@@ -65,9 +65,13 @@ const testRenderPlanFingerprint = computeRenderPlanFingerprint({
 interface NodeAdapterModule {
   nodeRequestToWebRequest(
     request: IncomingMessage,
-    options?: { trustedProxy?: boolean },
+    options?: {
+      origin?: string | ((request: IncomingMessage) => string);
+      trustedProxy?: boolean;
+    },
     response?: ServerResponse,
   ): Request;
+  rejectInvalidNodeRequestAuthority(request: IncomingMessage, response: ServerResponse): boolean;
   rejectNodeRequestTargetLimit(request: IncomingMessage, response: ServerResponse): boolean;
   vercelRequestToWebRequest(request: IncomingMessage, response?: ServerResponse): Request;
   writeWebResponseToNode(
@@ -1508,6 +1512,7 @@ export default async function handler(request) {
       expect(nodeServer).not.toContain("from './node-adapter.mjs';");
       const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(nodeAdapter).toContain('export function rejectInvalidNodeRequestAuthority');
       expect(nodeAdapter).toContain('export function rejectNodeRequestTargetLimit');
       expect(nodeAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
@@ -1533,6 +1538,9 @@ export default async function handler(request) {
       expect(nodeServer).not.toContain('sanitizeDiagnosticUrl.toString');
       expect(
         nodeServer.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
+      ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
+      expect(
+        nodeServer.indexOf('rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)'),
       ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
       expect(
         nodeServer.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
@@ -1578,6 +1586,21 @@ export default async function handler(request) {
         );
         expect(postedAsset).toContain('route:/assets/cart.css:');
         expect(postedAsset).not.toContain('body { color: navy; }');
+
+        for (const authorityHeaders of [
+          'Host: victim.example@evil.example',
+          'Host: victim.example/ignored',
+          'Host: victim.example\\ignored',
+          'Host: victim.example\r\nHost: evil.example',
+        ]) {
+          const invalidAuthority = await rawHttpExchange(
+            baseUrl,
+            `GET /assets/cart.css HTTP/1.1\r\n${authorityHeaders}\r\nConnection: close\r\n\r\n`,
+          );
+          expect(invalidAuthority).toContain('HTTP/1.1 400');
+          expect(invalidAuthority).toContain('Bad Request');
+          expect(invalidAuthority).not.toContain('body { color: navy; }');
+        }
 
         const fetchedAsset = await fetch(`${baseUrl}/assets/cart.css`);
         await expect(fetchedAsset.text()).resolves.toBe('body { color: navy; }');
@@ -2919,6 +2942,7 @@ export default async function handler(request) {
         'utf8',
       );
       expect(vercelAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(vercelAdapter).toContain('export function rejectInvalidNodeRequestAuthority');
       expect(vercelAdapter).toContain('export function rejectNodeRequestTargetLimit');
       expect(vercelAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
@@ -2935,6 +2959,9 @@ export default async function handler(request) {
       expect(vercelFunction).not.toContain('function responseHeadersToNodeHeaders');
       expect(vercelFunction).toContain('nodeResponse.destroy()');
       expect(vercelFunction).toContain('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)');
+      expect(vercelFunction).toContain(
+        'rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)',
+      );
       expect(vercelFunction).toContain('rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)');
       expect(
         vercelFunction.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
@@ -4438,6 +4465,61 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
       adapter.nodeRequestToWebRequest(invalidForwarding, { trustedProxy: true }),
     ).toThrow(/must end in http or https|must end in an own string/u);
   }
+
+  for (const authority of [
+    '',
+    'victim.example@evil.example',
+    'victim.example/ignored',
+    'victim.example\\ignored',
+    'victim.example?ignored',
+    'victim.example#ignored',
+    'victim.example, evil.example',
+    'victim.example:99999',
+  ]) {
+    const liveInvalidAuthority = adapterParityRequest();
+    delete liveInvalidAuthority.headers[':authority'];
+    liveInvalidAuthority.headers.host = authority;
+    expect(() => liveNodeRequestToWebRequest(liveInvalidAuthority)).toThrow(
+      'Kovo Node adapter request authority must be one valid host[:port].',
+    );
+
+    const emittedInvalidAuthority = adapterParityRequest();
+    delete emittedInvalidAuthority.headers[':authority'];
+    emittedInvalidAuthority.headers.host = authority;
+    expect(() => adapter.nodeRequestToWebRequest(emittedInvalidAuthority)).toThrow(
+      'Kovo Node adapter request authority must be one valid host[:port].',
+    );
+  }
+
+  const duplicateHost = adapterParityRequest();
+  delete duplicateHost.headers[':authority'];
+  duplicateHost.headers.host = 'victim.example';
+  duplicateHost.rawHeaders = ['Host', 'victim.example', 'Host', 'evil.example'];
+  let authorityBody = '';
+  let authorityStatus = 0;
+  const authorityResponse = Object.assign(new EventEmitter(), {
+    end(value?: string) {
+      authorityBody = value ?? '';
+      return this;
+    },
+    headersSent: false,
+    writeHead(value: number) {
+      authorityStatus = value;
+      return this;
+    },
+  }) as unknown as ServerResponse;
+  expect(adapter.rejectInvalidNodeRequestAuthority(duplicateHost, authorityResponse)).toBe(true);
+  expect({ body: authorityBody, status: authorityStatus }).toEqual({
+    body: 'Bad Request',
+    status: 400,
+  });
+
+  const validIpv6Authority = adapterParityRequest();
+  delete validIpv6Authority.headers[':authority'];
+  validIpv6Authority.headers.host = '[2001:db8::1]:8080';
+  expect(adapter.nodeRequestToWebRequest(validIpv6Authority).url).toBe(
+    'http://[2001:db8::1]:8080/from-url?x=1',
+  );
 
   const liveRequest = liveNodeRequestToWebRequest(adapterParityRequest(), { trustedProxy: true });
   const emittedRequest = adapter.nodeRequestToWebRequest(adapterParityRequest(), {

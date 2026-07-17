@@ -380,6 +380,7 @@ interface PinnedNodeRequest {
   readonly httpVersion: string;
   readonly method: string;
   readonly peerAddress?: string;
+  readonly rawHostHeaderCount?: number;
   readonly rawTarget: string;
   readonly socket: Socket;
 }
@@ -480,6 +481,7 @@ function snapshotNodeRequest(nodeRequest: IncomingMessage): PinnedNodeRequest {
     encryptedDescriptor !== undefined &&
     'value' in encryptedDescriptor &&
     encryptedDescriptor.value === true;
+  const rawHostHeaderCount = snapshotRawHostHeaderCount(nodeRequest);
   return {
     carrier: nodeRequest,
     encrypted,
@@ -487,6 +489,7 @@ function snapshotNodeRequest(nodeRequest: IncomingMessage): PinnedNodeRequest {
     httpVersion,
     method,
     ...(peerAddress ? { peerAddress } : {}),
+    ...(rawHostHeaderCount === undefined ? {} : { rawHostHeaderCount }),
     rawTarget,
     socket,
   };
@@ -533,6 +536,38 @@ function requestStringProperty(
   return propertyValue;
 }
 
+function snapshotRawHostHeaderCount(nodeRequest: IncomingMessage): number | undefined {
+  const descriptor = witnessGetOwnPropertyDescriptor(nodeRequest, 'rawHeaders');
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor) || !witnessIsArray(descriptor.value)) {
+    throw new TypeError('Kovo Node adapter requires rawHeaders as an own string array.');
+  }
+  const rawHeaders = descriptor.value as unknown[];
+  if (rawHeaders.length % 2 !== 0) {
+    throw new TypeError('Kovo Node adapter requires complete raw header pairs.');
+  }
+  let count = 0;
+  for (let index = 0; index < rawHeaders.length; index += 2) {
+    const name = witnessGetOwnPropertyDescriptor(rawHeaders, index)?.value;
+    const value = witnessGetOwnPropertyDescriptor(rawHeaders, index + 1)?.value;
+    if (typeof name !== 'string' || typeof value !== 'string') {
+      throw new TypeError('Kovo Node adapter requires dense string raw header pairs.');
+    }
+    if (rawHeaderNameIsHost(name)) count += 1;
+  }
+  return count;
+}
+
+function rawHeaderNameIsHost(name: string): boolean {
+  return (
+    name.length === 4 &&
+    (name[0] === 'h' || name[0] === 'H') &&
+    (name[1] === 'o' || name[1] === 'O') &&
+    (name[2] === 's' || name[2] === 'S') &&
+    (name[3] === 't' || name[3] === 'T')
+  );
+}
+
 /**
  * Adapt a Web-standard `RequestHandler` (from `createRequestHandler`) to a Node
  * `http`/`https` `(req, res)` listener, translating between Node and Web
@@ -554,6 +589,7 @@ export function toNodeHandler(
       // boot-captured controls before any authored handler or option callback can run.
       const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
       if (rejectPinnedNodeRequestTargetLimit(pinnedNodeRequest, nodeResponse)) return;
+      if (rejectInvalidPinnedNodeRequestAuthority(pinnedNodeRequest, nodeResponse)) return;
       if (rejectUnsafePinnedNodeMutationTarget(pinnedNodeRequest, nodeResponse)) return;
       const request = nodeRequestToWebRequestFromSnapshot(
         pinnedNodeRequest,
@@ -631,6 +667,9 @@ function nodeRequestToWebRequestFromSnapshot(
   }
   if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
+  }
+  if (!validNodeRequestAuthority(pinnedNodeRequest)) {
+    throw new TypeError('Kovo Node adapter request authority must be one valid host[:port].');
   }
   const method = pinnedNodeRequest.method;
   const headers = nodeHeadersToWebHeaders(pinnedNodeRequest.headers);
@@ -884,6 +923,35 @@ function nodeResponseShouldKeepAlive(nodeResponse: ServerResponse): boolean | un
     throw new TypeError('Kovo Node adapter requires an own boolean keep-alive state property.');
   }
   return descriptor.value;
+}
+
+/**
+ * SPEC §9.5 / RFC 9112 §3.2: Node accepts duplicate and syntactically invalid Host fields even
+ * though an HTTP/1 server must reject them. Do so before URL normalization, static serving, or app
+ * dispatch can observe two different authorities.
+ */
+function rejectInvalidPinnedNodeRequestAuthority(
+  pinnedNodeRequest: PinnedNodeRequest,
+  nodeResponse: ServerResponse,
+): boolean {
+  if (validNodeRequestAuthority(pinnedNodeRequest)) return false;
+
+  const responseTransport = pinNodeResponseTransport(nodeResponse);
+  armIncompleteNodeRequestClose(pinnedNodeRequest.carrier, nodeResponse);
+  witnessReflectApply(responseTransport.writeHead, nodeResponse, [
+    400,
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  ]);
+  witnessReflectApply(
+    responseTransport.end,
+    nodeResponse,
+    pinnedNodeRequest.method === 'HEAD' ? [] : ['Bad Request'],
+  );
+  return true;
 }
 
 /**
@@ -1393,6 +1461,53 @@ function canonicalRelativeRequestTarget(rawTarget: string): string {
     first += 1;
   }
   return `/${rawRequestTargetRange(rawTarget, first, rawTarget.length)}`;
+}
+
+function validNodeRequestAuthority(request: PinnedNodeRequest): boolean {
+  const pseudoAuthority = request.headers[':authority'];
+  const authority = pseudoAuthority === undefined ? request.headers.host : pseudoAuthority;
+
+  // HTTP/2 :authority owns the request target and a divergent Host is ignored. For HTTP/1,
+  // retain the raw occurrence count because Node's normalized header bag silently keeps only the
+  // first Host field, erasing an ambiguity RFC 9112 requires the server to reject.
+  if (pseudoAuthority === undefined && request.rawHostHeaderCount !== undefined) {
+    if (
+      authority === undefined ? request.rawHostHeaderCount !== 0 : request.rawHostHeaderCount !== 1
+    ) {
+      return false;
+    }
+  }
+  if (authority === undefined) return true;
+  if (typeof authority !== 'string' || authority.length === 0) return false;
+
+  for (let index = 0; index < authority.length; index += 1) {
+    const character = authority[index];
+    const code = witnessReflectApply<number>(nativeStringCharCodeAt, authority, [index]);
+    if (
+      code <= 0x20 ||
+      code === 0x7f ||
+      character === '@' ||
+      character === '/' ||
+      character === '\\' ||
+      character === '?' ||
+      character === '#' ||
+      character === ','
+    ) {
+      return false;
+    }
+  }
+
+  try {
+    const parsed = new NativeURL(`http://${authority}`);
+    return (
+      urlOrigin(parsed) !== 'null' &&
+      urlPathname(parsed) === '/' &&
+      urlSearch(parsed) === '' &&
+      urlHash(parsed) === ''
+    );
+  } catch {
+    return false;
+  }
 }
 
 function defaultOrigin(request: PinnedNodeRequest, options: PinnedNodeHandlerOptions): string {

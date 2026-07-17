@@ -1060,6 +1060,7 @@ const nativeUrlHrefGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.proto
 const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'origin').get;
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
 const nativeUrlSearchGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'search').get;
+const nativeStringCharCodeAt = String.prototype.charCodeAt;
 const nativeStringIndexOf = String.prototype.indexOf;
 const nativeStringLastIndexOf = String.prototype.lastIndexOf;
 const nativeStringSlice = String.prototype.slice;
@@ -1111,6 +1112,9 @@ function nodeRequestToWebRequestFromSnapshot(
   }
   if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
+  }
+  if (!validNodeRequestAuthority(pinnedNodeRequest)) {
+    throw new TypeError('Kovo Node adapter request authority must be one valid host[:port].');
   }
   const method = pinnedNodeRequest.method;
   const headers = nodeHeadersToWebHeaders(pinnedNodeRequest.headers);
@@ -1259,6 +1263,7 @@ function snapshotNodeRequest(nodeRequest) {
   const peerAddress =
     typeof remoteAddress === 'string' ? apply(nativeStringTrim, remoteAddress, []) : undefined;
   const encryptedDescriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [socket, 'encrypted']);
+  const rawHostHeaderCount = snapshotRawHostHeaderCount(nodeRequest);
   const snapshot = {
     carrier: nodeRequest,
     encrypted:
@@ -1269,6 +1274,7 @@ function snapshotNodeRequest(nodeRequest) {
     httpVersion,
     method,
     ...(peerAddress ? { peerAddress } : {}),
+    ...(rawHostHeaderCount === undefined ? {} : { rawHostHeaderCount }),
     rawTarget,
     socket,
   };
@@ -1289,6 +1295,36 @@ function requestStringProperty(value, property, fallback, nativeGetter) {
     throw new TypeError('Kovo Node adapter requires own string request properties.');
   }
   return propertyValue;
+}
+
+function snapshotRawHostHeaderCount(nodeRequest) {
+  const descriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [nodeRequest, 'rawHeaders']);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor) || !apply(nativeArrayIsArray, NativeArray, [descriptor.value])) {
+    throw new TypeError('Kovo Node adapter requires rawHeaders as an own string array.');
+  }
+  const rawHeaders = descriptor.value;
+  if (rawHeaders.length % 2 !== 0) {
+    throw new TypeError('Kovo Node adapter requires complete raw header pairs.');
+  }
+  let count = 0;
+  for (let index = 0; index < rawHeaders.length; index += 2) {
+    const name = apply(nativeObjectGetOwnPropertyDescriptor, Object, [rawHeaders, index])?.value;
+    const value = apply(nativeObjectGetOwnPropertyDescriptor, Object, [rawHeaders, index + 1])?.value;
+    if (typeof name !== 'string' || typeof value !== 'string') {
+      throw new TypeError('Kovo Node adapter requires dense string raw header pairs.');
+    }
+    if (rawHeaderNameIsHost(name)) count += 1;
+  }
+  return count;
+}
+
+function rawHeaderNameIsHost(name) {
+  return name.length === 4 &&
+    (name[0] === 'h' || name[0] === 'H') &&
+    (name[1] === 'o' || name[1] === 'O') &&
+    (name[2] === 's' || name[2] === 'S') &&
+    (name[3] === 't' || name[3] === 'T');
 }
 
 function constructNativeRequest(input, init) {
@@ -1337,6 +1373,20 @@ export function rejectNodeRequestTargetLimit(nodeRequest, nodeResponse) {
     'x-content-type-options': 'nosniff',
   });
   nodeResponse.end(pinnedNodeRequest.method === 'HEAD' ? undefined : 'URI Too Long');
+  return true;
+}
+
+export function rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse) {
+  pinNodeResponseTransport(nodeResponse);
+  const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
+  if (validNodeRequestAuthority(pinnedNodeRequest)) return false;
+  armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+  nodeResponse.writeHead(400, {
+    'cache-control': 'no-store',
+    'content-type': 'text/plain; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+  });
+  nodeResponse.end(pinnedNodeRequest.method === 'HEAD' ? undefined : 'Bad Request');
   return true;
 }
 
@@ -1654,6 +1704,35 @@ function urlOrigin(url) { return apply(nativeUrlOriginGetter, url, []); }
 function urlPathname(url) { return apply(nativeUrlPathnameGetter, url, []); }
 function urlSearch(url) { return apply(nativeUrlSearchGetter, url, []); }
 
+function validNodeRequestAuthority(nodeRequest) {
+  const pseudoAuthority = nodeRequest.headers[':authority'];
+  const authority = pseudoAuthority === undefined ? nodeRequest.headers.host : pseudoAuthority;
+  // HTTP/2 :authority owns the target. For HTTP/1, preserve the raw Host occurrence count because
+  // Node's normalized header bag silently keeps only the first duplicate field.
+  if (pseudoAuthority === undefined && nodeRequest.rawHostHeaderCount !== undefined) {
+    if (authority === undefined
+      ? nodeRequest.rawHostHeaderCount !== 0
+      : nodeRequest.rawHostHeaderCount !== 1) return false;
+  }
+  if (authority === undefined) return true;
+  if (typeof authority !== 'string' || authority.length === 0) return false;
+  for (let index = 0; index < authority.length; index += 1) {
+    const character = authority[index];
+    const code = apply(nativeStringCharCodeAt, authority, [index]);
+    if (code <= 0x20 || code === 0x7f || character === '@' || character === '/' ||
+      character === '\\\\' || character === '?' || character === '#' || character === ',') {
+      return false;
+    }
+  }
+  try {
+    const parsed = new NativeURL('http://' + authority);
+    return urlOrigin(parsed) !== 'null' && urlPathname(parsed) === '/' &&
+      urlSearch(parsed) === '' && urlHash(parsed) === '';
+  } catch {
+    return false;
+  }
+}
+
 function defaultOrigin(nodeRequest, options) {
   // SPEC §9.5 / RFC 9113 §8.3.1: HTTP/2 \`:authority\` is request-target authority. A peer can
   // still send a divergent regular \`Host\`, but recipients must not use it to determine the
@@ -1853,6 +1932,7 @@ module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
     const {
       armIncompleteNodeRequestClose,
       nodeRequestTransportMetadata,
+      rejectInvalidNodeRequestAuthority,
       rejectNodeRequestTargetLimit,
       rejectUnsafeNodeMutationTarget,
       vercelRequestToWebRequest,
@@ -1860,6 +1940,7 @@ module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
     } = await loadNodeAdapter();
     closeIncompleteRequest = armIncompleteNodeRequestClose;
     if (rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)) return;
+    if (rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)) return;
     if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
     const transport = nodeRequestTransportMetadata(nodeRequest);
     // Vercel documents x-vercel-forwarded-for and x-forwarded-proto as edge-overwritten request
@@ -3234,6 +3315,7 @@ lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
 const {
   armIncompleteNodeRequestClose,
   nodeRequestToWebRequest,
+  rejectInvalidNodeRequestAuthority,
   rejectNodeRequestTargetLimit,
   rejectUnsafeNodeMutationTarget,
   writeWebResponseToNode,
@@ -3438,6 +3520,7 @@ export function createKovoNodeServer(options = {}) {
     let diagnosticRequestUrl;
     try {
       if (rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)) return;
+      if (rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)) return;
       if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
       const method = ownStringOr(nodeRequest, 'method', 'GET');
       const rawTarget = ownStringOr(nodeRequest, 'url', '/');

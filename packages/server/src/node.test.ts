@@ -77,6 +77,45 @@ describe('server node adapter', () => {
     expect(absoluteDoubleSlashPath.url).toBe('https://app.example//other.example/admin?next=1');
   });
 
+  it('requires one syntactically valid request authority even with a pinned origin', () => {
+    for (const authority of [
+      '',
+      'victim.example@evil.example',
+      'victim.example/ignored',
+      'victim.example\\ignored',
+      'victim.example?ignored',
+      'victim.example#ignored',
+      'victim.example, evil.example',
+      'victim.example:99999',
+    ]) {
+      const request = nodeRequest('/authority');
+      request.headers = { host: authority };
+      expect(() =>
+        nodeRequestToWebRequest(request, { origin: 'https://canonical.example' }),
+      ).toThrow('Kovo Node adapter request authority must be one valid host[:port].');
+    }
+
+    const duplicate = nodeRequest('/authority');
+    duplicate.headers = { host: 'victim.example' };
+    duplicate.rawHeaders = ['Host', 'victim.example', 'Host', 'evil.example'];
+    expect(() => nodeRequestToWebRequest(duplicate)).toThrow(
+      'Kovo Node adapter request authority must be one valid host[:port].',
+    );
+
+    const invalidPseudoAuthority = nodeRequest('/authority');
+    invalidPseudoAuthority.headers = {
+      ':authority': 'victim.example@evil.example',
+      host: 'canonical.example',
+    };
+    expect(() => nodeRequestToWebRequest(invalidPseudoAuthority)).toThrow(
+      'Kovo Node adapter request authority must be one valid host[:port].',
+    );
+
+    const ipv6 = nodeRequest('/authority');
+    ipv6.headers = { host: '[2001:db8::1]:8080' };
+    expect(nodeRequestToWebRequest(ipv6).url).toBe('http://[2001:db8::1]:8080/authority');
+  });
+
   it('uses captured URL, Request, and Headers constructors after app evaluation', () => {
     const OriginalHeaders = globalThis.Headers;
     const OriginalRequest = globalThis.Request;
@@ -208,6 +247,48 @@ describe('server node adapter', () => {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       );
+    }
+  });
+
+  it('rejects malformed or duplicate HTTP/1 authorities before app dispatch', async () => {
+    const handler = vi.fn(async (request: Request) =>
+      Response.json({ host: request.headers.get('host'), url: request.url }),
+    );
+    const server = await serveWithNode(toNodeHandler(handler));
+    const invalidAuthorities = [
+      'Host: victim.example@evil.example',
+      'Host: victim.example/ignored',
+      'Host: victim.example\\ignored',
+      'Host: victim.example?ignored',
+      'Host: victim.example#ignored',
+      'Host: victim.example, evil.example',
+      'Host: victim.example\r\nHost: evil.example',
+    ];
+
+    try {
+      for (const authorityHeaders of invalidAuthorities) {
+        const response = await rawHttpExchange(
+          server.origin,
+          `GET /authority HTTP/1.1\r\n${authorityHeaders}\r\nConnection: close\r\n\r\n`,
+        );
+        expect(response).toContain('HTTP/1.1 400');
+        expect(response).toContain('Bad Request');
+        expect(response).toMatch(/cache-control: no-store/i);
+        expect(response).not.toContain('evil.example/authority');
+      }
+      expect(handler).not.toHaveBeenCalled();
+
+      const canonical = await rawHttpExchange(
+        server.origin,
+        'GET /authority HTTP/1.1\r\nHost: app.example:8080\r\nConnection: close\r\n\r\n',
+      );
+      expect(canonical).toContain('HTTP/1.1 200');
+      expect(canonical).toContain(
+        JSON.stringify({ host: 'app.example:8080', url: 'http://app.example:8080/authority' }),
+      );
+      expect(handler).toHaveBeenCalledTimes(1);
+    } finally {
+      await server.close();
     }
   });
 
