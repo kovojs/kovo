@@ -14,6 +14,7 @@ import {
 
 const nativeStringLastIndexOf = String.prototype.lastIndexOf;
 const nativeStringSlice = String.prototype.slice;
+const nativeStringToLowerCase = String.prototype.toLowerCase;
 const nativeStringTrim = String.prototype.trim;
 
 /**
@@ -52,26 +53,17 @@ export function trustedNodeRequestScheme(
     ? rightmostHeaderListValue(request.headers['x-forwarded-proto'])
     : undefined;
   // SPEC §9.5 / RFC 9113 §8.3.1: `:scheme` is peer-supplied request-target control data, not
-  // proof that this hop is encrypted. Treat it like other proxy-carried scheme metadata and
-  // accept it only when the operator explicitly opts into trusted-proxy posture.
-  const pseudoScheme = options.trustedProxy
-    ? firstHeaderValue(pseudoHeaders[':scheme'])
-    : undefined;
+  // proof that this hop is encrypted. Under explicit trust, require one canonical value rather
+  // than coercing a present invalid field to HTTP; canonical XFP retains precedence.
+  const pseudoScheme =
+    options.trustedProxy && forwardedProto === undefined
+      ? trustedPseudoSchemeValue(pseudoHeaders[':scheme'])
+      : undefined;
   const scheme =
     forwardedProto ??
     pseudoScheme ??
     ((request.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http');
   return scheme === 'https' ? 'https' : 'http';
-}
-
-function firstHeaderValue(value: string | string[] | undefined): string | undefined {
-  if (!witnessIsArray(value)) return value;
-  const first = witnessGetOwnPropertyDescriptor(value, 0);
-  if (first === undefined) return undefined;
-  if (!('value' in first) || typeof first.value !== 'string') {
-    throw new TypeError('Trusted request scheme headers must contain stable own strings.');
-  }
-  return first.value;
 }
 
 function rightmostHeaderListValue(value: string | string[] | undefined): string | undefined {
@@ -94,6 +86,18 @@ function rightmostHeaderListValue(value: string | string[] | undefined): string 
   const scheme = witnessReflectApply<string>(nativeStringTrim, candidate, []);
   if (scheme !== 'http' && scheme !== 'https') {
     throw new TypeError('Trusted request scheme headers must end in http or https.');
+  }
+  return scheme;
+}
+
+function trustedPseudoSchemeValue(value: string | string[] | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    throw new TypeError('Trusted HTTP/2 :scheme must identify one http or https scheme.');
+  }
+  const scheme = witnessReflectApply<string>(nativeStringToLowerCase, value, []);
+  if (scheme !== 'http' && scheme !== 'https') {
+    throw new TypeError('Trusted HTTP/2 :scheme must identify one http or https scheme.');
   }
   return scheme;
 }

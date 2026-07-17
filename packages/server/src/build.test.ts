@@ -3054,6 +3054,17 @@ export default async function handler(request) {
         expect(aliasResponse).toContain('HTTP/1.1 404');
         expect(aliasResponse).toContain('Not Found');
         expect(aliasResponse).not.toContain('VERCEL_ALIAS_CREDENTIAL');
+        const invalidPlatformScheme = await rawHttpExchange(
+          baseUrl,
+          'GET /hello HTTP/1.1\r\n' +
+            'Host: 127.0.0.1\r\n' +
+            'X-Forwarded-Proto: https\r\n' +
+            'X-Forwarded-Proto: http\r\n' +
+            'Connection: close\r\n\r\n',
+        );
+        expect(invalidPlatformScheme).toContain('HTTP/1.1 500');
+        expect(invalidPlatformScheme).toContain('Internal Server Error');
+        expect(invalidPlatformScheme).not.toContain('vercel:/hello:');
         const canonicalMutationPath = await rawHttpExchange(
           baseUrl,
           rawMutationRequest('/_m/a/b', 'VERCEL_CANONICAL_CREDENTIAL'),
@@ -3162,13 +3173,15 @@ export default async function handler(request) {
       expect(isTrustedSecureRequest(secureMutation)).toBe(true);
       expect(verifyCsrfRequestOriginFloor(secureMutation, { trustedOrigins: [] })).toBe(true);
 
-      const ambiguousScheme = vercelRequest('203.0.113.13', {
-        method: 'POST',
-        origin: 'https://shop.example.test',
-        scheme: 'https, http',
-      });
-      expect(isTrustedSecureRequest(ambiguousScheme)).toBe(false);
-      expect(verifyCsrfRequestOriginFloor(ambiguousScheme, { trustedOrigins: [] })).toBe(false);
+      for (const scheme of ['', 'HTTPS', 'https, http']) {
+        expect(() =>
+          vercelRequest('203.0.113.13', {
+            method: 'POST',
+            origin: 'https://shop.example.test',
+            scheme,
+          }),
+        ).toThrow('Kovo Vercel adapter requires one canonical x-forwarded-proto value.');
+      }
 
       const genericNodeRequest = adapter.nodeRequestToWebRequest(
         platformBridgeRequest({
@@ -4465,6 +4478,33 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
       adapter.nodeRequestToWebRequest(invalidForwarding, { trustedProxy: true }),
     ).toThrow(/must end in http or https|must end in an own string/u);
   }
+
+  for (const invalid of ['', 'javascript', 'https, http', ['https']] as const) {
+    const liveInvalidPseudo = adapterParityRequest();
+    liveInvalidPseudo.headers[':scheme'] = invalid;
+    expect(() => liveNodeRequestToWebRequest(liveInvalidPseudo, { trustedProxy: true })).toThrow(
+      'Trusted HTTP/2 :scheme must identify one http or https scheme.',
+    );
+
+    const emittedInvalidPseudo = adapterParityRequest();
+    emittedInvalidPseudo.headers[':scheme'] = invalid;
+    expect(() =>
+      adapter.nodeRequestToWebRequest(emittedInvalidPseudo, { trustedProxy: true }),
+    ).toThrow('Trusted HTTP/2 :scheme must identify one http or https scheme.');
+  }
+
+  const forwardedSchemePrecedence = adapterParityRequest();
+  forwardedSchemePrecedence.headers[':scheme'] = 'javascript';
+  forwardedSchemePrecedence.headers['x-forwarded-proto'] = 'https';
+  expect(
+    adapter.nodeRequestToWebRequest(forwardedSchemePrecedence, { trustedProxy: true }).url,
+  ).toBe('https://h2.example.test/from-url?x=1');
+
+  const uppercasePseudoScheme = adapterParityRequest();
+  uppercasePseudoScheme.headers[':scheme'] = 'HTTPS';
+  expect(adapter.nodeRequestToWebRequest(uppercasePseudoScheme, { trustedProxy: true }).url).toBe(
+    'https://h2.example.test/from-url?x=1',
+  );
 
   for (const authority of [
     '',

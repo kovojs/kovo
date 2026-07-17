@@ -223,6 +223,34 @@ describe('server node adapter', () => {
         /must end in http or https|must end in an own string/u,
       );
     }
+
+    for (const invalid of ['', 'javascript', 'https, http', ['https']] as const) {
+      const invalidPseudoScheme = nodeRequest('/pseudo-invalid');
+      invalidPseudoScheme.headers = {
+        ':authority': 'app.example',
+        ':scheme': invalid,
+      };
+      (invalidPseudoScheme.socket as Socket & { encrypted?: boolean }).encrypted = true;
+      expect(() => nodeRequestToWebRequest(invalidPseudoScheme, { trustedProxy: true })).toThrow(
+        'Trusted HTTP/2 :scheme must identify one http or https scheme.',
+      );
+    }
+
+    const forwardedPrecedence = nodeRequest('/forwarded-precedence');
+    forwardedPrecedence.headers = {
+      ':authority': 'app.example',
+      ':scheme': 'javascript',
+      'x-forwarded-proto': 'https',
+    };
+    expect(nodeRequestToWebRequest(forwardedPrecedence, { trustedProxy: true }).url).toBe(
+      'https://app.example/forwarded-precedence',
+    );
+
+    const uppercasePseudoScheme = nodeRequest('/pseudo-uppercase');
+    uppercasePseudoScheme.headers = { ':authority': 'app.example', ':scheme': 'HTTPS' };
+    expect(nodeRequestToWebRequest(uppercasePseudoScheme, { trustedProxy: true }).url).toBe(
+      'https://app.example/pseudo-uppercase',
+    );
   });
 
   it('uses the closest trusted proxy scheme from real duplicate HTTP/1 headers', async () => {
@@ -1428,6 +1456,48 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
         host: 'trusted.example',
         url: 'http://trusted.example/authority',
       });
+    } finally {
+      client.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  it('fails closed on a real unsupported trusted HTTP/2 scheme', async () => {
+    const webHandler = vi.fn(async (request: Request) => new Response(request.url));
+    const nodeHandler = toNodeHandler(webHandler, { trustedProxy: true });
+    const server = createHttp2Server((request, response) => {
+      void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const client = http2Connect(`http://127.0.0.1:${address.port}`);
+
+    try {
+      const outcome = await new Promise<{ body: string; status: number }>((resolve, reject) => {
+        const request = client.request({
+          ':authority': 'app.example',
+          ':method': 'GET',
+          ':path': '/invalid-scheme',
+          ':scheme': 'javascript',
+        });
+        let body = '';
+        let status = 0;
+        request.on('response', (headers) => {
+          status = Number(headers[':status'] ?? 0);
+        });
+        request.setEncoding('utf8');
+        request.on('data', (chunk: string) => {
+          body += chunk;
+        });
+        request.on('end', () => resolve({ body, status }));
+        request.on('error', reject);
+        request.end();
+      });
+
+      expect(outcome).toEqual({ body: 'Internal Server Error', status: 500 });
+      expect(webHandler).not.toHaveBeenCalled();
     } finally {
       client.close();
       await new Promise<void>((resolve, reject) =>

@@ -57,6 +57,29 @@ describe('trusted request scheme provenance', () => {
     }
   });
 
+  it('rejects an invalid trusted pseudo-scheme without downgrading encrypted posture', () => {
+    for (const value of ['', 'javascript', 'https, http', ['https']] as const) {
+      const request = nodeRequest({ ':scheme': value });
+      (request.socket as { encrypted?: boolean }).encrypted = true;
+
+      expect(() => trustedNodeRequestScheme(request, { trustedProxy: true })).toThrow(
+        'Trusted HTTP/2 :scheme must identify one http or https scheme.',
+      );
+    }
+  });
+
+  it('keeps canonical X-Forwarded-Proto precedence over an invalid pseudo-scheme', () => {
+    const request = nodeRequest({
+      ':scheme': 'javascript',
+      'x-forwarded-proto': 'https',
+    });
+
+    expect(trustedNodeRequestScheme(request, { trustedProxy: true })).toBe('https');
+    expect(
+      trustedNodeRequestScheme(nodeRequest({ ':scheme': 'HTTPS' }), { trustedProxy: true }),
+    ).toBe('https');
+  });
+
   it('rejects accessor-backed array entries instead of treating them as transport authority', () => {
     const forwarded: string[] = [];
     Object.defineProperty(forwarded, 0, { get: () => 'https' });

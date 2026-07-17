@@ -1064,6 +1064,7 @@ const nativeStringCharCodeAt = String.prototype.charCodeAt;
 const nativeStringIndexOf = String.prototype.indexOf;
 const nativeStringLastIndexOf = String.prototype.lastIndexOf;
 const nativeStringSlice = String.prototype.slice;
+const nativeStringToLowerCase = String.prototype.toLowerCase;
 const nativeStringTrim = String.prototype.trim;
 const bodylessMethods = new Set(['GET', 'HEAD']);
 const requestTargetAnalysisOrigin = 'https://kovo.invalid';
@@ -1089,7 +1090,11 @@ export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse)
 export function vercelRequestToWebRequest(nodeRequest, nodeResponse) {
   if (nodeResponse) pinNodeResponseTransport(nodeResponse);
   const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
-  const scheme = platformSingleHeaderValue(pinnedNodeRequest.headers['x-forwarded-proto']);
+  const platformScheme = pinnedNodeRequest.headers['x-forwarded-proto'];
+  const scheme = platformSingleHeaderValue(platformScheme);
+  if (platformScheme !== undefined && scheme !== 'http' && scheme !== 'https') {
+    throw new TypeError('Kovo Vercel adapter requires one canonical x-forwarded-proto value.');
+  }
   const clientIp =
     platformSingleHeaderValue(pinnedNodeRequest.headers['x-vercel-forwarded-for']) ??
     'vercel:unresolved-client';
@@ -1744,9 +1749,10 @@ function defaultOrigin(nodeRequest, options) {
     ? rightmostHeaderListValue(nodeRequest.headers['x-forwarded-proto'])
     : undefined;
   // SPEC §9.5 / RFC 9113 §8.3.1: :scheme is peer-supplied request-target control data, not proof
-  // that this hop is encrypted. Accept it only with explicit trusted-proxy posture.
-  const pseudoScheme = options.trustedProxy
-    ? firstHeaderValue(nodeRequest.headers[':scheme'])
+  // that this hop is encrypted. Under explicit trust, require one canonical value instead of
+  // silently downgrading an invalid field; canonical XFP retains precedence.
+  const pseudoScheme = options.trustedProxy && forwardedProto === undefined
+    ? trustedPseudoSchemeValue(nodeRequest.headers[':scheme'])
     : undefined;
   const proto =
     forwardedProto ??
@@ -1899,6 +1905,18 @@ function rightmostHeaderListValue(value) {
   const scheme = apply(nativeStringTrim, candidate, []);
   if (scheme !== 'http' && scheme !== 'https') {
     throw new TypeError('Trusted proxy scheme headers must end in http or https.');
+  }
+  return scheme;
+}
+
+function trustedPseudoSchemeValue(value) {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    throw new TypeError('Trusted HTTP/2 :scheme must identify one http or https scheme.');
+  }
+  const scheme = apply(nativeStringToLowerCase, value, []);
+  if (scheme !== 'http' && scheme !== 'https') {
+    throw new TypeError('Trusted HTTP/2 :scheme must identify one http or https scheme.');
   }
   return scheme;
 }
