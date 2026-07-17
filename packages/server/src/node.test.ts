@@ -1193,6 +1193,59 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
     }
   });
 
+  it('uses HTTP/2 :authority for both the Web URL and app-visible Host header', async () => {
+    // RFC 9113 §8.3.1 forbids using a divergent regular Host as request-target authority.
+    // Keeping it here would let a remotely supplied second authority poison absolute URLs or
+    // any application security decision that reads the Web Request's URL/Host after H2 routing.
+    const nodeHandler = toNodeHandler(async (request) => {
+      return Response.json({
+        host: request.headers.get('host'),
+        url: request.url,
+      });
+    });
+    const server = createHttp2Server((request, response) => {
+      void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const client = http2Connect(`http://127.0.0.1:${address.port}`);
+
+    try {
+      const outcome = await new Promise<{ body: string; status: number }>((resolve, reject) => {
+        const request = client.request({
+          ':authority': 'trusted.example',
+          ':method': 'GET',
+          ':path': '/authority',
+          ':scheme': 'http',
+          host: 'attacker.example',
+        });
+        let body = '';
+        let status = 0;
+        request.on('response', (headers) => {
+          status = Number(headers[':status'] ?? 0);
+        });
+        request.setEncoding('utf8');
+        request.on('data', (chunk: string) => {
+          body += chunk;
+        });
+        request.on('end', () => resolve({ body, status }));
+        request.on('error', reject);
+        request.end();
+      });
+
+      expect(outcome.status).toBe(200);
+      expect(JSON.parse(outcome.body)).toEqual({
+        host: 'trusted.example',
+        url: 'http://trusted.example/authority',
+      });
+    } finally {
+      client.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
   it('rejects separator-heavy HTTP/2 targets with 414 before the Web handler', async () => {
     const webHandler = vi.fn(async () => new Response('handler reached'));
     const nodeHandler = toNodeHandler(webHandler);

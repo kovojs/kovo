@@ -3223,6 +3223,12 @@ export default async function handler(request) {
       await expect(readFile(join(vercelOutDir, 'static/index.html'), 'utf8')).resolves.toContain(
         'Static Home',
       );
+      // Vercel's Build Output API makes every file under static/ public at the deployment root.
+      // These are Kovo/host metadata, not application assets, and must not be uploaded there.
+      await expect(readFile(join(vercelOutDir, 'static/_headers'), 'utf8')).rejects.toThrow();
+      await expect(
+        readFile(join(vercelOutDir, 'static/kovo-static-manifest.json'), 'utf8'),
+      ).rejects.toThrow();
       await expect(
         readFile(join(vercelOutDir, 'functions/kovo.func/index.cjs'), 'utf8'),
       ).rejects.toThrow();
@@ -3402,6 +3408,10 @@ export default async function handler(request) {
       await expect(
         readFile(join(vercelOutDir, 'static/static/index.html'), 'utf8'),
       ).resolves.toContain('Static Route');
+      await expect(readFile(join(vercelOutDir, 'static/_headers'), 'utf8')).rejects.toThrow();
+      await expect(
+        readFile(join(vercelOutDir, 'static/kovo-static-manifest.json'), 'utf8'),
+      ).rejects.toThrow();
       await expect(
         readFile(join(vercelOutDir, 'functions/kovo.func/index.cjs'), 'utf8'),
       ).resolves.toContain('kovoVercelFunction');
@@ -4358,11 +4368,12 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     trustedProxy: true,
   });
 
-  // SPEC §9.5: the live and emitted Node adapters must agree on the HTTP/2 compat header
-  // bridge. Pseudo-headers are URL inputs only; they must never be copied into Web Headers.
+  // SPEC §9.5 / RFC 9113 §8.3.1: live and emitted adapters must use `:authority` for the URL,
+  // drop pseudo-headers themselves, and replace a divergent app-visible Host with that same
+  // authority so application code never receives two competing request-target authorities.
   expect(emittedRequest.url).toBe(liveRequest.url);
   expect(emittedRequest.headers.get('x-from-test')).toBe(liveRequest.headers.get('x-from-test'));
-  expect(emittedRequest.headers.get('host')).toBeNull();
+  expect(emittedRequest.headers.get('host')).toBe('h2.example.test');
   expect(() => emittedRequest.headers.get(':authority')).toThrow();
 
   for (const target of [
@@ -4474,6 +4485,7 @@ function adapterParityRequest(): IncomingMessage {
       ':method': 'GET',
       ':path': '/from-pseudo',
       ':scheme': 'https',
+      host: 'attacker.example.test',
       'x-from-test': ['one', 'two'],
     },
     method: 'GET',

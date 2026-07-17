@@ -262,6 +262,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "'/x%2f..%2fassets%2froot-confusion.js'",
         ],
       },
+      {
+        id: 'vercel-private-static-metadata-regression',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          "readFile(join(vercelOutDir, 'static/_headers'), 'utf8')",
+          "readFile(join(vercelOutDir, 'static/kovo-static-manifest.json'), 'utf8')",
+          'Vercel\'s Build Output API makes every file under static/ public',
+        ],
+      },
     ],
   },
   {

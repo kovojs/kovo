@@ -1384,12 +1384,12 @@ function canonicalRelativeRequestTarget(rawTarget: string): string {
 }
 
 function defaultOrigin(request: PinnedNodeRequest, options: PinnedNodeHandlerOptions): string {
-  // E2 (SPEC §9.5): under HTTP/2 the `Host` header is often absent — the authority lives in
-  // the `:authority` pseudo-header instead. Fall back to it (then `:scheme`) so URL resolution
-  // works for HTTP/2 requests, not just HTTP/1.1.
+  // SPEC §9.5 / RFC 9113 §8.3.1: HTTP/2 `:authority` is request-target authority. A peer can
+  // still send a divergent regular `Host`, but recipients must not use it to determine the
+  // target URI when `:authority` is present.
   const host =
-    firstHeaderValue(request.headers.host) ??
     firstHeaderValue(request.headers[':authority']) ??
+    firstHeaderValue(request.headers.host) ??
     '127.0.0.1';
   const forwardedProto = options.trustedProxy
     ? firstHeaderValue(request.headers['x-forwarded-proto'])
@@ -1404,6 +1404,7 @@ function nodeHeadersToWebHeaders(
   nodeHeaders: Record<string, string | string[] | undefined>,
 ): Headers {
   const headers = new NativeHeaders();
+  const authority = firstHeaderValue(nodeHeaders[':authority']);
   const names = witnessObjectKeys(nodeHeaders);
   for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
     const name = names[nameIndex]!;
@@ -1418,6 +1419,9 @@ function nodeHeadersToWebHeaders(
     // name starting with `:`, so copying them unfiltered 500'd every HTTP/2 request. Skip them
     // — they are addressed via `request.method`/`request.url`/the `:authority` URL fallback.
     if (name[0] === ':') continue;
+    // The Web Request bridge otherwise exposes two authorities to application code. Match
+    // RFC 9113's safe HTTP/2-to-HTTP/1 translation rule by replacing Host with `:authority`.
+    if (authority !== undefined && name === 'host') continue;
     if (witnessIsArray(value)) {
       for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
         const entry = witnessGetOwnPropertyDescriptor(value, valueIndex)?.value;
@@ -1434,6 +1438,7 @@ function nodeHeadersToWebHeaders(
     }
   }
 
+  if (authority !== undefined) setHeader(headers, 'host', authority);
   return headers;
 }
 

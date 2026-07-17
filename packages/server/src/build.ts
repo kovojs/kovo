@@ -398,7 +398,13 @@ async function emitVercelPreset(
 ): Promise<void> {
   if (build.staticOnly && build.staticOutput !== undefined) {
     const outDir = resolvedFileSystemPath(context.outDir);
-    await writePresetDirectory(build.staticOutput.dir, outDir, 'static', 'vercel static output');
+    await writePresetDirectory(
+      build.staticOutput.dir,
+      outDir,
+      'static',
+      'vercel static output',
+      true,
+    );
     await writePresetArtifacts(
       outDir,
       [presetJsonEntry(outDir, 'config.json', vercelStaticBuildOutputConfig())],
@@ -557,6 +563,7 @@ async function writePresetStaticFiles(
       outDir,
       targetDirectory,
       `${preset} static output`,
+      preset === 'vercel',
     );
   }
   await writePresetDirectory(build.clientDir, outDir, targetDirectory, `${preset} client output`);
@@ -852,6 +859,7 @@ async function writePresetDirectory(
   outDir: string,
   targetDirectory: string,
   label: string,
+  omitVercelStaticMetadata = false,
 ): Promise<void> {
   const source = createFrameworkOutputFileSystemBoundary(sourceDir);
   await source.ensureDirectory();
@@ -863,6 +871,7 @@ async function writePresetDirectory(
     targetDirectory,
     label,
     entries,
+    omitVercelStaticMetadata,
   );
   await writePresetArtifacts(outDir, entries, label);
 }
@@ -874,6 +883,7 @@ async function appendPresetDirectoryEntries(
   targetDirectory: string,
   label: string,
   entries: ArtifactOutputEntry[],
+  omitVercelStaticMetadata: boolean,
 ): Promise<void> {
   const snapshot = snapshotBuildArray(children, `${label} source directory entries`);
   for (let index = 0; index < snapshot.length; index += 1) {
@@ -886,11 +896,22 @@ async function appendPresetDirectoryEntries(
         targetDirectory,
         label,
         entries,
+        omitVercelStaticMetadata,
       );
       continue;
     }
     if (entry.kind !== 'file') {
       throw new Error(`Kovo ${label} refuses non-regular source entry '${entry.relativePath}'.`);
+    }
+    // Vercel's Build Output API publishes every file under static/ unchanged at the deployment
+    // root. `_headers` is a Netlify/Cloudflare host sidecar and the manifest is Kovo build
+    // metadata; Vercel already receives the equivalent policy through config.json, so neither
+    // file may cross into its public static primitive (SPEC §6.6/§9.5/§14).
+    if (
+      omitVercelStaticMetadata &&
+      (entry.relativePath === '_headers' || entry.relativePath === 'kovo-static-manifest.json')
+    ) {
+      continue;
     }
     commitBuildArrayValue(
       entries,
@@ -1624,10 +1645,10 @@ function urlPathname(url) { return apply(nativeUrlPathnameGetter, url, []); }
 function urlSearch(url) { return apply(nativeUrlSearchGetter, url, []); }
 
 function defaultOrigin(nodeRequest, options) {
-  // E2 (SPEC §9.5): under HTTP/2 the \`Host\` header is often absent — the authority lives in
-  // the \`:authority\` pseudo-header instead. Fall back to it (then \`:scheme\`) so URL resolution
-  // works for HTTP/2 requests, not just HTTP/1.1.
-  const host = firstHeaderValue(nodeRequest.headers.host) ?? firstHeaderValue(nodeRequest.headers[':authority']) ?? '127.0.0.1';
+  // SPEC §9.5 / RFC 9113 §8.3.1: HTTP/2 \`:authority\` is request-target authority. A peer can
+  // still send a divergent regular \`Host\`, but recipients must not use it to determine the
+  // target URI when \`:authority\` is present.
+  const host = firstHeaderValue(nodeRequest.headers[':authority']) ?? firstHeaderValue(nodeRequest.headers.host) ?? '127.0.0.1';
   const forwardedProto = options.trustedProxy
     ? firstHeaderValue(nodeRequest.headers['x-forwarded-proto'])
     : undefined;
@@ -1702,6 +1723,7 @@ function snapshotNodeHeaders(nodeRequest) {
 
 function nodeHeadersToWebHeaders(nodeHeaders) {
   const headers = new NativeHeaders();
+  const authority = firstHeaderValue(nodeHeaders[':authority']);
   const names = apply(nativeObjectKeys, Object, [nodeHeaders]);
   for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
     const name = apply(nativeObjectGetOwnPropertyDescriptor, Object, [names, nameIndex])?.value;
@@ -1712,6 +1734,9 @@ function nodeHeadersToWebHeaders(nodeHeaders) {
     // name starting with \`:\`, so copying them unfiltered 500'd every HTTP/2 request. Skip them
     // — they are addressed via \`nodeRequest.method\`/\`nodeRequest.url\`/the \`:authority\` URL fallback.
     if (name[0] === ':') continue;
+    // The Web Request bridge otherwise exposes two authorities to application code. Match
+    // RFC 9113's safe HTTP/2-to-HTTP/1 translation rule by replacing Host with \`:authority\`.
+    if (authority !== undefined && name === 'host') continue;
     if (apply(nativeArrayIsArray, NativeArray, [value])) {
       for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
         const entry = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, valueIndex])?.value;
@@ -1727,6 +1752,7 @@ function nodeHeadersToWebHeaders(nodeHeaders) {
       apply(nativeHeadersSet, headers, [name, value]);
     }
   }
+  if (authority !== undefined) apply(nativeHeadersSet, headers, ['host', authority]);
   return headers;
 }
 
