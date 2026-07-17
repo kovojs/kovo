@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    0 |      6 |
+| High     |    0 |      7 |
 | Medium   |    0 |      6 |
 | Low      |    0 |      3 |
 
@@ -76,6 +76,17 @@ rendering, Better Auth, and managed SQL.
     `9decef0e6`, and `aec5517ad` impose finite mandatory defaults and hard maxima across direct,
     Node HTTP/1+HTTP/2, Vite, generated Node/Vercel, and Cloudflare paths.
   - **Evidence:** affected request/build/egress matrix 109/109 plus adapter URL-limit regressions.
+
+- [x] **H7 - Ambiguous transaction commit acknowledgements released mutation and webhook replay
+      claims.**
+  - A successful transaction callback followed by an adapter/COMMIT rejection was treated like a
+    proven rollback. If the database committed before its acknowledgement was lost, a remote client
+    or provider retry could execute the same write again.
+  - **Fixed:** `5eae63679` gives successful-callback adapter failures a framework-owned ambiguous
+    settlement signal. Mutation and webhook lifecycles retain the pending replay claim, while setup
+    and callback failures still abort it for a safe retry.
+  - **Evidence:** focused exactly-once/mutation/webhook replay matrix 138/138; server dist/DTS and
+    API-surface checks passed.
 
 ## Medium
 
@@ -141,6 +152,7 @@ rendering, Better Auth, and managed SQL.
 ## Latest verification
 
 - Mutation/replay/browser focused matrix: 158/158.
+- Ambiguous-settlement exactly-once/mutation/webhook replay matrix: 138/138.
 - Durable Postgres/webhook/replay focused matrix: 229/229.
 - Capability/route/Postgres focused matrix: 106/106.
 - Document/app-document focused matrix: 96/96.
