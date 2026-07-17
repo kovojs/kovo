@@ -440,6 +440,7 @@ export {
   unsafeInline,
   createMemoryWebhookReplayStore,
   webhook,
+  webhookReplayIdentity,
 } from './api/routing.js';
 
 // SPEC §6.6 rule 6: all native root dependencies (including retained Node DB parser profiles)
@@ -539,6 +540,7 @@ export type {
   WebhookPrincipalWriteScope,
   WebhookRunnableMutation,
   WebhookRunnableMutationInput,
+  WebhookReplayIdentity,
   WebhookReplayReservation,
   WebhookReplayStore,
   WebhookResponseStatus,

@@ -105,7 +105,7 @@ export type {
   UnsafeCookieDowngrade,
   UnsafeCookieDowngradeInput,
 } from '../cookies.js';
-export { createMemoryWebhookReplayStore, webhook } from '../webhook.js';
+export { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '../webhook.js';
 export type {
   WebhookChangeOptions,
   WebhookDeclaration,
@@ -119,6 +119,7 @@ export type {
   WebhookPrincipalWriteScope,
   WebhookRunnableMutation,
   WebhookRunnableMutationInput,
+  WebhookReplayIdentity,
   WebhookReplayReservation,
   WebhookReplayStore,
   WebhookResponseStatus,

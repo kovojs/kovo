@@ -14,7 +14,10 @@ import { s, SchemaValidationError } from './schema.js';
 import {
   createMemoryWebhookReplayStore as createPublicMemoryWebhookReplayStore,
   runWebhook,
+  snapshotWebhookReplayIdentity,
   webhook,
+  webhookReplayIdentity,
+  type WebhookReplayIdentity,
   type WebhookReplayReservation,
   type WebhookReplayStore,
   type WebhookTxDb,
@@ -22,6 +25,13 @@ import {
 } from './webhook.js';
 
 const WEBHOOK_HMAC_SECRET = '707172737475767778797a7b7c7d7e7f';
+const WEBHOOK_REPLAY_HORIZON_MS = 30 * 24 * 60 * 60_000;
+const WEBHOOK_REPLAY_MAX_FUTURE_SKEW_MS = 5 * 60_000;
+const TEST_WEBHOOK_OCCURRED_AT_MS = Date.now();
+
+function testWebhookReplayIdentity(key: string): WebhookReplayIdentity {
+  return webhookReplayIdentity(key, TEST_WEBHOOK_OCCURRED_AT_MS);
+}
 
 function signedRequest(body: string, signature: string): Request {
   return new Request('https://example.test/webhooks/stripe', {
@@ -106,11 +116,12 @@ describe('server webhook primitive', () => {
 
   it('exports a memory replay store that reserves, commits, and replays webhook responses', async () => {
     const store = createPublicMemoryWebhookReplayStore();
-    const reservation = store.reserve('webhook:public-store', 'evt_1');
+    const identity = testWebhookReplayIdentity('evt_1');
+    const reservation = store.reserve('webhook:public-store', identity);
     expect(reservation).toBeTruthy();
-    expect(store.reserve('webhook:public-store', 'evt_1')).toBeUndefined();
+    expect(store.reserve('webhook:public-store', identity)).toBeUndefined();
 
-    const pending = store.get('webhook:public-store', 'evt_1');
+    const pending = store.get('webhook:public-store', identity);
     expect(pending).toBeInstanceOf(Promise);
 
     const response: WebhookWireResponse = {
@@ -121,7 +132,204 @@ describe('server webhook primitive', () => {
     reservation?.commit(response);
 
     await expect(pending).resolves.toBe(response);
-    expect(store.get('webhook:public-store', 'evt_1')).toBe(response);
+    expect(store.get('webhook:public-store', identity)).toBe(response);
+  });
+
+  it('rejects a forged structural replay identity before any memory-store lookup', () => {
+    const store = createPublicMemoryWebhookReplayStore();
+    const now = Date.now();
+    const forged = {
+      expiresAtMs: now + WEBHOOK_REPLAY_HORIZON_MS,
+      key: 'evt_forged',
+      occurredAtMs: now,
+    } as WebhookReplayIdentity;
+
+    expect(() => store.get('webhook:opaque-identity', forged)).toThrow(
+      /webhookReplayIdentity\(\)/u,
+    );
+    expect(() => store.reserve('webhook:opaque-identity', forged)).toThrow(
+      /webhookReplayIdentity\(\)/u,
+    );
+    const minted = webhookReplayIdentity('evt_minted', now);
+    expect(snapshotWebhookReplayIdentity(minted, 'test identity')).toBe(minted);
+    expect(() => snapshotWebhookReplayIdentity(forged, 'test identity')).toThrow(
+      /webhookReplayIdentity\(\)/u,
+    );
+  });
+
+  it('fails closed when a live provider key is reused with a different occurrence', async () => {
+    const replayStore = createPublicMemoryWebhookReplayStore();
+    const handler = vi.fn(() => ({ ok: true }));
+    const declaration = webhook('/webhooks/reused-provider-key', {
+      handler,
+      idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
+      input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+      replayStore,
+      verify: customVerifier('authenticated-reused-provider-key', () => true),
+    });
+    const occurredAtMs = Date.now();
+    const request = (occurrence: number) =>
+      new Request('https://example.test/webhooks/reused-provider-key', {
+        body: JSON.stringify({ id: 'evt_reused', occurredAtMs: occurrence }),
+        method: 'POST',
+      });
+
+    const first = await runWebhook(declaration, request(occurredAtMs));
+    const exactReplay = await runWebhook(declaration, request(occurredAtMs));
+    const conflict = await runWebhook(declaration, request(occurredAtMs + 1));
+
+    expect(first.response.status).toBe(200);
+    expect(exactReplay.replayed).toBe(true);
+    expect(conflict.response.status).toBe(422);
+    await expect(conflict.response.text()).resolves.toBe(
+      'Webhook replay identity conflicts with retained truth.',
+    );
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('retires committed replay truth at the authenticated event horizon', () => {
+    const store = createPublicMemoryWebhookReplayStore({ maxEntries: 1 });
+    const expired = webhookReplayIdentity(
+      'evt_reused_after_horizon',
+      Date.now() - WEBHOOK_REPLAY_HORIZON_MS - 1,
+    );
+    const current = webhookReplayIdentity('evt_reused_after_horizon', Date.now());
+    const response: WebhookWireResponse = { body: 'old', headers: {}, status: 200 };
+
+    store.set('webhook:horizon', expired, response);
+    expect(store.get('webhook:horizon', expired)).toBeUndefined();
+    const replacement = store.reserve('webhook:horizon', current);
+    expect(replacement).toBeDefined();
+    replacement?.abort?.();
+  });
+
+  it('never auto-evicts a pending replay claim after its event horizon', () => {
+    const store = createPublicMemoryWebhookReplayStore({ maxEntries: 1, maxPending: 1 });
+    const expired = webhookReplayIdentity(
+      'evt_pending',
+      Date.now() - WEBHOOK_REPLAY_HORIZON_MS - 1,
+    );
+    const current = webhookReplayIdentity('evt_pending', Date.now());
+
+    const pending = store.reserve('webhook:horizon', expired);
+    expect(pending).toBeDefined();
+    expect(store.reserve('webhook:horizon', expired)).toBeUndefined();
+    expect(store.get('webhook:horizon', expired)).toBeInstanceOf(Promise);
+    expect(() => store.reserve('webhook:horizon', current)).toThrow(
+      /different authenticated occurrence/u,
+    );
+    pending?.abort?.();
+
+    const replacement = store.reserve('webhook:horizon', current);
+    expect(replacement).toBeDefined();
+    replacement?.abort?.();
+  });
+
+  it.each([
+    ['stale', Date.now() - WEBHOOK_REPLAY_HORIZON_MS - 60_000],
+    ['future', Date.now() + WEBHOOK_REPLAY_MAX_FUTURE_SKEW_MS + 60_000],
+  ])(
+    'rejects a %s authenticated event before replay storage or handling',
+    async (_kind, occurredAtMs) => {
+      const get = vi.fn();
+      const reserve = vi.fn();
+      const set = vi.fn();
+      const handler = vi.fn();
+      const declaration = webhook('/webhooks/event-horizon', {
+        handler,
+        idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
+        input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+        replayStore: { get, reserve, set },
+        verify: customVerifier('authenticated-event-horizon', () => true),
+      });
+
+      const result = await runWebhook(
+        declaration,
+        new Request('https://example.test/webhooks/event-horizon', {
+          body: JSON.stringify({ id: `evt_${_kind}`, occurredAtMs }),
+          method: 'POST',
+        }),
+      );
+
+      expect(result.response.status).toBe(422);
+      expect(get).not.toHaveBeenCalled();
+      expect(reserve).not.toHaveBeenCalled();
+      expect(set).not.toHaveBeenCalled();
+      expect(handler).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a legacy raw-string idempotency callback with a sanitized 500', async () => {
+    const get = vi.fn();
+    const reserve = vi.fn();
+    const set = vi.fn();
+    const handler = vi.fn();
+    const declaration = webhook('/webhooks/raw-replay-id', {
+      handler,
+      idempotency: ((input: { id: string }) => input.id) as never,
+      input: s.object({ id: s.string() }),
+      replayStore: { get, reserve, set },
+      verify: customVerifier('authenticated-raw-replay-id', () => true),
+    });
+
+    const result = await runWebhook(
+      declaration,
+      new Request('https://example.test/webhooks/raw-replay-id', {
+        body: JSON.stringify({ id: 'evt_raw' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    await expect(result.response.text()).resolves.toBe('Internal Server Error');
+    expect(get).not.toHaveBeenCalled();
+    expect(reserve).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('calls the identity callback once and gives stores one frozen sanitized carrier', async () => {
+    const identity = webhookReplayIdentity('evt_carrier', Date.now());
+    const idempotency = vi.fn(() => identity);
+    const seen: WebhookReplayIdentity[] = [];
+    const replayStore: WebhookReplayStore = {
+      get(_scope, candidate) {
+        seen.push(candidate);
+        return undefined;
+      },
+      reserve(_scope, candidate) {
+        seen.push(candidate);
+        return {
+          commit() {},
+        };
+      },
+      set() {},
+    };
+    const declaration = webhook('/webhooks/identity-carrier', {
+      handler: () => ({ ok: true }),
+      idempotency,
+      input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+      replayStore,
+      verify: customVerifier('authenticated-identity-carrier', () => true),
+    });
+
+    const result = await runWebhook(
+      declaration,
+      new Request('https://example.test/webhooks/identity-carrier', {
+        body: JSON.stringify({ id: identity.key, occurredAtMs: identity.occurredAtMs }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(200);
+    expect(idempotency).toHaveBeenCalledOnce();
+    expect(seen).toEqual([identity, identity]);
+    expect(Object.isFrozen(identity)).toBe(true);
+    expect(identity).toEqual({
+      expiresAtMs: identity.occurredAtMs + WEBHOOK_REPLAY_HORIZON_MS,
+      key: 'evt_carrier',
+      occurredAtMs: identity.occurredAtMs,
+    });
   });
 
   it('rejects replay-store response accessors before status policy and wire status can disagree', async () => {
@@ -148,7 +356,7 @@ describe('server webhook primitive', () => {
       handler() {
         handled += 1;
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -169,9 +377,10 @@ describe('server webhook primitive', () => {
   });
 
   it('keeps committed webhook truth under selective Map.get/has and clock poisoning', () => {
-    const store = createPublicMemoryWebhookReplayStore({ ttlMs: 60_000 });
+    const store = createPublicMemoryWebhookReplayStore();
+    const identity = testWebhookReplayIdentity('evt_1');
     const response: WebhookWireResponse = { body: 'committed', headers: {}, status: 200 };
-    store.set('webhook:public-store', 'evt_1', response);
+    store.set('webhook:public-store', identity, response);
 
     const originalDateNow = Date.now;
     const originalMapGet = Map.prototype.get;
@@ -193,8 +402,8 @@ describe('server webhook primitive', () => {
         return originalMapHas.call(this, key);
       };
 
-      duplicateReservation = store.reserve('webhook:public-store', 'evt_1');
-      replayed = store.get('webhook:public-store', 'evt_1');
+      duplicateReservation = store.reserve('webhook:public-store', identity);
+      replayed = store.get('webhook:public-store', identity);
     } finally {
       Date.now = originalDateNow;
       Map.prototype.get = originalMapGet;
@@ -207,77 +416,77 @@ describe('server webhook primitive', () => {
 
   it('generation-fences a superseded webhook reservation from newer committed truth', async () => {
     const store = createPublicMemoryWebhookReplayStore();
-    const stale = store.reserve('webhook:public-store', 'evt_1');
-    const joined = store.get('webhook:public-store', 'evt_1');
+    const identity = testWebhookReplayIdentity('evt_1');
+    const stale = store.reserve('webhook:public-store', identity);
+    const joined = store.get('webhook:public-store', identity);
     const newer: WebhookWireResponse = { body: 'newer', headers: {}, status: 200 };
-    store.set('webhook:public-store', 'evt_1', newer);
+    store.set('webhook:public-store', identity, newer);
 
     await expect(joined).resolves.toBe(newer);
     stale?.commit({ body: 'stale', headers: {}, status: 200 });
-    expect(store.get('webhook:public-store', 'evt_1')).toBe(newer);
+    expect(store.get('webhook:public-store', identity)).toBe(newer);
   });
 
-  it('length-frames webhook scope and event ids without NUL collisions', () => {
+  it('keeps one provider event key isolated across replay scopes', () => {
     const store = createPublicMemoryWebhookReplayStore();
+    const identity = testWebhookReplayIdentity('evt_shared');
     const first: WebhookWireResponse = { body: 'first', headers: {}, status: 200 };
     const second: WebhookWireResponse = { body: 'second', headers: {}, status: 200 };
-    store.set('webhook\0event', 'tail', first);
-    store.set('webhook', 'event\0tail', second);
+    store.set('webhook\0event', identity, first);
+    store.set('webhook', identity, second);
 
-    expect(store.get('webhook\0event', 'tail')).toBe(first);
-    expect(store.get('webhook', 'event\0tail')).toBe(second);
+    expect(store.get('webhook\0event', identity)).toBe(first);
+    expect(store.get('webhook', identity)).toBe(second);
   });
 
-  it('fails closed at capacity and never forgets committed webhook replay truth', async () => {
+  it('fails closed at capacity without evicting live or pending replay truth', () => {
     const committedStore = createPublicMemoryWebhookReplayStore({
       maxEntries: 1,
       maxPending: 1,
-      ttlMs: 5,
     });
+    const firstIdentity = testWebhookReplayIdentity('first');
+    const secondIdentity = testWebhookReplayIdentity('second');
     const first: WebhookWireResponse = { body: 'first', headers: {}, status: 200 };
     const second: WebhookWireResponse = { body: 'second', headers: {}, status: 200 };
-    committedStore.set('scope', 'first', first);
-    expect(() => committedStore.set('scope', 'second', second)).toThrow(/capacity|saturated/u);
-    expect(committedStore.reserve('scope', 'second')).toBeUndefined();
-    expect(committedStore.get('scope', 'first')).toBe(first);
-
-    await new Promise((resolve) => setTimeout(resolve, 15));
-    expect(committedStore.get('scope', 'first')).toBe(first);
-    expect(committedStore.reserve('scope', 'second')).toBeUndefined();
+    committedStore.set('scope', firstIdentity, first);
+    expect(() => committedStore.set('scope', secondIdentity, second)).toThrow(
+      /capacity|saturated/u,
+    );
+    expect(committedStore.reserve('scope', secondIdentity)).toBeUndefined();
+    expect(committedStore.get('scope', firstIdentity)).toBe(first);
 
     const pendingStore = createPublicMemoryWebhookReplayStore({
       maxEntries: 1,
       maxPending: 1,
-      ttlMs: 5,
     });
-    const pending = pendingStore.reserve('scope', 'pending');
+    const pendingIdentity = testWebhookReplayIdentity('pending');
+    const otherPendingIdentity = testWebhookReplayIdentity('other-pending');
+    const pending = pendingStore.reserve('scope', pendingIdentity);
     expect(pending).toBeDefined();
-    expect(pendingStore.reserve('scope', 'other-pending')).toBeUndefined();
-    await new Promise((resolve) => setTimeout(resolve, 15));
-    expect(pendingStore.reserve('scope', 'other-pending')).toBeUndefined();
+    expect(pendingStore.reserve('scope', otherPendingIdentity)).toBeUndefined();
     pending?.abort?.();
 
-    const replacement = pendingStore.reserve('scope', 'other-pending');
+    const replacement = pendingStore.reserve('scope', otherPendingIdentity);
     expect(replacement).toBeDefined();
     replacement?.abort?.();
   });
 
-  it('rejects unsafe webhook replay capacity and ttl values', () => {
+  it('rejects unsafe webhook replay capacity and legacy ttl options', () => {
     expect(() => createPublicMemoryWebhookReplayStore({ maxEntries: Number.NaN })).toThrow(
       /maxEntries.*non-negative integer/u,
     );
     expect(() => createPublicMemoryWebhookReplayStore({ maxPending: -1 })).toThrow(
       /maxPending.*non-negative integer/u,
     );
-    expect(() => createPublicMemoryWebhookReplayStore({ ttlMs: 1.5 })).toThrow(
-      /ttlMs.*non-negative integer/u,
+    expect(() => createPublicMemoryWebhookReplayStore({ ttlMs: 1.5 } as never)).toThrow(
+      /unsupported option/u,
     );
   });
 
   it('ignores inherited webhook replay limits and refuses accessors without invoking them', () => {
     const inherited = Object.create({ maxEntries: 0, maxPending: 0, ttlMs: 0 });
     const inheritedStore = createPublicMemoryWebhookReplayStore(inherited);
-    expect(inheritedStore.reserve('scope', 'idem')).toBeDefined();
+    expect(inheritedStore.reserve('scope', testWebhookReplayIdentity('idem'))).toBeDefined();
 
     let getterCalls = 0;
     const accessor = {} as { maxPending?: number };
@@ -304,7 +513,7 @@ describe('server webhook primitive', () => {
 
     const providerWebhook = webhook('/webhooks/provider', {
       handler: () => undefined,
-      idempotency: (input) => input.id as string,
+      idempotency: (input) => testWebhookReplayIdentity(input.id as string),
       input: s.object({ id: s.string() }),
       verify: verifier,
     });
@@ -420,7 +629,7 @@ describe('server webhook primitive', () => {
         void compileOnly;
         return { received: input.type };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input,
       replayStore,
       async transaction(_context, run) {
@@ -489,7 +698,7 @@ describe('server webhook primitive', () => {
       handler() {
         handlerCalls += 1;
       },
-      idempotency: (input) => input.id as string,
+      idempotency: (input) => testWebhookReplayIdentity(input.id as string),
       input: s.object({ id: s.string() }),
       verify: verifier,
     });
@@ -593,7 +802,7 @@ describe('server webhook primitive', () => {
         ).toMatchObject({ text: 'select id from products where id = $1' });
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input,
       replayStore,
       async transaction(_context, run) {
@@ -655,7 +864,7 @@ describe('server webhook primitive', () => {
       async handler(input, context) {
         return context.actAs(`owner:${input.id}`).runMutation(recordInvoice, { id: input.id });
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -705,7 +914,7 @@ describe('server webhook primitive', () => {
         );
         return system.runMutation(recordEvent, input);
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -776,7 +985,7 @@ describe('server webhook primitive', () => {
       handler(input, context) {
         return context.actAs('owner_1').runMutation(guardedMutation, input);
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -812,7 +1021,7 @@ describe('server webhook primitive', () => {
       handler(input, context) {
         return context.actAs('owner_1').runMutation(guardedMutation, input);
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -857,7 +1066,7 @@ describe('server webhook primitive', () => {
           ownerId: input.ownerId,
         });
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string(), ownerId: s.string() }),
       replayStore,
       verify: 'none',
@@ -885,7 +1094,7 @@ describe('server webhook primitive', () => {
         (context.tx as unknown as { insert(): void }).insert();
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       async transaction(_context, run) {
@@ -916,7 +1125,7 @@ describe('server webhook primitive', () => {
         handlerCalls += 1;
         return input.id;
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       async transaction(_context, run) {
@@ -950,7 +1159,7 @@ describe('server webhook primitive', () => {
       handler(input) {
         return `handler:${input.id}`;
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       async transaction(_context, run) {
@@ -982,7 +1191,7 @@ describe('server webhook primitive', () => {
         handlerCalls += 1;
         return input.id;
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       transaction(_context, run) {
@@ -1025,7 +1234,7 @@ describe('server webhook primitive', () => {
         await blocker;
         return input.id;
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       transaction(_context, run) {
@@ -1068,7 +1277,7 @@ describe('server webhook primitive', () => {
         (context.tx as unknown as { insert(): void }).insert();
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       async transaction(_context, run) {
@@ -1153,7 +1362,7 @@ describe('server webhook primitive', () => {
       handler() {
         handled += 1;
       },
-      idempotency: (input) => input.id as string,
+      idempotency: (input) => testWebhookReplayIdentity(input.id as string),
       input: s.object({ id: s.string() }),
       verify: verifier,
     });
@@ -1216,7 +1425,7 @@ describe('server webhook primitive', () => {
         context.recordChange(invoice, { keys: [input.id] });
         return context.fail('IGNORED_EVENT', { id: input.id }, { status: 422 });
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       async transaction(_context, run) {
@@ -1305,7 +1514,7 @@ describe('server webhook primitive', () => {
           Array.prototype.some = nativeSome;
         }
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore: createMemoryWebhookReplayStore(),
       verify: 'none',
@@ -1369,7 +1578,7 @@ describe('server webhook primitive', () => {
         paidCalls += 1;
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -1380,7 +1589,7 @@ describe('server webhook primitive', () => {
         refundedCalls += 1;
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -1411,17 +1620,17 @@ describe('server webhook primitive', () => {
     const seenScopes: string[] = [];
     const replayStore = createMemoryWebhookReplayStore();
     const tracingReplayStore: WebhookReplayStore = {
-      get(scope, idem) {
-        seenScopes.push(`get:${scope}:${idem}`);
-        return replayStore.get(scope, idem);
+      get(scope, identity) {
+        seenScopes.push(`get:${scope}:${identity.key}`);
+        return replayStore.get(scope, identity);
       },
-      reserve(scope, idem) {
-        seenScopes.push(`reserve:${scope}:${idem}`);
-        return replayStore.reserve(scope, idem);
+      reserve(scope, identity) {
+        seenScopes.push(`reserve:${scope}:${identity.key}`);
+        return replayStore.reserve(scope, identity);
       },
-      set(scope, idem, response) {
-        seenScopes.push(`set:${scope}:${idem}`);
-        replayStore.set(scope, idem, response);
+      set(scope, identity, response) {
+        seenScopes.push(`set:${scope}:${identity.key}`);
+        replayStore.set(scope, identity, response);
       },
     };
     let calls = 0;
@@ -1431,7 +1640,7 @@ describe('server webhook primitive', () => {
           calls += 1;
           return { ok: true };
         },
-        idempotency: (input) => input.id,
+        idempotency: (input) => testWebhookReplayIdentity(input.id),
         input: s.object({ id: s.string() }),
         replayStore: tracingReplayStore,
         verify: 'none',
@@ -1474,7 +1683,7 @@ describe('server webhook primitive', () => {
           context.recordChange(invoice, { keys: [input.id] });
           return { ok: true };
         },
-        idempotency: (input) => input.id,
+        idempotency: (input) => testWebhookReplayIdentity(input.id),
         input: s.object({ id: s.string() }),
         verify: hmacSignature({
           encoding: 'hex',
@@ -1497,7 +1706,7 @@ describe('server webhook primitive', () => {
         context.recordChange(invoice, { keys: [input.id] });
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore: createMemoryWebhookReplayStore(),
       verify: 'none',
@@ -1538,7 +1747,7 @@ describe('server webhook primitive', () => {
     expect(handlerCalls).toBe(0);
   });
 
-  it('rejects non-string idempotency outcomes without coercing them into replay keys', async () => {
+  it('rejects unproven idempotency outcomes without coercing them into replay keys', async () => {
     const invoice = domain('invoice-invalid-runtime-id');
     let handlerCalls = 0;
     let coercions = 0;
@@ -1588,7 +1797,7 @@ describe('server webhook primitive', () => {
         ).recordChange(billing, { keys: [input.id] });
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -1669,7 +1878,7 @@ describe('server webhook primitive', () => {
         (context.tx as unknown as { insert(): void }).insert();
         return { received: input.id };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore: createDurableWebhookReplayStore(),
       async transaction(_context, run) {
@@ -1711,7 +1920,7 @@ describe('server webhook primitive', () => {
         context.recordChange(invoice, { keys: [input.id] });
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore: createMemoryWebhookReplayStore(),
       verify: 'none',
@@ -1773,7 +1982,7 @@ describe('server webhook primitive', () => {
         }
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore: durable,
       async transaction(_context, run) {
@@ -1813,15 +2022,16 @@ describe('server webhook primitive', () => {
 
   it('fails closed before webhook execution when retained replay truth fills capacity', async () => {
     const replayStore = createPublicMemoryWebhookReplayStore({ maxEntries: 1 });
+    const retainedIdentity = testWebhookReplayIdentity('retained-event');
     const retained: WebhookWireResponse = { body: 'retained', headers: {}, status: 200 };
-    replayStore.set('retained-scope', 'retained-event', retained);
+    replayStore.set('retained-scope', retainedIdentity, retained);
     let handlerCalls = 0;
     const wh = webhook('/webhooks/capacity', {
       handler() {
         handlerCalls += 1;
         return { ok: true };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -1839,7 +2049,7 @@ describe('server webhook primitive', () => {
     expect(handlerCalls).toBe(0);
     expect(result.response.status).toBe(429);
     expect(result.response.headers.get('retry-after')).toBe('1');
-    expect(replayStore.get('retained-scope', 'retained-event')).toBe(retained);
+    expect(replayStore.get('retained-scope', retainedIdentity)).toBe(retained);
   });
 
   // A4 (SPEC §9.1:850): an unexpected handler exception must abort the reservation so
@@ -1853,7 +2063,7 @@ describe('server webhook primitive', () => {
         if (callCount === 1) throw new Error('transient DB blip');
         return { received: input.id };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       replayStore,
       verify: 'none',
@@ -1888,7 +2098,7 @@ describe('server webhook primitive', () => {
       handler() {
         handled += 1;
       },
-      idempotency: (input) => input.id as string,
+      idempotency: (input) => testWebhookReplayIdentity(input.id as string),
       input: s.object({ id: s.string() }),
       // A malformed signature header makes a real app verifier throw rather than
       // return false (e.g. `Buffer.from(badHex, 'hex')` / signature parsing).
@@ -1932,7 +2142,7 @@ describe('server webhook primitive', () => {
         handled += 1;
         return { received: input.id };
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => testWebhookReplayIdentity(input.id),
       input: s.object({ id: s.string() }),
       verify: verifier,
     });
@@ -1970,7 +2180,7 @@ describe('server webhook primitive', () => {
       const handler = vi.fn((input: { id: string }) => ({ received: input.id }));
       const boundedIdemWebhook = webhook('/webhooks/bounded-idem', {
         handler,
-        idempotency: () => idem,
+        idempotency: () => webhookReplayIdentity(idem, TEST_WEBHOOK_OCCURRED_AT_MS),
         input: s.object({ id: s.string() }),
         replayStore: { get, reserve, set },
         verify: 'none',
@@ -1996,7 +2206,7 @@ describe('server webhook primitive', () => {
     const handler = vi.fn((input: { id: string }) => ({ received: input.id }));
     const boundedIdemWebhook = webhook('/webhooks/bounded-idem-control', {
       handler,
-      idempotency: () => 'a'.repeat(1_024),
+      idempotency: () => testWebhookReplayIdentity('a'.repeat(1_024)),
       input: s.object({ id: s.string() }),
       replayStore: createMemoryWebhookReplayStore(),
       verify: 'none',
@@ -2104,14 +2314,14 @@ function createMemoryWebhookReplayStore(): WebhookReplayStore {
   >();
 
   return {
-    get(scope, idem) {
-      const record = responses.get(webhookReplayKey(scope, idem));
+    get(scope, identity) {
+      const record = responses.get(webhookReplayKey(scope, identity));
       if (!record) return undefined;
       if ('pending' in record) return record.pending;
       return record.response;
     },
-    reserve(scope, idem) {
-      const key = webhookReplayKey(scope, idem);
+    reserve(scope, identity) {
+      const key = webhookReplayKey(scope, identity);
       if (responses.has(key)) return undefined;
 
       let resolvePending: (response: WebhookWireResponse) => void = () => undefined;
@@ -2139,8 +2349,8 @@ function createMemoryWebhookReplayStore(): WebhookReplayStore {
         },
       };
     },
-    set(scope, idem, response) {
-      const key = webhookReplayKey(scope, idem);
+    set(scope, identity, response) {
+      const key = webhookReplayKey(scope, identity);
       const existing = responses.get(key);
       responses.set(key, { response });
       if (existing && 'pending' in existing) existing.resolve(response);
@@ -2148,8 +2358,8 @@ function createMemoryWebhookReplayStore(): WebhookReplayStore {
   };
 }
 
-function webhookReplayKey(scope: string, idem: string): string {
-  return `${scope}\0${idem}`;
+function webhookReplayKey(scope: string, identity: WebhookReplayIdentity): string {
+  return `${scope}\0${identity.key}`;
 }
 
 // A contract-compliant durable cross-instance store analogue (SPEC §10.3:1151):
@@ -2159,11 +2369,11 @@ function webhookReplayKey(scope: string, idem: string): string {
 function createDurableWebhookReplayStore(): WebhookReplayStore {
   const rows = new Map<string, { committed?: WebhookWireResponse }>();
   return {
-    get(scope, idem) {
-      return rows.get(webhookReplayKey(scope, idem))?.committed;
+    get(scope, identity) {
+      return rows.get(webhookReplayKey(scope, identity))?.committed;
     },
-    reserve(scope, idem): WebhookReplayReservation | undefined {
-      const key = webhookReplayKey(scope, idem);
+    reserve(scope, identity): WebhookReplayReservation | undefined {
+      const key = webhookReplayKey(scope, identity);
       if (rows.has(key)) return undefined;
       const row: { committed?: WebhookWireResponse } = {};
       rows.set(key, row);
@@ -2176,8 +2386,8 @@ function createDurableWebhookReplayStore(): WebhookReplayStore {
         },
       };
     },
-    set(scope, idem, response) {
-      rows.set(webhookReplayKey(scope, idem), { committed: response });
+    set(scope, identity, response) {
+      rows.set(webhookReplayKey(scope, identity), { committed: response });
     },
   };
 }

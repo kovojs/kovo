@@ -616,6 +616,7 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.createMemoryWebhookReplayStore).toBe(
       routingApi.createMemoryWebhookReplayStore,
     );
+    expect(publicApi.webhookReplayIdentity).toBe(routingApi.webhookReplayIdentity);
     expect(publicApi.hmacSignature).toBe(coreHmacSignature);
     expect(publicApi.standardWebhooks).toBe(coreStandardWebhooks);
     expect(publicApi.customVerifier).toBe(coreCustomVerifier);
@@ -658,6 +659,7 @@ describe('server app-shell public API barrels', () => {
       routingApi.createMemoryWebhookReplayStore,
     );
     expect(publicApi.webhook).toBe(routingApi.webhook);
+    expect(publicApi.webhookReplayIdentity).toBe(routingApi.webhookReplayIdentity);
     expect(publicApi.declarePublicRelation).toBe(dataApi.declarePublicRelation);
     expect(publicApi.postgresAppRuntimeOptions).toBe(dataApi.postgresAppRuntimeOptions);
     expect(publicApi.declarePublicRead).toBe(dataApi.declarePublicRead);
@@ -918,6 +920,7 @@ describe('server app-shell public API barrels', () => {
   });
 
   it('exposes path-first webhook authoring through public routing barrels', () => {
+    const replayIdentity = publicApi.webhookReplayIdentity('evt_public', Date.now());
     const rootWebhook = publicApi.webhook('/webhooks/public-order-paid', {
       handler: () => undefined,
       input: publicApi.s.object({ id: publicApi.s.string() }),
@@ -943,6 +946,11 @@ describe('server app-shell public API barrels', () => {
     expect(rootWebhook.name).toBe('/webhooks/public-order-paid');
     expect(rootWebhook.path).toBe('/webhooks/public-order-paid');
     expect(rootWebhook.reason).toBe('webhook:/webhooks/public-order-paid');
+    expect(replayIdentity).toMatchObject({
+      key: 'evt_public',
+      occurredAtMs: expect.any(Number),
+      expiresAtMs: expect.any(Number),
+    });
     expect(routingWebhook.name).toBe('/webhooks/routing-order-paid');
     expect(removedOptionsPath).toBeTypeOf('function');
   });
