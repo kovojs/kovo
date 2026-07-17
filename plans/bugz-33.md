@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-17
 
-**Resolved:** 2026-07-17
+**Status:** Active remediation
 **Baseline:** `4403ce7401760725836332aedb3031e1c0833cfe`
 
 **Scope:** Fresh remotely reachable and framework-authority findings after `bugz-32`. Deliberate
@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |      7 |
-| Medium   |    0 |      6 |
+| Medium   |    1 |      6 |
 | Low      |    0 |      3 |
 
 ## High
@@ -30,7 +30,9 @@ rendering, Better Auth, and managed SQL.
     expiries, bounded committed cleanup, persisted per-surface watermarks, and a fail-closed v3
     capability cutover. Pending ambiguity never expires automatically.
   - **Evidence:** integrated Postgres/replay matrix 229/229; capability/route/Postgres matrix
-    106/106.
+    106/106. Follow-up `6457f772e` keeps optional posture probes inside a savepoint and audits the
+    runtime login through a privileged posture client; the exact split-role Postgres probe and
+    Postgres runtime/replay matrix passed 1/1 and 130/130.
 
 - [x] **H2 - Configured mutation replay could be silently disabled, and asynchronous admission
       could cross the token horizon before handler execution.**
@@ -131,12 +133,23 @@ rendering, Better Auth, and managed SQL.
     facts, recheck at reservation/settlement, and preserve pending ambiguity.
   - **Evidence:** webhook/API matrix 72/72 and integrated replay matrix 229/229.
 
+- [ ] **M7 - Packaged Better Auth credential mutations bypass Better Auth's router rate limiter.**
+  - The wrappers call `auth.api.signInEmail` and `auth.api.signUpEmail` directly. Better Auth 1.6.17
+    applies its limiter at router ingress, so repeated remote credential attempts through Kovo never
+    receive the router's `429`; a control sent through `auth.handler` does.
+  - **Open:** route credential attempts through a framework-pinned handler request, preserve Kovo's
+    CSRF and origin boundary, derive rather than trust client identity, use durable multi-instance
+    limiter state for framework-owned bindings, and prove bounded fresh-key storage.
+
 ## Low
 
 - [x] **L1 - The Vercel preset copied framework metadata files into the public static root.**
   - `_headers` and `kovo-static-manifest.json` disclosed internal deploy/header metadata even though
     the runtime did not need them as public assets.
-  - **Fixed:** `82dc47260` omits both files from the Vercel static output.
+  - **Fixed:** `82dc47260` omits both files from the Vercel static output. Follow-up `8753ea9b7`
+    closes the same disclosure in Cloudflare static and mixed builds while retaining the reserved
+    `_headers` deploy artifact.
+  - **Evidence:** Cloudflare build and static-output matrices 53/53 and 22/22.
 
 - [x] **L2 - Durable task-status filters and result breadth lacked tight operational bounds.**
   - An exposed operator/status endpoint could request overly broad scans or oversized status data.
@@ -156,6 +169,4 @@ rendering, Better Auth, and managed SQL.
 - Durable Postgres/webhook/replay focused matrix: 229/229.
 - Capability/route/Postgres focused matrix: 106/106.
 - Document/app-document focused matrix: 96/96.
-- Fresh non-replay remote-boundary review found no other confirmed defect across adapters, CSRF,
-  cookies/redirects, credential delegation, files/static/upload/rendering, egress, Better Auth, and
-  managed SQL/auth.
+- Final exact-tip remote-boundary review remains open until M7 and current regression repairs land.
