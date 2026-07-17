@@ -2,168 +2,53 @@
 
 **Date:** 2026-07-16
 
-**Baseline:** `e71f216829a8039b6bdd0cc77d328fa136e09b6c` (`origin/main` when this
-ledger was reproduced).
+**Resolved:** 2026-07-17
+**Baseline:** `e71f216829a8039b6bdd0cc77d328fa136e09b6c`
 
-**Scope:** Distinct request-classifier temporal/provenance findings from the post-`bugz-30`
-adversarial pass. Rankings prioritize practical authority impact, then exploitability. `SPEC.md`
-§6.6, §9.1, and §9.6 are normative: classifier-recognized intrinsics are pinned before
-authored evaluation, uncertain provenance fails closed, and request/task authority may execute only
-inside its owning settlement boundary.
+**Scope:** Temporal/provenance classifier cases found after `bugz-30`. This ledger was reassessed
+against the explicit trusted-application-code boundary added to SPEC §6.6. Kovo statically guards
+its supported authoring subset; it does not sandbox deliberately hostile server modules or
+same-realm dependencies.
 
-## Severity summary
+## Resolution
 
-| Severity | Families | Items |
-| -------- | -------: | ----- |
-| Critical |        3 | C1-C3 |
-| High     |        1 | H1    |
+| Classification | Open | Closed |
+| -------------- | ---: | -----: |
+| Remote security defect | 0 | 1 |
+| Supported-subset defense-in-depth | 0 | 3 |
+| Privileged same-realm non-finding | 0 | 3 |
 
-## Critical
+- [x] **H1 - Reject direct deferred-class authority after request/task settlement.**
+  - Direct and transparent class/thenable returns that schedule request, storage, DB, task,
+    webhook, cookie, or failure authority after settlement now fail the supported-subset classifier.
+  - **Evidence:** the temporal trust-escape regressions and production-artifact cases landed through
+    `d8437c98c`; `pnpm run check:security-classifier-corpus` passes at the integrated tip.
 
-- [ ] **C1 - Exact global namespace-member replacement can turn reviewed intrinsic outcomes into
-      authored late-authority thenables without KV424.**
-  - A top-level `Object.defineProperty` replacement of `Promise.resolve`, `Response.json`,
-    `Array.isArray`, or `JSON.stringify` is still accepted as the exact reviewed member. The
-    replacement can return an authored class thenable whose hook settles first and performs network
-    authority afterward.
-  - **Representative repro:**
+- [x] **C1-C3 reassessment - Do not treat deliberate same-realm JavaScript compromise as a remote
+  framework vulnerability.**
+  - The remaining repros install or manufacture an authored callable `then`, replace reviewed
+    globals, mutate trusted carriers, and schedule ambient `fetch` from trusted app/dependency code.
+    Remote request bytes neither provide nor recover that callable.
+  - SPEC §6.6 now states the boundary explicitly at `f24d6e076`: mutually untrusted plugins or
+    generated server code require a separate process/isolated realm plus typed RPC. Finite
+    intrinsic pinning and syntax/value-flow rules are defense-in-depth, not a JavaScript sandbox.
+  - **Evidence:** an independent exact-tip reassessment reproduced the four residual cases only with
+    deliberate trusted-code installation and rejected the proposed ~952-line partial effect model.
 
-    ```ts
-    import { s, task } from '@kovojs/server';
-    class Deferred {
-      static then(resolve: (value: { ok: true }) => void): void {
-        resolve({ ok: true });
-        queueMicrotask(() => {
-          void fetch('https://example.test/late');
-        });
-      }
-    }
-    Object.defineProperty(Promise, 'resolve', { value: () => Deferred });
-    task('intrinsic-member', {
-      input: s.object({}),
-      async run() {
-        return Promise.resolve();
-      },
-    });
-    ```
+- [x] **Retain the landed finite classifier improvements as defense-in-depth without overstating
+  their guarantee.**
+  - Exact global-member replacement, mutated-root provenance, common helper/container carriers,
+    and authored thenable settlement receive additional diagnostics through
+    `d4c6717ec..d8437c98c`.
+  - These checks reduce accidental misuse inside the supported subset. They are not cited as proof
+    against `Function`, dynamic loading, native addons, reflection, or hostile same-realm packages.
 
-  - **Evidence:** bundling the e71 classifier and invoking
-    `collectUnregisteredSinksFromProject` returned `[]` for the representative and for otherwise
-    identical `Response.json`, `Array.isArray`, and `JSON.stringify` replacements. An ECMAScript
-    trace produced `then -> framework-settled -> late-authority`. This contradicts the direct
-    namespace-member lockdown required by SPEC §6.6 and crosses the request/task settlement model
-    in §9.1/§9.6.
-  - **Acceptance:** require one framework-owned, pre-authored-evaluation identity for every exact
-    global member the classifier trusts; reject assignment, descriptor, alias, and cross-module
-    replacement before granting the reviewed call result; add all four variants to the KV424
-    corpus and the production-artifact paranoid gate.
+- [x] **Do not integrate the residual temporal rewrite.**
+  - The uncommitted experiment in the review worktree is intentionally excluded: it adds a large,
+    incomplete alias/effect model for an out-of-scope sandbox claim and has no remote-input exploit.
 
-- [ ] **C2 - Framework and native-Promise assimilation still accept authored class thenables
-      through opaque helper, container-method, and callback results, allowing authority after
-      settlement.**
-  - Direct and statically transparent class values now fail closed, including pristine const
-    aliases, direct object/array projections and destructuring, expression carriers,
-    imports/re-exports, and sync framework-root outputs. Opaque helper and container-method results
-    remain open, as do values returned by native-Promise callbacks. Examples include `.at()`,
-    `.slice()`, `.find()`, `.map()`, `Reflect.get()`, and `then`/`catch`/`finally` callbacks.
-  - **Representative repro:**
+## Latest verification
 
-    ```ts
-    import { s, task } from '@kovojs/server';
-    task('callback-carrier', {
-      input: s.object({}),
-      async run(_input, context) {
-        class Deferred {
-          static then(resolve: (value: { ok: true }) => void): void {
-            resolve({ ok: true });
-            queueMicrotask(() => {
-              void context.fetch('https://example.test/late');
-            });
-          }
-        }
-        return Promise.resolve(1).then(() => [Deferred].at(0));
-      },
-    });
-    ```
-
-  - **Evidence:** the e71 collector returned `[]` for direct `return Deferred`, a const alias,
-    `[Deferred].at(0)`, and the Promise-callback repro. The same runtime trace places late authority
-    after framework settlement. The transparent slice is now closed; a fresh 9bed matrix still
-    reproduces helper-return, container-method, and callback-result carriers. SPEC §6.6, §9.1,
-    §9.6.
-  - [x] Close direct and transparent assimilation paths: direct classes, pristine const aliases,
-        direct object/array projections and const destructuring, conditional/logical/comma/simple
-        assignment outputs, imported/renamed/default/re-export aliases, and sync framework roots.
-    - **Evidence:** the focused transparent-class/import regression matrix, full trust-escape suite,
-      classifier corpus, and Phase 5 Postgres production-artifact harness pass at `f38b41220`.
-  - [x] Close exact request-local `Map#get` carriers without blessing stored values or unbounded
-        carrier graphs.
-    - **Evidence:** the benign/stored-class/direct-cycle/mutual-cycle/depth matrix, full 307-test
-      trust suite, and `check:security-classifier-corpus` pass at `4f714b2b8`.
-  - [ ] Close opaque helper-return, container-method, and native-Promise callback carriers,
-        including `.at()`, `.slice()`, `.find()`, `.map()`, `Reflect.get()`, and
-        `then`/`catch`/`finally` outputs.
-  - **Acceptance:** make every framework/native-Promise assimilation site fail closed unless the
-    value is proven non-thenable or is an exact framework/native outcome whose identity is pinned;
-    cover sync and async request roots, promise settlement callbacks, imports/re-exports, dynamic
-    then assignment/prototypes, and opaque container projections without regressing ordinary
-    `Response`, redirect/not-found/respond, primitive, plain-data, or exact native-Promise outcomes.
-
-- [ ] **C3 - Trusted root input/request provenance remains trusted after mutation and is assigned
-      to call-derived outputs, laundering the same authored thenable.**
-  - A root role survives whole/property assignment, array/object destructuring, `Object.assign`,
-    `Object.defineProperty`, `Reflect.set`, loop assignment, and mutation through an aggregate
-    helper. Separately, `map`, `reduce`, `reduceRight`, `flatMap`, and string protocol hooks can label
-    callback-produced values as request input. Returning the contaminated value therefore bypasses
-    the otherwise conservative opaque-carrier behavior.
-  - **Representative repros:**
-
-    ```ts
-    import { s, task } from '@kovojs/server';
-    class Deferred {
-      static then(resolve: (value: { ok: true }) => void): void {
-        resolve({ ok: true });
-        queueMicrotask(() => {
-          void fetch('https://example.test/late');
-        });
-      }
-    }
-
-    task('x', {
-      input: s.object({ value: s.string() }),
-      async run(input) {
-        Object.defineProperty(input, 'value', { value: Deferred });
-        return input.value;
-      },
-    });
-
-    task('y', {
-      input: s.object({ values: s.array(s.string()) }),
-      async run(input) {
-        return input.values.map(() => Deferred)[0];
-      },
-    });
-    ```
-
-  - **Evidence:** on clean e71, an 18-case async-root matrix returned `[]` for property/whole
-    assignment, both destructuring forms, `Object.assign`, `Reflect.set`, descriptor replacement,
-    `for..of`, aggregate-helper mutation, `reduce`/`reduceRight`, `map`/`flatMap`,
-    `Symbol.match`/`replace`/`split`, and Request descriptor replacement. Controls for a generic
-    opaque call, mutable class alias, and module `Map.get` emitted KV424 facts, isolating stale
-    trusted-role/call-result provenance as the failure. SPEC §6.6, §9.1, §9.6.
-  - **Acceptance:** invalidate or recompute root roles across every write/escape edge and derive
-    callback/protocol call results from the callback outputs rather than the receiver role; add the
-    full assignment, aggregate, loop, map/reduce/flatMap, and symbol-hook matrix with safe immutable
-    input projections as negative controls.
-
-## High
-
-- [x] **H1 - Direct request/capability calls could execute from deferred class instance
-      initialization after the owning root settled.**
-  - A returned class thenable could resolve first, instantiate itself in a queued microtask, and
-    execute otherwise-reviewed request body, storage, DB, task composition/scheduling, webhook,
-    invalidation/change-record, cookie, or failure authority from instance fields.
-  - **Evidence:** e71's deferred-class composition, scheduling, exact-root allowlist, and
-    immediate-control regression tests passed 3/3. A same-session collector repro emitted
-    `request-handler.opaque-call` for both `request.text` and `context.storage.get`, while the
-    immediate controls remain accepted. SPEC §6.6, §9.1, §9.6.
+- `pnpm run check:security-classifier-corpus`
+- `pnpm run check:fail-closed-classifiers`
+- `pnpm run check:classifier-verdict-routing`
