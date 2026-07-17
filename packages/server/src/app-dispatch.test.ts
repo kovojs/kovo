@@ -1103,7 +1103,6 @@ describe('server app matched dispatch boundary', () => {
         notFound() {
           return {
             body: trustedHtml('<h1>Missing</h1>'),
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
             status: 404,
           };
         },

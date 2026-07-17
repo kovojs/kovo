@@ -64,6 +64,8 @@ export type {
   UnauthenticatedHandler,
 } from '../guards.js';
 export type {
+  AppResponseHeaderName,
+  AppResponseHeaders,
   NotFound,
   ResponseHeaderValue,
   ResponseHeaders,

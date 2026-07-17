@@ -494,6 +494,8 @@ export type {
   RateLimitOptions,
   RedirectLocationAllowlistEntry,
   Redirect,
+  AppResponseHeaderName,
+  AppResponseHeaders,
   ResponseHeaders,
   ResponseHeaderValue,
   Route,

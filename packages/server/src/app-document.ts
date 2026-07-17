@@ -28,9 +28,16 @@ import {
 } from './html.js';
 import {
   appendResponseHeader,
+  cloneResponseHeaders,
   routeResponseToDocumentResponse,
+  type ResponseHeaders,
   type RoutePageResponse,
 } from './response.js';
+import {
+  assertAllowedAppResponseHeaders,
+  createAppResponseHeaderClassifier,
+} from './response-app-headers.js';
+import type { TransportResponseHeaderEntry } from './response-transport-headers.js';
 import type { ForbiddenRenderer } from './guards.js';
 import {
   renderRoutePageResponse,
@@ -68,6 +75,9 @@ import {
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 const fallbackBroadcastFingerprintSecret = randomBytes(32);
+const classifyConfiguredErrorShellHeaders = createAppResponseHeaderClassifier({
+  lowerCase: witnessStringToLowerCase,
+});
 
 export interface AppRouteDocumentOptions {
   app: KovoApp;
@@ -560,10 +570,11 @@ function normalizeConfiguredErrorShellResponse(
   status: 403 | 404 | 500,
 ): RoutePageResponse {
   if (isRoutePageResponseLike(rendered)) {
+    const headers = configuredErrorShellHeaders(rendered);
     return {
       ...rendered,
       body: 'body' in rendered ? renderConfiguredErrorShellBody(rendered.body) : '',
-      headers: rendered.headers ?? {},
+      headers,
       status,
     };
   }
@@ -573,6 +584,42 @@ function normalizeConfiguredErrorShellResponse(
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
     status,
   };
+}
+
+function configuredErrorShellHeaders(rendered: {
+  headers?: RoutePageResponse['headers'];
+}): ResponseHeaders {
+  const descriptor = witnessGetOwnPropertyDescriptor(rendered, 'headers');
+  if (descriptor === undefined) return {};
+  if (!('value' in descriptor)) {
+    throw new TypeError('Configured error shell headers must be a stable own data property.');
+  }
+  if (descriptor.value === undefined) return {};
+  const headers = cloneResponseHeaders(descriptor.value as ResponseHeaders);
+  const entries: TransportResponseHeaderEntry[] = [];
+  const names = witnessObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = witnessGetOwnPropertyDescriptor(headers, name)?.value;
+    if (typeof value === 'string') {
+      entries[entries.length] = { name, value };
+      continue;
+    }
+    if (!witnessIsArray(value)) {
+      throw new TypeError(
+        `Configured error shell header ${name} must be a string or string array.`,
+      );
+    }
+    for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
+      const entry = value[valueIndex];
+      if (typeof entry !== 'string') {
+        throw new TypeError(`Configured error shell header ${name} values must be strings.`);
+      }
+      entries[entries.length] = { name, value: entry };
+    }
+  }
+  assertAllowedAppResponseHeaders(entries, classifyConfiguredErrorShellHeaders);
+  return headers;
 }
 
 function isRoutePageResponseLike(

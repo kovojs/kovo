@@ -1000,6 +1000,8 @@ export type StaticExportOptions = any;
 export type StyleInput = any;
 export type CsrfOptions<Request = any> = any;
 export type SigningKeyRing = any;
+export type AppResponseHeaderName = 'Cache-Control' | 'Last-Modified' | 'Vary';
+export type AppResponseHeaders = Partial<Record<AppResponseHeaderName, string | string[]>>;
 
 export class ComponentXmlError extends Error {}
 export const BodyEnd: any;
@@ -1063,6 +1065,27 @@ export const tag: any;
 export const redirect: any;
 export const renderRegistry: any;
 export const renderTree: any;
+export const respond: {
+  file(
+    body: ArrayBuffer | ReadableStream<Uint8Array> | Uint8Array | string,
+    options: {
+      contentType: string;
+      etag?: string;
+      filename?: string;
+      headers?: AppResponseHeaders;
+    },
+  ): any;
+  stream(
+    body: ArrayBuffer | ReadableStream<Uint8Array> | Uint8Array | string,
+    options: {
+      contentType: string;
+      disposition?: 'attachment' | 'inline';
+      etag?: string;
+      filename?: string;
+      headers?: AppResponseHeaders;
+    },
+  ): any;
+};
 export const route: any;
 export const s: any;
 export const safeRichHtml: any;

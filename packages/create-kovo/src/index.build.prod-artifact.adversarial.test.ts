@@ -467,12 +467,12 @@ describe('create-kovo starter (build integration: adversarial production artifac
           await fetchTextWhenReady(`${origin}/m1/header-safe.txt`, output);
           const safe = await fetch(`${origin}/m1/header-safe.txt`);
           await expect(safe.text()).resolves.toBe('m1 safe\n');
-          expect(safe.headers.get('x-m1-proof')).toBe('safe');
+          expect(safe.headers.get('last-modified')).toBe('Wed, 21 Oct 2015 07:28:00 GMT');
 
           const unsafe = await fetch(`${origin}/m1/header-unsafe.txt`);
           const unsafeBody = await unsafe.text();
           expect(unsafe.status, unsafeBody).toBe(500);
-          expect(unsafe.headers.get('x-m1-proof')).toBeNull();
+          expect(unsafe.headers.get('vary')).toBeNull();
           expect(unsafe.headers.getSetCookie()).toEqual([]);
 
           const headerCookieJar = new Map<string, string>();
@@ -1319,13 +1319,13 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
         "    route('/m1/header-safe.txt', {",
         "      access: publicAccess('public M1 header sink proof'),",
         '      page() {',
-        "        return respond.file('m1 safe\\n', { contentType: 'text/plain', headers: { 'X-M1-Proof': 'safe' } });",
+        "        return respond.file('m1 safe\\n', { contentType: 'text/plain', headers: { 'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT' } });",
         '      },',
         '    }),',
         "    route('/m1/header-unsafe.txt', {",
         "      access: publicAccess('public M1 header sink proof'),",
         '      page() {',
-        "        return respond.file('m1 unsafe\\n', { contentType: 'text/plain', headers: { 'X-M1-Proof': 'm1-header-unsafe\\r\\nSet-Cookie: m1=owned' } });",
+        "        return respond.file('m1 unsafe\\n', { contentType: 'text/plain', headers: { Vary: 'm1-header-unsafe\\r\\nSet-Cookie: m1=owned' } });",
         '      },',
         '    }),',
         "    route('/m1/redirect', {",

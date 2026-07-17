@@ -1256,6 +1256,80 @@ describe('server app document boundary', () => {
     expect(onError.mock.calls[0]?.[1].request.url).toBe('https://shop.example.test/missing?from');
   });
 
+  it('fails remote-derived error-shell header names closed with KV415', async () => {
+    const onError = vi.fn();
+    const remoteHeaders: Record<string, string> = {
+      'X-Accel-Redirect': '/internal/admin',
+    };
+    const request = new Request('https://shop.example.test/missing');
+    const app = createApp({
+      errorShells: {
+        notFound() {
+          return {
+            body: trustedHtml('<main>must not render</main>'),
+            headers: remoteHeaders,
+          };
+        },
+      },
+      onError,
+    });
+
+    const response = await renderAppErrorDocumentResponse(app, request, 404);
+
+    expect(response.status).toBe(404);
+    expect(response.body).not.toContain('must not render');
+    expect(headerValue(response.headers, 'x-accel-redirect')).toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'KV415',
+        message: expect.stringMatching(/X-Accel-Redirect.*outside the direct allowlist/u),
+      }),
+      expect.objectContaining({ operation: 'error-shell', status: 404 }),
+    );
+  });
+
+  it('preserves allowed error-shell response metadata before document hardening', async () => {
+    const request = new Request('https://shop.example.test/missing');
+    const app = createApp({
+      errorShells: {
+        notFound() {
+          return {
+            body: trustedHtml('<main>allowed metadata</main>'),
+            headers: {
+              'Cache-Control': 'private, no-store',
+              'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
+              Vary: 'Accept-Language',
+            },
+          };
+        },
+      },
+    });
+
+    const response = await renderAppErrorDocumentResponse(app, request, 404);
+
+    expect(response.body).toContain('allowed metadata');
+    expect(headerValue(response.headers, 'last-modified')).toBe('Wed, 21 Oct 2015 07:28:00 GMT');
+    expect(headerValue(response.headers, 'vary')).toContain('Accept-Language');
+  });
+
+  it('rejects forbidden literal error-shell header names at author time', () => {
+    if (false) {
+      createApp({
+        errorShells: {
+          notFound() {
+            return {
+              body: trustedHtml('<main>blocked</main>'),
+              // @ts-expect-error SPEC §9.1.1 exposes only typed structured response metadata.
+              headers: { 'Access-Control-Allow-Origin': '*' },
+            };
+          },
+        },
+      });
+    }
+
+    expect(true).toBe(true);
+  });
+
   it('renders route notFound outcomes through the configured 404 shell', async () => {
     const productRoute = route('/products/:id', {
       page() {
@@ -1269,8 +1343,7 @@ describe('server app document boundary', () => {
           return {
             body: trustedHtml(`<main data-shell="404">configured:${status}</main>`),
             headers: {
-              'Content-Type': 'text/plain;charset=UTF-8',
-              'X-Shell': 'kept',
+              'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
             },
             status,
           };
@@ -1291,7 +1364,7 @@ describe('server app document boundary', () => {
     expect(response.body).toContain('<main data-shell="404">configured:404</main>');
     expect(response.body).toContain('<!doctype html>');
     expectDocumentSecurityFloor(response.headers);
-    expect(headerValue(response.headers, 'x-shell')).toBe('kept');
+    expect(headerValue(response.headers, 'last-modified')).toBe('Wed, 21 Oct 2015 07:28:00 GMT');
   });
 
   it('applies the credential cache floor to a matched default 404 carrying a rolling cookie', async () => {
@@ -1416,7 +1489,6 @@ describe('server app document boundary', () => {
         serverError({ status }) {
           return {
             body: trustedHtml(`<main data-shell="500">configured:${status}</main>`),
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
             status,
           };
         },
@@ -1465,7 +1537,6 @@ describe('server app document boundary', () => {
         serverError({ request, status }) {
           return {
             body: `<main data-shell="${status}">${request.headers.get('x-shell-payload')}</main>`,
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
             status,
           };
         },
@@ -1503,7 +1574,6 @@ describe('server app document boundary', () => {
         forbidden({ status }) {
           return {
             body: trustedHtml(`<main data-shell="403">configured:${status}</main>`),
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
             status,
           };
         },
@@ -1595,12 +1665,10 @@ describe('server app document boundary', () => {
       errorShells: {
         forbidden: ({ status }) => ({
           body: `<main data-app-shell="403">app:${status}</main>`,
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
           status,
         }),
         notFound: ({ status }) => ({
           body: `<main data-app-shell="404">app:${status}</main>`,
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
           status,
         }),
       },

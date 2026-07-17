@@ -92,6 +92,19 @@ import * as wireHtmlApi from '../wire-html.js';
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppDocumentOptions = import('../index.js').AppDocumentOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootAppResponseHeaderName = import('@kovojs/server').AppResponseHeaderName;
+const rootAppResponseHeaders: import('@kovojs/server').AppResponseHeaders = {
+  'Cache-Control': 'private, no-store',
+  'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
+  Vary: 'Accept-Encoding',
+};
+void rootAppResponseHeaders;
+const rejectedRootAppResponseHeaders: import('@kovojs/server').AppResponseHeaders = {
+  // @ts-expect-error SPEC §9.1.1 exposes only the direct structured metadata allowlist.
+  'X-Accel-Redirect': '/internal/admin',
+};
+void rejectedRootAppResponseHeaders;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootKovoPostgresSystemDb = import('@kovojs/server').KovoPostgresSystemDb;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedRootUsePostgresSystemDb =

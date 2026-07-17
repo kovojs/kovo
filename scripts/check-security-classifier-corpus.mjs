@@ -539,6 +539,55 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'structured-app-response-headers',
+    marker: '@kovo-security-classifier-corpus structured-app-response-headers',
+    testFiles: [
+      'packages/server/src/response-app-headers.test.ts',
+      'packages/server/src/response.test.ts',
+      'packages/server/src/app-document.test.ts',
+      'packages/server/src/api/app.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'exact-runtime-and-public-type-set',
+        file: 'packages/server/src/response-app-headers.test.ts',
+        snippets: [
+          'keeps the exact runtime allowlist aligned with the public type-level set',
+          "'cache-control'",
+          "'last-modified'",
+          "'vary'",
+          'MissingAppResponseHeaderName',
+        ],
+      },
+      {
+        id: 'remote-derived-route-outcomes',
+        file: 'packages/server/src/response.test.ts',
+        snippets: [
+          'rejects remote-derived names outside the structured app response allowlist',
+          "'X-Accel-Redirect'",
+          "'Access-Control-Allow-Origin'",
+        ],
+      },
+      {
+        id: 'configured-error-shell-boundary',
+        file: 'packages/server/src/app-document.test.ts',
+        snippets: [
+          'fails remote-derived error-shell header names closed with KV415',
+          'outside the direct allowlist',
+        ],
+      },
+      {
+        id: 'public-api-allowlist',
+        file: 'packages/server/src/api/app.test.ts',
+        snippets: [
+          'RootAppResponseHeaderName',
+          'rejectedRootAppResponseHeaders',
+          "'X-Accel-Redirect'",
+        ],
+      },
+    ],
+  },
+  {
     id: 'kv418-request-authority',
     marker: '@kovo-security-classifier-corpus kv418-request-authority',
     testFiles: ['packages/compiler/src/scan/parse.test.ts'],

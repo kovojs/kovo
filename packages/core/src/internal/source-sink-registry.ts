@@ -230,6 +230,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
   {
     consumers: [
       'response-builder',
+      'configured-error-shell-builder',
       'cookie-builder',
       'raw-endpoint-finalizer',
       'static-export-header-sink',
@@ -239,15 +240,17 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     context: 'http.headers.cookies.redirects',
     diagnostic: 'KV415',
     escapeHatch: 'endpoint-raw-response-body-only(no-transport-header-authority)',
-    firstParser: 'respond-builder+cookie-serializer+response-transport-header-classifier',
-    guard: 'typed-header-allowlist+typed-cookie-builder+transport-owned-header-deny-set',
+    firstParser:
+      'respond-builder+configured-error-shell-builder+cookie-serializer+app-response-header-classifier+response-transport-header-classifier',
+    guard:
+      'direct-app-header-allowlist+dedicated-field-options+typed-cookie-builder+transport-owned-header-deny-set',
     runtimeGuard:
-      'reject-cr-lf-nul-controls+reject-framing-hop-by-hop+structural-cookie-serialization',
+      'reject-unknown-direct-app-names+reject-cr-lf-nul-controls+reject-framing-hop-by-hop+structural-cookie-serialization',
     schema:
-      'mutation-response-header-channel|route-outcome-headers|raw-endpoint-Response|static-export-headers|Set-Cookie|Content-Type|Cache-Control|Vary|ETag|Last-Modified|Content-Disposition|Location|Retry-After|Kovo-*|Content-Length|Connection|Keep-Alive|Proxy-Connection|TE|Trailer|Transfer-Encoding|Upgrade|Proxy-Authenticate|Proxy-Authorization|HTTP2-Settings|Node-Bun-Workers-header-conversion',
+      'mutation-response-header-channel|route-outcome-direct-headers(Cache-Control,Last-Modified,Vary)|configured-error-shell-direct-headers(Cache-Control,Last-Modified,Vary)|raw-endpoint-Response|static-export-headers|Set-Cookie|Content-Type|ETag|Content-Disposition|Location|Retry-After|Kovo-*|Content-Length|Connection|Keep-Alive|Proxy-Connection|TE|Trailer|Transfer-Encoding|Upgrade|Proxy-Authenticate|Proxy-Authorization|HTTP2-Settings|Node-Bun-Workers-header-conversion',
     sink: 'http.header.cookie',
     source:
-      'mutation-response-channel|route-outcome|raw-endpoint-response|static-export-config|session-provider|request.headers|cookies|redirect-target|app-config-env-values',
+      'mutation-response-channel|route-outcome|configured-error-shell|raw-endpoint-response|static-export-config|session-provider|request.headers|cookies|redirect-target|app-config-env-values',
     specAnchor: 'SPEC.md#9.1;SPEC.md#11.3',
     testEvidence: [existingEvidence.cookie, existingEvidence.response],
     trust: 'transport-metadata',
@@ -438,6 +441,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
     family: 'http.header.cookie',
     negativeTestEvidence: [
       'packages/server/src/cookies.test.ts',
+      'packages/server/src/response-app-headers.test.ts',
       'packages/server/src/response.test.ts',
     ],
     payloads: [
@@ -447,6 +451,8 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'quoted filename breakout',
       'bad header names',
       'reserved Kovo-* writes',
+      'unknown structured app header names',
+      'proxy deployment-control headers',
       'private cache override',
       'raw Set-Cookie forwarding',
     ],
@@ -798,20 +804,26 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
   },
   {
     hostileValueEvidence: [
+      'packages/server/src/response-app-headers.test.ts',
+      'packages/server/src/response.test.ts',
+      'packages/server/src/app-document.test.ts',
       'packages/server/src/response-posture.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
     ],
     inventoryFamily: 'http.header.cookie',
     mechanism: 'own',
     mechanismDetail:
-      'Typed and raw response finalization own header names, multi-value semantics, controls, and the transport-owned framing/hop-by-hop deny set before adapter mutation.',
+      'Direct app inputs pass an exact metadata allowlist before framework fields are assembled; typed and raw finalization then own controls and the transport-owned framing/hop-by-hop deny set before adapter mutation.',
     proofEvidence: [
+      'packages/server/src/response-app-headers.test.ts',
+      'packages/server/src/response.test.ts',
+      'packages/server/src/app-document.test.ts',
       'packages/server/src/response-posture.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
     ],
     sink: 'http response headers',
     soleDoor:
-      'finalizeResponseHeaders/finalizeRawResponseHeaders plus the shared response transport-header classifier at static and adapter sinks',
+      'respond/error-shell app-header classifiers, then finalizeResponseHeaders/finalizeRawResponseHeaders and the shared transport-header classifier at static and adapter sinks',
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
   },
   {

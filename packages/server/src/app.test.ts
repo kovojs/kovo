@@ -1557,7 +1557,6 @@ describe('server createApp request shell', () => {
             const url = new URL(request.url);
             return {
               body: trustedHtml(`<main>${status}:${url.pathname}</main>`),
-              headers: { 'Content-Type': 'text/html; charset=utf-8' },
               status,
             };
           },
@@ -1599,7 +1598,7 @@ describe('server createApp request shell', () => {
               headers: {
                 'Clear-Site-Data': '"cookies"',
                 'Set-Cookie': 'sid=attacker; Path=/',
-              },
+              } as never,
             };
           },
         },
@@ -1645,7 +1644,7 @@ describe('server createApp request shell', () => {
               headers: {
                 'Clear-Site-Data': '"cookies"',
                 'Set-Cookie': 'sid=attacker; Path=/',
-              },
+              } as never,
             };
           },
         },
@@ -1683,7 +1682,7 @@ describe('server createApp request shell', () => {
             headers: {
               'Clear-Site-Data': '"cookies"',
               'Set-Cookie': 'sid=attacker; Path=/',
-            },
+            } as never,
           };
         },
       },
@@ -1706,7 +1705,9 @@ describe('server createApp request shell', () => {
     expect(response.status).toBe(500);
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(response.headers.get('clear-site-data')).toBeNull();
-    await expect(response.text()).resolves.toContain('<main>startup error</main>');
+    const body = await response.text();
+    expect(body).not.toContain('<main>startup error</main>');
+    expect(body).toContain('Server Error');
   });
 
   it('reports failing error shells and falls back to stable no-internals documents', async () => {

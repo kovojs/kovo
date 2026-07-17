@@ -63,12 +63,27 @@ import {
   createTransportResponseHeaderClassifier,
   type TransportResponseHeaderEntry,
 } from './response-transport-headers.js';
+import {
+  assertAllowedAppResponseHeaders,
+  createAppResponseHeaderClassifier,
+  type AppResponseHeaderName,
+} from './response-app-headers.js';
+
+export type { AppResponseHeaderName } from './response-app-headers.js';
 
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
 
 /** A header bag mapping header names to values. */
 export type ResponseHeaders = Record<string, ResponseHeaderValue>;
+
+/**
+ * Direct app-owned metadata accepted on structured response outcomes.
+ *
+ * Use `contentType`, `etag`, `filename`/`disposition`, `redirect()`, and the typed mutation cookie
+ * builder for the corresponding dedicated response fields (SPEC §9.1.1; KV415).
+ */
+export type AppResponseHeaders = Partial<Record<AppResponseHeaderName, ResponseHeaderValue>>;
 
 const SERVER_REDIRECT_LOCATION_SINK = 'server:redirect-location';
 
@@ -208,20 +223,11 @@ export interface RouteFileOptions<Headers extends Record<string, string> = Recor
   filename?: string;
   headers?: Headers & {
     [Name in keyof Headers]: Name extends string
-      ? Lowercase<Name> extends
-          | 'connection'
-          | 'content-length'
-          | 'http2-settings'
-          | 'keep-alive'
-          | 'proxy-authenticate'
-          | 'proxy-authorization'
-          | 'proxy-connection'
-          | 'te'
-          | 'trailer'
-          | 'transfer-encoding'
-          | 'upgrade'
-        ? never
-        : Headers[Name]
+      ? string extends Name
+        ? Headers[Name]
+        : Lowercase<Name> extends Lowercase<AppResponseHeaderName>
+          ? Headers[Name]
+          : never
       : Headers[Name];
   };
 }
@@ -1010,7 +1016,7 @@ function routeResponseOutcome(
     rawHeaders === undefined
       ? undefined
       : witnessFreeze(snapshotStringHeaderRecord(rawHeaders, 'respond.file()/stream() headers'));
-  assertSafeRouteTransportHeaders(headers);
+  assertSafeAppRouteHeaders(headers);
   const contentDisposition = filename
     ? contentDispositionWithFilename(disposition, filename)
     : disposition;
@@ -1100,10 +1106,11 @@ function safeRouteOutcomeHeaders(
 const classifyRouteTransportResponseHeaders = createTransportResponseHeaderClassifier({
   lowerCase: securityStringToLowerCase,
 });
+const classifyRouteAppResponseHeaders = createAppResponseHeaderClassifier({
+  lowerCase: securityStringToLowerCase,
+});
 
-function assertSafeRouteTransportHeaders(
-  headers: Readonly<Record<string, string>> | undefined,
-): void {
+function assertSafeAppRouteHeaders(headers: Readonly<Record<string, string>> | undefined): void {
   if (headers === undefined) return;
   const entries: TransportResponseHeaderEntry[] = [];
   const names = securityObjectKeys(headers);
@@ -1116,6 +1123,7 @@ function assertSafeRouteTransportHeaders(
     entries[entries.length] = { name, value };
   }
   assertSafeTransportResponseHeaders(entries, classifyRouteTransportResponseHeaders);
+  assertAllowedAppResponseHeaders(entries, classifyRouteAppResponseHeaders);
 }
 
 const contentDispositionWithFilename = createContentDispositionWithFilename({

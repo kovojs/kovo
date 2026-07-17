@@ -59,6 +59,7 @@ describe('create-kovo starter (build integration: production response header art
             'header-route-omitted-policy.bin',
             'header-route-access-private.txt',
             'header-sink-unsafe.txt',
+            'header-name-unsafe.txt',
             'header-transport-unsafe.txt',
           ],
         },
@@ -99,7 +100,7 @@ describe('create-kovo starter (build integration: production response header art
       const safe = await fetch(`${origin}/header-sink-safe.txt`);
       await expect(safe.text()).resolves.toBe('safe header proof\n');
       expect(safe.status).toBe(200);
-      expect(safe.headers.get('x-kovo-header-proof')).toBe('safe-header-value');
+      expect(safe.headers.get('last-modified')).toBe('Wed, 21 Oct 2015 07:28:00 GMT');
 
       const safeStream = await fetch(`${origin}/header-stream-safe.bin`);
       await expect(safeStream.text()).resolves.toBe('safe stream proof\n');
@@ -132,12 +133,12 @@ describe('create-kovo starter (build integration: production response header art
       );
       expect(typedFile.headers.get('content-type')).toBe('application/octet-stream');
       expect(typedFile.headers.get('x-content-type-options')).toBe('nosniff');
-      expect(typedFile.headers.get('x-kovo-pinned')).toBe('pinned-genuine-header');
+      expect(typedFile.headers.get('vary')).toBe('Accept-Encoding');
 
       const unsafe = await fetch(`${origin}/header-sink-unsafe.txt`);
       const unsafeBody = await unsafe.text();
       expect(unsafe.status, unsafeBody).toBe(500);
-      expect(unsafe.headers.get('x-kovo-header-proof')).toBeNull();
+      expect(unsafe.headers.get('vary')).toBeNull();
       expect(unsafe.headers.getSetCookie()).toEqual([]);
       expect(unsafeBody).toContain('Server Error');
 
@@ -148,6 +149,14 @@ describe('create-kovo starter (build integration: production response header art
       expect(unsafeTransport.status, unsafeTransportBody).toBe(500);
       expect(unsafeTransport.headers.get('content-length')).not.toBe('0');
       expect(unsafeTransportBody).not.toContain('UNDECLARED_ROUTE_BYTES');
+
+      const unsafeName = await fetch(`${origin}/header-name-unsafe.txt`, {
+        headers: { 'x-response-name': 'X-Accel-Redirect' },
+      });
+      const unsafeNameBody = await unsafeName.text();
+      expect(unsafeName.status, unsafeNameBody).toBe(500);
+      expect(unsafeName.headers.get('x-accel-redirect')).toBeNull();
+      expect(unsafeNameBody).not.toContain('UNKNOWN_HEADER_BYTES');
 
       const pipelinedWire = await pipelinedTransportHeaderExchange(port);
       expect(pipelinedWire).toContain('HTTP/1.1 500');
@@ -472,7 +481,18 @@ function addHeaderSinkProofRoutes(root: string): void {
       '      page() {',
       "        return respond.file('safe header proof\\n', {",
       "          contentType: 'text/plain; charset=utf-8',",
-      "          headers: { 'X-Kovo-Header-Proof': 'safe-header-value' },",
+      "          headers: { 'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT' },",
+      '        });',
+      '      },',
+      '    }),',
+      "    route('/header-name-unsafe.txt', {",
+      "      access: publicAccess('public response header-name allowlist proof'),",
+      '      page(_context, request: AppRequest) {',
+      "        const name = request.headers.get('x-response-name') ?? 'X-Accel-Redirect';",
+      "        const headers: Record<string, string> = { [name]: '/internal/admin' };",
+      "        return respond.file('UNKNOWN_HEADER_BYTES', {",
+      "          contentType: 'text/plain; charset=utf-8',",
+      '          headers,',
       '        });',
       '      },',
       '    }),',
@@ -525,7 +545,7 @@ function addHeaderSinkProofRoutes(root: string): void {
       '      page() {',
       "        return respond.file('unsafe header proof\\n', {",
       "          contentType: 'text/plain; charset=utf-8',",
-      "          headers: { 'X-Kovo-Header-Proof': 'unsafe\\r\\nSet-Cookie: c2=owned' },",
+      "          headers: { Vary: 'unsafe\\r\\nSet-Cookie: c2=owned' },",
       '        });',
       '      },',
       '    }),',
@@ -561,7 +581,7 @@ function addHeaderSinkProofRoutes(root: string): void {
       "        return respond.file(new TextEncoder().encode('PINNED_GENUINE_BYTES'), {",
       "          contentType: 'application/octet-stream',",
       "          filename: 'pinned-genuine.bin',",
-      "          headers: { 'X-Kovo-Pinned': 'pinned-genuine-header' },",
+      "          headers: { Vary: 'Accept-Encoding' },",
       '        });',
       '      },',
       '    }),',

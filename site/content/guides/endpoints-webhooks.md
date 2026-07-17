@@ -100,27 +100,37 @@ The verifier kit includes generic HMAC and Standard Webhooks helpers. Provider-s
 including Stripe's exact signature format, can live in app/example code on top of those helpers; the
 audit prints the resolved verifier scheme or a named custom/none justification.
 
-## Typed response headers and cookies
+## Set response metadata
 
-Mutation handlers, endpoints, and route file/stream responses use typed response channels for
-transport metadata. They do not get a raw string map. Header names are confined to an allowlist such
-as `Set-Cookie`, `Cache-Control`, `Vary`, `ETag`, `Last-Modified`, `Content-Disposition`, and
-declared redirect `Location`; app code cannot write reserved `Kovo-*` framework headers.
-
-Every header name and value is rejected if it contains CR, LF, NUL, or other forbidden controls.
-That is a cookie-sink error. `Set-Cookie` must use the typed cookie builder, which validates the name,
-percent-encodes values, and serializes attributes structurally.
+Use the named file options for fields that change how a response is interpreted. The direct header
+bag is only for cache metadata:
 
 ```ts
-export function pdfResponse(bytes: BodyInit) {
-  return new Response(bytes, {
+import { respond } from '@kovojs/server';
+
+declare const pdfBytes: Uint8Array;
+
+function downloadInvoice() {
+  return respond.file(pdfBytes, {
+    contentType: 'application/pdf',
+    etag: '"invoice-42"',
+    filename: 'invoice-42.pdf',
     headers: {
       'Cache-Control': 'private, no-store',
-      'Content-Type': 'application/pdf',
+      Vary: 'Cookie',
     },
   });
 }
 ```
+
+`respond.file()` and `respond.stream()` accept `Cache-Control`, `Last-Modified`, and `Vary` in
+`headers`. Use `contentType`, `etag`, and `filename`/`disposition` for the dedicated fields. Return
+`redirect()` for a location. Mutation cookies go through `context.setCookie()`.
+
+Raw `endpoint()` responses may need other end-to-end integration headers. Return a Web `Response`
+for those. Kovo still rejects `Content-Length`, `Connection`, `Transfer-Encoding`, and the other
+adapter-owned framing or hop-by-hop fields before anything reaches the socket. Header controls such
+as CR, LF, and NUL also fail closed.
 
 ## Send CSRF tokens to raw endpoints
 

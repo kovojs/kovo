@@ -14,7 +14,7 @@ import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryFactory } from './query.js';
 import type { ServerRenderable } from './deferred-region.js';
 import type { MutationReplayStore } from './replay.js';
-import type { ResponseHeaders } from './response.js';
+import type { AppResponseHeaders } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
 import type { TaskDefinition, TaskFactory, TaskSchedulingRequest } from './task.js';
 import type { Reader } from './managed-db.js';
@@ -103,14 +103,14 @@ export type ErrorShellRenderer = (context: { request: Request; status: 403 | 404
   | Exclude<ServerRenderable, Promise<unknown>>
   | {
       body: Exclude<ServerRenderable, Promise<unknown>>;
-      headers?: ResponseHeaders;
+      headers?: AppResponseHeaders;
       status?: 403 | 404 | 500;
     }
   | Promise<
       | Exclude<ServerRenderable, Promise<unknown>>
       | {
           body: Exclude<ServerRenderable, Promise<unknown>>;
-          headers?: ResponseHeaders;
+          headers?: AppResponseHeaders;
           status?: 403 | 404 | 500;
         }
     >;

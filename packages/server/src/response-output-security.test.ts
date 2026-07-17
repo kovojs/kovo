@@ -4,12 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { generatedFragmentHtml } from './html.js';
 import { renderDeferredStream, renderDeferredStreamingResponse } from './deferred-stream.js';
 import { renderPageHints } from './hints.js';
-import {
-  redirectLocationHeader,
-  respond,
-  routeOutcomeResponse,
-  routeResponseToWebResponse,
-} from './response.js';
+import { redirectLocationHeader, respond } from './response.js';
 
 const originalArrayJoin = Array.prototype.join;
 const originalArraySome = Array.prototype.some;
@@ -24,18 +19,17 @@ afterEach(() => {
 });
 
 describe('response output intrinsic closure', () => {
-  it('keeps app Set-Cookie outside respond.file when Set.has lies', async () => {
+  it('keeps app Set-Cookie outside respond.file when Set.has lies', () => {
     Set.prototype.has = function () {
       return false;
     };
-    const outcome = respond.file('safe', {
-      contentType: 'text/plain',
-      headers: { 'Set-Cookie': 'sid=attacker; Path=/' },
-    });
-    const response = routeResponseToWebResponse(routeOutcomeResponse(outcome, { headers: {} }), {
-      method: 'GET',
-    });
-    expect(response.headers.get('Set-Cookie')).toBeNull();
+    expect(() =>
+      respond.file('safe', {
+        contentType: 'text/plain',
+        // @ts-expect-error Cookies use the typed mutation cookie builder (SPEC §9.1.1; KV415).
+        headers: { 'Set-Cookie': 'sid=attacker; Path=/' },
+      }),
+    ).toThrow(/KV415.*Set-Cookie.*typed mutation cookie builder/u);
   });
 
   it('neutralizes a protocol-relative redirect when String.startsWith lies selectively', () => {

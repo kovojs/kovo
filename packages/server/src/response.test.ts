@@ -207,7 +207,7 @@ describe('server response adapters', () => {
     await expect(response.text()).resolves.toBe('');
   });
 
-  it('preserves cache and security headers on file ETag 304 responses', async () => {
+  it('preserves allowed metadata and the security floor on file ETag 304 responses', async () => {
     const routeResponse = routeOutcomeResponse(
       respond.file('orders', {
         contentType: 'text/plain; charset=utf-8',
@@ -215,8 +215,8 @@ describe('server response adapters', () => {
         filename: 'orders.txt',
         headers: {
           'Cache-Control': 'public, max-age=60',
-          'Content-Security-Policy': "default-src 'none'",
-          'X-Download-Options': 'noopen',
+          'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
+          Vary: 'Accept-Encoding',
         },
       }),
       { headers: { 'If-None-Match': '"orders-v1"' }, method: 'GET' },
@@ -226,9 +226,9 @@ describe('server response adapters', () => {
     expect(response.status).toBe(304);
     expect(response.headers.get('etag')).toBe('"orders-v1"');
     expect(response.headers.get('cache-control')).toBe('public, max-age=60');
-    expect(response.headers.get('content-security-policy')).toBe("default-src 'none'");
+    expect(response.headers.get('last-modified')).toBe('Wed, 21 Oct 2015 07:28:00 GMT');
+    expect(response.headers.get('vary')).toBe('Accept-Encoding');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
-    expect(response.headers.get('x-download-options')).toBe('noopen');
     await expect(response.text()).resolves.toBe('');
   });
 
@@ -543,7 +543,7 @@ describe('server response adapters', () => {
 
   it('consumes the private pinned route-outcome snapshot, not exposed mutable fields', async () => {
     const source = new TextEncoder().encode('SAFE_ATTACHMENT_BYTES');
-    const sourceHeaders = { 'X-Audit': 'safe' };
+    const sourceHeaders = { Vary: 'Accept-Encoding' };
     const sourceOptions = {
       contentType: 'application/octet-stream',
       filename: 'safe.bin',
@@ -551,13 +551,13 @@ describe('server response adapters', () => {
     };
     const outcome = respond.file(source, sourceOptions);
     source.fill(0x58);
-    sourceHeaders['X-Audit'] = 'mutated-source-header';
+    sourceHeaders.Vary = 'mutated-source-header';
     sourceOptions.contentType = 'text/html; charset=utf-8';
     sourceOptions.filename = 'mutated.html';
     (outcome.body as Uint8Array).fill(0x41);
     expect(Reflect.set(outcome, 'contentDisposition', 'inline')).toBe(false);
     expect(Reflect.set(outcome, 'contentType', 'text/html')).toBe(false);
-    expect(Reflect.set(outcome.headers!, 'X-Audit', 'mutated')).toBe(false);
+    expect(Reflect.set(outcome.headers!, 'Vary', 'mutated')).toBe(false);
 
     const response = routeResponseToWebResponse(routeOutcomeResponse(outcome, { method: 'GET' }), {
       method: 'GET',
@@ -565,7 +565,7 @@ describe('server response adapters', () => {
     await expect(response.text()).resolves.toBe('SAFE_ATTACHMENT_BYTES');
     expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="safe.bin"');
     expect(response.headers.get('Content-Type')).toBe('application/octet-stream');
-    expect(response.headers.get('X-Audit')).toBe('safe');
+    expect(response.headers.get('Vary')).toBe('Accept-Encoding');
   });
 
   it('does not inherit omitted route outcome fields from late Object.prototype pollution', async () => {
@@ -732,6 +732,88 @@ describe('server response adapters', () => {
     }
   });
 
+  it('rejects remote-derived names outside the structured app response allowlist', () => {
+    const proxyHeaders: Record<string, string> = {
+      'X-Accel-Redirect': '/internal/admin',
+    };
+    const corsHeaders: Record<string, string> = {
+      'Access-Control-Allow-Origin': '*',
+    };
+
+    expect(() =>
+      respond.file('blocked', {
+        contentType: 'text/plain; charset=utf-8',
+        headers: proxyHeaders,
+      }),
+    ).toThrow(/KV415.*X-Accel-Redirect.*outside the direct allowlist/u);
+    expect(() =>
+      respond.stream('blocked', {
+        contentType: 'text/plain; charset=utf-8',
+        headers: corsHeaders,
+      }),
+    ).toThrow(/KV415.*Access-Control-Allow-Origin.*outside the direct allowlist/u);
+  });
+
+  it('preserves allowed metadata and routes dedicated fields through structured options', () => {
+    const outcome = respond.file('safe', {
+      contentType: 'text/plain; charset=utf-8',
+      etag: '"safe-v1"',
+      filename: 'safe.txt',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
+        Vary: 'Accept-Encoding',
+      },
+    });
+    const response = routeResponseToWebResponse(routeOutcomeResponse(outcome, { method: 'GET' }), {
+      method: 'GET',
+    });
+
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('last-modified')).toBe('Wed, 21 Oct 2015 07:28:00 GMT');
+    expect(response.headers.get('vary')).toBe('Accept-Encoding');
+    expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect(response.headers.get('etag')).toBe('"safe-v1"');
+    expect(response.headers.get('content-disposition')).toBe('attachment; filename="safe.txt"');
+  });
+
+  it('rejects forbidden literal header names at author time while keeping dynamic checks', () => {
+    if (false) {
+      for (const headers of [
+        { 'X-Accel-Redirect': '/internal/admin' },
+        { 'Access-Control-Allow-Origin': '*' },
+        { 'Content-Type': 'text/html' },
+        { ETag: 'weak' },
+        { 'Content-Disposition': 'inline' },
+        { Location: '/admin' },
+        { 'Set-Cookie': 'sid=x' },
+        { 'Kovo-Build': 'forged' },
+      ]) {
+        respond.file('blocked', {
+          contentType: 'text/plain',
+          // @ts-expect-error SPEC §9.1.1 confines direct app metadata to the exact allowlist.
+          headers,
+        });
+      }
+
+      respond.file('safe', {
+        contentType: 'text/plain',
+        headers: {
+          'Cache-Control': 'private, no-store',
+          'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
+          Vary: 'Accept-Encoding',
+        },
+      });
+      const dynamicHeaders: Record<string, string> = { 'X-Accel-Redirect': '/runtime-checked' };
+      respond.file('runtime checked', {
+        contentType: 'text/plain',
+        headers: dynamicHeaders,
+      });
+    }
+
+    expect(true).toBe(true);
+  });
+
   it('does not let poisoned byte globals forge an inline stream sniff result (KV428)', () => {
     const NativeArrayBuffer = globalThis.ArrayBuffer;
     const NativeUint8Array = globalThis.Uint8Array;
@@ -761,31 +843,24 @@ describe('server response adapters', () => {
     }
   });
 
-  it('does not let file header maps override reserved safety headers', () => {
-    const response = routeOutcomeResponse(
+  it('rejects file header maps that bypass dedicated or framework-owned fields', () => {
+    const headers: Record<string, string> = {
+      'Content-Disposition': 'inline',
+      'Content-Type': 'image/svg+xml',
+      ETag: '"evil"',
+      'Set-Cookie': 'session=evil',
+      'X-Audit': 'kept',
+      'x-content-type-options': 'custom',
+    };
+
+    expect(() =>
       respond.file('payload', {
         contentType: 'text/plain',
         etag: '"safe"',
         filename: 'safe.txt',
-        headers: {
-          'Content-Disposition': 'inline',
-          'Content-Type': 'image/svg+xml',
-          ETag: '"evil"',
-          'Set-Cookie': 'session=evil',
-          'X-Audit': 'kept',
-          'x-content-type-options': 'custom',
-        },
+        headers,
       }),
-      { method: 'GET' },
-    );
-
-    expect(response.headers['Content-Disposition']).toBe('attachment; filename="safe.txt"');
-    expect(response.headers['Content-Type']).toBe('text/plain');
-    expect(response.headers.ETag).toBe('"safe"');
-    expect(response.headers['Set-Cookie']).toBeUndefined();
-    expect(response.headers['X-Audit']).toBe('kept');
-    expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
-    expect(response.headers['x-content-type-options']).toBeUndefined();
+    ).toThrow(/KV415.*Content-Disposition.*filename\/disposition options/u);
   });
 
   // KV428: respond.storedFile takes a bare string key (no compile-visible verification), so it is

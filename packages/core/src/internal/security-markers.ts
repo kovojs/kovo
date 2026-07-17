@@ -326,7 +326,7 @@ export const SECURITY_CODE_REGISTRY = {
     code: 'KV415',
     enforcement: 'runtime-choke',
     property:
-      'Response header names and values stay in framework-owned channels; app-authored framing and hop-by-hop fields fail before adapter mutation.',
+      'Direct structured app headers stay in the exact metadata allowlist; dedicated fields use typed constructors; app-authored framing and hop-by-hop fields fail before adapter mutation.',
     propertyDependsOn: 'request-state',
   },
   KV416: {
