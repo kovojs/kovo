@@ -28407,6 +28407,28 @@ const REQUEST_EXACT_GLOBAL_MUTATION_METHOD_MEMO = new WeakMap<
   Project,
   Map<string, { readonly exhausted: boolean; readonly matches: readonly string[] }>
 >();
+const REQUEST_EXACT_GLOBAL_NAMESPACE_SEED_MEMO = new WeakMap<Project, Map<string, boolean>>();
+
+function requestProjectHasExactGlobalNamespaceSeed(
+  project: Project,
+  namespace: 'Object' | 'Reflect',
+): boolean {
+  let memo = REQUEST_EXACT_GLOBAL_NAMESPACE_SEED_MEMO.get(project);
+  if (!memo) {
+    memo = new Map();
+    REQUEST_EXACT_GLOBAL_NAMESPACE_SEED_MEMO.set(project, memo);
+  }
+  const cached = memo.get(namespace);
+  if (cached !== undefined) return cached;
+  const result = project.getSourceFiles().some((file) =>
+    file.getDescendants().some((node) => {
+      if (Node.isIdentifier(node)) return node.getText() === namespace;
+      return isStringLiteralLike(node) && node.getLiteralText() === namespace;
+    }),
+  );
+  memo.set(namespace, result);
+  return result;
+}
 
 function requestExactGlobalMutationMethods(
   callee: Node,
@@ -28423,6 +28445,14 @@ function requestExactGlobalMutationMethods(
   const memoKey = `${nodeKey}:${methods.join(',')}`;
   const cached = memo.get(memoKey);
   if (cached) return cached;
+  // Exact Object/Reflect mutation authority cannot emerge from an authored graph that never names
+  // that namespace. Prove this cheap necessary condition before entering the mutually-recursive
+  // carrier lattice; opaque imports remain misses under the same positive-identity contract.
+  if (!requestProjectHasExactGlobalNamespaceSeed(project, namespace)) {
+    const result = { exhausted: false, matches: [] };
+    memo.set(memoKey, result);
+    return result;
+  }
   let active = REQUEST_EXACT_GLOBAL_MUTATION_METHOD_ACTIVE.get(project);
   if (!active) {
     active = new Set();
@@ -28433,17 +28463,21 @@ function requestExactGlobalMutationMethods(
   // the mutually-recursive method lattice again; the caller already treats exhaustion fail closed.
   if (active.has(nodeKey)) return { exhausted: true, matches: [] };
   active.add(nodeKey);
-  const verdicts = methods.map((method) => ({
-    method,
-    verdict: requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
-      callee,
-      namespace,
+  let verdicts: { readonly method: string; readonly verdict: RequestExactGlobalProvenance }[];
+  try {
+    verdicts = methods.map((method) => ({
       method,
-      new Set(),
-      0,
-    ),
-  }));
-  active.delete(nodeKey);
+      verdict: requestExpressionResolvesToExactGlobalNamespaceMemberForMutation(
+        callee,
+        namespace,
+        method,
+        new Set(),
+        0,
+      ),
+    }));
+  } finally {
+    active.delete(nodeKey);
+  }
   const result = {
     exhausted: verdicts.some(({ verdict }) => verdict === 'exhausted'),
     matches: verdicts.filter(({ verdict }) => verdict === 'match').map(({ method }) => method),

@@ -273,6 +273,27 @@ describe('KV424 exact global namespace-member lockdown', () => {
     expectExactMemberRejected(facts, 'Promise.resolve');
   });
 
+  it('keeps computed Object namespace seeds fail closed', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      const objectNamespace = globalThis[\`Object\`];
+      const replace = objectNamespace['defineProperty'];
+      replace(Promise, 'resolve', { value: () => Deferred });
+      task('computed-object-seed-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
   it.each([
     ['literal', '[Promise][0]!.resolve = (() => Deferred) as typeof Promise.resolve;'],
     [
@@ -1247,6 +1268,36 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
     expectExactMemberRejected(facts, 'Promise.resolve');
     expect(elapsedClassifierCpuMs(startedAt)).toBeLessThan(2_000);
+  });
+
+  it('keeps an Object/Reflect-free high-fanout call graph bounded', () => {
+    const bindings = Array.from({ length: 160 }, (_value, index) =>
+      [
+        `function createBinding${index}(value: { ok: true }) {`,
+        '  return { invoke: () => value };',
+        '}',
+        `const binding${index} = createBinding${index}({ ok: true });`,
+        `void binding${index}.invoke();`,
+      ].join('\n'),
+    ).join('\n');
+    const startedAt = cpuUsage();
+    const facts = sinksFor(`
+      import { endpoint, publicAccess } from '@kovojs/server';
+      ${bindings}
+      endpoint('/bounded-no-mutation-authority', {
+        access: publicAccess('bounded exact-global provenance proof'),
+        auth: { justification: 'bounded exact-global provenance proof', kind: 'none' },
+        csrf: false,
+        csrfJustification: 'read-only exact-global provenance proof',
+        handler() { return Response.json({ ok: true }); },
+        method: 'GET',
+        reason: 'read-only exact-global provenance proof',
+        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+      });
+    `);
+
+    expect(facts).toEqual([]);
+    expect(elapsedClassifierCpuMs(startedAt)).toBeLessThan(5_000);
   });
 
   it('keeps diamond alias provenance bounded', () => {
