@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |     17 |
-| Medium   |    4 |     16 |
+| Medium   |    2 |     18 |
 | Low      |    0 |      4 |
 
 ## High
@@ -426,7 +426,7 @@ rendering, Better Auth, and managed SQL.
   - **Open:** centralize exact CLI driver parsing and reject every defined unsupported value across
     check, generate, migrate, and provision before any default target can be selected.
 
-- [ ] **M18 - Trusted-proxy client ports split one IP across per-IP rate-limit buckets.**
+- [x] **M18 - Trusted-proxy client ports split one IP across per-IP rate-limit buckets.**
   - The built-in trusted-proxy resolver returned the complete rightmost RFC 7239 `Forwarded for=`
     node as `req.clientIp`. A standards-conforming proxy may append the client's ephemeral source
     port, so reconnecting gave one remote address a fresh shell and lifecycle limiter key (SPEC
@@ -434,9 +434,11 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** a real front proxy emitted the same IPv6 address with ports 47011 then 47012; a
     `max: 1` mutation returned `[303, 303]` and ran twice, while the stable-port control returned
     `[303, 429]` and ran once. Global work budgets remained enforced.
-  - **Open:** canonicalize every built-in trusted-proxy client-IP source to one address-only IPv4 or
-    IPv6 identity, strip only syntactically valid optional ports, reject malformed/obfuscated nodes,
-    and prove shell/lifecycle plus live/generated parity.
+  - **Fixed:** `abab70b96` canonicalizes all six built-in IPv4/IPv6 carrier forms to one
+    address-only identity, strips only valid optional ports, maps IPv4-mapped IPv6, and rejects
+    malformed or obfuscated nodes while leaving explicit callback keys opaque (SPEC §9.5).
+  - **Evidence:** integrated request-state/shell/guard/real-proxy matrix 54/54; the generated
+    production Node six-carrier regression passed 1/1; all 16 C13 corpora passed.
 
 - [x] **M19 - ASCII-case duplicate meta attributes bypassed the refresh navigation sink.**
   - The JSX runtime compared the `content` name case-insensitively but found its paired
@@ -454,7 +456,7 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** focused compiler/runtime/source-sink tests 135/135; the exact production plugin
     regression passed 6/6 across Chromium, Firefox, and WebKit; all 15 C13 corpora passed.
 
-- [ ] **M20 - Conflicting forwarded-header families could shadow a proxy-owned rate identity.**
+- [x] **M20 - Conflicting forwarded-header families could shadow a proxy-owned rate identity.**
   - With `trustedProxy: true`, the built-in resolver preferred `X-Forwarded-For` over
     `X-Real-IP` over RFC 7239 `Forwarded`. A proxy that authored only `Forwarded` but left an
     incoming `X-Forwarded-For` header intact therefore let a remote client rotate the higher-priority
@@ -462,9 +464,11 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** with one stable `Forwarded: for=203.0.113.80`, changing only attacker-supplied XFF
     values changed `resolveRequestClientIp()` from `198.51.100.1` to `198.51.100.2`. The mandatory
     global budget remained enforced, but the per-IP shell and guard buckets could be split.
-  - **Open:** reject multi-family client-IP authority as ambiguous, fall back to peer/global
-    admission, and prove the conflict path plus strict RFC 7239 malformed/duplicate-parameter
-    rejection in the C13 corpus.
+  - **Fixed:** `abab70b96` rejects multi-family client-IP authority as ambiguous, falls back to
+    adapter peer/global admission, and strictly rejects malformed, duplicate, C0-bearing, or
+    over-breadth RFC 7239 elements (SPEC §9.5).
+  - **Evidence:** integrated conflicting-family/global-floor and bounded-parser regressions passed
+    in the 54/54 focused matrix; all 16 C13 corpora passed.
 
 ## Low
 
@@ -522,5 +526,7 @@ rendering, Better Auth, and managed SQL.
   the C13 classifier corpus passed.
 - Meta-refresh live/compiler/source-sink matrix: 135/135; the production-plugin regression passed
   6/6 across Chromium, Firefox, and WebKit; all 15 C13 corpora passed.
+- Trusted-client-IP live/real-proxy matrix: 54/54 plus generated production Node 1/1; all 16 C13
+  corpora passed.
 - Final exact-tip remote-boundary review remains open until the fresh parser/browser-content passes
   and full serial gates complete without a new remotely reachable issue.
