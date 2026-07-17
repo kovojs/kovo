@@ -1441,13 +1441,54 @@ describe('credential success is positively classified', () => {
     const auth = signInAuthReturning(jsonResponse(500, { message: 'broken' }));
     const signIn = betterAuthSignInEmailMutation(auth);
 
-    const result = await runProtectedCredentialMutation(
-      signIn,
-      { email: 'ada@example.com', password: 'correct' },
-      { headers: requestHeaders() },
+    await expect(
+      runProtectedCredentialMutation(
+        signIn,
+        { email: 'ada@example.com', password: 'correct' },
+        { headers: requestHeaders() },
+      ),
+    ).rejects.toThrow(
+      'Better Auth credential provider failed inside the trusted plaintext boundary.',
     );
+  });
 
-    expect(result).toMatchObject({ ok: false, status: 422 });
+  it('rethrows a real routed custom-storage failure so replay can abort', async () => {
+    const storageFailure = new Error('private database failure');
+    const auth = betterAuth({
+      advanced: { ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] } },
+      baseURL: 'https://example.test/api/auth',
+      database: memoryAdapter({ account: [], session: [], user: [], verification: [] }),
+      emailAndPassword: { enabled: true },
+      rateLimit: {
+        customRules: {
+          '/sign-in/email': { max: 3, window: 10 },
+          '/**': false,
+        },
+        customStorage: {
+          get: async () => {
+            throw storageFailure;
+          },
+          set: async () => {
+            throw storageFailure;
+          },
+          consume: async () => {
+            throw storageFailure;
+          },
+        },
+        enabled: true,
+      },
+      secret: 'better-auth-storage-failure-test-secret-0123456789',
+    });
+
+    await expect(
+      runProtectedCredentialMutation(
+        betterAuthSignInEmailMutation(auth),
+        { email: 'ada@example.com', password: 'correct' },
+        { headers: requestHeaders() },
+      ),
+    ).rejects.toThrow(
+      'Better Auth credential provider failed inside the trusted plaintext boundary.',
+    );
   });
 
   it('does NOT trust late-poisoned native Response status or headers getters', async () => {
@@ -1458,7 +1499,6 @@ describe('credential success is positively classified', () => {
     const headersDescriptor = Object.getOwnPropertyDescriptor(Response.prototype, 'headers')!;
     const forgedHeaders = new Headers();
     forgedHeaders.append('set-cookie', 'attacker_session=forged; Path=/; HttpOnly');
-    let result: unknown;
     try {
       Object.defineProperty(Response.prototype, 'status', {
         ...statusDescriptor,
@@ -1468,17 +1508,19 @@ describe('credential success is positively classified', () => {
         ...headersDescriptor,
         get: () => forgedHeaders,
       });
-      result = await runProtectedCredentialMutation(
-        signIn,
-        { email: 'ada@example.com', password: 'correct' },
-        { headers: requestHeaders() },
+      await expect(
+        runProtectedCredentialMutation(
+          signIn,
+          { email: 'ada@example.com', password: 'correct' },
+          { headers: requestHeaders() },
+        ),
+      ).rejects.toThrow(
+        'Better Auth credential provider failed inside the trusted plaintext boundary.',
       );
     } finally {
       Object.defineProperty(Response.prototype, 'status', statusDescriptor);
       Object.defineProperty(Response.prototype, 'headers', headersDescriptor);
     }
-
-    expect(result).toMatchObject({ ok: false, status: 422 });
   });
 
   it('does NOT sign up on a 200 two-factor-pending body', async () => {

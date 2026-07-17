@@ -18,6 +18,7 @@ import {
 } from './internal/intrinsics.js';
 import { betterAuthHashPassword, betterAuthVerifyPassword } from './internal/password.js';
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
+import { createBetterAuthSqliteRateLimitStorage } from './internal/sqlite-rate-limit-storage.js';
 import {
   callBetterAuthSignUpEmail,
   pinBetterAuthSignUpEmail,
@@ -178,7 +179,7 @@ export function createBetterAuthSqliteBindings<
     throw new NativeTypeError('Better Auth SQLite binding schema must be an object.');
   }
   const pinnedSchema = snapshotSqliteSchemaRecord(schema);
-  requireBetterAuthRateLimitSchema(pinnedSchema);
+  const rateLimitTable = requireBetterAuthRateLimitSchema(pinnedSchema);
   const secret = betterAuthSqliteSecret(requiredTextOption(options, 'secret'));
   const signInAccess = requiredOption<AccessDecision>(options, 'signInAccess');
   const signOutAccess = requiredOption<AccessDecision>(options, 'signOutAccess');
@@ -213,10 +214,7 @@ export function createBetterAuthSqliteBindings<
       enabled: true,
       password: { hash: betterAuthHashPassword, verify: betterAuthVerifyPassword },
     },
-    // Partial checkpoint: shared database counters close the per-process bypass, but Better Auth
-    // 1.6.x still derives persistent row keys from attacker-controlled IP/path input. A bounded
-    // Kovo-owned customStorage must replace this before storage-growth resistance is claimed.
-    rateLimit: { enabled: true, storage: 'database' },
+    rateLimit: createBetterAuthSqliteRateLimitStorage(secret, systemDb, rateLimitTable),
     secret,
     secrets: [{ version: 0, value: secret }],
     telemetry: { enabled: false },
@@ -265,7 +263,7 @@ export function createBetterAuthSqliteBindings<
   );
 }
 
-function requireBetterAuthRateLimitSchema(schema: object): void {
+function requireBetterAuthRateLimitSchema(schema: object): unknown {
   const table = betterAuthOwnDataOption<unknown>(
     schema,
     'rateLimit',
@@ -276,6 +274,7 @@ function requireBetterAuthRateLimitSchema(schema: object): void {
       'Better Auth SQLite bindings require schema.rateLimit for durable credential throttling.',
     );
   }
+  return table;
 }
 
 function requiredOption<Value>(

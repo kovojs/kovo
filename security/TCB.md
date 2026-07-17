@@ -48,7 +48,7 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
   "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1; plans/fundamental-fixes-followup-7b.md DEC-A; plans/fundamental-fixes-followup-12.md DEC-D1",
   "budgets": {
     "entryMaxLines": 150,
-    "totalTcbMaxLines": 1145
+    "totalTcbMaxLines": 1350
   },
   "trustedDependencySurfaces": [
     {
@@ -149,6 +149,15 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "pinnedVersion": "1.6.17",
       "guarantee": "If an app enables Better Auth social/account-linking flows, Kovo mounts the callback protocol as a public Better Auth-owned endpoint and keeps the app session out of the handler, but the proof that a provider callback cannot bind an attacker-controlled identity to the victim account rests on Better Auth's callback-state, nonce, and identity-binding checks.",
       "reviewTrigger": "Any bump of better-auth, or any Kovo change that wraps provider callback/linking flows more deeply than mount/session delegation, must re-confirm callback state/nonce validation and that account linking is bound to the initiating browser identity rather than ambient session confusion."
+    },
+    {
+      "id": "dep.better-auth.atomic-rate-limit-custom-storage",
+      "surface": "Better Auth custom rate-limit storage and route-rule dispatch",
+      "dependency": "better-auth",
+      "packageJson": "packages/better-auth/package.json",
+      "pinnedVersion": "1.6.17",
+      "guarantee": "Better Auth gives customStorage precedence over native storage, invokes atomic consume instead of the get/set fallback, applies exact customRules before the catch-all rule, preserves retryAfter on denials, and turns storage faults into a routed 5xx that Kovo rethrows.",
+      "reviewTrigger": "Any bump of better-auth must re-run the bounded limiter's real-router, fallback-failure, concurrency, path-variant, and retry-after tests and re-confirm customStorage/customRules precedence in the pinned implementation."
     },
     {
       "id": "dep.argon2.password-hashing",
@@ -413,6 +422,70 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "classification": "tcb",
       "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
       "lineBudget": 45
+    },
+    {
+      "id": "better-auth.rate-limit.storage",
+      "file": "packages/better-auth/src/internal/rate-limit-storage.ts",
+      "name": "createBetterAuthBoundedRateLimitStorage",
+      "kind": "bounded-hmac-credential-rate-limit-storage",
+      "classification": "tcb",
+      "lineBudget": 100
+    },
+    {
+      "id": "better-auth.rate-limit.key",
+      "file": "packages/better-auth/src/internal/rate-limit-storage.ts",
+      "name": "assertCredentialRateLimitKey",
+      "kind": "credential-rate-limit-key-refusal",
+      "classification": "tcb",
+      "lineBudget": 20
+    },
+    {
+      "id": "server.better-auth.rate-limit.postgres-consume",
+      "file": "packages/server/src/internal/better-auth.ts",
+      "name": "createBetterAuthPostgresRateLimitBucketConsumer",
+      "kind": "postgres-atomic-db-clock-rate-limit-consumer",
+      "classification": "tcb",
+      "lineBudget": 35
+    },
+    {
+      "id": "server.better-auth.rate-limit.sqlite-consume",
+      "file": "packages/server/src/internal/better-auth.ts",
+      "name": "createBetterAuthSqliteRateLimitBucketConsumer",
+      "kind": "sqlite-atomic-db-clock-rate-limit-consumer",
+      "classification": "tcb",
+      "lineBudget": 35
+    },
+    {
+      "id": "server.better-auth.rate-limit.bucket-input",
+      "file": "packages/server/src/internal/better-auth.ts",
+      "name": "assertBetterAuthRateLimitBucketInput",
+      "kind": "fixed-rate-limit-bucket-refusal",
+      "classification": "tcb",
+      "lineBudget": 20
+    },
+    {
+      "id": "server.better-auth.rate-limit.postgres-table",
+      "file": "packages/server/src/internal/better-auth.ts",
+      "name": "requirePostgresRateLimitTable",
+      "kind": "postgres-rate-limit-table-refusal",
+      "classification": "tcb",
+      "lineBudget": 15
+    },
+    {
+      "id": "server.better-auth.rate-limit.sqlite-table",
+      "file": "packages/server/src/internal/better-auth.ts",
+      "name": "requireSqliteRateLimitTable",
+      "kind": "sqlite-rate-limit-table-refusal",
+      "classification": "tcb",
+      "lineBudget": 15
+    },
+    {
+      "id": "server.better-auth.rate-limit.columns",
+      "file": "packages/server/src/internal/better-auth.ts",
+      "name": "requireRateLimitColumns",
+      "kind": "rate-limit-column-shape-refusal",
+      "classification": "tcb",
+      "lineBudget": 25
     },
     {
       "id": "drizzle.runtime-metadata.extract",

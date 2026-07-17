@@ -6,13 +6,20 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { kovo, sql } from '@kovojs/drizzle';
 import { eq } from 'drizzle-orm';
-import { pgTable, text } from 'drizzle-orm/pg-core';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { bigint, integer, pgTable, text } from 'drizzle-orm/pg-core';
 import { Pool, type PoolClient, type QueryConfig, type QueryResultRow } from 'pg';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@kovojs/better-auth/internal/server-mount-adapter', () => ({
+  assertBetterAuthMountAdapter: vi.fn(),
+  invokeBetterAuthMountAdapter: vi.fn(),
+}));
 
 import { actAsNonRequestPrincipal } from './auth-principal.js';
 import { guards } from './guards.js';
-import { usePostgresAppRuntimeDb } from './internal/postgres-capability.js';
+import { createBetterAuthPostgresRateLimitBucketConsumer } from './internal/better-auth.js';
+import { createPostgresSystemDb, usePostgresAppRuntimeDb } from './internal/postgres-capability.js';
 import {
   createPostgresReadonlyClient,
   createPostgresScopedClient,
@@ -66,6 +73,12 @@ const probeNotesV2 = pgTable(
 
 const schema = { probeNotes };
 const evolvedSchema = { probeNotes: probeNotesV2 };
+const externalRateLimit = pgTable('rateLimit', {
+  count: integer('count').notNull(),
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  lastRequest: bigint('lastRequest', { mode: 'number' }).notNull(),
+});
 const createNotesMigration = {
   id: '001-create-probe-notes.sql',
   sql: `
@@ -100,6 +113,54 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     await Promise.allSettled(clusters.splice(0).map((cluster) => cluster.stop()));
     for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
   });
+
+  it('keeps the bounded Better Auth upsert atomic without dual-unique 23505 failures', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-external-better-auth-rate-limit-'));
+    roots.push(root);
+    const cluster = await startLocalPostgres(root);
+    clusters.push(cluster);
+    const pool = new Pool({ connectionString: cluster.url('postgres', 'postgres') });
+    try {
+      await pool.query(`
+        CREATE TABLE "rateLimit" (
+          "id" text PRIMARY KEY,
+          "key" text NOT NULL UNIQUE,
+          "count" integer NOT NULL,
+          "lastRequest" bigint NOT NULL
+        )
+      `);
+      const database = drizzle({ client: pool });
+      const systemDb = createPostgresSystemDb(database);
+      const first = createBetterAuthPostgresRateLimitBucketConsumer(systemDb, externalRateLimit);
+      const second = createBetterAuthPostgresRateLimitBucketConsumer(systemDb, externalRateLimit);
+      const input = {
+        bucketKey: 'kovo-ba-rl-v1:0042',
+        max: 3,
+        windowMs: 10_000,
+      } as const;
+
+      const decisions = await Promise.all(
+        Array.from({ length: 20 }, (_, index) => (index % 2 === 0 ? first(input) : second(input))),
+      );
+      const rows = await pool.query<{
+        count: number;
+        id: string;
+        key: string;
+      }>('SELECT "id", "key", "count" FROM "rateLimit"');
+
+      expect(decisions.filter(Boolean)).toHaveLength(3);
+      expect(decisions.filter((allowed) => !allowed)).toHaveLength(17);
+      expect(rows.rows).toEqual([
+        expect.objectContaining({
+          count: 3,
+          id: expect.stringMatching(/^[0-9a-f-]{36}$/u),
+          key: input.bucketKey,
+        }),
+      ]);
+    } finally {
+      await pool.end();
+    }
+  }, 30_000);
 
   it('proves split provisioning, adopted roles, fail-closed posture, and pg Pool scope reset', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-external-postgres-probe-'));

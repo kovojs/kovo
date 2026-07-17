@@ -1,4 +1,5 @@
 import { csrfToken } from '@kovojs/server';
+import { runEndpoint } from '@kovojs/server/internal/execution';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 import { createSqliteAppRuntime, type KovoSqliteAppRuntime } from '@kovojs/server/sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,7 @@ import {
   text,
 } from '../../server/node_modules/drizzle-orm/sqlite-core/index.js';
 import { runMutation } from '../../server/src/mutation.js';
+import { mount } from './mount.js';
 import { betterAuthSqliteSecret, createBetterAuthSqliteBindings } from './sqlite.js';
 
 vi.mock('./internal/runtime-lock.js', () => ({
@@ -187,31 +189,108 @@ describe('Better Auth development seed session posture', () => {
       method: 'POST',
     });
     const token = csrfToken(request, csrf, { audience: 'auth/sign-in' });
-    const definitions = [first.signIn, second.signIn, first.signIn, second.signIn];
-    const results = [];
-
-    for (let index = 0; index < definitions.length; index += 1) {
-      results.push(
-        await runMutation(
-          definitions[index]!,
+    const definitions = Array.from({ length: 20 }, (_, index) =>
+      index % 2 === 0 ? first.signIn : second.signIn,
+    );
+    const results = await Promise.all(
+      definitions.map((definition) =>
+        runMutation(
+          definition,
           { csrf: token, email: 'missing@example.test', password: 'incorrect-password' },
           request,
           { clientIp: () => '127.0.0.20' },
         ),
-      );
-    }
+      ),
+    );
 
-    expect(results.slice(0, 3)).toEqual([
-      expect.objectContaining({ error: { code: 'INVALID_CREDENTIALS', payload: {} }, status: 422 }),
-      expect.objectContaining({ error: { code: 'INVALID_CREDENTIALS', payload: {} }, status: 422 }),
-      expect.objectContaining({ error: { code: 'INVALID_CREDENTIALS', payload: {} }, status: 422 }),
+    expect(results.filter((result) => !result.ok && result.status === 422)).toHaveLength(3);
+    expect(results.filter((result) => !result.ok && result.status === 429)).toHaveLength(17);
+    expect(results.filter((result) => !result.ok && result.status === 429)).toEqual(
+      expect.arrayContaining(
+        Array.from({ length: 17 }, () =>
+          expect.objectContaining({
+            error: { code: 'RATE_LIMITED', payload: {} },
+            retryAfter: 10,
+          }),
+        ),
+      ),
+    );
+    const rows = useSqliteSystemDb(systemDb, (db) => db.select().from(rateLimit).all());
+    expect(rows).toEqual([
+      expect.objectContaining({
+        count: 3,
+        id: expect.stringMatching(/^[0-9a-f]{32}$/u),
+        key: expect.stringMatching(/^kovo-ba-rl-v1:[0-9a-f]{4}$/u),
+      }),
     ]);
-    expect(results[3]).toEqual({
-      error: { code: 'RATE_LIMITED', payload: {} },
-      ok: false,
-      retryAfter: 10,
-      status: 429,
+    expect(rows[0]?.key).not.toContain('127.0.0.20');
+    expect(rows[0]?.key).not.toContain('/sign-in/email');
+
+    useSqliteSystemDb(systemDb, (db) => db.update(rateLimit).set({ lastRequest: 0 }).run());
+    vi.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
+    await expect(
+      runMutation(
+        first.signIn,
+        { csrf: token, email: 'missing@example.test', password: 'incorrect-password' },
+        request,
+        { clientIp: () => '127.0.0.20' },
+      ),
+    ).resolves.toMatchObject({ error: { code: 'INVALID_CREDENTIALS' }, status: 422 });
+    expect(useSqliteSystemDb(systemDb, (db) => db.select().from(rateLimit).all())).toEqual([
+      expect.objectContaining({ count: 1 }),
+    ]);
+  });
+
+  it('does not allocate rate-limit rows for GETs or adversarial mount suffixes', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
+    runtimes.push(runtime);
+    const systemDb = runtime.systemDb({
+      operation: 'write',
+      reason: 'Prove unknown Better Auth paths cannot grow limiter storage',
+      surface: 'packages/better-auth/src/sqlite.seed-session.test.ts',
     });
-    expect(useSqliteSystemDb(systemDb, (db) => db.select().from(rateLimit).all())).toHaveLength(1);
+    const bindings = createBetterAuthSqliteBindings({
+      baseURL: 'http://localhost:5173',
+      csrf: {
+        field: 'csrf',
+        secret: 'Kovo-Unknown-Path-Csrf-0a1B2c3D4e5F6g7H8i9J',
+        sessionId: () => 'unknown-path-principal',
+      },
+      mapSession: ({ session: authSession, user: authUser }) => ({
+        id: authSession.id,
+        user: { email: authUser.email, id: authUser.id, name: authUser.name },
+      }),
+      schema: authSchema,
+      secret: betterAuthSqliteSecret(authSecret),
+      signInAccess: { kind: 'public', reason: 'unknown path test' },
+      signOutAccess: { kind: 'public', reason: 'unknown path test' },
+      systemDb,
+    });
+    const endpoint = mount('/api/auth', bindings.mountAdapter);
+    const suffixes = [
+      '/sign-in/email',
+      '/sign-up/email',
+      '/sign-in//email',
+      '/sign-in/%65mail',
+      '/SIGN-IN/email',
+      '/sign-in/email/',
+      '/sign-in%2Femail',
+      '/sign-in%5Cemail',
+      '/sign-in/../sign-in/email',
+      '/sign-in\\email',
+      ...Array.from({ length: 64 }, (_, index) => `/unknown-${index}`),
+    ];
+
+    const responses = await Promise.all(
+      suffixes.map((suffix) =>
+        runEndpoint(endpoint, new Request(`http://localhost:5173/api/auth${suffix}`)),
+      ),
+    );
+
+    expect(responses.map((response) => response.status)).toEqual(
+      Array.from({ length: suffixes.length }, () => 404),
+    );
+    expect(useSqliteSystemDb(systemDb, (db) => db.select().from(rateLimit).all())).toEqual([]);
   });
 });

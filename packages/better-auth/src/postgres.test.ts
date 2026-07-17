@@ -196,7 +196,20 @@ describe('Better Auth Postgres bindings', () => {
           enabled: true,
           password: { hash: expect.any(Function), verify: expect.any(Function) },
         },
-        rateLimit: { enabled: true, storage: 'database' },
+        rateLimit: expect.objectContaining({
+          customRules: {
+            '/**': false,
+            '/sign-in/email': expect.any(Function),
+            '/sign-up/email': expect.any(Function),
+          },
+          customStorage: {
+            consume: expect.any(Function),
+            get: expect.any(Function),
+            set: expect.any(Function),
+          },
+          enabled: true,
+          storage: 'database',
+        }),
         secret: strongSecretText,
         secrets: [{ value: strongSecretText, version: 0 }],
         telemetry: { enabled: false },

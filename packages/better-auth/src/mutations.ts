@@ -105,6 +105,13 @@ export function betterAuthSignInEmailMutation<
 
         const rateLimitFailure = betterAuthCredentialRateLimitFailure(response);
         if (rateLimitFailure !== undefined) return rateLimitFailure;
+        // A custom-storage/adapter fault is infrastructure failure, not an attacker-visible
+        // credential verdict. Throwing also aborts Kovo's replay reservation instead of committing
+        // a retryable DB outage as a completed invalid-password result (SPEC §6.5/§6.6).
+        const responseStatus = betterAuthResponseStatus(response);
+        if (responseStatus !== undefined && responseStatus >= 500) {
+          throw betterAuthCredentialBoundaryFailure();
+        }
 
         const success = await resolveBetterAuthCredentialSuccess(response, context, {
           redirectTo: redirectPath(input.next, defaultRedirectTo),
@@ -184,6 +191,10 @@ export function betterAuthSignUpEmailMutation<
 
         const rateLimitFailure = betterAuthCredentialRateLimitFailure(response);
         if (rateLimitFailure !== undefined) return rateLimitFailure;
+        const responseStatus = betterAuthResponseStatus(response);
+        if (responseStatus !== undefined && responseStatus >= 500) {
+          throw betterAuthCredentialBoundaryFailure();
+        }
 
         const success = await resolveBetterAuthCredentialSuccess(response, context, {
           redirectTo: redirectPath(input.next, defaultRedirectTo),

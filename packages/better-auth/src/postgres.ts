@@ -21,6 +21,7 @@ import {
   betterAuthUrlProtocol,
 } from './internal/intrinsics.js';
 import { betterAuthHashPassword, betterAuthVerifyPassword } from './internal/password.js';
+import { createBetterAuthPostgresRateLimitStorage } from './internal/postgres-rate-limit-storage.js';
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
 import {
   callBetterAuthSignUpEmail,
@@ -208,7 +209,7 @@ export function createBetterAuthPostgresBindings<
     throw new NativeTypeError('Better Auth Postgres binding schema must be an object.');
   }
   const pinnedSchema = postgresSchemaModule(schema);
-  requireBetterAuthRateLimitSchema(pinnedSchema);
+  const rateLimitTable = requireBetterAuthRateLimitSchema(pinnedSchema);
   const secret = betterAuthPostgresSecret(requiredTextOption(options, 'secret'));
   const signInAccess = requiredOption<AccessDecision>(options, 'signInAccess');
   const signOutAccess = requiredOption<AccessDecision>(options, 'signOutAccess');
@@ -243,10 +244,7 @@ export function createBetterAuthPostgresBindings<
       enabled: true,
       password: { hash: betterAuthHashPassword, verify: betterAuthVerifyPassword },
     },
-    // Partial checkpoint: shared database counters close the per-process bypass, but Better Auth
-    // 1.6.x still derives persistent row keys from attacker-controlled IP/path input. A bounded
-    // Kovo-owned customStorage must replace this before storage-growth resistance is claimed.
-    rateLimit: { enabled: true, storage: 'database' },
+    rateLimit: createBetterAuthPostgresRateLimitStorage(secret, systemDb, rateLimitTable),
     secret,
     secrets: [{ version: 0, value: secret }],
     telemetry: { enabled: false },
@@ -294,7 +292,7 @@ export function createBetterAuthPostgresBindings<
   );
 }
 
-function requireBetterAuthRateLimitSchema(schema: object): void {
+function requireBetterAuthRateLimitSchema(schema: object): unknown {
   const table = betterAuthOwnDataOption<unknown>(
     schema,
     'rateLimit',
@@ -305,6 +303,7 @@ function requireBetterAuthRateLimitSchema(schema: object): void {
       'Better Auth Postgres bindings require schema.rateLimit for durable credential throttling.',
     );
   }
+  return table;
 }
 
 function requiredOption<Value>(
