@@ -40,13 +40,13 @@ const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
 const nativeRegExpExec = RegExp.prototype.exec;
 const nativeUrlHash = ownDescriptor(NativeURL.prototype, 'hash')?.get;
+const nativeUrlHostname = ownDescriptor(NativeURL.prototype, 'hostname')?.get;
 const nativeUrlHref = ownDescriptor(NativeURL.prototype, 'href')?.get;
 const nativeUrlOrigin = ownDescriptor(NativeURL.prototype, 'origin')?.get;
 const nativeUrlPathname = ownDescriptor(NativeURL.prototype, 'pathname')?.get;
 const nativeUrlSearch = ownDescriptor(NativeURL.prototype, 'search')?.get;
 const nativeUrlSearchParams = ownDescriptor(NativeURL.prototype, 'searchParams')?.get;
 const nativeUrlSearchParamsSet = globalThis.URLSearchParams.prototype.set;
-const forwardedForPattern = /(?:^|;)\s*for="?([^";,\s]+)"?/i;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
   return nativeReflectApply(fn, receiver, args) as Return;
@@ -109,11 +109,6 @@ function capturedRequestStateControlsAreSound(): boolean {
     if (apply(nativeJsonStringify, NativeJSON, [['control', undefined]]) !== '["control",null]') {
       return false;
     }
-    const forwardedMatch = apply<RegExpExecArray | null>(nativeRegExpExec, forwardedForPattern, [
-      'proto=https; for="203.0.113.9"',
-    ]);
-    if (forwardedMatch?.[1] !== '203.0.113.9') return false;
-
     const epoch = new NativeDate(0);
     if (apply(nativeDateGetTime, epoch, []) !== 0) return false;
     const now = apply<number>(nativeDateNow, NativeDate, []);
@@ -128,6 +123,7 @@ function capturedRequestStateControlsAreSound(): boolean {
 
     if (
       typeof nativeUrlHash !== 'function' ||
+      typeof nativeUrlHostname !== 'function' ||
       typeof nativeUrlHref !== 'function' ||
       typeof nativeUrlOrigin !== 'function' ||
       typeof nativeUrlPathname !== 'function' ||
@@ -146,6 +142,8 @@ function capturedRequestStateControlsAreSound(): boolean {
     apply(nativeUrlSearchParamsSet, searchParams, ['one', '2']);
     if (urlScalar(nativeUrlSearch, url) !== '?one=2') return false;
     if (urlScalar(nativeUrlHref, url) !== 'https://kovo.local/control?one=2#hash') return false;
+    const ipv6Url = new NativeURL('http://[2001:0DB8:0:0:0:0:0:1]/');
+    if (urlScalar(nativeUrlHostname, ipv6Url) !== '[2001:db8::1]') return false;
     return true;
   } catch {
     return false;
@@ -286,36 +284,360 @@ export function requestStateParseUnsignedInteger(value: string): number | undefi
   return parsed;
 }
 
-export function requestStateRightmostHeaderListValue(value: string | null): string | undefined {
-  assertRequestStateIntrinsics();
-  if (value === null) return undefined;
-  let end = value.length;
-  for (;;) {
-    const comma = apply<number>(nativeStringLastIndexOf, value, [',', end - 1]);
-    const candidate = apply<string>(nativeStringSlice, value, [comma + 1, end]);
-    const trimmed = apply<string>(nativeStringTrim, candidate, []);
-    if (trimmed !== '') return trimmed;
-    if (comma < 0) return undefined;
-    end = comma;
+function requestStateOwsSlice(value: string, start = 0, end = value.length): string {
+  while (start < end) {
+    const code = apply<number>(nativeStringCharCodeAt, value, [start]);
+    if (code !== 32 && code !== 9) break;
+    start += 1;
+  }
+  while (end > start) {
+    const code = apply<number>(nativeStringCharCodeAt, value, [end - 1]);
+    if (code !== 32 && code !== 9) break;
+    end -= 1;
+  }
+  return apply(nativeStringSlice, value, [start, end]);
+}
+
+function requestStateStrictIpv4(value: string): string | undefined {
+  if (value.length < 7 || value.length > 15) return undefined;
+  let octets = 0;
+  let digits = 0;
+  let octet = 0;
+  let leadingZero = false;
+  let canonical = '';
+
+  for (let index = 0; index <= value.length; index += 1) {
+    const code =
+      index === value.length ? 46 : apply<number>(nativeStringCharCodeAt, value, [index]);
+    if (code === 46) {
+      if (digits === 0 || octet > 255 || (leadingZero && digits > 1) || octets >= 4) {
+        return undefined;
+      }
+      canonical += `${octets === 0 ? '' : '.'}${apply<string>(NativeString, undefined, [octet])}`;
+      octets += 1;
+      digits = 0;
+      octet = 0;
+      leadingZero = false;
+      continue;
+    }
+    if (code < 48 || code > 57) return undefined;
+    if (digits === 0) leadingZero = code === 48;
+    digits += 1;
+    if (digits > 3) return undefined;
+    octet = octet * 10 + code - 48;
+  }
+
+  return octets === 4 ? canonical : undefined;
+}
+
+function requestStateHexWord(value: string): number | undefined {
+  if (value.length < 1 || value.length > 4) return undefined;
+  let parsed = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+    const digit =
+      code >= 48 && code <= 57
+        ? code - 48
+        : code >= 65 && code <= 70
+          ? code - 55
+          : code >= 97 && code <= 102
+            ? code - 87
+            : -1;
+    if (digit < 0) return undefined;
+    parsed = parsed * 16 + digit;
+  }
+  return parsed;
+}
+
+function requestStateMappedIpv4(canonicalIpv6: string): string | undefined {
+  if (!apply<boolean>(nativeStringStartsWith, canonicalIpv6, ['::ffff:'])) return undefined;
+  const suffix = apply<string>(nativeStringSlice, canonicalIpv6, [7]);
+  const separator = apply<number>(nativeStringIndexOf, suffix, [':']);
+  if (
+    separator <= 0 ||
+    separator !== apply<number>(nativeStringLastIndexOf, suffix, [':']) ||
+    separator >= suffix.length - 1
+  ) {
+    return undefined;
+  }
+  const upper = requestStateHexWord(apply(nativeStringSlice, suffix, [0, separator]));
+  const lower = requestStateHexWord(apply(nativeStringSlice, suffix, [separator + 1]));
+  if (upper === undefined || lower === undefined) return undefined;
+  return `${upper >> 8}.${upper & 255}.${lower >> 8}.${lower & 255}`;
+}
+
+function requestStateCanonicalIpv6(value: string): string | undefined {
+  if (value.length < 2 || value.length > 45) return undefined;
+  let hasColon = false;
+  let hasDot = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+    if (code === 58) {
+      hasColon = true;
+      continue;
+    }
+    if (code === 46) {
+      hasDot = true;
+      continue;
+    }
+    const isHex =
+      (code >= 48 && code <= 57) || (code >= 65 && code <= 70) || (code >= 97 && code <= 102);
+    if (!isHex) return undefined;
+  }
+  if (!hasColon) return undefined;
+  if (hasDot) {
+    const finalColon = apply<number>(nativeStringLastIndexOf, value, [':']);
+    if (
+      finalColon < 0 ||
+      requestStateStrictIpv4(apply(nativeStringSlice, value, [finalColon + 1])) === undefined
+    ) {
+      return undefined;
+    }
+  }
+
+  try {
+    const url = new NativeURL(`http://[${value}]/`);
+    const hostname = urlScalar(nativeUrlHostname, url);
+    if (
+      hostname === undefined ||
+      hostname.length < 4 ||
+      apply<number>(nativeStringCharCodeAt, hostname, [0]) !== 91 ||
+      apply<number>(nativeStringCharCodeAt, hostname, [hostname.length - 1]) !== 93
+    ) {
+      return undefined;
+    }
+    const canonical = apply<string>(nativeStringSlice, hostname, [1, hostname.length - 1]);
+    return requestStateMappedIpv4(canonical) ?? canonical;
+  } catch {
+    return undefined;
   }
 }
 
-export function requestStateRightmostForwardedForValue(value: string | null): string | undefined {
+function requestStateValidPort(value: string): boolean {
+  if (value.length < 1 || value.length > 5) return false;
+  let port = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+    if (code < 48 || code > 57) return false;
+    port = port * 10 + code - 48;
+  }
+  return port <= 65_535;
+}
+
+/**
+ * Canonicalize one trusted-proxy node as an address-only key (SPEC §9.5). Brackets are required
+ * when an IPv6 transport port is present. Bare valid IPv6 literals remain address literals; a
+ * decimal suffix is never guessed to be a port.
+ */
+export function requestStateCanonicalClientIpValue(value: string | null): string | undefined {
   assertRequestStateIntrinsics();
   if (value === null) return undefined;
-  let end = value.length;
-  for (;;) {
-    const comma = apply<number>(nativeStringLastIndexOf, value, [',', end - 1]);
-    const entry = apply<string>(nativeStringSlice, value, [comma + 1, end]);
-    const match = apply<RegExpExecArray | null>(nativeRegExpExec, forwardedForPattern, [entry]);
-    const candidate = match?.[1];
-    if (candidate !== undefined) {
-      const trimmed = apply<string>(nativeStringTrim, candidate, []);
-      if (trimmed !== '') return trimmed;
+  const candidate = requestStateOwsSlice(value);
+  if (candidate === '' || candidate.length > 53) return undefined;
+
+  if (apply<number>(nativeStringCharCodeAt, candidate, [0]) === 91) {
+    const closingBracket = apply<number>(nativeStringIndexOf, candidate, [']']);
+    if (closingBracket <= 1) return undefined;
+    const suffix = apply<string>(nativeStringSlice, candidate, [closingBracket + 1]);
+    if (
+      suffix !== '' &&
+      (apply<number>(nativeStringCharCodeAt, suffix, [0]) !== 58 ||
+        !requestStateValidPort(apply(nativeStringSlice, suffix, [1])))
+    ) {
+      return undefined;
     }
-    if (comma < 0) return undefined;
-    end = comma;
+    return requestStateCanonicalIpv6(apply(nativeStringSlice, candidate, [1, closingBracket]));
   }
+
+  const ipv4 = requestStateStrictIpv4(candidate);
+  if (ipv4 !== undefined) return ipv4;
+  const ipv6 = requestStateCanonicalIpv6(candidate);
+  if (ipv6 !== undefined) return ipv6;
+
+  const separator = apply<number>(nativeStringIndexOf, candidate, [':']);
+  if (
+    separator <= 0 ||
+    separator !== apply<number>(nativeStringLastIndexOf, candidate, [':']) ||
+    separator >= candidate.length - 1
+  ) {
+    return undefined;
+  }
+  const port = apply<string>(nativeStringSlice, candidate, [separator + 1]);
+  if (!requestStateValidPort(port)) return undefined;
+  return requestStateStrictIpv4(apply(nativeStringSlice, candidate, [0, separator]));
+}
+
+/** Resolve exactly the rightmost X-Forwarded-For hop and canonicalize its address-only key. */
+export function requestStateRightmostHeaderListValue(value: string | null): string | undefined {
+  assertRequestStateIntrinsics();
+  if (value === null || value.length > 8_192) return undefined;
+  const comma = apply<number>(nativeStringLastIndexOf, value, [',']);
+  return requestStateCanonicalClientIpValue(apply(nativeStringSlice, value, [comma + 1]));
+}
+
+function requestStateIsHttpTokenCode(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 33 ||
+    code === 35 ||
+    code === 36 ||
+    code === 37 ||
+    code === 38 ||
+    code === 39 ||
+    code === 42 ||
+    code === 43 ||
+    code === 45 ||
+    code === 46 ||
+    code === 94 ||
+    code === 95 ||
+    code === 96 ||
+    code === 124 ||
+    code === 126
+  );
+}
+
+function requestStateRightmostForwardedElement(value: string): string | undefined {
+  let quoted = false;
+  let escaped = false;
+  let rightmostComma = -1;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+    if (code === 13 || code === 10 || code === 0) return undefined;
+    if (quoted) {
+      if (escaped) {
+        escaped = false;
+      } else if (code === 92) {
+        escaped = true;
+      } else if (code === 34) {
+        quoted = false;
+      }
+    } else if (code === 34) {
+      quoted = true;
+    } else if (code === 44) {
+      rightmostComma = index;
+    }
+  }
+  if (quoted || escaped) return undefined;
+  const element = requestStateOwsSlice(value, rightmostComma + 1);
+  return element === '' ? undefined : element;
+}
+
+const MAX_FORWARDED_ELEMENT_PARAMETERS = 32;
+
+/**
+ * Resolve the rightmost RFC 7239 Forwarded element. Unknown, obfuscated, duplicate, malformed,
+ * or non-IP `for` nodes fail closed instead of minting limiter identities (SPEC §9.5).
+ */
+export function requestStateRightmostForwardedForValue(value: string | null): string | undefined {
+  assertRequestStateIntrinsics();
+  if (value === null || value.length > 8_192) return undefined;
+  const entry = requestStateRightmostForwardedElement(value);
+  if (entry === undefined) return undefined;
+
+  let index = 0;
+  let forValue: string | undefined;
+  let parameterCount = 0;
+  let seenParameterNames = '';
+  while (index < entry.length) {
+    parameterCount += 1;
+    // Keep duplicate detection linear in the bounded 8 KiB carrier. A normal Forwarded element
+    // has at most by/for/host/proto plus a few extensions; a 33rd pair is adversarial ambiguity.
+    if (parameterCount > MAX_FORWARDED_ELEMENT_PARAMETERS) return undefined;
+    while (index < entry.length) {
+      const code = apply<number>(nativeStringCharCodeAt, entry, [index]);
+      if (code !== 32 && code !== 9) break;
+      index += 1;
+    }
+    const nameStart = index;
+    while (
+      index < entry.length &&
+      requestStateIsHttpTokenCode(apply(nativeStringCharCodeAt, entry, [index]))
+    ) {
+      index += 1;
+    }
+    if (index === nameStart) return undefined;
+    const name = apply<string>(
+      nativeStringToLowerCase,
+      apply(nativeStringSlice, entry, [nameStart, index]),
+      [],
+    );
+    const framedName = `\0${name}\0`;
+    if (apply<number>(nativeStringIndexOf, seenParameterNames, [framedName]) >= 0) {
+      return undefined;
+    }
+    seenParameterNames += framedName;
+    if (index >= entry.length || apply<number>(nativeStringCharCodeAt, entry, [index]) !== 61) {
+      return undefined;
+    }
+    index += 1;
+    if (index >= entry.length) return undefined;
+
+    let parsedValue = '';
+    if (apply<number>(nativeStringCharCodeAt, entry, [index]) === 34) {
+      index += 1;
+      let closed = false;
+      while (index < entry.length) {
+        const code = apply<number>(nativeStringCharCodeAt, entry, [index]);
+        if (code === 34) {
+          closed = true;
+          index += 1;
+          break;
+        }
+        if (code === 92) {
+          index += 1;
+          if (index >= entry.length) return undefined;
+          const escapedCode = apply<number>(nativeStringCharCodeAt, entry, [index]);
+          if (escapedCode !== 9 && (escapedCode < 32 || escapedCode === 127 || escapedCode > 255)) {
+            return undefined;
+          }
+          parsedValue += apply<string>(nativeStringCharAt, entry, [index]);
+          index += 1;
+          continue;
+        }
+        if (code !== 9 && (code < 32 || code === 127 || code > 255)) return undefined;
+        parsedValue += apply<string>(nativeStringCharAt, entry, [index]);
+        index += 1;
+      }
+      if (!closed) return undefined;
+    } else {
+      const valueStart = index;
+      while (
+        index < entry.length &&
+        requestStateIsHttpTokenCode(apply(nativeStringCharCodeAt, entry, [index]))
+      ) {
+        index += 1;
+      }
+      if (index === valueStart) return undefined;
+      parsedValue = apply(nativeStringSlice, entry, [valueStart, index]);
+    }
+
+    if (name === 'for') {
+      if (forValue !== undefined) return undefined;
+      forValue = parsedValue;
+    }
+
+    while (index < entry.length) {
+      const code = apply<number>(nativeStringCharCodeAt, entry, [index]);
+      if (code !== 32 && code !== 9) break;
+      index += 1;
+    }
+    if (index === entry.length) break;
+    if (apply<number>(nativeStringCharCodeAt, entry, [index]) !== 59) return undefined;
+    index += 1;
+    if (index === entry.length) return undefined;
+  }
+
+  if (forValue === undefined || requestStateOwsSlice(forValue) !== forValue) return undefined;
+  const firstColon = apply<number>(nativeStringIndexOf, forValue, [':']);
+  if (
+    firstColon !== apply<number>(nativeStringLastIndexOf, forValue, [':']) &&
+    apply<number>(nativeStringCharCodeAt, forValue, [0]) !== 91
+  ) {
+    return undefined;
+  }
+  return requestStateCanonicalClientIpValue(forValue);
 }
 
 const MAX_RATE_LIMIT_KEY_LENGTH = 1_024;

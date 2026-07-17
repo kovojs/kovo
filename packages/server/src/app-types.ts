@@ -173,10 +173,15 @@ export interface AppRequestLimitOptions extends AppRequestRateLimitOptions {
    * up to 100,000 (SPEC §9.5).
    */
   maxQueryListItems?: number;
-  /** Optional IP key extractor used by the coarse per-IP limiter. */
+  /**
+   * Optional app-owned opaque key extractor used by the coarse per-IP limiter. Its result is
+   * bounded but is not reinterpreted as a built-in proxy IP literal (SPEC §9.5).
+   */
   clientIp?: (request: Request) => string | undefined;
   /**
-   * Trust forwarded client IP headers for the default per-IP limiter. Disabled by default;
+   * Trust canonical address-only client IPs from the built-in forwarded-header classifier.
+   * Exactly one of X-Forwarded-For, X-Real-IP, or Forwarded may be present; a multi-family ingress
+   * is ambiguous and falls back to adapter peer/global identity. Disabled by default;
    * adapter/operator-owned proxy boundaries must opt in (SPEC §9.5).
    */
   trustedProxy?: boolean;

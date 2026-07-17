@@ -439,6 +439,100 @@ describe('server node adapter', () => {
     expect((await handler(makeRequest('203.0.113.10'))).status).toBe(429);
   });
 
+  it('keeps a real front-proxy reconnect in one per-IP bucket after stripping its source port', async () => {
+    const run = vi.fn(() => ({ ok: true }));
+    const key = 'cart/front-proxy-reconnect';
+    const appHandler = createRequestHandler(
+      createApp({
+        mutations: [
+          mutation(key, {
+            csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
+            handler: run,
+            input: s.object({}),
+          }),
+        ],
+        requestLimits: {
+          global: { max: 100, windowMs: 60_000 },
+          mutations: {
+            global: { max: 100, windowMs: 60_000 },
+            perIp: { max: 1, windowMs: 60_000 },
+          },
+          perIp: { max: 100, windowMs: 60_000 },
+          queries: {},
+          trustedProxy: true,
+        },
+      }),
+    );
+    const backend = await serveWithNode(toNodeHandler(appHandler));
+    const observedSourcePorts: number[] = [];
+    const upstreamStatuses: number[] = [];
+    const proxy = await serveWithNode((request, response) => {
+      const remoteAddress = request.socket.remoteAddress;
+      const remotePort = request.socket.remotePort;
+      if (remoteAddress === undefined || remotePort === undefined) {
+        response.writeHead(502).end('missing peer');
+        return;
+      }
+      observedSourcePorts.push(remotePort);
+      const upstream = httpRequest(
+        `${backend.origin}${request.url ?? '/'}`,
+        {
+          headers: {
+            'content-length': request.headers['content-length'] ?? '0',
+            'content-type': request.headers['content-type'] ?? 'application/octet-stream',
+            forwarded: `for="${remoteAddress}:${remotePort}"`,
+          },
+          method: request.method,
+        },
+        (upstreamResponse) => {
+          upstreamStatuses.push(upstreamResponse.statusCode ?? 0);
+          response.writeHead(upstreamResponse.statusCode ?? 502, {
+            connection: 'close',
+            ...(upstreamResponse.headers['content-type'] === undefined
+              ? {}
+              : { 'content-type': upstreamResponse.headers['content-type'] }),
+            ...(upstreamResponse.headers.location === undefined
+              ? {}
+              : { location: upstreamResponse.headers.location }),
+            ...(upstreamResponse.headers['retry-after'] === undefined
+              ? {}
+              : { 'retry-after': upstreamResponse.headers['retry-after'] }),
+          });
+          upstreamResponse.pipe(response);
+        },
+      );
+      upstream.on('error', () => response.writeHead(502).end('proxy failure'));
+      request.pipe(upstream);
+    });
+
+    try {
+      const options = {
+        body: '',
+        headers: {
+          connection: 'close',
+          'content-length': '0',
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        method: 'POST',
+      } as const;
+      const first = await proxy.fetch(`/_m/${key}`, options);
+      const second = await proxy.fetch(`/_m/${key}`, options);
+      expect(first.status, first.body).toBe(303);
+      expect({ body: second.body, status: second.status, upstreamStatuses }).toEqual({
+        body: 'Too Many Requests',
+        status: 429,
+        upstreamStatuses: [303, 429],
+      });
+      expect(observedSourcePorts).toHaveLength(2);
+      expect(observedSourcePorts[0]).not.toBe(observedSourcePorts[1]);
+      expect(run).toHaveBeenCalledTimes(1);
+    } finally {
+      await proxy.close();
+      await backend.close();
+    }
+  });
+
   it('preserves the Node peer address across authority-neutral endpoint and mutation copies', async () => {
     const app = createApp({});
     const makeRequest = () => {
@@ -1423,7 +1517,11 @@ describe('responseHeadersToNodeHeaders (B1)', () => {
       let capturedHeaders: Record<string, string | string[]> | undefined;
       const nodeResponse = {
         end: vi.fn(),
-        writeHead(_status: number, _statusText: string, headers: Record<string, string | string[]>) {
+        writeHead(
+          _status: number,
+          _statusText: string,
+          headers: Record<string, string | string[]>,
+        ) {
           capturedHeaders = headers;
           return this;
         },

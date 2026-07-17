@@ -1494,6 +1494,65 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'trusted-client-ip',
+    marker: '@kovo-security-classifier-corpus trusted-client-ip',
+    testFiles: [
+      'packages/server/src/request-state-intrinsics.test.ts',
+      'packages/server/src/client-ip.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.client-ip.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'canonical-address-only-and-malformed-node-corpus',
+        file: 'packages/server/src/request-state-intrinsics.test.ts',
+        snippets: [
+          'canonicalizes trusted client node %s to address-only key %s',
+          'keeps the proxy-nearest X-Forwarded-For hop while stripping its transport port',
+          'rejects malformed, ambiguous, or non-IP Forwarded value %s',
+          'for=203.0.113.9;proto=https;proto=http',
+          'for=203.0.113.9;ext="a\\u0001b"',
+          'rejects an empty terminal X-Forwarded-For hop instead of falling back leftward',
+          'bounds many unique Forwarded extensions before per-IP rate admission',
+        ],
+      },
+      {
+        id: 'shell-guard-global-and-custom-authority-corpus',
+        file: 'packages/server/src/client-ip.test.ts',
+        snippets: [
+          'keys $label by one canonical address across reconnects',
+          'shares canonical trusted-proxy identity between the shell and per-IP guards',
+          'keeps the global request floor when malformed proxy nodes cannot mint a per-IP key',
+          'rejects conflicting trusted client-IP header families as ambiguous',
+          'applies the global floor when an attacker header conflicts with the proxy-owned family',
+          'leaves an explicit clientIp callback in charge of its opaque keys',
+        ],
+      },
+      {
+        id: 'real-front-proxy-reconnect-regression',
+        file: 'packages/server/src/node.test.ts',
+        snippets: [
+          'keeps a real front-proxy reconnect in one per-IP bucket after stripping its source port',
+          'expect(observedSourcePorts[0]).not.toBe(observedSourcePorts[1])',
+          'upstreamStatuses: [303, 429]',
+        ],
+      },
+      {
+        id: 'generated-node-six-carrier-parity',
+        file: 'packages/create-kovo/src/index.build.prod-artifact.client-ip.test.ts',
+        snippets: [
+          'keeps all built-in trusted-proxy port carriers in canonical per-IP buckets',
+          "label: 'Forwarded IPv4 port'",
+          "label: 'Forwarded IPv6 port'",
+          "label: 'X-Forwarded-For IPv4 port'",
+          "label: 'X-Forwarded-For IPv6 port'",
+          "label: 'X-Real-IP IPv4 port'",
+          "label: 'X-Real-IP IPv6 port'",
+        ],
+      },
+    ],
+  },
+  {
     id: 'mutation-idem',
     marker: '@kovo-security-classifier-corpus mutation-idem',
     testFiles: [

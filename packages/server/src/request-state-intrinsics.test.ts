@@ -6,6 +6,7 @@ import { createApp } from './app.js';
 import { preDispatchLoadShedResponse } from './app-load-shed.js';
 import { guards, sanitizeNext } from './guards.js';
 import {
+  requestStateCanonicalClientIpValue,
   requestStateExactCompositeKey,
   requestStateHeaderGet,
   requestStateIsSafeInteger,
@@ -22,6 +23,85 @@ import {
 const moduleUrl = new URL('./request-state-intrinsics.ts', import.meta.url).href;
 
 describe('request-state intrinsic membrane', () => {
+  // @kovo-security-classifier-corpus trusted-client-ip
+  it.each([
+    ['203.0.113.9', '203.0.113.9'],
+    ['203.0.113.9:47011', '203.0.113.9'],
+    ['[2001:0DB8:0:0:0:0:0:9]', '2001:db8::9'],
+    ['[2001:0DB8:0:0:0:0:0:9]:47011', '2001:db8::9'],
+    ['0:0:0:0:0:ffff:c000:0209', '192.0.2.9'],
+    ['[::FFFF:192.0.2.9]:47011', '192.0.2.9'],
+  ])('canonicalizes trusted client node %s to address-only key %s', (value, expected) => {
+    expect(requestStateCanonicalClientIpValue(value)).toBe(expected);
+  });
+
+  it('keeps the proxy-nearest X-Forwarded-For hop while stripping its transport port', () => {
+    expect(requestStateRightmostHeaderListValue('198.51.100.1, 203.0.113.9:47011')).toBe(
+      '203.0.113.9',
+    );
+    expect(
+      requestStateRightmostHeaderListValue('198.51.100.2, [2001:0DB8:0:0:0:0:0:9]:47012'),
+    ).toBe('2001:db8::9');
+  });
+
+  it('parses the rightmost RFC 7239 element without treating quoted commas as proxy hops', () => {
+    expect(
+      requestStateRightmostForwardedForValue(
+        'for=198.51.100.1;ext="one,two", proto=https;For="203.0.113.9:47011"',
+      ),
+    ).toBe('203.0.113.9');
+    expect(
+      requestStateRightmostForwardedForValue(
+        'for=198.51.100.2, for="[2001:0DB8:0:0:0:0:0:9]:47012";proto=https',
+      ),
+    ).toBe('2001:db8::9');
+  });
+
+  it.each([
+    'unknown',
+    '_obfuscated',
+    '01.2.3.4',
+    '256.2.3.4',
+    '203.0.113.9:65536',
+    '203.0.113.9:ephemeral',
+    '[2001:db8::9]:65536',
+    '[2001:db8::9]:ephemeral',
+    'fe80::1%eth0',
+    '203.0.113.9, 198.51.100.1',
+    '"203.0.113.9"',
+  ])('rejects malformed or non-address trusted client node %s', (value) => {
+    expect(requestStateCanonicalClientIpValue(value)).toBeUndefined();
+  });
+
+  it.each([
+    'for=unknown',
+    'for=_obfuscated',
+    'for=203.0.113.9:47011',
+    'for="2001:db8::9"',
+    'for="[2001:db8::9]:65536"',
+    'for=203.0.113.9;for=198.51.100.1',
+    'for=203.0.113.9;proto=https;proto=http',
+    'for=203.0.113.9;Ext=one;ext=two',
+    'for=203.0.113.9;ext="a\u0001b"',
+    'for=203.0.113.9, proto=https',
+    'for="203.0.113.9',
+    'for=" 203.0.113.9"',
+  ])('rejects malformed, ambiguous, or non-IP Forwarded value %s', (value) => {
+    expect(requestStateRightmostForwardedForValue(value)).toBeUndefined();
+  });
+
+  it('rejects an empty terminal X-Forwarded-For hop instead of falling back leftward', () => {
+    expect(requestStateRightmostHeaderListValue('203.0.113.9,')).toBeUndefined();
+  });
+
+  it('bounds many unique Forwarded extensions before per-IP rate admission', () => {
+    const parameters = ['for=203.0.113.9'];
+    for (let index = 0; index < 31; index += 1) parameters.push(`extension${index}=value`);
+    expect(requestStateRightmostForwardedForValue(parameters.join(';'))).toBe('203.0.113.9');
+    parameters.push('extension31=value');
+    expect(requestStateRightmostForwardedForValue(parameters.join(';'))).toBeUndefined();
+  });
+
   it('pins clocks, numeric checks, client keys, headers, and URL scalars after late poisoning', () => {
     const originalDateNow = Date.now;
     const originalHeadersGet = Headers.prototype.get;

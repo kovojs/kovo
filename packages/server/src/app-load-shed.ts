@@ -16,6 +16,7 @@ import { securityUint8ArrayLength } from './response-security-intrinsics.js';
 import { requestDecodeUtf8, requestParseJson } from './request-body-intrinsics.js';
 import {
   requestStateHeaderGet,
+  requestStateCanonicalClientIpValue,
   requestStateIgnorePromiseRejection,
   requestStateIsSafeInteger,
   requestStateNow,
@@ -1061,18 +1062,21 @@ function countedBody(
 /**
  * @internal Resolve the trustworthy client IP for a request using the SAME source the coarse
  * pre-dispatch limiter uses (SPEC §9.5): the app-configured `createApp({ requestLimits: { clientIp }
- * })` extractor, else `X-Forwarded-For`/`X-Real-IP`/`Forwarded` ONLY when `trustedProxy` is set.
- * The request shell threads this onto `req.clientIp` (via `resolveLifecycleRequest`'s `clientIp`
- * resolver) so `guards.rateLimit({ per: 'ip' })` keys on a trusted value rather than an arbitrary
- * client-supplied header. Returns `undefined` (never an empty string) when no trusted IP is found.
+ * })` opaque extractor, else a canonical address-only `X-Forwarded-For`/`X-Real-IP`/`Forwarded`
+ * value ONLY when `trustedProxy` is set. The request shell threads this onto `req.clientIp` (via
+ * `resolveLifecycleRequest`'s `clientIp` resolver) so `guards.rateLimit({ per: 'ip' })` keys on the
+ * exact same trusted value rather than an arbitrary client-supplied header. Returns `undefined`
+ * (never an empty string) when no trusted IP is found.
  */
 export function resolveRequestClientIp(app: KovoApp, request: Request): string | undefined {
   const limits = app.requestLimits;
+  const configuredIp = limits.clientIp?.(request);
+  if (configuredIp !== undefined && configuredIp !== null) {
+    return requestStateOptionalRateLimitKey(configuredIp, 'createApp({ requestLimits.clientIp })');
+  }
   const ip =
-    limits.clientIp?.(request) ??
-    requestClientIp(request, { trustedProxy: limits.trustedProxy }) ??
-    requestPeerAddress(request);
-  return requestStateOptionalRateLimitKey(ip, 'createApp({ requestLimits.clientIp })');
+    requestClientIp(request, { trustedProxy: limits.trustedProxy }) ?? requestPeerAddress(request);
+  return requestStateOptionalRateLimitKey(ip, 'trusted client IP');
 }
 
 function requestPeerAddress(request: Request): string | undefined {
@@ -1085,16 +1089,15 @@ function requestPeerAddress(request: Request): string | undefined {
 function requestClientIp(request: Request, options: { trustedProxy: boolean }): string | undefined {
   if (!options.trustedProxy) return undefined;
   const headers = readNativeRequestHeaders(request);
-  const forwardedFor = requestStateRightmostHeaderListValue(
-    requestStateHeaderGet(headers, 'x-forwarded-for'),
-  );
-  if (forwardedFor) return forwardedFor;
-
-  const realIp = requestStateOptionalRateLimitKey(
-    requestStateHeaderGet(headers, 'x-real-ip'),
-    'trusted X-Real-IP',
-  );
-  if (realIp) return realIp;
-
-  return requestStateRightmostForwardedForValue(requestStateHeaderGet(headers, 'forwarded'));
+  const forwardedFor = requestStateHeaderGet(headers, 'x-forwarded-for');
+  const realIp = requestStateHeaderGet(headers, 'x-real-ip');
+  const forwarded = requestStateHeaderGet(headers, 'forwarded');
+  const familyCount =
+    (forwardedFor === null ? 0 : 1) + (realIp === null ? 0 : 1) + (forwarded === null ? 0 : 1);
+  // SPEC §9.5: a proxy boundary must present one unambiguous authority family. In particular, an
+  // unstripped client-authored XFF value cannot shadow a proxy-owned RFC 7239 Forwarded element.
+  if (familyCount !== 1) return undefined;
+  if (forwardedFor !== null) return requestStateRightmostHeaderListValue(forwardedFor);
+  if (realIp !== null) return requestStateCanonicalClientIpValue(realIp);
+  return requestStateRightmostForwardedForValue(forwarded);
 }
