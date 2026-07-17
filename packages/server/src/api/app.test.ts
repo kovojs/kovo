@@ -97,6 +97,14 @@ type RootKovoPostgresSystemDb = import('@kovojs/server').KovoPostgresSystemDb;
 type RemovedRootUsePostgresSystemDb =
   // @ts-expect-error SPEC §6.6/§10.3: raw capability consumers are package-internal.
   typeof import('@kovojs/server').usePostgresSystemDb;
+// eslint-disable-next-line no-unused-vars -- compile-time egress authority-boundary assertion only.
+type RemovedRootDatabaseEgressSocketFactory =
+  // @ts-expect-error SPEC §6.6/§10.3: only the framework Postgres adapter may mint this carrier.
+  typeof import('@kovojs/server').createDatabaseEgressSocket;
+// eslint-disable-next-line no-unused-vars -- compile-time egress authority-boundary assertion only.
+type RemovedInternalDatabaseEgressSocketFactory =
+  // @ts-expect-error The manifest-declared internal egress API exposes install/credentials, not DB authority.
+  typeof import('@kovojs/server/internal/egress').createDatabaseEgressSocket;
 // eslint-disable-next-line no-unused-vars -- compile-time authority-boundary assertion only.
 type RemovedPublishedEndpointBrowserCredentialWitness =
   // @ts-expect-error SPEC §6.6/§9.1: app-authored modules cannot mint the private witness.
@@ -715,6 +723,8 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('readHeader');
     expect(publicValues).not.toHaveProperty('renderComponent');
     expect(publicValues).not.toHaveProperty('installEgressFloor');
+    expect(publicValues).not.toHaveProperty('createDatabaseEgressSocket');
+    expect(packageRootValues).not.toHaveProperty('createDatabaseEgressSocket');
     expect(publicValues).not.toHaveProperty('selfProbe');
     expect(publicValues).not.toHaveProperty('awsCredential');
     expect(publicValues).not.toHaveProperty('gcpCredential');
@@ -838,6 +848,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageInternalAuditFactsApi).toEqual(internalAuditFactsApi);
     expect(packageInternalEgressApi.installEgressFloor).toBe(egressBootstrapApi.installEgressFloor);
+    expect(packageInternalEgressApi).not.toHaveProperty('createDatabaseEgressSocket');
     expect(packageInternalEgressApi.selfProbe).toBe(egressBootstrapApi.selfProbe);
     expect(packageInternalEgressApi.awsCredential).toBe(egressCredentialsApi.awsCredential);
     expect(packageInternalEgressApi.gcpCredential).toBe(egressCredentialsApi.gcpCredential);

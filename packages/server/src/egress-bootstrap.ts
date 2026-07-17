@@ -278,9 +278,10 @@ export function activeEgressFloor(): EgressFloorInstall | undefined {
 /**
  * Register a framework-owned Postgres runtime URL with the process-local egress floor.
  *
- * Runtime database connections are still only exempt by exact `host:port`; cloud metadata and
- * unrelated private-network targets remain blocked by `evaluateEgress()` before this exemption
- * is considered (SPEC §6.6, §10.3 DEC-C).
+ * Runtime database connections are still only exempt by exact `host:port` and only on the
+ * framework-created Postgres socket carrying that endpoint's module-private provenance. Cloud
+ * metadata, ordinary fetch/node:http calls, unrelated sockets, and unrelated private-network
+ * targets remain blocked (SPEC §6.6, §10.3 DEC-C).
  *
  * @internal
  */

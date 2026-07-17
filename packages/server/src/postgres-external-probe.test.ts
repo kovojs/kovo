@@ -1,5 +1,7 @@
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, rmSync } from 'node:fs';
+import http from 'node:http';
+import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -17,6 +19,8 @@ vi.mock('@kovojs/better-auth/internal/server-mount-adapter', () => ({
 }));
 
 import { actAsNonRequestPrincipal } from './auth-principal.js';
+import { createDatabaseEgressSocket, EGRESS_BLOCKED_ERROR_NAME } from './egress.js';
+import { installEgressFloorSync, registerEgressDatabaseUrl } from './egress-bootstrap.js';
 import { guards } from './guards.js';
 import { createBetterAuthPostgresRateLimitBucketConsumer } from './internal/better-auth.js';
 import { createPostgresSystemDb, usePostgresAppRuntimeDb } from './internal/postgres-capability.js';
@@ -37,6 +41,7 @@ import {
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
 const probeToolchain = localPostgresToolchain();
 const describeIfPostgres = probeToolchain.available ? describe : describe.skip;
+const itIfPostgresTls = localBinaryAvailable('openssl') ? it : it.skip;
 
 const probeNotes = pgTable(
   'kovo_ext_probe_notes',
@@ -113,6 +118,101 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     await Promise.allSettled(clusters.splice(0).map((cluster) => cluster.stop()));
     for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
   });
+
+  it('confines literal and hostname DB authority to pg sockets across reconnects', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-external-egress-pg-'));
+    roots.push(root);
+    const cluster = await startLocalPostgres(root);
+    clusters.push(cluster);
+    const literalUrl = cluster.url('postgres', 'postgres');
+    const hostnameUrl = literalUrl.replace('@127.0.0.1:', '@localhost:');
+    const floor = installEgressFloorSync({ allowInternal: [] }, () => {});
+
+    try {
+      for (const databaseUrl of [literalUrl, hostnameUrl]) {
+        const unregister = registerEgressDatabaseUrl(databaseUrl);
+        let streamCreations = 0;
+        const pool = new Pool({
+          connectionString: databaseUrl,
+          max: 1,
+          stream: () => {
+            streamCreations += 1;
+            return createDatabaseEgressSocket(databaseUrl);
+          },
+        });
+        try {
+          await expect(pool.query('SELECT 1 AS connected')).resolves.toMatchObject({
+            rows: [{ connected: 1 }],
+          });
+          const firstClient = await pool.connect();
+          firstClient.release(true);
+          await expect(pool.query('SELECT 2 AS reconnected')).resolves.toMatchObject({
+            rows: [{ reconnected: 2 }],
+          });
+          expect(streamCreations).toBeGreaterThanOrEqual(2);
+
+          const endpoint = new URL(databaseUrl);
+          const host = endpoint.hostname;
+          const port = Number(endpoint.port);
+          await expect(fetch(`http://${host}:${port}/`)).rejects.toSatisfy(hasEgressBlockedCause);
+          await expect(connectRawSocket(host, port)).rejects.toMatchObject({
+            name: EGRESS_BLOCKED_ERROR_NAME,
+          });
+          await expect(requestWithNodeHttp(host, port)).rejects.toMatchObject({
+            name: EGRESS_BLOCKED_ERROR_NAME,
+          });
+        } finally {
+          await pool.end();
+          unregister();
+        }
+      }
+    } finally {
+      floor.uninstall();
+    }
+  }, 30_000);
+
+  itIfPostgresTls(
+    'keeps the pg socket provenance through TLS reconnects',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'kovo-external-egress-pg-tls-'));
+      roots.push(root);
+      const cluster = await startLocalPostgres(root, { tls: true });
+      clusters.push(cluster);
+      const databaseUrl = `${cluster
+        .url('postgres', 'postgres')
+        .replace('@127.0.0.1:', '@localhost:')}?sslmode=no-verify`;
+      const unregister = registerEgressDatabaseUrl(databaseUrl);
+      const floor = installEgressFloorSync({ allowInternal: [] }, () => {});
+      let streamCreations = 0;
+      const pool = new Pool({
+        connectionString: databaseUrl,
+        max: 1,
+        stream: () => {
+          streamCreations += 1;
+          return createDatabaseEgressSocket(databaseUrl);
+        },
+      });
+
+      try {
+        await expect(
+          pool.query<{ tls: boolean }>(
+            'SELECT ssl AS tls FROM pg_stat_ssl WHERE pid = pg_backend_pid()',
+          ),
+        ).resolves.toMatchObject({ rows: [{ tls: true }] });
+        const firstClient = await pool.connect();
+        firstClient.release(true);
+        await expect(pool.query('SELECT 2 AS reconnected')).resolves.toMatchObject({
+          rows: [{ reconnected: 2 }],
+        });
+        expect(streamCreations).toBeGreaterThanOrEqual(2);
+      } finally {
+        await pool.end();
+        floor.uninstall();
+        unregister();
+      }
+    },
+    30_000,
+  );
 
   it('keeps the bounded Better Auth upsert atomic without dual-unique 23505 failures', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-external-better-auth-rate-limit-'));
@@ -732,20 +832,49 @@ interface LocalPostgresCluster {
   url(database: string, user: string): string;
 }
 
-async function startLocalPostgres(root: string): Promise<LocalPostgresCluster> {
+async function startLocalPostgres(
+  root: string,
+  options: { tls?: boolean } = {},
+): Promise<LocalPostgresCluster> {
   const dataDir = join(root, 'data');
   const socketDir = '/tmp';
   execFileSync('initdb', ['-D', dataDir, '-A', 'trust', '-U', 'postgres'], {
     stdio: 'ignore',
   });
   const port = await availablePort();
-  const process = spawn(
-    'postgres',
-    ['-D', dataDir, '-h', '127.0.0.1', '-k', socketDir, '-p', String(port)],
-    {
-      stdio: 'pipe',
-    },
-  );
+  const postgresArgs = ['-D', dataDir, '-h', '127.0.0.1', '-k', socketDir, '-p', String(port)];
+  if (options.tls === true) {
+    const certificate = join(root, 'server.crt');
+    const privateKey = join(root, 'server.key');
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-new',
+        '-x509',
+        '-days',
+        '1',
+        '-nodes',
+        '-out',
+        certificate,
+        '-keyout',
+        privateKey,
+        '-subj',
+        '/CN=localhost',
+      ],
+      { stdio: 'ignore' },
+    );
+    chmodSync(privateKey, 0o600);
+    postgresArgs.push(
+      '-c',
+      'ssl=on',
+      '-c',
+      `ssl_cert_file=${certificate}`,
+      '-c',
+      `ssl_key_file=${privateKey}`,
+    );
+  }
+  const process = spawn('postgres', postgresArgs, { stdio: 'pipe' });
   const stderr: string[] = [];
   process.stderr.on('data', (chunk: Buffer) => stderr.push(chunk.toString('utf8')));
   const cluster: LocalPostgresCluster = {
@@ -777,14 +906,7 @@ async function startLocalPostgres(root: string): Promise<LocalPostgresCluster> {
 }
 
 function localPostgresToolchain(): { available: true } | { available: false; reason: string } {
-  const missing = POSTGRES_BINARIES.filter((binary) => {
-    try {
-      execFileSync(binary, ['--version'], { stdio: 'ignore' });
-      return false;
-    } catch {
-      return true;
-    }
-  });
+  const missing = POSTGRES_BINARIES.filter((binary) => !localBinaryAvailable(binary));
   if (missing.length > 0) {
     return {
       available: false,
@@ -792,6 +914,47 @@ function localPostgresToolchain(): { available: true } | { available: false; rea
     };
   }
   return { available: true };
+}
+
+function localBinaryAvailable(binary: string): boolean {
+  try {
+    execFileSync(binary, ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasEgressBlockedCause(error: unknown): boolean {
+  let current = error;
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (typeof current !== 'object' || current === null) return false;
+    if ('name' in current && current.name === EGRESS_BLOCKED_ERROR_NAME) return true;
+    current = 'cause' in current ? current.cause : undefined;
+  }
+  return false;
+}
+
+async function connectRawSocket(host: string, port: number): Promise<void> {
+  const socket = new net.Socket();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.once('error', reject);
+      socket.connect(port, host, resolve);
+    });
+  } finally {
+    socket.destroy();
+  }
+}
+
+async function requestWithNodeHttp(host: string, port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const request = http.get({ host, port }, (response) => {
+      response.resume();
+      response.once('end', resolve);
+    });
+    request.once('error', reject);
+  });
 }
 
 async function connect(connectionString: string): Promise<Pool> {

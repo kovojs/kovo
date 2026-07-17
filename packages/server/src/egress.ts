@@ -54,6 +54,11 @@ import {
   egressUrlToString,
   egressUrlUsername,
 } from './egress-intrinsics.js';
+import {
+  createWitnessWeakMap,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 // Supported runners evaluate this module only after the request-safe runtime bootstrap. Keep the
 // exact boot-pinned transport sink instead of redispatching through caller-mutable globalThis at
@@ -217,6 +222,12 @@ export type CloudMetadataProvider = 'aws' | 'azure' | 'gcp';
 
 const metadataAccessProvider = new AsyncLocalStorage<CloudMetadataProvider>();
 
+// A configured database URL is authority for the framework's Postgres transport, not ambient
+// authority for every HTTP/TCP caller in the process. Keep that provenance on the exact Socket
+// instance created for node-postgres so a reflected URL cannot reuse the DB host:port exemption
+// through fetch(), node:http, or an unrelated raw socket (SPEC §6.6, §10.3).
+const databaseEgressSocketEndpoints = createWitnessWeakMap<net.Socket, string>();
+
 /**
  * Enter the metadata-allowed frame for the duration of `fn`. Module-internal: exported only
  * for the credential-factory module within this package; it is NOT part of the public API
@@ -250,7 +261,7 @@ const azureIdentityEndpointPolicy: unique symbol = Symbol('kovo.azure-identity-e
 export interface EgressPolicy {
   /** `host:port` (lowercased host) entries permitted to reach a private/loopback IP. */
   readonly allowInternal: ReadonlySet<string>;
-  /** Framework-derived DB `host:port` endpoints exempt from the private-network floor. */
+  /** DB `host:port` endpoints eligible only for a framework-created Postgres socket exemption. */
   readonly allowDatabaseEndpoints: ReadonlySet<string>;
   /** Exact normalized origins permitted for framework-owned HTTP egress surfaces. */
   readonly allowDestinations: ReadonlySet<string>;
@@ -317,9 +328,9 @@ interface ResolveEgressPolicyOptions {
   /** Already-normalized framework-owned DB endpoints registered before this floor install. */
   databaseEndpoints?: readonly string[];
   /**
-   * Runtime database URLs whose exact host:port should be reachable even when the
-   * production/private-network floor is otherwise empty. Defaults to boot-pinned
-   * `KOVO_DATABASE_URL`.
+   * Runtime database URLs whose exact host:port a framework-created Postgres socket may reach
+   * even when the production/private-network floor is otherwise empty. Defaults to boot-pinned
+   * `KOVO_DATABASE_URL`; unrelated sockets remain denied.
    */
   databaseUrls?: readonly (string | undefined)[];
   /** Test/bootstrap override; production defaults to boot-pinned platform `IDENTITY_ENDPOINT`. */
@@ -414,7 +425,7 @@ export function resolveEgressPolicy(
   return policy;
 }
 
-/** @internal Normalize Postgres URLs into exact DB host:port egress exemptions. */
+/** @internal Normalize Postgres URLs into exact DB host:port socket capabilities. */
 export function databaseEgressEndpointsFromUrls(
   databaseUrls: readonly (string | undefined)[],
 ): readonly string[] {
@@ -476,6 +487,27 @@ function databaseEgressEndpointFromUrl(raw: string): string | null {
   const port = urlPort === '' ? 5432 : egressNumber(urlPort);
   if (!egressNumberIsInteger(port) || port < 1 || port > 65535) return null;
   return `${egressStringToLowerCase(host)}:${port}`;
+}
+
+/**
+ * Create the exact network carrier used by a framework-owned node-postgres connection.
+ *
+ * The returned socket is remembered only in a module-private WeakMap. Registering a database URL
+ * therefore does not widen the ambient process egress policy: the endpoint exemption is available
+ * only when this precise socket reaches the net.connect sink.
+ *
+ * @internal
+ */
+export function createDatabaseEgressSocket(databaseUrl: string): net.Socket {
+  const endpoint = databaseEgressEndpointFromUrl(databaseUrl);
+  if (endpoint === null) {
+    throw new TypeError(
+      'Framework-owned database egress requires an absolute postgres:// or postgresql:// URL.',
+    );
+  }
+  const socket = new net.Socket();
+  witnessWeakMapSet(databaseEgressSocketEndpoints, socket, endpoint);
+  return socket;
 }
 
 /** Boot-time config error for an invalid/forbidden egress allowlist entry. */
@@ -1040,6 +1072,34 @@ export function evaluateEgress(args: {
   policy: EgressPolicy;
   requireDestinationAllowlist?: boolean | undefined;
 }): EgressBlockedError | null {
+  return evaluateEgressDecision(args);
+}
+
+function evaluateSocketEgress(
+  args: {
+    host: string;
+    port: number;
+    protocol?: 'http:' | 'https:' | undefined;
+    resolvedIp: string;
+    policy: EgressPolicy;
+    requireDestinationAllowlist?: boolean | undefined;
+  },
+  socket: net.Socket,
+): EgressBlockedError | null {
+  return evaluateEgressDecision(args, witnessWeakMapGet(databaseEgressSocketEndpoints, socket));
+}
+
+function evaluateEgressDecision(
+  args: {
+    host: string;
+    port: number;
+    protocol?: 'http:' | 'https:' | undefined;
+    resolvedIp: string;
+    policy: EgressPolicy;
+    requireDestinationAllowlist?: boolean | undefined;
+  },
+  databaseSocketEndpoint?: string,
+): EgressBlockedError | null {
   const { host, port, protocol, resolvedIp, policy } = args;
   if (args.requireDestinationAllowlist) {
     const blocked = evaluateDestinationAllowlist({ host, port, protocol, resolvedIp, policy });
@@ -1098,8 +1158,9 @@ export function evaluateEgress(args: {
     return null;
   }
   if (
-    egressSetHas(policy.allowDatabaseEndpoints, hostKey) ||
-    egressSetHas(policy.allowDatabaseEndpoints, ipKey)
+    databaseSocketEndpoint !== undefined &&
+    egressSetHas(policy.allowDatabaseEndpoints, databaseSocketEndpoint) &&
+    (databaseSocketEndpoint === hostKey || databaseSocketEndpoint === ipKey)
   ) {
     return null;
   }
@@ -1407,7 +1468,10 @@ export function installNetConnectFloor(
     // If host is already an IP literal, classify + decide synchronously before connecting.
     const literalIp = normalizeFastPathIpLiteral(host);
     if (literalIp !== null) {
-      const blocked = evaluateEgress({ host, port, resolvedIp: literalIp, policy: activePolicy });
+      const blocked = evaluateSocketEgress(
+        { host, port, resolvedIp: literalIp, policy: activePolicy },
+        this,
+      );
       if (blocked) {
         // Throw on the connect call so fetch/http.get reject with the typed error.
         throw blocked;
@@ -1453,18 +1517,24 @@ export function installNetConnectFloor(
           if (egressArrayIsArray(address)) {
             for (let index = 0; index < address.length; index += 1) {
               const entry = address[index] as LookupAddress;
-              const blocked = evaluateEgress({
-                host,
-                port,
-                resolvedIp: entry.address,
-                policy: activePolicy,
-              });
+              const blocked = evaluateSocketEgress(
+                {
+                  host,
+                  port,
+                  resolvedIp: entry.address,
+                  policy: activePolicy,
+                },
+                this,
+              );
               if (blocked) return cb(blocked, entry.address, family as unknown as number);
             }
             return cb(null, address as unknown as string, family as unknown as number);
           }
           const resolvedIp = address as string;
-          const blocked = evaluateEgress({ host, port, resolvedIp, policy: activePolicy });
+          const blocked = evaluateSocketEgress(
+            { host, port, resolvedIp, policy: activePolicy },
+            this,
+          );
           if (blocked) return cb(blocked, resolvedIp, family as unknown as number);
           cb(null, address as unknown as string, family as unknown as number);
         },

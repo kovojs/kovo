@@ -38,6 +38,7 @@ import {
   snapshotAuditText,
 } from './audit-justification.js';
 import { registerEgressDatabaseUrl } from './egress-bootstrap.js';
+import { createDatabaseEgressSocket } from './egress.js';
 import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import { egressDecodeURIComponent, egressUrl, egressUrlUsername } from './egress-intrinsics.js';
 import {
@@ -4535,9 +4536,7 @@ function createNodePostgresRuntimeClient(
     config.systemDatabaseUrl === undefined
       ? undefined
       : registerEgressDatabaseUrl(config.systemDatabaseUrl);
-  const pool = pinNodePostgresPool(
-    new Pool({ connectionString: config.databaseUrl } satisfies PoolConfig),
-  );
+  const pool = createFrameworkNodePostgresPool(config.databaseUrl);
   const transactionalClient = new NodePostgresRuntimeClient(pool);
   const adminTransactionalClient = createOptionalNodePostgresRuntimeClient(config.adminDatabaseUrl);
   const systemTransactionalClient = createOptionalNodePostgresRuntimeClient(
@@ -4675,9 +4674,25 @@ function createOptionalNodePostgresRuntimeClient(
 ): NodePostgresRuntimeClient | undefined {
   return databaseUrl === undefined
     ? undefined
-    : new NodePostgresRuntimeClient(
-        pinNodePostgresPool(new Pool({ connectionString: databaseUrl } satisfies PoolConfig)),
-      );
+    : new NodePostgresRuntimeClient(createFrameworkNodePostgresPool(databaseUrl));
+}
+
+function createFrameworkNodePostgresPool(databaseUrl: string | undefined): Pool {
+  if (databaseUrl === undefined) {
+    // Explicit driver: "node-postgres" may rely on pg's ordinary PG* environment. Without a
+    // framework-reviewed URL there is no private-endpoint capability to attach, so retain pg's
+    // normal carrier and let the ambient egress floor classify it.
+    return pinNodePostgresPool(new Pool());
+  }
+  return pinNodePostgresPool(
+    new Pool({
+      connectionString: databaseUrl,
+      // SPEC §6.6/§10.3: the private DB endpoint exemption belongs to this framework-owned
+      // Postgres carrier. Merely registering the URL must not open the same host:port to ambient
+      // fetch/node:http/raw TCP calls that can be steered by a remote request.
+      stream: () => createDatabaseEgressSocket(databaseUrl),
+    } satisfies PoolConfig),
+  );
 }
 
 function nodePostgresScopedRuntimeClient(

@@ -183,6 +183,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "identityEndpoint: 'http://identity.internal:40344/msi/token'",
         ],
       },
+      {
+        id: 'database-endpoint-socket-provenance',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'keeps registered database authority on framework-created PostgreSQL sockets',
+          'createDatabaseEgressSocket(databaseUrl)',
+          "unrelatedSocket.connect(port, '127.0.0.1')",
+        ],
+      },
     ],
   },
   {

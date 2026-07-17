@@ -7,7 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agent, setGlobalDispatcher } from 'undici';
 
 import { createApp } from './app.js';
-import { EGRESS_BLOCKED_ERROR_NAME, EgressConfigError } from './egress.js';
+import {
+  EGRESS_BLOCKED_ERROR_NAME,
+  EgressConfigError,
+  createDatabaseEgressSocket,
+} from './egress.js';
 import {
   EgressFloorBootError,
   activeEgressFloor,
@@ -17,6 +21,18 @@ import {
   selfProbe,
 } from './egress-bootstrap.js';
 import { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
+
+async function connectFrameworkDatabaseSocket(databaseUrl: string, port: number): Promise<void> {
+  const socket = createDatabaseEgressSocket(databaseUrl);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.once('error', reject);
+      socket.connect(port, '127.0.0.1', resolve);
+    });
+  } finally {
+    socket.destroy();
+  }
+}
 
 describe('egress bootstrap: transport-floor install + self-probe', () => {
   let teardown: (() => void) | undefined;
@@ -348,23 +364,27 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     }
   });
 
-  it('permits a framework-registered database endpoint after the floor is installed', async () => {
+  it('confines a registered database endpoint to framework-owned database sockets', async () => {
     const server = http.createServer((_req, res) => res.end('ok'));
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
     const port = (server.address() as AddressInfo).port;
+    const databaseUrl = `postgres://app@127.0.0.1:${port}/kovo`;
 
     const install = await installEgressFloor({ allowInternal: [] }, () => {});
     teardown = install.uninstall;
 
     await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
-    const unregister = registerEgressDatabaseUrl(`postgres://app@127.0.0.1:${port}/kovo`);
+    const unregister = registerEgressDatabaseUrl(databaseUrl);
     try {
-      const ok = await fetch(`http://127.0.0.1:${port}/`);
-      expect(await ok.text()).toBe('ok');
+      await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
+      await expect(connectFrameworkDatabaseSocket(databaseUrl, port)).resolves.toBeUndefined();
     } finally {
       unregister();
     }
     await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
+    await expect(connectFrameworkDatabaseSocket(databaseUrl, port)).rejects.toMatchObject({
+      name: EGRESS_BLOCKED_ERROR_NAME,
+    });
 
     server.close();
   });
@@ -374,12 +394,13 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
     const port = (server.address() as AddressInfo).port;
     const endpoint = `127.0.0.1:${port}`;
+    const databaseUrl = `postgres://app@${endpoint}/kovo`;
     const previousDatabaseUrl = process.env.KOVO_DATABASE_URL;
     delete process.env.KOVO_DATABASE_URL;
 
     const install = await installEgressFloor({ allowInternal: [] }, () => {});
     teardown = install.uninstall;
-    const unregister = registerEgressDatabaseUrl(`postgres://app@${endpoint}/kovo`);
+    const unregister = registerEgressDatabaseUrl(databaseUrl);
     const nativeMapGet = Map.prototype.get;
     const nativeMapSet = Map.prototype.set;
     const nativeMapDelete = Map.prototype.delete;
@@ -388,8 +409,8 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     const poisonHits = { delete: 0, get: 0, includes: 0, push: 0, set: 0 };
 
     try {
-      const allowed = await fetch(`http://${endpoint}/`);
-      expect(await allowed.text()).toBe('ok');
+      await expect(connectFrameworkDatabaseSocket(databaseUrl, port)).resolves.toBeUndefined();
+      await expect(fetch(`http://${endpoint}/`)).rejects.toBeDefined();
 
       Map.prototype.get = function poisonedDatabaseEndpointGet(key: unknown) {
         if (key === endpoint) poisonHits.get += 1;
@@ -430,6 +451,9 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     try {
       expect(poisonHits).toEqual({ delete: 0, get: 0, includes: 0, push: 0, set: 0 });
       await expect(fetch(`http://${endpoint}/`)).rejects.toBeDefined();
+      await expect(connectFrameworkDatabaseSocket(databaseUrl, port)).rejects.toMatchObject({
+        name: EGRESS_BLOCKED_ERROR_NAME,
+      });
     } finally {
       unregister();
       server.close();
@@ -442,18 +466,22 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     const server = http.createServer((_req, res) => res.end('ok'));
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
     const port = (server.address() as AddressInfo).port;
+    const databaseUrl = `postgres://app@127.0.0.1:${port}/kovo`;
 
-    const unregister = registerEgressDatabaseUrl(`postgres://app@127.0.0.1:${port}/kovo`);
+    const unregister = registerEgressDatabaseUrl(databaseUrl);
     const install = await installEgressFloor({ allowInternal: [] }, () => {});
     teardown = install.uninstall;
 
     try {
-      const ok = await fetch(`http://127.0.0.1:${port}/`);
-      expect(await ok.text()).toBe('ok');
+      await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
+      await expect(connectFrameworkDatabaseSocket(databaseUrl, port)).resolves.toBeUndefined();
     } finally {
       unregister();
     }
     await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
+    await expect(connectFrameworkDatabaseSocket(databaseUrl, port)).rejects.toMatchObject({
+      name: EGRESS_BLOCKED_ERROR_NAME,
+    });
 
     server.close();
   });
@@ -543,7 +571,7 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     }
   });
 
-  it('production default exempts only KOVO_DATABASE_URL host:port from the private-network floor', async () => {
+  it('production default confines KOVO_DATABASE_URL authority to database sockets', async () => {
     const dbServer = http.createServer((_req, res) => res.end('db-ok'));
     const otherServer = http.createServer((_req, res) => res.end('other-ok'));
     await new Promise<void>((r) => dbServer.listen(0, '127.0.0.1', () => r()));
@@ -553,13 +581,16 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     const previousNodeEnv = process.env.NODE_ENV;
     const previousDatabaseUrl = process.env.KOVO_DATABASE_URL;
     process.env.NODE_ENV = 'production';
-    process.env.KOVO_DATABASE_URL = `postgres://app@127.0.0.1:${dbPort}/app`;
+    const databaseUrl = `postgres://app@127.0.0.1:${dbPort}/app`;
+    process.env.KOVO_DATABASE_URL = databaseUrl;
     try {
       createApp();
       teardown = activeEgressFloor()?.uninstall;
 
-      const ok = await fetch(`http://127.0.0.1:${dbPort}/`);
-      expect(await ok.text()).toBe('db-ok');
+      await expect(fetch(`http://127.0.0.1:${dbPort}/`)).rejects.toMatchObject({
+        cause: { name: EGRESS_BLOCKED_ERROR_NAME },
+      });
+      await expect(connectFrameworkDatabaseSocket(databaseUrl, dbPort)).resolves.toBeUndefined();
       await expect(fetch(`http://127.0.0.1:${otherPort}/`)).rejects.toMatchObject({
         cause: { name: EGRESS_BLOCKED_ERROR_NAME },
       });

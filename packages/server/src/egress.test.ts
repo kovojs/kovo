@@ -10,6 +10,7 @@ import {
   EgressConfigError,
   classifyHost,
   classifyIp,
+  createDatabaseEgressSocket,
   evaluateEgress,
   frameworkEgressFetch,
   installNetConnectFloor,
@@ -541,7 +542,7 @@ describe('evaluateEgress policy decision', () => {
     ).toBeInstanceOf(EgressBlockedError);
   });
 
-  it('allows only the configured database host:port without broadening private-network egress', () => {
+  it('keeps a configured database host:port closed without framework socket provenance', () => {
     const policy = resolveEgressPolicy({ allowInternal: [] }, () => {}, {
       databaseUrls: ['postgres://app@127.0.0.1:54329/app'],
     });
@@ -550,7 +551,7 @@ describe('evaluateEgress policy decision', () => {
     expect(policy.allowDatabaseEndpoints.has('127.0.0.1:54329')).toBe(true);
     expect(
       evaluateEgress({ host: '127.0.0.1', port: 54329, resolvedIp: '127.0.0.1', policy }),
-    ).toBeNull();
+    ).toBeInstanceOf(EgressBlockedError);
     expect(
       evaluateEgress({ host: '127.0.0.1', port: 54330, resolvedIp: '127.0.0.1', policy }),
     ).toBeInstanceOf(EgressBlockedError);
@@ -983,6 +984,24 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
         req.on('error', reject);
       }),
     ).rejects.toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME });
+  });
+
+  // @kovo-security-classifier-corpus egress-ip
+  it('keeps registered database authority on framework-created PostgreSQL sockets', async () => {
+    const databaseUrl = `postgres://app@127.0.0.1:${port}/kovo`;
+    uninstall = installNetConnectFloor(
+      resolveEgressPolicy({ allowInternal: [] }, () => {}, { databaseUrls: [databaseUrl] }),
+    );
+
+    const unrelatedSocket = new net.Socket();
+    expect(() => unrelatedSocket.connect(port, '127.0.0.1')).toThrow(EgressBlockedError);
+
+    const databaseSocket = createDatabaseEgressSocket(databaseUrl);
+    await new Promise<void>((resolve, reject) => {
+      databaseSocket.once('error', reject);
+      databaseSocket.connect(port, '127.0.0.1', resolve);
+    });
+    databaseSocket.destroy();
   });
 
   it('DENIES non-canonical IPv4 spellings after DNS resolution instead of the fast path', async () => {
