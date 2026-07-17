@@ -76,6 +76,14 @@ export class AuthApiError extends Error {
 }
 
 export class FakeCredentialAuth {
+  readonly $context = Promise.resolve({
+    baseURL: 'https://example.test/api/auth',
+    options: {
+      advanced: { ipAddress: { ipAddressHeaders: ['x-forwarded-for'] } },
+      basePath: '/api/auth',
+    },
+  });
+
   readonly api = {
     signInEmail: async (options: {
       asResponse: true;
@@ -116,6 +124,9 @@ export class FakeCredentialAuth {
     },
   };
 
+  readonly handler = async (request: Request): Promise<Response> =>
+    routeFakeCredentialApi(this.api, request);
+
   lastSignIn:
     | { asResponse: true; body: { email: string; password: string }; headers: Headers }
     | undefined;
@@ -127,6 +138,57 @@ export class FakeCredentialAuth {
         headers: Headers;
       }
     | undefined;
+}
+
+export function fakeRoutedCredentialAuth<
+  Api extends {
+    signInEmail?: (...args: any[]) => any;
+    signOut?: (...args: any[]) => any;
+    signUpEmail?: (...args: any[]) => any;
+  },
+>(api: Api) {
+  const signInEmail = api.signInEmail;
+  const signUpEmail = api.signUpEmail;
+  const handlerApi = {
+    ...(signInEmail === undefined
+      ? {}
+      : { signInEmail: (...args: any[]) => Reflect.apply(signInEmail, api, args) }),
+    ...(signUpEmail === undefined
+      ? {}
+      : { signUpEmail: (...args: any[]) => Reflect.apply(signUpEmail, api, args) }),
+  };
+  return {
+    $context: Promise.resolve({
+      baseURL: 'https://example.test/api/auth',
+      options: {
+        advanced: { ipAddress: { ipAddressHeaders: ['x-forwarded-for'] } },
+        basePath: '/api/auth',
+      },
+    }),
+    api,
+    handler: (request: Request) => routeFakeCredentialApi(handlerApi, request),
+  };
+}
+
+async function routeFakeCredentialApi(
+  api: {
+    signInEmail?: (...args: any[]) => any;
+    signUpEmail?: (...args: any[]) => any;
+  },
+  request: Request,
+): Promise<Response> {
+  const path = new URL(request.url).pathname;
+  const body = (await request.json()) as Record<string, string>;
+  let response: BetterAuthResponseLike;
+  if (path.endsWith('/sign-in/email') && typeof api.signInEmail === 'function') {
+    response = await api.signInEmail({ asResponse: true, body, headers: request.headers });
+  } else if (path.endsWith('/sign-up/email') && typeof api.signUpEmail === 'function') {
+    response = await api.signUpEmail({ asResponse: true, body, headers: request.headers });
+  } else {
+    return new Response('Not Found', { status: 404 });
+  }
+  if (response instanceof Response) return response;
+  return new Response(null, { headers: response.headers, status: response.status });
 }
 
 export class FakeMountedAuth {

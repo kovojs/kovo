@@ -106,7 +106,7 @@ describe('Better Auth pinned conformance', () => {
         name: 'Grace Hopper',
         password,
       }),
-      { headers: requestHeaders() },
+      { clientIp: '192.0.2.10', headers: requestHeaders() },
       { csrf: credentialMutationCsrf },
     );
 
@@ -127,7 +127,7 @@ describe('Better Auth pinned conformance', () => {
         email: 'grace@example.com',
         password: 'wrong-conformance-secret',
       }),
-      { headers: requestHeaders() },
+      { clientIp: '192.0.2.10', headers: requestHeaders() },
       { csrf: credentialMutationCsrf },
     );
 
@@ -147,7 +147,7 @@ describe('Better Auth pinned conformance', () => {
         email: 'grace@example.com',
         password,
       }),
-      { headers: requestHeaders() },
+      { clientIp: '192.0.2.10', headers: requestHeaders() },
       { csrf: credentialMutationCsrf },
     );
 
@@ -252,7 +252,7 @@ describe('Better Auth pinned conformance', () => {
     const unauthenticatedAccount = await renderRoutePageResponse(
       accountRoute,
       {},
-      { headers: requestHeaders() },
+      { clientIp: '192.0.2.20', headers: requestHeaders() },
       String,
       {
         currentUrl: '/account',
@@ -276,7 +276,7 @@ describe('Better Auth pinned conformance', () => {
         email: 'member@example.com',
         password,
       }),
-      { headers: requestHeaders() },
+      { clientIp: '192.0.2.20', headers: requestHeaders() },
       { csrf: credentialMutationCsrf },
     );
 
@@ -320,7 +320,7 @@ describe('Better Auth pinned conformance', () => {
         email: 'admin@example.com',
         password,
       }),
-      { headers: requestHeaders() },
+      { clientIp: '192.0.2.20', headers: requestHeaders() },
       { csrf: credentialMutationCsrf },
     );
 
@@ -394,6 +394,7 @@ describe('Better Auth pinned conformance', () => {
     const harness = createKovoTestHarness<AuthVerifierDb>({
       db: createAuthVerifierDb(),
       request: {
+        clientIp: '192.0.2.30',
         headers: requestHeaders(),
       },
       touchGraph: betterAuthCredentialMutationTouchGraph,
@@ -495,6 +496,7 @@ describe('Better Auth pinned conformance', () => {
       write(table: string, value: unknown): void;
     };
     type PluginVerifierRequest = {
+      clientIp: string;
       db: PluginVerifierDb;
       headers: Headers;
     };
@@ -506,6 +508,7 @@ describe('Better Auth pinned conformance', () => {
         },
       },
       request: {
+        clientIp: '192.0.2.40',
         headers: requestHeaders(),
       },
       touchGraph: createBetterAuthCredentialMutationTouchGraph({

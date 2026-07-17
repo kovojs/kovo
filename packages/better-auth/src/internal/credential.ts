@@ -41,7 +41,7 @@ import {
   betterAuthToLowerCase,
   betterAuthTrim,
 } from './intrinsics.js';
-import { getBetterAuthSetCookie } from './trusted-plaintext.js';
+import { getBetterAuthRetryAfter, getBetterAuthSetCookie } from './trusted-plaintext.js';
 
 export { getBetterAuthSetCookie } from './trusted-plaintext.js';
 
@@ -56,6 +56,29 @@ export type BetterAuthCredentialFailure = MutationFail<
   'INVALID_CREDENTIALS',
   Record<string, never>
 >;
+
+/** @internal Framework wire outcome for a Better Auth router rate-limit response. */
+export type BetterAuthCredentialRateLimitFailure = MutationFail<
+  'RATE_LIMITED',
+  Record<string, never>
+>;
+
+/**
+ * @internal Preserve Better Auth's routed 429 and retry delay through Kovo's mutation wire.
+ */
+export function betterAuthCredentialRateLimitFailure(
+  response: BetterAuthResponseLike,
+): BetterAuthCredentialRateLimitFailure | undefined {
+  if (betterAuthResponseStatus(response) !== 429) return undefined;
+  const headers = betterAuthResponseHeaders(response);
+  const retryAfter = getBetterAuthRetryAfter(headers);
+  return {
+    error: { code: 'RATE_LIMITED', payload: {} },
+    ok: false,
+    ...(retryAfter === undefined ? {} : { retryAfter }),
+    status: 429,
+  };
+}
 
 interface BetterAuthForwardSetCookiePosture {
   class: 'session';

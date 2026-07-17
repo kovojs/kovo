@@ -28,7 +28,7 @@ random `KOVO_DEMO_PASSWORD` value in your generated, gitignored `.env` file.
 
 | File                   | Building block                                                                                                                                                                                              |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/schema.ts`        | Drizzle SQLite tables. `contacts` carries a `kovo({ domain, key, authzPolicy })` annotation so the compiler can prove invalidation and authorization posture; the four Better Auth tables sit alongside it. |
+| `src/schema.ts`        | Drizzle SQLite tables. `contacts` carries a `kovo({ domain, key, authzPolicy })` annotation so the compiler can prove invalidation and authorization posture; the five Better Auth tables sit alongside it. |
 | `src/db.ts`            | App-facing database types plus `readonlyAppDb` for read surfaces; raw SQLite creation and seeding live in the framework-owned `_kovo` runtime module.                                                       |
 | `src/queries.ts`       | `contactsQuery` — a typed read whose Drizzle select the compiler extracts.                                                                                                                                  |
 | `src/mutations.ts`     | `addContact` — a CSRF-protected, `authed`-guarded write with input validation and an optimistic list update.                                                                                                |

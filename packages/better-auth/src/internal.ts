@@ -53,6 +53,7 @@ import {
 } from './internal/contracts.js';
 import {
   activeOrganization,
+  betterAuthCredentialRateLimitFailure,
   credentialMutationDefinitionOptions as credentialMutationDefinitionOptionsForContract,
   forwardBetterAuthSetCookie,
   getBetterAuthSetCookie,
@@ -66,6 +67,7 @@ import {
   unauthorizedGuardFailure,
   type ActiveOrganizationRequest,
   type BetterAuthCredentialFailure,
+  type BetterAuthCredentialRateLimitFailure,
   type BetterAuthCredentialMutationValue,
   type BetterAuthOrganizationRequest,
   type BetterAuthOrganizationSession,
@@ -148,6 +150,7 @@ export {
 } from './internal/contracts.js';
 export {
   activeOrganization,
+  betterAuthCredentialRateLimitFailure,
   forwardBetterAuthSetCookie,
   getBetterAuthSetCookie,
   isBetterAuthCredentialFailureError,
@@ -161,6 +164,7 @@ export {
 export type {
   ActiveOrganizationRequest,
   BetterAuthCredentialFailure,
+  BetterAuthCredentialRateLimitFailure,
   BetterAuthCredentialMutationValue,
   BetterAuthOrganizationRequest,
   BetterAuthOrganizationSession,

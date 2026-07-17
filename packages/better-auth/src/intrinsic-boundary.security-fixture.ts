@@ -4,8 +4,11 @@ import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
 import { kovo } from '../../drizzle/src/index.js';
 import { runMutation } from '../../server/src/mutation.js';
+import { sql } from '../../server/node_modules/drizzle-orm/index.js';
 import {
+  bigint as pgBigint,
   boolean,
+  integer as pgInteger,
   pgTable,
   text as pgText,
   timestamp,
@@ -82,8 +85,24 @@ const postgresVerification = pgTable('verification', {
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
   value: pgText('value').notNull(),
 });
+const postgresRateLimit = pgTable(
+  'rateLimit',
+  {
+    count: pgInteger('count').notNull(),
+    id: pgText('id').primaryKey(),
+    key: pgText('key').notNull().unique(),
+    lastRequest: pgBigint('lastRequest', { mode: 'number' }).notNull(),
+  },
+  kovo({
+    authzPolicy: sql`false`,
+    domain: 'auth-rate-limit',
+    key: 'id',
+    secret: true,
+  }),
+);
 const postgresSchema = {
   account: postgresAccount,
+  rateLimit: postgresRateLimit,
   session: postgresSession,
   user: postgresUser,
   verification: postgresVerification,
@@ -135,8 +154,19 @@ const sqliteVerification = sqliteTable('verification', {
   updatedAt: integer('updatedAt', { mode: 'timestamp_ms' }).notNull(),
   value: sqliteText('value').notNull(),
 });
+const sqliteRateLimit = sqliteTable(
+  'rateLimit',
+  {
+    count: integer('count').notNull(),
+    id: sqliteText('id').primaryKey(),
+    key: sqliteText('key').notNull().unique(),
+    lastRequest: integer('lastRequest').notNull(),
+  },
+  kovo({ exempt: true }),
+);
 const sqliteSchema = {
   account: sqliteAccount,
+  rateLimit: sqliteRateLimit,
   session: sqliteSession,
   user: sqliteUser,
   verification: sqliteVerification,
@@ -346,6 +376,7 @@ async function exercisePostgres(dataDir: string): Promise<IntrinsicExerciseResul
         password: postgresPassword,
       },
       request,
+      { clientIp: () => '127.0.0.1' },
     );
     const sessionProbe = await bindings.sessionProvider({
       headers: new Headers({
@@ -405,6 +436,7 @@ async function exerciseSqlite(): Promise<IntrinsicExerciseResult['sqlite']> {
       bindings.signIn,
       { csrf: token, email: 'sqlite-intrinsic@example.test', password: sqlitePassword },
       request,
+      { clientIp: () => '127.0.0.1' },
     );
     const sessionProbe = await bindings.sessionProvider({
       headers: new Headers({

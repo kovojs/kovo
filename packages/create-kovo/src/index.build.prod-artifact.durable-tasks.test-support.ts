@@ -97,11 +97,12 @@ export function addDurableTaskProofs(root: string): void {
   const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
   const runtimeDb = readFileSync(runtimeDbPath, 'utf8')
     .replace(
-      "import { account, contacts, session, user, verification } from '../schema.js';",
+      "import { account, contacts, rateLimit, session, user, verification } from '../schema.js';",
       [
         'import {',
         '  account,',
         '  contacts,',
+        '  rateLimit,',
         '  session,',
         '  taskProofs,',
         '  user,',

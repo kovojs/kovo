@@ -208,6 +208,7 @@ export function createBetterAuthPostgresBindings<
     throw new NativeTypeError('Better Auth Postgres binding schema must be an object.');
   }
   const pinnedSchema = postgresSchemaModule(schema);
+  requireBetterAuthRateLimitSchema(pinnedSchema);
   const secret = betterAuthPostgresSecret(requiredTextOption(options, 'secret'));
   const signInAccess = requiredOption<AccessDecision>(options, 'signInAccess');
   const signOutAccess = requiredOption<AccessDecision>(options, 'signOutAccess');
@@ -230,6 +231,7 @@ export function createBetterAuthPostgresBindings<
     advanced: {
       disableCSRFCheck: true,
       disableOriginCheck: true,
+      ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] },
       useSecureCookies: betterAuthUrlProtocol(baseURL) === 'https:',
     },
     baseURL,
@@ -241,6 +243,10 @@ export function createBetterAuthPostgresBindings<
       enabled: true,
       password: { hash: betterAuthHashPassword, verify: betterAuthVerifyPassword },
     },
+    // Partial checkpoint: shared database counters close the per-process bypass, but Better Auth
+    // 1.6.x still derives persistent row keys from attacker-controlled IP/path input. A bounded
+    // Kovo-owned customStorage must replace this before storage-growth resistance is claimed.
+    rateLimit: { enabled: true, storage: 'database' },
     secret,
     secrets: [{ version: 0, value: secret }],
     telemetry: { enabled: false },
@@ -286,6 +292,19 @@ export function createBetterAuthPostgresBindings<
     { mountAdapter, seedDemoUser, sessionProvider, signIn, signOut },
     'Better Auth Postgres bindings',
   );
+}
+
+function requireBetterAuthRateLimitSchema(schema: object): void {
+  const table = betterAuthOwnDataOption<unknown>(
+    schema,
+    'rateLimit',
+    'Better Auth Postgres binding schema.rateLimit',
+  );
+  if ((typeof table !== 'object' && typeof table !== 'function') || table === null) {
+    throw new NativeTypeError(
+      'Better Auth Postgres bindings require schema.rateLimit for durable credential throttling.',
+    );
+  }
 }
 
 function requiredOption<Value>(

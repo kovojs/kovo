@@ -2,7 +2,11 @@ import { createSqliteAppRuntime, type KovoSqliteAppRuntime } from '@kovojs/serve
 import { runEndpoint } from '@kovojs/server/internal/execution';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { sqliteTable, text } from '../../server/node_modules/drizzle-orm/sqlite-core/index.js';
+import {
+  integer,
+  sqliteTable,
+  text,
+} from '../../server/node_modules/drizzle-orm/sqlite-core/index.js';
 import { mount } from './mount.js';
 import {
   betterAuthSqliteSecret,
@@ -27,7 +31,17 @@ const authMocks = vi.hoisted(() => {
         status: 302,
       }),
   );
-  const auth = { api: { getSession, signInEmail, signOut, signUpEmail }, handler };
+  const auth = {
+    $context: Promise.resolve({
+      baseURL: 'http://localhost:5173/api/auth',
+      options: {
+        advanced: { ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] } },
+        basePath: '/api/auth',
+      },
+    }),
+    api: { getSession, signInEmail, signOut, signUpEmail },
+    handler,
+  };
   return {
     auth,
     betterAuth: vi.fn(() => auth),
@@ -57,6 +71,12 @@ const runtimes: KovoSqliteAppRuntime[] = [];
 const strongSecretText = 'better-auth-sqlite-test-secret-32-characters';
 const proof = sqliteTable('kovo_better_auth_sqlite_posture', {
   id: text('id').primaryKey(),
+});
+const rateLimit = sqliteTable('rateLimit', {
+  count: integer('count').notNull(),
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  lastRequest: integer('last_request').notNull(),
 });
 
 afterEach(() => {
@@ -91,9 +111,22 @@ describe('Better Auth SQLite bindings', () => {
     expect(optionTrapHits).toBe(0);
   });
 
+  it('requires the Better Auth rate-limit table before constructing auth', () => {
+    const runtime = createSqliteAppRuntime({ tables: [proof] });
+    runtimes.push(runtime);
+    const options = bindingOptions(runtime);
+    options.schema = { proof };
+
+    expect(() => createBetterAuthSqliteBindings(options)).toThrow(
+      'Better Auth SQLite bindings require schema.rateLimit for durable credential throttling.',
+    );
+    expect(authMocks.betterAuth).not.toHaveBeenCalled();
+    expect(authMocks.drizzleAdapter).not.toHaveBeenCalled();
+  });
+
   it('pins secret and origin posture and exposes only an opaque official GET mount', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const runtime = createSqliteAppRuntime({ tables: [proof] });
+    const runtime = createSqliteAppRuntime({ tables: [proof, rateLimit] });
     runtimes.push(runtime);
     const previousSecrets = process.env.BETTER_AUTH_SECRETS;
     const previousTrustedOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS;
@@ -119,6 +152,7 @@ describe('Better Auth SQLite bindings', () => {
           advanced: {
             disableCSRFCheck: true,
             disableOriginCheck: true,
+            ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] },
             useSecureCookies: false,
           },
           database: { kind: 'sqlite-adapter' },
@@ -127,6 +161,7 @@ describe('Better Auth SQLite bindings', () => {
             enabled: true,
             password: { hash: expect.any(Function), verify: expect.any(Function) },
           },
+          rateLimit: { enabled: true, storage: 'database' },
           secret: strongSecretText,
           secrets: [{ value: strongSecretText, version: 0 }],
           telemetry: { enabled: false },
@@ -169,7 +204,7 @@ function bindingOptions(
       id: session.id,
       user: { email: user.email, id: user.id, name: user.name },
     }),
-    schema: { proof },
+    schema: { proof, rateLimit },
     secret: betterAuthSqliteSecret(strongSecretText),
     signInAccess: { kind: 'public', reason: 'test sign-in' },
     signOutAccess: { kind: 'public', reason: 'test sign-out' },

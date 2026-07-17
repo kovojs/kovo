@@ -13,7 +13,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { kovo } from '../../drizzle/src/index.js';
 import { runMutation } from '../../server/src/mutation.js';
-import { pgTable, text } from '../../server/node_modules/drizzle-orm/pg-core/index.js';
+import {
+  bigint,
+  integer,
+  pgTable,
+  text,
+} from '../../server/node_modules/drizzle-orm/pg-core/index.js';
 import { mount } from './mount.js';
 import {
   betterAuthPostgresSecret,
@@ -39,7 +44,17 @@ const authMocks = vi.hoisted(() => {
         status: 302,
       }),
   );
-  const auth = { api: { getSession, signInEmail, signOut, signUpEmail }, handler };
+  const auth = {
+    $context: Promise.resolve({
+      baseURL: 'https://app.example.test/api/auth',
+      options: {
+        advanced: { ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] } },
+        basePath: '/api/auth',
+      },
+    }),
+    api: { getSession, signInEmail, signOut, signUpEmail },
+    handler,
+  };
   return {
     adapter: Object.freeze({ kind: 'postgres-adapter' }),
     auth,
@@ -82,6 +97,12 @@ const bindingTestRows = pgTable(
     key: 'id',
   }),
 );
+const rateLimit = pgTable('rateLimit', {
+  count: integer('count').notNull(),
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+});
 
 afterEach(async () => {
   vi.clearAllMocks();
@@ -128,6 +149,18 @@ describe('Better Auth Postgres bindings', () => {
     expect(authMocks.drizzleAdapter).not.toHaveBeenCalled();
   });
 
+  it('requires the Better Auth rate-limit table before constructing auth', async () => {
+    const systemDb = await createSystemDb();
+    const options = bindingOptions(systemDb, betterAuthPostgresSecret(strongSecretText));
+    options.schema = { bindingTestRows };
+
+    expect(() => createBetterAuthPostgresBindings(options)).toThrow(
+      'Better Auth Postgres bindings require schema.rateLimit for durable credential throttling.',
+    );
+    expect(authMocks.betterAuth).not.toHaveBeenCalled();
+    expect(authMocks.drizzleAdapter).not.toHaveBeenCalled();
+  });
+
   it('consumes a real opaque system capability and returns only frozen sanitized bindings', async () => {
     const systemDb = await createSystemDb();
     const bindings = createBetterAuthPostgresBindings(
@@ -154,6 +187,7 @@ describe('Better Auth Postgres bindings', () => {
         advanced: {
           disableCSRFCheck: true,
           disableOriginCheck: true,
+          ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] },
           useSecureCookies: true,
         },
         database: { kind: 'postgres-adapter' },
@@ -162,6 +196,7 @@ describe('Better Auth Postgres bindings', () => {
           enabled: true,
           password: { hash: expect.any(Function), verify: expect.any(Function) },
         },
+        rateLimit: { enabled: true, storage: 'database' },
         secret: strongSecretText,
         secrets: [{ value: strongSecretText, version: 0 }],
         telemetry: { enabled: false },
@@ -321,7 +356,7 @@ async function createSystemDb(): Promise<KovoPostgresSystemDb> {
   const runtime = createPostgresAppRuntimeDb({
     dataDir,
     driver: 'pglite',
-    schema: { bindingTestRows },
+    schema: { bindingTestRows, rateLimit },
   });
   runtimes.push(runtime);
   await runtime.ready;
@@ -353,7 +388,7 @@ function bindingOptions(
       id: session.id,
       user: { email: user.email, id: user.id, name: user.name },
     }),
-    schema: {},
+    schema: { rateLimit },
     secret,
     signInAccess: { kind: 'public', reason: 'test sign-in' },
     signOutAccess: { kind: 'public', reason: 'test sign-out' },

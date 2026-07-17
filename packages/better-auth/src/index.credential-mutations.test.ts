@@ -1,5 +1,7 @@
 import { csrfToken, type CsrfOptions, type MutationDefinition, type Schema } from '@kovojs/server';
 import { runMutation } from '@kovojs/server/internal/execution';
+import { betterAuth } from 'better-auth';
+import { memoryAdapter } from 'better-auth/adapters/memory';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./internal/runtime-lock.js', () => ({
@@ -22,6 +24,7 @@ import {
 } from './internal.js';
 import {
   AuthApiError,
+  fakeRoutedCredentialAuth,
   FakeCredentialAuth,
   requestHeaders,
   responseWithCookies,
@@ -49,6 +52,14 @@ async function runProtectedCredentialMutation<
   request: Request,
 ) {
   const csrf = credentialCsrf<Request>();
+  if (!Object.prototype.hasOwnProperty.call(request, 'clientIp')) {
+    Object.defineProperty(request, 'clientIp', {
+      configurable: true,
+      enumerable: true,
+      value: '192.0.2.10',
+      writable: false,
+    });
+  }
   return runMutation(
     definition,
     {
@@ -230,16 +241,14 @@ describe('credential mutation helpers', () => {
     'does not let %s provider errors carry submitted passwords out of the trusted boundary',
     async (kind) => {
       const password = 'SUBMITTED_PASSWORD_SHOULD_NEVER_LOG';
-      const auth = {
-        api: {
-          signInEmail(input: { body: { password: string } }): never {
-            throw new Error(`provider failed for password=${input.body.password}`);
-          },
-          async signUpEmail(input: { body: { password: string } }): Promise<never> {
-            throw new Error(`provider failed for password=${input.body.password}`);
-          },
+      const auth = fakeRoutedCredentialAuth({
+        signInEmail(input: { body: { password: string } }): never {
+          throw new Error(`provider failed for password=${input.body.password}`);
         },
-      };
+        async signUpEmail(input: { body: { password: string } }): Promise<never> {
+          throw new Error(`provider failed for password=${input.body.password}`);
+        },
+      });
       const definition =
         kind === 'sign-in'
           ? betterAuthSignInEmailMutation(auth)
@@ -298,14 +307,15 @@ describe('credential mutation helpers', () => {
       { headers },
     );
 
-    expect(auth.lastSignIn).toEqual({
+    expect(auth.lastSignIn).toMatchObject({
       asResponse: true,
       body: {
         email: 'ada@example.com',
         password: 'correct',
       },
-      headers,
     });
+    expect(auth.lastSignIn?.headers).not.toBe(headers);
+    expect(auth.lastSignIn?.headers.get('x-forwarded-for')).toBe('192.0.2.10');
     expect(result).toMatchObject({
       ok: true,
       responseHeaders: {
@@ -319,6 +329,23 @@ describe('credential mutation helpers', () => {
         status: 'signed-in',
       },
     });
+  });
+
+  it('canonicalizes a lifecycle IPv6 address before assigning the Better Auth limiter key', async () => {
+    const auth = new FakeCredentialAuth();
+    const signIn = betterAuthSignInEmailMutation(auth);
+
+    await expect(
+      runProtectedCredentialMutation(
+        signIn,
+        { email: 'ada@example.com', password: 'correct' },
+        {
+          clientIp: '2001:0DB8:0:0:0:0:0:1',
+          headers: requestHeaders(),
+        },
+      ),
+    ).resolves.toMatchObject({ ok: true, value: { status: 'signed-in' } });
+    expect(auth.lastSignIn?.headers.get('x-forwarded-for')).toBe('2001:db8::1');
   });
 
   it('maps invalid sign-in credentials to the declared mutation failure path', async () => {
@@ -343,6 +370,138 @@ describe('credential mutation helpers', () => {
       status: 422,
     });
     expect(JSON.stringify(result)).not.toContain('wrong-password-secret');
+  });
+
+  it('routes real sign-in/sign-up through Better Auth rate limiting with trusted-IP isolation', async () => {
+    const auth = betterAuth({
+      advanced: {
+        disableCSRFCheck: true,
+        disableOriginCheck: true,
+        ipAddress: { ipAddressHeaders: ['x-kovo-test-ip'] },
+      },
+      baseURL: 'https://example.test/api/auth',
+      database: memoryAdapter({ account: [], session: [], user: [], verification: [] }),
+      emailAndPassword: {
+        enabled: true,
+        password: {
+          hash: async () => 'test-password-hash',
+          verify: async () => false,
+        },
+      },
+      rateLimit: { enabled: true },
+      secret: 'better-auth-real-rate-limit-test-secret-0123456789',
+    });
+    const signIn = betterAuthSignInEmailMutation(auth);
+    const signUp = betterAuthSignUpEmailMutation(auth);
+    const request = (clientIp: string, spoofedIp: string) => ({
+      clientIp,
+      headers: new Headers({
+        origin: 'https://example.test',
+        'x-forwarded-for': spoofedIp,
+        'x-kovo-test-ip': spoofedIp,
+      }),
+      url: 'https://example.test/login',
+    });
+
+    const signInResults = [];
+    for (let index = 0; index < 4; index += 1) {
+      signInResults.push(
+        await runProtectedCredentialMutation(
+          signIn,
+          { email: 'missing@example.test', password: 'incorrect-password' },
+          request('192.0.2.40', `198.51.100.${index + 1}`),
+        ),
+      );
+    }
+    expect(signInResults.slice(0, 3)).toEqual([
+      expect.objectContaining({ error: { code: 'INVALID_CREDENTIALS', payload: {} }, status: 422 }),
+      expect.objectContaining({ error: { code: 'INVALID_CREDENTIALS', payload: {} }, status: 422 }),
+      expect.objectContaining({ error: { code: 'INVALID_CREDENTIALS', payload: {} }, status: 422 }),
+    ]);
+    expect(signInResults[3]).toEqual({
+      error: { code: 'RATE_LIMITED', payload: {} },
+      ok: false,
+      retryAfter: 10,
+      status: 429,
+    });
+    await expect(
+      runProtectedCredentialMutation(
+        signIn,
+        { email: 'missing@example.test', password: 'incorrect-password' },
+        request('192.0.2.41', '192.0.2.40'),
+      ),
+    ).resolves.toMatchObject({ error: { code: 'INVALID_CREDENTIALS' }, status: 422 });
+
+    const signUpResults = [];
+    for (let index = 0; index < 4; index += 1) {
+      signUpResults.push(
+        await runProtectedCredentialMutation(
+          signUp,
+          {
+            email: `new-user-${index}@example.test`,
+            name: `New User ${index}`,
+            password: 'correct-password',
+          },
+          request('192.0.2.40', `203.0.113.${index + 1}`),
+        ),
+      );
+    }
+    expect(signUpResults.slice(0, 3).every((result) => result.ok)).toBe(true);
+    expect(signUpResults[3]).toEqual({
+      error: { code: 'RATE_LIMITED', payload: {} },
+      ok: false,
+      retryAfter: 10,
+      status: 429,
+    });
+    await expect(
+      runProtectedCredentialMutation(
+        signUp,
+        {
+          email: 'isolated-user@example.test',
+          name: 'Isolated User',
+          password: 'correct-password',
+        },
+        request('192.0.2.41', '192.0.2.40'),
+      ),
+    ).resolves.toMatchObject({ ok: true, value: { status: 'signed-up' } });
+  });
+
+  it('fails loud instead of trusting raw or inherited client-IP headers', async () => {
+    const auth = new FakeCredentialAuth();
+    const signIn = betterAuthSignInEmailMutation(auth);
+    const spoofedHeaders = () =>
+      new Headers({
+        origin: 'https://example.test',
+        'x-forwarded-for': '198.51.100.200',
+        'x-kovo-client-ip': '203.0.113.200',
+      });
+    const inheritedClientIp = Object.assign(Object.create({ clientIp: '192.0.2.200' }), {
+      headers: spoofedHeaders(),
+    }) as { clientIp?: string; headers: Headers };
+    const requests: { clientIp?: string; headers: Headers }[] = [
+      { headers: spoofedHeaders() },
+      { clientIp: 'not-an-ip', headers: spoofedHeaders() },
+      inheritedClientIp,
+    ];
+
+    for (const request of requests) {
+      const csrf = credentialCsrf<typeof request>();
+      await expect(
+        runMutation(
+          signIn,
+          {
+            email: 'ada@example.com',
+            password: 'correct',
+            'kovo-csrf': csrfToken(request, csrf, { mutation: signIn }),
+          },
+          request,
+          { csrf },
+        ),
+      ).rejects.toThrow(
+        'Better Auth credential provider failed inside the trusted plaintext boundary.',
+      );
+    }
+    expect(auth.lastSignIn).toBeUndefined();
   });
 
   it('wraps signUpEmail with a typed body and typed credential failure', async () => {
@@ -376,15 +535,16 @@ describe('credential mutation helpers', () => {
         status: 'signed-up',
       },
     });
-    expect(auth.lastSignUp).toEqual({
+    expect(auth.lastSignUp).toMatchObject({
       asResponse: true,
       body: {
         email: 'grace@example.com',
         name: 'Grace Hopper',
         password: 'correct',
       },
-      headers,
     });
+    expect(auth.lastSignUp?.headers).not.toBe(headers);
+    expect(auth.lastSignUp?.headers.get('x-forwarded-for')).toBe('192.0.2.10');
 
     await expect(
       runProtectedCredentialMutation(
@@ -624,8 +784,9 @@ describe('credential mutation helpers', () => {
     expect(reads).toBe(0);
   });
 
-  it('pins credential API methods and their receiver before plaintext becomes reachable', async () => {
+  it('pins routed credential handlers and their receiver before plaintext becomes reachable', async () => {
     const receiverCalls: Array<{ method: string; receiver: unknown }> = [];
+    const handlerReceiverCalls: unknown[] = [];
     const capturedByPoison: string[] = [];
     let poisonCalls = 0;
     const api = {
@@ -656,9 +817,14 @@ describe('credential mutation helpers', () => {
         return responseWithCookies(['kovo_session=sign-up; Path=/; HttpOnly; SameSite=Lax']);
       },
     };
-    const auth = { api } satisfies BetterAuthSignInEmailLike &
-      BetterAuthSignOutLike &
-      BetterAuthSignUpEmailLike;
+    const routed = fakeRoutedCredentialAuth(api);
+    const auth = {
+      ...routed,
+      handler(this: unknown, request: Request) {
+        handlerReceiverCalls.push(this);
+        return routed.handler(request);
+      },
+    } satisfies BetterAuthSignInEmailLike & BetterAuthSignOutLike & BetterAuthSignUpEmailLike;
     const signIn = betterAuthSignInEmailMutation(auth);
     const signUp = betterAuthSignUpEmailMutation(auth);
     const signOut = betterAuthSignOutMutation(auth);
@@ -681,6 +847,10 @@ describe('credential mutation helpers', () => {
       signInEmail: api.signInEmail,
       signOut: api.signOut,
       signUpEmail: api.signUpEmail,
+    };
+    auth.handler = async () => {
+      poisonCalls += 1;
+      return new Response(null, { status: 500 });
     };
 
     await expect(
@@ -709,27 +879,45 @@ describe('credential mutation helpers', () => {
       'signOut',
     ]);
     expect(receiverCalls.every(({ receiver }) => receiver === api)).toBe(true);
+    expect(handlerReceiverCalls).toEqual([auth, auth]);
   });
 
   it('rejects accessor and inherited credential authority at declaration time', () => {
-    const apiAccessor = Object.defineProperty({}, 'api', {
-      get: () => ({ signInEmail: () => responseWithCookies([]) }),
-    }) as BetterAuthSignInEmailLike;
+    const handlerAccessor = Object.defineProperty(
+      {
+        $context: Promise.resolve({
+          baseURL: 'https://example.test/api/auth',
+          options: { basePath: '/api/auth' },
+        }),
+        api: { signInEmail: () => responseWithCookies([]) },
+      },
+      'handler',
+      {
+        get: () => () => new Response(null, { status: 204 }),
+      },
+    ) as unknown as BetterAuthSignInEmailLike;
+    const inheritedHandler = Object.assign(
+      Object.create({ handler: () => new Response(null, { status: 204 }) }),
+      {
+        $context: Promise.resolve({
+          baseURL: 'https://example.test/api/auth',
+          options: { basePath: '/api/auth' },
+        }),
+        api: { signUpEmail: () => responseWithCookies([]) },
+      },
+    ) as BetterAuthSignUpEmailLike;
     const inheritedAuth = Object.create({
       api: { signOut: () => responseWithCookies([]) },
-    }) as BetterAuthSignOutLike;
-    const inheritedApi = {
-      api: Object.create({ signUpEmail: () => responseWithCookies([]) }),
-    } as BetterAuthSignUpEmailLike;
+    }) as BetterAuthSignInEmailLike;
 
-    expect(() => betterAuthSignInEmailMutation(apiAccessor)).toThrow(
-      'Better Auth sign-in.api must be a stable own-data object',
+    expect(() => betterAuthSignInEmailMutation(handlerAccessor)).toThrow(
+      'Better Auth sign-in.handler must be a stable own-data method',
     );
-    expect(() => betterAuthSignOutMutation(inheritedAuth)).toThrow(
-      'Better Auth sign-out.api must be a stable own-data object',
-    );
-    expect(() => betterAuthSignUpEmailMutation(inheritedApi)).toThrow(
-      'Better Auth sign-up.api.signUpEmail must be a stable own-data method',
+    expect(() =>
+      betterAuthSignOutMutation(inheritedAuth as unknown as BetterAuthSignOutLike),
+    ).toThrow('Better Auth sign-out.api must be a stable own-data object');
+    expect(() => betterAuthSignUpEmailMutation(inheritedHandler)).toThrow(
+      'Better Auth sign-up.handler must be a stable own-data method',
     );
   });
 
@@ -815,14 +1003,12 @@ describe('credential mutation helpers', () => {
   // `; Partitioned` or Chrome refuses/segregates it and login silently fails.
   it('preserves the Partitioned (CHIPS) attribute when forwarding Better Auth cookies', async () => {
     process.env.NODE_ENV = 'production';
-    const auth: BetterAuthSignInEmailLike = {
-      api: {
-        signInEmail: () =>
-          responseWithCookies([
-            'better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=None; Partitioned',
-          ]),
-      },
-    };
+    const auth = fakeRoutedCredentialAuth({
+      signInEmail: () =>
+        responseWithCookies([
+          'better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=None; Partitioned',
+        ]),
+    });
     const signIn = betterAuthSignInEmailMutation(auth, { defaultRedirectTo: '/home' });
 
     const result = await runProtectedCredentialMutation(
@@ -846,12 +1032,10 @@ describe('credential mutation helpers', () => {
   });
 
   it('keeps Better Auth session cookie names readable under the HTTPS Secure floor', async () => {
-    const auth: BetterAuthSignInEmailLike = {
-      api: {
-        signInEmail: () =>
-          responseWithCookies(['better-auth.session_token=tok-1; Path=/; HttpOnly; SameSite=Lax']),
-      },
-    };
+    const auth = fakeRoutedCredentialAuth({
+      signInEmail: () =>
+        responseWithCookies(['better-auth.session_token=tok-1; Path=/; HttpOnly; SameSite=Lax']),
+    });
     const signIn = betterAuthSignInEmailMutation(auth, { defaultRedirectTo: '/' });
 
     const result = await runProtectedCredentialMutation(
@@ -875,11 +1059,9 @@ describe('credential mutation helpers', () => {
 // carrying only such a cookie fails to sign in instead of redirecting into the protected area.
 describe('Expires-in-past clearing cookie is not session-establishing (part-3 I3)', () => {
   function signInAuthReturning(cookies: readonly string[]): BetterAuthSignInEmailLike {
-    return {
-      api: {
-        signInEmail: () => responseWithCookies(cookies, 200),
-      },
-    };
+    return fakeRoutedCredentialAuth({
+      signInEmail: () => responseWithCookies(cookies, 200),
+    });
   }
 
   it('does NOT sign in on a 200 whose only cookie has Expires in the past', async () => {
@@ -1141,11 +1323,9 @@ describe('credential success is positively classified', () => {
   }
 
   function signInAuthReturning(response: BetterAuthResponseLike): BetterAuthSignInEmailLike {
-    return {
-      api: {
-        signInEmail: () => response,
-      },
-    };
+    return fakeRoutedCredentialAuth({
+      signInEmail: () => response,
+    });
   }
 
   it('treats a 2xx response with a session-establishing cookie as signed-in', async () => {
@@ -1254,7 +1434,7 @@ describe('credential success is positively classified', () => {
       { headers: requestHeaders() },
     );
 
-    expect(result).toMatchObject({ ok: false, status: 422 });
+    expect(result).toMatchObject({ error: { code: 'RATE_LIMITED' }, ok: false, status: 429 });
   });
 
   it('treats a 500 response as a failure, not a sign-in', async () => {
@@ -1302,11 +1482,9 @@ describe('credential success is positively classified', () => {
   });
 
   it('does NOT sign up on a 200 two-factor-pending body', async () => {
-    const auth: BetterAuthSignUpEmailLike = {
-      api: {
-        signUpEmail: () => jsonResponse(200, { twoFactorRedirect: true }),
-      },
-    };
+    const auth = fakeRoutedCredentialAuth({
+      signUpEmail: () => jsonResponse(200, { twoFactorRedirect: true }),
+    });
     const signUp = betterAuthSignUpEmailMutation(auth);
 
     const result = await runProtectedCredentialMutation(

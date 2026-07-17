@@ -65,7 +65,14 @@ const verification = sqliteTable('verification', {
   value: text('value').notNull(),
 });
 
-const authSchema = { account, session, user, verification };
+const rateLimit = sqliteTable('rateLimit', {
+  count: integer('count').notNull(),
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  lastRequest: integer('last_request').notNull(),
+});
+
+const authSchema = { account, rateLimit, session, user, verification };
 const authSecret = 'Kovo-Seed-Session-Secret-0a1B2c3D4e5F6g7H8i9J';
 const demoPassword = 'Kovo-Demo-Password-123!';
 const runtimes: KovoSqliteAppRuntime[] = [];
@@ -136,6 +143,7 @@ describe('Better Auth development seed session posture', () => {
         bindings.signIn,
         { csrf: token, email: 'demo@example.com', password: demoPassword },
         request,
+        { clientIp: () => '127.0.0.1' },
       ),
     ).resolves.toMatchObject({ ok: true, value: { status: 'signed-in' } });
     expect(
@@ -143,5 +151,67 @@ describe('Better Auth development seed session posture', () => {
         db.select({ userId: session.userId }).from(session).all(),
       ),
     ).toHaveLength(1);
+  });
+
+  it('shares atomic credential rate-limit state across real SQLite Better Auth instances', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
+    runtimes.push(runtime);
+    const systemDb = runtime.systemDb({
+      operation: 'write',
+      reason: 'Prove shared Better Auth credential rate-limit state',
+      surface: 'packages/better-auth/src/sqlite.seed-session.test.ts',
+    });
+    const csrf = {
+      field: 'csrf',
+      secret: 'Kovo-Shared-Rate-Limit-Csrf-0a1B2c3D4e5F6g7H8i9J',
+      sessionId: () => 'shared-rate-limit-principal',
+    };
+    const bindingOptions = {
+      baseURL: 'http://localhost:5173',
+      csrf,
+      mapSession: ({ session: authSession, user: authUser }: any) => ({
+        id: authSession.id,
+        user: { email: authUser.email, id: authUser.id, name: authUser.name },
+      }),
+      schema: authSchema,
+      secret: betterAuthSqliteSecret(authSecret),
+      signInAccess: { kind: 'public' as const, reason: 'shared limiter sign-in' },
+      signOutAccess: { kind: 'public' as const, reason: 'shared limiter sign-out' },
+      systemDb,
+    };
+    const first = createBetterAuthSqliteBindings(bindingOptions);
+    const second = createBetterAuthSqliteBindings(bindingOptions);
+    const request = new Request('http://localhost:5173/_m/auth/sign-in', {
+      headers: { origin: 'http://localhost:5173' },
+      method: 'POST',
+    });
+    const token = csrfToken(request, csrf, { audience: 'auth/sign-in' });
+    const definitions = [first.signIn, second.signIn, first.signIn, second.signIn];
+    const results = [];
+
+    for (let index = 0; index < definitions.length; index += 1) {
+      results.push(
+        await runMutation(
+          definitions[index]!,
+          { csrf: token, email: 'missing@example.test', password: 'incorrect-password' },
+          request,
+          { clientIp: () => '127.0.0.20' },
+        ),
+      );
+    }
+
+    expect(results.slice(0, 3)).toEqual([
+      expect.objectContaining({ error: { code: 'INVALID_CREDENTIALS', payload: {} }, status: 422 }),
+      expect.objectContaining({ error: { code: 'INVALID_CREDENTIALS', payload: {} }, status: 422 }),
+      expect.objectContaining({ error: { code: 'INVALID_CREDENTIALS', payload: {} }, status: 422 }),
+    ]);
+    expect(results[3]).toEqual({
+      error: { code: 'RATE_LIMITED', payload: {} },
+      ok: false,
+      retryAfter: 10,
+      status: 429,
+    });
+    expect(useSqliteSystemDb(systemDb, (db) => db.select().from(rateLimit).all())).toHaveLength(1);
   });
 });

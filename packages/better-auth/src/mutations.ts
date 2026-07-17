@@ -2,6 +2,7 @@ import type { MutationDefinition, MutationFormDefinition } from '@kovojs/server'
 import { createBetterAuthCredentialMutation } from '@kovojs/server/internal/better-auth';
 
 import {
+  betterAuthCredentialRateLimitFailure,
   betterAuthCredentialMutationErrors,
   betterAuthSignInEmailInput,
   betterAuthSignOutInput,
@@ -26,12 +27,10 @@ import type {
   BetterAuthSignUpEmailLike,
 } from './internal.js';
 import {
-  callBetterAuthSignInEmail,
+  callBetterAuthCredentialHandler,
   callBetterAuthSignOut,
-  callBetterAuthSignUpEmail,
-  pinBetterAuthSignInEmail,
+  pinBetterAuthCredentialHandler,
   pinBetterAuthSignOut,
-  pinBetterAuthSignUpEmail,
 } from './internal/trusted-plaintext.js';
 import {
   betterAuthOwnDataOption,
@@ -49,7 +48,8 @@ function betterAuthCredentialBoundaryFailure(): Error {
 
 /**
  * Builds a typed Kovo mutation that signs a user in via Better Auth email/password.
- * Calls `auth.api.signInEmail` with `asResponse: true`, treats the result as success only
+ * Routes a synthetic `/sign-in/email` POST through the captured Better Auth handler so its
+ * configured rate-limit storage/rules execute, then treats the result as success only
  * on POSITIVE evidence of an established session (2xx, no two-factor-pending body, and a
  * session-establishing `Set-Cookie`), forwards the session cookie, and otherwise returns
  * the declared `INVALID_CREDENTIALS` failure. Defaults the mutation key to `auth/sign-in`.
@@ -72,7 +72,7 @@ export function betterAuthSignInEmailMutation<
   GuardedRequest
 > &
   MutationFormDefinition<Key, Request> {
-  const pinnedAuth = pinBetterAuthSignInEmail(auth);
+  const pinnedAuth = pinBetterAuthCredentialHandler(auth, 'signInEmail');
   const defaultRedirectTo = redirectPath(
     betterAuthOwnDataOption<string>(
       options,
@@ -93,14 +93,18 @@ export function betterAuthSignInEmailMutation<
       result.value.redirectTo,
     async handler(input, request, context) {
       try {
-        const response = await callBetterAuthSignInEmail(
+        const response = await callBetterAuthCredentialHandler(
           pinnedAuth,
           {
             email: input.email,
             password: input.password,
           },
           request.headers,
+          request,
         );
+
+        const rateLimitFailure = betterAuthCredentialRateLimitFailure(response);
+        if (rateLimitFailure !== undefined) return rateLimitFailure;
 
         const success = await resolveBetterAuthCredentialSuccess(response, context, {
           redirectTo: redirectPath(input.next, defaultRedirectTo),
@@ -125,7 +129,7 @@ export function betterAuthSignInEmailMutation<
 
 /**
  * Builds a typed Kovo mutation that registers a user via Better Auth email/password.
- * Calls `auth.api.signUpEmail` with `asResponse: true`, applies the same
+ * Routes a synthetic `/sign-up/email` POST through the captured Better Auth handler, applies the same
  * positive-session-evidence success check as sign-in, forwards the session cookie, and
  * returns the declared `INVALID_CREDENTIALS` failure otherwise. Defaults the mutation key
  * to `auth/sign-up` (SPEC.md §6.5; CSRF default-on per §6.6).
@@ -146,7 +150,7 @@ export function betterAuthSignUpEmailMutation<
   GuardedRequest
 > &
   MutationFormDefinition<Key, Request> {
-  const pinnedAuth = pinBetterAuthSignUpEmail(auth);
+  const pinnedAuth = pinBetterAuthCredentialHandler(auth, 'signUpEmail');
   const defaultRedirectTo = redirectPath(
     betterAuthOwnDataOption<string>(
       options,
@@ -167,7 +171,7 @@ export function betterAuthSignUpEmailMutation<
       result.value.redirectTo,
     async handler(input, request, context) {
       try {
-        const response = await callBetterAuthSignUpEmail(
+        const response = await callBetterAuthCredentialHandler(
           pinnedAuth,
           {
             email: input.email,
@@ -175,7 +179,11 @@ export function betterAuthSignUpEmailMutation<
             password: input.password,
           },
           request.headers,
+          request,
         );
+
+        const rateLimitFailure = betterAuthCredentialRateLimitFailure(response);
+        if (rateLimitFailure !== undefined) return rateLimitFailure;
 
         const success = await resolveBetterAuthCredentialSuccess(response, context, {
           redirectTo: redirectPath(input.next, defaultRedirectTo),

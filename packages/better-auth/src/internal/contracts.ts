@@ -74,7 +74,11 @@ export interface BetterAuthLike<Session, User> {
  * CSRF fields; it is the default `Request` type parameter across this adapter's helpers.
  */
 export interface BetterAuthRequestLike {
+  /** Framework-resolved client IP attached by Kovo's request lifecycle (SPEC.md §9.5). */
+  clientIp?: string;
   headers: Headers;
+  /** Absolute incoming request URL, available on native Request-backed Kovo lifecycle carriers. */
+  url?: string;
 }
 
 /**
@@ -135,20 +139,50 @@ export interface BetterAuthSignOutApi {
   }): Promise<BetterAuthResponseLike> | BetterAuthResponseLike;
 }
 
-/**
- * Structural shape accepted by `betterAuthSignInEmailMutation`: a Better Auth
- * instance whose `api` exposes `signInEmail`. A real Better Auth object satisfies this.
- */
-export interface BetterAuthSignInEmailLike {
-  api: BetterAuthSignInEmailApi;
+/** @internal Better Auth context fields needed to route credential calls through its HTTP stack. */
+export interface BetterAuthCredentialHandlerContextLike {
+  baseURL?: string;
+  options: {
+    advanced?: {
+      ipAddress?: {
+        disableIpTracking?: boolean;
+        ipAddressHeaders?: readonly string[];
+      };
+    };
+    basePath?: string;
+  };
 }
 
 /**
- * Structural shape accepted by `betterAuthSignUpEmailMutation`: a Better Auth
- * instance whose `api` exposes `signUpEmail`.
+ * @internal Handler capability required by credential mutations. Direct `auth.api` calls bypass
+ * Better Auth's configured HTTP rate limiter, so sign-in/sign-up must use this routed boundary.
+ */
+export interface BetterAuthCredentialHandlerLike {
+  $context: PromiseLike<unknown>;
+  handler(request: Request): Promise<Response> | Response;
+}
+
+/**
+ * Structural shape accepted by `betterAuthSignInEmailMutation`: a Better Auth instance exposing
+ * both its routed handler and `signInEmail` API metadata. The mutation invokes the handler so
+ * Better Auth's configured rate-limit storage and rules remain authoritative. Caller-owned auth
+ * instances must choose shared durable storage when requests can run in multiple workers; Kovo's
+ * SQLite/Postgres binding constructors configure Better Auth's database storage automatically.
+ */
+export interface BetterAuthSignInEmailLike {
+  $context: PromiseLike<unknown>;
+  api: BetterAuthSignInEmailApi;
+  handler(request: Request): Promise<Response> | Response;
+}
+
+/**
+ * Structural shape accepted by `betterAuthSignUpEmailMutation`: a Better Auth instance exposing
+ * its routed handler and `signUpEmail` API metadata. There is intentionally no API-only fallback.
  */
 export interface BetterAuthSignUpEmailLike {
+  $context: PromiseLike<unknown>;
   api: BetterAuthSignUpEmailApi;
+  handler(request: Request): Promise<Response> | Response;
 }
 
 /**
@@ -193,13 +227,14 @@ export const betterAuthSignUpEmailInput = s.object({
 export const betterAuthSignOutInput = s.object({});
 
 /**
- * Declared error map for the credential mutations: a single `INVALID_CREDENTIALS` failure
- * (with an empty payload) the sign-in/sign-up mutations return when a session was not
- * positively established. Surfaced so apps can render the matching error UI (SPEC.md §6.5).
+ * Declared error map for credential mutations: `INVALID_CREDENTIALS` when no session was
+ * positively established and framework-preserved `RATE_LIMITED` when Better Auth's routed
+ * credential limiter returns 429. Surfaced so apps can render either outcome (SPEC.md §6.5).
  */
 export const betterAuthCredentialMutationErrors = betterAuthDeepFreeze(
   {
     INVALID_CREDENTIALS: s.object({}),
+    RATE_LIMITED: s.object({}),
   },
   'Better Auth credential mutation errors',
 );

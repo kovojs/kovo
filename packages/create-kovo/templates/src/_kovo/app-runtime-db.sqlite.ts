@@ -2,14 +2,22 @@ import { createSqliteAppRuntime, type KovoSqliteSeed } from '@kovojs/server/sqli
 import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth';
 import { type AccessDecision, type CsrfOptions, type MutationReplayStore } from '@kovojs/server';
 
-import { account, authSchema, contacts, session, user, verification } from '../schema.js';
+import {
+  account,
+  authSchema,
+  contacts,
+  rateLimit,
+  session,
+  user,
+  verification,
+} from '../schema.js';
 import type { AppReadonlyDb } from '../db.js';
 import type { AppRequest, AppSession } from '../auth.js';
 
 // SPEC §6.6/§10.3: generated source carries only declarative Drizzle tables, structured seed
 // rows, and opaque Kovo capabilities. Filesystem paths, native SQLite clients, Drizzle construction,
 // raw SQL/DDL, and Better Auth adapter authority remain inside first-party package boundaries.
-const APP_TABLES = [contacts, user, session, account, verification] as const;
+const APP_TABLES = [contacts, user, session, account, verification, rateLimit] as const;
 const APP_SEED = [
   {
     table: contacts,

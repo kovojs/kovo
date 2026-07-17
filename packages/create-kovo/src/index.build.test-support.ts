@@ -868,14 +868,14 @@ export function addRuntimeMutationSafetyProofs(
     ? replaceRequired(
         replaceRequired(
           runtimeDbSource,
-          "import { account, authSchema, contacts, session, user, verification } from '../schema.js';",
+          "import { account, authSchema, contacts, rateLimit, session, user, verification } from '../schema.js';",
           [
             "import * as schema from '../schema.js';",
-            "import { account, authSchema, contacts, session, user, verification } from '../schema.js';",
+            "import { account, authSchema, contacts, rateLimit, session, user, verification } from '../schema.js';",
           ].join('\n'),
           'runtime mutation safety SQLite schema namespace import',
         ),
-        'const APP_TABLES = [contacts, user, session, account, verification] as const;',
+        'const APP_TABLES = [contacts, user, session, account, verification, rateLimit] as const;',
         [
           'const APP_TABLES = [',
           '  contacts,',
@@ -888,18 +888,20 @@ export function addRuntimeMutationSafetyProofs(
           '  session,',
           '  account,',
           '  verification,',
+          '  rateLimit,',
           '] as const;',
         ].join('\n'),
         'runtime mutation safety SQLite table registration',
       )
     : runtimeDbSource
         .replace(
-          "import { account, contacts, session, user, verification } from '../schema.js';",
+          "import { account, contacts, rateLimit, session, user, verification } from '../schema.js';",
           [
             'import {',
             '  account,',
             '  contacts,',
             '  rawRuntimeDrift,',
+            '  rateLimit,',
             '  session,',
             '  txProofs,',
             '  user,',
@@ -2864,14 +2866,14 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
   let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
   runtimeDb = replaceRequired(
     runtimeDb,
-    "import { account, authSchema, contacts, session, user, verification } from '../schema.js';",
-    "import { account, authSchema, contacts, runtimeSecretJoinProof, runtimeSecretProof, session, user, verification } from '../schema.js';",
+    "import { account, authSchema, contacts, rateLimit, session, user, verification } from '../schema.js';",
+    "import { account, authSchema, contacts, rateLimit, runtimeSecretJoinProof, runtimeSecretProof, session, user, verification } from '../schema.js';",
     'sqlite runtime secret provenance schema import',
   );
   runtimeDb = replaceRequired(
     runtimeDb,
-    'const APP_TABLES = [contacts, user, session, account, verification] as const;',
-    'const APP_TABLES = [contacts, runtimeSecretProof, runtimeSecretJoinProof, user, session, account, verification] as const;',
+    'const APP_TABLES = [contacts, user, session, account, verification, rateLimit] as const;',
+    'const APP_TABLES = [contacts, runtimeSecretProof, runtimeSecretJoinProof, user, session, account, verification, rateLimit] as const;',
     'sqlite runtime secret provenance table list',
   );
   runtimeDb = replaceRequired(
@@ -3662,14 +3664,14 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
   let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
   runtimeDb = replaceRequired(
     runtimeDb,
-    "import { account, authSchema, contacts, runtimeSecretJoinProof, runtimeSecretProof, session, user, verification } from '../schema.js';",
-    "import { account, authSchema, contacts, phase5AuthzItems, phase5AuthzOrders, runtimeSecretJoinProof, runtimeSecretProof, session, user, verification } from '../schema.js';",
+    "import { account, authSchema, contacts, rateLimit, runtimeSecretJoinProof, runtimeSecretProof, session, user, verification } from '../schema.js';",
+    "import { account, authSchema, contacts, phase5AuthzItems, phase5AuthzOrders, rateLimit, runtimeSecretJoinProof, runtimeSecretProof, session, user, verification } from '../schema.js';",
     'phase 5.1 authorization schema import',
   );
   runtimeDb = replaceRequired(
     runtimeDb,
-    'const APP_TABLES = [contacts, runtimeSecretProof, runtimeSecretJoinProof, user, session, account, verification] as const;',
-    'const APP_TABLES = [contacts, phase5AuthzOrders, phase5AuthzItems, runtimeSecretProof, runtimeSecretJoinProof, user, session, account, verification] as const;',
+    'const APP_TABLES = [contacts, runtimeSecretProof, runtimeSecretJoinProof, user, session, account, verification, rateLimit] as const;',
+    'const APP_TABLES = [contacts, phase5AuthzOrders, phase5AuthzItems, runtimeSecretProof, runtimeSecretJoinProof, user, session, account, verification, rateLimit] as const;',
     'phase 5.1 authorization table list',
   );
   runtimeDb = replaceRequired(
@@ -3916,8 +3918,8 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
   let schema = readFileSync(schemaPath, 'utf8');
   schema = replaceRequired(
     schema,
-    "import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
-    "import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+    "import { bigint, boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+    "import { bigint, boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
     'phase 5 postgres schema import anchor',
   );
   schema = replaceRequired(

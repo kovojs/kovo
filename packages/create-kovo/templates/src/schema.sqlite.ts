@@ -25,7 +25,7 @@ export const contacts = sqliteTable(
 );
 
 // --- Auth infrastructure -------------------------------------------------------
-// The four tables Better Auth manages. The credential-bearing tables are owner-scoped
+// The five tables Better Auth manages. The credential-bearing tables are owner-scoped
 // and classify raw credential columns as `secret` so KV435 keeps password hashes and
 // bearer/OAuth tokens off the client wire (SPEC.md §6.6, §10.1). The column names match
 // the fields Better Auth expects (introspectable via `getAuthTables(auth.options)`);
@@ -98,5 +98,16 @@ export const verification = sqliteTable('verification', {
   updatedAt: integer('updatedAt', { mode: 'timestamp_ms' }).notNull(),
 });
 
+export const rateLimit = sqliteTable(
+  'rateLimit',
+  {
+    id: text('id').primaryKey(),
+    key: text('key').notNull().unique(),
+    count: integer('count').notNull(),
+    lastRequest: integer('lastRequest').notNull(),
+  },
+  kovo({ exempt: true }),
+);
+
 /** Tables Better Auth's Drizzle adapter binds to (see `src/auth.ts`). */
-export const authSchema = { user, session, account, verification };
+export const authSchema = { user, session, account, verification, rateLimit };

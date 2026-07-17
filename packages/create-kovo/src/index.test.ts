@@ -374,7 +374,13 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/test-setup.ts')).toContain(
       'assertRequestSafeRuntimeRealmLocked: vi.fn()',
     );
-    expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
+    expect(files.get('src/schema.ts')).toContain(
+      'import { bigint, boolean, integer, pgTable, text, timestamp }',
+    );
+    expect(files.get('src/schema.ts')).toContain('export const rateLimit = pgTable(');
+    expect(files.get('src/schema.ts')).toContain("  'rateLimit',");
+    expect(files.get('src/schema.ts')).toContain("domain: 'auth-rate-limit'");
+    expect(files.get('src/schema.ts')).toContain('authzPolicy: sql`false`');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain("provider: 'pg'");
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('drizzleAdapter');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain("from 'better-auth'");
@@ -1025,6 +1031,9 @@ describe('create-kovo starter (metadata)', () => {
       'createBetterAuthSqliteBindingsFromEnvironment',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('const APP_TABLES = [');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'verification, rateLimit] as const;',
+    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       '] as const satisfies readonly KovoSqliteSeed[];',
     );

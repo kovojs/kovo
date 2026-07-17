@@ -22,6 +22,7 @@ const nativeDateGetTime = NativeDate.prototype.getTime;
 const nativeDateNow = NativeDate.now;
 const nativeDateParse = NativeDate.parse;
 const nativeJsonParse = NativeJSON.parse;
+const nativeJsonStringify = NativeJSON.stringify;
 const nativeMapForEach = NativeMap.prototype.forEach;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
@@ -142,6 +143,7 @@ function capturedControlsAreSound(): boolean {
       keys.length === 1 &&
       keys[0] === 'safe' &&
       parsed.safe === true &&
+      apply<string>(nativeJsonStringify, NativeJSON, [{ safe: true }]) === '{"safe":true}' &&
       apply(nativeObjectIsFrozen, NativeObject, [frozenProbe]) === true &&
       apply(nativeMapGet, map, ['safe']) === 'value' &&
       apply(nativeMapHas, map, ['safe']) === true &&
@@ -231,6 +233,11 @@ export function betterAuthCloneDate(value: object): Date | undefined {
 export function betterAuthDateParse(value: string): number {
   assertBetterAuthIntrinsics();
   return apply(nativeDateParse, NativeDate, [value]);
+}
+
+export function betterAuthJsonStringify(value: unknown): string {
+  assertBetterAuthIntrinsics();
+  return apply(nativeJsonStringify, NativeJSON, [value]);
 }
 
 /** @internal Parse a URL and read its scheme without consulting a mutable late prototype getter. */

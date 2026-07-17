@@ -224,8 +224,8 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
 
       const schemaWithSerialAndOwnerFk = originalSchema
         .replace(
-          "import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
-          "import { boolean, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';",
+          "import { bigint, boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+          "import { bigint, boolean, integer, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';",
         )
         .replace(
           "    company: text('company').notNull().default(''),",

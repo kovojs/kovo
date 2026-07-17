@@ -32,6 +32,7 @@ export interface ReferenceSession {
 }
 
 export interface ReferenceRequest {
+  clientIp?: string;
   headers: Headers;
   session?: ReferenceSession | null;
 }
@@ -42,6 +43,7 @@ export interface AuthVerifierDb {
 }
 
 export interface AuthVerifierRequest {
+  clientIp: string;
   db: AuthVerifierDb;
   headers: Headers;
 }
@@ -129,6 +131,8 @@ export function authTable(fields: readonly string[] = [], modelName?: string) {
 export class ObservedCredentialAuth
   implements BetterAuthSignInEmailLike, BetterAuthSignOutLike, BetterAuthSignUpEmailLike
 {
+  readonly $context = observedCredentialContext;
+
   readonly api = {
     signInEmail: async (): Promise<BetterAuthResponseLike> => {
       this.db.write('session', { action: 'signInEmail' });
@@ -149,10 +153,23 @@ export class ObservedCredentialAuth
     },
   };
 
+  readonly handler = async (request: Request): Promise<Response> => {
+    const path = new URL(request.url).pathname;
+    const response = path.endsWith('/sign-in/email')
+      ? await this.api.signInEmail()
+      : path.endsWith('/sign-up/email')
+        ? await this.api.signUpEmail()
+        : undefined;
+    if (response === undefined) return new Response('Not Found', { status: 404 });
+    return new Response(null, { headers: response.headers, status: response.status });
+  };
+
   constructor(private readonly db: AuthVerifierDb) {}
 }
 
 export class ObservedPluginCredentialAuth implements BetterAuthSignInEmailLike {
+  readonly $context = observedCredentialContext;
+
   readonly api = {
     signInEmail: async (): Promise<BetterAuthResponseLike> => {
       this.db.write('session', { action: 'signInEmail' });
@@ -164,11 +181,27 @@ export class ObservedPluginCredentialAuth implements BetterAuthSignInEmailLike {
     },
   };
 
+  readonly handler = async (request: Request): Promise<Response> => {
+    if (!new URL(request.url).pathname.endsWith('/sign-in/email')) {
+      return new Response('Not Found', { status: 404 });
+    }
+    const response = await this.api.signInEmail();
+    return new Response(null, { headers: response.headers, status: response.status });
+  };
+
   constructor(
     private readonly db: { write(table: string, value: unknown): void },
     private readonly pluginTable = 'webauthnCredential',
   ) {}
 }
+
+const observedCredentialContext = Promise.resolve({
+  baseURL,
+  options: {
+    advanced: { ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] } },
+    basePath: '/api/auth',
+  },
+});
 
 export function createAuthVerifierDb(): AuthVerifierDb {
   const writes: { table: BetterAuthTable; value: unknown }[] = [];
