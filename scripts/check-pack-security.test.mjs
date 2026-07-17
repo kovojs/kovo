@@ -6,6 +6,7 @@ import {
   collectManifestTargets,
   normalizePackedPath,
   parsePackJson,
+  validateBetterAuthMountAuthorityPack,
   validateFirstPartyScopeRegistryPolicy,
   validatePackedPackage,
 } from './check-pack-security.mjs';
@@ -30,6 +31,61 @@ function validateFixture(files, overrides = {}) {
 }
 
 describe('pack-security gate', () => {
+  it('keeps the Better Auth mount-adapter mint unreachable in the packed exports map', () => {
+    const safeManifest = {
+      exports: {
+        '.': { default: './dist/index.mjs', types: './dist/index.d.mts' },
+        './internal/server-mount-adapter': {
+          default: './dist/internal/server-mount-adapter.mjs',
+          types: './dist/internal/server-mount-adapter.d.mts',
+        },
+      },
+    };
+    const safeFiles = new Map([
+      [
+        'dist/internal/server-mount-adapter.mjs',
+        'export { assertBetterAuthMountAdapter, invokeBetterAuthMountAdapter };',
+      ],
+      [
+        'dist/internal/server-mount-adapter.d.mts',
+        'export { type BetterAuthMountAdapter, assertBetterAuthMountAdapter, invokeBetterAuthMountAdapter };',
+      ],
+    ]);
+
+    expect(
+      validateBetterAuthMountAuthorityPack({
+        manifest: safeManifest,
+        readTextFile: (rel) => safeFiles.get(rel),
+      }),
+    ).toEqual([]);
+
+    const unsafeManifest = {
+      exports: {
+        ...safeManifest.exports,
+        './*': './dist/*.mjs',
+        './adapter-authority': './dist/mount-adapter-private.mjs',
+        './mount-adapter': './dist/mount-adapter.mjs',
+      },
+    };
+    safeFiles.set(
+      'dist/internal/server-mount-adapter.mjs',
+      'export { createBetterAuthMountAdapter };',
+    );
+    const findings = validateBetterAuthMountAuthorityPack({
+      manifest: unsafeManifest,
+      readTextFile: (rel) => safeFiles.get(rel),
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('must not contain a wildcard'),
+        expect.stringContaining('export ./adapter-authority targets the private mount-adapter'),
+        expect.stringContaining('forbidden mount-adapter subpath ./mount-adapter'),
+        expect.stringContaining('exposes the private adapter mint'),
+      ]),
+    );
+  });
+
   it('rejects leaked environment files, test fixtures, and unexpected source files', () => {
     const findings = validateFixture([
       { path: 'package.json', text: '{}' },

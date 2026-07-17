@@ -8,11 +8,13 @@ import {
   type KovoPostgresAppRuntimeDb,
   type KovoPostgresSystemDb,
 } from '@kovojs/server';
+import { runEndpoint } from '@kovojs/server/internal/execution';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { kovo } from '../../drizzle/src/index.js';
 import { runMutation } from '../../server/src/mutation.js';
 import { pgTable, text } from '../../server/node_modules/drizzle-orm/pg-core/index.js';
+import { mount } from './mount.js';
 import {
   betterAuthPostgresSecret,
   createBetterAuthPostgresBindings,
@@ -26,13 +28,25 @@ const authMocks = vi.hoisted(() => {
   const signInEmail = vi.fn(async () => new Response(null, { status: 204 }));
   const signOut = vi.fn(async () => new Response(null, { status: 204 }));
   const signUpEmail = vi.fn(async () => new Response(null, { status: 204 }));
-  const auth = { api: { getSession, signInEmail, signOut, signUpEmail } };
+  const handler = vi.fn(
+    async (_request: Request) =>
+      new Response(null, {
+        headers: {
+          'cache-control': 'no-store',
+          location: '/signed-in',
+          'set-cookie': 'better-auth.session_token=rotated; Path=/; HttpOnly',
+        },
+        status: 302,
+      }),
+  );
+  const auth = { api: { getSession, signInEmail, signOut, signUpEmail }, handler };
   return {
     adapter: Object.freeze({ kind: 'postgres-adapter' }),
     auth,
     betterAuth: vi.fn(() => auth),
     drizzleAdapter: vi.fn(() => Object.freeze({ kind: 'postgres-adapter' })),
     getSession,
+    handler,
     signInEmail,
     signOut,
     signUpEmail,
@@ -122,6 +136,7 @@ describe('Better Auth Postgres bindings', () => {
 
     expect(Object.isFrozen(bindings)).toBe(true);
     expect(Object.keys(bindings).sort()).toEqual([
+      'mountAdapter',
       'seedDemoUser',
       'sessionProvider',
       'signIn',
@@ -130,6 +145,9 @@ describe('Better Auth Postgres bindings', () => {
     expect(bindings).not.toHaveProperty('auth');
     expect(bindings).not.toHaveProperty('database');
     expect(bindings).not.toHaveProperty('systemDb');
+    expect(Object.isFrozen(bindings.mountAdapter)).toBe(true);
+    expect(Object.keys(bindings.mountAdapter)).toEqual([]);
+    expect(bindings.mountAdapter).not.toHaveProperty('handler');
     expect(authMocks.drizzleAdapter).toHaveBeenCalledOnce();
     expect(authMocks.betterAuth).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -162,6 +180,22 @@ describe('Better Auth Postgres bindings', () => {
         },
       }),
     );
+
+    const endpoint = mount('/api/auth', bindings.mountAdapter);
+    const request = new Request('https://app.example.test/api/auth/callback/github', {
+      headers: {
+        authorization: 'Bearer provider-callback',
+        cookie: 'better-auth.state=secret',
+      },
+    });
+    const response = await runEndpoint(endpoint, request);
+    expect(authMocks.handler).toHaveBeenCalledWith(
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    const delegated = authMocks.handler.mock.calls.at(-1)?.[0];
+    expect(delegated?.headers.get('authorization')).toBe('Bearer provider-callback');
+    expect(delegated?.headers.get('cookie')).toBe('better-auth.state=secret');
+    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=rotated');
   });
 
   it('rejects counterfeit capabilities, proxy schemas, and accessor-backed options before auth', () => {
@@ -255,7 +289,7 @@ describe('Better Auth Postgres bindings', () => {
   it('treats an absent development seed as disabled', async () => {
     const systemDb = await createSystemDb();
     const options = bindingOptions(systemDb, betterAuthPostgresSecret(strongSecretText));
-    options.developmentSeed = undefined;
+    delete options.developmentSeed;
     const bindings = createBetterAuthPostgresBindings(options);
 
     await bindings.seedDemoUser();

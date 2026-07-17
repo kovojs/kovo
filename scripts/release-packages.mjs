@@ -62,6 +62,13 @@ function workspaceDependencyNames(manifest) {
   const names = new Set();
   for (const key of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
     for (const [name, version] of Object.entries(manifest[key] ?? {})) {
+      // Optional peers are supplied by a consumer and do not impose publish order. In particular,
+      // @kovojs/better-auth depends on @kovojs/server while server's isolated Better Auth bridge
+      // names it as an optional peer; treating that reverse integration edge as a hard dependency
+      // creates a false release cycle even though server can be packed without the peer installed.
+      if (key === 'peerDependencies' && manifest.peerDependenciesMeta?.[name]?.optional === true) {
+        continue;
+      }
       if (typeof version === 'string' && version.startsWith('workspace:')) {
         names.add(name);
       }

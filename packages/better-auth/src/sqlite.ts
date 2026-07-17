@@ -23,6 +23,7 @@ import {
   pinBetterAuthSignUpEmail,
 } from './internal/trusted-plaintext.js';
 import { betterAuthSignInEmailMutation, betterAuthSignOutMutation } from './mutations.js';
+import { createBetterAuthMountAdapter, type BetterAuthMountAdapter } from './mount-adapter.js';
 import { betterAuthSession, type BetterAuthSessionMapper } from './session.js';
 
 const NativeHeaders = globalThis.Headers;
@@ -96,6 +97,8 @@ export interface BetterAuthSqliteBindings<
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 > {
+  /** Opaque provider/callback router token accepted only by `mount()`. */
+  mountAdapter: BetterAuthMountAdapter;
   /** Create the configured fixed development account, or do nothing when disabled/production. */
   seedDemoUser(): Promise<void>;
   /** Runtime-sanitized Better Auth session provider. */
@@ -191,9 +194,9 @@ export function createBetterAuthSqliteBindings<
     drizzleAdapter(db, { provider: 'sqlite', schema: pinnedSchema }),
   );
   const auth = betterAuth({
-    // The raw Better Auth router is unreachable. Kovo's fixed credential wrappers own the
-    // request-origin floor and never forward callback URLs (SPEC §6.6/§10.3 C9), so ambient
-    // Better Auth trusted-origin configuration must not become a second, widenable authority.
+    // The raw Better Auth router is structurally unreachable. Kovo exposes only an opaque,
+    // GET-only callback adapter; fixed credential wrappers own unsafe-method ingress (SPEC
+    // §6.6/§10.3 C9), so ambient trusted-origin configuration cannot become widenable authority.
     advanced: {
       disableCSRFCheck: true,
       disableOriginCheck: true,
@@ -213,6 +216,7 @@ export function createBetterAuthSqliteBindings<
     telemetry: { enabled: false },
     trustedOrigins: [],
   });
+  const mountAdapter = createBetterAuthMountAdapter(auth);
   const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {
     access: signInAccess,
@@ -250,7 +254,7 @@ export function createBetterAuthSqliteBindings<
   }
 
   return betterAuthFreezeOwn(
-    { seedDemoUser, sessionProvider, signIn, signOut },
+    { mountAdapter, seedDemoUser, sessionProvider, signIn, signOut },
     'Better Auth SQLite bindings',
   );
 }

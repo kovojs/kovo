@@ -6,6 +6,7 @@ const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const manifestPath = path.join(repoRoot, 'scripts/capability-surface-census.manifest.json');
 
 const requiredRowIds = [
+  'better-auth-mount-adapter',
   'generated-postgres-auth-adapter',
   'generated-sqlite-auth-adapter',
   'generated-postgres-readonly-db',
@@ -116,13 +117,18 @@ requirePattern(
 );
 requirePattern(
   betterAuthPostgres,
-  /return\s+betterAuthFreezeOwn\(\s*\{\s*seedDemoUser,\s*sessionProvider,\s*signIn,\s*signOut\s*\}/u,
-  'Better Auth Postgres constructor must return only the frozen sanitized binding record',
+  /return\s+betterAuthFreezeOwn\(\s*\{\s*mountAdapter,\s*seedDemoUser,\s*sessionProvider,\s*signIn,\s*signOut\s*\}/u,
+  'Better Auth Postgres constructor must return only the frozen sanitized binding record and opaque mount adapter',
 );
 requirePattern(
   betterAuthSqlite,
   /\buseSqliteSystemDb\(systemDb,\s*\(db\)\s*=>\s*\n?\s*drizzleAdapter\(db,\s*\{\s*provider:\s*'sqlite',\s*schema:\s*pinnedSchema\s*\}\)\s*,?\s*\)/u,
   'Better Auth SQLite constructor must unwrap the system DB only at the adapter sink',
+);
+requirePattern(
+  betterAuthSqlite,
+  /return\s+betterAuthFreezeOwn\(\s*\{\s*mountAdapter,\s*seedDemoUser,\s*sessionProvider,\s*signIn,\s*signOut\s*\}/u,
+  'Better Auth SQLite constructor must return only the frozen sanitized binding record and opaque mount adapter',
 );
 requirePattern(
   postgresAuth,

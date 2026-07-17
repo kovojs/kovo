@@ -30,8 +30,8 @@ export {
   createBetterAuthSqliteBindingsFromEnvironment,
 } from './sqlite.js';
 export type { BetterAuthCredentialMutationOptions } from './credential-options.js';
-export type { BetterAuthMountOptions } from './mount.js';
 export { mount } from './mount.js';
+export type { BetterAuthMountAdapter } from './mount-adapter.js';
 export type {
   BetterAuthApi,
   BetterAuthCredentialMutationValue,
@@ -39,8 +39,6 @@ export type {
   BetterAuthGetSessionWithHeadersOptions,
   BetterAuthGetSessionWithHeadersResult,
   BetterAuthLike,
-  BetterAuthMountHandler,
-  BetterAuthMountLike,
   BetterAuthRequestLike,
   BetterAuthResponseLike,
   BetterAuthSignInEmailApi,

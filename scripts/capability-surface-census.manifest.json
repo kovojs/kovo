@@ -2,6 +2,19 @@
   "version": 1,
   "rows": [
     {
+      "id": "better-auth-mount-adapter",
+      "kind": "browser-credential-delegation-adapter",
+      "authority": "Opaque token for delegating one GET provider/callback request and its browser credentials to the Kovo-constructed Better Auth router",
+      "mint": "packages/better-auth/src/mount-adapter.ts#createBetterAuthMountAdapter",
+      "publicStatus": "opaque token type public; mint package-private; packed server bridge exports only exact-token validation and invocation",
+      "allowedConsumers": [
+        "packages/better-auth/src/mount.ts#mount",
+        "packages/server/src/internal/better-auth.ts#createBetterAuthMountEndpoint"
+      ],
+      "buildDiagnostic": "scripts/check-pack-security.mjs rejects wildcard/deep mount-adapter exports or a packed server bridge that exposes the private mint",
+      "evidence": "packages/better-auth/src/index.session.test.ts rejects raw/structural handlers and scripts/check-pack-security.test.mjs proves the packed negative boundary"
+    },
+    {
       "id": "generated-postgres-auth-adapter",
       "kind": "auth-adapter-db",
       "authority": "Opaque Postgres system-write capability unwrapped only to construct Better Auth's Drizzle adapter",

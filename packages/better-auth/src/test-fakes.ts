@@ -1,8 +1,4 @@
-import {
-  type BetterAuthLike,
-  type BetterAuthMountLike,
-  type BetterAuthResponseLike,
-} from './internal.js';
+import { type BetterAuthLike, type BetterAuthResponseLike } from './internal.js';
 
 export type AuthSession = {
   activeOrganizationId: null | string;
@@ -133,7 +129,7 @@ export class FakeCredentialAuth {
     | undefined;
 }
 
-export class FakeMountedAuth implements BetterAuthMountLike {
+export class FakeMountedAuth {
   lastRequest: Request | undefined;
   sawSession = false;
 
@@ -142,7 +138,7 @@ export class FakeMountedAuth implements BetterAuthMountLike {
     this.sawSession = 'session' in request;
 
     return new Response(new URL(request.url).pathname, {
-      headers: { location: '/login/complete' },
+      headers: { 'cache-control': 'no-store', location: '/login/complete' },
       status: 302,
     });
   };

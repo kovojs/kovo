@@ -136,11 +136,11 @@ export const betterAuthRequestSecretPaths = betterAuthDeepFreeze(
       id: 'better-auth.mount.handler-delegation',
       entrypoint: 'mounted-better-auth-handler',
       carrier: 'request-cookie',
-      source: 'packages/better-auth/src/mount.ts',
+      source: 'packages/better-auth/src/mount-adapter.ts',
       disposition: 'confined-third-party-adapter',
       readsCrossUserCredential: false,
       reason:
-        'Mounted provider callbacks delegate the whole request to Better Auth and return its Response.',
+        'Only an opaque Kovo-owned adapter delegates a GET callback request to Better Auth and returns its Response.',
     },
   ] as const satisfies readonly BetterAuthRequestSecretPath[],
   'Better Auth request secret path manifest',

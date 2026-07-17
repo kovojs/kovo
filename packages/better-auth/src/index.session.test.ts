@@ -1,9 +1,12 @@
-import { type EndpointDeclaration, type SessionProvider } from '@kovojs/server';
+import { type SessionProvider } from '@kovojs/server';
 import {
   endpointMatches,
   resolveLifecycleRequest,
   runEndpoint,
 } from '@kovojs/server/internal/execution';
+import { createBetterAuthMountEndpoint } from '@kovojs/server/internal/better-auth';
+import { betterAuth } from 'better-auth';
+import { memoryAdapter } from 'better-auth/adapters/memory';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 vi.mock('./internal/runtime-lock.js', () => ({
@@ -11,7 +14,9 @@ vi.mock('./internal/runtime-lock.js', () => ({
 }));
 
 import { betterAuthSession, mount, type BetterAuthLike } from './index.js';
+import * as packageInternalServerMountAdapterApi from '@kovojs/better-auth/internal/server-mount-adapter';
 import { betterAuthMountOperationContract } from './internal.js';
+import { createBetterAuthMountAdapter } from './mount-adapter.js';
 import {
   type AppSession,
   type AuthSession,
@@ -21,6 +26,22 @@ import {
   type RequestWithHeaders,
   mapSession,
 } from './test-fakes.js';
+
+type RemovedPublishedBetterAuthMountAdapterMint =
+  // @ts-expect-error SPEC §6.6/§9.1: no published subpath exports the adapter mint.
+  typeof import('@kovojs/better-auth/internal/server-mount-adapter').createBetterAuthMountAdapter;
+// @ts-expect-error Raw handler authority is not part of the app-facing root contract.
+type RemovedRootBetterAuthMountHandler = import('@kovojs/better-auth').BetterAuthMountHandler;
+// @ts-expect-error Structural raw-auth authority is not part of the app-facing root contract.
+type RemovedRootBetterAuthMountLike = import('@kovojs/better-auth').BetterAuthMountLike;
+// @ts-expect-error The opaque mount is fixed to GET and has no method options authority.
+type RemovedRootBetterAuthMountOptions = import('@kovojs/better-auth').BetterAuthMountOptions;
+type RemovedInternalBetterAuthMountHandler =
+  // @ts-expect-error Published internal contracts do not expose a bare mount handler either.
+  import('@kovojs/better-auth/internal').BetterAuthMountHandler;
+type RemovedInternalBetterAuthMountLike =
+  // @ts-expect-error Published internal contracts do not expose a structural mount source either.
+  import('@kovojs/better-auth/internal').BetterAuthMountLike;
 
 const mappedAppSession: AppSession = {
   activeOrganizationId: 'org-1',
@@ -381,9 +402,17 @@ describe('betterAuthSession', () => {
 });
 
 describe('browser redirect protocol mount', () => {
+  it('publishes only validation and invocation on the server bridge subpath', () => {
+    expect(Object.keys(packageInternalServerMountAdapterApi).sort()).toEqual([
+      'assertBetterAuthMountAdapter',
+      'invokeBetterAuthMountAdapter',
+    ]);
+    expect(packageInternalServerMountAdapterApi).not.toHaveProperty('createBetterAuthMountAdapter');
+  });
+
   it('declares a prefix endpoint for Better Auth-owned redirect protocols', async () => {
     const auth = new FakeMountedAuth();
-    const authEndpoint = mount('/auth', auth, { method: 'GET' });
+    const authEndpoint = mount('/auth', createBetterAuthMountAdapter(auth));
 
     expect(authEndpoint.path).toBe('/auth');
     expect(authEndpoint.mount).toBe('prefix');
@@ -433,42 +462,56 @@ describe('browser redirect protocol mount', () => {
     expect(auth.sawSession).toBe(false);
   });
 
-  it('accepts a direct handler and explicit audit metadata', async () => {
-    const magicLink = mount('/auth/magic-link', (request) => new Response(request.method), {
-      auth: { justification: 'magic-link verification token', kind: 'none' },
-      csrfJustification: 'magic-link verification token',
-      method: 'GET',
+  it('preserves the official Better Auth handler flow behind the opaque adapter', async () => {
+    const auth = betterAuth({
+      advanced: { disableCSRFCheck: true },
+      baseURL: 'https://example.test/auth',
+      database: memoryAdapter({ account: [], session: [], user: [], verification: [] }),
+      emailAndPassword: { enabled: true },
+      secret: '0123456789abcdef0123456789abcdef',
     });
-    const typedEndpoint: EndpointDeclaration<'/auth/magic-link', 'GET', 'prefix'> = magicLink;
+    const endpoint = mount('/auth', createBetterAuthMountAdapter(auth));
 
-    expect(typedEndpoint.auth).toEqual({
-      justification: 'magic-link verification token',
-      kind: 'none',
-    });
-    expect(typedEndpoint.csrf).toEqual({
-      exempt: true,
-      justification: 'magic-link verification token',
-    });
-    expect(
-      endpointMatches(typedEndpoint, { method: 'GET', pathname: '/auth/magic-link/verify' }),
-    ).toBe(true);
-    expect(
-      endpointMatches(typedEndpoint, { method: 'POST', pathname: '/auth/magic-link/verify' }),
-    ).toBe(false);
-    await expect(
-      (
-        await runEndpoint(typedEndpoint, new Request('https://example.test/auth/magic-link'))
-      ).text(),
-    ).resolves.toBe('GET');
+    const response = await runEndpoint(
+      endpoint,
+      new Request('https://example.test/auth/get-session', {
+        headers: { Origin: 'https://example.test' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('null');
+  });
+
+  it('rejects bare, structural, and directly forged mount authority before witness minting', () => {
+    let handlerCalls = 0;
+    const forgedHandler = (_request: Request) => {
+      handlerCalls += 1;
+      return new Response(null, {
+        headers: { 'Cache-Control': 'no-store', Location: '/', 'Set-Cookie': 'owned=1' },
+        status: 302,
+      });
+    };
+    const bareHandlerCall = () =>
+      // @ts-expect-error SPEC §6.6/§9.1: app callbacks cannot mint browser delegation.
+      mount('/forged', forgedHandler);
+
+    expect(bareHandlerCall).toThrow('opaque mountAdapter returned by Kovo-owned Better Auth');
+    expect(() => mount('/forged', { handler: forgedHandler } as never)).toThrow(
+      'opaque mountAdapter returned by Kovo-owned Better Auth',
+    );
+    expect(() => createBetterAuthMountEndpoint('/forged', {} as never)).toThrow(
+      'opaque mountAdapter returned by Kovo-owned Better Auth',
+    );
+    expect(handlerCalls).toBe(0);
   });
 
   it('delegates browser credentials only through the pinned Better Auth mount', async () => {
     let received:
       | { authorization: string | null; cookie: string | null; session: boolean }
       | undefined;
-    const authEndpoint = mount(
-      '/auth',
-      (request) => {
+    const adapter = createBetterAuthMountAdapter({
+      handler(request: Request) {
         received = {
           authorization: request.headers.get('authorization'),
           cookie: request.headers.get('cookie'),
@@ -484,8 +527,8 @@ describe('browser redirect protocol mount', () => {
           status: 302,
         });
       },
-      { method: 'GET' },
-    );
+    });
+    const authEndpoint = mount('/auth', adapter);
     const request = new Request('https://example.test/auth/callback/provider', {
       headers: {
         Authorization: 'Bearer callback-token',
@@ -509,35 +552,7 @@ describe('browser redirect protocol mount', () => {
     expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=rotated');
   });
 
-  it('keeps explicitly unauthenticated mounts browser-credential neutral', async () => {
-    let received: { authorization: string | null; cookie: string | null } | undefined;
-    const magicLink = mount(
-      '/auth/magic-link',
-      (request) => {
-        received = {
-          authorization: request.headers.get('authorization'),
-          cookie: request.headers.get('cookie'),
-        };
-        return new Response('verified');
-      },
-      {
-        auth: { justification: 'magic-link token is carried in the URL', kind: 'none' },
-        csrfJustification: 'magic-link token is carried in the URL',
-        method: 'GET',
-      },
-    );
-
-    await runEndpoint(
-      magicLink,
-      new Request('https://example.test/auth/magic-link/verify?token=opaque', {
-        headers: { Authorization: 'Bearer ambient', Cookie: 'sid=ambient' },
-      }),
-    );
-
-    expect(received).toEqual({ authorization: null, cookie: null });
-  });
-
-  it('pins an own mount handler with its receiver and rejects substitutions', async () => {
+  it('pins the Kovo-constructed handler with its receiver and rejects unstable sources', async () => {
     let poisonCalls = 0;
     const auth = {
       handled: false,
@@ -546,7 +561,8 @@ describe('browser redirect protocol mount', () => {
         return new Response(new URL(request.url).pathname);
       },
     };
-    const endpoint = mount('/auth', auth, { method: 'GET' });
+    const adapter = createBetterAuthMountAdapter(auth);
+    const endpoint = mount('/auth', adapter);
     auth.handler = () => {
       poisonCalls += 1;
       return new Response('attacker');
@@ -564,11 +580,11 @@ describe('browser redirect protocol mount', () => {
       get: () => () => new Response('attacker'),
     }) as FakeMountedAuth;
     const inherited = Object.create({ handler: () => new Response('attacker') }) as FakeMountedAuth;
-    expect(() => mount('/auth/accessor', accessor, { method: 'GET' })).toThrow(
-      'Better Auth mount.handler must be a stable own-data method',
+    expect(() => createBetterAuthMountAdapter(accessor)).toThrow(
+      'Kovo Better Auth construction.handler must be a stable own-data method',
     );
-    expect(() => mount('/auth/inherited', inherited, { method: 'GET' })).toThrow(
-      'Better Auth mount.handler must be a stable own-data method',
+    expect(() => createBetterAuthMountAdapter(inherited)).toThrow(
+      'Kovo Better Auth construction.handler must be a stable own-data method',
     );
   });
 
@@ -576,10 +592,13 @@ describe('browser redirect protocol mount', () => {
     const secret = 'MOUNT_COOKIE_SECRET_MUST_NOT_ESCAPE';
     const endpoint = mount(
       '/auth',
-      (request) => {
-        throw new Error(`provider callback failed for ${secret}: ${request.headers.get('cookie')}`);
-      },
-      { method: 'GET' },
+      createBetterAuthMountAdapter({
+        async handler(request: Request) {
+          throw new Error(
+            `provider callback failed for ${secret}: ${request.headers.get('cookie')}`,
+          );
+        },
+      }),
     );
     let thrown: unknown;
     try {
@@ -600,37 +619,27 @@ describe('browser redirect protocol mount', () => {
     expect(`${String((thrown as Error).stack)} ${JSON.stringify(thrown)}`).not.toContain(secret);
   });
 
-  it('does not inherit mount auth authority and rejects option accessors', () => {
-    const auth = new FakeMountedAuth();
+  it('does not inherit mount authority and cannot be widened to an unsafe method', () => {
+    const adapter = createBetterAuthMountAdapter(new FakeMountedAuth());
     Object.defineProperty(Object.prototype, 'auth', {
       configurable: true,
       value: { justification: 'attacker downgrade', kind: 'none' },
     });
-    let endpoint: ReturnType<typeof mount<'/auth', 'GET'>>;
+    let endpoint: ReturnType<typeof mount<'/auth'>>;
     try {
-      endpoint = mount('/auth', auth, { method: 'GET' });
+      endpoint = mount('/auth', adapter);
     } finally {
       delete (Object.prototype as { auth?: unknown }).auth;
     }
     expect(endpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
 
-    let reads = 0;
-    const options = Object.defineProperties(
-      {},
-      {
-        auth: {
-          get() {
-            reads += 1;
-            return { justification: 'attacker downgrade', kind: 'none' };
-          },
-        },
-        method: { value: 'GET' },
-      },
+    const widened = mount(
+      '/auth',
+      adapter,
+      // @ts-expect-error The opaque redirect adapter is permanently GET-only.
+      { method: 'POST' },
     );
-    expect(() => mount('/auth', auth, options as never)).toThrow(
-      'Better Auth mount option auth must be an own-data property',
-    );
-    expect(reads).toBe(0);
+    expect(widened.method).toBe('GET');
   });
 
   it('does not let the exported mount contract downgrade later endpoint posture', () => {
@@ -653,7 +662,7 @@ describe('browser redirect protocol mount', () => {
       });
       Reflect.set(contract, 'auth', { justification: 'attacker downgrade', kind: 'none' });
       Reflect.set(contract.csrf, 'justification', 'attacker downgrade');
-      const endpoint = mount('/auth', new FakeMountedAuth(), { method: 'GET' });
+      const endpoint = mount('/auth', createBetterAuthMountAdapter(new FakeMountedAuth()));
 
       expect(endpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
       expect(endpoint.access).toEqual({

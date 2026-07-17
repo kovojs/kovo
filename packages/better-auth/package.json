@@ -11,7 +11,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./internal": "./src/internal.ts"
+    "./internal": "./src/internal.ts",
+    "./internal/server-mount-adapter": "./src/internal/server-mount-adapter.ts"
   },
   "publishConfig": {
     "exports": {
@@ -22,11 +23,15 @@
       "./internal": {
         "types": "./dist/internal.d.mts",
         "default": "./dist/internal.mjs"
+      },
+      "./internal/server-mount-adapter": {
+        "types": "./dist/internal/server-mount-adapter.d.mts",
+        "default": "./dist/internal/server-mount-adapter.mjs"
       }
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/index.ts src/internal.ts src/internal/runtime-lock.ts --dts",
+    "build:dist": "vp pack src/index.ts src/internal.ts src/internal/runtime-lock.ts src/internal/server-mount-adapter.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

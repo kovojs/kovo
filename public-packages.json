@@ -1819,6 +1819,7 @@
         "internal": [
           "./internal/app-shell-vite",
           "./internal/audit-facts",
+          "./internal/better-auth",
           "./internal/build",
           "./internal/build-context",
           "./internal/build-preset",
@@ -2088,7 +2089,7 @@
       "apiBoundary": {
         "public": ["."],
         "generated": [],
-        "internal": ["./internal"]
+        "internal": ["./internal", "./internal/server-mount-adapter"]
       },
       "apiRef": {
         "order": 7,

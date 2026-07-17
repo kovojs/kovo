@@ -78,21 +78,6 @@ export interface BetterAuthRequestLike {
 }
 
 /**
- * Handler that turns a web `Request` into a `Response`. This is Better Auth's own
- * fetch-style handler, mounted at a prefix endpoint by `mount` to serve the
- * library's browser redirect protocol (OAuth/SAML/magic-link callbacks; SPEC.md §9.1).
- */
-export type BetterAuthMountHandler = (request: Request) => Promise<Response> | Response;
-
-/**
- * Structural shape of a Better Auth instance accepted by `mount`: it just needs a
- * `handler`. Apps pass their real Better Auth object directly.
- */
-export interface BetterAuthMountLike {
-  handler: BetterAuthMountHandler;
-}
-
-/**
  * Minimal Better Auth response shape the credential mutations inspect: an object with
  * `status` and `headers`. Used to classify sign-in/sign-up success and to forward
  * `Set-Cookie` headers into the mutation response (SPEC.md §6.5).

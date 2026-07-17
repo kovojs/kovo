@@ -102,6 +102,13 @@ type RemovedRootUsePostgresSystemDb =
 type RemovedPublishedEndpointBrowserCredentialWitness =
   // @ts-expect-error SPEC §6.6/§9.1: app-authored modules cannot mint the private witness.
   typeof import('@kovojs/server/internal/execution').pinEndpointBrowserCredentialDelegation;
+// eslint-disable-next-line no-unused-vars -- compile-time authority-boundary assertion only.
+type RemovedPublishedBetterAuthEndpointWitness =
+  // @ts-expect-error SPEC §6.6/§9.1: the generic Better Auth witness constructor is private.
+  typeof import('@kovojs/server/internal/execution').frameworkBetterAuthEndpoint;
+// eslint-disable-next-line no-unused-vars -- compile-time narrow bridge assertion only.
+type InternalBetterAuthMountEndpoint =
+  typeof import('@kovojs/server/internal/better-auth').createBetterAuthMountEndpoint;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppErrorShellOptions = import('../index.js').AppErrorShellOptions;
 const removedRootLiveTargetRendererOption: import('../index.js').CreateAppOptions = {
@@ -982,7 +989,6 @@ describe('server app-shell public API barrels', () => {
       'endpointMatches',
       'explainGuard',
       'extractCompilerBoundKovoRuntimeDbMetadata',
-      'frameworkBetterAuthEndpoint',
       'guardAuditName',
       'installGeneratedTableSecurityManifestForCommand',
       'invalidate',
@@ -1084,6 +1090,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
       './internal/audit-facts': './src/internal/audit-facts.ts',
+      './internal/better-auth': './src/internal/better-auth.ts',
       './internal/capabilities': './src/internal/capabilities.ts',
       './internal/client-modules': './src/internal/client-modules.ts',
       './internal/csp': './src/internal/csp.ts',

@@ -198,7 +198,75 @@ export function validatePackedPackage({
     }
   }
 
+  if (packageName === '@kovojs/better-auth') {
+    findings.push(...validateBetterAuthMountAuthorityPack({ manifest, readTextFile }));
+  }
+
   return findings;
+}
+
+/**
+ * The Better Auth mount adapter mint is deliberately package-private. Node's exports map is the
+ * packed-package enforcement boundary: no wildcard or deep adapter subpath may make the shared
+ * implementation chunk importable, and the one server bridge may expose only validation and
+ * invocation (SPEC §6.6/§9.1).
+ */
+export function validateBetterAuthMountAuthorityPack({ manifest, readTextFile }) {
+  const findings = [];
+  const exportsMap = manifest.exports;
+  if (!exportsMap || typeof exportsMap !== 'object' || Array.isArray(exportsMap)) {
+    return ['@kovojs/better-auth: packed manifest must declare an explicit exports map'];
+  }
+
+  const bridgeSubpath = './internal/server-mount-adapter';
+  for (const [subpath, exportedTarget] of Object.entries(exportsMap)) {
+    if (subpath.includes('*')) {
+      findings.push(
+        '@kovojs/better-auth: packed exports must not contain a wildcard that can expose the private mount-adapter chunk',
+      );
+    }
+    if (subpath.includes('mount-adapter') && subpath !== bridgeSubpath) {
+      findings.push(
+        `@kovojs/better-auth: packed exports expose forbidden mount-adapter subpath ${subpath}`,
+      );
+    }
+    if (
+      subpath !== bridgeSubpath &&
+      collectExportTargetStrings(exportedTarget).some((target) => target.includes('mount-adapter'))
+    ) {
+      findings.push(
+        `@kovojs/better-auth: packed export ${subpath} targets the private mount-adapter implementation`,
+      );
+    }
+  }
+
+  const bridgeTargets = collectExportTargetStrings(exportsMap[bridgeSubpath]);
+  if (bridgeTargets.length === 0) {
+    findings.push(
+      '@kovojs/better-auth: packed exports are missing the fixed server mount-adapter bridge',
+    );
+  }
+  for (const target of bridgeTargets) {
+    const rel = stripLeadingDot(target);
+    const source = readTextFile(rel);
+    if (source === undefined) {
+      findings.push(`@kovojs/better-auth: packed server mount-adapter bridge is missing ${rel}`);
+      continue;
+    }
+    if (source.includes('createBetterAuthMountAdapter')) {
+      findings.push(
+        `@kovojs/better-auth: packed server mount-adapter bridge ${rel} exposes the private adapter mint`,
+      );
+    }
+  }
+
+  return findings;
+}
+
+function collectExportTargetStrings(value) {
+  if (typeof value === 'string') return [value];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  return Object.values(value).flatMap(collectExportTargetStrings);
 }
 
 function isAllowedStarterTemplate(packageName, rel) {

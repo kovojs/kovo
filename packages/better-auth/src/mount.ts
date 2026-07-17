@@ -1,40 +1,11 @@
-import type {
-  AccessDecision,
-  EndpointAuthDeclaration,
-  EndpointDeclaration,
-  EndpointMethod,
-} from '@kovojs/server';
-import { frameworkBetterAuthEndpoint } from '@kovojs/server/internal/execution';
+import type { EndpointDeclaration } from '@kovojs/server';
+import { createBetterAuthMountEndpoint } from '@kovojs/server/internal/better-auth';
 
-import { betterAuthMountOperationContract } from './internal/contracts.js';
-import {
-  betterAuthApply,
-  betterAuthCaptureOwnMethod,
-  betterAuthOwnDataOption,
-} from './internal/intrinsics.js';
-import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
-import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js';
-
-const NativeError = Error;
-const betterAuthMountBoundaryFailureMessage =
-  'Better Auth mounted handler failed inside the trusted plaintext boundary.';
-
-/**
- * Options for `mount`. `auth` overrides the default `custom` endpoint auth
- * declaration; `method` narrows the HTTP method; `csrfJustification` records why this
- * prefix endpoint is exempt from CSRF (the endpoint always runs with `csrf: false` — see
- * `mount` for the SPEC.md §6.6 rationale).
- */
-export interface BetterAuthMountOptions<Method extends EndpointMethod = EndpointMethod> {
-  access?: AccessDecision;
-  auth?: EndpointAuthDeclaration;
-  csrfJustification?: string;
-  method: Method;
-}
+import type { BetterAuthMountAdapter } from './mount-adapter.js';
 
 /**
  * Mounts Better Auth's own request handler at a prefix endpoint so its browser redirect
- * protocol — OAuth/SAML/magic-link callbacks and similar provider round-trips — is served
+ * protocol — OAuth/magic-link callbacks and similar safe-method provider round-trips — is served
  * under one declared path, while credential forms stay on typed mutations (SPEC.md §9.1).
  *
  * SECURITY — this endpoint is always declared with `csrf: false`. Per SPEC.md §6.6, CSRF
@@ -46,62 +17,12 @@ export interface BetterAuthMountOptions<Method extends EndpointMethod = Endpoint
  * library-supplied OAuth `state` parameter (not a Kovo CSRF token) carries the
  * anti-forgery guarantee, so a Kovo CSRF token cannot be present or required here.
  * Disabling CSRF on this prefix does NOT relax protection on the app's own credential
- * mutations, which keep CSRF on. The reason is recorded on the endpoint via
- * `csrfJustification` (overridable through `BetterAuthMountOptions`).
+ * mutations, which keep CSRF on. The framework hardcodes GET: an unsafe-method callback needs a
+ * separate framework-owned, self-verifying adapter rather than widening this prefix authority.
  */
-export function mount<
-  const Path extends string,
-  const Method extends EndpointMethod = EndpointMethod,
->(
+export function mount<const Path extends string>(
   path: Path,
-  auth: BetterAuthMountLike | BetterAuthMountHandler,
-  options: BetterAuthMountOptions<Method>,
-): EndpointDeclaration<Path, Method, 'prefix'> {
-  const { method: handler, receiver: handlerReceiver } =
-    typeof auth === 'function'
-      ? { method: auth, receiver: undefined }
-      : betterAuthCaptureOwnMethod(auth, 'handler', 'Better Auth mount');
-  const configuredAuth = betterAuthOwnDataOption<EndpointAuthDeclaration>(
-    options,
-    'auth',
-    'Better Auth mount option auth',
-  );
-  const access = betterAuthOwnDataOption<AccessDecision>(
-    options,
-    'access',
-    'Better Auth mount option access',
-  );
-  const csrfJustification = betterAuthOwnDataOption<string>(
-    options,
-    'csrfJustification',
-    'Better Auth mount option csrfJustification',
-  );
-  const method = betterAuthOwnDataOption<Method>(
-    options,
-    'method',
-    'Better Auth mount option method',
-  );
-  if (method === undefined) {
-    throw new TypeError('Better Auth mount option method must be an own-data property.');
-  }
-  const endpointAuth = configuredAuth ?? betterAuthMountOperationContract.auth;
-
-  return frameworkBetterAuthEndpoint(path, {
-    ...(access === undefined && configuredAuth !== undefined
-      ? {}
-      : { access: access ?? betterAuthMountOperationContract.access }),
-    auth: endpointAuth,
-    csrfJustification: csrfJustification ?? betterAuthMountOperationContract.csrf.justification,
-    async handler(request) {
-      assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
-      try {
-        return await betterAuthApply<Promise<Response> | Response>(handler, handlerReceiver, [
-          request,
-        ]);
-      } catch {
-        throw new NativeError(betterAuthMountBoundaryFailureMessage);
-      }
-    },
-    method,
-  });
+  adapter: BetterAuthMountAdapter,
+): EndpointDeclaration<Path, 'GET', 'prefix'> {
+  return createBetterAuthMountEndpoint(path, adapter);
 }

@@ -1,7 +1,9 @@
 import { createSqliteAppRuntime, type KovoSqliteAppRuntime } from '@kovojs/server/sqlite';
+import { runEndpoint } from '@kovojs/server/internal/execution';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { sqliteTable, text } from '../../server/node_modules/drizzle-orm/sqlite-core/index.js';
+import { mount } from './mount.js';
 import {
   betterAuthSqliteSecret,
   createBetterAuthSqliteBindings,
@@ -14,11 +16,23 @@ const authMocks = vi.hoisted(() => {
   const signInEmail = vi.fn(async () => new Response(null, { status: 204 }));
   const signOut = vi.fn(async () => new Response(null, { status: 204 }));
   const signUpEmail = vi.fn(async () => new Response(null, { status: 204 }));
-  const auth = { api: { getSession, signInEmail, signOut, signUpEmail } };
+  const handler = vi.fn(
+    async (_request: Request) =>
+      new Response(null, {
+        headers: {
+          'cache-control': 'no-store',
+          location: '/signed-in',
+          'set-cookie': 'better-auth.session_token=rotated; Path=/; HttpOnly',
+        },
+        status: 302,
+      }),
+  );
+  const auth = { api: { getSession, signInEmail, signOut, signUpEmail }, handler };
   return {
     auth,
     betterAuth: vi.fn(() => auth),
     drizzleAdapter: vi.fn(() => Object.freeze({ kind: 'sqlite-adapter' })),
+    handler,
   };
 });
 
@@ -77,7 +91,7 @@ describe('Better Auth SQLite bindings', () => {
     expect(optionTrapHits).toBe(0);
   });
 
-  it('pins secret and origin posture against late upstream environment mutation', () => {
+  it('pins secret and origin posture and exposes only an opaque official GET mount', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: [proof] });
     runtimes.push(runtime);
@@ -90,12 +104,16 @@ describe('Better Auth SQLite bindings', () => {
       const bindings = createBetterAuthSqliteBindings(bindingOptions(runtime));
 
       expect(Object.keys(bindings).sort()).toEqual([
+        'mountAdapter',
         'seedDemoUser',
         'sessionProvider',
         'signIn',
         'signOut',
       ]);
       expect(bindings).not.toHaveProperty('auth');
+      expect(Object.isFrozen(bindings.mountAdapter)).toBe(true);
+      expect(Object.keys(bindings.mountAdapter)).toEqual([]);
+      expect(bindings.mountAdapter).not.toHaveProperty('handler');
       expect(authMocks.betterAuth).toHaveBeenCalledWith(
         expect.objectContaining({
           advanced: {
@@ -115,6 +133,19 @@ describe('Better Auth SQLite bindings', () => {
           trustedOrigins: [],
         }),
       );
+
+      const endpoint = mount('/api/auth', bindings.mountAdapter);
+      const request = new Request('http://localhost:5173/api/auth/callback/github', {
+        headers: {
+          authorization: 'Bearer provider-callback',
+          cookie: 'better-auth.state=secret',
+        },
+      });
+      const response = await runEndpoint(endpoint, request);
+      const delegated = authMocks.handler.mock.calls.at(-1)?.[0];
+      expect(delegated?.headers.get('authorization')).toBe('Bearer provider-callback');
+      expect(delegated?.headers.get('cookie')).toBe('better-auth.state=secret');
+      expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=rotated');
     } finally {
       if (previousSecrets === undefined) delete process.env.BETTER_AUTH_SECRETS;
       else process.env.BETTER_AUTH_SECRETS = previousSecrets;

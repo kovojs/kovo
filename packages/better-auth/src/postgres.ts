@@ -27,6 +27,7 @@ import {
   pinBetterAuthSignUpEmail,
 } from './internal/trusted-plaintext.js';
 import { betterAuthSignInEmailMutation, betterAuthSignOutMutation } from './mutations.js';
+import { createBetterAuthMountAdapter, type BetterAuthMountAdapter } from './mount-adapter.js';
 import { betterAuthSession, type BetterAuthSessionMapper } from './session.js';
 
 const NativeHeaders = globalThis.Headers;
@@ -120,6 +121,8 @@ export interface BetterAuthPostgresBindings<
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 > {
+  /** Opaque provider/callback router token accepted only by `mount()`. */
+  mountAdapter: BetterAuthMountAdapter;
   /** Create the configured fixed development account, or do nothing when disabled/production. */
   seedDemoUser(): Promise<void>;
   /** Runtime-sanitized Better Auth session provider for `session(schema).provider(...)`. */
@@ -172,8 +175,9 @@ export function createBetterAuthPostgresBindingsFromEnvironment<
  *
  * Only the opaque `KovoPostgresSystemDb` capability crosses generated app source. The raw Drizzle
  * database is revealed inside this package just long enough to construct Better Auth's adapter;
- * the returned frozen record contains only a sanitized session provider, Kovo credential
- * mutations, and a fixed development seed operation (SPEC §6.6 and §10.3 C9).
+ * the returned frozen record contains only an opaque GET callback adapter, a sanitized session
+ * provider, Kovo credential mutations, and a fixed development seed operation (SPEC §6.6 and
+ * §10.3 C9).
  */
 export function createBetterAuthPostgresBindings<
   Request extends BetterAuthRequestLike,
@@ -220,9 +224,9 @@ export function createBetterAuthPostgresBindings<
     drizzleAdapter(db, { provider: 'pg', schema: pinnedSchema }),
   );
   const auth = betterAuth({
-    // The raw Better Auth router is unreachable. Kovo's fixed credential wrappers own the
-    // request-origin floor and never forward callback URLs (SPEC §6.6/§10.3 C9), so ambient
-    // Better Auth trusted-origin configuration must not become a second, widenable authority.
+    // The raw Better Auth router is structurally unreachable. Kovo exposes only an opaque,
+    // GET-only callback adapter; fixed credential wrappers own unsafe-method ingress (SPEC
+    // §6.6/§10.3 C9), so ambient trusted-origin configuration cannot become widenable authority.
     advanced: {
       disableCSRFCheck: true,
       disableOriginCheck: true,
@@ -242,6 +246,7 @@ export function createBetterAuthPostgresBindings<
     telemetry: { enabled: false },
     trustedOrigins: [],
   });
+  const mountAdapter = createBetterAuthMountAdapter(auth);
   const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {
     access: signInAccess,
@@ -278,7 +283,7 @@ export function createBetterAuthPostgresBindings<
   }
 
   return betterAuthFreezeOwn(
-    { seedDemoUser, sessionProvider, signIn, signOut },
+    { mountAdapter, seedDemoUser, sessionProvider, signIn, signOut },
     'Better Auth Postgres bindings',
   );
 }

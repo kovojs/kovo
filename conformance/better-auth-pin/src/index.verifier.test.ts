@@ -1,4 +1,3 @@
-import { endpointMatches, runEndpoint } from '@kovojs/server/internal/execution';
 import { mount } from '@kovojs/better-auth';
 import { getAuthTables } from 'better-auth';
 import { deviceAuthorization, oidcProvider, twoFactor } from 'better-auth/plugins';
@@ -15,7 +14,6 @@ import {
   betterAuthSchemaSourceFixture,
   createRealAuth,
   futureWebAuthnPlugin,
-  requestHeaders,
   requireAuthTable,
 } from './real-auth-fixtures.js';
 
@@ -331,32 +329,15 @@ describe('Better Auth pinned conformance', () => {
     );
   });
 
-  it('mounts the real Better Auth handler as an audit-visible prefix endpoint', async () => {
+  it('rejects a real or structural Better Auth handler at the public mount boundary', () => {
     const { auth } = createRealAuth();
-    const authEndpoint = mount('/api/auth', auth, { method: 'GET' });
+    const mountRawAuth = () =>
+      // @ts-expect-error SPEC §6.6/§9.1: raw handlers cannot mint browser delegation.
+      mount('/api/auth', auth);
 
-    expect(authEndpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
-    expect(authEndpoint.method).toBe('GET');
-    expect(authEndpoint.csrf).toEqual({
-      exempt: true,
-      justification: 'better-auth browser redirect protocol handler',
-    });
-    expect(
-      endpointMatches(authEndpoint, { method: 'GET', pathname: '/api/auth/get-session' }),
-    ).toBe(true);
-    expect(
-      endpointMatches(authEndpoint, { method: 'POST', pathname: '/api/auth/sign-in/email' }),
-    ).toBe(false);
-    expect(
-      endpointMatches(authEndpoint, { method: 'GET', pathname: '/api/authish/get-session' }),
-    ).toBe(false);
-
-    const response = await runEndpoint(
-      authEndpoint,
-      new Request('https://example.test/api/auth/get-session', { headers: requestHeaders() }),
+    expect(mountRawAuth).toThrow('opaque mountAdapter returned by Kovo-owned Better Auth bindings');
+    expect(() => mount('/api/auth', { handler: auth.handler } as never)).toThrow(
+      'opaque mountAdapter returned by Kovo-owned Better Auth bindings',
     );
-
-    expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('null');
   });
 });

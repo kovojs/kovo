@@ -117,8 +117,8 @@ import {
 // below stays authored in this file.
 export type * from './internal/contracts.js';
 export { authed, role } from './guards.js';
-export type { BetterAuthMountOptions } from './mount.js';
 export { mount } from './mount.js';
+export type { BetterAuthMountAdapter } from './mount-adapter.js';
 export {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
