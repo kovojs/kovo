@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    1 |     13 |
+| High     |    2 |     13 |
 | Medium   |    1 |     15 |
 | Low      |    0 |      3 |
 
@@ -185,6 +185,18 @@ rendering, Better Auth, and managed SQL.
   - **Open:** reserve all framing and hop-by-hop headers across structured and raw response paths,
     generated adapters, and HTTP versions; fail before write and add wire-level desynchronization
     regressions.
+
+- [ ] **H15 - Structured route responses bypassed KV415's typed header-name allowlist.**
+  - `respond.file()` and `respond.stream()` accepted an arbitrary `Record<string, string>` even
+    though SPEC §9.1 and KV415 require structured app response channels to reject names outside a
+    typed allowlist. An app that routes remotely derived names into this advertised safe sink can
+    therefore emit deployment-sensitive control metadata such as proxy internal-redirect or CORS
+    fields; raw endpoints are the explicit arbitrary end-to-end header escape instead.
+  - **Evidence:** dynamic `X-Accel-Redirect`, CORS, `X-Audit`, and `X-Trace-Id` names survive route
+    outcome construction today, while existing tests pin custom structured names as accepted.
+  - **Open:** give public structured route options a precise type-level and runtime allowlist,
+    preserve the existing structured content/disposition/redirect APIs, and retain arbitrary
+    end-to-end names only on the declared raw endpoint and operator static-metadata paths.
 
 ## Medium
 
