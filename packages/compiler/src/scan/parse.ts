@@ -4418,6 +4418,10 @@ function objectLiteralEntries(
               }
             : {}),
           ...staticConstructorTypeEntry(sourceFile, property.initializer),
+          ...(ts.isStringLiteralLike(property.initializer) ||
+          ts.isNoSubstitutionTemplateLiteral(property.initializer)
+            ? { staticStringValue: property.initializer.text }
+            : {}),
           ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
           value: compilerStringSlice(
             source,
@@ -5057,6 +5061,7 @@ function jsxExpressionModel(
     ts.isCallExpression(unwrapped) && ts.isIdentifier(unwrapped.expression)
       ? unwrapped.expression.text
       : undefined;
+  const staticValue = staticLiteralValue(expression);
   const localNames: string[] = [];
   appendUniqueStrings(localNames, localIdentifierNames(expression), 'JSX expression local names');
   appendUniqueStrings(localNames, enclosingLocalNames(node), 'JSX expression local names');
@@ -5072,6 +5077,7 @@ function jsxExpressionModel(
     references: referenceIdentifiers(expression),
     ...(solePath ? { solePropertyAccessPath: solePath } : {}),
     start,
+    ...(staticValue === undefined ? {} : { staticValue }),
     temporalReads: temporalReadModels(sourceFile, expression),
   };
 }

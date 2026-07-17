@@ -1,7 +1,7 @@
 import type { Component } from '@kovojs/core';
 
 import { isKovoComponentDescriptor } from './component-authority.js';
-import { escapeAttribute } from './html.js';
+import { escapeWireAttribute } from './html.js';
 import {
   createLiveTargetAttestationWithAuthority,
   type LiveTargetAttestationAuthority,
@@ -508,7 +508,11 @@ export function setOrAppendHtmlAttribute(attrs: string, name: string, value: str
   if (typeof attrs !== 'string' || typeof value !== 'string') {
     throw new TypeError('Stamped HTML attributes and values must be strings.');
   }
-  const rendered = `${name}="${escapeAttribute(value)}"`;
+  const rendered = `${name}="${escapeWireAttribute(
+    value,
+    'dom-identity',
+    `framework root stamp ${name}`,
+  )}"`;
   const match = securityRegExpExec(attributePattern(name), attrs);
   if (match === null) return `${attrs} ${rendered}`;
 

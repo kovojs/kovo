@@ -1,7 +1,12 @@
 import type { TrustedHtml } from '@kovojs/browser';
 import type { ComponentChild } from '@kovojs/core';
 
-import { escapeAttribute, renderedHtml, renderedHtmlContent, type RenderedHtml } from './html.js';
+import {
+  escapeWireAttribute,
+  renderedHtml,
+  renderedHtmlContent,
+  type RenderedHtml,
+} from './html.js';
 import {
   deferredStreamInitialChunkCount,
   type DeferredPriority,
@@ -280,7 +285,19 @@ function placeholder(
   fallback: string,
   state = 'pending',
 ): string {
-  return `<kovo-defer target="${escapeAttribute(target)}" state="${escapeAttribute(state)}" data-kovo-region-priority="${escapeAttribute(priority)}">${fallback}</kovo-defer>`;
+  return `<kovo-defer target="${escapeWireAttribute(
+    target,
+    'dom-identity',
+    'kovo-defer[target]',
+  )}" state="${escapeWireAttribute(
+    state,
+    'dom-identity',
+    'kovo-defer[state]',
+  )}" data-kovo-region-priority="${escapeWireAttribute(
+    priority,
+    'dom-identity',
+    'kovo-defer[data-kovo-region-priority]',
+  )}">${fallback}</kovo-defer>`;
 }
 
 function rendered(value: MaybePromise<string>): MaybePromise<RenderedHtml> {

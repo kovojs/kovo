@@ -130,5 +130,185 @@ import {
   securitySet,
   securitySetAdd,
   securitySetHas,
+  securityStringCharCodeAt,
   securityStringStartsWith,
+  securityStringToLowerCase,
 } from './security-witness-intrinsics.js';
+
+/** @internal The browser boundary a server-authored string must survive without aliasing. */
+export type HtmlWireValuePosture =
+  | 'dom-identity'
+  | 'multiline-content'
+  | 'option-fallback'
+  | 'submitted-control';
+
+/** @internal Why a server-authored string cannot retain its identity at the selected boundary. */
+export type HtmlWireValueIssue =
+  | 'carriage-return'
+  | 'line-feed'
+  | 'nul'
+  | 'option-whitespace'
+  | 'unpaired-surrogate';
+
+/**
+ * @internal Find the first lossy HTML/form wire condition in a server-authored string.
+ *
+ * SPEC §13.2 requires Kovo's rendered, submitted, and morph identities to remain the same string.
+ * HTML input preprocessing replaces NUL, normalizes CR/CRLF, and UTF-8 serialization replaces
+ * unpaired UTF-16 surrogates. Native form serialization additionally normalizes every line ending
+ * in successful control names/values to CRLF. That rewrite is forbidden for routing/identity
+ * values but accepted for ordinary multiline textarea content. An option without `value` also
+ * strips and collapses ASCII whitespace when deriving its submitted value. Keep these rules in one
+ * boot-pinned predicate so compiler diagnostics and runtime sinks cannot drift.
+ */
+export function htmlWireValueIssue(
+  value: string,
+  posture: HtmlWireValuePosture,
+): HtmlWireValueIssue | undefined {
+  let previous = -1;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code === 0x0000) return 'nul';
+    if (code === 0x000d && posture !== 'multiline-content') return 'carriage-return';
+    if (code === 0x000a && posture !== 'dom-identity' && posture !== 'multiline-content') {
+      return 'line-feed';
+    }
+    if (
+      posture === 'option-fallback' &&
+      (code === 0x0009 ||
+        code === 0x000c ||
+        (code === 0x0020 && (index === 0 || previous === 0x0020)))
+    ) {
+      return 'option-whitespace';
+    }
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = index + 1 < value.length ? securityStringCharCodeAt(value, index + 1) : -1;
+      if (next < 0xdc00 || next > 0xdfff) return 'unpaired-surrogate';
+      index += 1;
+      previous = next;
+      continue;
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) return 'unpaired-surrogate';
+    previous = code;
+  }
+  if (
+    posture === 'option-fallback' &&
+    value.length > 0 &&
+    securityStringCharCodeAt(value, value.length - 1) === 0x0020
+  ) {
+    return 'option-whitespace';
+  }
+  return undefined;
+}
+
+/** @internal True only when `value` survives the selected HTML/form boundary injectively. */
+export function isHtmlWireValueStable(value: string, posture: HtmlWireValuePosture): boolean {
+  return htmlWireValueIssue(value, posture) === undefined;
+}
+
+/** @internal Fail closed before a lossy server-authored identity reaches HTML output. */
+export function assertHtmlWireValueStable(
+  value: string,
+  posture: HtmlWireValuePosture,
+  sink: string,
+): string {
+  const issue = htmlWireValueIssue(value, posture);
+  if (issue !== undefined) {
+    throw new TypeError(
+      `KV236: ${sink} is not stable across server HTML and native form serialization (${issue}); SPEC §13.2 forbids emitting aliased runtime identity or substituted control content.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * @internal Classify intrinsic JSX attributes whose strings route DOM or submitted authority.
+ * Ordinary presentation attributes remain outside this fail-closed set.
+ */
+export function htmlAttributeWireValuePosture(
+  tagName: string,
+  attributeName: string,
+): HtmlWireValuePosture | undefined {
+  const tag = securityStringToLowerCase(tagName);
+  const name = securityStringToLowerCase(attributeName);
+
+  if (name === 'name') {
+    if (
+      tag === 'button' ||
+      tag === 'input' ||
+      tag === 'object' ||
+      tag === 'select' ||
+      tag === 'textarea'
+    ) {
+      return 'submitted-control';
+    }
+    if (tag === 'form' || tag === 'iframe' || tag === 'map' || tag === 'kovo-query') {
+      return 'dom-identity';
+    }
+  }
+  if (name === 'dirname' && (tag === 'input' || tag === 'textarea')) {
+    return 'submitted-control';
+  }
+  if (name === 'value' && (tag === 'button' || tag === 'input' || tag === 'option')) {
+    return 'submitted-control';
+  }
+  if (
+    name === 'action' ||
+    name === 'formaction' ||
+    name === 'formenctype' ||
+    name === 'formmethod' ||
+    name === 'formtarget'
+  ) {
+    return 'submitted-control';
+  }
+  if (
+    name === 'command' ||
+    name === 'commandfor' ||
+    name === 'for' ||
+    name === 'form' ||
+    name === 'id' ||
+    name === 'key' ||
+    name === 'list' ||
+    name === 'popovertarget' ||
+    name === 'target'
+  ) {
+    return 'dom-identity';
+  }
+  if (
+    name === 'data-error-code' ||
+    name === 'data-error-path' ||
+    securityStringStartsWith(name, 'kovo-') ||
+    securityStringStartsWith(name, 'data-kovo-') ||
+    securityStringStartsWith(name, 'data-bind') ||
+    securityStringStartsWith(name, 'data-derive') ||
+    securityStringStartsWith(name, 'data-mutation') ||
+    securityStringStartsWith(name, 'data-p-') ||
+    securityStringStartsWith(name, 'data-stream-') ||
+    securityStringStartsWith(name, 'on:')
+  ) {
+    return 'dom-identity';
+  }
+  if (
+    (tag === 'kovo-query' && (name === 'settles' || name === 'version')) ||
+    (tag === 'kovo-fragment' &&
+      (name === 'error-boundary' || name === 'mode' || name === 'priority')) ||
+    (tag === 'kovo-text' && name === 'mode') ||
+    (tag === 'kovo-defer' && name === 'state') ||
+    (tag === 'kovo-done' && name === 'reason') ||
+    (tag === 'kovo-live' && name === 'query')
+  ) {
+    return 'dom-identity';
+  }
+  return undefined;
+}
+
+/** @internal Classify intrinsic element text that can become a successful submitted value. */
+export function htmlTextWireValuePosture(
+  tagName: string,
+  hasExplicitValue: boolean,
+): HtmlWireValuePosture | undefined {
+  const tag = securityStringToLowerCase(tagName);
+  if (tag === 'textarea') return 'multiline-content';
+  if (tag === 'option' && !hasExplicitValue) return 'option-fallback';
+  return undefined;
+}

@@ -21,7 +21,7 @@ import {
   renderDeferredStreamingResponse,
   type DeferredStreamChunk,
 } from './deferred-stream.js';
-import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
+import { escapeHtml, escapeScriptJson, escapeWireAttribute } from './html.js';
 import { renderShellAttributes, type DocumentConfig } from './document-structured.js';
 import {
   renderPageHints,
@@ -370,14 +370,22 @@ function assembleDocumentShellParts(
   // check for presence, not emptiness.
   const buildMeta =
     options.buildToken !== undefined
-      ? `<meta name="kovo-build" content="${escapeAttribute(options.buildToken)}">`
+      ? `<meta name="kovo-build" content="${escapeWireAttribute(
+          options.buildToken,
+          'dom-identity',
+          'meta[name=kovo-build][content]',
+        )}">`
       : '';
 
   // bugs-1 F13 / SPEC §9.3: stamp the opaque per-session fingerprint for the client's
   // cross-principal BroadcastChannel discard.
   const sessionMeta =
     options.sessionFingerprint !== undefined && options.sessionFingerprint !== ''
-      ? `<meta name="kovo-session" content="${escapeAttribute(options.sessionFingerprint)}">`
+      ? `<meta name="kovo-session" content="${escapeWireAttribute(
+          options.sessionFingerprint,
+          'dom-identity',
+          'meta[name=kovo-session][content]',
+        )}">`
       : '';
   const sessionDependentMeta =
     options.sessionDependent === true ? '<meta name="kovo-session-dependent" content="true">' : '';
@@ -948,7 +956,10 @@ function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {
   csp: CspInlineMetadata;
   html: string;
 } {
-  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
+  const keyAttribute =
+    options.key === undefined
+      ? ''
+      : ` key="${escapeWireAttribute(options.key, 'dom-identity', 'script[kovo-query][key]')}"`;
   // SPEC §4.1 wire codec: normalize bigint/Date through the shared encode seam so a
   // bigint never throws (bugs-part4 L3/L4) and a Date round-trips as a Date (L5).
   const scriptText = escapeScriptJson(stringifyWireValue(options.value));
@@ -956,7 +967,11 @@ function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {
 
   return {
     csp: { scripts: [hash], styles: [] },
-    html: `<script type="application/json" kovo-query="${escapeAttribute(options.name)}"${keyAttribute} ${cspHashAttribute(hash)}>${scriptText}</script>`,
+    html: `<script type="application/json" kovo-query="${escapeWireAttribute(
+      options.name,
+      'dom-identity',
+      'script[kovo-query]',
+    )}"${keyAttribute} ${cspHashAttribute(hash)}>${scriptText}</script>`,
   };
 }
 

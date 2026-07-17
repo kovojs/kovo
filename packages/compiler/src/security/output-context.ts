@@ -4,6 +4,12 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
+import {
+  htmlAttributeWireValuePosture,
+  htmlTextWireValuePosture,
+  htmlWireValueIssue,
+  type HtmlWireValuePosture,
+} from '@kovojs/core/internal/semantic-attributes';
 import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
@@ -70,6 +76,11 @@ export function validateOutputContexts(
       found,
       validateElementAttributes(diagnostics, element, compilerOwnedStyleSpans),
       'Output-context attribute diagnostics',
+    );
+    appendOutputItems(
+      found,
+      validateSubmittedElementText(diagnostics, model, element),
+      'Output-context submitted-text diagnostics',
     );
     appendOutputItems(
       found,
@@ -258,6 +269,11 @@ function validateElementAttributes(
 
   for (let index = 0; index < attributeLength; index += 1) {
     const attribute = outputArrayValue(element.attributes, index, 'Element attributes');
+    appendOutputItems(
+      found,
+      validateWireStableAttribute(diagnostics, element.intrinsicTagName, attribute),
+      'Wire-stable attribute diagnostics',
+    );
     if (isUrlAttribute(attribute.name)) {
       appendOutputItems(
         found,
@@ -389,6 +405,7 @@ function validateElementAttributes(
         spread.objectEntries,
         { end: spread.end, start: spread.start },
         hasExternalEscape,
+        element.intrinsicTagName,
       ),
       'Spread attribute diagnostics',
     );
@@ -408,6 +425,86 @@ function validateElementAttributes(
   );
 
   return found;
+}
+
+function validateWireStableAttribute(
+  diagnostics: DiagnosticFactory,
+  intrinsicTagName: string | undefined,
+  attribute: JsxAttributeModel,
+  span: SourceSpan = { end: attribute.end, start: attribute.start },
+): CompilerDiagnostic[] {
+  if (intrinsicTagName === undefined) return [];
+  const posture = htmlAttributeWireValuePosture(intrinsicTagName, attribute.name);
+  if (posture === undefined) return [];
+  const value = literalAttributeStringValue(attribute);
+  if (value === null) return [];
+  const issue = htmlWireValueIssue(value, posture);
+  return issue === undefined
+    ? []
+    : [wireIdentityDiagnostic(diagnostics, intrinsicTagName, attribute.name, posture, issue, span)];
+}
+
+function validateSubmittedElementText(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  const tag = element.intrinsicTagName;
+  if (tag === undefined) return [];
+  const posture = htmlTextWireValuePosture(tag, elementHasDefinitelyRenderedValue(element));
+  if (posture === undefined) return [];
+
+  const found: CompilerDiagnostic[] = [];
+  const children = directChildExpressions(model, element);
+  const childLength = compilerArrayLength(children, 'Submitted text child expressions');
+  for (let index = 0; index < childLength; index += 1) {
+    const child = outputArrayValue(children, index, 'Submitted text child expressions');
+    if (typeof child.staticValue !== 'string') continue;
+    const issue = htmlWireValueIssue(child.staticValue, posture);
+    if (issue === undefined) continue;
+    compilerArrayAppend(
+      found,
+      wireIdentityDiagnostic(diagnostics, tag, 'text', posture, issue, {
+        end: child.containerEnd,
+        start: child.containerStart,
+      }),
+      'Submitted text wire diagnostics',
+    );
+  }
+  return found;
+}
+
+function elementHasDefinitelyRenderedValue(element: JsxElementModel): boolean {
+  const attributes = element.attributes;
+  const attributeLength = compilerArrayLength(attributes, 'Submitted text value attributes');
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Submitted text value attributes');
+    if (compilerStringToLowerCase(attribute.name) !== 'value') continue;
+    if (attribute.value !== undefined || attribute.expression === undefined) return true;
+    const value = attribute.expressionStaticValue;
+    return value !== undefined && value !== null && value !== false;
+  }
+  return false;
+}
+
+function wireIdentityDiagnostic(
+  diagnostics: DiagnosticFactory,
+  tag: string,
+  sink: string,
+  posture: HtmlWireValuePosture,
+  issue: string,
+  span: SourceSpan,
+): CompilerDiagnostic {
+  return {
+    ...diagnostics.at('KV236', { start: span.start, length: span.end - span.start }),
+    help: [
+      'Blocked reason: UTF-8, HTML parsing, or native form serialization would substitute or canonicalize this server-authored wire value; identity-bearing values can then alias a distinct record or DOM target.',
+      'Fixes: remove NUL and lone UTF-16 surrogates; use line-ending-free control names and identity-bearing single-line/hidden values. Multiline textarea business content may retain CR/LF. Give options an explicit stable value when their label needs formatting whitespace.',
+      'SPEC §13.2 requires rendered, submitted, morph, and optimistic identity to remain the same string.',
+      'Escape: there is no suppression; encode display copy separately from identity-bearing fields.',
+    ].join('\n'),
+    message: `Unsafe server HTML wire value in <${tag}> ${sink} (${posture}: ${issue}); the browser would observe a different string.`,
+  };
 }
 
 /**
@@ -457,13 +554,14 @@ function validateStaticObjectEntrySinks(
   entries: readonly ObjectLiteralEntry[],
   span: SourceSpan,
   hasExternalEscape: boolean,
+  intrinsicTagName?: string,
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
   const length = compilerArrayLength(entries, 'Static object sink entries');
   for (let index = 0; index < length; index += 1) {
     const entry = outputArrayValue(entries, index, 'Static object sink entries');
     if (entry.value === undefined) continue;
-    const literal = literalStringValue(entry.value);
+    const literal = entry.staticStringValue ?? literalStringValue(entry.value);
     if (literal === null) continue;
     const synthetic: JsxAttributeModel = {
       end: span.end,
@@ -472,6 +570,12 @@ function validateStaticObjectEntrySinks(
       start: span.start,
       value: literal,
     };
+
+    appendOutputItems(
+      found,
+      validateWireStableAttribute(diagnostics, intrinsicTagName, synthetic, span),
+      'Static wire-stable spread diagnostics',
+    );
 
     if (isUrlAttribute(synthetic.name)) {
       appendOutputItems(
@@ -618,7 +722,7 @@ function validateStaticStyleObjectAttribute(
     const entry = outputArrayValue(entries, index, 'Static style object entries');
     if (entry.objectEntries) continue;
     if (entry.value === undefined) continue;
-    const literal = literalStringValue(entry.value);
+    const literal = entry.staticStringValue ?? literalStringValue(entry.value);
     if (literal === null || !cssTextHasUnsafeUrl(literal)) continue;
     return [
       outputContextDiagnostic(diagnostics, 'style attribute contains an unsafe CSS url()', {

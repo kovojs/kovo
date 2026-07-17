@@ -2,9 +2,9 @@ import type { QueryDelta, QueryListDelta } from '@kovojs/core/internal/query-del
 import { stringifyWireValue as stringifyKovoWireValue } from '@kovojs/core/internal/wire-json';
 
 import {
-  escapeAttribute,
   escapeHtml,
   escapeScriptJson,
+  escapeWireAttribute,
   renderFragmentHtmlValue,
   type FragmentHtml,
 } from './html.js';
@@ -73,17 +73,34 @@ export interface DoneWireRenderOptions {
 }
 
 export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
-  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
+  const keyAttribute =
+    options.key === undefined
+      ? ''
+      : ` key="${escapeWireAttribute(options.key, 'dom-identity', 'kovo-query[key]')}"`;
   const versionAttribute =
-    options.version === undefined ? '' : ` version="${escapeAttribute(String(options.version))}"`;
+    options.version === undefined
+      ? ''
+      : ` version="${escapeWireAttribute(
+          String(options.version),
+          'dom-identity',
+          'kovo-query[version]',
+        )}"`;
   const settlesAttribute =
     options.settles === undefined || options.settles.length === 0
       ? ''
-      : ` settles="${escapeAttribute(options.settles.join(' '))}"`;
+      : ` settles="${escapeWireAttribute(
+          options.settles.join(' '),
+          'dom-identity',
+          'kovo-query[settles]',
+        )}"`;
   // Boolean attribute: presence alone signals delta mode; no value is emitted (SPEC §9.1.1).
   const deltaAttribute = options.delta === true ? ' delta' : '';
 
-  return `<kovo-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}${settlesAttribute}${deltaAttribute}>${escapeHtml(stringifyKovoWireValue(options.value))}</kovo-query>`;
+  return `<kovo-query name="${escapeWireAttribute(
+    options.name,
+    'dom-identity',
+    'kovo-query[name]',
+  )}"${keyAttribute}${versionAttribute}${settlesAttribute}${deltaAttribute}>${escapeHtml(stringifyKovoWireValue(options.value))}</kovo-query>`;
 }
 
 /**
@@ -152,9 +169,16 @@ export function renderQueryPageWireHtml(options: QueryPageWireRenderOptions): st
  * const html: string = renderQueryScript({ name: 'cart', value: { count: 2 } });
  */
 export function renderQueryScript(options: QueryScriptRenderOptions): string {
-  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
+  const keyAttribute =
+    options.key === undefined
+      ? ''
+      : ` key="${escapeWireAttribute(options.key, 'dom-identity', 'script[kovo-query][key]')}"`;
 
-  return `<script type="application/json" kovo-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(stringifyKovoWireValue(options.value))}</script>`;
+  return `<script type="application/json" kovo-query="${escapeWireAttribute(
+    options.name,
+    'dom-identity',
+    'script[kovo-query]',
+  )}"${keyAttribute}>${escapeScriptJson(stringifyKovoWireValue(options.value))}</script>`;
 }
 
 export function renderFragmentWireHtml(options: FragmentWireRenderOptions): string {
@@ -165,27 +189,45 @@ export function renderFragmentWireHtml(options: FragmentWireRenderOptions): stri
   const priorityAttribute =
     options.priority === undefined
       ? ''
-      : ` priority="${escapeAttribute(String(options.priority))}"`;
+      : ` priority="${escapeWireAttribute(
+          String(options.priority),
+          'dom-identity',
+          'kovo-fragment[priority]',
+        )}"`;
   const errorBoundaryAttribute =
     options.errorBoundary === undefined
       ? ''
-      : ` error-boundary="${escapeAttribute(options.errorBoundary)}"`;
+      : ` error-boundary="${escapeWireAttribute(
+          options.errorBoundary,
+          'dom-identity',
+          'kovo-fragment[error-boundary]',
+        )}"`;
 
   const html = `${renderStylesheetLinks(options.stylesheets ?? [])}${renderFragmentHtmlValue(options.html)}`;
 
-  return `<kovo-fragment target="${escapeAttribute(options.target)}"${modeAttribute}${priorityAttribute}${errorBoundaryAttribute}>${html}</kovo-fragment>`;
+  return `<kovo-fragment target="${escapeWireAttribute(
+    options.target,
+    'dom-identity',
+    'kovo-fragment[target]',
+  )}"${modeAttribute}${priorityAttribute}${errorBoundaryAttribute}>${html}</kovo-fragment>`;
 }
 
 export function renderTextWireHtml(options: TextWireRenderOptions): string {
   const modeAttribute =
     options.mode === undefined || options.mode === 'append' ? '' : ' mode="checkpoint"';
 
-  return `<kovo-text target="${escapeAttribute(options.target)}"${modeAttribute}>${escapeHtml(options.text)}</kovo-text>`;
+  return `<kovo-text target="${escapeWireAttribute(
+    options.target,
+    'dom-identity',
+    'kovo-text[target]',
+  )}"${modeAttribute}>${escapeHtml(options.text)}</kovo-text>`;
 }
 
 export function renderDoneWireHtml(options: DoneWireRenderOptions = {}): string {
   const reasonAttribute =
-    options.reason === undefined ? '' : ` reason="${escapeAttribute(options.reason)}"`;
+    options.reason === undefined
+      ? ''
+      : ` reason="${escapeWireAttribute(options.reason, 'dom-identity', 'kovo-done[reason]')}"`;
 
   return `<kovo-done${reasonAttribute}></kovo-done>`;
 }

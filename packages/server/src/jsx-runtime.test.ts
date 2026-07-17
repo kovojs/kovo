@@ -238,6 +238,117 @@ describe('server jsx runtime', () => {
     );
   });
 
+  it.each([
+    ['NUL DOM id', () => jsx('form', { id: 'record\u00001', children: '' }), /\(nul\)/u],
+    [
+      'lone-surrogate key',
+      () => jsx('section', { key: 'record\ud8001', children: '' }),
+      /\(unpaired-surrogate\)/u,
+    ],
+    [
+      'LF control name',
+      () => jsx('input', { name: 'record\nId', value: 'record-1' }),
+      /\(line-feed\)/u,
+    ],
+    [
+      'CR hidden value',
+      () => jsx('input', { type: 'hidden', name: 'recordId', value: 'record\r1' }),
+      /\(carriage-return\)/u,
+    ],
+    [
+      'LF button value',
+      () => jsx('button', { name: 'intent', value: 'save\nother', children: 'Save' }),
+      /\(line-feed\)/u,
+    ],
+    [
+      'NUL textarea content',
+      () => jsx('textarea', { name: 'notes', children: 'first\u0000second' }),
+      /\(nul\)/u,
+    ],
+    [
+      'collapsed option fallback',
+      () => jsx('option', { children: ' record  one ' }),
+      /\(option-whitespace\)/u,
+    ],
+  ])('fails closed for a runtime-dynamic %s', (_label, render, expected) => {
+    // SPEC §13.2: abort the response rather than let HTML/form algorithms alias record identity.
+    expect(() => html(render())).toThrow(expected);
+  });
+
+  it('guards the generated kovo-form-key as a successful submitted value', () => {
+    const save = declaredMutation('account/save');
+    expect(() =>
+      html(
+        jsx(
+          'form',
+          { mutation: save, children: '' },
+          // LF survives kovo-key in the DOM, but native form serialization rewrites the hidden
+          // submitted identity to CRLF. The hidden-field sink therefore owns the stricter check.
+          'record\n1',
+        ),
+      ),
+    ).toThrow(/kovo-form-key.*\(line-feed\)/u);
+  });
+
+  it('rejects trusted raw HTML where parsing derives a submitted text value', () => {
+    expect(() =>
+      html(
+        jsx('textarea', {
+          name: 'record',
+          rawHtml: trustedHtml('record&#13;1'),
+        }),
+      ),
+    ).toThrow(/KV236.*raw HTML.*SPEC §13\.2/u);
+    expect(() =>
+      html(
+        jsx('textarea', {
+          name: 'record',
+          children: trustedHtml('record&#0;1'),
+        }),
+      ),
+    ).toThrow(/KV236.*TrustedHtml.*SPEC §13\.2/u);
+    expect(() =>
+      html(
+        jsx('option', {
+          children: trustedHtml('record&#32;&#32;one'),
+        }),
+      ),
+    ).toThrow(/KV236.*TrustedHtml.*SPEC §13\.2/u);
+    expect(() =>
+      html(
+        jsx('option', {
+          rawHtml: trustedHtml('record&#32;&#32;one'),
+        }),
+      ),
+    ).toThrow(/KV236.*raw HTML.*SPEC §13\.2/u);
+
+    // An explicit option value owns submission identity, so its trusted rich label is display-only.
+    expect(
+      html(jsx('option', { value: 'record-1', rawHtml: trustedHtml('<b>Record one</b>') })),
+    ).toBe('<option value="record-1"><b>Record one</b></option>');
+  });
+
+  it('keeps valid scalar values and non-authority multiline display copy', () => {
+    expect(
+      html(
+        jsx('section', {
+          children: [
+            jsx('input', {
+              type: 'hidden',
+              name: 'recordId',
+              value: 'record\ud83d\ude001',
+            }),
+            jsx('option', { value: 'record-1', children: ' United  States\r\n' }),
+            jsx('textarea', { name: 'notes', children: 'first\r\nsecond' }),
+            jsx('p', { title: 'first\r\nsecond', children: 'first\r\nsecond' }),
+          ],
+        }),
+      ),
+    ).toBe(
+      '<section><input type="hidden" name="recordId" value="record😀1"><option value="record-1"> United  States\r\n</option><textarea name="notes">first\r\nsecond</textarea><p title="first\r\nsecond">first\r\nsecond</p></section>',
+    );
+  });
+
   it('renders one session-bound CSRF field for direct server JSX mutation forms', () => {
     const request = { session: { id: 's1' } };
     const csrf = {

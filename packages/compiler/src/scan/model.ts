@@ -16,6 +16,8 @@ export interface ObjectLiteralEntry {
   key: string;
   objectEntries?: readonly ObjectLiteralEntry[];
   staticConstructorType?: 'boolean' | 'number' | 'string';
+  /** Parser-decoded string literal value; consumers must not re-parse escape sequences. */
+  staticStringValue?: string;
   value?: string;
   valuePropertyAccesses?: readonly PropertyAccessPathModel[];
 }
@@ -172,6 +174,8 @@ export interface JsxExpressionModel {
   references: readonly string[];
   solePropertyAccessPath?: string;
   start: number;
+  /** Parser-owned literal value for static JSX-child output validation. */
+  staticValue?: StaticLiteralValue;
   temporalReads: readonly TemporalReadModel[];
 }
 

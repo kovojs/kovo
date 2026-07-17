@@ -23,6 +23,12 @@ function kv242(source: string, extraFiles: readonly ExtraFile[] = []) {
   );
 }
 
+function kv236(source: string, extraFiles: readonly ExtraFile[] = []) {
+  return compile(source, extraFiles).diagnostics.filter(
+    (diagnostic) => diagnostic.code === 'KV236',
+  );
+}
+
 const optionalMutation = `
 export const save = mutation({
   input: s.object({ email: s.string().optional() }),
@@ -227,6 +233,58 @@ export const View = component({
   render: () => <>
     <form mutation={save}><button>Save</button></form>
     <NativeShell><button formaction="/preview/compact" formmethod="get">Preview</button></NativeShell>
+  </>,
+});
+`),
+    ).toEqual([]);
+  });
+});
+
+describe('server HTML identity diagnostics', () => {
+  it.each([
+    ['form id NUL', '<form id={"record\\u00001"} />'],
+    ['form reference CR', '<button form={"record\\r1"}>Save</button>'],
+    ['submitted name LF', '<input name={"record\\nId"} />'],
+    ['input value LF', '<input type="hidden" name="recordId" value={"record\\n1"} />'],
+    ['button value CRLF', '<button name="intent" value={"save\\r\\nother"}>Save</button>'],
+    ['option value surrogate', '<option value={"record\\ud8001"}>Record</option>'],
+    ['textarea initial NUL', '<textarea name="notes">{"first\\u0000second"}</textarea>'],
+    [
+      'option fallback collapse',
+      '<select name="record"><option>{" record  one "}</option></select>',
+    ],
+    ['authored key NUL', '<section key={"record\\u00001"}>Record</section>'],
+  ])('rejects compiler-known %s before server render', (_label, element) => {
+    const diagnostics = kv236(`
+export const View = component({
+  render: () => ${element},
+});
+`);
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain('browser would observe a different string');
+    expect(diagnostics[0]?.help).toContain('SPEC §13.2');
+  });
+
+  it('checks static intrinsic spread values through the same wire predicate', () => {
+    expect(
+      kv236(`
+export const View = component({
+  render: () => <input {...{ name: "record\\nId", value: "record\\ud8001" }} />,
+});
+`),
+    ).toHaveLength(2);
+  });
+
+  it('accepts wire-stable DOM and submitted identities', () => {
+    expect(
+      kv236(`
+export const View = component({
+  render: () => <>
+    <form id={"record\\n1"} />
+    <input type="hidden" name="recordId" value={"record\\ud83d\\ude001"} />
+    <textarea name="notes">{"first\\r\\nsecond"}</textarea>
+    <select name="record"><option value="record-1">United  States</option></select>
+    <p title={"ordinary\\nmultiline display"}>Copy</p>
   </>,
 });
 `),

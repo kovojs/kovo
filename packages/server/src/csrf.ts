@@ -2,7 +2,7 @@ import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
 import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
-import { escapeAttribute } from './html.js';
+import { escapeWireAttribute } from './html.js';
 import { currentJsxFrameworkContext } from './jsx-context.js';
 import {
   isFrameworkCsrfSigningSecret,
@@ -276,7 +276,10 @@ export function csrfField<Request>(
   const context = witnessCreateNullRecord<unknown>() as CsrfAudienceContext;
   if (options.audience !== undefined) context.audience = options.audience;
   if (options.mutation !== undefined) context.mutation = options.mutation;
-  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(csrfToken(request, options, context))}">`;
+  return renderHiddenSubmittedField(
+    options.field ?? 'kovo-csrf',
+    csrfToken(request, options, context),
+  );
 }
 
 /**
@@ -302,7 +305,7 @@ export function mintCsrfField<Request>(
   return {
     ...minted,
     field,
-    html: `<input type="hidden" name="${escapeAttribute(field)}" value="${escapeAttribute(minted.token)}">`,
+    html: renderHiddenSubmittedField(field, minted.token),
   };
 }
 
@@ -503,7 +506,7 @@ export function mintIdemToken(): string {
  * them correctly. Emitted alongside the CSRF field by compiler-lowered forms.
  */
 export function renderMutationIdemField(): string {
-  return `<input type="hidden" name="${escapeAttribute(KOVO_IDEM_FIELD_NAME)}" value="${escapeAttribute(mintIdemToken())}">`;
+  return renderHiddenSubmittedField(KOVO_IDEM_FIELD_NAME, mintIdemToken());
 }
 
 /**
@@ -640,7 +643,18 @@ function csrfFieldForBinding<Request>(
   options: CsrfOptions<Request> & { field?: string },
   audience: string,
 ): string {
-  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(createCsrfToken(binding, options.secret, audience))}">`;
+  return renderHiddenSubmittedField(
+    options.field ?? 'kovo-csrf',
+    createCsrfToken(binding, options.secret, audience),
+  );
+}
+
+function renderHiddenSubmittedField(name: string, value: string): string {
+  return `<input type="hidden" name="${escapeWireAttribute(
+    name,
+    'submitted-control',
+    'hidden input name',
+  )}" value="${escapeWireAttribute(value, 'submitted-control', 'hidden input value')}">`;
 }
 
 /**

@@ -11,7 +11,7 @@ import type { CookieOptions } from '../cookies.js';
 import { snapshotMutationCsrfOptions, type CsrfOptions } from '../csrf.js';
 import type { Domain } from '../domain.js';
 import type { Guard, RequestLifecycleOptions } from '../guards.js';
-import { escapeAttribute } from '../html.js';
+import { escapeWireAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
 import {
@@ -737,9 +737,15 @@ export function renderMutationFormAttributes<const Key extends string>(
   definition: MutationFormDefinition<Key>,
 ): string {
   const attributes = mutationFormAttributes(definition);
-  return `method="${attributes.method}" action="${escapeAttribute(
+  return `method="${attributes.method}" action="${escapeWireAttribute(
     attributes.action,
-  )}"${attributes.enctype ? ` enctype="${attributes.enctype}"` : ''} enhance data-mutation="${escapeAttribute(attributes['data-mutation'])}"`;
+    'submitted-control',
+    'mutation form action',
+  )}"${attributes.enctype ? ` enctype="${attributes.enctype}"` : ''} enhance data-mutation="${escapeWireAttribute(
+    attributes['data-mutation'],
+    'dom-identity',
+    'mutation form data-mutation',
+  )}"`;
 }
 
 function mutationFormDefinitionKey<Key extends string, Request>(

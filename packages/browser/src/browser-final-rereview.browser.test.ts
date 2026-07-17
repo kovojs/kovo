@@ -109,3 +109,71 @@ it.each([
     expect(submitted.get('recordId')).not.toBe(authoredId);
   },
 );
+
+it('shows native urlencoded and multipart line-ending collapse after FormData construction', async () => {
+  document.body.innerHTML = `
+    <iframe name="wire-result"></iframe>
+    <form method="get" action="about:blank" target="wire-result">
+      <input type="hidden" name="record\nId" value="record\n1">
+      <textarea name="notes">first\nsecond</textarea>
+    </form>
+  `;
+  const form = document.querySelector<HTMLFormElement>('form');
+  const frame = document.querySelector<HTMLIFrameElement>('iframe');
+  if (!form || !frame) throw new Error('missing native form-encoding fixture');
+
+  // FormData exposes LF, but both native urlencoded submission and multipart body serialization
+  // rewrite successful-control names/values to CRLF. SPEC §13.2 routing/identity fields therefore
+  // cannot use a source line ending. The textarea is the positive contrast: multiline business
+  // content intentionally accepts this ordinary native form canonicalization.
+  const data = new FormData(form);
+  expect([...data.entries()]).toEqual([
+    ['record\nId', 'record\n1'],
+    ['notes', 'first\nsecond'],
+  ]);
+
+  const loaded = new Promise<string>((resolve) => {
+    const onLoad = () => {
+      const href = frame.contentWindow?.location.href ?? '';
+      if (!href.includes('?')) return;
+      frame.removeEventListener('load', onLoad);
+      resolve(href);
+    };
+    frame.addEventListener('load', onLoad);
+  });
+  form.requestSubmit();
+  await expect(loaded).resolves.toBe(
+    'about:blank?record%0D%0AId=record%0D%0A1&notes=first%0D%0Asecond',
+  );
+
+  const multipart = await new Request('https://kovo.invalid/submit', {
+    body: data,
+    method: 'POST',
+  }).text();
+  expect(multipart).toContain('name="record%0D%0AId"');
+  expect(multipart).toContain('record\r\n1');
+  expect(multipart).toContain('first\r\nsecond');
+});
+
+it('shows option fallback collapse and explicit-value select identity', () => {
+  document.body.innerHTML = `
+    <form>
+      <select name="fallback">
+        <option selected> record\t  one </option>
+      </select>
+      <select name="explicit">
+        <option selected value="record-1"> record\t  one </option>
+      </select>
+      <select name="unicode">
+        <option selected value="record😀1">Record</option>
+      </select>
+    </form>
+  `;
+  const form = document.querySelector<HTMLFormElement>('form');
+  if (!form) throw new Error('missing select identity fixture');
+
+  const submitted = new FormData(form);
+  expect(submitted.get('fallback')).toBe('record one');
+  expect(submitted.get('explicit')).toBe('record-1');
+  expect(submitted.get('unicode')).toBe('record😀1');
+});

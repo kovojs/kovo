@@ -12,6 +12,11 @@ import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
 import { isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
+  assertHtmlWireValueStable,
+  htmlAttributeWireValuePosture,
+  htmlTextWireValuePosture,
+} from '@kovojs/core/internal/semantic-attributes';
+import {
   drainRuntimeSinkSecurityEvent,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
@@ -27,6 +32,7 @@ import { isKovoComponentDescriptor } from './component-authority.js';
 import { renderMutationCsrfField, renderMutationIdemField, type CsrfOptions } from './csrf.js';
 import {
   escapeAttribute,
+  escapeWireAttribute,
   renderedHtml,
   type RenderedHtml,
   safeRuntimeAttribute,
@@ -58,6 +64,7 @@ import {
   formHelperSnapshotRecord,
   formHelperString,
   formHelperStringEndsWith,
+  formHelperStringIndexOf,
   formHelperStringStartsWith,
   formHelperStringToLowerCase,
 } from './jsx-form-helper-intrinsics.js';
@@ -322,7 +329,11 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
   let renderedStyleSource = false;
 
   if (key !== false && key !== null && key !== undefined) {
-    rendered += ` kovo-key="${escapeAttribute(attributeText('kovo-key', key))}"`;
+    rendered += ` kovo-key="${escapeWireAttribute(
+      attributeText('kovo-key', key),
+      'dom-identity',
+      'kovo-key',
+    )}"`;
   }
 
   const names = formHelperObjectKeys(props);
@@ -355,7 +366,11 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     }
     if (name === 'streamText') {
       if (props['data-stream-text'] === undefined) {
-        rendered += ` data-stream-text="${escapeAttribute(attributeText(name, value))}"`;
+        rendered += ` data-stream-text="${escapeWireAttribute(
+          attributeText(name, value),
+          'dom-identity',
+          'data-stream-text',
+        )}"`;
       }
       continue;
     }
@@ -457,10 +472,18 @@ function renderMutationFormAttributes(key: string, props: JsxProps): string {
   let attributes = '';
   if (formHelperOwnDataValue(props, 'method') === undefined) attributes += ' method="post"';
   if (formHelperOwnDataValue(props, 'action') === undefined) {
-    attributes += ` action="${escapeAttribute(`/_m/${key}`)}"`;
+    attributes += ` action="${escapeWireAttribute(
+      `/_m/${key}`,
+      'submitted-control',
+      'form[action]',
+    )}"`;
   }
   if (formHelperOwnDataValue(props, 'data-mutation') === undefined) {
-    attributes += ` data-mutation="${escapeAttribute(key)}"`;
+    attributes += ` data-mutation="${escapeWireAttribute(
+      key,
+      'dom-identity',
+      'form[data-mutation]',
+    )}"`;
   }
   if (
     formHelperOwnDataValue(props, 'stream') === true &&
@@ -481,7 +504,11 @@ function renderFormKeyContent(props: JsxProps, jsxKey?: unknown): string {
   const key = formKeyValue(props, jsxKey);
   if (key === undefined) return '';
 
-  return `<input type="hidden" name="${kovoFormKeyFieldName}" value="${escapeAttribute(key)}">`;
+  return `<input type="hidden" name="${kovoFormKeyFieldName}" value="${escapeWireAttribute(
+    key,
+    'submitted-control',
+    'input[name=kovo-form-key][value]',
+  )}">`;
 }
 
 function renderFormCsrfContent(props: JsxProps): string {
@@ -678,11 +705,74 @@ function revealSubmittedFormValue(value: unknown): unknown {
 
 function renderJsxElementChildren(type: string, props: JsxProps): MaybePromise<string> {
   const rawHtml = rawHtmlContent(props);
-  if (rawHtml !== undefined) return rawHtml;
+  if (rawHtml !== undefined) {
+    if (htmlTextWireValuePosture(type, optionHasExplicitValue(props)) !== undefined) {
+      // Trusted raw HTML is still parsed as RCDATA in textarea and as markup/text in option.
+      // Character references and element parsing can therefore change the submitted fallback
+      // after this process has validated the source bytes. No honest injective check is possible
+      // without running an HTML parser here, so authority-bearing text rejects the raw escape.
+      throw new TypeError(
+        `KV236: <${type}> submitted text cannot use raw HTML because parsing can change its native form value (SPEC §13.2).`,
+      );
+    }
+    return rawHtml;
+  }
   const children = formHelperOwnDataValue(props, 'children') as JsxChild;
-  return isExecutableTextElement(type)
-    ? renderExecutableElementChildren(type, children)
-    : renderJsxChildren(children);
+  const posture = htmlTextWireValuePosture(type, optionHasExplicitValue(props));
+  const rendered =
+    posture !== undefined
+      ? renderWireStableElementChildren(type, children)
+      : isExecutableTextElement(type)
+        ? renderExecutableElementChildren(type, children)
+        : renderJsxChildren(children);
+  return isPromiseLike(rendered)
+    ? formHelperPromiseThen(rendered, (html) => validateWireStableElementText(type, props, html))
+    : validateWireStableElementText(type, props, rendered);
+}
+
+function renderWireStableElementChildren(type: string, children: JsxChild): MaybePromise<string> {
+  if (isPromiseLike(children)) {
+    return formHelperPromiseThen(children, (resolved) =>
+      renderWireStableElementChildren(type, resolved),
+    );
+  }
+  if (formHelperIsArray(children)) {
+    return renderJsxChildArray(children, (child) => renderWireStableElementChildren(type, child));
+  }
+  if (
+    typeof children === 'object' &&
+    children !== null &&
+    kovoTrustedHtmlContent(children) !== ''
+  ) {
+    throw new TypeError(
+      `KV236: <${type}> submitted text cannot use TrustedHtml because character references can change its native form value (SPEC §13.2).`,
+    );
+  }
+  return renderJsxChildren(children);
+}
+
+function validateWireStableElementText(type: string, props: JsxProps, html: string): string {
+  const posture = htmlTextWireValuePosture(type, optionHasExplicitValue(props));
+  if (posture === undefined) return html;
+  if (formHelperStringIndexOf(html, '<') >= 0) {
+    throw new TypeError(
+      `KV236: <${type}> submitted text must use scalar text so HTML parsing cannot change its native form value (SPEC §13.2).`,
+    );
+  }
+  return assertHtmlWireValueStable(html, posture, `<${type}> submitted text`);
+}
+
+function optionHasExplicitValue(props: JsxProps): boolean {
+  const names = formHelperObjectKeys(props);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = formHelperOwnDataValue(names, index);
+    if (typeof name !== 'string' || formHelperStringToLowerCase(name) !== 'value') continue;
+    const value = formHelperOwnDataValue(props, name);
+    if (value !== false && value !== null && value !== undefined && !isKovoTrustedUrl(value)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function renderExecutableElementChildren(type: string, children: JsxChild): MaybePromise<string> {
@@ -738,9 +828,12 @@ function renderContextualAttributeValue(
     );
     return null;
   }
+  const text = attributeText(name, value);
+  const posture = htmlAttributeWireValuePosture(type, name);
+  if (posture !== undefined) assertHtmlWireValueStable(text, posture, `<${type}>[${name}]`);
   return isKovoTrustedUrl(value) && isUrlAttributeName(name)
-    ? escapeAttribute(value.value)
-    : safeRuntimeAttribute(name, attributeText(name, value));
+    ? escapeAttribute(text)
+    : safeRuntimeAttribute(name, text);
 }
 
 function isMetaRefreshContentAttribute(type: string, props: JsxProps, name: string): boolean {

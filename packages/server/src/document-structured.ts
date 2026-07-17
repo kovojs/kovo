@@ -1,4 +1,8 @@
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
+import {
+  assertHtmlWireValueStable,
+  htmlAttributeWireValuePosture,
+} from '@kovojs/core/internal/semantic-attributes';
 import type { TrustedHtml } from '@kovojs/browser';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
@@ -11,6 +15,7 @@ import {
 import {
   escapeAttribute,
   escapeHtml,
+  escapeWireAttribute,
   isRenderedHtml,
   renderHtmlValue,
   safeUrlAttribute,
@@ -276,8 +281,14 @@ export function InlineScript(props: {
   const hash = cspSha256(source);
   return documentNode(
     'head',
-    `<script id="${escapeAttribute(props.id)}" data-kovo-run="${escapeAttribute(
+    `<script id="${escapeWireAttribute(
+      props.id,
+      'dom-identity',
+      'InlineScript[id]',
+    )}" data-kovo-run="${escapeWireAttribute(
       props.run,
+      'dom-identity',
+      'InlineScript[data-kovo-run]',
     )}" ${cspHashAttribute(hash)}>${source}</script>`,
     { scripts: [hash], styles: [] },
   );
@@ -299,8 +310,14 @@ export function InlineStyle(props: {
   const hash = cspSha256(source);
   return documentNode(
     'head',
-    `<style id="${escapeAttribute(props.id)}" data-kovo-style-source="${escapeAttribute(
+    `<style id="${escapeWireAttribute(
+      props.id,
+      'dom-identity',
+      'InlineStyle[id]',
+    )}" data-kovo-style-source="${escapeWireAttribute(
       props.source,
+      'dom-identity',
+      'InlineStyle[data-kovo-style-source]',
     )}" ${cspHashAttribute(hash)}>${source}</style>`,
     { scripts: [], styles: [hash] },
   );
@@ -381,7 +398,12 @@ export function renderShellAttributes(attributes: DocumentShellAttributes): stri
       continue;
     }
     if (value === false) continue;
-    securityArrayPush(rendered, ` ${name}="${escapeAttribute(securityString(value))}"`);
+    const text = securityString(value);
+    const posture = htmlAttributeWireValuePosture('html', name);
+    if (posture !== undefined) {
+      assertHtmlWireValueStable(text, posture, `document shell[${name}]`);
+    }
+    securityArrayPush(rendered, ` ${name}="${escapeAttribute(text)}"`);
   }
   return securityArrayJoin(rendered, '');
 }

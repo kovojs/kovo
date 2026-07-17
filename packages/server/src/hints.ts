@@ -8,7 +8,13 @@ import {
   mergeCspInlineMetadata,
   type CspInlineMetadata,
 } from './csp.js';
-import { escapeAttribute, escapeHtml, escapeScriptJson, safeUrlValue } from './html.js';
+import {
+  escapeAttribute,
+  escapeHtml,
+  escapeScriptJson,
+  escapeWireAttribute,
+  safeUrlValue,
+} from './html.js';
 import {
   createWitnessWeakMap,
   witnessFreeze,
@@ -528,7 +534,11 @@ function renderPageStylesheetHint(asset: StylesheetAsset): InlineHtmlWithCsp {
 
   return {
     csp: { scripts: [], styles: [hash] },
-    html: `<style data-kovo-critical-href="${escapeAttribute(href)}" ${cspHashAttribute(hash)}>${cssText}</style>${fullStylesheet}`,
+    html: `<style data-kovo-critical-href="${escapeWireAttribute(
+      href,
+      'dom-identity',
+      'style[data-kovo-critical-href]',
+    )}" ${cspHashAttribute(hash)}>${cssText}</style>${fullStylesheet}`,
   };
 }
 
@@ -1139,7 +1149,11 @@ function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): InlineHtmlWithC
 
     securityArrayPush(rendered, {
       csp: { scripts: [hash], styles: [] },
-      html: `<script type="application/json" kovo-i18n locale="${escapeAttribute(catalog.locale)}" ${cspHashAttribute(hash)}>${scriptText}</script>`,
+      html: `<script type="application/json" kovo-i18n locale="${escapeWireAttribute(
+        catalog.locale,
+        'dom-identity',
+        'script[kovo-i18n][locale]',
+      )}" ${cspHashAttribute(hash)}>${scriptText}</script>`,
     });
   }
   return rendered;

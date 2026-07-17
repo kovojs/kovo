@@ -15,6 +15,7 @@ import {
   frameworkExport,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
+import { isHtmlWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 import { diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
@@ -92,7 +93,6 @@ import {
   compilerSetForEach,
   compilerSetHas,
   compilerSnapshotDenseArray,
-  compilerStringCharCodeAt,
   compilerStringEndsWith,
   compilerStringIncludes,
   compilerStringIndexOf,
@@ -3735,21 +3735,7 @@ function staticFormAssociationString(element: JsxIrElement, name: string): strin
 }
 
 function formAssociationValueIsHtmlWireStable(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const code = compilerStringCharCodeAt(value, index);
-    // The HTML input stream replaces NUL and normalizes both CR and CRLF to LF before tokenizing
-    // attributes. Neither authored value can therefore participate in a source-level ID proof.
-    if (code === 0x0000 || code === 0x000d) return false;
-    if (code >= 0xd800 && code <= 0xdbff) {
-      const next = index + 1 < value.length ? compilerStringCharCodeAt(value, index + 1) : -1;
-      if (next < 0xdc00 || next > 0xdfff) return false;
-      index += 1;
-      continue;
-    }
-    // Node's UTF-8 serialization replaces an unpaired low surrogate with U+FFFD as well.
-    if (code >= 0xdc00 && code <= 0xdfff) return false;
-  }
-  return true;
+  return isHtmlWireValueStable(value, 'dom-identity');
 }
 
 function accordionMultipleExpression(

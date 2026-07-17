@@ -716,20 +716,30 @@ export function queryWireHtmlInvariantFindings(filePath, text) {
     findings.push(`${filePath}: /_q query wire sink must keep renderQueryWireHtml()`);
   }
 
-  if (!/\bname="\$\{escapeAttribute\s*\(\s*options\s*\.\s*name\s*\)\}"/.test(source)) {
-    findings.push(`${filePath}: /_q query wire name attribute must be escaped`);
-  }
-
-  if (!/\bkey="\$\{escapeAttribute\s*\(\s*options\s*\.\s*key\s*\)\}"/.test(source)) {
-    findings.push(`${filePath}: /_q query wire key attribute must be escaped`);
-  }
-
   if (
-    !/\bversion="\$\{escapeAttribute\s*\(\s*String\s*\(\s*options\s*\.\s*version\s*\)\s*\)\}"/.test(
+    !/\bname="\$\{escapeWireAttribute\s*\(\s*options\s*\.\s*name\s*,\s*['"]dom-identity['"]\s*,\s*['"]kovo-query\[name\]['"]\s*,?\s*\)\}"/.test(
       source,
     )
   ) {
-    findings.push(`${filePath}: /_q query wire version attribute must be escaped`);
+    findings.push(`${filePath}: /_q query wire name attribute must be wire-validated and escaped`);
+  }
+
+  if (
+    !/\bkey="\$\{escapeWireAttribute\s*\(\s*options\s*\.\s*key\s*,\s*['"]dom-identity['"]\s*,\s*['"]kovo-query\[key\]['"]\s*\)\}"/.test(
+      source,
+    )
+  ) {
+    findings.push(`${filePath}: /_q query wire key attribute must be wire-validated and escaped`);
+  }
+
+  if (
+    !/\bversion="\$\{escapeWireAttribute\s*\(\s*String\s*\(\s*options\s*\.\s*version\s*\)\s*,\s*['"]dom-identity['"]\s*,\s*['"]kovo-query\[version\]['"]\s*,?\s*\)\}"/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: /_q query wire version attribute must be wire-validated and escaped`,
+    );
   }
 
   if (

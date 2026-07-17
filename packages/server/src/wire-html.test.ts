@@ -54,6 +54,41 @@ describe('renderQueryWireHtml', () => {
 });
 
 describe('server wire html emitters', () => {
+  it.each([
+    [
+      'query name NUL',
+      () => renderQueryWireHtml({ name: 'record\u00001', value: null }),
+      /kovo-query\[name\].*\(nul\)/u,
+    ],
+    [
+      'query key lone surrogate',
+      () => renderQueryScript({ key: 'record\ud8001', name: 'record', value: null }),
+      /script\[kovo-query\]\[key\].*\(unpaired-surrogate\)/u,
+    ],
+    [
+      'fragment target CR',
+      () =>
+        renderFragmentWireHtml({
+          html: generatedFragmentHtml('<p>Record</p>'),
+          target: 'record\r1',
+        }),
+      /kovo-fragment\[target\].*\(carriage-return\)/u,
+    ],
+    [
+      'text target lone surrogate',
+      () => renderTextWireHtml({ target: 'record\udc001', text: 'Record' }),
+      /kovo-text\[target\].*\(unpaired-surrogate\)/u,
+    ],
+  ])('fails closed for a direct %s identity', (_label, render, expected) => {
+    expect(render).toThrow(expected);
+  });
+
+  it('preserves LF and valid scalar values in direct DOM identity attributes', () => {
+    expect(renderQueryWireHtml({ name: 'record\n\ud83d\ude001', value: null })).toBe(
+      '<kovo-query name="record\n😀1">null</kovo-query>',
+    );
+  });
+
   it('types fragment wire html as an internal capability, not a raw string', () => {
     expect(() =>
       renderFragmentWireHtml({

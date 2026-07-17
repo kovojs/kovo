@@ -309,7 +309,7 @@ export const CartBadge = component({
           },
         ],
       },
-      { key: 'local', value: "'draft'" },
+      { key: 'local', staticStringValue: 'draft', value: "'draft'" },
     ]);
   });
 

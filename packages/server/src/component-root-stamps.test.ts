@@ -2,7 +2,7 @@ import { component } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { query } from './query.js';
-import { stampKovoComponentRoot } from './component-root-stamps.js';
+import { setOrAppendHtmlAttribute, stampKovoComponentRoot } from './component-root-stamps.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { createLiveTargetTestAuthority } from './test-fixtures.js';
@@ -13,6 +13,16 @@ const componentRootStampTestAuthority = createLiveTargetTestAuthority(
 );
 
 describe('component root stamp security', () => {
+  it('fails closed before a framework-owned root stamp changes during HTML parsing', () => {
+    expect(() => setOrAppendHtmlAttribute('', 'kovo-key', 'record\r1')).toThrow(
+      /KV236.*framework root stamp kovo-key.*carriage-return/u,
+    );
+    expect(() => setOrAppendHtmlAttribute('', 'kovo-key', 'record\ud8001')).toThrow(
+      /KV236.*framework root stamp kovo-key.*unpaired-surrogate/u,
+    );
+    expect(setOrAppendHtmlAttribute('', 'kovo-key', 'record\n😀1')).toBe(' kovo-key="record\n😀1"');
+  });
+
   it('does not let a late selective String.replace escape the stamped opening tag', () => {
     // SPEC §5.2/§6.6 C9/§9.1: framework live-target stamps are emitted after the JSX
     // output choke, so their parser and final assembly must remain framework-owned controls.

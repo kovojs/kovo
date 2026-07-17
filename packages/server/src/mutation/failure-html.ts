@@ -1,4 +1,4 @@
-import { escapeAttribute, escapeHtml } from '../html.js';
+import { escapeHtml, escapeWireAttribute } from '../html.js';
 import {
   securityArrayIsArray,
   securityArrayJoin,
@@ -28,13 +28,21 @@ function renderFailureFragment(error: FailureErrorSnapshot): string {
       const issue = validation.issues[index]!;
       securityArrayPush(
         rendered,
-        `<output role="alert" data-error-path="${escapeAttribute(securityArrayJoin(issue.path, '.'))}">${escapeHtml(issue.message)}</output>`,
+        `<output role="alert" data-error-path="${escapeWireAttribute(
+          securityArrayJoin(issue.path, '.'),
+          'dom-identity',
+          'output[data-error-path]',
+        )}">${escapeHtml(issue.message)}</output>`,
       );
     }
     return securityArrayJoin(rendered, '');
   }
 
-  return `<output role="alert" data-error-code="${escapeAttribute(error.code)}">${escapeHtml(securityJsonStringify(error.payload) ?? 'undefined')}</output>`;
+  return `<output role="alert" data-error-code="${escapeWireAttribute(
+    error.code,
+    'dom-identity',
+    'output[data-error-code]',
+  )}">${escapeHtml(securityJsonStringify(error.payload) ?? 'undefined')}</output>`;
 }
 
 interface FailureErrorSnapshot {

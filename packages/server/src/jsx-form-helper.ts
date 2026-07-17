@@ -1,4 +1,4 @@
-import { escapeAttribute, escapeHtml } from './html.js';
+import { escapeAttribute, escapeHtml, escapeWireAttribute } from './html.js';
 import type { JsxMutationFormHelperKind, JsxMutationFormHelperRegistry } from './jsx-context.js';
 import {
   formHelperApply,
@@ -133,14 +133,24 @@ export function renderMutationFormHelperOutput(
     formHelperString(formHelperOwnDataValue(props, 'role') ?? 'alert'),
   )}"`;
   const id = formHelperOwnDataValue(props, 'id');
-  if (id !== undefined) attributes += ` id="${escapeAttribute(formHelperString(id))}"`;
+  if (id !== undefined) {
+    attributes += ` id="${escapeWireAttribute(
+      formHelperString(id),
+      'dom-identity',
+      'mutation form helper[id]',
+    )}"`;
+  }
   const className = formHelperOwnDataValue(props, 'class');
   if (className !== undefined) {
     attributes += ` class="${escapeAttribute(formHelperString(className))}"`;
   }
   const failureCode = formHelperOwnDataValue(failure, 'code');
   if (typeof failureCode === 'string') {
-    attributes += ` data-error-code="${escapeAttribute(failureCode)}"`;
+    attributes += ` data-error-code="${escapeWireAttribute(
+      failureCode,
+      'dom-identity',
+      'mutation form helper[data-error-code]',
+    )}"`;
   }
   return `<output${attributes}>${escapeHtml(formHelperString(message))}</output>`;
 }

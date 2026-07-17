@@ -3,6 +3,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
+  assertHtmlWireValueStable,
+  type HtmlWireValuePosture,
+} from '@kovojs/core/internal/semantic-attributes';
+import {
   createFragmentHtml,
   decideRuntimeAttributeWrite,
   drainRuntimeSinkSecurityEvent,
@@ -72,6 +76,18 @@ export function escapeHtml(value: string): string {
  */
 export function escapeAttribute(value: string): string {
   return witnessStringReplaceAll(escapeHtml(value), '"', '&quot;');
+}
+
+/**
+ * @internal Validate an authority-bearing HTML/form string before escaping it for server output.
+ * SPEC §13.2 requires the browser-observed identity to remain the exact server-authored string.
+ */
+export function escapeWireAttribute(
+  value: string,
+  posture: HtmlWireValuePosture,
+  sink: string,
+): string {
+  return escapeAttribute(assertHtmlWireValueStable(value, posture, sink));
 }
 
 const coercedRenderedHtmlPrefix = '\uE000kovo-rendered-html:v2:';

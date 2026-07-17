@@ -1005,6 +1005,60 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       },
     ],
   },
+  {
+    id: 'html-wire-identity',
+    marker: '@kovo-security-classifier-corpus html-wire-identity',
+    testFiles: [
+      'packages/core/src/internal/semantic-attributes.test.ts',
+      'packages/server/src/jsx-runtime.test.ts',
+      'packages/server/src/wire-html.test.ts',
+      'packages/compiler/src/browser-final-rereview.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'shared-html-and-form-canonicalization-corpus',
+        file: 'packages/core/src/internal/semantic-attributes.test.ts',
+        snippets: [
+          'pins distinct DOM-identity and submitted-control wire boundaries',
+          "'carriage-return'",
+          "'line-feed'",
+          "'nul'",
+          "'unpaired-surrogate'",
+          'rejects only option fallback whitespace that the browser strips or collapses',
+        ],
+      },
+      {
+        id: 'runtime-and-raw-html-closed-verdicts',
+        file: 'packages/server/src/jsx-runtime.test.ts',
+        snippets: [
+          'fails closed for a runtime-dynamic %s',
+          'guards the generated kovo-form-key as a successful submitted value',
+          'rejects trusted raw HTML where parsing derives a submitted text value',
+          'record&#13;1',
+        ],
+      },
+      {
+        id: 'direct-wire-emitter-closed-verdicts',
+        file: 'packages/server/src/wire-html.test.ts',
+        snippets: [
+          'query name NUL',
+          'query key lone surrogate',
+          'fragment target CR',
+          'text target lone surrogate',
+        ],
+      },
+      {
+        id: 'compiler-static-and-spread-closed-verdicts',
+        file: 'packages/compiler/src/browser-final-rereview.test.ts',
+        snippets: [
+          'server HTML identity diagnostics',
+          'rejects compiler-known %s before server render',
+          'checks static intrinsic spread values through the same wire predicate',
+          'accepts wire-stable DOM and submitted identities',
+        ],
+      },
+    ],
+  },
 ];
 
 export function evaluateSecurityClassifierCorpus(options = {}) {

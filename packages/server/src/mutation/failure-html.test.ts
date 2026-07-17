@@ -55,6 +55,25 @@ describe('default mutation failure HTML', () => {
     expect(() => renderDefaultFailurePage(failure)).toThrow(/issues.*own data property/u);
     expect(getterExecutions).toBe(0);
   });
+
+  it('fails closed when a failure discriminator or field target changes in HTML parsing', () => {
+    const codeFailure = {
+      error: { code: 'OUT\rOF\rSTOCK', payload: {} },
+      ok: false,
+      status: 409,
+    } as MutationFail;
+    expect(() => renderDefaultFailureFragmentContent(codeFailure)).toThrow(
+      /output\[data-error-code\].*carriage-return/u,
+    );
+
+    const pathFailure = validationFailure();
+    (pathFailure.error.payload as { issues: { path: string[] }[] }).issues[0]!.path = [
+      'profile\ud800title',
+    ];
+    expect(() => renderDefaultFailureFragmentContent(pathFailure)).toThrow(
+      /output\[data-error-path\].*unpaired-surrogate/u,
+    );
+  });
 });
 
 function validationFailure(): MutationFail {
