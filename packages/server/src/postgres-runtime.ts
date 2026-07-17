@@ -1814,17 +1814,34 @@ export async function checkPostgresAppDbPosture(
   assertPostgresRuntimeSchemaSupported(schemaTables, metadata);
   const client = createRuntimeClient(config);
   try {
-    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(config.databaseUrl);
-    const postureUsesRuntimeConnection = client.postureSql === client.sql;
-    // SPEC §10.3: ordinary runtime roles cannot read durable replay truth. Exact posture checks
-    // therefore use the framework-owned admin/system authority when one was supplied, while still
-    // auditing the runtime login named by the ordinary database URL.
+    const runtimeConnectionPosture =
+      config.driver === 'node-postgres'
+        ? await witnessRuntimeConnectionPosture(client.sql, config)
+        : undefined;
+    if (runtimeConnectionPosture?.issue !== undefined) {
+      return {
+        driver: config.driver,
+        issues: [runtimeConnectionPosture.issue],
+        ok: false,
+        roleTopology: postgresRoleTopologyReport(
+          config.roleTopology,
+          runtimeConnectionPosture.runtimeLoginRole === undefined
+            ? {}
+            : { runtimeLogin: runtimeConnectionPosture.runtimeLoginRole },
+        ),
+      };
+    }
+    const runtimeLoginRole =
+      runtimeConnectionPosture?.runtimeLoginRole ??
+      runtimeLoginRoleFromDatabaseUrl(config.databaseUrl);
+    // SPEC §10.3: the ordinary connection witnesses its authenticated identity and least-privilege
+    // posture first. Framework admin/system authority then proves private replay and catalog facts
+    // without substituting a URL-declared username for that live runtime identity.
     return await checkRuntimeDbPosture(client.postureSql, {
-      checkConnectionLeastPrivilege:
-        config.driver === 'node-postgres' && postureUsesRuntimeConnection,
       config,
       metadata,
       ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
+      runtimeLoginPostureWitnessed: runtimeConnectionPosture !== undefined,
       schemaTables,
     });
   } finally {
@@ -1855,19 +1872,17 @@ async function initializeRuntimeDb(
       runtimeLoginRole: undefined,
     });
   }
-  if (input.config.driver === 'node-postgres' && !input.config.postureCheckOnBoot) {
-    await assertRuntimeConnectionLeastPrivilege(client, input.config);
-  }
+  const runtimeLoginRole =
+    input.config.driver === 'node-postgres'
+      ? await assertRuntimeConnectionLeastPrivilege(client, input.config)
+      : runtimeLoginRoleFromDatabaseUrl(input.config.databaseUrl);
   if (input.config.postureCheckOnBoot) {
-    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(input.config.databaseUrl);
-    const postureUsesRuntimeConnection = input.postureClient === client;
     const report = await checkRuntimeDbPosture(input.postureClient, {
       config: input.config,
       metadata: input.metadata,
       schemaTables: input.schemaTables,
-      checkConnectionLeastPrivilege:
-        input.config.driver === 'node-postgres' && postureUsesRuntimeConnection,
       ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
+      runtimeLoginPostureWitnessed: input.config.driver === 'node-postgres',
     });
     if (!report.ok) {
       if (
@@ -1983,16 +1998,17 @@ async function withPostgresAppDdlSearchPath<Result>(
 async function checkRuntimeDbPosture(
   client: RuntimeSqlClient,
   input: {
-    checkConnectionLeastPrivilege?: boolean;
     config: ResolvedPostgresRuntimeConfig;
     metadata: KovoRuntimeDbMetadata;
     runtimeLoginRole?: string;
+    runtimeLoginPostureWitnessed?: boolean;
     schemaTables: readonly PgTable[];
   },
 ): Promise<KovoPostgresPostureReport> {
-  // SPEC §10.3 (C9/C10): all live posture facts come from one pinned session and one
-  // repeatable-read snapshot. Naming pg_temp last prevents PostgreSQL's implicit-first temporary
-  // schema lookup, while pg_catalog first defeats public/temp catalog and privilege-oracle shadows.
+  // SPEC §10.3 (C9/C10): all exact database-posture facts come from one pinned session and one
+  // repeatable-read snapshot; the authenticated runtime identity is witnessed separately on that
+  // ordinary connection. Naming pg_temp last prevents PostgreSQL's implicit-first temporary schema
+  // lookup, while pg_catalog first defeats public/temp catalog and privilege-oracle shadows.
   return client.transaction(async (tx) => {
     await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
     await tx.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
@@ -2003,30 +2019,19 @@ async function checkRuntimeDbPosture(
 async function checkRuntimeDbPostureTransaction(
   client: RuntimeTransactionClient,
   input: {
-    checkConnectionLeastPrivilege?: boolean;
     config: ResolvedPostgresRuntimeConfig;
     metadata: KovoRuntimeDbMetadata;
     runtimeLoginRole?: string;
+    runtimeLoginPostureWitnessed?: boolean;
     schemaTables: readonly PgTable[];
   },
 ): Promise<KovoPostgresPostureReport> {
   const issues: KovoPostgresPostureIssue[] = [];
-  if (input.checkConnectionLeastPrivilege === true) {
-    const leastPrivilegeIssue = await runtimeConnectionLeastPrivilegeIssue(client, input.config);
-    if (leastPrivilegeIssue !== undefined) {
-      return {
-        driver: input.config.driver,
-        issues: [leastPrivilegeIssue],
-        ok: false,
-        roleTopology: postgresRoleTopologyReport(input.config.roleTopology),
-      };
-    }
-  }
   const runtimeLoginRole =
     input.config.driver === 'node-postgres'
       ? (input.runtimeLoginRole ?? (await currentPostgresLogin(client)))
       : input.runtimeLoginRole;
-  if (runtimeLoginRole !== undefined) {
+  if (runtimeLoginRole !== undefined && input.runtimeLoginPostureWitnessed !== true) {
     appendPostgresDenseValues(
       issues,
       await postgresRuntimeLoginPostureIssues(client, input.config, runtimeLoginRole),
@@ -6375,36 +6380,69 @@ function assertInternalPostgresRuntimeDbCapability(
 async function assertRuntimeConnectionLeastPrivilege(
   client: RuntimeSqlClient,
   config: ResolvedPostgresRuntimeConfig,
-): Promise<void> {
-  const issue = await client.transaction(async (tx) => {
-    await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
-    await tx.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
-    return runtimeConnectionLeastPrivilegeIssue(tx, config);
-  });
-  if (issue !== undefined) {
-    throw new Error(`KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR}: ${issue.detail} (SPEC §10.3).`);
+): Promise<string> {
+  const witness = await witnessRuntimeConnectionPosture(client, config);
+  if (witness.issue !== undefined) {
+    throw new Error(
+      `KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR}: ${witness.issue.detail} (SPEC §10.3).`,
+    );
   }
+  if (witness.runtimeLoginRole === undefined) {
+    throw new Error(`KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR} (SPEC §10.3).`);
+  }
+  return witness.runtimeLoginRole;
 }
 
-async function runtimeConnectionLeastPrivilegeIssue(
+interface PostgresRuntimeConnectionPostureWitness {
+  issue: KovoPostgresPostureIssue | undefined;
+  runtimeLoginRole: string | undefined;
+}
+
+async function witnessRuntimeConnectionPosture(
+  client: RuntimeSqlClient,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<PostgresRuntimeConnectionPostureWitness> {
+  return client.transaction(async (tx) => {
+    await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    await tx.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
+    return witnessRuntimeConnectionPostureTransaction(tx, config);
+  });
+}
+
+async function witnessRuntimeConnectionPostureTransaction(
   client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
-): Promise<KovoPostgresPostureIssue | undefined> {
-  const current = await client.query<{ runtime_login: string }>(
-    'SELECT current_user AS runtime_login',
+): Promise<PostgresRuntimeConnectionPostureWitness> {
+  const current = await client.query<{ runtime_login: string; session_login: string }>(
+    'SELECT current_user AS runtime_login, session_user AS session_login',
   );
   const currentRows = snapshotPostgresQueryRows(current.rows, 'Postgres runtime-login rows');
-  const runtimeLogin =
+  const identity =
     currentRows.length === 0
       ? undefined
-      : postgresDenseArrayValue(currentRows, 0, 'Postgres runtime-login rows').runtime_login;
-  if (runtimeLogin === undefined) {
+      : postgresDenseArrayValue(currentRows, 0, 'Postgres runtime-login rows');
+  if (identity === undefined || identity.runtime_login === '') {
     return {
-      code: 'KV433_RUNTIME_ROLE',
-      detail: RUNTIME_LEAST_PRIVILEGE_ERROR,
+      issue: {
+        code: 'KV433_RUNTIME_ROLE',
+        detail: RUNTIME_LEAST_PRIVILEGE_ERROR,
+      },
+      runtimeLoginRole: undefined,
     };
   }
-  return (await postgresRuntimeLoginPostureIssues(client, config, runtimeLogin))[0];
+  if (identity.runtime_login !== identity.session_login) {
+    return {
+      issue: {
+        code: 'KV433_RUNTIME_ROLE',
+        detail: `runtime connection current_user ${identity.runtime_login} must match authenticated session_user ${identity.session_login}; startup SET ROLE/role options are forbidden for the ordinary runtime connection`,
+      },
+      runtimeLoginRole: identity.runtime_login,
+    };
+  }
+  return {
+    issue: (await postgresRuntimeLoginPostureIssues(client, config, identity.runtime_login))[0],
+    runtimeLoginRole: identity.runtime_login,
+  };
 }
 
 function assertProductionRuntimeDriver(config: ResolvedPostgresRuntimeConfig): void {

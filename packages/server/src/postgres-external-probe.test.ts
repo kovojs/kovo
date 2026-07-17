@@ -315,6 +315,53 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     }
   }, 30_000);
 
+  it('witnesses runtime current_user on standalone and boot split-authority posture paths', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-external-posture-identity-'));
+    roots.push(root);
+    const cluster = await startLocalPostgres(root);
+    clusters.push(cluster);
+    const database = `${probeRun}_identity`;
+    const adminRole = `${probeRun}_identity_admin`;
+    const runtimeRole = `${probeRun}_identity_runtime`;
+    const superPool = await connect(cluster.url('postgres', 'postgres'));
+    try {
+      await superPool.query(`CREATE ROLE ${quoteIdent(adminRole)} LOGIN CREATEROLE NOBYPASSRLS`);
+      await superPool.query(
+        `CREATE ROLE ${quoteIdent(runtimeRole)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await superPool.query(
+        `CREATE DATABASE ${quoteIdent(database)} OWNER ${quoteIdent(adminRole)}`,
+      );
+    } finally {
+      await superPool.end();
+    }
+
+    const adminDatabaseUrl = cluster.url(database, adminRole);
+    const runtimeDatabaseUrl = cluster.url(database, runtimeRole);
+    const migrated = await migratePostgresAppDb({
+      databaseUrl: adminDatabaseUrl,
+      migrations: [createNotesMigration],
+      runtimeDatabaseUrl,
+      schema,
+    });
+    expect(migrated.posture.ok, JSON.stringify(migrated.posture.issues)).toBe(true);
+
+    await withPool(cluster.url(database, 'postgres'), async (pool) => {
+      await pool.query(`GRANT kovo_admin TO ${quoteIdent(runtimeRole)}`);
+    });
+    const assumedAdminRuntimeUrl = `${runtimeDatabaseUrl}?options=${encodeURIComponent(
+      '-c role=kovo_admin',
+    )}`;
+    await expectStandalonePostureWitnessesAuthenticatedRuntimeConnection(
+      assumedAdminRuntimeUrl,
+      adminDatabaseUrl,
+    );
+    await expectBootPostureWitnessesAuthenticatedRuntimeConnection(
+      assumedAdminRuntimeUrl,
+      adminDatabaseUrl,
+    );
+  }, 30_000);
+
   it('proves split provisioning, adopted roles, fail-closed posture, and pg Pool scope reset', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-external-postgres-probe-'));
     roots.push(root);
@@ -587,6 +634,43 @@ async function expectLeastPrivilegeRuntimePostureFailure(databaseUrl: string): P
   expect(report.issues[0]?.detail).toMatch(
     /runtime login .* (must have no elevated role attributes|must not be able to SET ROLE to adminRole=)/,
   );
+}
+
+async function expectStandalonePostureWitnessesAuthenticatedRuntimeConnection(
+  databaseUrl: string,
+  adminDatabaseUrl: string,
+): Promise<void> {
+  // SPEC §10.3: the ordinary connection, rather than the URL parser or privileged posture pool,
+  // owns the runtime-identity witness. A startup role setting makes current_user observably differ
+  // from the authority username and proves standalone check inspects that live session.
+  const report = await checkPostgresAppDbPosture({
+    adminDatabaseUrl,
+    databaseUrl,
+    schema,
+  });
+  expect(report.ok).toBe(false);
+  expect(report.issues).toHaveLength(1);
+  expect(report.issues[0]).toMatchObject({
+    code: 'KV433_RUNTIME_ROLE',
+    detail: expect.stringContaining(
+      'runtime connection current_user kovo_admin must match authenticated session_user',
+    ),
+  });
+  expect(report.roleTopology.runtimeLogin).toBe('kovo_admin');
+}
+
+async function expectBootPostureWitnessesAuthenticatedRuntimeConnection(
+  databaseUrl: string,
+  adminDatabaseUrl: string,
+): Promise<void> {
+  const runtime = createPostgresAppRuntimeDb({ adminDatabaseUrl, databaseUrl, schema });
+  try {
+    await expect(runtime.ready).rejects.toThrow(
+      /runtime connection current_user kovo_admin must match authenticated session_user/,
+    );
+  } finally {
+    await runtime.close();
+  }
 }
 
 async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: string): Promise<void> {
