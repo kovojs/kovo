@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    1 |     15 |
+| High     |    2 |     15 |
 | Medium   |    2 |     15 |
 | Low      |    0 |      3 |
 
@@ -216,6 +216,18 @@ rendering, Better Auth, and managed SQL.
   - **Open:** reject missing authenticated and malformed generic session bindings, domain-separate
     anonymous/session credentials, and include independently proven principal identity in replay
     scope while preserving the declared anonymous flow.
+
+- [ ] **H17 - Public raw endpoint responses could cache and replay credential state.**
+  - A verifier-authorized raw `GET` endpoint could declare and emit `Cache-Control: public` with
+    `Set-Cookie`. Header finalization normalized the privileged cookie but did not make the response
+    client-private, so a shared cache could serve the authenticated response and cookie to a later
+    anonymous request without re-running the endpoint verifier. Cached `Clear-Site-Data` exposed the
+    corresponding cross-client destructive replay (SPEC §6.6/§9.1).
+  - **Evidence:** the exact dispatch path emitted a public normalized session cookie; a minimal
+    shared-cache reproduction served it to the second anonymous request with status `200` while
+    verifier calls remained at one instead of returning `401` on a second verifier call.
+  - **Open:** stamp `private, no-store` plus `Vary: Cookie` at final structured/raw reconstruction
+    whenever `Set-Cookie` or `Clear-Site-Data` is present, regardless of authored cache posture.
 
 ## Medium
 
