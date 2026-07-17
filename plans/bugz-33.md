@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    1 |     11 |
+| High     |    2 |     11 |
 | Medium   |    0 |     15 |
 | Low      |    0 |      3 |
 
@@ -156,6 +156,18 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** focused compiler/runtime matrix 165/165; response-fragment exploit regressions
     42/42 across Chromium, Firefox, and WebKit; all 11 classifier corpora plus inline-artifact,
     API-surface, SPEC, and fail-closed gates passed at the integrated checkpoint.
+
+- [ ] **H13 - Windows environment snapshotting could silently disable security posture.**
+  - Windows main-thread environment lookups are case-insensitive, but Kovo copied the enumerated
+    operator spelling into a case-sensitive null-prototype snapshot. Mixed-case names such as
+    `node_env` or `node_tls_reject_unauthorized` could therefore be honored by Node or the platform
+    while Kovo missed the corresponding uppercase production/TLS control.
+  - **Evidence:** Node's Windows environment contract and libuv enumeration preserve this
+    case-folding/spelling differential; the current snapshot performs only exact own-key lookup
+    after pinning (SPEC §6.6 operator-environment trust root).
+  - **Open:** make Windows snapshot and lookup semantics case-insensitive with collision refusal,
+    then prove production posture and TLS-disable detection through platform-independent
+    regressions.
 
 ## Medium
 
