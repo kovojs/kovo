@@ -168,12 +168,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       {
         id: 'iana-ipv6-special-purpose-regression',
         file: 'packages/server/src/egress.test.ts',
-        snippets: [
-          "'2001:2::1'",
-          "'2001:100::1'",
-          "'3fff::1'",
-          "classification: 'special-use'",
-        ],
+        snippets: ["'2001:2::1'", "'2001:100::1'", "'3fff::1'", "classification: 'special-use'"],
       },
       {
         id: 'azure-identity-endpoint-provider-separation',
@@ -268,7 +263,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           "readFile(join(vercelOutDir, 'static/_headers'), 'utf8')",
           "readFile(join(vercelOutDir, 'static/kovo-static-manifest.json'), 'utf8')",
-          'Vercel\'s Build Output API makes every file under static/ public',
+          "Vercel's Build Output API makes every file under static/ public",
         ],
       },
     ],
