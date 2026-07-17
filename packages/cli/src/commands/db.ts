@@ -514,6 +514,8 @@ function applyRuntimeOptionOverrides(
   result: KovoPostgresAppRuntimeOptions,
   overrides: Partial<KovoPostgresAppRuntimeOptions>,
 ): void {
+  if (overrides.adminDatabaseUrl !== undefined)
+    result.adminDatabaseUrl = overrides.adminDatabaseUrl;
   if (overrides.schema !== undefined) result.schema = overrides.schema;
   if (overrides.dataDir !== undefined) result.dataDir = overrides.dataDir;
   if (overrides.databaseUrl !== undefined) result.databaseUrl = overrides.databaseUrl;
@@ -566,25 +568,35 @@ function checkTargetOptions(options: ResolvedKovoDbOptions): {
   const driver = options.driver;
   if (driver === 'pglite') return { overrides: { driver: 'pglite' }, source: 'explicit-driver' };
   const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
+  const adminDatabaseUrl = resolveAdminDatabaseUrl(options);
   if (driver === 'pg' || driver === 'node-postgres') {
-    const databaseUrl = runtimeDatabaseUrl ?? resolveAdminDatabaseUrl(options);
+    const databaseUrl = runtimeDatabaseUrl ?? adminDatabaseUrl;
     if (databaseUrl === undefined) {
       throw new Error(
         'kovo db check with external Postgres requires KOVO_DATABASE_URL, KOVO_RUNTIME_DATABASE_URL, KOVO_ADMIN_DATABASE_URL, --database-url, or --admin-database-url.',
       );
     }
     return {
-      overrides: { databaseUrl, driver: 'node-postgres' },
+      overrides: {
+        ...(runtimeDatabaseUrl === undefined || adminDatabaseUrl === undefined
+          ? {}
+          : { adminDatabaseUrl }),
+        databaseUrl,
+        driver: 'node-postgres',
+      },
       source: runtimeDatabaseUrl === undefined ? 'admin' : 'runtime',
     };
   }
   if (runtimeDatabaseUrl !== undefined) {
     return {
-      overrides: { databaseUrl: runtimeDatabaseUrl, driver: 'node-postgres' },
+      overrides: {
+        ...(adminDatabaseUrl === undefined ? {} : { adminDatabaseUrl }),
+        databaseUrl: runtimeDatabaseUrl,
+        driver: 'node-postgres',
+      },
       source: 'runtime',
     };
   }
-  const adminDatabaseUrl = resolveAdminDatabaseUrl(options);
   if (adminDatabaseUrl !== undefined) {
     return {
       overrides: { databaseUrl: adminDatabaseUrl, driver: 'node-postgres' },

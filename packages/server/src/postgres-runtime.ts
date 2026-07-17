@@ -1815,8 +1815,13 @@ export async function checkPostgresAppDbPosture(
   const client = createRuntimeClient(config);
   try {
     const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(config.databaseUrl);
-    return await checkRuntimeDbPosture(client.sql, {
-      checkConnectionLeastPrivilege: config.driver === 'node-postgres',
+    const postureUsesRuntimeConnection = client.postureSql === client.sql;
+    // SPEC §10.3: ordinary runtime roles cannot read durable replay truth. Exact posture checks
+    // therefore use the framework-owned admin/system authority when one was supplied, while still
+    // auditing the runtime login named by the ordinary database URL.
+    return await checkRuntimeDbPosture(client.postureSql, {
+      checkConnectionLeastPrivilege:
+        config.driver === 'node-postgres' && postureUsesRuntimeConnection,
       config,
       metadata,
       ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),

@@ -349,6 +349,8 @@ describeIfPostgres(
           'check',
           '--schema',
           '.kovo/external-postgres-schema.mjs',
+          '--admin-database-url',
+          adminUrl,
           '--database-url',
           runtimeUrl,
         ]);
