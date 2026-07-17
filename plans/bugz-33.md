@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    2 |     13 |
+| High     |    3 |     13 |
 | Medium   |    1 |     15 |
 | Low      |    0 |      3 |
 
@@ -197,6 +197,19 @@ rendering, Better Auth, and managed SQL.
   - **Open:** give public structured route options a precise type-level and runtime allowlist,
     preserve the existing structured content/disposition/redirect APIs, and retain arbitrary
     end-to-end names only on the declared raw endpoint and operator static-metadata paths.
+
+- [ ] **H16 - A misbound authenticated CSRF session could collapse replay scope across users.**
+  - Generic CSRF configuration treated an empty or missing `sessionId` as an anonymous browser
+    binding even after Kovo had independently proved an authenticated principal. Mutation replay
+    then preferred that anonymous binding over the proven principal, so two users sharing the
+    stale CSRF cookie, token, idempotency key, and input could receive one another's cached response
+    metadata instead of executing independently (SPEC §6.6/§10.3).
+  - **Evidence:** a real sequential Alice-to-Bob mutation reproduced one handler call and replayed
+    Alice's `Set-Cookie` response to Bob with both an omitted session id and an empty-string session
+    id; both requests passed their own authenticated guard and returned `303`.
+  - **Open:** reject missing authenticated and malformed generic session bindings, domain-separate
+    anonymous/session credentials, and include independently proven principal identity in replay
+    scope while preserving the declared anonymous flow.
 
 ## Medium
 
