@@ -557,13 +557,14 @@ function staticSpreadAttributeValue(entry: ObjectLiteralEntry): StaticRenderedAt
 function staticWireSpreadAttributeValue(
   entry: StaticJsxWireAttributeEntry,
 ): StaticRenderedAttributeValue {
-  const value = entry.staticValue;
+  if (entry.value.kind === 'unknown') return { kind: 'unknown' };
+  const value = entry.value.value;
+  if (value === undefined) return { kind: 'omitted' };
   if (value === false || value === null) return { kind: 'omitted' };
   if (typeof value === 'string') return { kind: 'known', value };
   // A non-string static literal serializes to an empty/JSON/numeric blocker, never either reserved
   // keyword. Keep the exact bytes irrelevant to this narrow tuple classifier.
-  if (value !== undefined) return { kind: 'known', value: '' };
-  return { kind: 'unknown' };
+  return { kind: 'known', value: '' };
 }
 
 function setStaticRenderedAttribute(

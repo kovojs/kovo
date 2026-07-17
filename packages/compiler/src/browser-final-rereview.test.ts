@@ -317,6 +317,30 @@ export const View = component({
       'nested fully-static object spread',
       '<input {...{ ...{ type: "hidden" }, name: "_charset_" }} />',
     ],
+    [
+      'known undefined same-key omission',
+      '<input {...{ type: undefined, TYPE: "hidden", name: "_charset_" }} />',
+    ],
+    [
+      'known void same-key omission',
+      '<input {...{ type: void 0, TYPE: "hidden", name: "_charset_" }} />',
+    ],
+    [
+      'nested null spread with no enumerable keys',
+      '<input {...{ ...null, type: "hidden", name: "_charset_" }} />',
+    ],
+    [
+      'nested undefined spread with no enumerable keys',
+      '<input {...{ ...undefined, type: "hidden", name: "_charset_" }} />',
+    ],
+    [
+      'nested void spread with no enumerable keys',
+      '<input {...{ ...(void 0), type: "hidden", name: "_charset_" }} />',
+    ],
+    [
+      'nested false spread with no enumerable keys',
+      '<input {...{ ...false, type: "hidden", name: "_charset_" }} />',
+    ],
   ])('rejects the reserved _charset_ hidden-value rewrite from %s', (_label, element) => {
     const diagnostics = kv236(`
 const TYPE = 'type';
@@ -329,6 +353,25 @@ export const View = component({
     expect(diagnostics[0]?.message).toContain('reserved-charset-hidden-control');
     expect(diagnostics[0]?.help).toContain('SPEC §13.2');
     expect(diagnostics[0]?.help).toContain('SPEC §6.6');
+  });
+
+  it('keeps emitted runtime sink authority for statically omitted spread values', () => {
+    const result = compile(`
+export const View = component({
+  render: () => <form>
+    <input {...{ type: undefined, TYPE: "hidden", name: "_charset_" }} />
+    <input {...{ ...null, ...undefined, ...(void 0), ...false, type: "hidden", name: "_charset_" }} />
+  </form>,
+});
+`);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toHaveLength(2);
+    expect(result.loweredSource).toContain('<input TYPE="hidden" name="_charset_" />');
+    expect(result.loweredSource).toContain(
+      '...kovoSafeJsxSpread({ ...null, ...undefined, ...(void 0), ...false, type: "hidden", name: "_charset_" }',
+    );
+    expect(result.files.find((file) => file.kind === 'server')?.source).toContain(
+      'kovoSafeJsxSpread',
+    );
   });
 
   it('preserves non-hidden, non-reserved, and definitely-overridden _charset_ neighbors', () => {
@@ -357,9 +400,13 @@ export const View = component({
 let MUTABLE_TYPE = 'type';
 const TYPE = 'type';
 export const View = component({
-  render: ({ TYPE }) => <form>
+  render: ({ TYPE, runtimeType, runtimeAttrs, undefined }) => <form>
     <input {...{ [MUTABLE_TYPE]: "hidden", name: "_charset_" }} />
     <input {...{ [TYPE]: "hidden", name: "_charset_" }} />
+    <input {...{ type: runtimeType, TYPE: "hidden", name: "_charset_" }} />
+    <input {...{ type: undefined, TYPE: "hidden", name: "_charset_" }} />
+    <input {...{ ...undefined, type: "hidden", name: "_charset_" }} />
+    <input {...{ ...runtimeAttrs, type: "hidden", name: "_charset_" }} />
   </form>,
 });
 `),

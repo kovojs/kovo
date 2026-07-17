@@ -91,6 +91,7 @@ import type {
   SourceSpan,
   StateReturnObjectModel,
   StaticJsxWireAttributeEntry,
+  StaticJsxWireAttributeValue,
   StringRenderModel,
   TaskRunHandlerModel,
   TemporalReadModel,
@@ -4849,6 +4850,7 @@ function completeStaticJsxWireAttributeEntries(
     }
     if (ts.isSpreadAssignment(property)) {
       const nestedExpression = unwrapExpression(property.expression);
+      if (staticJsxWireSpreadHasNoEnumerableKeys(sourceFile, nestedExpression)) continue;
       if (!ts.isObjectLiteralExpression(nestedExpression)) return undefined;
       const nested = completeStaticJsxWireAttributeEntries(
         sourceFile,
@@ -4860,7 +4862,11 @@ function completeStaticJsxWireAttributeEntries(
       continue;
     }
     if (ts.isShorthandPropertyAssignment(property)) {
-      compilerArrayAppend(entries, { key: property.name.text }, 'Static JSX wire spread entries');
+      compilerArrayAppend(
+        entries,
+        { key: property.name.text, value: { kind: 'unknown' } },
+        'Static JSX wire spread entries',
+      );
       continue;
     }
     if (!ts.isPropertyAssignment(property)) return undefined;
@@ -4873,17 +4879,45 @@ function completeStaticJsxWireAttributeEntries(
     // own `['__proto__']` key is harmless here but keeping both shapes opaque avoids inventing an
     // own attribute for the setter spelling.
     if (!key || key === '__proto__') return undefined;
-    const staticValue = staticLiteralValue(property.initializer);
     compilerArrayAppend(
       entries,
       {
         key,
-        ...(staticValue === undefined ? {} : { staticValue }),
+        value: staticJsxWireAttributeValue(sourceFile, property.initializer),
       },
       'Static JSX wire spread entries',
     );
   }
   return entries;
+}
+
+function staticJsxWireAttributeValue(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): StaticJsxWireAttributeValue {
+  const unwrapped = unwrapExpression(expression);
+  if (
+    ts.isVoidExpression(unwrapped) ||
+    (ts.isIdentifier(unwrapped) &&
+      identifierResolvesToUnshadowedGlobal(sourceFile, unwrapped, 'undefined'))
+  ) {
+    return { kind: 'known', value: undefined };
+  }
+  const value = staticLiteralValue(unwrapped);
+  return value === undefined ? { kind: 'unknown' } : { kind: 'known', value };
+}
+
+function staticJsxWireSpreadHasNoEnumerableKeys(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  return (
+    expression.kind === ts.SyntaxKind.NullKeyword ||
+    expression.kind === ts.SyntaxKind.FalseKeyword ||
+    ts.isVoidExpression(expression) ||
+    (ts.isIdentifier(expression) &&
+      identifierResolvesToUnshadowedGlobal(sourceFile, expression, 'undefined'))
+  );
 }
 
 function staticJsxWireAttributeKey(

@@ -1648,6 +1648,10 @@ export const WireSpreads = component({
     <input {...{ TYPE: false, type: 'hidden', NAME: null, name: '_charset_' }} />
     <input {...{ ...{ type: 'hidden' }, name: '_charset_' }} />
     <input {...{ ...profile.attributes, name: '_charset_' }} />
+    <input {...{ type: undefined, TYPE: 'hidden', name: '_charset_' }} />
+    <input {...{ type: void 0, TYPE: 'hidden', name: '_charset_' }} />
+    <input {...{ ...null, ...undefined, ...(void 0), ...false, type: 'hidden', name: '_charset_' }} />
+    <input {...{ type: profile.type, TYPE: 'hidden', name: '_charset_' }} />
   </form>,
 });
 `;
@@ -1657,22 +1661,42 @@ export const WireSpreads = component({
 
     expect(spreads[0]?.objectEntries).toBeUndefined();
     expect(spreads[0]?.staticWireAttributeEntries).toEqual([
-      { key: 'type', staticValue: 'hidden' },
-      { key: 'name', staticValue: '_charset_' },
+      { key: 'type', value: { kind: 'known', value: 'hidden' } },
+      { key: 'name', value: { kind: 'known', value: '_charset_' } },
     ]);
     expect(spreads[1]?.staticWireAttributeEntries).toEqual([
-      { key: 'TYPE', staticValue: false },
-      { key: 'type', staticValue: 'hidden' },
-      { key: 'NAME', staticValue: null },
-      { key: 'name', staticValue: '_charset_' },
+      { key: 'TYPE', value: { kind: 'known', value: false } },
+      { key: 'type', value: { kind: 'known', value: 'hidden' } },
+      { key: 'NAME', value: { kind: 'known', value: null } },
+      { key: 'name', value: { kind: 'known', value: '_charset_' } },
     ]);
     expect(spreads[2]?.objectEntries).toBeUndefined();
     expect(spreads[2]?.staticWireAttributeEntries).toEqual([
-      { key: 'type', staticValue: 'hidden' },
-      { key: 'name', staticValue: '_charset_' },
+      { key: 'type', value: { kind: 'known', value: 'hidden' } },
+      { key: 'name', value: { kind: 'known', value: '_charset_' } },
     ]);
     expect(spreads[3]?.objectEntries).toBeUndefined();
     expect(spreads[3]?.staticWireAttributeEntries).toBeUndefined();
+    expect(spreads[4]?.staticWireAttributeEntries).toEqual([
+      { key: 'type', value: { kind: 'known', value: undefined } },
+      { key: 'TYPE', value: { kind: 'known', value: 'hidden' } },
+      { key: 'name', value: { kind: 'known', value: '_charset_' } },
+    ]);
+    expect(spreads[5]?.staticWireAttributeEntries).toEqual([
+      { key: 'type', value: { kind: 'known', value: undefined } },
+      { key: 'TYPE', value: { kind: 'known', value: 'hidden' } },
+      { key: 'name', value: { kind: 'known', value: '_charset_' } },
+    ]);
+    expect(spreads[6]?.objectEntries).toBeUndefined();
+    expect(spreads[6]?.staticWireAttributeEntries).toEqual([
+      { key: 'type', value: { kind: 'known', value: 'hidden' } },
+      { key: 'name', value: { kind: 'known', value: '_charset_' } },
+    ]);
+    expect(spreads[7]?.staticWireAttributeEntries).toEqual([
+      { key: 'type', value: { kind: 'unknown' } },
+      { key: 'TYPE', value: { kind: 'known', value: 'hidden' } },
+      { key: 'name', value: { kind: 'known', value: '_charset_' } },
+    ]);
   });
 
   it('records mutation form controls across partial spreads, aliases, and static computed names', () => {

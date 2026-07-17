@@ -339,6 +339,20 @@ describe('server jsx runtime', () => {
     ).toBe('<input TYPE="text" type="hidden" name="_charset_" value="record-3">');
   });
 
+  it('skips an undefined exact-key value before applying case-folded duplicate semantics', () => {
+    // SPEC §13.2: an omitted first spelling does not mask the later browser-effective hidden type.
+    expect(() =>
+      html(
+        jsx('input', {
+          type: undefined,
+          TYPE: 'hidden',
+          name: '_charset_',
+          value: 'record-4',
+        }),
+      ),
+    ).toThrow(/KV236.*_charset_/u);
+  });
+
   it('rejects trusted raw HTML where parsing derives a submitted text value', () => {
     expect(() =>
       html(

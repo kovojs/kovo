@@ -22,15 +22,20 @@ export interface ObjectLiteralEntry {
   valuePropertyAccesses?: readonly PropertyAccessPathModel[];
 }
 
+export type StaticJsxWireAttributeValue =
+  | { readonly kind: 'known'; readonly value: StaticLiteralValue | undefined }
+  | { readonly kind: 'unknown' };
+
 /**
  * Parser-owned fact for a statically enumerable JSX spread entry at the HTML wire boundary.
- * `staticValue` is absent when the property value remains runtime-dynamic. This fact is separate
- * from {@link ObjectLiteralEntry}: nested object spreads can be complete enough for a security
- * verdict without being eligible for static spread lowering (SPEC §5.2 rule 10 / §13.2).
+ * The discriminated value preserves known `undefined` separately from a runtime-dynamic value.
+ * This fact is separate from {@link ObjectLiteralEntry}: nested object spreads can be complete
+ * enough for a security verdict without being eligible for static spread lowering (SPEC §5.2
+ * rule 10 / §13.2).
  */
 export interface StaticJsxWireAttributeEntry {
   key: string;
-  staticValue?: StaticLiteralValue;
+  value: StaticJsxWireAttributeValue;
 }
 
 export type HandlerWriteSinkSurface = 'endpoint' | 'mutation' | 'task' | 'webhook';
