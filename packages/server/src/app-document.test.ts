@@ -216,6 +216,28 @@ describe('trusted request scheme provenance', () => {
       vi.resetModules();
     }
   });
+
+  it('attaches HSTS to built-in error documents over adapter-proven https', async () => {
+    const previous = process.env.NODE_ENV;
+    try {
+      const [, appApi, appDocumentApi] = await productionDocumentRuntime();
+      const response = await appDocumentApi.renderAppErrorDocumentResponse(
+        appApi.createApp({
+          egress: { enabled: false, justification: 'isolated error HSTS regression' },
+        }),
+        new Request('https://shop.example.test/missing'),
+        404,
+      );
+
+      expect(headerValue(response.headers, 'strict-transport-security')).toBe(
+        'max-age=63072000; includeSubDomains',
+      );
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+      vi.resetModules();
+    }
+  });
 });
 
 // ─── DEPLOY-3: module-less app always stamps kovo-build ───────────────────────

@@ -448,7 +448,9 @@ export async function renderAppErrorDocumentResponse(
   const stableUrlSnapshot = requestUrlSnapshot(stableUrl);
   const diagnosticUrl = appRequestUrl(stableUrl);
   const reportingOrigin = stableUrlSnapshot.origin;
-  const secure = stableUrlSnapshot.protocol === 'https:';
+  // SPEC §6.6: preserve the adapter-proven scheme through both configured and
+  // built-in error shells. Do not infer security from forwarding headers here.
+  const secure = isTrustedSecureRequest(request);
   const renderer =
     status === 403
       ? app.errorShells.forbidden
@@ -484,6 +486,7 @@ export async function renderAppErrorDocumentResponse(
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
     reportingOrigin,
+    ...(secure ? { secure: true } : {}),
     status,
   });
 }

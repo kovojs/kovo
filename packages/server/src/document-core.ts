@@ -203,6 +203,11 @@ export interface ErrorDocumentOptions {
   loaderRuntimeHref?: string;
   message?: string;
   reportingOrigin?: string;
+  /**
+   * SPEC §6.6: adapter-proven HTTPS posture for the originating request. Built-in
+   * error documents share the prod+HTTPS HSTS floor with other framework documents.
+   */
+  secure?: boolean;
   status: 403 | 404 | 500;
   title?: string;
 }
@@ -830,9 +835,14 @@ export const renderErrorDocument = wireEmitter(
         // SPEC §6.6 (runtime defense-in-depth): the same conservative isolation/hardening
         // baseline as successful documents (X-Frame-Options/COOP/Permissions-Policy/
         // Referrer-Policy). Error documents have no route response to carry an author
-        // opt-out, so the static baseline applies unconditionally. HSTS is intentionally
-        // omitted here: error documents render without the request's secure context.
+        // opt-out, so the static baseline applies unconditionally.
         ...documentIsolationHeaders({}, KOVO_CSP_REPORT_GROUP),
+        // SPEC §6.6: built-in 403/404/500 documents are remotely reachable framework
+        // documents too. Preserve the same prod+HTTPS-only HSTS gate as successful and
+        // configured error documents; callers without transport provenance still omit it.
+        ...(options.secure === true && shouldEmitDocumentHsts(true)
+          ? { 'Strict-Transport-Security': DOCUMENT_HSTS_VALUE }
+          : {}),
         // SF (secure-framework Tier 3): error documents are framework-rendered HTML with
         // the same inline loader/hashes, so they carry the strict default-on CSP too. No
         // route response means no author allowlist here — the plain strict `'self'` policy

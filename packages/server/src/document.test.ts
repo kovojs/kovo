@@ -697,6 +697,24 @@ describe('server app shell document assembly', () => {
         );
       }
 
+      async function renderErrorWithBootEnvironment(
+        nodeEnvironment: 'development' | 'production',
+        secure: boolean | undefined,
+      ) {
+        vi.resetModules();
+        process.env.NODE_ENV = nodeEnvironment;
+        const documentCore =
+          nodeEnvironment === 'production'
+            ? (await import('./security-bootstrap.ts?error-hsts-production'),
+              await import('./document-core.ts?error-hsts-production'))
+            : (await import('./security-bootstrap.ts?error-hsts-development'),
+              await import('./document-core.ts?error-hsts-development'));
+        return documentCore.renderErrorDocument({
+          ...(secure === undefined ? {} : { secure }),
+          status: 404,
+        });
+      }
+
       it('is present only under prod + HTTPS', async () => {
         const secure = await renderWithBootEnvironment('production', true);
         expect(secure.headers['Strict-Transport-Security']).toBe(
@@ -717,6 +735,21 @@ describe('server app shell document assembly', () => {
       it('is absent when the call site never wired the secure flag', async () => {
         const unwired = await renderWithBootEnvironment('production', undefined);
         expect(unwired.headers['Strict-Transport-Security']).toBeUndefined();
+      });
+
+      it('also protects built-in error documents under prod + HTTPS', async () => {
+        const secureError = await renderErrorWithBootEnvironment('production', true);
+        expect(secureError.headers['Strict-Transport-Security']).toBe(
+          'max-age=63072000; includeSubDomains',
+        );
+      });
+
+      it('does not pin built-in error documents over HTTP or in development', async () => {
+        const productionHttp = await renderErrorWithBootEnvironment('production', false);
+        expect(productionHttp.headers['Strict-Transport-Security']).toBeUndefined();
+
+        const developmentHttps = await renderErrorWithBootEnvironment('development', true);
+        expect(developmentHttps.headers['Strict-Transport-Security']).toBeUndefined();
       });
     });
   });
