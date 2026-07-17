@@ -49,6 +49,11 @@ const NativeURL = globalThis.URL;
 const NativeURLSearchParams = globalThis.URLSearchParams;
 const nativeIteratorSymbol: typeof Symbol.iterator = Symbol.iterator;
 const MAX_REQUEST_BODY_CHUNKS = 4_096;
+// SPEC §9.1: byte and stream-chunk ceilings do not bound the object work induced by query/form
+// carriers. Keep native parsing aligned with KV430's default breadth floor; count URL query/form
+// entries before record reconstruction or allocating slices/FormData parts so one compact request
+// cannot fan out into an unbounded carrier graph.
+const MAX_REQUEST_INPUT_ENTRIES = 10_000;
 
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
@@ -551,18 +556,30 @@ function parseUrlEncodedForm(bytes: Uint8Array): FormData {
   const body = decodeUtf8Unchecked(bytes);
   if (body.length === 0) return form;
 
-  const pairs = securityStringSplit(body, '&');
-  for (let index = 0; index < pairs.length; index += 1) {
-    const pair = pairs[index]!;
-    if (pair.length === 0) continue;
-    const separator = securityStringIndexOf(pair, '=');
-    const name = decodeUrlEncodedComponent(
-      separator === -1 ? pair : securityStringSlice(pair, 0, separator),
-    );
-    const value = decodeUrlEncodedComponent(
-      separator === -1 ? '' : securityStringSlice(pair, separator + 1),
-    );
-    requestFormDataAppendUnchecked(form, name, value);
+  // Do not split the attacker-owned body first: a 1 MiB string of separators otherwise creates
+  // roughly one million array slots before any schema/shape budget can run.
+  let position = 0;
+  let entries = 0;
+  while (position <= body.length) {
+    const next = securityStringIndexOf(body, '&', position);
+    const end = next === -1 ? body.length : next;
+    entries += 1;
+    if (entries > MAX_REQUEST_INPUT_ENTRIES) {
+      throw new TypeError('Kovo refused a URL-encoded form with too many entries.');
+    }
+    const pair = securityStringSlice(body, position, end);
+    if (pair.length !== 0) {
+      const separator = securityStringIndexOf(pair, '=');
+      const name = decodeUrlEncodedComponent(
+        separator === -1 ? pair : securityStringSlice(pair, 0, separator),
+      );
+      const value = decodeUrlEncodedComponent(
+        separator === -1 ? '' : securityStringSlice(pair, separator + 1),
+      );
+      requestFormDataAppendUnchecked(form, name, value);
+    }
+    if (next === -1) break;
+    position = next + 1;
   }
   return form;
 }
@@ -700,6 +717,10 @@ function parseMultipartForm(bytes: Uint8Array, boundary: string): FormData {
       throw new TypeError('Kovo multipart boundary is not followed by CRLF.');
     }
     position += 2;
+    parts += 1;
+    if (parts > MAX_REQUEST_INPUT_ENTRIES) {
+      throw new TypeError('Kovo refused a multipart form with too many parts.');
+    }
 
     const headerEnd = indexOfBytes(bytes, headerTerminator, position);
     if (headerEnd === -1 || headerEnd - position > 65_536) {
@@ -721,10 +742,6 @@ function parseMultipartForm(bytes: Uint8Array, boundary: string): FormData {
       requestFormDataAppendUnchecked(form, headers.name, file);
     }
 
-    parts += 1;
-    if (parts > 100_000) {
-      throw new TypeError('Kovo refused a multipart form with too many parts.');
-    }
     position = boundaryPosition + typedArrayLengthUnchecked(nextDelimiter);
   }
 
@@ -984,7 +1001,7 @@ function urlSearchParamsEntriesUnchecked(
 ): readonly (readonly [string, string])[] {
   const iterator = witnessReflectApply<object>(nativeUrlSearchParamsEntries, searchParams, []);
   const entries: (readonly [string, string])[] = [];
-  for (let count = 0; count <= 100_000; count += 1) {
+  for (let count = 0; count <= MAX_REQUEST_INPUT_ENTRIES; count += 1) {
     const result = witnessReflectApply<{ done?: unknown; value?: unknown }>(
       nativeUrlSearchParamsEntriesNext,
       iterator,
@@ -1003,9 +1020,12 @@ function urlSearchParamsEntriesUnchecked(
     ) {
       throw new TypeError('Kovo received an invalid URLSearchParams entry.');
     }
+    if (count === MAX_REQUEST_INPUT_ENTRIES) {
+      throw new TypeError('Kovo refused URL search input with too many entries.');
+    }
     securityArrayPush(entries, [result.value[0], result.value[1]] as const);
   }
-  throw new TypeError('Kovo refused an unbounded URLSearchParams carrier.');
+  throw new TypeError('Kovo refused URL search input with too many entries.');
 }
 
 export function requestIsBlob(value: unknown): value is Blob {

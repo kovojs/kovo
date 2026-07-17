@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { csrfToken, validateCsrfToken } from './csrf.js';
 import {
   assertRequestBodyAsyncIntrinsics,
+  requestFormData,
   requestJson,
   requestSerializeUrlSearchParamsEntries,
   requestUrlSearchParamsEntries,
@@ -64,6 +65,52 @@ describe('request body carrier intrinsic closure', () => {
     } as RequestInit & { duplex: 'half' });
 
     await expect(requestJson(boundaryRequest)).resolves.toEqual({});
+  });
+
+  it('bounds URL-encoded and multipart form entry work before schema traversal', async () => {
+    // A split-first parser allocates 10,001+ array slots even though empty URL-encoded segments
+    // never become successful controls. The parser counts wire segments before allocating them.
+    const urlEncoded = new Request('https://kovo.local/form-entry-budget', {
+      body: '&'.repeat(10_000),
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+    });
+    await expect(requestFormData(urlEncoded)).rejects.toThrow(/too many entries/u);
+
+    const boundary = 'KovoFormEntryBudget';
+    const parts: string[] = [];
+    for (let index = 0; index < 10_001; index += 1) {
+      parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="field"\r\n\r\nx\r\n`);
+    }
+    parts.push(`--${boundary}--\r\n`);
+    const multipart = new Request('https://kovo.local/form-entry-budget', {
+      body: parts.join(''),
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      method: 'POST',
+    });
+    await expect(requestFormData(multipart)).rejects.toThrow(/too many parts/u);
+
+    const ordinary = new Request('https://kovo.local/form-entry-budget', {
+      body: 'first=one&second=two',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+    });
+    const parsed = await requestFormData(ordinary);
+    expect(parsed.get('first')).toBe('one');
+    expect(parsed.get('second')).toBe('two');
+  });
+
+  it('bounds URL search entries before route/query record reconstruction', () => {
+    const search = new URLSearchParams();
+    for (let index = 0; index < 10_001; index += 1) {
+      search.append('field', String(index));
+    }
+    expect(() => requestUrlSearchParamsEntries(search)).toThrow(/too many entries/u);
+
+    expect(requestUrlSearchParamsEntries(new URLSearchParams('first=one&second=two'))).toEqual([
+      ['first', 'one'],
+      ['second', 'two'],
+    ]);
   });
 
   it('pins URLSearchParams entry and serialization controls for guarded query input', () => {
