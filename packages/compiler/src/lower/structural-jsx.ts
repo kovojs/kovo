@@ -92,6 +92,7 @@ import {
   compilerSetForEach,
   compilerSetHas,
   compilerSnapshotDenseArray,
+  compilerStringCharCodeAt,
   compilerStringEndsWith,
   compilerStringIncludes,
   compilerStringIndexOf,
@@ -132,6 +133,7 @@ export type StructuralJsxLoweringOptions = Pick<
 };
 
 const KOVO_COMPONENT_IDENTITY = frameworkExport('@kovojs/core', 'component');
+const KOVO_ROUTE_IDENTITY = frameworkExport('@kovojs/server', 'route');
 
 interface InlineAttributeDerive {
   attribute: JsxAttributeModel;
@@ -586,7 +588,7 @@ function submitterTargetsProvenSeparateNativeForm(
   elements: readonly JsxIrElement[],
   mutationForms: readonly JsxIrElement[],
 ): boolean {
-  const formId = staticAttributeString(submitter, 'form');
+  const formId = staticFormAssociationString(submitter, 'form');
   if (formId === null || formId.length === 0) return false;
   const allElements = compilerSnapshotDenseArray(elements, 'Native form association elements');
   const typedForms = compilerSnapshotDenseArray(mutationForms, 'Typed mutation forms');
@@ -595,7 +597,7 @@ function submitterTargetsProvenSeparateNativeForm(
     const candidate = allElements[index]!;
     if (!isIntrinsicHtmlElement(candidate.element, 'form')) continue;
     if (formAssociationIdIsDynamic(candidate)) return false;
-    if (staticAttributeString(candidate, 'id') !== formId) continue;
+    if (staticFormAssociationString(candidate, 'id') !== formId) continue;
     let typed = false;
     for (let typedIndex = 0; typedIndex < typedForms.length; typedIndex += 1) {
       if (typedForms[typedIndex] === candidate) {
@@ -652,14 +654,14 @@ function mutationFormForSubmitter(
   ) {
     return null;
   }
-  const controlFormId = staticAttributeString(element, 'form');
+  const controlFormId = staticFormAssociationString(element, 'form');
   const forms = compilerSnapshotDenseArray(mutationForms, 'Proven mutation submitter forms');
   for (let index = 0; index < forms.length; index += 1) {
     const form = forms[index]!;
     const source = form.element;
     const descendant =
       element.element.start >= source.openingEnd && element.element.end <= source.closingStart;
-    const formId = staticAttributeString(form, 'id');
+    const formId = staticFormAssociationString(form, 'id');
     if (descendant || (controlFormId !== null && formId === controlFormId)) return form;
   }
   return null;
@@ -758,6 +760,8 @@ interface MutationDocumentElementInstance {
 interface MutationDocumentFormInstance extends MutationDocumentElementInstance {
   readonly id: string | null;
   readonly idIsDynamic: boolean;
+  readonly idIsWireStable: boolean;
+  readonly idSpan: SourceSpan | undefined;
   readonly typed: boolean;
 }
 
@@ -767,9 +771,23 @@ interface MutationDocumentControlInstance extends MutationDocumentElementInstanc
 }
 
 interface MutationDocumentOpaqueInstance {
+  readonly descendantClassified: boolean;
   readonly diagnosticSpan: SourceSpan;
   readonly inheritedForm: MutationDocumentFormInstance | undefined;
   readonly tag: string;
+}
+
+interface MutationDocumentProjection {
+  readonly context: MutationDocumentProjectionContext;
+  readonly localName?: string;
+  readonly nodes: readonly MutationDocumentOutputNode[];
+  readonly objectName?: string;
+  readonly propertyName?: string;
+}
+
+interface MutationDocumentProjectionContext {
+  readonly entries: readonly MutationDocumentProjection[];
+  unknownValues: boolean;
 }
 
 interface MutationDocumentCensus {
@@ -850,12 +868,24 @@ function documentMutationFormOwnershipDiagnostics(
     }
     if (typedForms.length === 0 && !hasDefiniteFormAssociation) continue;
 
+    for (let formIndex = 0; formIndex < forms.length; formIndex += 1) {
+      const form = forms[formIndex]!;
+      if (form.idIsWireStable) continue;
+      appendMutationDocumentDiagnostic(
+        diagnostics,
+        seen,
+        options,
+        form.source.model === model ? (form.idSpan ?? form.diagnosticSpan) : form.diagnosticSpan,
+        'form id is not stable across SSR UTF-8 serialization and HTML input preprocessing; remove NUL, carriage returns, and lone UTF-16 surrogates from security-relevant form ids',
+      );
+    }
+
     const opaque = compilerSnapshotDenseArray(census.opaque, 'Document mutation opaque output');
     for (let opaqueIndex = 0; opaqueIndex < opaque.length; opaqueIndex += 1) {
       const candidate = opaque[opaqueIndex]!;
       // The descendant-only classifier already owns this exact closed verdict. This census adds
       // the sibling/document-wide relation that the descendant walk cannot observe.
-      if (candidate.inheritedForm?.typed === true) continue;
+      if (candidate.inheritedForm?.typed === true && candidate.descendantClassified) continue;
       appendMutationDocumentDiagnostic(
         diagnostics,
         seen,
@@ -875,12 +905,76 @@ function documentMutationFormOwnershipDiagnostics(
 
     for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
       const control = controls[controlIndex]!;
+      const provenOwner = mutationDocumentControlOwner(census, control);
+      if (
+        provenOwner?.typed === true &&
+        !mutationDocumentControlIsLexicalDescendant(control, provenOwner)
+      ) {
+        const directTransport = mutationSubmitterDirectTransport(control.element);
+        for (
+          let overrideIndex = 0;
+          overrideIndex < directTransport.overrides.length;
+          overrideIndex += 1
+        ) {
+          const override = directTransport.overrides[overrideIndex]!;
+          appendMutationDocumentDiagnostic(
+            diagnostics,
+            seen,
+            options,
+            control.diagnosticSpan,
+            `component-rendered ${override.name} cannot override a typed mutation form transport; use a separate native form`,
+          );
+        }
+        const spreads = compilerSnapshotDenseArray(
+          control.element.spreadAttributes,
+          'Document mutation submitter spreads',
+        );
+        for (let spreadIndex = 0; spreadIndex < spreads.length; spreadIndex += 1) {
+          const spread = spreads[spreadIndex]!;
+          const names = compilerSnapshotDenseArray(
+            spread.mutationFormControlNames ?? [],
+            'Document mutation submitter spread controls',
+          );
+          const overrides: string[] = [];
+          for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+            const transport = mutationSubmitterTransportAttributeName(names[nameIndex]!);
+            if (transport !== null && transport !== 'form') {
+              appendCompilerFact(
+                overrides,
+                names[nameIndex]!,
+                'Document mutation submitter spread overrides',
+              );
+            }
+          }
+          if (overrides.length === 0) continue;
+          appendMutationDocumentDiagnostic(
+            diagnostics,
+            seen,
+            options,
+            control.diagnosticSpan,
+            `component-rendered submitter spread cannot override typed mutation transport (${compilerArrayJoin(overrides, ', ')})`,
+          );
+        }
+      }
       const formAttribute = documentControlFormAttribute(control);
       if (formAttribute === undefined && control.formSpreadAssociation === null) continue;
+      const rawFormId =
+        control.formSpreadAssociation === null
+          ? documentStaticAttributeString(formAttribute)
+          : null;
+      if (rawFormId !== null && !formAssociationValueIsHtmlWireStable(rawFormId)) {
+        appendMutationDocumentDiagnostic(
+          diagnostics,
+          seen,
+          options,
+          control.diagnosticSpan,
+          'form association is not stable across SSR UTF-8 serialization and HTML input preprocessing; remove NUL, carriage returns, and lone UTF-16 surrogates from security-relevant form references',
+        );
+      }
       const formId =
         control.formSpreadAssociation !== null
           ? null
-          : documentStaticAttributeString(formAttribute);
+          : documentStaticFormAssociationString(formAttribute);
       const matches: MutationDocumentFormInstance[] = [];
       if (formId !== null && formId.length > 0) {
         for (let formIndex = 0; formIndex < forms.length; formIndex += 1) {
@@ -934,6 +1028,17 @@ function documentMutationFormOwnershipDiagnostics(
     }
   }
   return diagnostics;
+}
+
+function mutationDocumentControlIsLexicalDescendant(
+  control: MutationDocumentControlInstance,
+  form: MutationDocumentFormInstance,
+): boolean {
+  return (
+    control.source === form.source &&
+    control.element.start >= form.element.openingEnd &&
+    control.element.end <= form.element.closingStart
+  );
 }
 
 function appendMutationDocumentDiagnostic(
@@ -1060,6 +1165,7 @@ function mutationDocumentCensuses(
     compilerSetAdd(rootIdentities, identity);
     appendCompilerFact(roots, implementation, 'Mutation document root implementations');
   }
+  appendMutationDocumentRouteRoots(project.root, roots, rootIdentities);
 
   const censuses: MutationDocumentCensus[] = [];
   for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
@@ -1080,10 +1186,75 @@ function mutationDocumentCensuses(
       project,
       options,
       mutable,
+      { entries: [], unknownValues: true },
     );
     appendCompilerFact(censuses, mutable, 'Mutation document censuses');
   }
   return censuses;
+}
+
+function appendMutationDocumentRouteRoots(
+  source: MutationComponentSource,
+  roots: MutationComponentImplementation[],
+  identities: Set<string>,
+): void {
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      expressionResolvesToFrameworkExport(
+        ts as FrameworkIdentityTypeScript,
+        source.model.sourceFile,
+        node.expression,
+        KOVO_ROUTE_IDENTITY,
+        { legacyGlobals: [KOVO_ROUTE_IDENTITY] },
+      )
+    ) {
+      const argumentsSnapshot = compilerSnapshotDenseArray(
+        node.arguments,
+        'Mutation document route arguments',
+      );
+      const definitionCandidate = argumentsSnapshot[1] ?? argumentsSnapshot[0];
+      const definition =
+        definitionCandidate === undefined
+          ? undefined
+          : unwrapMutationComponentExpression(definitionCandidate);
+      if (definition !== undefined && ts.isObjectLiteralExpression(definition)) {
+        const properties = compilerSnapshotDenseArray(
+          definition.properties,
+          'Mutation document route properties',
+        );
+        for (let index = 0; index < properties.length; index += 1) {
+          const property = properties[index]!;
+          if (mutationDocumentPropertyName(property.name) !== 'page') continue;
+          let implementation: MutationComponentImplementation | null = null;
+          if (ts.isPropertyAssignment(property)) {
+            const initializer = unwrapMutationComponentExpression(property.initializer);
+            if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
+              implementation = { body: initializer.body, source };
+            } else if (ts.isIdentifier(initializer)) {
+              implementation = localMutationComponentImplementation(source, initializer.text);
+            }
+          } else if (ts.isMethodDeclaration(property) && property.body !== undefined) {
+            implementation = { body: property.body, source };
+          }
+          if (implementation === null) continue;
+          const identity = mutationComponentImplementationIdentity(implementation);
+          if (compilerSetHas(identities, identity)) continue;
+          compilerSetAdd(identities, identity);
+          appendCompilerFact(roots, implementation, 'Mutation document route roots');
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source.model.sourceFile);
+}
+
+function mutationDocumentPropertyName(name: ts.PropertyName): string | null {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return null;
 }
 
 function appendMutationDocumentImplementation(
@@ -1099,12 +1270,14 @@ function appendMutationDocumentImplementation(
     forms: MutationDocumentFormInstance[];
     opaque: MutationDocumentOpaqueInstance[];
   },
+  projections: MutationDocumentProjectionContext,
 ): void {
   const identity = mutationComponentImplementationIdentity(implementation);
-  if (compilerSetHas(active, identity) || !componentBodyHasClosedJsxReturns(implementation.body)) {
+  if (compilerSetHas(active, identity)) {
     appendCompilerFact(
       census.opaque,
       {
+        descendantClassified: true,
         diagnosticSpan: rootSpan,
         inheritedForm,
         tag: mutationImplementationDisplayName(implementation),
@@ -1114,11 +1287,10 @@ function appendMutationDocumentImplementation(
     return;
   }
   compilerSetAdd(active, identity);
-  const roots = mutationImplementationElementTree(implementation);
+  const roots = mutationImplementationOutputTree(implementation);
   for (let index = 0; index < roots.length; index += 1) {
-    appendMutationDocumentElement(
+    appendMutationDocumentOutput(
       roots[index]!,
-      implementation.source,
       inheritedForm,
       componentDepth,
       rootSpan,
@@ -1126,67 +1298,188 @@ function appendMutationDocumentImplementation(
       project,
       options,
       census,
+      projections,
     );
   }
   compilerSetDelete(active, identity);
 }
 
+type MutationDocumentOutputNode =
+  | MutationDocumentElementNode
+  | MutationDocumentExpressionNode;
+
 interface MutationDocumentElementNode {
-  readonly children: MutationDocumentElementNode[];
+  readonly children: readonly MutationDocumentOutputNode[];
   readonly element: JsxElementModel;
+  readonly implementation: MutationComponentImplementation;
+  readonly kind: 'element';
+  readonly node: ts.JsxElement | ts.JsxSelfClosingElement;
 }
 
-function mutationImplementationElementTree(
+interface MutationDocumentExpressionNode {
+  readonly expression: ts.Expression;
+  readonly implementation: MutationComponentImplementation;
+  readonly kind: 'expression';
+  readonly span: SourceSpan;
+}
+
+function mutationImplementationOutputTree(
   implementation: MutationComponentImplementation,
-): MutationDocumentElementNode[] {
-  const bodyStart = implementation.body.getStart(implementation.source.model.sourceFile);
-  const bodyEnd = implementation.body.getEnd();
-  const all = compilerSnapshotDenseArray(
-    implementation.source.model.jsxElements,
-    'Mutation document implementation elements',
-  );
-  const nodes: MutationDocumentElementNode[] = [];
-  for (let index = 0; index < all.length; index += 1) {
-    const element = all[index]!;
-    if (element.start < bodyStart || element.end > bodyEnd) continue;
-    appendCompilerFact(
-      nodes,
-      { children: [], element },
-      'Mutation document implementation element nodes',
-    );
+): MutationDocumentOutputNode[] {
+  const roots: MutationDocumentOutputNode[] = [];
+  if (!ts.isBlock(implementation.body)) {
+    appendMutationDocumentExpressionOutput(implementation.body, implementation, roots);
+    return roots;
   }
-  const roots: MutationDocumentElementNode[] = [];
-  for (let childIndex = 0; childIndex < nodes.length; childIndex += 1) {
-    const child = nodes[childIndex]!;
-    let parent: MutationDocumentElementNode | undefined;
-    let parentWidth: number | undefined;
-    for (let parentIndex = 0; parentIndex < nodes.length; parentIndex += 1) {
-      if (parentIndex === childIndex) continue;
-      const candidate = nodes[parentIndex]!;
-      if (!mutationDocumentElementContains(candidate.element, child.element)) continue;
-      const width = candidate.element.end - candidate.element.start;
-      if (parentWidth === undefined || width < parentWidth) {
-        parent = candidate;
-        parentWidth = width;
+
+  const visit = (node: ts.Node): void => {
+    if (node !== implementation.body && ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node)) {
+      if (node.expression !== undefined) {
+        appendMutationDocumentExpressionOutput(node.expression, implementation, roots);
       }
+      return;
     }
-    if (parent === undefined) {
-      appendCompilerFact(roots, child, 'Mutation document root elements');
-    } else {
-      appendCompilerFact(parent.children, child, 'Mutation document child elements');
-    }
-  }
+    ts.forEachChild(node, visit);
+  };
+  visit(implementation.body);
   return roots;
 }
 
-function mutationDocumentElementContains(parent: JsxElementModel, child: JsxElementModel): boolean {
-  if (parent.selfClosing) return false;
-  return child.start >= parent.openingEnd && child.end <= parent.closingStart;
+function appendMutationDocumentExpressionOutput(
+  expression: ts.Expression,
+  implementation: MutationComponentImplementation,
+  output: MutationDocumentOutputNode[],
+): void {
+  const value = unwrapMutationComponentExpression(expression);
+  if (ts.isJsxElement(value) || ts.isJsxSelfClosingElement(value)) {
+    const element = mutationDocumentElementModelForNode(implementation.source, value);
+    if (element === null) {
+      appendCompilerFact(
+        output,
+        {
+          expression: value,
+          implementation,
+          kind: 'expression',
+          span: mutationDocumentNodeSpan(implementation.source, value),
+        },
+        'Mutation document unresolved JSX output',
+      );
+      return;
+    }
+    const children: MutationDocumentOutputNode[] = [];
+    if (ts.isJsxElement(value)) {
+      const childSnapshot = compilerSnapshotDenseArray(
+        value.children,
+        'Mutation document JSX children',
+      );
+      for (let index = 0; index < childSnapshot.length; index += 1) {
+        const child = childSnapshot[index]!;
+        if (ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child)) {
+          appendMutationDocumentExpressionOutput(child, implementation, children);
+        } else if (ts.isJsxExpression(child) && child.expression !== undefined) {
+          appendMutationDocumentExpressionOutput(child.expression, implementation, children);
+        }
+      }
+    }
+    appendCompilerFact(
+      output,
+      { children, element, implementation, kind: 'element', node: value },
+      'Mutation document JSX output',
+    );
+    return;
+  }
+  if (ts.isJsxFragment(value)) {
+    const children = compilerSnapshotDenseArray(value.children, 'Mutation document fragment children');
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index]!;
+      if (ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child)) {
+        appendMutationDocumentExpressionOutput(child, implementation, output);
+      } else if (ts.isJsxExpression(child) && child.expression !== undefined) {
+        appendMutationDocumentExpressionOutput(child.expression, implementation, output);
+      }
+    }
+    return;
+  }
+  if (ts.isConditionalExpression(value)) {
+    appendMutationDocumentExpressionOutput(value.whenTrue, implementation, output);
+    appendMutationDocumentExpressionOutput(value.whenFalse, implementation, output);
+    return;
+  }
+  if (ts.isArrayLiteralExpression(value)) {
+    const elements = compilerSnapshotDenseArray(value.elements, 'Mutation document output array');
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]!;
+      if (ts.isOmittedExpression(element)) continue;
+      appendMutationDocumentExpressionOutput(
+        ts.isSpreadElement(element) ? element.expression : element,
+        implementation,
+        output,
+      );
+    }
+    return;
+  }
+  if (ts.isBinaryExpression(value)) {
+    if (
+      value.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+      value.operatorToken.kind === ts.SyntaxKind.CommaToken
+    ) {
+      appendMutationDocumentExpressionOutput(value.right, implementation, output);
+      return;
+    }
+    if (
+      value.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+      value.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+    ) {
+      appendMutationDocumentExpressionOutput(value.left, implementation, output);
+      appendMutationDocumentExpressionOutput(value.right, implementation, output);
+      return;
+    }
+  }
+  if (
+    value.kind === ts.SyntaxKind.NullKeyword ||
+    value.kind === ts.SyntaxKind.FalseKeyword ||
+    value.kind === ts.SyntaxKind.TrueKeyword ||
+    ts.isStringLiteralLike(value) ||
+    ts.isNumericLiteral(value)
+  ) {
+    return;
+  }
+  appendCompilerFact(
+    output,
+    {
+      expression: value,
+      implementation,
+      kind: 'expression',
+      span: mutationDocumentNodeSpan(implementation.source, value),
+    },
+    'Mutation document expression output',
+  );
 }
 
-function appendMutationDocumentElement(
-  node: MutationDocumentElementNode,
+function mutationDocumentElementModelForNode(
   source: MutationComponentSource,
+  node: ts.JsxElement | ts.JsxSelfClosingElement,
+): JsxElementModel | null {
+  const start = node.getStart(source.model.sourceFile);
+  const end = node.getEnd();
+  const elements = compilerSnapshotDenseArray(
+    source.model.jsxElements,
+    'Mutation document source JSX elements',
+  );
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (element.start === start && element.end === end) return element;
+  }
+  return null;
+}
+
+function mutationDocumentNodeSpan(source: MutationComponentSource, node: ts.Node): SourceSpan {
+  return { end: node.getEnd(), start: node.getStart(source.model.sourceFile) };
+}
+
+function appendMutationDocumentOutput(
+  node: MutationDocumentOutputNode,
   inheritedForm: MutationDocumentFormInstance | undefined,
   componentDepth: number,
   rootSpan: SourceSpan,
@@ -1198,14 +1491,60 @@ function appendMutationDocumentElement(
     forms: MutationDocumentFormInstance[];
     opaque: MutationDocumentOpaqueInstance[];
   },
+  projections: MutationDocumentProjectionContext,
 ): void {
+  if (node.kind === 'expression') {
+    appendMutationDocumentOutputExpression(
+      node,
+      inheritedForm,
+      componentDepth,
+      rootSpan,
+      active,
+      project,
+      options,
+      census,
+      projections,
+    );
+    return;
+  }
+  appendMutationDocumentElement(
+    node,
+    inheritedForm,
+    componentDepth,
+    rootSpan,
+    active,
+    project,
+    options,
+    census,
+    projections,
+  );
+}
+
+function appendMutationDocumentElement(
+  node: MutationDocumentElementNode,
+  inheritedForm: MutationDocumentFormInstance | undefined,
+  componentDepth: number,
+  rootSpan: SourceSpan,
+  active: Set<string>,
+  project: MutationComponentProject,
+  options: StructuralJsxLoweringOptions,
+  census: {
+    controls: MutationDocumentControlInstance[];
+    forms: MutationDocumentFormInstance[];
+    opaque: MutationDocumentOpaqueInstance[];
+  },
+  projections: MutationDocumentProjectionContext,
+): void {
+  const source = node.implementation.source;
   const element = node.element;
   const diagnosticSpan = source === project.root ? element : rootSpan;
   let childForm = inheritedForm;
   if (element.intrinsicTagName !== undefined) {
     if (isIntrinsicHtmlElement(element, 'form')) {
       const idAttribute = mutationDocumentAttribute(element, 'id');
-      const id = documentStaticAttributeString(idAttribute);
+      const rawId = documentStaticAttributeString(idAttribute);
+      const idIsWireStable = rawId === null || formAssociationValueIsHtmlWireStable(rawId);
+      const id = idIsWireStable ? rawId : null;
       const form: MutationDocumentFormInstance = {
         componentDepth,
         diagnosticSpan,
@@ -1215,7 +1554,9 @@ function appendMutationDocumentElement(
           element.spreadAttributes.length > 0 ||
           (idAttribute !== undefined &&
             !mutationFormControlIsStaticallyAbsent(idAttribute) &&
-            id === null),
+            rawId === null),
+        idIsWireStable,
+        idSpan: idAttribute,
         nearestForm: inheritedForm,
         source,
         typed: mutationDocumentFormIsTyped(source, element, options),
@@ -1239,13 +1580,19 @@ function appendMutationDocumentElement(
         'Mutation document controls',
       );
     }
-  } else if (!compilerOwnedMutationFormHelper(source.model, element.tag)) {
+  } else {
     const invocationSpan = source === project.root ? element : rootSpan;
+    if (compilerOwnedMutationFormHelper(source.model, element.tag)) return;
     const implementation = resolveMutationComponent(source, element.tag, project);
     if (implementation === null) {
       appendCompilerFact(
         census.opaque,
-        { diagnosticSpan: invocationSpan, inheritedForm, tag: element.tag },
+        {
+          descendantClassified: true,
+          diagnosticSpan: invocationSpan,
+          inheritedForm,
+          tag: element.tag,
+        },
         'Mutation document opaque components',
       );
     } else {
@@ -1258,15 +1605,18 @@ function appendMutationDocumentElement(
         project,
         options,
         census,
+        mutationDocumentComponentProjections(node, implementation, projections),
       );
     }
+    // JSX children are component inputs, not lexical DOM descendants. They are visited only at a
+    // statically resolved `{children}` / `props.children` projection in the callee output.
+    return;
   }
 
   const children = compilerSnapshotDenseArray(node.children, 'Mutation document child nodes');
   for (let index = 0; index < children.length; index += 1) {
-    appendMutationDocumentElement(
+    appendMutationDocumentOutput(
       children[index]!,
-      source,
       childForm,
       componentDepth,
       rootSpan,
@@ -1274,8 +1624,394 @@ function appendMutationDocumentElement(
       project,
       options,
       census,
+      projections,
     );
   }
+}
+
+interface MutationDocumentPropOutput {
+  readonly name: string;
+  readonly nodes: readonly MutationDocumentOutputNode[];
+}
+
+function mutationDocumentComponentProjections(
+  invocation: MutationDocumentElementNode,
+  implementation: MutationComponentImplementation,
+  callerContext: MutationDocumentProjectionContext,
+): MutationDocumentProjectionContext {
+  const entries: MutationDocumentProjection[] = [];
+  const propOutputs: MutationDocumentPropOutput[] = [];
+  let unknownValues = false;
+  const opening = ts.isJsxElement(invocation.node)
+    ? invocation.node.openingElement
+    : invocation.node;
+  const attributes = compilerSnapshotDenseArray(
+    opening.attributes.properties,
+    'Mutation document component props',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (ts.isJsxSpreadAttribute(attribute)) {
+      unknownValues = true;
+      continue;
+    }
+    if (!ts.isIdentifier(attribute.name)) {
+      unknownValues = true;
+      continue;
+    }
+    const nodes: MutationDocumentOutputNode[] = [];
+    if (attribute.initializer !== undefined && ts.isJsxExpression(attribute.initializer)) {
+      if (attribute.initializer.expression !== undefined) {
+        appendMutationDocumentExpressionOutput(
+          attribute.initializer.expression,
+          invocation.implementation,
+          nodes,
+        );
+      }
+    }
+    appendCompilerFact(
+      propOutputs,
+      { name: attribute.name.text, nodes },
+      'Mutation document component prop output',
+    );
+  }
+  if (invocation.children.length > 0) {
+    appendCompilerFact(
+      propOutputs,
+      { name: 'children', nodes: invocation.children },
+      'Mutation document component children output',
+    );
+  }
+
+  const context: MutationDocumentProjectionContext = { entries, unknownValues };
+  const parameters = mutationDocumentImplementationParameters(implementation);
+  const props = parameters[0];
+  if (props === undefined) return context;
+  if (ts.isIdentifier(props.name)) {
+    for (let index = 0; index < propOutputs.length; index += 1) {
+      const prop = propOutputs[index]!;
+      appendCompilerFact(
+        entries,
+        {
+          context: callerContext,
+          nodes: prop.nodes,
+          objectName: props.name.text,
+          propertyName: prop.name,
+        },
+        'Mutation document property projections',
+      );
+    }
+    return context;
+  }
+  if (!ts.isObjectBindingPattern(props.name)) return context;
+  const bindings = compilerSnapshotDenseArray(
+    props.name.elements,
+    'Mutation document component prop bindings',
+  );
+  for (let bindingIndex = 0; bindingIndex < bindings.length; bindingIndex += 1) {
+    const binding = bindings[bindingIndex]!;
+    if (binding.dotDotDotToken !== undefined || !ts.isIdentifier(binding.name)) {
+      unknownValues = true;
+      continue;
+    }
+    const propertyName =
+      binding.propertyName === undefined
+        ? binding.name.text
+        : mutationDocumentPropertyName(binding.propertyName);
+    if (propertyName === null) {
+      unknownValues = true;
+      continue;
+    }
+    let matched = false;
+    for (let propIndex = 0; propIndex < propOutputs.length; propIndex += 1) {
+      const prop = propOutputs[propIndex]!;
+      if (prop.name !== propertyName) continue;
+      matched = true;
+      appendCompilerFact(
+        entries,
+        {
+          context: callerContext,
+          localName: binding.name.text,
+          nodes: prop.nodes,
+        },
+        'Mutation document local prop projections',
+      );
+    }
+    if (!matched && binding.initializer !== undefined) {
+      const nodes: MutationDocumentOutputNode[] = [];
+      appendMutationDocumentExpressionOutput(binding.initializer, implementation, nodes);
+      appendCompilerFact(
+        entries,
+        {
+          context,
+          localName: binding.name.text,
+          nodes,
+        },
+        'Mutation document default prop projections',
+      );
+    }
+  }
+  context.unknownValues = unknownValues;
+  return context;
+}
+
+function mutationDocumentImplementationParameters(
+  implementation: MutationComponentImplementation,
+): readonly ts.ParameterDeclaration[] {
+  const parent = implementation.body.parent;
+  return ts.isFunctionLike(parent) ? parent.parameters : [];
+}
+
+function appendMutationDocumentOutputExpression(
+  node: MutationDocumentExpressionNode,
+  inheritedForm: MutationDocumentFormInstance | undefined,
+  componentDepth: number,
+  rootSpan: SourceSpan,
+  active: Set<string>,
+  project: MutationComponentProject,
+  options: StructuralJsxLoweringOptions,
+  census: {
+    controls: MutationDocumentControlInstance[];
+    forms: MutationDocumentFormInstance[];
+    opaque: MutationDocumentOpaqueInstance[];
+  },
+  projections: MutationDocumentProjectionContext,
+): void {
+  const projected = mutationDocumentProjectionForExpression(node, projections);
+  if (projected !== null) {
+    const output = compilerSnapshotDenseArray(
+      projected.nodes,
+      'Mutation document projected output',
+    );
+    for (let index = 0; index < output.length; index += 1) {
+      appendMutationDocumentOutput(
+        output[index]!,
+        inheritedForm,
+        componentDepth,
+        rootSpan,
+        active,
+        project,
+        options,
+        census,
+        projected.context,
+      );
+    }
+    return;
+  }
+
+  if (mutationDocumentExpressionReferencesParameter(node)) {
+    if (projections.unknownValues) {
+      appendMutationDocumentOpaqueExpression(census.opaque, node, inheritedForm, rootSpan, project);
+    }
+    return;
+  }
+
+  const expression = unwrapMutationComponentExpression(node.expression);
+  if (ts.isCallExpression(expression)) {
+    if (ts.isIdentifier(expression.expression)) {
+      const implementation = resolveMutationComponent(
+        node.implementation.source,
+        expression.expression.text,
+        project,
+      );
+      if (implementation !== null) {
+        appendMutationDocumentImplementation(
+          implementation,
+          inheritedForm,
+          componentDepth + 1,
+          node.implementation.source === project.root ? node.span : rootSpan,
+          active,
+          project,
+          options,
+          census,
+          mutationDocumentHelperProjections(node, expression, implementation, projections),
+        );
+        return;
+      }
+    }
+    appendMutationDocumentOpaqueExpression(census.opaque, node, inheritedForm, rootSpan, project);
+    return;
+  }
+
+  if (
+    mutationDocumentExpressionIsCompilerEscapedText(node) ||
+    mutationDocumentExpressionIsSyntacticPrimitive(expression)
+  ) {
+    return;
+  }
+  appendMutationDocumentOpaqueExpression(census.opaque, node, inheritedForm, rootSpan, project);
+}
+
+function mutationDocumentProjectionForExpression(
+  node: MutationDocumentExpressionNode,
+  context: MutationDocumentProjectionContext,
+): MutationDocumentProjection | null {
+  const expression = unwrapMutationComponentExpression(node.expression);
+  const entries = compilerSnapshotDenseArray(context.entries, 'Mutation document projections');
+  for (let index = 0; index < entries.length; index += 1) {
+    const projection = entries[index]!;
+    if (
+      projection.localName !== undefined &&
+      ts.isIdentifier(expression) &&
+      expression.text === projection.localName
+    ) {
+      return projection;
+    }
+    if (
+      projection.objectName !== undefined &&
+      projection.propertyName !== undefined &&
+      ts.isPropertyAccessExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text === projection.objectName &&
+      expression.name.text === projection.propertyName
+    ) {
+      return projection;
+    }
+    if (
+      projection.objectName !== undefined &&
+      projection.propertyName !== undefined &&
+      ts.isElementAccessExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text === projection.objectName &&
+      expression.argumentExpression !== undefined &&
+      ts.isStringLiteralLike(expression.argumentExpression) &&
+      expression.argumentExpression.text === projection.propertyName
+    ) {
+      return projection;
+    }
+  }
+  return null;
+}
+
+function mutationDocumentExpressionReferencesParameter(
+  node: MutationDocumentExpressionNode,
+): boolean {
+  const expression = unwrapMutationComponentExpression(node.expression);
+  const parameters = mutationDocumentImplementationParameters(node.implementation);
+  for (let index = 0; index < parameters.length; index += 1) {
+    const parameter = parameters[index]!;
+    if (ts.isIdentifier(parameter.name)) {
+      if (ts.isIdentifier(expression) && expression.text === parameter.name.text) return true;
+      if (
+        (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) &&
+        ts.isIdentifier(expression.expression) &&
+        expression.expression.text === parameter.name.text
+      ) {
+        return true;
+      }
+      continue;
+    }
+    if (!ts.isObjectBindingPattern(parameter.name) || !ts.isIdentifier(expression)) continue;
+    const bindings = compilerSnapshotDenseArray(
+      parameter.name.elements,
+      'Mutation document parameter bindings',
+    );
+    for (let bindingIndex = 0; bindingIndex < bindings.length; bindingIndex += 1) {
+      const binding = bindings[bindingIndex]!;
+      if (ts.isIdentifier(binding.name) && binding.name.text === expression.text) return true;
+    }
+  }
+  return false;
+}
+
+function mutationDocumentHelperProjections(
+  caller: MutationDocumentExpressionNode,
+  call: ts.CallExpression,
+  implementation: MutationComponentImplementation,
+  callerContext: MutationDocumentProjectionContext,
+): MutationDocumentProjectionContext {
+  const entries: MutationDocumentProjection[] = [];
+  let unknownValues = false;
+  const context: MutationDocumentProjectionContext = { entries, unknownValues };
+  const parameters = mutationDocumentImplementationParameters(implementation);
+  const argumentsSnapshot = compilerSnapshotDenseArray(
+    call.arguments,
+    'Mutation document helper arguments',
+  );
+  for (let index = 0; index < parameters.length; index += 1) {
+    const parameter = parameters[index]!;
+    const argument = argumentsSnapshot[index];
+    if (!ts.isIdentifier(parameter.name)) {
+      if (argument !== undefined) unknownValues = true;
+      continue;
+    }
+    const nodes: MutationDocumentOutputNode[] = [];
+    if (argument !== undefined) {
+      appendMutationDocumentExpressionOutput(argument, caller.implementation, nodes);
+    } else if (parameter.initializer !== undefined) {
+      appendMutationDocumentExpressionOutput(parameter.initializer, implementation, nodes);
+    }
+    appendCompilerFact(
+      entries,
+      {
+        context: argument === undefined ? context : callerContext,
+        localName: parameter.name.text,
+        nodes,
+      },
+      'Mutation document helper projections',
+    );
+  }
+  context.unknownValues = unknownValues;
+  return context;
+}
+
+function mutationDocumentExpressionIsCompilerEscapedText(
+  node: MutationDocumentExpressionNode,
+): boolean {
+  const expressions = compilerSnapshotDenseArray(
+    node.implementation.source.model.jsxExpressions,
+    'Mutation document JSX expressions',
+  );
+  for (let index = 0; index < expressions.length; index += 1) {
+    const expression = expressions[index]!;
+    if (expression.start === node.span.start && expression.end === node.span.end) {
+      return shouldEscapeStaticTextExpression(expression, node.implementation.source.model);
+    }
+  }
+  return false;
+}
+
+function mutationDocumentExpressionIsSyntacticPrimitive(expression: ts.Expression): boolean {
+  if (
+    ts.isIdentifier(expression) ||
+    ts.isPropertyAccessExpression(expression) ||
+    ts.isElementAccessExpression(expression) ||
+    ts.isTemplateExpression(expression) ||
+    ts.isNoSubstitutionTemplateLiteral(expression)
+  ) {
+    return true;
+  }
+  if (ts.isPrefixUnaryExpression(expression) || ts.isPostfixUnaryExpression(expression)) {
+    return true;
+  }
+  if (ts.isBinaryExpression(expression)) {
+    return (
+      expression.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken &&
+      expression.operatorToken.kind !== ts.SyntaxKind.BarBarToken &&
+      expression.operatorToken.kind !== ts.SyntaxKind.QuestionQuestionToken &&
+      expression.operatorToken.kind !== ts.SyntaxKind.CommaToken
+    );
+  }
+  return false;
+}
+
+function appendMutationDocumentOpaqueExpression(
+  opaque: MutationDocumentOpaqueInstance[],
+  node: MutationDocumentExpressionNode,
+  inheritedForm: MutationDocumentFormInstance | undefined,
+  rootSpan: SourceSpan,
+  project: MutationComponentProject,
+): void {
+  appendCompilerFact(
+    opaque,
+    {
+      descendantClassified: false,
+      diagnosticSpan: node.implementation.source === project.root ? node.span : rootSpan,
+      inheritedForm,
+      tag: 'JSX expression',
+    },
+    'Mutation document opaque expressions',
+  );
 }
 
 function mutationDocumentFormIsTyped(
@@ -1318,6 +2054,13 @@ function documentStaticAttributeString(attribute: JsxAttributeModel | undefined)
   return typeof attribute.expressionStaticValue === 'string'
     ? attribute.expressionStaticValue
     : null;
+}
+
+function documentStaticFormAssociationString(
+  attribute: JsxAttributeModel | undefined,
+): string | null {
+  const value = documentStaticAttributeString(attribute);
+  return value !== null && formAssociationValueIsHtmlWireStable(value) ? value : null;
 }
 
 function documentControlFormAttribute(
@@ -1378,7 +2121,7 @@ function mutationDocumentControlOwner(
   if (control.formSpreadAssociation !== null) return undefined;
   const formAttribute = documentControlFormAttribute(control);
   if (formAttribute === undefined) return control.nearestForm;
-  const formId = documentStaticAttributeString(formAttribute);
+  const formId = documentStaticFormAssociationString(formAttribute);
   if (formId === null || formId.length === 0) return undefined;
   const forms = compilerSnapshotDenseArray(census.forms, 'Mutation document owner forms');
   let owner: MutationDocumentFormInstance | undefined;
@@ -2978,6 +3721,35 @@ function staticAttributeString(element: JsxIrElement, name: string): string | nu
   if (!attribute) return null;
   if (attribute.value !== undefined) return attribute.value;
   return staticStringValue(attribute.expressionStaticValue);
+}
+
+/**
+ * Return a form-owner identity only when the authored UTF-16 string survives SSR byte encoding
+ * and HTML input preprocessing unchanged. SPEC §§5.2, 6.3, and 9.1 make form ownership part of
+ * the compiler proof: U+0000, CR/CRLF, and lone surrogates must not compare as distinct in source
+ * and then collapse onto another form id in the browser.
+ */
+function staticFormAssociationString(element: JsxIrElement, name: string): string | null {
+  const value = staticAttributeString(element, name);
+  return value !== null && formAssociationValueIsHtmlWireStable(value) ? value : null;
+}
+
+function formAssociationValueIsHtmlWireStable(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = compilerStringCharCodeAt(value, index);
+    // The HTML input stream replaces NUL and normalizes both CR and CRLF to LF before tokenizing
+    // attributes. Neither authored value can therefore participate in a source-level ID proof.
+    if (code === 0x0000 || code === 0x000d) return false;
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = index + 1 < value.length ? compilerStringCharCodeAt(value, index + 1) : -1;
+      if (next < 0xdc00 || next > 0xdfff) return false;
+      index += 1;
+      continue;
+    }
+    // Node's UTF-8 serialization replaces an unpaired low surrogate with U+FFFD as well.
+    if (code >= 0xdc00 && code <= 0xdfff) return false;
+  }
+  return true;
 }
 
 function accordionMultipleExpression(

