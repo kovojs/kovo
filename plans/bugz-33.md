@@ -14,8 +14,8 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    1 |      8 |
-| Medium   |    0 |     14 |
+| High     |    0 |      9 |
+| Medium   |    1 |     14 |
 | Low      |    0 |      3 |
 
 ## High
@@ -101,16 +101,20 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** signed sequential and durable concurrent duplicate/retry regressions passed in
     the webhook matrix 72/72; server dist, API, wire, security-guarantee, and mutation gates passed.
 
-- [ ] **H9 - Configured database authority leaked into process-global outbound networking.**
+- [x] **H9 - Configured database authority leaked into process-global outbound networking.**
   - Registering a private Postgres endpoint admitted its host and port through the egress floor for
     ordinary global fetch, Node HTTP, and raw TCP. A remotely influenced generic egress sink could
     therefore reuse framework-granted database reachability without going through the managed
     Postgres driver boundary.
   - **Evidence:** with a private Postgres URL configured, generic process-global network primitives
     reached the same private host/port before the fix.
-  - **Open:** bind database egress authority to framework-created Postgres sockets, keep generic
-    fetch/HTTP/TCP denied, and prove managed database connectivity still works across bootstrap and
-    runtime paths (SPEC §6.6/§9.4/§9.5).
+  - **Fixed:** `0bba77c20` binds each registered database endpoint to the exact framework-created
+    node-postgres socket through module-private provenance. Generic fetch/HTTP/raw TCP remain
+    subject to the private-network floor, and no package export exposes the socket mint
+    (SPEC §6.6/§9.4/§9.5).
+  - **Evidence:** egress/bootstrap/Postgres runtime matrix 192/192; real PostgreSQL 18 literal,
+    hostname, reconnect, and TLS reconnect probes 2/2; all 11 classifier corpora plus egress, API,
+    and TCB boundary gates passed.
 
 ## Medium
 
@@ -261,6 +265,17 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** real-wire/live/generated Node matrix 99/99; server dist, wire, API, and VP gates
     passed.
 
+- [ ] **M15 - Normal Node request completion falsely aborted the Web request signal.**
+  - The adapter mapped every `IncomingMessage` `close` event to `Request.signal.abort()`, but Node
+    emits `close` after a normally consumed request body. A valid remote POST could therefore mark
+    itself aborted before downstream fetch/database work and trigger cancellation paths intended
+    only for client disconnects.
+  - **Evidence:** a real POST body was read successfully, then the handler observed
+    `signal.aborted === true` both immediately and after a delay despite normal client completion.
+  - **Open:** treat request `close` as an abort only when native completion evidence is false, keep
+    explicit request/socket aborts unconditional, and prove live/emitted normal-POST and disconnect
+    parity (SPEC §9.5).
+
 ## Low
 
 - [x] **L1 - The Vercel preset copied framework metadata files into the public static root.**
@@ -294,7 +309,9 @@ rendering, Better Auth, and managed SQL.
 - Trusted-scheme live/generated matrix: 106/106; wire-output boundary gate passed.
 - Missing-authority real/live/generated matrix: 99/99; wire-output boundary gate passed.
 - Webhook signed replay/retry matrix: 72/72; wire-output boundary gate passed.
+- Database socket-provenance matrix: 192/192 plus real PostgreSQL reconnect/TLS 2/2; classifier,
+  egress, API, and TCB boundary gates passed.
 - Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
-- Final exact-tip remote-boundary review remains open until H9 lands and the parallel fresh passes
+- Final exact-tip remote-boundary review remains open until M15 lands and the parallel fresh passes
   find no new remotely reachable issue.
