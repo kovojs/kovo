@@ -131,8 +131,10 @@ describe('source/sink inventory', () => {
     expect(searchableInventory).toContain('runtime-style-property-writers');
     expect(searchableInventory).toContain('generated-keyframe-theme-output');
     expect(searchableInventory).toContain('mutation-response-header-channel');
-    expect(searchableInventory).toContain('route-outcome-headers');
+    expect(searchableInventory).toContain('route-outcome-direct-headers');
     expect(searchableInventory).toContain('Set-Cookie');
+    expect(searchableInventory).toContain('Clear-Site-Data');
+    expect(searchableInventory).toContain('browser-state-private-no-store-floor');
     expect(searchableInventory).toContain('Content-Type');
     expect(searchableInventory).toContain('Content-Disposition');
     expect(searchableInventory).toContain('Retry-After');

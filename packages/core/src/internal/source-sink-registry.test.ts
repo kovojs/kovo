@@ -103,4 +103,25 @@ describe('boundary crossing sink inventory', () => {
       'ingress.endpoint.webhook',
     );
   });
+
+  it('keeps browser-state cache poisoning in the C13 header/cookie superset corpus', () => {
+    const headerInventory = frameworkSourceSinkInventory().find(
+      (entry) => entry.sink === 'http.header.cookie',
+    );
+    const headerCorpus = sourceSinkRedCorpus().find(
+      (entry) => entry.family === 'http.header.cookie',
+    );
+    const boundary = boundaryCrossingSinkInventory().find(
+      (entry) => entry.sink === 'http response headers',
+    );
+
+    expect(headerInventory?.runtimeGuard).toContain('browser-state-private-no-store-floor');
+    expect(headerInventory?.schema).toContain('Set-Cookie|Clear-Site-Data');
+    expect(headerInventory?.testEvidence).toContain('packages/server/src/response-posture.test.ts');
+    expect(headerInventory?.testEvidence).toContain('packages/server/src/app-dispatch.test.ts');
+    expect(headerCorpus?.payloads).toContain(
+      'public cache policy with Set-Cookie or Clear-Site-Data',
+    );
+    expect(boundary?.mechanismDetail).toContain('browser-state private/no-store floor');
+  });
 });

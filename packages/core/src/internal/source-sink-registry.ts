@@ -245,14 +245,19 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     guard:
       'direct-app-header-allowlist+dedicated-field-options+typed-cookie-builder+transport-owned-header-deny-set',
     runtimeGuard:
-      'reject-unknown-direct-app-names+reject-cr-lf-nul-controls+reject-framing-hop-by-hop+structural-cookie-serialization',
+      'reject-unknown-direct-app-names+reject-cr-lf-nul-controls+reject-framing-hop-by-hop+structural-cookie-serialization+browser-state-private-no-store-floor',
     schema:
-      'mutation-response-header-channel|route-outcome-direct-headers(Cache-Control,Last-Modified,Vary)|configured-error-shell-direct-headers(Cache-Control,Last-Modified,Vary)|raw-endpoint-Response|static-export-headers|Set-Cookie|Content-Type|ETag|Content-Disposition|Location|Retry-After|Kovo-*|Content-Length|Connection|Keep-Alive|Proxy-Connection|TE|Trailer|Transfer-Encoding|Upgrade|Proxy-Authenticate|Proxy-Authorization|HTTP2-Settings|Node-Bun-Workers-header-conversion',
+      'mutation-response-header-channel|route-outcome-direct-headers(Cache-Control,Last-Modified,Vary)|configured-error-shell-direct-headers(Cache-Control,Last-Modified,Vary)|raw-endpoint-Response|static-export-headers|Set-Cookie|Clear-Site-Data|Content-Type|ETag|Content-Disposition|Location|Retry-After|Kovo-*|Content-Length|Connection|Keep-Alive|Proxy-Connection|TE|Trailer|Transfer-Encoding|Upgrade|Proxy-Authenticate|Proxy-Authorization|HTTP2-Settings|Node-Bun-Workers-header-conversion',
     sink: 'http.header.cookie',
     source:
       'mutation-response-channel|route-outcome|configured-error-shell|raw-endpoint-response|static-export-config|session-provider|request.headers|cookies|redirect-target|app-config-env-values',
     specAnchor: 'SPEC.md#9.1;SPEC.md#11.3',
-    testEvidence: [existingEvidence.cookie, existingEvidence.response],
+    testEvidence: [
+      existingEvidence.cookie,
+      existingEvidence.response,
+      'packages/server/src/response-posture.test.ts',
+      'packages/server/src/app-dispatch.test.ts',
+    ],
     trust: 'transport-metadata',
   },
   {
@@ -437,12 +442,14 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
   },
   {
     expected:
-      'typed builders reject or encode controls; KV415 covers app-authored channels; private/query/session responses keep no-store and Vary: Cookie',
+      'typed builders reject or encode controls; KV415 covers app-authored channels; private/query/session/browser-state responses keep no-store and Vary: Cookie',
     family: 'http.header.cookie',
     negativeTestEvidence: [
       'packages/server/src/cookies.test.ts',
       'packages/server/src/response-app-headers.test.ts',
       'packages/server/src/response.test.ts',
+      'packages/server/src/response-posture.test.ts',
+      'packages/server/src/app-dispatch.test.ts',
     ],
     payloads: [
       'CR/LF/NUL/DEL/control chars',
@@ -455,9 +462,11 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'proxy deployment-control headers',
       'private cache override',
       'raw Set-Cookie forwarding',
+      'public cache policy with Set-Cookie or Clear-Site-Data',
     ],
     positiveTestEvidence: [
       'packages/server/src/cookies.test.ts',
+      'packages/server/src/app-dispatch.test.ts',
       'tests/integration/specs/query-args-search.spec.ts',
       'tests/integration/specs/mutation-response-headers.spec.ts',
     ],
@@ -813,7 +822,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     inventoryFamily: 'http.header.cookie',
     mechanism: 'own',
     mechanismDetail:
-      'Direct app inputs pass an exact metadata allowlist before framework fields are assembled; typed and raw finalization then own controls and the transport-owned framing/hop-by-hop deny set before adapter mutation.',
+      'Direct app inputs pass an exact metadata allowlist before framework fields are assembled; typed and raw finalization then own controls, the browser-state private/no-store floor, and the transport-owned framing/hop-by-hop deny set before adapter mutation.',
     proofEvidence: [
       'packages/server/src/response-app-headers.test.ts',
       'packages/server/src/response.test.ts',

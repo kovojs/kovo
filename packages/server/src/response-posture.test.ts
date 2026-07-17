@@ -219,7 +219,11 @@ describe('central response posture finalization', () => {
   });
 
   it('normalizes raw endpoint Set-Cookie headers through the credential cookie floor', async () => {
-    const headers = new Headers({ 'Content-Type': 'text/plain; charset=utf-8' });
+    const headers = new Headers({
+      'Cache-Control': 'public, max-age=3600',
+      'Content-Type': 'text/plain; charset=utf-8',
+      Vary: 'Accept-Encoding',
+    });
     headers.append('Set-Cookie', 'sid=abc; Path=/');
     const raw = new Response('payload', { headers, status: 200 });
 
@@ -227,6 +231,8 @@ describe('central response posture finalization', () => {
 
     expect(finalized).not.toBe(raw);
     await expect(finalized.text()).resolves.toBe('payload');
+    expect(finalized.headers.get('cache-control')).toBe('private, no-store');
+    expect(finalized.headers.get('vary')).toBe('Accept-Encoding, Cookie');
     const cookies = finalized.headers.getSetCookie();
     expect(cookies).toHaveLength(1);
     expect(cookies[0]).toContain('sid=abc');
@@ -234,6 +240,49 @@ describe('central response posture finalization', () => {
     expect(cookies[0]).toContain('HttpOnly');
     expect(cookies[0]).toContain('SameSite=Lax');
   });
+
+  it('forces the private cache floor on cache-destructive raw endpoint responses', () => {
+    const finalized = finalizeRawWebResponse(
+      new Response('signed out', {
+        headers: {
+          'Cache-Control': 'public, max-age=3600',
+          'Clear-Site-Data': '"cookies", "storage"',
+          Vary: 'Accept',
+        },
+        status: 200,
+      }),
+      { method: 'GET' },
+    );
+
+    expect(finalized.headers.get('cache-control')).toBe('private, no-store');
+    expect(finalized.headers.get('vary')).toBe('Accept, Cookie');
+    expect(finalized.headers.get('clear-site-data')).toBe('"cookies", "storage"');
+  });
+
+  it.each([
+    ['Set-Cookie', 'sid=structured; Path=/; HttpOnly'],
+    ['Clear-Site-Data', '"cookies"'],
+  ] as const)(
+    'forces the browser-state cache floor on structured %s responses too',
+    (name, value) => {
+      const finalized = finalizeServerResponse(
+        {
+          body: 'state changed',
+          headers: {
+            'Cache-Control': 'public, max-age=3600',
+            [name]: value,
+            Vary: 'Accept-Language',
+          },
+          status: 200,
+        },
+        { method: 'GET' },
+      );
+
+      expect(finalized.headers.get('cache-control')).toBe('private, no-store');
+      expect(finalized.headers.get('vary')).toBe('Accept-Language, Cookie');
+      expect(finalized.headers.get(name)).toBe(value);
+    },
+  );
 
   it('fails closed before malformed raw endpoint Set-Cookie headers reach the adapter', () => {
     expect(() =>

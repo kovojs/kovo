@@ -366,27 +366,31 @@ describe('server app matched dispatch boundary', () => {
   });
 
   it('finalizes raw endpoint Set-Cookie and redirect headers at the app shell boundary', async () => {
+    let cookieVerifierCalls = 0;
     const cookieEndpoint = endpoint('/raw-cookie', {
       auth: {
         kind: 'custom',
         name: 'raw-cookie-finalization',
-        verify: customVerifier(
-          'raw-cookie-finalization',
-          (request) => request.headers.get('x-cookie-proof') === 'accepted',
-        ),
+        verify: customVerifier('raw-cookie-finalization', (request) => {
+          cookieVerifierCalls += 1;
+          return request.headers.get('x-cookie-proof') === 'accepted';
+        }),
       },
       handler() {
         return new Response('cookie', {
           headers: {
-            'Cache-Control': 'no-store',
+            'Cache-Control': 'public, max-age=3600',
             'Set-Cookie': 'sid=abc; Path=/',
+            Vary: 'Accept-Encoding',
           },
         });
       },
       method: 'GET',
       reason: 'raw endpoint cookie finalization proof',
       response: {
-        ...rawTextResponse,
+        appOwnedSafety: true,
+        body: 'text',
+        cache: 'public',
         reservedHeaders: ['Set-Cookie'],
       },
     });
@@ -446,12 +450,31 @@ describe('server app matched dispatch boundary', () => {
         }),
       ),
     );
+    // Minimal RFC 9111 shared-cache model: Set-Cookie itself does not inhibit storage. Before
+    // H17 the public response was retained here, so the anonymous request below received the
+    // privileged cookie without reaching the endpoint verifier a second time.
+    const cacheControl = cookie.headers.get('cache-control') ?? '';
+    const sharedCache = /\b(?:private|no-store)\b/iu.test(cacheControl)
+      ? undefined
+      : cookie.clone();
+    const anonymous =
+      sharedCache ??
+      (await dispatchMatchedAppRequest(
+        matchedAppRequest(app, new Request('https://shop.example.test/raw-cookie')),
+      ));
+    expect.soft(anonymous.status).toBe(401);
+    expect.soft(anonymous.headers.getSetCookie()).toEqual([]);
+    expect.soft(cookieVerifierCalls).toBe(2);
+    expect.soft(sharedCache).toBeUndefined();
+
     expect(await cookie.text()).toBe('cookie');
     const cookies = cookie.headers.getSetCookie();
     expect(cookies).toHaveLength(1);
     expect(cookies[0]).toContain('sid=abc');
     expect(cookies[0]).toContain('HttpOnly');
     expect(cookies[0]).toContain('SameSite=Lax');
+    expect(cookie.headers.get('cache-control')).toBe('private, no-store');
+    expect(cookie.headers.get('vary')).toBe('Accept-Encoding, Cookie');
 
     const redirect = await dispatchMatchedAppRequest(
       matchedAppRequest(app, new Request('https://shop.example.test/raw-redirect')),

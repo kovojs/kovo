@@ -725,6 +725,7 @@ function finalizeResponseHeaders(
     }
   }
 
+  stampBrowserStateResponseCacheFloor(webHeaders);
   return webHeaders;
 }
 
@@ -774,7 +775,31 @@ function finalizeRawResponseHeaders(
     );
   }
 
+  stampBrowserStateResponseCacheFloor(webHeaders);
   return webHeaders;
+}
+
+/**
+ * SPEC §6.6/§9.1: browser-state responses are per-client and must never survive in a
+ * shared cache. RFC 9111 §7.3 explicitly says `Set-Cookie` does not inhibit caching, so this
+ * floor must live at the final structured/raw wire reconstruction rather than relying on an
+ * endpoint's declared or authored cache policy. Cached `Clear-Site-Data` is destructive too: a
+ * replay can clear an unrelated visitor's cookies/storage without reaching the endpoint verifier.
+ */
+function stampBrowserStateResponseCacheFloor(headers: Headers): void {
+  if (!nativeHeaderHas(headers, 'Set-Cookie') && !nativeHeaderHas(headers, 'Clear-Site-Data')) {
+    return;
+  }
+
+  nativeHeaderSet(headers, 'Cache-Control', 'private, no-store');
+  const vary = nativeHeaderGet(headers, 'Vary');
+  if (vary === null || securityStringTrim(vary) === '') {
+    nativeHeaderSet(headers, 'Vary', 'Cookie');
+    return;
+  }
+  if (!witnessRegExpTest(/(?:^|,)\s*(?:cookie|\*)\s*(?:,|$)/iu, vary)) {
+    nativeHeaderSet(headers, 'Vary', `${vary}, Cookie`);
+  }
 }
 
 function structuredTransportHeaderEntries(
