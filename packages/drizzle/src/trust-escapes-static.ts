@@ -1540,6 +1540,13 @@ const REQUEST_ROOT_BUDGET = 512;
 interface RequestProvenanceSession {
   readonly assignedBindingMemo: Map<string, readonly RequestAssignedBindingProjection[]>;
   readonly bootOnlySetupMemo: Map<string, boolean>;
+  readonly classMutationTargetActive: Set<string>;
+  readonly classMutationTargetMemo: Map<
+    string,
+    readonly (import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression)[]
+  >;
+  readonly classStaticMutationActive: Set<string>;
+  readonly classStaticMutationMemo: Map<string, RequestClassStaticMutationSummary>;
   readonly callableActive: Set<string>;
   readonly callableMemo: Map<string, RequestCallableResolution>;
   readonly callableSymbolActive: Set<string>;
@@ -1589,6 +1596,10 @@ function createRequestProvenanceSession(): RequestProvenanceSession {
   return {
     assignedBindingMemo: new Map(),
     bootOnlySetupMemo: new Map(),
+    classMutationTargetActive: new Set(),
+    classMutationTargetMemo: new Map(),
+    classStaticMutationActive: new Set(),
+    classStaticMutationMemo: new Map(),
     callableActive: new Set(),
     callableMemo: new Map(),
     callableSymbolActive: new Set(),
@@ -17412,6 +17423,22 @@ function requestThenableProtocolSources(
       )) {
         sources.push(...requestThenableProtocolSources(inherited, session, new Set(seen), state));
       }
+      const ownerClasses = requestClassDeclarationsForMutationTarget(node.getExpression(), session);
+      if (
+        ownerClasses.length > 0 &&
+        requestClassStaticMemberProjectionIsOpaque(
+          node.getExpression(),
+          member,
+          node.getStart(),
+          session,
+          new Set(),
+        )
+      ) {
+        // An unresolved class mutation can install a class thenable in this exact slot. Feed the
+        // owner declarations into the existing class-assimilation verdict instead of treating an
+        // incomplete member walk as proof of plain data (SPEC §6.6 C1/C2).
+        sources.push(...ownerClasses);
+      }
       const owner = unwrapStaticExpression(node.getExpression());
       if (Node.isCallExpression(owner)) {
         const mutableRead = requestMutableFactoryReadForCall(owner, session);
@@ -17520,7 +17547,7 @@ function requestStaticMemberAssimilationSources(
     );
   }
 
-  const classes = requestDirectClassDeclarationsForExpression(node, new Set());
+  const classes = requestClassDeclarationsForMutationTarget(node, session);
   if (classes.length === 0) {
     const projected = requestWireProjectedExpression(node, [member], new Set(), 0);
     return projected ? [projected] : [];
@@ -17568,17 +17595,25 @@ function requestStaticMemberAssimilationSources(
         ...requestDefinedStaticDataPropertyExpressions(name, member, snapshotBoundary, session),
       );
     }
+    const mutationSummary = requestClassStaticMutationSummary(
+      declaration,
+      member,
+      snapshotBoundary,
+      session,
+    );
+    own.push(...mutationSummary.values);
 
     // JavaScript static inheritance is shadowing, not a union. Once the subclass has an exact own
     // member, a dangerous base member is unreachable through `Child.member` (SPEC §6.6 C1/C2).
     if (own.length > 0) {
       sources.push(...own);
-      if (!requestClassStaticMemberMayBeDeleted(declaration, member, snapshotBoundary, session)) {
+      if (!mutationSummary.deleted) {
         continue;
       }
     }
     for (const prototype of requestClassStaticPrototypeSources(
       declaration,
+      member,
       snapshotBoundary,
       session,
     )) {
@@ -17602,46 +17637,7 @@ function requestClassStaticMemberMayBeDeleted(
   snapshotBoundary: number,
   session: RequestProvenanceSession,
 ): boolean {
-  const matchesDeclaration = (candidate: Node | undefined): boolean =>
-    !!candidate &&
-    requestDirectClassDeclarationsForExpression(candidate, new Set()).some((resolved) =>
-      requestNodesAreSame(resolved, declaration),
-    );
-  const sourceFile = declaration.getSourceFile();
-  for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
-    if (!requestMutationMayExecuteBefore(deletion, snapshotBoundary, session)) continue;
-    const target = unwrapStaticExpression(deletion.getExpression());
-    if (!Node.isPropertyAccessExpression(target) && !Node.isElementAccessExpression(target)) {
-      continue;
-    }
-    const deletedMember = Node.isPropertyAccessExpression(target)
-      ? requestCallableMemberName(target.getNameNode())
-      : requestCallableMemberName(target.getArgumentExpression());
-    if (
-      (deletedMember === undefined || deletedMember === member) &&
-      matchesDeclaration(target.getExpression())
-    ) {
-      return true;
-    }
-  }
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!requestMutationMayExecuteBefore(call, snapshotBoundary, session)) continue;
-    const callee = unwrapStaticExpression(call.getExpression());
-    const receiver = requestCallReceiver(callee);
-    if (
-      !receiver ||
-      requestStaticCallMember(callee) !== 'deleteProperty' ||
-      !expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0)
-    ) {
-      continue;
-    }
-    const [target, property] = call.getArguments();
-    const deletedMember = requestReflectivePropertyName(property);
-    if (matchesDeclaration(target) && (deletedMember === undefined || deletedMember === member)) {
-      return true;
-    }
-  }
-  return false;
+  return requestClassStaticMutationSummary(declaration, member, snapshotBoundary, session).deleted;
 }
 
 function requestDefinedGetterExpressionsBefore(
@@ -17693,6 +17689,455 @@ function requestDirectClassDeclarationsForExpression(
   return dedupeRequestClassDeclarations(classes);
 }
 
+interface RequestClassStaticMutationSummary {
+  readonly deleted: boolean;
+  readonly opaque: boolean;
+  readonly prototypes: readonly Node[];
+  readonly values: readonly Node[];
+}
+
+/**
+ * Resolve the exact class object reached by a mutation target. Unlike the ordinary declaration
+ * resolver, this walk follows finite object/array carriers and reverse local/imported helper
+ * bindings because JavaScript mutates the same constructor identity through all of those shapes.
+ * Unknown spreads/paths consume the shared provenance budget and therefore fail closed at the
+ * projection sink (SPEC §6.6; bugz-31 C1/C2).
+ */
+function requestClassDeclarationsForMutationTarget(
+  expression: Node,
+  session: RequestProvenanceSession,
+  seen: Set<string> = new Set(),
+  depth = 0,
+): Array<import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression> {
+  const node = unwrapStaticExpression(expression);
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH || !requestProvenanceStep(session, node)) {
+    session.exhaustedAt ??= node;
+    return [];
+  }
+  const key = `class-mutation-target:${requestNodeIdentity(node)}`;
+  const memoized = session.classMutationTargetMemo.get(key);
+  if (memoized) return [...memoized];
+  if (seen.has(key) || session.classMutationTargetActive.has(key)) return [];
+  seen.add(key);
+  session.classMutationTargetActive.add(key);
+
+  const classes: Array<import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression> =
+    [];
+  const collect = (candidate: Node): void => {
+    classes.push(
+      ...requestClassDeclarationsForMutationTarget(candidate, session, new Set(seen), depth + 1),
+    );
+  };
+
+  if (Node.isClassDeclaration(node) || Node.isClassExpression(node)) {
+    classes.push(node);
+  } else if (node.getKind() === SyntaxKind.ThisKeyword) {
+    const declaration = node.getFirstAncestor(
+      (ancestor) => Node.isClassDeclaration(ancestor) || Node.isClassExpression(ancestor),
+    );
+    if (Node.isClassDeclaration(declaration) || Node.isClassExpression(declaration)) {
+      const ancestors = node.getAncestors();
+      const inStaticBlock = declaration
+        .getStaticBlocks()
+        .some((block) => ancestors.some((ancestor) => requestNodesAreSame(ancestor, block)));
+      const staticElement = ancestors.find(
+        (ancestor) =>
+          (Node.isPropertyDeclaration(ancestor) ||
+            Node.isMethodDeclaration(ancestor) ||
+            Node.isGetAccessorDeclaration(ancestor) ||
+            Node.isSetAccessorDeclaration(ancestor)) &&
+          ancestor.getParent() === declaration,
+      );
+      if (
+        inStaticBlock ||
+        (staticElement &&
+          (Node.isPropertyDeclaration(staticElement) ||
+            Node.isMethodDeclaration(staticElement) ||
+            Node.isGetAccessorDeclaration(staticElement) ||
+            Node.isSetAccessorDeclaration(staticElement)) &&
+          staticElement.isStatic())
+      ) {
+        classes.push(declaration);
+      }
+    }
+  } else if (Node.isConditionalExpression(node)) {
+    collect(node.getWhenTrue());
+    collect(node.getWhenFalse());
+  } else if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (operator === SyntaxKind.CommaToken || operator === SyntaxKind.EqualsToken) {
+      collect(node.getRight());
+    } else if (
+      operator === SyntaxKind.BarBarToken ||
+      operator === SyntaxKind.AmpersandAmpersandToken ||
+      operator === SyntaxKind.QuestionQuestionToken
+    ) {
+      collect(node.getLeft());
+      collect(node.getRight());
+    }
+  } else {
+    const projection = requestStaticExpressionProjection(node);
+    if (projection && projection.path.every((member): member is string => member !== undefined)) {
+      const selected = requestWireProjectedExpression(
+        projection.base,
+        projection.path,
+        new Set(),
+        0,
+      );
+      if (selected && !requestNodesAreSame(selected, node)) collect(selected);
+    }
+
+    if (Node.isCallExpression(node)) {
+      const invocation = requestNormalizedCall(node);
+      for (const callable of resolveRequestCallable(invocation.target, new Set(), 0, session)
+        .callables) {
+        for (const output of requestWireOutputExpressions(callable)) collect(output);
+      }
+    }
+
+    if (Node.isIdentifier(node)) {
+      const symbol = requestIdentifierValueSymbol(node);
+      if (symbol) {
+        const exactSession = requestExactGlobalValueSession(
+          node.getProject(),
+          REQUEST_EXACT_GLOBAL_OBJECT,
+        );
+        for (const declaration of symbol.getDeclarations()) {
+          if (Node.isClassDeclaration(declaration) || Node.isClassExpression(declaration)) {
+            classes.push(declaration);
+            continue;
+          }
+          const initializer = valueDeclarationInitializer(declaration);
+          if (initializer) collect(initializer);
+          const inputs = Node.isParameterDeclaration(declaration)
+            ? requestExactGlobalParameterInputs(declaration, exactSession)
+            : Node.isBindingElement(declaration)
+              ? requestExactGlobalBindingElementInputs(declaration, exactSession)
+              : undefined;
+          if (!inputs) continue;
+          if (inputs.exhausted) session.exhaustedAt ??= declaration;
+          for (const input of inputs.inputs) {
+            classes.push(
+              ...requestClassDeclarationsForMutationBoundInput(
+                input,
+                session,
+                new Set(seen),
+                depth + 1,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  const result = dedupeRequestClassDeclarations(classes);
+  session.classMutationTargetActive.delete(key);
+  session.classMutationTargetMemo.set(key, result);
+  return [...result];
+}
+
+function requestClassDeclarationsForMutationBoundInput(
+  input: RequestExactGlobalBoundInput,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+  depth: number,
+): Array<import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression> {
+  if (input.opaque || input.objectRest) {
+    session.exhaustedAt ??= input.expression;
+    return [];
+  }
+  if (input.alternatives) {
+    return dedupeRequestClassDeclarations(
+      input.alternatives.flatMap((alternative) =>
+        requestClassDeclarationsForMutationBoundInput(
+          { ...alternative, path: [...alternative.path, ...input.path] },
+          session,
+          new Set(seen),
+          depth + 1,
+        ),
+      ),
+    );
+  }
+  if (input.elements) {
+    if (input.path.length === 0) return [];
+    const [member, ...rest] = input.path;
+    const candidates =
+      member === undefined
+        ? input.elements.filter(
+            (candidate): candidate is RequestExactGlobalBoundInput => candidate !== undefined,
+          )
+        : /^(?:0|[1-9][0-9]*)$/u.test(member)
+          ? [input.elements[Number(member)]].filter(
+              (candidate): candidate is RequestExactGlobalBoundInput => candidate !== undefined,
+            )
+          : [];
+    return dedupeRequestClassDeclarations(
+      candidates.flatMap((candidate) =>
+        requestClassDeclarationsForMutationBoundInput(
+          { ...candidate, path: [...candidate.path, ...rest] },
+          session,
+          new Set(seen),
+          depth + 1,
+        ),
+      ),
+    );
+  }
+  if (input.path.some((member) => member === undefined)) {
+    session.exhaustedAt ??= input.expression;
+    return [];
+  }
+  const selected =
+    input.path.length === 0
+      ? input.expression
+      : requestWireProjectedExpression(
+          input.expression,
+          input.path as readonly string[],
+          new Set(),
+          0,
+        );
+  return selected
+    ? requestClassDeclarationsForMutationTarget(selected, session, seen, depth + 1)
+    : [];
+}
+
+function requestClassStaticMutationSummary(
+  declaration: import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression,
+  member: string,
+  snapshotBoundary: number,
+  session: RequestProvenanceSession,
+): RequestClassStaticMutationSummary {
+  const key = `class-static-mutations:${requestNodeIdentity(declaration)}:${member}:${snapshotBoundary}`;
+  const memoized = session.classStaticMutationMemo.get(key);
+  if (memoized) return memoized;
+  if (session.classStaticMutationActive.has(key)) {
+    return { deleted: false, opaque: true, prototypes: [], values: [] };
+  }
+  session.classStaticMutationActive.add(key);
+  let deleted = false;
+  let opaque = false;
+  const prototypes: Node[] = [];
+  const values: Node[] = [];
+  const matches = (candidate: Node | undefined): boolean =>
+    !!candidate &&
+    requestClassDeclarationsForMutationTarget(candidate, session).some((resolved) =>
+      requestNodesAreSame(resolved, declaration),
+    );
+  const before = (site: Node): boolean =>
+    requestMutationMayExecuteBefore(site, snapshotBoundary, session);
+  const addDescriptor = (descriptor: Node | undefined): void => {
+    if (!descriptor) {
+      opaque = true;
+      return;
+    }
+    const object = resolveStaticObjectLiteral(descriptor, new Set(), 0);
+    if (
+      !object ||
+      object
+        .getProperties()
+        .some(
+          (property) =>
+            Node.isSpreadAssignment(property) ||
+            requestCallableMemberName(requestObjectLiteralElementNameNode(property)) === undefined,
+        )
+    ) {
+      opaque = true;
+      return;
+    }
+    const value = requestStaticDescriptorValue(descriptor);
+    if (value) values.push(value);
+    const getterProperty = requestStaticObjectProperty(object, 'get');
+    const getter = getterProperty
+      ? (requestHandlerPropertyExpression(getterProperty) ?? getterProperty)
+      : undefined;
+    if (getter) {
+      const callables = resolveRequestCallable(getter, new Set(), 0, session).callables;
+      if (callables.length === 0) opaque = true;
+      for (const callable of callables) values.push(...requestWireOutputExpressions(callable));
+    }
+    // A setter-only or undefined-valued descriptor still creates an own shadow. Retain the plain
+    // descriptor as a non-class source so inheritance is not spuriously consulted.
+    if (!value && !getter) values.push(descriptor);
+  };
+
+  for (const file of declaration.getProject().getSourceFiles()) {
+    if (file.isDeclarationFile()) continue;
+    for (const assignment of file.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (
+        operator < SyntaxKind.FirstAssignment ||
+        operator > SyntaxKind.LastAssignment ||
+        !before(assignment)
+      ) {
+        continue;
+      }
+      const target = unwrapStaticExpression(assignment.getLeft());
+      if (!Node.isPropertyAccessExpression(target) && !Node.isElementAccessExpression(target)) {
+        continue;
+      }
+      if (!matches(target.getExpression())) continue;
+      const assignedMember = Node.isPropertyAccessExpression(target)
+        ? requestCallableMemberName(target.getNameNode())
+        : requestReflectivePropertyName(target.getArgumentExpression());
+      if (assignedMember === undefined) {
+        opaque = true;
+        continue;
+      }
+      if (assignedMember === '__proto__') {
+        prototypes.push(assignment.getRight());
+        continue;
+      }
+      if (assignedMember !== member) continue;
+      if (operator === SyntaxKind.EqualsToken) values.push(assignment.getRight());
+      else opaque = true;
+    }
+
+    for (const deletion of file.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      if (!before(deletion)) continue;
+      const target = unwrapStaticExpression(deletion.getExpression());
+      if (!Node.isPropertyAccessExpression(target) && !Node.isElementAccessExpression(target)) {
+        continue;
+      }
+      if (!matches(target.getExpression())) continue;
+      const deletedMember = Node.isPropertyAccessExpression(target)
+        ? requestCallableMemberName(target.getNameNode())
+        : requestReflectivePropertyName(target.getArgumentExpression());
+      if (deletedMember === undefined) {
+        deleted = true;
+        opaque = true;
+      } else if (deletedMember === member) {
+        deleted = true;
+      }
+    }
+
+    for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      if (!before(call)) continue;
+      const callee = unwrapStaticExpression(call.getExpression());
+      const receiver = requestCallReceiver(callee);
+      const method = requestStaticCallMember(callee);
+      const objectGlobal =
+        !!receiver && expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0);
+      const reflectGlobal =
+        !!receiver && expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0);
+      const [target, property, descriptorOrValue, ...rest] = call.getArguments();
+      let handled = false;
+
+      if (
+        target &&
+        matches(target) &&
+        method === 'setPrototypeOf' &&
+        (objectGlobal || reflectGlobal)
+      ) {
+        if (property) prototypes.push(property);
+        else opaque = true;
+        handled = true;
+      } else if (target && matches(target) && reflectGlobal && method === 'set') {
+        const assignedMember = requestReflectivePropertyName(property);
+        if (assignedMember === undefined) opaque = true;
+        else if (assignedMember === '__proto__') {
+          if (descriptorOrValue) prototypes.push(descriptorOrValue);
+          else opaque = true;
+        } else if (assignedMember === member) {
+          if (descriptorOrValue) values.push(descriptorOrValue);
+          else opaque = true;
+        }
+        handled = true;
+      } else if (target && matches(target) && objectGlobal && method === 'assign') {
+        for (const source of [property, descriptorOrValue, ...rest]) {
+          if (!source) continue;
+          const object = resolveStaticObjectLiteral(source, new Set(), 0);
+          if (!object) {
+            opaque = true;
+            continue;
+          }
+          for (const entry of object.getProperties()) {
+            if (Node.isSpreadAssignment(entry)) {
+              opaque = true;
+              continue;
+            }
+            const assignedMember = requestCallableMemberName(
+              requestObjectLiteralElementNameNode(entry),
+            );
+            const value = requestHandlerPropertyExpression(entry);
+            if (assignedMember === undefined) {
+              opaque = true;
+            } else if (assignedMember === '__proto__') {
+              if (value) prototypes.push(value);
+              else opaque = true;
+            } else if (assignedMember === member) {
+              if (value) values.push(value);
+              else opaque = true;
+            }
+          }
+        }
+        handled = true;
+      } else if (
+        target &&
+        matches(target) &&
+        method === 'defineProperty' &&
+        (objectGlobal || reflectGlobal)
+      ) {
+        const definedMember = requestReflectivePropertyName(property);
+        if (definedMember === undefined) opaque = true;
+        else if (definedMember === member) addDescriptor(descriptorOrValue);
+        handled = true;
+      } else if (target && matches(target) && objectGlobal && method === 'defineProperties') {
+        const descriptors = property
+          ? resolveStaticObjectLiteral(property, new Set(), 0)
+          : undefined;
+        if (!descriptors) {
+          opaque = true;
+        } else {
+          for (const entry of descriptors.getProperties()) {
+            if (Node.isSpreadAssignment(entry)) {
+              opaque = true;
+              continue;
+            }
+            const definedMember = requestCallableMemberName(
+              requestObjectLiteralElementNameNode(entry),
+            );
+            if (definedMember === undefined) opaque = true;
+            else if (definedMember === member) {
+              addDescriptor(requestHandlerPropertyExpression(entry));
+            }
+          }
+        }
+        handled = true;
+      } else if (target && matches(target) && reflectGlobal && method === 'deleteProperty') {
+        const deletedMember = requestReflectivePropertyName(property);
+        if (deletedMember === undefined) {
+          deleted = true;
+          opaque = true;
+        } else if (deletedMember === member) {
+          deleted = true;
+        }
+        handled = true;
+      }
+
+      if (handled) continue;
+      const classEscapes =
+        (!!receiver && matches(receiver)) ||
+        call.getArguments().some((argument) => matches(argument));
+      if (classEscapes) opaque = true;
+    }
+
+    for (const construct of file.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+      if (!before(construct)) continue;
+      if (construct.getArguments().some((argument) => matches(argument))) opaque = true;
+    }
+  }
+
+  const summary: RequestClassStaticMutationSummary = {
+    deleted,
+    opaque: opaque || session.exhaustedAt !== undefined,
+    prototypes: dedupeRequestNodes(prototypes),
+    values: dedupeRequestNodes(values),
+  };
+  session.classStaticMutationActive.delete(key);
+  session.classStaticMutationMemo.set(key, summary);
+  return summary;
+}
+
 function requestClassStaticMemberProjectionIsOpaque(
   expression: Node,
   member: string,
@@ -17715,10 +18160,17 @@ function requestClassStaticMemberProjectionIsOpaque(
       ),
     );
   }
-  const classes = requestDirectClassDeclarationsForExpression(node, new Set());
+  const classes = requestClassDeclarationsForMutationTarget(node, session);
   if (classes.length === 0) return false;
 
   for (const declaration of classes) {
+    const mutationSummary = requestClassStaticMutationSummary(
+      declaration,
+      member,
+      snapshotBoundary,
+      session,
+    );
+    if (mutationSummary.opaque) return true;
     const declaredMembers = [
       ...declaration.getProperties(),
       ...declaration.getGetAccessors(),
@@ -17821,7 +18273,8 @@ function requestClassStaticMemberProjectionIsOpaque(
           requestDefinedGetterExpressionsBefore(name, member, snapshotBoundary, session).length >
             0 ||
           requestDefinedStaticDataPropertyExpressions(name, member, snapshotBoundary, session)
-            .length > 0));
+            .length > 0)) ||
+      mutationSummary.values.length > 0;
     if (
       knownOwn &&
       !requestClassStaticMemberMayBeDeleted(declaration, member, snapshotBoundary, session)
@@ -17830,6 +18283,7 @@ function requestClassStaticMemberProjectionIsOpaque(
     }
     for (const prototype of requestClassStaticPrototypeSources(
       declaration,
+      member,
       snapshotBoundary,
       session,
     )) {
@@ -17872,17 +18326,20 @@ function requestClassStaticMemberProjectionIsOpaque(
 
 function requestClassStaticPrototypeSources(
   declaration: import('ts-morph').ClassDeclaration | import('ts-morph').ClassExpression,
+  member: string,
   snapshotBoundary: number,
   session: RequestProvenanceSession,
 ): Node[] {
-  const sources: Node[] = [];
+  const sources: Node[] = [
+    ...requestClassStaticMutationSummary(declaration, member, snapshotBoundary, session).prototypes,
+  ];
   const heritage = declaration.getExtends()?.getExpression();
   if (heritage) sources.push(heritage);
   const name = declaration.getNameNode();
   if (!name) return sources;
   const matchesDeclaration = (candidate: Node | undefined): boolean =>
     !!candidate &&
-    requestDirectClassDeclarationsForExpression(candidate, new Set()).some((resolved) =>
+    requestClassDeclarationsForMutationTarget(candidate, session).some((resolved) =>
       requestNodesAreSame(resolved, declaration),
     );
   const sourceFile = declaration.getSourceFile();
@@ -26448,7 +26905,7 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
   }
   if (
     member !== undefined &&
-    requestDirectClassDeclarationsForExpression(node, new Set()).length > 0
+    requestClassDeclarationsForMutationTarget(node, session.callIndex.callableSession).length > 0
   ) {
     const snapshotBoundary = node.getStart();
     const staticSources = requestClassStaticMemberAssimilationSources(
@@ -32718,6 +33175,59 @@ function requestRootRoleBindingIsPristineUncached(
       const rules = rulesBySource.get(plan.source) ?? [];
       rules.push({ plan, target });
       rulesBySource.set(plan.source, rules);
+    }
+  }
+
+  // SPEC §6.6 / bugz-31 C3: a `for..of` binding receives a live element reference, not a
+  // validated copy. Include iteration bindings in the same reverse alias plan as ordinary const
+  // declarations so writes through `alias` invalidate the originating request/input root. A rest
+  // binding creates only a shallow Array container; selecting one of its elements still recovers
+  // the direct carrier through the existing shallow-array projection rule.
+  const loopBindingIdentifiers = (name: Node): import('ts-morph').Identifier[] => {
+    if (Node.isIdentifier(name)) return [name];
+    if (!Node.isObjectBindingPattern(name) && !Node.isArrayBindingPattern(name)) return [];
+    return name
+      .getElements()
+      .flatMap((element) =>
+        Node.isOmittedExpression(element) ? [] : loopBindingIdentifiers(element.getNameNode()),
+      );
+  };
+  for (const loop of callable.body
+    .getDescendantsOfKind(SyntaxKind.ForOfStatement)
+    .filter(belongs)) {
+    const initializer = loop.getInitializer();
+    if (!Node.isVariableDeclarationList(initializer)) continue;
+    const plans = requestRootRoleReferencePlans(
+      loop.getExpression(),
+      referenceSession,
+      callbackMemo,
+      new Set(),
+      0,
+    ).flatMap((plan) => {
+      const mapped = requestRootRoleMappedReferencePlan(plan, () => 'direct');
+      return mapped ? [mapped] : [];
+    });
+    for (const declaration of initializer.getDeclarations()) {
+      for (const identifier of loopBindingIdentifiers(declaration.getNameNode())) {
+        const symbol = identifier.getSymbol();
+        if (!symbol) continue;
+        const rest = identifier
+          .getAncestors()
+          .some(
+            (ancestor) =>
+              Node.isBindingElement(ancestor) && ancestor.getDotDotDotToken() !== undefined,
+          );
+        const target = requestSymbolKey(symbol);
+        for (const plan of plans) {
+          const output = rest
+            ? requestRootRoleMappedReferencePlan(plan, () => 'shallow-array')
+            : plan;
+          if (!output) continue;
+          const rules = rulesBySource.get(output.source) ?? [];
+          rules.push({ plan: output, target });
+          rulesBySource.set(output.source, rules);
+        }
+      }
     }
   }
   const queue = [rootKey];
