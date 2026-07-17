@@ -13,6 +13,8 @@ import { bigint, integer, pgTable, text } from 'drizzle-orm/pg-core';
 import { Pool, type PoolClient, type QueryConfig, type QueryResultRow } from 'pg';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
+// @kovo-security-classifier-corpus postgres-identity-posture
+
 vi.mock('@kovojs/better-auth/internal/server-mount-adapter', () => ({
   assertBetterAuthMountAdapter: vi.fn(),
   invokeBetterAuthMountAdapter: vi.fn(),

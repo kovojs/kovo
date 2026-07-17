@@ -465,7 +465,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'postgres-identity-posture',
     marker: '@kovo-security-classifier-corpus postgres-identity-posture',
-    testFiles: ['packages/server/src/postgres-grant-shape-fuzzer.test.ts'],
+    testFiles: [
+      'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
+      'packages/server/src/postgres-external-probe.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'grant-shape-closure-fuzzer',
@@ -479,6 +482,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
         snippets: [
           'matches the identity-attribute axis against runtime-login and assumable-role posture',
+        ],
+      },
+      {
+        id: 'live-current-user-session-user-skew',
+        file: 'packages/server/src/postgres-external-probe.test.ts',
+        snippets: [
+          'witnesses runtime current_user on standalone and boot split-authority posture paths',
+          "'-c role=kovo_admin'",
+          'expectStandalonePostureWitnessesAuthenticatedRuntimeConnection',
+          'expectBootPostureWitnessesAuthenticatedRuntimeConnection',
+          'runtime connection current_user kovo_admin must match authenticated session_user',
         ],
       },
     ],
