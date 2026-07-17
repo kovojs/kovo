@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |     17 |
-| Medium   |    4 |     15 |
+| Medium   |    3 |     16 |
 | Low      |    0 |      4 |
 
 ## High
@@ -438,7 +438,7 @@ rendering, Better Auth, and managed SQL.
     IPv6 identity, strip only syntactically valid optional ports, reject malformed/obfuscated nodes,
     and prove shell/lifecycle plus live/generated parity.
 
-- [ ] **M19 - ASCII-case duplicate meta attributes bypassed the refresh navigation sink.**
+- [x] **M19 - ASCII-case duplicate meta attributes bypassed the refresh navigation sink.**
   - The JSX runtime compared the `content` name case-insensitively but found its paired
     `http-equiv` value through only the exact `http-equiv`/`httpEquiv` object keys. HTML folds
     attribute names and honors the first duplicate, so a persisted/query-backed dynamic spread
@@ -448,9 +448,11 @@ rendering, Better Auth, and managed SQL.
     KV236 diagnostic; Chromium, Firefox, and WebKit navigated to the external `/phish`, while the
     safe-first duplicate and canonical lowercase controls stayed on the app. `javascript:` and
     `data:` controls did not execute or navigate.
-  - **Open:** classify the browser-effective first rendered `http-equiv` attribute with the same
-    ASCII-case, ordering, name, and value rules as emission, remove paired refresh content across
-    live/compiler paths, and enroll the remote case-folding bypass in the C13 corpus.
+  - **Fixed:** `4ab3a577d` classifies the browser-effective first rendered `http-equiv` attribute
+    with the same ASCII-case, ordering, omission, name, and value rules as HTML emission, so refresh
+    content is removed across live and compiler paths (SPEC §5.2 rule 11).
+  - **Evidence:** focused compiler/runtime/source-sink tests 135/135; the exact production plugin
+    regression passed 6/6 across Chromium, Firefox, and WebKit; all 15 C13 corpora passed.
 
 ## Low
 
@@ -506,5 +508,7 @@ rendering, Better Auth, and managed SQL.
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
 - Bidi filename live/generated/source-sink matrix: 145/145; three-engine download regression and
   the C13 classifier corpus passed.
+- Meta-refresh live/compiler/source-sink matrix: 135/135; the production-plugin regression passed
+  6/6 across Chromium, Firefox, and WebKit; all 15 C13 corpora passed.
 - Final exact-tip remote-boundary review remains open until the fresh parser/browser-content passes
   and full serial gates complete without a new remotely reachable issue.
