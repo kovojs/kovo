@@ -702,16 +702,12 @@ describe('server jsx runtime', () => {
     }
   });
 
-  it('rejects an empty retained mutation key before rendering a form action', () => {
-    const empty = csrfExemptMutation('');
-    expect(() =>
-      html(
-        jsx('form', {
-          mutation: empty,
-          children: '',
-        }),
-      ),
-    ).toThrow('Retained JSX mutation.key must be a non-empty stable own data string.');
+  it('rejects an empty mutation key before a form action can be constructed', () => {
+    // SPEC §6.3: the bounded replay identity is established at declaration time, so an invalid
+    // definition never becomes a retained JSX mutation value.
+    expect(() => csrfExemptMutation('')).toThrow(
+      'mutation registry key must be a 1..1024-code-unit string.',
+    );
   });
 
   it('pins mutation CSRF options before caller mutation', () => {
