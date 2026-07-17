@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    3 |     11 |
+| High     |    1 |     13 |
 | Medium   |    1 |     15 |
 | Low      |    0 |      3 |
 
@@ -130,7 +130,7 @@ rendering, Better Auth, and managed SQL.
     Better Auth matrix 199/199 and combined auth/CSRF/replay/webhook matrix 297/297; dist, API, TCB,
     security-guarantee, wire, and mutation gates passed.
 
-- [ ] **H11 - Non-local Postgres credentials could travel without authenticated TLS.**
+- [x] **H11 - Non-local Postgres credentials could travel without authenticated TLS.**
   - External runtime, admin, system, and CLI database URLs passed directly to pinned node-postgres.
     An absent/disabled SSL mode permitted cleartext, while `no-verify` and libpq-compatible
     `require` permitted encryption without authenticating the server. Runtime data and privileged
@@ -138,9 +138,13 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** pinned pg connection parameters selected cleartext for absent/disabled modes and
     `rejectUnauthorized: false` for the unauthenticated modes; the real local TLS cluster accepted
     those weaker connections before the gate.
-  - **Open:** require exact authenticated `sslmode=verify-full` for every non-loopback/non-Unix
-    runtime/admin/system/CLI URL, fail before any socket or credential use, and retain cleartext only
-    for genuinely local loopback/Unix development endpoints (SPEC §6.6/§9.4/§10.3).
+  - **Fixed:** `3b10df8cc` requires explicit canonical authority, identity, database, and port
+    fields; exact `sslmode=verify-full` plus a DNS hostname for non-local carriers; and rejects
+    ambient destination/identity fallback, malformed parser differentials, IP-literal TLS, and
+    process-wide TLS verification disablement before pool construction (SPEC §6.6/§10.3).
+  - **Evidence:** a seeded 1,191,520-URL differential found zero accepted carrier/posture
+    mismatches; focused egress/Postgres/environment tests 184/184 and real Postgres/TLS probes 4/4
+    passed with all 11 classifier corpora, API, docs, egress, and SPEC gates.
 
 - [x] **H12 - SVG SMIL transfer attributes could animate a link into a JavaScript URL.**
   - Server JSX and browser fragment/live-binding sinks treated SVG `<animate>`/`<set>` transfer
@@ -157,7 +161,7 @@ rendering, Better Auth, and managed SQL.
     42/42 across Chromium, Firefox, and WebKit; all 11 classifier corpora plus inline-artifact,
     API-surface, SPEC, and fail-closed gates passed at the integrated checkpoint.
 
-- [ ] **H13 - Windows environment snapshotting could silently disable security posture.**
+- [x] **H13 - Windows environment snapshotting could silently disable security posture.**
   - Windows main-thread environment lookups are case-insensitive, but Kovo copied the enumerated
     operator spelling into a case-sensitive null-prototype snapshot. Mixed-case names such as
     `node_env` or `node_tls_reject_unauthorized` could therefore be honored by Node or the platform
@@ -165,9 +169,10 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** Node's Windows environment contract and libuv enumeration preserve this
     case-folding/spelling differential; the current snapshot performs only exact own-key lookup
     after pinning (SPEC §6.6 operator-environment trust root).
-  - **Open:** make Windows snapshot and lookup semantics case-insensitive with collision refusal,
-    then prove production posture and TLS-disable detection through platform-independent
-    regressions.
+  - **Fixed:** `3b10df8cc` preserves original operator spellings while giving the boot-pinned
+    server environment Windows-equivalent lookup and fail-closed case-collision detection.
+  - **Evidence:** platform-independent mixed-case production/TLS posture regressions 5/5 passed;
+    M16 separately tracks the two CLI-owned invocation snapshots discovered by the post-fix audit.
 
 - [ ] **H14 - Route response headers could desynchronize keep-alive HTTP responses.**
   - `respond.file()`/`respond.stream()` accepted caller-supplied `Content-Length` and hop-by-hop
