@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |     17 |
-| Medium   |    2 |     15 |
+| Medium   |    3 |     15 |
 | Low      |    0 |      4 |
 
 ## High
@@ -425,6 +425,18 @@ rendering, Better Auth, and managed SQL.
     data directory rather than rejecting the invalid authority before target access.
   - **Open:** centralize exact CLI driver parsing and reject every defined unsupported value across
     check, generate, migrate, and provision before any default target can be selected.
+
+- [ ] **M18 - Trusted-proxy client ports split one IP across per-IP rate-limit buckets.**
+  - The built-in trusted-proxy resolver returned the complete rightmost RFC 7239 `Forwarded for=`
+    node as `req.clientIp`. A standards-conforming proxy may append the client's ephemeral source
+    port, so reconnecting gave one remote address a fresh shell and lifecycle limiter key (SPEC
+    §9.5).
+  - **Evidence:** a real front proxy emitted the same IPv6 address with ports 47011 then 47012; a
+    `max: 1` mutation returned `[303, 303]` and ran twice, while the stable-port control returned
+    `[303, 429]` and ran once. Global work budgets remained enforced.
+  - **Open:** canonicalize every built-in trusted-proxy client-IP source to one address-only IPv4 or
+    IPv6 identity, strip only syntactically valid optional ports, reject malformed/obfuscated nodes,
+    and prove shell/lifecycle plus live/generated parity.
 
 ## Low
 
