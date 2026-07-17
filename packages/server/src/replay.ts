@@ -13,6 +13,7 @@ import {
   type ServerResponseBase,
 } from './response.js';
 import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
+import { parseMutationIdemToken } from './mutation-idem.js';
 import { formLikeToRecord } from './schema.js';
 import {
   requestBlobArrayBuffer,
@@ -38,6 +39,7 @@ import {
   witnessIsArray,
   witnessJsonStringifyPrimitive,
   witnessMapDelete,
+  witnessMapForEach,
   witnessMapGet,
   witnessMapSet,
   witnessMapSize,
@@ -53,6 +55,7 @@ import {
   requestStateExactCompositeKey,
   requestStateIgnorePromiseRejection,
   requestStateIsSafeInteger,
+  requestStateNow,
   requestStatePromiseThen,
 } from './request-state-intrinsics.js';
 
@@ -286,9 +289,8 @@ export interface MutationReplayStoreOptions {
    */
   maxPending?: number;
   /**
-   * @deprecated Accepted as a validated legacy retention hint but intentionally ignored.
-   * SPEC §10.3 requires every sequential duplicate to replay and never re-execute, so an
-   * in-memory store cannot expire committed truth without weakening the idempotency contract.
+   * @deprecated Accepted as a validated legacy retention hint but intentionally ignored. Canonical
+   * mutation tokens carry their normative expiry; unparseable legacy keys remain retained.
    */
   ttlMs?: number;
 }
@@ -299,8 +301,9 @@ type CsrfReplayScope<Request> =
 
 /**
  * Build the default in-memory {@link MutationReplayStore} (SPEC §9.1/§10.3): admitted replay keys
- * are bounded by `maxEntries`, committed truth is never evicted or expired, and unseen work is
- * refused at capacity so callers fail closed before running the handler.
+ * are bounded by `maxEntries`; canonical committed truth is reclaimed only at its token expiry,
+ * while pending claims and unparseable legacy truth are never time-evicted. Unseen work is refused
+ * at capacity so callers fail closed before running the handler.
  */
 export function createMemoryMutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
@@ -317,12 +320,23 @@ export function createMemoryMutationReplayStore<
   assertMutationReplayStoreOptions({ maxEntries, maxPending, ttlMs });
   const responses = createWitnessMap<string, MutationReplayRecord<Response>>();
 
-  // SPEC §10.3: the map itself is the retained idempotency truth. Pending reservations may abort,
-  // but committed responses never disappear; maxEntries sheds unseen work before execution.
+  // SPEC §10.3: pending reservations may abort but never expire. Canonical committed records are
+  // reclaimable only once the exact token is no longer admissible; maxEntries sheds unseen work.
   let pendingCount = 0;
+  // Once this store has observed a later time, a wall-clock rollback must not make a reclaimed
+  // exact token admissible again. Availability fails closed until wall time catches up. This
+  // process-local floor is sufficient for the explicitly non-production volatile store; the
+  // production durable store persists its equivalent watermark across replicas and restarts.
+  let observedNowMs = 0;
+  const observeNow = () => {
+    const nowMs = requestStateNow();
+    if (nowMs > observedNowMs) observedNowMs = nowMs;
+    return observedNowMs;
+  };
 
   const store: MutationReplayStore<Response> = {
     get(scope, idem, fingerprint) {
+      sweepExpiredCommittedMutationReplays(responses, observeNow());
       const key = mutationReplayKey(scope, idem);
       const record = witnessMapGet(responses, key);
       if (!record) return undefined;
@@ -338,6 +352,8 @@ export function createMemoryMutationReplayStore<
       return cloneMutationReplayResponse(record.response);
     },
     reserve(scope, idem, fingerprint) {
+      const nowMs = observeNow();
+      sweepExpiredCommittedMutationReplays(responses, nowMs);
       const key = mutationReplayKey(scope, idem);
       const existing = witnessMapGet(responses, key);
       if (existing) {
@@ -346,6 +362,10 @@ export function createMemoryMutationReplayStore<
         }
         return undefined;
       }
+      const expiresAtMs = mutationReplayExpiresAtMs(idem);
+      // Direct store users receive the same fail-closed floor as endpoint policy: once a canonical
+      // token is stale it can never be re-reserved after its committed row is reclaimed.
+      if (expiresAtMs !== undefined && nowMs >= expiresAtMs) return undefined;
 
       // SPEC §10.3: refuse, never evict. `reserveReplayBeforeRun` translates an unavailable
       // reservation with no existing value into the framework's fail-closed 429 response.
@@ -362,6 +382,7 @@ export function createMemoryMutationReplayStore<
       requestStateIgnorePromiseRejection(pending);
       const generation = {};
       const record: MutationReplayRecord<Response> = {
+        expiresAtMs,
         fingerprint,
         generation,
         kind: 'pending',
@@ -400,9 +421,16 @@ export function createMemoryMutationReplayStore<
           ) {
             return;
           }
+          // A handler may cross the token boundary after winning admission. Its application write
+          // may already have committed, so expiry can no longer prove that deleting this ambiguous
+          // claim is safe. Keep the exact pending generation and fail settlement closed.
+          if (expiresAtMs !== undefined && observeNow() >= expiresAtMs) {
+            throw new MutationReplaySettlementExpiredError();
+          }
           const cloned = cloneMutationReplayResponse(response);
           pendingCount -= 1;
           witnessMapSet(responses, key, {
+            expiresAtMs,
             fingerprint,
             kind: 'committed',
             response: cloned,
@@ -412,6 +440,8 @@ export function createMemoryMutationReplayStore<
       };
     },
     set(scope, idem, response, fingerprint) {
+      const nowMs = observeNow();
+      sweepExpiredCommittedMutationReplays(responses, nowMs);
       const key = mutationReplayKey(scope, idem);
       const existing = witnessMapGet(responses, key);
       if (existing && !fingerprintsMatch(existing.fingerprint, fingerprint)) {
@@ -421,10 +451,15 @@ export function createMemoryMutationReplayStore<
         throw new Error('Mutation replay store is saturated; cannot admit a new idempotency key.');
       }
       const cloned = cloneMutationReplayResponse(response);
+      const expiresAtMs = mutationReplayExpiresAtMs(idem);
+      if (expiresAtMs !== undefined && nowMs >= expiresAtMs) {
+        throw new MutationReplaySettlementExpiredError();
+      }
       if (existing?.kind === 'pending') {
         pendingCount -= 1;
       }
       witnessMapSet(responses, key, {
+        expiresAtMs,
         fingerprint,
         kind: 'committed',
         response: cloned,
@@ -434,6 +469,25 @@ export function createMemoryMutationReplayStore<
   };
   witnessWeakSetAdd(memoryMutationReplayStores, store);
   return store;
+}
+
+function mutationReplayExpiresAtMs(idem: string): number | undefined {
+  return parseMutationIdemToken(idem)?.expiresAtMs;
+}
+
+function sweepExpiredCommittedMutationReplays<Response extends MutationReplayResponse>(
+  responses: Map<string, MutationReplayRecord<Response>>,
+  nowMs: number,
+): void {
+  witnessMapForEach(responses, (record, key) => {
+    if (
+      record.kind === 'committed' &&
+      record.expiresAtMs !== undefined &&
+      nowMs >= record.expiresAtMs
+    ) {
+      witnessMapDelete(responses, key);
+    }
+  });
 }
 
 function stableMutationReplayOption(
@@ -690,6 +744,15 @@ export class MutationReplayConflictError extends Error {
   }
 }
 
+export class MutationReplaySettlementExpiredError extends Error {
+  constructor() {
+    super(
+      'Mutation idempotency token expired before replay settlement; the pending claim remains fail-closed.',
+    );
+    this.name = 'MutationReplaySettlementExpiredError';
+  }
+}
+
 /**
  * Render under a reservation already created by `reserveMutationReplayBeforeRun`,
  * committing the result so duplicate in-flight requests resolve to it.
@@ -705,16 +768,18 @@ export async function commitReservedMutationReplay<Response extends MutationRepl
 
 type MutationReplayRecord<Response extends MutationReplayResponse> =
   | {
+      expiresAtMs: number | undefined;
       fingerprint: string | undefined;
       kind: 'committed';
       response: Response;
     }
   | {
+      expiresAtMs: number | undefined;
       fingerprint: string | undefined;
       generation: object;
       kind: 'pending';
       pending: Promise<Response>;
-      // Explicit abort settles joined awaiters; capacity and TTL never evict pending records.
+      // Explicit abort settles joined awaiters; token expiry never evicts pending records.
       reject(reason?: unknown): void;
       resolve(response: Response): void;
     };

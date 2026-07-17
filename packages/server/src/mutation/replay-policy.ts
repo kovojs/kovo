@@ -3,6 +3,7 @@ import { isUntrusted, revealUntrusted } from '@kovojs/core';
 import { KOVO_IDEM_FIELD_NAME, type CsrfOptions } from '../csrf.js';
 import {
   MutationReplayConflictError,
+  MutationReplaySettlementExpiredError,
   mutationReplayContext,
   readMutationReplay,
   reserveReplayBeforeRun,
@@ -28,6 +29,7 @@ import {
 } from '../security-witness-intrinsics.js';
 import { securityStringStartsWith } from '../response-security-intrinsics.js';
 import { validateMutationIdemToken } from '../mutation-idem.js';
+import { requestStateExactCompositeKey } from '../request-state-intrinsics.js';
 
 export type MutationLifecycleReplayReservation<Response> = {
   abort?(): Promise<void> | void;
@@ -93,17 +95,58 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   request: MutationWireRequest<Request>;
 }): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> | undefined {
   const idem: unknown = mode.request.idem;
-  if (idem === undefined) return undefined;
+  if (idem === undefined) {
+    return mode.request.replayStore === undefined ? undefined : invalidMutationIdemReplayPolicy();
+  }
   const idemFacts = validateMutationIdemToken(idem);
   if (idemFacts === undefined) return invalidMutationIdemReplayPolicy();
-  if (!mode.request.replayStore) return undefined;
+  const replayStore = mode.request.replayStore;
+  if (!replayStore) return freshnessOnlyMutationIdemReplayPolicy(idemFacts.token);
+  const freshnessCheckedStore = {
+    async get(scope: string, token: string, fingerprint?: string) {
+      assertFreshMutationIdem(idemFacts.token);
+      const response = await replayStore.get(scope, token, fingerprint);
+      assertFreshMutationIdem(idemFacts.token);
+      return response;
+    },
+    async reserve(scope: string, token: string, fingerprint?: string) {
+      assertFreshMutationIdem(idemFacts.token);
+      const reservation = await replayStore.reserve(scope, token, fingerprint);
+      if (validateMutationIdemToken(idemFacts.token) === undefined) {
+        await reservation?.abort?.();
+        throw new MutationReplayConflictError();
+      }
+      return reservation;
+    },
+    set(
+      scope: string,
+      token: string,
+      response: BufferedMutationWireResponse,
+      fingerprint?: string,
+    ) {
+      return replayStore.set(scope, token, response, fingerprint);
+    },
+  };
   let context: ReturnType<typeof mutationReplayContext> | undefined;
-  const replayContext = () =>
-    (context ??= mutationReplayContext(mode.csrf ?? false, {
+  let scopedContext: Awaited<ReturnType<typeof mutationReplayContext>> | undefined;
+  const replayContext = async () => {
+    const resolved = await (context ??= mutationReplayContext(mode.csrf ?? false, {
       ...mode.request,
       idem: idemFacts.token,
       mutationKey: mode.mutationKey,
+      replayStore: freshnessCheckedStore,
     }));
+    // SPEC §10.3 atomic reservation applies to csrf:false machine clients too. With neither an
+    // anonymous-CSRF cookie nor a session, isolate their enhanced replay truth by mutation key;
+    // no-JS uses its own `nojs:` namespace below so response vocabularies cannot cross-replay.
+    return (scopedContext ??=
+      resolved.scope === null
+        ? {
+            ...resolved,
+            scope: requestStateExactCompositeKey('enhanced-sessionless', mode.mutationKey),
+          }
+        : resolved);
+  };
   return {
     async read() {
       return enhancedReplayResponseOrConflict(await readMutationReplay(await replayContext()));
@@ -124,6 +167,7 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
             ? {}
             : { abort: () => result.reservation.abort?.() }),
           commit(response: BufferedMutationWireResponse) {
+            assertFreshMutationIdemSettlement(idemFacts.token);
             return result.reservation.commit(response);
           },
         },
@@ -142,10 +186,31 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   // duplicated, accessor-backed, or otherwise malformed field cannot disable replay validation.
   const formIdem = readNoJsIdemField(mode.request.rawInput);
   const idem: unknown = formIdem.present ? formIdem.value : mode.request.idem;
-  if (!formIdem.present && idem === undefined) return undefined;
+  if (!formIdem.present && idem === undefined) {
+    return mode.request.replayStore === undefined ? undefined : invalidMutationIdemReplayPolicy();
+  }
   const idemFacts = validateMutationIdemToken(idem);
   if (idemFacts === undefined) return invalidMutationIdemReplayPolicy();
-  if (!mode.request.replayStore) return undefined;
+  const replayStore = mode.request.replayStore;
+  if (!replayStore) return freshnessOnlyMutationIdemReplayPolicy(idemFacts.token);
+
+  const freshnessCheckedStore = {
+    async get(scope: string, token: string, fingerprint?: string) {
+      assertFreshMutationIdem(idemFacts.token);
+      const response = await replayStore.get(scope, token, fingerprint);
+      assertFreshMutationIdem(idemFacts.token);
+      return response;
+    },
+    async reserve(scope: string, token: string, fingerprint?: string) {
+      assertFreshMutationIdem(idemFacts.token);
+      const reservation = await replayStore.reserve(scope, token, fingerprint);
+      if (validateMutationIdemToken(idemFacts.token) === undefined) {
+        await reservation?.abort?.();
+        throw new MutationReplayConflictError();
+      }
+      return reservation;
+    },
+  };
 
   let context: ReturnType<typeof mutationReplayContext> | undefined;
   const replayContext = () =>
@@ -165,11 +230,7 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
     async read() {
       const context = await replayContext();
       const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
-      const response = await mode.request.replayStore?.get(
-        scope,
-        idemFacts.token,
-        context.fingerprint,
-      );
+      const response = await freshnessCheckedStore.get(scope, idemFacts.token, context.fingerprint);
       return noJsReplayResponseOrConflict(
         response === undefined ? undefined : snapshotMutationReplayResponse(response),
       );
@@ -184,7 +245,7 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
         fingerprint: context.fingerprint,
         idem: idemFacts.token,
         scope,
-        store: mode.request.replayStore,
+        store: freshnessCheckedStore,
       });
       if (result.kind === 'replayed') {
         return {
@@ -195,7 +256,7 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
       if (result.kind !== 'reserved') return result;
       return {
         kind: 'reserved',
-        reservation: noJsReplayReservation(result.reservation),
+        reservation: noJsReplayReservation(result.reservation, idemFacts.token),
       };
     },
   };
@@ -210,6 +271,33 @@ function invalidMutationIdemReplayPolicy<Response>(): MutationLifecycleReplayPol
       return { kind: 'conflict' };
     },
   };
+}
+
+function freshnessOnlyMutationIdemReplayPolicy<Response>(
+  token: string,
+): MutationLifecycleReplayPolicy<Response> {
+  return {
+    read() {
+      assertFreshMutationIdem(token);
+      return undefined;
+    },
+    reserve() {
+      assertFreshMutationIdem(token);
+      return { kind: 'disabled' };
+    },
+  };
+}
+
+function assertFreshMutationIdem(token: string): void {
+  if (validateMutationIdemToken(token) === undefined) {
+    throw new MutationReplayConflictError();
+  }
+}
+
+function assertFreshMutationIdemSettlement(token: string): void {
+  if (validateMutationIdemToken(token) === undefined) {
+    throw new MutationReplaySettlementExpiredError();
+  }
 }
 
 export function isNoJsReplayResponse(
@@ -291,10 +379,12 @@ function noJsReplayResultOrConflict(
 
 function noJsReplayReservation(
   reservation: NoJsMutationReplayReservation,
+  token: string,
 ): MutationLifecycleReplayReservation<NoJsMutationResponse> {
   return {
     ...(reservation.abort === undefined ? {} : { abort: () => reservation.abort?.() }),
     commit(response) {
+      assertFreshMutationIdemSettlement(token);
       return reservation.commit(response);
     },
   };

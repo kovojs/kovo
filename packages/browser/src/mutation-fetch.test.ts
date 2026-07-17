@@ -549,6 +549,16 @@ describe('enhanced mutation fetch', () => {
     );
     expect(fetched.idem).not.toBe(renderedIdem);
     expect(formData.get('Kovo-Idem')).toBe(fetched.idem);
+
+    const resubmitted = await fetchEnhancedMutation({
+      fetch,
+      form: typedMutationForm('comment/post'),
+      formData,
+      root,
+    });
+    expect(resubmitted.idem).toMatch(/^v1_1750000000000_[0-9a-f]{32}$/u);
+    expect(resubmitted.idem).not.toBe(fetched.idem);
+    expect(formData.get('Kovo-Idem')).toBe(resubmitted.idem);
   });
 
   it('rejects a read-only custom body that carries stale idempotency authority', async () => {

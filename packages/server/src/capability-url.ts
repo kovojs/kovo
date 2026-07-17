@@ -164,6 +164,10 @@ export function createMemoryCapabilityReplayStore(
     throw capabilityTypeError('Capability replay-store now must be a function.');
   }
   const now = configuredNow ?? capabilityNow;
+  // A consumed nonce that was reclaimed after expiry must never become consumable again if the
+  // injected/system clock later rolls backward. This volatile watermark is process-local; the
+  // production durable store persists the equivalent fact.
+  let reclaimedThroughExpiry = -1;
   const evict = (): number => {
     const current = capabilityReflectApply<number>(now, undefined, []);
     if (!isValidClock(current)) {
@@ -174,7 +178,10 @@ export function createMemoryCapabilityReplayStore(
     const entries = capabilityMapEntries(consumed);
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index]!;
-      if (entry[1] <= current) capabilityMapDelete(consumed, entry[0]);
+      if (entry[1] <= current) {
+        capabilityMapDelete(consumed, entry[0]);
+        if (entry[1] > reclaimedThroughExpiry) reclaimedThroughExpiry = entry[1];
+      }
     }
     return current;
   };
@@ -187,6 +194,7 @@ export function createMemoryCapabilityReplayStore(
         id.length === 0 ||
         typeof expiresAt !== 'number' ||
         !capabilityIsSafeInteger(expiresAt) ||
+        expiresAt <= reclaimedThroughExpiry ||
         expiresAt <= current ||
         capabilityMapSize(consumed) >= maxEntries
       ) {

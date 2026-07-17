@@ -421,6 +421,69 @@ describe('server mutation replay store', () => {
 });
 
 describe('server mutation response replay', () => {
+  it('rejects a missing token before a configured replay store or handler is reached', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const save = mutation('settings/save', {
+      input: s.object({ value: s.string() }),
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+
+    const response = await renderMutationResponse(save, {
+      rawInput: { value: 'unsafe-without-replay-identity' },
+      replayStore,
+      request: { sessionId: 's1' },
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body).toContain('IDEMPOTENCY_CONFLICT');
+    expect(writes).toBe(0);
+  });
+
+  it('deduplicates sessionless csrf:false enhanced mutations by mutation identity', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let firstWrites = 0;
+    let secondWrites = 0;
+    const machineMutation = (key: 'machine/first' | 'machine/second') =>
+      mutation(key, {
+        csrf: false,
+        csrfJustification: 'test fixture models a non-browser machine caller',
+        input: s.object({ value: s.string() }),
+        handler(input) {
+          if (key === 'machine/first') firstWrites += 1;
+          else secondWrites += 1;
+          return input;
+        },
+      });
+    const firstMutation = machineMutation('machine/first');
+    const secondMutation = machineMutation('machine/second');
+    const request = {
+      idem: replayIdem('sessionless-enhanced-machine'),
+      rawInput: { value: 'once' },
+      replayStore,
+      request: {},
+    };
+
+    const first = await renderMutationResponse(firstMutation, request);
+    const duplicate = await renderMutationResponse(firstMutation, request);
+    const conflictingBody = await renderMutationResponse(firstMutation, {
+      ...request,
+      rawInput: { value: 'different' },
+    });
+    const distinctMutation = await renderMutationResponse(secondMutation, request);
+
+    expect(first.status).toBe(200);
+    expect(duplicate.status).toBe(200);
+    expect(conflictingBody.status).toBe(422);
+    expect(conflictingBody.body).toContain('IDEMPOTENCY_CONFLICT');
+    expect(distinctMutation.status).toBe(200);
+    expect(firstWrites).toBe(1);
+    expect(secondWrites).toBe(1);
+  });
+
   it('replays enhanced mutation responses by Kovo-Idem without re-running the handler', async () => {
     const cart = domain('cart');
     const replayStore = createMemoryMutationReplayStore();

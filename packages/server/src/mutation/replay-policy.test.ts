@@ -5,14 +5,63 @@ import { describe, expect, it } from 'vitest';
 import { KOVO_IDEM_FIELD_NAME } from '../csrf.js';
 import { mintMutationIdemToken } from '../mutation-idem.js';
 import { MutationReplayConflictError } from '../replay.js';
-import type { MutationEndpointReplayResponse, NoJsMutationRequest } from '../mutation-wire.js';
+import type {
+  MutationEndpointReplayResponse,
+  MutationWireRequest,
+  NoJsMutationRequest,
+} from '../mutation-wire.js';
 import {
+  enhancedMutationReplayPolicy,
   isEnhancedReplayResponse,
   isNoJsReplayResponse,
   noJsMutationReplayPolicy,
 } from './replay-policy.js';
 
 describe('mutation replay response authority', () => {
+  it.each(['enhanced', 'no-js'] as const)(
+    'rejects a missing %s token when replay storage is configured',
+    (mode) => {
+      let storeCalls = 0;
+      const replayStore = {
+        get() {
+          storeCalls += 1;
+          return undefined;
+        },
+        reserve() {
+          storeCalls += 1;
+          return undefined;
+        },
+        set() {
+          storeCalls += 1;
+        },
+      };
+      const policy =
+        mode === 'enhanced'
+          ? enhancedMutationReplayPolicy({
+              csrf: false,
+              mutationKey: 'settings/update',
+              request: {
+                rawInput: {},
+                replayStore,
+                request: {},
+              } as MutationWireRequest<object>,
+            })
+          : noJsMutationReplayPolicy({
+              csrf: false,
+              mutationKey: 'settings/update',
+              request: {
+                rawInput: {},
+                redirectTo: '/',
+                replayStore,
+                request: {},
+              } as NoJsMutationRequest<object, unknown>,
+            });
+
+      expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+      expect(storeCalls).toBe(0);
+    },
+  );
+
   it.each([
     ['empty', ''],
     ['oversized', 'a'.repeat(1_025)],

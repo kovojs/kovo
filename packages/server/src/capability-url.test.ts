@@ -582,4 +582,18 @@ describe('capability-url: one-time tokens via a replay store', () => {
     currentTime = 1000;
     expect(store.size()).toBe(0);
   });
+
+  it('never reopens a reclaimed one-time nonce after clock rollback', () => {
+    let now = 1;
+    const store = createMemoryCapabilityReplayStore({ now: () => now });
+
+    expect(store.consume('v1:key:nonce', 10)).toBe(true);
+    now = 10;
+    expect(store.size()).toBe(0);
+
+    now = 5;
+    expect(store.consume('v1:key:nonce', 10)).toBe(false);
+    expect(store.consume('another-old-window', 9)).toBe(false);
+    expect(store.consume('newer-window', 11)).toBe(true);
+  });
 });
