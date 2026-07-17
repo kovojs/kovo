@@ -177,3 +177,19 @@ it('shows option fallback collapse and explicit-value select identity', () => {
   expect(submitted.get('explicit')).toBe('record-1');
   expect(submitted.get('unicode')).toBe('record😀1');
 });
+
+it('shows the reserved _charset_ control overwrites a stable hidden value', () => {
+  document.body.innerHTML = `
+    <form>
+      <input type="hidden" name="_charset_" value="record-1">
+    </form>
+  `;
+  const form = document.querySelector<HTMLFormElement>('form');
+  const input = document.querySelector<HTMLInputElement>('input');
+  if (!form || !input) throw new Error('missing _charset_ fixture');
+
+  // The source/DOM value is stable, but HTML's entry-list construction reserves this exact hidden
+  // control name and replaces the submitted value with the selected encoding label.
+  expect(input.value).toBe('record-1');
+  expect(new FormData(form).get('_charset_')).toBe('UTF-8');
+});

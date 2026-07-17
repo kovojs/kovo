@@ -290,6 +290,14 @@ describe('server jsx runtime', () => {
     ).toThrow(/kovo-form-key.*\(line-feed\)/u);
   });
 
+  it('rejects a reserved _charset_ hidden value before native form submission rewrites it', () => {
+    // SPEC §13.2 requires identity-bearing hidden values to reach native form submission as the
+    // same string. HTML reserves this exact name and substitutes the encoding label instead.
+    expect(() =>
+      html(jsx('input', { type: 'hidden', name: '_charset_', value: 'record-1' })),
+    ).toThrow(/KV236.*_charset_.*SPEC §13\.2/u);
+  });
+
   it('rejects trusted raw HTML where parsing derives a submitted text value', () => {
     expect(() =>
       html(

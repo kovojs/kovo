@@ -290,4 +290,14 @@ export const View = component({
 `),
     ).toEqual([]);
   });
+
+  it('rejects the reserved _charset_ hidden-value rewrite before server render', () => {
+    expect(
+      kv236(`
+export const View = component({
+  render: () => <form><input type="hidden" name="_charset_" value="record-1" /></form>,
+});
+`),
+    ).not.toEqual([]);
+  });
 });
