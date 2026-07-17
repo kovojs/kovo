@@ -239,6 +239,27 @@ describe('Postgres durable replay stores', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('fails closed when durable mutation replay truth reaches the default admission ceiling', async () => {
+    const { executor } = await runtimeAt(dataDir());
+    const store = createPostgresMutationReplayStoreFromExecutor(executor, { pendingWaitMs: 0 });
+
+    for (let index = 0; index < 1_000; index += 1) {
+      const reservation = await store.reserve('public:save', `idem-${index}`, `fingerprint-${index}`);
+      expect(reservation).toBeDefined();
+      await reservation?.commit(mutationResponse('saved'));
+    }
+
+    await expect(
+      store.reserve('public:save', 'idem-over-capacity', 'fingerprint-over-capacity'),
+    ).resolves.toBeUndefined();
+
+    const persisted = await executor.execute<{ count: number }>({
+      text: "SELECT COUNT(*)::int AS count FROM public._kovo_replay WHERE surface = 'mutation'",
+      values: [],
+    });
+    expect(persisted.rows).toEqual([{ count: 1_000 }]);
+  });
+
   it('keeps a crash-orphaned pending row fail-closed across restart until exact reconciliation', async () => {
     const dir = dataDir();
     const firstRuntime = await runtimeAt(dir);
