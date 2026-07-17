@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    2 |     14 |
-| Medium   |    1 |     15 |
+| Medium   |    2 |     15 |
 | Low      |    0 |      3 |
 
 ## High
@@ -386,6 +386,16 @@ rendering, Better Auth, and managed SQL.
   - **Open:** give both command-entry snapshots Windows-equivalent lookup and collision refusal,
     then prove the database URL/driver and security-posture reads without changing non-Windows
     spelling semantics.
+
+- [ ] **M17 - Invalid CLI database-driver authority silently selected local PGlite.**
+  - CLI target selection recognized the supported driver strings but let every other defined
+    `KOVO_DB_DRIVER` value fall through automatic target detection. With no database URL, an
+    operator typo therefore became an explicit PGlite override instead of matching server boot's
+    fail-closed driver validation (SPEC §6.6).
+  - **Evidence:** `KOVO_DB_DRIVER=bogus kovo db check` reported `DRIVER pglite` and selected a local
+    data directory rather than rejecting the invalid authority before target access.
+  - **Open:** centralize exact CLI driver parsing and reject every defined unsupported value across
+    check, generate, migrate, and provision before any default target can be selected.
 
 ## Low
 
