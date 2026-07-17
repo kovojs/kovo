@@ -583,6 +583,12 @@ function serializeReplayHeaders(headers: unknown, maxBytes: number): string {
 }
 
 function serializeReplayBody(body: string, maxBytes: number): string {
+  // The persisted encoding is UTF-16LE, exactly two bytes per JavaScript code unit. Reject from
+  // the primitive string length before allocating the encoded buffer, so an oversized renderer
+  // cannot turn the storage guard itself into a transient allocation amplifier (SPEC §10.3).
+  if (body.length > maxBytes / 2) {
+    throw new RangeError('Replay response body exceeds the durable storage byte limit.');
+  }
   const bytes = securityBufferFrom(body, 'utf16le');
   if (securityUint8ArrayLength(bytes) > maxBytes) {
     throw new RangeError('Replay response body exceeds the durable storage byte limit.');
