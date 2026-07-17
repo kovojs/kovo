@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { lookup as dnsLookup } from 'node:dns/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -28,6 +30,7 @@ import {
   __testPostgresRuntimeInternals,
   migratePostgresAppDb,
   postgresSchemaModule,
+  provisionPostgresAppDb,
   type KovoPostgresAppRuntimeOptions,
   type KovoPostgresAppRuntimeDb,
   type KovoPostgresRuntimeDb,
@@ -940,6 +943,471 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  // @kovo-security-classifier-corpus egress-ip
+  it('requires exact authenticated TLS for every non-local managed Postgres URL', () => {
+    const rejectedModes = [
+      '',
+      '?sslmode=disable',
+      '?sslmode=allow',
+      '?sslmode=prefer',
+      '?sslmode=require',
+      '?sslmode=verify-ca',
+      '?sslmode=no-verify',
+      '?ssl=true',
+      '?uselibpqcompat=true&sslmode=require',
+      '?sslmode=%ZZ',
+    ];
+    for (const suffix of rejectedModes) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl: `postgres://app@db.example:5432/kovo${suffix}`,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_(?:TLS|URL): non-local databaseUrl|KV433_POSTGRES_URL:/);
+    }
+
+    for (const databaseUrl of [
+      'postgres://app@db.example:5432/kovo?sslmode=verify-full',
+      'postgres://app@db.example:5432/kovo?ssl%6dode=verify%2Dfull',
+      // pg-connection-string is last-wins for duplicate query parameters.
+      'postgres://app@db.example:5432/kovo?sslmode=disable&sslmode=verify-full',
+    ]) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).not.toThrow();
+    }
+
+    expect(() =>
+      __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+        databaseUrl: 'postgres://app@db.example:5432/kovo?sslmode=verify-full&sslmode=disable',
+        driver: 'node-postgres',
+        schema,
+      }),
+    ).toThrow(/KV433_POSTGRES_TLS: non-local databaseUrl/);
+  });
+
+  it('rejects every non-loopback IP literal because pg does not verify its certificate identity', () => {
+    for (const databaseUrl of [
+      'postgres://app@10.0.0.9:5432/kovo?sslmode=verify-full',
+      'postgres://app@203.0.113.9:5432/kovo?sslmode=verify-full',
+      'postgres://app@167772169:5432/kovo?sslmode=verify-full',
+      'postgres://app@012.0.0.11:5432/kovo?sslmode=verify-full',
+      'postgres://app@[2001:4860:4860::8888]:5432/kovo?sslmode=verify-full',
+      'postgres://app@[fd12:3456::1]:5432/kovo?sslmode=verify-full',
+      'postgres://app@[::ffff:10.0.0.9]:5432/kovo?sslmode=verify-full',
+    ]) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_TLS_HOST: non-local databaseUrl must use a DNS hostname/);
+    }
+
+    for (const databaseUrl of [
+      'postgres://app@db.example:5432/kovo?host=10.0.0.9&sslmode=verify-full',
+      'postgres://app@db.example:5432/kovo?host=2001%3A4860%3A4860%3A%3A8888&sslmode=verify-full',
+      'postgres://app@db.example:5432/kovo?host=%3A%3Affff%3A10.0.0.9&sslmode=verify-full',
+    ]) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_AUTHORITY: (?:non-local )?databaseUrl/);
+    }
+  });
+
+  it('rejects remote cleartext and no-verify URLs before creating the app pool', () => {
+    for (const databaseUrl of [
+      'postgres://app@db.example:5432/kovo',
+      'postgres://app@db.example:5432/kovo?sslmode=no-verify',
+      'postgres://app@203.0.113.9:5432/kovo?sslmode=verify-full',
+    ]) {
+      expect(() =>
+        createPostgresAppRuntimeDb({ databaseUrl, driver: 'node-postgres', schema }),
+      ).toThrow(/KV433_POSTGRES_TLS(?:_HOST)?: non-local databaseUrl/);
+    }
+  });
+
+  it('preserves cleartext only for exact carrier-local loopback or Unix controls', () => {
+    for (const databaseUrl of [
+      'postgres://app@127.0.0.1:5432/kovo',
+      'postgres://app@localhost:5432/kovo?host=%3A%3A1',
+      'postgres://app@db.example:5432/kovo?host=127.0.0.1',
+      'postgres://app@localhost:5432/kovo?host=%2Ftmp%2Fkovo-pg',
+    ]) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).not.toThrow();
+    }
+
+    for (const databaseUrl of [
+      'postgres://app@localhost:5432/kovo',
+      'postgres://app@api.localhost:5432/kovo',
+      'postgres://app@localhost.:5432/kovo',
+      'postgres://app@[::1]:5432/kovo',
+      'postgres://app@127.1:5432/kovo',
+      'postgres://app@2130706433:5432/kovo',
+      'postgres://app@0177.0.0.1:5432/kovo',
+      'postgres://app@[::ffff:127.0.0.1]:5432/kovo',
+      'postgres://app@[64:ff9b::127.0.0.1]:5432/kovo',
+    ]) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_TLS(?:_HOST)?: non-local databaseUrl/);
+    }
+
+    expect(() =>
+      __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+        databaseUrl: 'postgres://app@127.0.0.1:5432/kovo?host=0177.0.0.1',
+        driver: 'node-postgres',
+        schema,
+      }),
+    ).toThrow(/KV433_POSTGRES_AUTHORITY: non-local databaseUrl/);
+
+    // The query host, not the cosmetically local authority, is where node-postgres dials.
+    expect(() =>
+      __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+        databaseUrl: 'postgres://app@127.0.0.1:5432/kovo?host=db.example&sslmode=disable',
+        driver: 'node-postgres',
+        schema,
+      }),
+    ).toThrow(/KV433_POSTGRES_AUTHORITY: non-local databaseUrl/);
+  });
+
+  it('does not confuse permissive resolver spellings with an exact local Postgres carrier', async () => {
+    // macOS resolves this spelling as public 177.0.0.1 even though legacy IPv4 parsers often
+    // classify it as octal loopback. The differential sweep covered 708,024 spellings and found
+    // 17,576 public resolver outputs; the managed-DB exception therefore compares only exact
+    // carrier values (127.0.0.1 or query-host ::1) and rejects every loose spelling.
+    const resolved = await dnsLookup('0177.0.0.1');
+    if (process.platform === 'darwin') expect(resolved.address).toBe('177.0.0.1');
+
+    expect(() =>
+      __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+        databaseUrl: 'postgres://app@0177.0.0.1:5432/kovo',
+        driver: 'node-postgres',
+        schema,
+      }),
+    ).toThrow(/KV433_POSTGRES_TLS_HOST: non-local databaseUrl/);
+  });
+
+  it('requires canonical remote authority fields and rejects permissive query ports', () => {
+    for (const databaseUrl of [
+      'postgres://app@db.example/kovo?sslmode=verify-full',
+      'postgres://db.example:5432/kovo?sslmode=verify-full',
+      'postgres://app@db.example:5432/?sslmode=verify-full',
+      'postgres://app@db.example:5432/kovo?host=other.example&sslmode=verify-full',
+      'postgres://app@db.example:5432/kovo?port=5432&sslmode=verify-full',
+      'postgres://app@db.example:5432/kovo?user=admin&sslmode=verify-full',
+      'postgres://app@db.example:5432/kovo?database=other&sslmode=verify-full',
+    ]) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_AUTHORITY: (?:non-local )?databaseUrl/);
+    }
+
+    for (const port of ['1e3', '0x1538', '0b1010', '01e2', '+5432', '-1', ' 5432']) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl: `postgres://app@127.0.0.1/kovo?port=${encodeURIComponent(port)}`,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_URL:/);
+    }
+  });
+
+  it('gates runtime, admin, and system URLs and refuses ambient pg authority', () => {
+    const localRuntime = 'postgres://app@127.0.0.1:5432/kovo';
+    for (const [label, extra] of [
+      ['databaseUrl', { databaseUrl: 'postgres://app@db.example:5432/kovo' }],
+      ['adminDatabaseUrl', { adminDatabaseUrl: 'postgres://admin@db.example:5432/kovo' }],
+      ['systemDatabaseUrl', { systemDatabaseUrl: 'postgres://system@db.example:5432/kovo' }],
+    ] as const) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl: localRuntime,
+          driver: 'node-postgres',
+          schema,
+          ...extra,
+        }),
+      ).toThrow(new RegExp(`KV433_POSTGRES_TLS: non-local ${label}`));
+    }
+
+    const previousHost = process.env.PGHOST;
+    const previousMode = process.env.PGSSLMODE;
+    try {
+      process.env.PGHOST = 'db.example';
+      process.env.PGSSLMODE = 'verify-full';
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_URL: node-postgres requires an explicit databaseUrl/);
+    } finally {
+      if (previousHost === undefined) delete process.env.PGHOST;
+      else process.env.PGHOST = previousHost;
+      if (previousMode === undefined) delete process.env.PGSSLMODE;
+      else process.env.PGSSLMODE = previousMode;
+    }
+  });
+
+  it('gates provision and migrate runtime URLs before connecting', async () => {
+    const baseOptions = {
+      databaseUrl: 'postgres://admin@127.0.0.1:1/kovo',
+      driver: 'node-postgres' as const,
+      runtimeDatabaseUrl: 'postgres://app@db.example:5432/kovo?sslmode=no-verify',
+      schema,
+    };
+    for (const operation of [
+      () => provisionPostgresAppDb(baseOptions),
+      () => migratePostgresAppDb({ ...baseOptions, migrations: [] }),
+    ]) {
+      await expect(operation()).rejects.toThrow(/KV433_POSTGRES_TLS: non-local runtimeDatabaseUrl/);
+    }
+  });
+
+  it('locks the managed TLS gate to pinned node-postgres parsing behavior', () => {
+    const cleartext = new Client({ connectionString: 'postgres://app@db.example/kovo' });
+    const unauthenticatedTls = new Client({
+      connectionString: 'postgres://app@db.example/kovo?sslmode=no-verify',
+    });
+    const authenticatedTls = new Client({
+      connectionString: 'postgres://app@db.example/kovo?sslmode=verify-full',
+    });
+    const overriddenEndpoint = new Client({
+      connectionString:
+        'postgres://app@127.0.0.1:1111/kovo?host=10.0.0.1&port=2222&host=db.example&port=5433&sslmode=verify-full',
+    });
+    const overriddenLogin = new Client({
+      connectionString: 'postgres://app@db.example:5432/kovo?user=admin&sslmode=verify-full',
+    });
+    const permissivePort = new Client({
+      connectionString: 'postgres://app@db.example:5432/kovo?port=1e3&sslmode=verify-full',
+    });
+    const bracketedIpv6Authority = new Client({
+      connectionString: 'postgres://app@[::1]:5432/kovo',
+    });
+    const exactIpv6QueryHost = new Client({
+      connectionString: 'postgres://app@localhost:5432/kovo?host=%3A%3A1',
+    });
+    expect(cleartext.connectionParameters.ssl).toBe(false);
+    expect(unauthenticatedTls.connectionParameters.ssl).toMatchObject({
+      rejectUnauthorized: false,
+    });
+    expect(authenticatedTls.connectionParameters.ssl).toEqual({});
+    expect(overriddenEndpoint.connectionParameters.host).toBe('db.example');
+    expect(overriddenEndpoint.connectionParameters.port).toBe(5433);
+    expect(overriddenLogin.connectionParameters.user).toBe('admin');
+    expect(permissivePort.connectionParameters.port).toBe(1);
+    expect(bracketedIpv6Authority.connectionParameters.host).toBe('[::1]');
+    expect(exactIpv6QueryHost.connectionParameters.host).toBe('::1');
+  });
+
+  it('refuses a missing remote port that pinned pg would fill from ambient PGPORT', () => {
+    const previousPort = process.env.PGPORT;
+    try {
+      process.env.PGPORT = '6543';
+      const ambientPortClient = new Client({
+        connectionString: 'postgres://app@db.example/kovo?sslmode=verify-full',
+      });
+      expect(ambientPortClient.connectionParameters.port).toBe(6543);
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl: 'postgres://app@db.example/kovo?sslmode=verify-full',
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_AUTHORITY: databaseUrl must include an explicit decimal port/);
+    } finally {
+      if (previousPort === undefined) delete process.env.PGPORT;
+      else process.env.PGPORT = previousPort;
+    }
+  });
+
+  it('requires explicit Unix-socket identity and port instead of pg ambient fallbacks', () => {
+    const previousPort = process.env.PGPORT;
+    const previousUser = process.env.PGUSER;
+    try {
+      process.env.PGPORT = '6543';
+      process.env.PGUSER = 'ambient_admin';
+      const historical = new Client({ connectionString: '/tmp/kovo-pg kovo' });
+      expect(historical.connectionParameters).toMatchObject({
+        host: '/tmp/kovo-pg',
+        port: 6543,
+        user: 'ambient_admin',
+      });
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl: '/tmp/kovo-pg kovo',
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_URL:/);
+
+      const canonical = 'postgres://app@localhost:5432/kovo?host=%2Ftmp%2Fkovo-pg';
+      const canonicalClient = new Client({ connectionString: canonical });
+      expect(canonicalClient.connectionParameters).toMatchObject({
+        database: 'kovo',
+        host: '/tmp/kovo-pg',
+        port: 5432,
+        user: 'app',
+      });
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl: canonical,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).not.toThrow();
+
+      for (const databaseUrl of [
+        'postgres://app@localhost/kovo?host=%2Ftmp%2Fkovo-pg',
+        'postgres://localhost:5432/kovo?host=%2Ftmp%2Fkovo-pg',
+        'postgres://app@localhost:5432/?host=%2Ftmp%2Fkovo-pg',
+      ]) {
+        expect(() =>
+          __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+            databaseUrl,
+            driver: 'node-postgres',
+            schema,
+          }),
+        ).toThrow(/KV433_POSTGRES_AUTHORITY:/);
+      }
+    } finally {
+      if (previousPort === undefined) delete process.env.PGPORT;
+      else process.env.PGPORT = previousPort;
+      if (previousUser === undefined) delete process.env.PGUSER;
+      else process.env.PGUSER = previousUser;
+    }
+  });
+
+  it('rejects raw URL-envelope forms that pinned pg parses against a different authority', () => {
+    const leadingSpace = new Client({
+      connectionString: ' postgres://app@db.example:5432/kovo?sslmode=verify-full',
+    });
+    expect(leadingSpace.connectionParameters.host).toBe('base');
+    expect(leadingSpace.connectionParameters.database).toBe(' postgres://app@db.example:5432/kovo');
+
+    for (const databaseUrl of [
+      ' postgres://app@db.example:5432/kovo?sslmode=verify-full',
+      '\npostgres://app@db.example:5432/kovo?sslmode=verify-full',
+      'POSTGRES://app@db.example:5432/kovo?sslmode=verify-full',
+    ]) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_URL:/);
+    }
+  });
+
+  it('rejects malformed-percent preprocessing that makes pg ignore reviewed security keys', () => {
+    const localFalseProof = 'postgres://u:p%zz@8.8.8.8:5432/db?h%6Fst=127.0.0.1';
+    const tlsFalseProof = 'postgres://u:p%zz@db.example:5432/db?sslm%6Fde=verify-full';
+    const pgLocalFalseProof = new Client({ connectionString: localFalseProof });
+    const pgTlsFalseProof = new Client({ connectionString: tlsFalseProof });
+
+    // pg preprocesses the whole malformed string, leaves the escaped key literal, and therefore
+    // ignores the host/TLS fields that a direct WHATWG parse would decode and approve.
+    expect(pgLocalFalseProof.connectionParameters).toMatchObject({
+      host: '8.8.8.8',
+      ssl: false,
+    });
+    expect(pgTlsFalseProof.connectionParameters).toMatchObject({
+      host: 'db.example',
+      ssl: false,
+    });
+
+    for (const databaseUrl of [
+      localFalseProof,
+      tlsFalseProof,
+      'postgres://u:p%@db.example:5432/db?sslmode=verify-full',
+      'postgres://u:p%a@db.example:5432/db?sslmode=verify-full',
+      'postgres://u:p%ag@db.example:5432/db?sslmode=verify-full',
+      'postgres://u:p%gg@db.example:5432/db?sslmode=verify-full',
+    ]) {
+      expect(() =>
+        __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl,
+          driver: 'node-postgres',
+          schema,
+        }),
+      ).toThrow(/KV433_POSTGRES_URL:/);
+    }
+  });
+
+  it('refuses a boot-pinned NODE_TLS_REJECT_UNAUTHORIZED=0 before creating a remote pool', () => {
+    const runtimeUrl = new URL('./postgres-runtime.ts', import.meta.url).href;
+    const environmentUrl = new URL('./runtime-environment-authority.ts', import.meta.url).href;
+    const source = `
+      import { existsSync } from 'node:fs';
+      import { registerHooks } from 'node:module';
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+            const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+            if (existsSync(candidate)) return nextResolve(candidate.href, context);
+          }
+          return nextResolve(specifier, context);
+        },
+      });
+      const environment = await import(${JSON.stringify(environmentUrl)});
+      environment.pinServerRuntimeEnvironment();
+      const runtime = await import(${JSON.stringify(runtimeUrl)});
+      try {
+        runtime.__testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+          databaseUrl: 'postgres://app@db.example:5432/kovo?sslmode=verify-full',
+          driver: 'node-postgres',
+          schema: {},
+        });
+        process.stdout.write('accepted');
+      } catch (error) {
+        process.stdout.write(error instanceof Error ? error.message : String(error));
+      }
+    `;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        source,
+      ],
+      {
+        encoding: 'utf8',
+        env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
+      },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toMatch(/KV433_POSTGRES_TLS_ENV: non-local databaseUrl/);
+  });
+
   it('grants protected tables only with FORCE RLS and live Kovo policies', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-grant-policy-'));
     roots.push(dataDir);
@@ -1716,7 +2184,7 @@ describe('createPostgresAppRuntimeDb', () => {
           sql: ['CREATE ROLE kovo_runtime_login LOGIN', runtimeSchemaMigrationSql].join('; '),
         },
       ],
-      runtimeDatabaseUrl: 'postgres://kovo_runtime_login@127.0.0.1/kovo',
+      runtimeDatabaseUrl: 'postgres://kovo_runtime_login@127.0.0.1:5432/kovo',
       schema,
     });
     expect(report.posture.ok).toBe(true);
@@ -1752,14 +2220,14 @@ describe('createPostgresAppRuntimeDb', () => {
   it('binds the runtime grant to exact URL and SQL identifier bytes under late replacement', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-url-role-'));
     roots.push(dataDir);
-    const runtimeDatabaseUrl = 'postgres://victim_runtime_login@127.0.0.1/kovo';
+    const runtimeDatabaseUrl = 'postgres://victim_runtime_login@127.0.0.1:5432/kovo';
     const NativeURL = globalThis.URL;
     class PoisonedURL extends NativeURL {
       constructor(input: string | URL, base?: string | URL) {
         const source = typeof input === 'string' ? input : input.href;
         super(
           source === runtimeDatabaseUrl
-            ? 'postgres://attacker_runtime_login@127.0.0.1/kovo'
+            ? 'postgres://attacker_runtime_login@127.0.0.1:5432/kovo'
             : input,
           base,
         );
@@ -3060,7 +3528,7 @@ describe('createPostgresAppRuntimeDb', () => {
 
     const report = await checkPostgresAppDbPosture({
       dataDir,
-      databaseUrl: 'postgres://kovo_runtime_login@127.0.0.1/kovo',
+      databaseUrl: 'postgres://kovo_runtime_login@127.0.0.1:5432/kovo',
       driver: 'pglite',
       schema,
     });
@@ -3135,7 +3603,7 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       const report = await checkPostgresAppDbPosture({
         dataDir,
-        databaseUrl: 'postgres://posture_login@127.0.0.1/kovo',
+        databaseUrl: 'postgres://posture_login@127.0.0.1:5432/kovo',
         driver: 'pglite',
         schema,
       });
@@ -3458,7 +3926,7 @@ describe('createPostgresAppRuntimeDb', () => {
               ),
             },
           ],
-          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1:5432/kovo',
           schema,
         });
         expect(report.posture.ok).toBe(true);
@@ -3502,7 +3970,7 @@ describe('createPostgresAppRuntimeDb', () => {
               ].join('; '),
             },
           ],
-          runtimeDatabaseUrl: 'postgres://elevated_runtime_login@127.0.0.1/kovo',
+          runtimeDatabaseUrl: 'postgres://elevated_runtime_login@127.0.0.1:5432/kovo',
           schema,
         }),
       ).rejects.toThrow(
@@ -3528,7 +3996,7 @@ describe('createPostgresAppRuntimeDb', () => {
               ].join('; '),
             },
           ],
-          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1:5432/kovo',
           schema,
         }),
       ).rejects.toThrow(
@@ -3569,7 +4037,7 @@ describe('createPostgresAppRuntimeDb', () => {
               ].join('; '),
             },
           ],
-          runtimeDatabaseUrl: 'postgres://predefined_runtime_login@127.0.0.1/kovo',
+          runtimeDatabaseUrl: 'postgres://predefined_runtime_login@127.0.0.1:5432/kovo',
           schema,
         }),
       ).rejects.toThrow(
@@ -3597,7 +4065,7 @@ describe('createPostgresAppRuntimeDb', () => {
               ].join('; '),
             },
           ],
-          runtimeDatabaseUrl: 'postgres://predefined_provider_login@127.0.0.1/kovo',
+          runtimeDatabaseUrl: 'postgres://predefined_provider_login@127.0.0.1:5432/kovo',
           schema,
         }),
       ).rejects.toThrow(
@@ -3626,7 +4094,7 @@ describe('createPostgresAppRuntimeDb', () => {
               ),
             },
           ],
-          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+          runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1:5432/kovo',
           schema,
         });
         expect(report.posture.ok).toBe(true);
@@ -3660,7 +4128,7 @@ describe('createPostgresAppRuntimeDb', () => {
             dataDir,
             driver: 'pglite',
             migrations: [{ id: '001_runtime_login_schema', sql: runtimeSchemaMigrationSql }],
-            runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+            runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1:5432/kovo',
             schema,
           }),
         ).rejects.toThrow(
@@ -3682,7 +4150,7 @@ describe('createPostgresAppRuntimeDb', () => {
           sql: ['CREATE ROLE provider_runtime_login LOGIN', runtimeSchemaMigrationSql].join('; '),
         },
       ],
-      runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+      runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1:5432/kovo',
       schema,
     });
     expect(report.posture.ok).toBe(true);
@@ -3698,7 +4166,7 @@ describe('createPostgresAppRuntimeDb', () => {
 
     const drifted = await checkPostgresAppDbPosture({
       dataDir,
-      databaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+      databaseUrl: 'postgres://provider_runtime_login@127.0.0.1:5432/kovo',
       driver: 'pglite',
       schema,
     });
@@ -3728,7 +4196,7 @@ describe('createPostgresAppRuntimeDb', () => {
           sql: ['CREATE ROLE provider_runtime_login LOGIN', runtimeSchemaMigrationSql].join('; '),
         },
       ],
-      runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+      runtimeDatabaseUrl: 'postgres://provider_runtime_login@127.0.0.1:5432/kovo',
       schema,
     });
     expect(report.posture.ok).toBe(true);
@@ -3745,7 +4213,7 @@ describe('createPostgresAppRuntimeDb', () => {
 
     const drifted = await checkPostgresAppDbPosture({
       dataDir,
-      databaseUrl: 'postgres://provider_runtime_login@127.0.0.1/kovo',
+      databaseUrl: 'postgres://provider_runtime_login@127.0.0.1:5432/kovo',
       driver: 'pglite',
       schema,
     });
@@ -3773,7 +4241,7 @@ describe('createPostgresAppRuntimeDb', () => {
           dataDir,
           driver: 'pglite',
           migrations: [{ id: '001_runtime_login_schema', sql: runtimeSchemaMigrationSql }],
-          runtimeDatabaseUrl: `postgres://${role}@127.0.0.1/kovo`,
+          runtimeDatabaseUrl: `postgres://${role}@127.0.0.1:5432/kovo`,
           schema,
         }),
       ).rejects.toThrow(new RegExp(`KV433_RUNTIME_ROLE[\\s\\S]*privileged framework role ${role}`));
@@ -4441,7 +4909,7 @@ describe('createPostgresAppRuntimeDb', () => {
   it('requires separate external Postgres URLs for framework admin and system roles', async () => {
     const baseConfig = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
       crossOwnerReadTables: ['kovo_runtime_notes'],
-      databaseUrl: 'postgres://app-runtime@127.0.0.1/kovo',
+      databaseUrl: 'postgres://app-runtime@127.0.0.1:5432/kovo',
       driver: 'node-postgres',
       postureCheck: {
         justification: 'unit test constructs handles without connecting',
@@ -4464,9 +4932,9 @@ describe('createPostgresAppRuntimeDb', () => {
     }
 
     const privilegedConfig = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
-      adminDatabaseUrl: 'postgres://framework-admin@127.0.0.1/kovo',
+      adminDatabaseUrl: 'postgres://framework-admin@127.0.0.1:5432/kovo',
       crossOwnerReadTables: ['kovo_runtime_notes'],
-      databaseUrl: 'postgres://app-runtime@127.0.0.1/kovo',
+      databaseUrl: 'postgres://app-runtime@127.0.0.1:5432/kovo',
       driver: 'node-postgres',
       postureCheck: {
         justification: 'unit test constructs handles without connecting',
@@ -4474,7 +4942,7 @@ describe('createPostgresAppRuntimeDb', () => {
       },
       provisionOnBoot: false,
       schema,
-      systemDatabaseUrl: 'postgres://framework-system@127.0.0.1/kovo',
+      systemDatabaseUrl: 'postgres://framework-system@127.0.0.1:5432/kovo',
     });
     const privilegedClient = __testPostgresRuntimeInternals.createRuntimeClient(privilegedConfig);
     try {
@@ -4487,8 +4955,8 @@ describe('createPostgresAppRuntimeDb', () => {
 
   it('does not dispatch a late Promise.all replacement while closing external role pools', async () => {
     const config = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
-      adminDatabaseUrl: 'postgres://framework-admin@127.0.0.1/kovo',
-      databaseUrl: 'postgres://app-runtime@127.0.0.1/kovo',
+      adminDatabaseUrl: 'postgres://framework-admin@127.0.0.1:5432/kovo',
+      databaseUrl: 'postgres://app-runtime@127.0.0.1:5432/kovo',
       driver: 'node-postgres',
       postureCheck: {
         justification: 'unit test constructs handles without connecting',
@@ -4496,7 +4964,7 @@ describe('createPostgresAppRuntimeDb', () => {
       },
       provisionOnBoot: false,
       schema,
-      systemDatabaseUrl: 'postgres://framework-system@127.0.0.1/kovo',
+      systemDatabaseUrl: 'postgres://framework-system@127.0.0.1:5432/kovo',
     });
     const runtimeClient = __testPostgresRuntimeInternals.createRuntimeClient(config);
     const nativeAll = Promise.all;

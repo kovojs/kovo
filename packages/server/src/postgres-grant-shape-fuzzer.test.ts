@@ -189,7 +189,7 @@ describe('Postgres grant-shape closure fuzzer', () => {
       });
       const runtimeReport = await checkPostgresAppDbPosture({
         dataDir: runtimeDataDir,
-        databaseUrl: `postgres://kovo_fuzzer_runtime_${label}@127.0.0.1/kovo`,
+        databaseUrl: `postgres://kovo_fuzzer_runtime_${label}@127.0.0.1:5432/kovo`,
         driver: 'pglite',
         schema: fuzzerSchema,
       });
@@ -213,7 +213,7 @@ describe('Postgres grant-shape closure fuzzer', () => {
       });
       const assumableReport = await checkPostgresAppDbPosture({
         dataDir: assumableDataDir,
-        databaseUrl: `postgres://kovo_fuzzer_login_${label}@127.0.0.1/kovo`,
+        databaseUrl: `postgres://kovo_fuzzer_login_${label}@127.0.0.1:5432/kovo`,
         driver: 'pglite',
         schema: fuzzerSchema,
       });
@@ -250,7 +250,7 @@ describe('Postgres grant-shape closure fuzzer', () => {
       });
       const runtimeReport = await checkPostgresAppDbPosture({
         dataDir: runtimeDataDir,
-        databaseUrl: `postgres://kovo_fuzzer_predef_${predefinedRole}@127.0.0.1/kovo`,
+        databaseUrl: `postgres://kovo_fuzzer_predef_${predefinedRole}@127.0.0.1:5432/kovo`,
         driver: 'pglite',
         schema: fuzzerSchema,
       });
@@ -279,7 +279,7 @@ describe('Postgres grant-shape closure fuzzer', () => {
       });
       const assumableReport = await checkPostgresAppDbPosture({
         dataDir: assumableDataDir,
-        databaseUrl: `postgres://kovo_fuzzer_predef_login_${predefinedRole}@127.0.0.1/kovo`,
+        databaseUrl: `postgres://kovo_fuzzer_predef_login_${predefinedRole}@127.0.0.1:5432/kovo`,
         driver: 'pglite',
         schema: fuzzerSchema,
       });

@@ -472,7 +472,53 @@ function resolveDatabaseEgressEndpoints(
   return result;
 }
 
-function databaseEgressEndpointFromUrl(raw: string): string | null {
+/** Effective node-postgres connection facts parsed from a framework-owned connection string. */
+export interface DatabaseEgressUrlFacts {
+  readonly authorityHost: string;
+  readonly authorityPortExplicit: boolean;
+  readonly authorityUsername: string;
+  readonly databasePathPresent: boolean;
+  readonly host: string;
+  readonly port: number;
+  readonly queryDatabaseOverride: string | undefined;
+  readonly queryHostOverride: string | undefined;
+  readonly queryPortOverride: string | undefined;
+  readonly queryUserOverride: string | undefined;
+  readonly sslMode: string | undefined;
+  readonly unixSocket: boolean;
+}
+
+/**
+ * Parse the host/port/TLS posture that pinned `pg-connection-string` will actually use.
+ *
+ * Query-string `host`, `port`, and `sslmode` values are last-wins in node-postgres. Keeping this
+ * parser beside the DB socket provenance parser prevents a URL whose authority says loopback from
+ * redirecting the real database carrier through `?host=...` (SPEC §6.6/§10.3).
+ *
+ * @internal
+ */
+export function databaseEgressUrlFacts(raw: string): DatabaseEgressUrlFacts | null {
+  // Deliberately reject pg-connection-string's historical `/socket/path database` shorthand.
+  // That grammar has no user or port fields, so node-postgres silently sources both from PGUSER /
+  // PGPORT (or OS defaults) after Kovo has reviewed a different authority. A Unix carrier remains
+  // available through a canonical URL such as
+  // `postgres://app@localhost:5432/kovo?host=%2Fvar%2Frun%2Fpostgresql`.
+  // pg-connection-string preprocesses any raw space/control-containing URL with encodeURI before
+  // parsing it relative to `postgres://base`, while WHATWG URL trims leading controls. Reject the
+  // differential entirely; callers can percent-encode intentional credential/query bytes.
+  if (egressRegExpTest(/[\p{White_Space}\p{Cc}]/u, raw)) return null;
+  // A single malformed percent escape makes pg-connection-string encodeURI() the *whole* input.
+  // That can double-encode otherwise-valid query-key escapes (for example h%6Fst), so Kovo and pg
+  // would disagree about the effective host or sslmode. Require a canonical escape envelope before
+  // either parser sees the URL.
+  if (egressRegExpTest(/%(?![0-9A-Fa-f]{2})/u, raw)) return null;
+  if (
+    !egressStringStartsWith(raw, 'postgres://') &&
+    !egressStringStartsWith(raw, 'postgresql://')
+  ) {
+    return null;
+  }
+
   let url: URL;
   try {
     url = egressUrl(raw);
@@ -481,12 +527,84 @@ function databaseEgressEndpointFromUrl(raw: string): string | null {
   }
   const protocol = egressUrlProtocol(url);
   if (protocol !== 'postgres:' && protocol !== 'postgresql:') return null;
-  const host = stripIpv6Brackets(egressDecodeURIComponent(egressUrlHostname(url)));
+  let queryHost: string | undefined;
+  let queryPort: string | undefined;
+  let queryUser: string | undefined;
+  let queryDatabase: string | undefined;
+  let sslMode: string | undefined;
+  try {
+    const query = egressUrlSearch(url);
+    const encodedEntries = egressStringSplit(
+      egressStringStartsWith(query, '?') ? egressStringSlice(query, 1) : query,
+      '&',
+    );
+    for (let index = 0; index < encodedEntries.length; index += 1) {
+      const entry = encodedEntries[index]!;
+      if (entry === '') continue;
+      const separator = egressStringIndexOf(entry, '=');
+      const encodedKey = separator < 0 ? entry : egressStringSlice(entry, 0, separator);
+      const encodedValue = separator < 0 ? '' : egressStringSlice(entry, separator + 1);
+      const key = decodeDatabaseUrlQueryComponent(encodedKey);
+      const value = decodeDatabaseUrlQueryComponent(encodedValue);
+      if (key === 'host') queryHost = value;
+      else if (key === 'port') queryPort = value;
+      else if (key === 'user') queryUser = value;
+      else if (key === 'database') queryDatabase = value;
+      else if (key === 'sslmode') sslMode = value;
+    }
+  } catch {
+    return null;
+  }
+
+  let authorityHost: string;
+  let authorityUsername: string;
+  try {
+    // Keep WHATWG's non-special-scheme bracket spelling: pinned pg passes `[::1]` (including the
+    // brackets) to net.connect, so normalizing it to `::1` here would approve a different carrier.
+    authorityHost = egressDecodeURIComponent(egressUrlHostname(url));
+    authorityUsername = egressDecodeURIComponent(egressUrlUsername(url));
+  } catch {
+    return null;
+  }
+  // pg-connection-string falls back to the authority for an absent or empty query host/port.
+  const host = queryHost === undefined || queryHost === '' ? authorityHost : queryHost;
   if (host === '') return null;
-  const urlPort = egressUrlPort(url);
-  const port = urlPort === '' ? 5432 : egressNumber(urlPort);
+  const authorityPort = egressUrlPort(url);
+  const effectivePort = queryPort === undefined || queryPort === '' ? authorityPort : queryPort;
+  if (
+    queryPort !== undefined &&
+    queryPort !== '' &&
+    !egressRegExpTest(/^[1-9][0-9]{0,4}$/u, queryPort)
+  ) {
+    return null;
+  }
+  const port = effectivePort === '' ? 5432 : egressNumber(effectivePort);
   if (!egressNumberIsInteger(port) || port < 1 || port > 65535) return null;
-  return `${egressStringToLowerCase(host)}:${port}`;
+  return {
+    authorityHost,
+    authorityPortExplicit: authorityPort !== '',
+    authorityUsername,
+    databasePathPresent: egressUrlPathname(url).length > 1,
+    host,
+    port,
+    queryDatabaseOverride: queryDatabase,
+    queryHostOverride: queryHost,
+    queryPortOverride: queryPort,
+    queryUserOverride: queryUser,
+    sslMode,
+    unixSocket: egressStringStartsWith(host, '/'),
+  };
+}
+
+function decodeDatabaseUrlQueryComponent(value: string): string {
+  // WHATWG URLSearchParams uses application/x-www-form-urlencoded `+` => space semantics.
+  return egressDecodeURIComponent(egressArrayJoin(egressStringSplit(value, '+'), '%20'));
+}
+
+function databaseEgressEndpointFromUrl(raw: string): string | null {
+  const facts = databaseEgressUrlFacts(raw);
+  if (facts === null || facts.unixSocket) return null;
+  return `${egressStringToLowerCase(facts.host)}:${facts.port}`;
 }
 
 /**
@@ -499,14 +617,20 @@ function databaseEgressEndpointFromUrl(raw: string): string | null {
  * @internal
  */
 export function createDatabaseEgressSocket(databaseUrl: string): net.Socket {
-  const endpoint = databaseEgressEndpointFromUrl(databaseUrl);
-  if (endpoint === null) {
+  const facts = databaseEgressUrlFacts(databaseUrl);
+  if (facts === null) {
     throw new TypeError(
       'Framework-owned database egress requires an absolute postgres:// or postgresql:// URL.',
     );
   }
   const socket = new net.Socket();
-  witnessWeakMapSet(databaseEgressSocketEndpoints, socket, endpoint);
+  witnessWeakMapSet(
+    databaseEgressSocketEndpoints,
+    socket,
+    facts.unixSocket
+      ? `unix:${facts.host}/.s.PGSQL.${facts.port}`
+      : `${egressStringToLowerCase(facts.host)}:${facts.port}`,
+  );
   return socket;
 }
 
@@ -1454,8 +1578,20 @@ export function installNetConnectFloor(
     const activePolicy = state.policy;
 
     const options = normalizeConnectOptions(args);
-    if (options !== null && stableConnectTargetValue(options, 'path') != null) {
-      throw unixDomainSocketBlocked();
+    if (options !== null) {
+      const path = stableConnectTargetValue(options, 'path');
+      if (path != null) {
+        // UDS remains ambient-default-denied. Only the exact path derived from a validated managed
+        // Postgres URL may pass, and only on the framework-created socket carrying that private
+        // witness. Registering the URL cannot open the path to unrelated process callers.
+        if (
+          typeof path !== 'string' ||
+          witnessWeakMapGet(databaseEgressSocketEndpoints, this) !== `unix:${path}`
+        ) {
+          throw unixDomainSocketBlocked();
+        }
+        return egressApply(original, this, args);
+      }
     }
     if (!options || options.host === undefined || options.host === '') {
       // Unparseable forms retain Node's own argument validation. Recognized path-only forms were

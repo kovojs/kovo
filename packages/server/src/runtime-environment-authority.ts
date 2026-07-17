@@ -6,6 +6,7 @@ import {
   witnessObjectIs,
   witnessObjectKeys,
   witnessReflectApply,
+  witnessStringToLowerCase,
 } from './security-witness-intrinsics.js';
 
 /**
@@ -23,13 +24,21 @@ import {
 
 type RuntimeEnvironment = Readonly<Record<PropertyKey, string>>;
 
-let pinnedRuntimeEnvironment: RuntimeEnvironment | undefined;
+interface RuntimeEnvironmentAuthority {
+  /** Original operator spellings, preserved for app env-schema snapshots. */
+  readonly snapshot: RuntimeEnvironment;
+  /** Windows-only case-folded name -> original name index for host-equivalent lookup. */
+  readonly windowsNames: RuntimeEnvironment | undefined;
+}
+
+let pinnedRuntimeEnvironment: RuntimeEnvironmentAuthority | undefined;
 
 const bootProcess =
   typeof process === 'undefined' || process === null || typeof process !== 'object'
     ? undefined
     : process;
 const bootLoadEnvFile = bootProcessValue('loadEnvFile');
+const bootEnvironmentNamesAreCaseInsensitive = bootProcessValue('platform') === 'win32';
 
 /**
  * Load the conventional local `.env` file through the boot-captured Node host hook, then pin the
@@ -53,14 +62,18 @@ export function loadAndPinServerRuntimeEnvironment(): void {
 /** Pin the operator environment once, before authored modules evaluate. @internal */
 export function pinServerRuntimeEnvironment(): void {
   if (pinnedRuntimeEnvironment !== undefined) return;
-  pinnedRuntimeEnvironment = snapshotEnvironment(liveProcessEnvironment());
+  pinnedRuntimeEnvironment = createEnvironmentAuthority(
+    liveProcessEnvironment(),
+    bootEnvironmentNamesAreCaseInsensitive,
+  );
 }
 
 /** Read one operator environment value from the bootstrap snapshot. @internal */
 export function runtimeEnvironmentValue(name: string): string | undefined {
-  const source = pinnedRuntimeEnvironment ?? liveProcessEnvironment();
-  if (source === undefined) return undefined;
-  return stableOwnEnvironmentValue(source, name);
+  const authority =
+    pinnedRuntimeEnvironment ??
+    createEnvironmentAuthority(liveProcessEnvironment(), bootEnvironmentNamesAreCaseInsensitive);
+  return environmentAuthorityValue(authority, name);
 }
 
 /**
@@ -69,7 +82,24 @@ export function runtimeEnvironmentValue(name: string): string | undefined {
  * @internal
  */
 export function runtimeEnvironmentSnapshot(): RuntimeEnvironment {
-  return snapshotEnvironment(pinnedRuntimeEnvironment ?? liveProcessEnvironment());
+  return snapshotEnvironment(pinnedRuntimeEnvironment?.snapshot ?? liveProcessEnvironment());
+}
+
+/**
+ * Inject an operator source/platform posture without depending on the test host OS. This module is
+ * implementation-private and the seam is deliberately not re-exported from the package's internal
+ * runtime-environment subpath.
+ *
+ * @internal test-only
+ */
+export function __testPinServerRuntimeEnvironment(
+  source: Readonly<Record<string, string | undefined>>,
+  windowsCaseInsensitive: boolean,
+): void {
+  if (pinnedRuntimeEnvironment !== undefined) {
+    throw new TypeError('Kovo test operator environment is already pinned.');
+  }
+  pinnedRuntimeEnvironment = createEnvironmentAuthority(source, windowsCaseInsensitive);
 }
 
 function liveProcessEnvironment(): Record<string, string | undefined> | undefined {
@@ -125,6 +155,59 @@ function snapshotEnvironment(
     });
   }
   return witnessFreeze(snapshot);
+}
+
+function createEnvironmentAuthority(
+  source: Readonly<Record<string, string | undefined>> | undefined,
+  windowsCaseInsensitive: boolean,
+): RuntimeEnvironmentAuthority {
+  const snapshot = snapshotEnvironment(source);
+  return witnessFreeze({
+    snapshot,
+    windowsNames: windowsCaseInsensitive ? indexWindowsEnvironmentNames(snapshot) : undefined,
+  });
+}
+
+function indexWindowsEnvironmentNames(snapshot: RuntimeEnvironment): RuntimeEnvironment {
+  const index = witnessCreateNullRecord<string>();
+  const names = witnessObjectKeys(snapshot);
+  for (let position = 0; position < names.length; position += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(names, position);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError('Kovo operator environment names must be dense own strings.');
+    }
+    const name = descriptor.value;
+    const foldedName = witnessStringToLowerCase(name);
+    const existing = stableOwnEnvironmentValue(index, foldedName);
+    if (existing !== undefined && existing !== name) {
+      throw new TypeError(
+        `Kovo operator environment contains case-colliding Windows names ${existing} and ${name} (SPEC §6.6 rule 6).`,
+      );
+    }
+    witnessDefineProperty(index, foldedName, {
+      configurable: false,
+      enumerable: true,
+      value: name,
+      writable: false,
+    });
+  }
+  return witnessFreeze(index);
+}
+
+function environmentAuthorityValue(
+  authority: RuntimeEnvironmentAuthority,
+  name: string,
+): string | undefined {
+  const originalName =
+    authority.windowsNames === undefined
+      ? name
+      : stableOwnEnvironmentValue(authority.windowsNames, witnessStringToLowerCase(name));
+  if (originalName === undefined) return undefined;
+  return stableOwnEnvironmentValue(authority.snapshot, originalName);
 }
 
 function stableOwnEnvironmentValue(

@@ -1187,13 +1187,13 @@ describe('create-kovo starter (metadata)', () => {
         'BETTER_AUTH_URL=https://app.example.com',
       );
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
-        'KOVO_DATABASE_URL=postgres://app_runtime@db.example.com:5432/your_app',
+        'KOVO_DATABASE_URL=postgres://app_runtime@db.example.com:5432/your_app?sslmode=verify-full',
       );
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
-        'KOVO_RUNTIME_DATABASE_URL=postgres://app_runtime@db.example.com:5432/your_app',
+        'KOVO_RUNTIME_DATABASE_URL=postgres://app_runtime@db.example.com:5432/your_app?sslmode=verify-full',
       );
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
-        'KOVO_ADMIN_DATABASE_URL=postgres://app_admin@db.example.com:5432/your_app',
+        'KOVO_ADMIN_DATABASE_URL=postgres://app_admin@db.example.com:5432/your_app?sslmode=verify-full',
       );
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain('KOVO_DB_DRIVER=');
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(

@@ -55,6 +55,15 @@ every random string in your process env.
 
 These are the env vars you will usually touch in app code, deploy config, or CI.
 
+Every Postgres URL must explicitly name its login, database, and decimal port. Non-local runtime,
+admin, and system URLs must also use a DNS hostname and exact `sslmode=verify-full`. Kovo validates
+this before opening a connection and does not fill destination or identity fields from ambient
+`PG*` variables. Only exact `127.0.0.1`, an exact query-host `::1`, and validated Unix-socket targets
+may omit TLS for local development. Write the IPv6 control as
+`postgres://app@localhost:5432/db?host=%3A%3A1`; Kovo rejects bracketed authority `[::1]` because
+pinned `pg` passes those brackets to DNS. A process booted with `NODE_TLS_REJECT_UNAUTHORIZED=0`
+cannot use a non-local managed Postgres URL.
+
 | Variable                       | Used by                                                      | What it does                                                                                   |
 | ------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | `KOVO_CSRF_SECRET`             | `createApp({ csrf })`, starter auth                          | Framework signing secret for browser mutation CSRF when you wire it through app config.        |

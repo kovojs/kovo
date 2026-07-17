@@ -153,7 +153,11 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'egress-ip',
     marker: '@kovo-security-classifier-corpus egress-ip',
-    testFiles: ['packages/server/src/egress.test.ts'],
+    testFiles: [
+      'packages/server/src/egress.test.ts',
+      'packages/server/src/postgres-runtime.test.ts',
+      'packages/server/src/runtime-environment-authority.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'octal-ip-regression',
@@ -190,6 +194,132 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'keeps registered database authority on framework-created PostgreSQL sockets',
           'createDatabaseEgressSocket(databaseUrl)',
           "unrelatedSocket.connect(port, '127.0.0.1')",
+        ],
+      },
+      {
+        id: 'database-effective-query-endpoint-regression',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'uses node-postgres last-wins query host and port for database socket provenance',
+          'host=10.0.5.2&port=54329&sslmode=verify-full',
+          "policy.allowDatabaseEndpoints.has('10.0.5.2:54329')",
+        ],
+      },
+      {
+        id: 'database-duplicate-last-tls-posture-regression',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'requires exact authenticated TLS for every non-local managed Postgres URL',
+          'sslmode=verify-full&sslmode=disable',
+          'toThrow(/KV433_POSTGRES_TLS: non-local databaseUrl/)',
+        ],
+      },
+      {
+        id: 'database-ip-literal-certificate-identity-regression',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'rejects every non-loopback IP literal because pg does not verify its certificate identity',
+          'postgres://app@10.0.0.9:5432/kovo?sslmode=verify-full',
+          'postgres://app@[2001:4860:4860::8888]:5432/kovo?sslmode=verify-full',
+          'postgres://app@db.example:5432/kovo?host=10.0.0.9&sslmode=verify-full',
+          'KV433_POSTGRES_TLS_HOST',
+        ],
+      },
+      {
+        id: 'database-pinned-parser-query-endpoint-regression',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'locks the managed TLS gate to pinned node-postgres parsing behavior',
+          'host=10.0.0.1&port=2222&host=db.example&port=5433&sslmode=verify-full',
+          "connectionParameters.host).toBe('db.example')",
+          'connectionParameters.port).toBe(5433)',
+          "bracketedIpv6Authority.connectionParameters.host).toBe('[::1]')",
+          "exactIpv6QueryHost.connectionParameters.host).toBe('::1')",
+        ],
+      },
+      {
+        id: 'database-resolver-locality-differential-regression',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'does not confuse permissive resolver spellings with an exact local Postgres carrier',
+          "dnsLookup('0177.0.0.1')",
+          "databaseUrl: 'postgres://app@0177.0.0.1:5432/kovo'",
+          'KV433_POSTGRES_TLS_HOST',
+        ],
+      },
+      {
+        id: 'database-ambient-port-and-permissive-port-regression',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'requires canonical remote authority fields and rejects permissive query ports',
+          "connectionString: 'postgres://app@db.example:5432/kovo?port=1e3&sslmode=verify-full'",
+          'permissivePort.connectionParameters.port).toBe(1)',
+          'refuses a missing remote port that pinned pg would fill from ambient PGPORT',
+          "process.env.PGPORT = '6543'",
+          'KV433_POSTGRES_AUTHORITY',
+        ],
+      },
+      {
+        id: 'database-unix-socket-authority-regression',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'requires explicit Unix-socket identity and port instead of pg ambient fallbacks',
+          "connectionString: '/tmp/kovo-pg kovo'",
+          'postgres://app@localhost:5432/kovo?host=%2Ftmp%2Fkovo-pg',
+          'KV433_POSTGRES_AUTHORITY',
+        ],
+      },
+      {
+        id: 'database-unix-socket-carrier-provenance',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'keeps a validated Postgres Unix path on the exact framework-created socket',
+          'unrelatedSocket.connect(socketPath)',
+          'createDatabaseEgressSocket(databaseUrl)',
+        ],
+      },
+      {
+        id: 'database-raw-url-envelope-regression',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'rejects raw URL-envelope forms that pinned pg parses against a different authority',
+          "connectionParameters.host).toBe('base')",
+          "'POSTGRES://app@db.example:5432/kovo?sslmode=verify-full'",
+          'KV433_POSTGRES_URL',
+        ],
+      },
+      {
+        id: 'database-malformed-percent-parser-regression',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'rejects malformed-percent preprocessing that makes pg ignore reviewed security keys',
+          'postgres://u:p%zz@8.8.8.8:5432/db?h%6Fst=127.0.0.1',
+          'postgres://u:p%zz@db.example:5432/db?sslm%6Fde=verify-full',
+          "host: '8.8.8.8'",
+          'ssl: false',
+          'KV433_POSTGRES_URL',
+        ],
+      },
+      {
+        id: 'database-disabled-node-tls-regression',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'refuses a boot-pinned NODE_TLS_REJECT_UNAUTHORIZED=0 before creating a remote pool',
+          "NODE_TLS_REJECT_UNAUTHORIZED: '0'",
+          'KV433_POSTGRES_TLS_ENV',
+        ],
+      },
+      {
+        id: 'windows-operator-environment-casefold-regression',
+        file: 'packages/server/src/runtime-environment-authority.test.ts',
+        snippets: [
+          'mirrors Windows case-insensitive operator lookup without rewriting app env keys',
+          "node_env: 'production'",
+          "Node_Tls_Reject_Unauthorized: '0'",
+          'production requires a least-privilege external Postgres',
+          'KV433_POSTGRES_TLS_ENV',
+          'fails closed on impossible Windows case-fold collisions',
+          "{ Node_Env: 'production', NODE_ENV: 'development' }",
         ],
       },
     ],

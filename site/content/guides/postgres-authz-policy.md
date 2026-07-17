@@ -84,9 +84,9 @@ Run provision with an admin connection. Run check with the same least-privilege 
 uses at request time:
 
 ```sh
-KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app KOVO_DATABASE_URL=postgres://app@db/app \
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full \
   kovo db provision
-KOVO_DATABASE_URL=postgres://app@db/app kovo db check
+KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check
 ```
 
 The command derives the table posture from `src/schema.ts`. For the document table, the important
@@ -147,8 +147,8 @@ mutation errors for a better user experience, but the database is the last line 
 Provision once, then check with the app credential and a member/non-member seed:
 
 ```sh
-KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app KOVO_DATABASE_URL=postgres://app@db/app kovo db provision
-KOVO_DATABASE_URL=postgres://app@db/app kovo db check
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db provision
+KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check
 ```
 
 Then run the two reads above. The member sees the row. The non-member gets zero rows, and a cross-team

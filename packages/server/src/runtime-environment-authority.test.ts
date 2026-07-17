@@ -23,6 +23,53 @@ afterEach(() => {
 });
 
 describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', () => {
+  it('mirrors Windows case-insensitive operator lookup without rewriting app env keys', async () => {
+    vi.resetModules();
+    const authority = await import('./runtime-environment-authority.js');
+    authority.__testPinServerRuntimeEnvironment(
+      {
+        node_env: 'production',
+        Node_Tls_Reject_Unauthorized: '0',
+        Operator_Mixed_Case: 'preserved',
+      },
+      true,
+    );
+
+    const [env, postgresRuntime] = await Promise.all([
+      import('./env.ts?operator-environment-windows-casefold'),
+      import('./postgres-runtime.ts?operator-environment-windows-casefold'),
+    ]);
+    expect(env.resolveBootMode()).toBe('production');
+    expect(() =>
+      postgresRuntime.createPostgresAppRuntimeDb({ driver: 'pglite', schema: {} }),
+    ).toThrow(/KV433: production requires a least-privilege external Postgres/u);
+    expect(() =>
+      postgresRuntime.__testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+        databaseUrl: 'postgres://app@db.example:5432/app?sslmode=verify-full',
+        driver: 'node-postgres',
+        schema: {},
+      }),
+    ).toThrow(/KV433_POSTGRES_TLS_ENV/u);
+
+    // App env-schema validation still receives the operator's original spellings.
+    expect(authority.runtimeEnvironmentSnapshot()).toEqual({
+      node_env: 'production',
+      Node_Tls_Reject_Unauthorized: '0',
+      Operator_Mixed_Case: 'preserved',
+    });
+  });
+
+  it('fails closed on impossible Windows case-fold collisions', async () => {
+    vi.resetModules();
+    const authority = await import('./runtime-environment-authority.js');
+    expect(() =>
+      authority.__testPinServerRuntimeEnvironment(
+        { Node_Env: 'production', NODE_ENV: 'development' },
+        true,
+      ),
+    ).toThrow(/case-colliding Windows names Node_Env and NODE_ENV/u);
+  });
+
   it('keeps production boot posture pinned after authored app code mutates process.env', async () => {
     vi.resetModules();
     setEnvironment('NODE_ENV', 'production');
@@ -169,6 +216,8 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
     );
 
     const policy = egress.resolveEgressPolicy(undefined, () => {});
+    expect(policy.allowDatabaseEndpoints.has('127.0.0.1:54321')).toBe(true);
+    expect(policy.allowDatabaseEndpoints.has('127.0.0.1:54322')).toBe(false);
     expect(
       egress.evaluateEgress({
         host: '127.0.0.1',
@@ -176,7 +225,7 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
         port: 54321,
         resolvedIp: '127.0.0.1',
       }),
-    ).toBeNull();
+    ).toMatchObject({ classification: 'loopback' });
     expect(
       egress.evaluateEgress({
         host: '127.0.0.1',
@@ -206,6 +255,7 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
       databaseUrls: ['postgres://rotated@127.0.0.1:54322/app'],
       identityEndpoint: 'http://127.0.0.1:40343/msi/token',
     });
+    expect(explicitRotationPolicy.allowDatabaseEndpoints.has('127.0.0.1:54322')).toBe(true);
     expect(
       egress.evaluateEgress({
         host: '127.0.0.1',
@@ -213,7 +263,7 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
         port: 54322,
         resolvedIp: '127.0.0.1',
       }),
-    ).toBeNull();
+    ).toMatchObject({ classification: 'loopback' });
     expect(
       egress.evaluateEgress({
         host: '127.0.0.1',

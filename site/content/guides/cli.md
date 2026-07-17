@@ -200,10 +200,10 @@ in the reader and writer roles and `kovo_schema_state` read access.
 
 ```sh
 kovo db generate --migrations migrations
-KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app KOVO_DATABASE_URL=postgres://app@db/app \
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full \
   kovo db provision --migrations migrations
-KOVO_DATABASE_URL=postgres://app@db/app kovo db check
-KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db check
+KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full kovo db check
 kovo db check --driver pglite --data-dir .kovo/pglite
 ```
 

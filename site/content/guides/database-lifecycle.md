@@ -87,8 +87,8 @@ each file was applied or skipped.
 When the app needs the real runtime posture, switch the URLs instead of rewriting the app:
 
 ```sh
-KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app \
-KOVO_RUNTIME_DATABASE_URL=postgres://app@db/app \
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full \
+KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full \
 kovo db provision --schema src/schema.ts --migrations migrations
 ```
 
@@ -96,12 +96,23 @@ Use the admin URL for setup commands only. Use the runtime URL for the live app 
 check`. Reader and writer roles default to `kovo_reader` and `kovo_writer`, or you can override
 them with `KOVO_DB_READER_ROLE` and `KOVO_DB_WRITER_ROLE`.
 
+Every Postgres URL must explicitly name its login, database, and decimal port. Remote URLs must use
+a DNS hostname and exact `sslmode=verify-full`; Kovo refuses IP literals, every query user/database
+override, remote query host/port overrides, weaker TLS modes, and ambient `PG*` destination or
+identity fallback before it opens a pool. This keeps credentials off plaintext or
+certificate-unverified connections. Only exact `127.0.0.1`, an exact query-host `::1`, and validated
+Unix-socket URLs may omit TLS for local development. Write the IPv6 control as
+`postgres://app@localhost:5432/app?host=%3A%3A1`; bracketed authority `[::1]` is rejected because
+pinned `pg` passes those brackets to DNS. Express a Unix socket as a URL with explicit identity and
+port, for example
+`postgres://app@localhost:5432/app?host=%2Fvar%2Frun%2Fpostgresql`.
+
 ## Check the posture
 
 Make the live database prove it matches the schema and grants:
 
 ```sh
-KOVO_DATABASE_URL=postgres://app@db/app kovo db check --schema src/schema.ts
+KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check --schema src/schema.ts
 ```
 
 On a healthy database the command reports `STATUS ok` with `issues=0`. On an empty or drifted

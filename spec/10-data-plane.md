@@ -209,6 +209,27 @@ and the reachable-object closure audit above before the app serves. This relocat
 zero-dependency local development without claiming that an in-process superuser can be made into a
 production least-privilege identity.
 
+Every managed Postgres connection string — runtime, admin, system, provisioning, migration, and
+posture-check alike — MUST explicitly name a nonempty authority login, a nonempty database path, and
+a decimal port. Query-string login and database overrides are forbidden. Non-local URLs additionally
+MUST keep host and port in the authority, use a DNS hostname rather than an IP literal, and
+authenticate both the certificate chain and server hostname before credentials or queries cross the
+network. Kovo accepts the exact `sslmode=verify-full` posture and fails closed before pool
+construction on absent, malformed, duplicate-last-weaker, or weaker modes. The pinned node-postgres
+transport does not check IP literals against certificate identity even in `verify-full` mode, and a
+boot-pinned `NODE_TLS_REJECT_UNAUTHORIZED=0` disables Node certificate verification, so Kovo rejects
+both for non-local transports. Only exact pg-effective `127.0.0.1`, exact query-host `::1`, and
+validated Unix-socket carriers may omit TLS; a bracketed IPv6 authority remains `[::1]` in pinned pg
+and is not the proven local carrier. Unix sockets use URL form with explicit login, database, and port;
+the ambient-dependent historical `/socket/path database` shorthand is forbidden. Connection-string
+URLs use an exact lowercase `postgres://` or `postgresql://` envelope with no raw whitespace or
+control characters, and every raw percent sign MUST be followed by exactly two ASCII hexadecimal
+digits. Malformed or truncated percent escapes are rejected globally before parsing so Kovo and the
+pinned Postgres parser cannot disagree about security-relevant query keys; intentional credential
+and query bytes must be canonically percent-encoded. The node-postgres driver requires an explicit
+reviewed `databaseUrl`/`KOVO_DATABASE_URL`; it does not combine a pinned Kovo security decision with
+pg's later live reads of ambient `PG*` destination or identity variables.
+
 The real authorization boundary is split. **Privilege** belongs to unassumeable Postgres roles such
 as `kovo_admin`/`kovo_system`, and those roles may be assumed only inside framework-owned scoped
 clients for provisioning, migration, audit, or other system work. App/runtime roles cannot assume

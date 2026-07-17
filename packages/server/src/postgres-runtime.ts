@@ -38,7 +38,7 @@ import {
   snapshotAuditText,
 } from './audit-justification.js';
 import { registerEgressDatabaseUrl } from './egress-bootstrap.js';
-import { createDatabaseEgressSocket } from './egress.js';
+import { classifyHost, createDatabaseEgressSocket, databaseEgressUrlFacts } from './egress.js';
 import { runExactlyOnceAdapter } from './exactly-once-continuation.js';
 import { egressDecodeURIComponent, egressUrl, egressUrlUsername } from './egress-intrinsics.js';
 import {
@@ -1686,6 +1686,7 @@ export async function provisionPostgresAppDb(
     postureCheckOnBoot: false,
     provisionOnBoot: true,
   });
+  assertManagedPostgresTransportUrl('runtimeDatabaseUrl', safeOptions.runtimeDatabaseUrl);
   const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
@@ -1727,6 +1728,7 @@ export async function migratePostgresAppDb(
     postureCheckOnBoot: false,
     provisionOnBoot: false,
   });
+  assertManagedPostgresTransportUrl('runtimeDatabaseUrl', safeOptions.runtimeDatabaseUrl);
   const config = resolvePostgresRuntimeConfigSnapshot(safeOptions);
   const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
   const metadata = snapshotExtractedKovoRuntimeDbMetadata(
@@ -4679,10 +4681,9 @@ function createOptionalNodePostgresRuntimeClient(
 
 function createFrameworkNodePostgresPool(databaseUrl: string | undefined): Pool {
   if (databaseUrl === undefined) {
-    // Explicit driver: "node-postgres" may rely on pg's ordinary PG* environment. Without a
-    // framework-reviewed URL there is no private-endpoint capability to attach, so retain pg's
-    // normal carrier and let the ambient egress floor classify it.
-    return pinNodePostgresPool(new Pool());
+    throw new Error(
+      'KV433_POSTGRES_URL: node-postgres requires an explicit databaseUrl/KOVO_DATABASE_URL (SPEC §10.3).',
+    );
   }
   return pinNodePostgresPool(
     new Pool({
@@ -4973,6 +4974,16 @@ function resolvePostgresRuntimeConfigSnapshot(
   const adminDatabaseUrl = options.adminDatabaseUrl ?? runtimeEnvironmentValue('KOVO_DB_ADMIN_URL');
   const systemDatabaseUrl =
     options.systemDatabaseUrl ?? runtimeEnvironmentValue('KOVO_DB_SYSTEM_URL');
+  if (driver === 'node-postgres') {
+    if (databaseUrl === undefined) {
+      throw new Error(
+        'KV433_POSTGRES_URL: node-postgres requires an explicit databaseUrl/KOVO_DATABASE_URL so Kovo and pg consume the same reviewed transport authority (SPEC §10.3).',
+      );
+    }
+    assertManagedPostgresTransportUrl('databaseUrl', databaseUrl);
+    assertManagedPostgresTransportUrl('adminDatabaseUrl', adminDatabaseUrl);
+    assertManagedPostgresTransportUrl('systemDatabaseUrl', systemDatabaseUrl);
+  }
   const envAdminRole = nonEmptyEnv('KOVO_DB_ADMIN_ROLE');
   const envReaderRole = nonEmptyEnv('KOVO_DB_READER_ROLE');
   const envSystemRole = nonEmptyEnv('KOVO_DB_SYSTEM_ROLE');
@@ -5018,6 +5029,105 @@ function resolvePostgresRuntimeConfigSnapshot(
   };
   if (databaseUrl !== undefined) return { ...config, databaseUrl };
   return config;
+}
+
+type ManagedPostgresUrlLabel =
+  | 'adminDatabaseUrl'
+  | 'databaseUrl'
+  | 'runtimeDatabaseUrl'
+  | 'systemDatabaseUrl';
+
+/**
+ * Refuse remote database credentials before pool construction unless pg will authenticate both
+ * the certificate chain and the server hostname. The exact mode is intentional: pinned pg 8 treats
+ * several weaker libpq names as temporary aliases today and has announced weaker pg 9 semantics.
+ * Kovo must not silently change its transport proof when that dependency changes (SPEC §10.3).
+ */
+function assertManagedPostgresTransportUrl(
+  label: ManagedPostgresUrlLabel,
+  databaseUrl: string | undefined,
+): void {
+  if (databaseUrl === undefined) return;
+  const facts = databaseEgressUrlFacts(databaseUrl);
+  if (facts === null) {
+    throw new Error(
+      `KV433_POSTGRES_URL: ${label} must be a valid postgres:// or postgresql:// connection string (SPEC §10.3).`,
+    );
+  }
+  assertCanonicalPostgresIdentity(label, facts);
+  if (facts.unixSocket) return;
+  if (isExactLocalPostgresEndpoint(facts)) return;
+  assertCanonicalRemotePostgresAuthority(label, facts);
+  if (runtimeEnvironmentValue('NODE_TLS_REJECT_UNAUTHORIZED') === '0') {
+    throw new Error(
+      `KV433_POSTGRES_TLS_ENV: non-local ${label} is forbidden while NODE_TLS_REJECT_UNAUTHORIZED=0 disables Node certificate verification (SPEC §10.3).`,
+    );
+  }
+  if (classifyHost(facts.host) !== null) {
+    throw new Error(
+      `KV433_POSTGRES_TLS_HOST: non-local ${label} must use a DNS hostname, not an IP literal, because pinned node-postgres does not verify IP literals against the certificate identity (SPEC §10.3).`,
+    );
+  }
+  if (facts.sslMode !== 'verify-full') {
+    throw new Error(
+      `KV433_POSTGRES_TLS: non-local ${label} must include exact sslmode=verify-full so Postgres authenticates the certificate chain and server hostname (SPEC §10.3).`,
+    );
+  }
+}
+
+function isExactLocalPostgresEndpoint(
+  facts: NonNullable<ReturnType<typeof databaseEgressUrlFacts>>,
+): boolean {
+  // Compare the exact string pinned pg passes to net.connect. In particular, pg retains brackets
+  // on an IPv6 URL authority (`[::1]`), which is not the working `::1` carrier and must not inherit
+  // the cleartext-local exception. A query `host=%3A%3A1` produces the exact working value.
+  return facts.host === '127.0.0.1' || facts.host === '::1';
+}
+
+function assertCanonicalPostgresIdentity(
+  label: ManagedPostgresUrlLabel,
+  facts: NonNullable<ReturnType<typeof databaseEgressUrlFacts>>,
+): void {
+  if (
+    (facts.queryUserOverride !== undefined && facts.queryUserOverride !== '') ||
+    (facts.queryDatabaseOverride !== undefined && facts.queryDatabaseOverride !== '')
+  ) {
+    throw new Error(
+      `KV433_POSTGRES_AUTHORITY: ${label} must keep user and database in the URL authority/path; query overrides are forbidden (SPEC §10.3).`,
+    );
+  }
+  if (
+    !facts.authorityPortExplicit &&
+    (facts.queryPortOverride === undefined || facts.queryPortOverride === '')
+  ) {
+    throw new Error(
+      `KV433_POSTGRES_AUTHORITY: ${label} must include an explicit decimal port so PGPORT cannot retarget the connection (SPEC §10.3).`,
+    );
+  }
+  if (facts.authorityUsername === '') {
+    throw new Error(
+      `KV433_POSTGRES_AUTHORITY: ${label} must include a nonempty authority username so PGUSER cannot select the login role (SPEC §10.3).`,
+    );
+  }
+  if (!facts.databasePathPresent) {
+    throw new Error(
+      `KV433_POSTGRES_AUTHORITY: ${label} must include a nonempty database path so PGDATABASE cannot select the database (SPEC §10.3).`,
+    );
+  }
+}
+
+function assertCanonicalRemotePostgresAuthority(
+  label: ManagedPostgresUrlLabel,
+  facts: NonNullable<ReturnType<typeof databaseEgressUrlFacts>>,
+): void {
+  if (
+    (facts.queryHostOverride !== undefined && facts.queryHostOverride !== '') ||
+    (facts.queryPortOverride !== undefined && facts.queryPortOverride !== '')
+  ) {
+    throw new Error(
+      `KV433_POSTGRES_AUTHORITY: non-local ${label} must keep host, port, user, and database in the URL authority/path; query overrides are forbidden (SPEC §10.3).`,
+    );
+  }
 }
 
 function resolvePostgresPostureCheck(

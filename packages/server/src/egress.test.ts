@@ -1,7 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import http from 'node:http';
 import dns from 'node:dns';
+import { mkdtempSync, rmSync } from 'node:fs';
 import net, { type AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,6 +14,7 @@ import {
   classifyHost,
   classifyIp,
   createDatabaseEgressSocket,
+  databaseEgressUrlFacts,
   evaluateEgress,
   frameworkEgressFetch,
   installNetConnectFloor,
@@ -560,6 +564,22 @@ describe('evaluateEgress policy decision', () => {
     ).toBeInstanceOf(EgressBlockedError);
   });
 
+  it('uses node-postgres last-wins query host and port for database socket provenance', () => {
+    const databaseUrl =
+      'postgres://app@127.0.0.1:1111/app?host=10.0.5.2&port=54329&sslmode=verify-full';
+    expect(databaseEgressUrlFacts(databaseUrl)).toMatchObject({
+      host: '10.0.5.2',
+      port: 54329,
+      sslMode: 'verify-full',
+      unixSocket: false,
+    });
+    const policy = resolveEgressPolicy({ allowInternal: [] }, () => {}, {
+      databaseUrls: [databaseUrl],
+    });
+    expect(policy.allowDatabaseEndpoints.has('10.0.5.2:54329')).toBe(true);
+    expect(policy.allowDatabaseEndpoints.has('127.0.0.1:1111')).toBe(false);
+  });
+
   it('keeps metadata blocked even when KOVO_DATABASE_URL names a metadata host', () => {
     const policy = resolveEgressPolicy({ allowInternal: [] }, () => {}, {
       databaseUrls: ['postgres://app@169.254.169.254:5432/app'],
@@ -1002,6 +1022,35 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
       databaseSocket.connect(port, '127.0.0.1', resolve);
     });
     databaseSocket.destroy();
+  });
+
+  it('keeps a validated Postgres Unix path on the exact framework-created socket', async () => {
+    const socketDirectory = mkdtempSync(join(tmpdir(), 'kovo-pg-'));
+    const socketPath = join(socketDirectory, '.s.PGSQL.5432');
+    const unixServer = net.createServer();
+    await new Promise<void>((resolve, reject) => {
+      unixServer.once('error', reject);
+      unixServer.listen(socketPath, resolve);
+    });
+    const databaseUrl = `postgres://app@localhost:5432/kovo?host=${encodeURIComponent(socketDirectory)}`;
+    uninstall = installNetConnectFloor(emptyPolicy());
+
+    try {
+      const unrelatedSocket = new net.Socket();
+      expect(() => unrelatedSocket.connect(socketPath)).toThrow(EgressBlockedError);
+
+      const databaseSocket = createDatabaseEgressSocket(databaseUrl);
+      await new Promise<void>((resolve, reject) => {
+        databaseSocket.once('error', reject);
+        databaseSocket.connect(socketPath, resolve);
+      });
+      databaseSocket.destroy();
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        unixServer.close((error) => (error ? reject(error) : resolve()));
+      });
+      rmSync(socketDirectory, { force: true, recursive: true });
+    }
   });
 
   it('DENIES non-canonical IPv4 spellings after DNS resolution instead of the fast path', async () => {

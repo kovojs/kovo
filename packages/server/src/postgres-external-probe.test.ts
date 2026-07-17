@@ -172,17 +172,53 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
   }, 30_000);
 
   itIfPostgresTls(
-    'keeps the pg socket provenance through TLS reconnects',
+    'uses certificate-and-hostname verified TLS through reconnects',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'kovo-external-egress-pg-tls-'));
       roots.push(root);
       const cluster = await startLocalPostgres(root, { tls: true });
       clusters.push(cluster);
-      const databaseUrl = `${cluster
+      const cleartextUrl = cluster
         .url('postgres', 'postgres')
-        .replace('@127.0.0.1:', '@localhost:')}?sslmode=no-verify`;
+        .replace('@127.0.0.1:', '@localhost:');
+      const cleartextPool = new Pool({ connectionString: cleartextUrl, max: 1 });
+      try {
+        // Reproduction control: a TLS-capable Postgres server still accepts plaintext when pg is
+        // given no sslmode, so server capability alone does not protect credentials or queries.
+        await expect(
+          cleartextPool.query<{ tls: boolean }>(
+            'SELECT ssl AS tls FROM pg_stat_ssl WHERE pid = pg_backend_pid()',
+          ),
+        ).resolves.toMatchObject({ rows: [{ tls: false }] });
+      } finally {
+        await cleartextPool.end();
+      }
+
+      const databaseUrl = `${cleartextUrl}?sslmode=verify-full&sslrootcert=${encodeURIComponent(
+        cluster.certificatePath!,
+      )}`;
+      const ipLiteralUrl = `${cluster.url(
+        'postgres',
+        'postgres',
+      )}?sslmode=verify-full&sslrootcert=${encodeURIComponent(cluster.certificatePath!)}`;
+      const mismatchedHostnameUrl = `${cleartextUrl.replace(
+        '@localhost:',
+        '@wrong.localhost:',
+      )}?sslmode=verify-full&sslrootcert=${encodeURIComponent(cluster.certificatePath!)}`;
       const unregister = registerEgressDatabaseUrl(databaseUrl);
+      const unregisterIpLiteral = registerEgressDatabaseUrl(ipLiteralUrl);
+      const unregisterMismatch = registerEgressDatabaseUrl(mismatchedHostnameUrl);
       const floor = installEgressFloorSync({ allowInternal: [] }, () => {});
+      const ipLiteralPool = new Pool({
+        connectionString: ipLiteralUrl,
+        max: 1,
+        stream: () => createDatabaseEgressSocket(ipLiteralUrl),
+      });
+      const mismatchedHostnamePool = new Pool({
+        connectionString: mismatchedHostnameUrl,
+        max: 1,
+        stream: () => createDatabaseEgressSocket(mismatchedHostnameUrl),
+      });
       let streamCreations = 0;
       const pool = new Pool({
         connectionString: databaseUrl,
@@ -194,6 +230,19 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       });
 
       try {
+        // Pinned pg does not pass an IP literal as TLS servername, so even verify-full accepts a
+        // CA-trusted CN=localhost certificate for 127.0.0.1. Kovo therefore refuses non-loopback
+        // IP literals before pool creation and requires a DNS hostname for remote databases.
+        await expect(
+          ipLiteralPool.query<{ tls: boolean }>(
+            'SELECT ssl AS tls FROM pg_stat_ssl WHERE pid = pg_backend_pid()',
+          ),
+        ).resolves.toMatchObject({ rows: [{ tls: true }] });
+
+        // With a DNS hostname, pg does perform endpoint-identity validation.
+        await expect(mismatchedHostnamePool.query('SELECT 1')).rejects.toMatchObject({
+          code: 'ERR_TLS_CERT_ALTNAME_INVALID',
+        });
         await expect(
           pool.query<{ tls: boolean }>(
             'SELECT ssl AS tls FROM pg_stat_ssl WHERE pid = pg_backend_pid()',
@@ -206,8 +255,12 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
         });
         expect(streamCreations).toBeGreaterThanOrEqual(2);
       } finally {
+        await ipLiteralPool.end();
+        await mismatchedHostnamePool.end();
         await pool.end();
         floor.uninstall();
+        unregisterMismatch();
+        unregisterIpLiteral();
         unregister();
       }
     },
@@ -828,6 +881,7 @@ class TestNodePostgresTransactionClient {
 }
 
 interface LocalPostgresCluster {
+  certificatePath?: string;
   stop(): Promise<void>;
   url(database: string, user: string): string;
 }
@@ -843,8 +897,10 @@ async function startLocalPostgres(
   });
   const port = await availablePort();
   const postgresArgs = ['-D', dataDir, '-h', '127.0.0.1', '-k', socketDir, '-p', String(port)];
+  let certificatePath: string | undefined;
   if (options.tls === true) {
     const certificate = join(root, 'server.crt');
+    certificatePath = certificate;
     const privateKey = join(root, 'server.key');
     execFileSync(
       'openssl',
@@ -878,6 +934,7 @@ async function startLocalPostgres(
   const stderr: string[] = [];
   process.stderr.on('data', (chunk: Buffer) => stderr.push(chunk.toString('utf8')));
   const cluster: LocalPostgresCluster = {
+    ...(certificatePath === undefined ? {} : { certificatePath }),
     async stop() {
       process.kill('SIGTERM');
       await onceExit(process);
