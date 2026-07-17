@@ -182,14 +182,32 @@ function resolveDbCommandAuthority(
   security: KovoCommandSecurityDisposition,
 ): ResolvedKovoDbOptions {
   const invocationCwd = security.invocationCwd;
+  const driver = resolveDbCommandDriver(options.driver, security.invocationEnv);
   return {
     ...options,
     ...(options.dataDir === undefined ? {} : { dataDir: resolve(invocationCwd, options.dataDir) }),
+    ...(driver === undefined ? {} : { driver }),
     invocationCwd,
     invocationEnv: security.invocationEnv,
     migrationsDir: resolve(invocationCwd, options.migrationsDir ?? 'migrations'),
     schemaPath: resolve(invocationCwd, options.schemaPath),
   };
+}
+
+function resolveDbCommandDriver(
+  explicitDriver: KovoPostgresRuntimeDriver | undefined,
+  invocationEnv: NodeJS.ProcessEnv,
+): KovoPostgresRuntimeDriver | undefined {
+  if (explicitDriver !== undefined) return explicitDriver;
+  const environmentDriver = kovoInvocationEnvironmentValue(invocationEnv, 'KOVO_DB_DRIVER');
+  if (environmentDriver === undefined) return undefined;
+  const parsed = parsePostgresRuntimeDriver(environmentDriver);
+  if (parsed === undefined) {
+    throw new Error(
+      `kovo: unsupported KOVO_DB_DRIVER ${stableValue(environmentDriver)}; expected pglite, pg, or node-postgres.`,
+    );
+  }
+  return parsed;
 }
 
 function dbArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
@@ -515,7 +533,7 @@ function applyRuntimeOptionOverrides(
 }
 
 function shouldProvisionEmbeddedPglite(options: ResolvedKovoDbOptions): boolean {
-  const driver = options.driver ?? invocationEnvironmentValue(options, 'KOVO_DB_DRIVER');
+  const driver = options.driver;
   if (driver === 'pglite') return true;
   if (driver === 'pg' || driver === 'node-postgres') return false;
   return (
@@ -528,7 +546,7 @@ function shouldProvisionEmbeddedPglite(options: ResolvedKovoDbOptions): boolean 
 }
 
 function shouldCheckEmbeddedPglite(options: ResolvedKovoDbOptions): boolean {
-  const driver = options.driver ?? invocationEnvironmentValue(options, 'KOVO_DB_DRIVER');
+  const driver = options.driver;
   if (driver === 'pglite') return true;
   if (driver === 'pg' || driver === 'node-postgres') return false;
   return (
@@ -545,7 +563,7 @@ function checkTargetOptions(options: ResolvedKovoDbOptions): {
   overrides: Partial<KovoPostgresAppRuntimeOptions>;
   source: KovoDbTargetSource;
 } {
-  const driver = options.driver ?? invocationEnvironmentValue(options, 'KOVO_DB_DRIVER');
+  const driver = options.driver;
   if (driver === 'pglite') return { overrides: { driver: 'pglite' }, source: 'explicit-driver' };
   const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
   if (driver === 'pg' || driver === 'node-postgres') {
@@ -579,7 +597,7 @@ function checkTargetOptions(options: ResolvedKovoDbOptions): {
 function generateDriverOptions(
   options: ResolvedKovoDbOptions,
 ): Partial<KovoPostgresAppRuntimeOptions> {
-  const driver = options.driver ?? invocationEnvironmentValue(options, 'KOVO_DB_DRIVER');
+  const driver = options.driver;
   if (driver === 'pglite' || shouldCheckEmbeddedPglite(options)) return { driver: 'pglite' };
   const databaseUrl = nonEmptyValue(
     resolveAdminDatabaseUrl(options) ?? resolveRuntimeDatabaseUrl(options),

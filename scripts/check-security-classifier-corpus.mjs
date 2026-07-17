@@ -347,6 +347,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "expect(check.stderr).not.toContain('DRIVER pglite')",
         ],
       },
+      {
+        id: 'cli-invalid-database-driver-closed-regression',
+        file: 'packages/cli/src/index.kovo-db.test.ts',
+        snippets: [
+          'refuses unsupported KOVO_DB_DRIVER before %s target selection',
+          "const invalidDrivers = ['bogus', '', ' pg', 'PG'] as const",
+          "expect(run.stderr, driver).toContain('unsupported KOVO_DB_DRIVER')",
+          "expect(run.stderr, driver).not.toContain('DRIVER pglite')",
+          "expect(run.stderr, driver).not.toContain('authored schema evaluated')",
+        ],
+      },
     ],
   },
   {

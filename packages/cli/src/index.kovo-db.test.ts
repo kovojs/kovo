@@ -182,6 +182,32 @@ describe('kovo db', () => {
     expect(check.stderr).toMatch(/ECONNREFUSED|connect/u);
   });
 
+  it.each(['check', 'generate', 'migrate', 'provision'] as const)(
+    'refuses unsupported KOVO_DB_DRIVER before %s target selection',
+    async (action) => {
+      const { schemaPath } = writeDbCommandFixture(`invalid-env-driver-${action}`);
+      writeFileSync(schemaPath, "throw new Error('authored schema evaluated');\n", 'utf8');
+      const invalidDrivers = ['bogus', '', ' pg', 'PG'] as const;
+
+      for (const driver of invalidDrivers) {
+        const security = Object.freeze({
+          invocationCwd: process.cwd(),
+          invocationEnv: snapshotKovoInvocationEnvironment({ KOVO_DB_DRIVER: driver }),
+          paranoidStaticAdvisory: false,
+        });
+        const run = await captureWrites(() =>
+          mainAsync(['db', action, '--schema', schemaPath], security),
+        );
+
+        expect(run.result, driver).toBe(1);
+        expect(run.stdout, driver).toBe('');
+        expect(run.stderr, driver).toContain('unsupported KOVO_DB_DRIVER');
+        expect(run.stderr, driver).not.toContain('DRIVER pglite');
+        expect(run.stderr, driver).not.toContain('authored schema evaluated');
+      }
+    },
+  );
+
   it('applies reviewed SQL migrations before reasserting Postgres posture', async () => {
     const { dataDir, migrationsDir, schemaPath } = writeDbCommandFixture('migrated');
     writeFileSync(
