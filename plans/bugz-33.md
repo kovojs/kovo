@@ -84,7 +84,7 @@ rendering, Better Auth, and managed SQL.
   - A successful transaction callback followed by an adapter/COMMIT rejection was treated like a
     proven rollback. If the database committed before its acknowledgement was lost, a remote client
     or provider retry could execute the same write again.
-  - **Fixed:** `5eae63679` gives successful-callback adapter failures a framework-owned ambiguous
+  - **Fixed:** `13ad6f7c9` gives successful-callback adapter failures a framework-owned ambiguous
     settlement signal. Mutation and webhook lifecycles retain the pending replay claim, while setup
     and callback failures still abort it for a safe retry.
   - **Evidence:** focused exactly-once/mutation/webhook replay matrix 138/138; server dist/DTS and
