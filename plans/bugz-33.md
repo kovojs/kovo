@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    2 |     14 |
+| High     |    1 |     15 |
 | Medium   |    2 |     15 |
 | Low      |    0 |      3 |
 
@@ -188,7 +188,7 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** focused route/static/generated/wire matrix 216/216, all 12 security-classifier
     corpora, API-surface, and real pipelined response-boundary regressions passed.
 
-- [ ] **H15 - Structured route responses bypassed KV415's typed header-name allowlist.**
+- [x] **H15 - Structured route responses bypassed KV415's typed header-name allowlist.**
   - `respond.file()` and `respond.stream()` accepted an arbitrary `Record<string, string>` even
     though SPEC §9.1 and KV415 require structured app response channels to reject names outside a
     typed allowlist. An app that routes remotely derived names into this advertised safe sink can
@@ -196,9 +196,13 @@ rendering, Better Auth, and managed SQL.
     fields; raw endpoints are the explicit arbitrary end-to-end header escape instead.
   - **Evidence:** dynamic `X-Accel-Redirect`, CORS, `X-Audit`, and `X-Trace-Id` names survive route
     outcome construction today, while existing tests pin custom structured names as accepted.
-  - **Open:** give public structured route options a precise type-level and runtime allowlist,
-    preserve the existing structured content/disposition/redirect APIs, and retain arbitrary
-    end-to-end names only on the declared raw endpoint and operator static-metadata paths.
+  - **Fixed:** `bc58cf53c` limits direct `respond.file()`/`respond.stream()` and configured
+    error-shell metadata to `Cache-Control`, `Last-Modified`, and `Vary` at both the public type and
+    case-insensitive runtime boundary. Dedicated fields keep their named APIs; raw endpoints and
+    operator static metadata retain arbitrary end-to-end names behind H14's transport floor.
+  - **Evidence:** focused response/header matrix 447/447 and all 13 classifier corpora passed. A
+    separate production replay-store provenance trace found no remote path for choosing stored
+    header names; production accepts only the ACL-audited framework Postgres store.
 
 - [ ] **H16 - A misbound authenticated CSRF session could collapse replay scope across users.**
   - Generic CSRF configuration treated an empty or missing `sessionId` as an anonymous browser
