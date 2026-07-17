@@ -1739,6 +1739,77 @@ describe('nodeRequestToWebRequest client disconnect (E3)', () => {
   // SPEC §9.5: a client disconnect must propagate to request.signal so handlers/queries and
   // any downstream fetch(url, { signal: request.signal }) abort instead of running against a
   // dead socket. Previously RequestInit carried no signal and nothing bridged 'aborted'/'close'.
+  it('keeps request.signal live after a normal HTTP/1 body completes', async () => {
+    const server = await serveWithNode(
+      toNodeHandler(async (request) => {
+        const body = await request.text();
+        const afterBody = request.signal.aborted;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        return Response.json({ afterBody, afterDelay: request.signal.aborted, body });
+      }),
+    );
+
+    try {
+      const response = await server.fetch('/complete-body', {
+        body: 'abc',
+        headers: { 'content-length': '3' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({
+        afterBody: false,
+        afterDelay: false,
+        body: 'abc',
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('keeps request.signal live after a normal HTTP/2 body completes', async () => {
+    const nodeHandler = toNodeHandler(async (request) => {
+      const body = await request.text();
+      const afterBody = request.signal.aborted;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return Response.json({ afterBody, afterDelay: request.signal.aborted, body });
+    });
+    const server = createHttp2Server((request, response) => {
+      void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const client = http2Connect(`http://127.0.0.1:${address.port}`);
+
+    try {
+      const result = await new Promise<string>((resolve, reject) => {
+        const request = client.request({
+          ':authority': 'app.example',
+          ':method': 'POST',
+          ':path': '/complete-body',
+          ':scheme': 'http',
+        });
+        let body = '';
+        request.setEncoding('utf8');
+        request.on('data', (chunk: string) => {
+          body += chunk;
+        });
+        request.on('end', () => resolve(body));
+        request.on('error', reject);
+        request.end('abc');
+      });
+      expect(JSON.parse(result)).toEqual({
+        afterBody: false,
+        afterDelay: false,
+        body: 'abc',
+      });
+    } finally {
+      client.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
   it('aborts request.signal when the client destroys the connection mid-handler', async () => {
     let observedSignal: AbortSignal | undefined;
     const aborted = new Promise<boolean>((resolve) => {

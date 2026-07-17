@@ -692,8 +692,17 @@ function nodeRequestToWebRequestFromSnapshot(
   };
   const nodeRequest = pinnedNodeRequest.carrier;
   const socket = pinnedNodeRequest.socket;
+  // Node emits IncomingMessage `close` after a normally consumed request body as well as after
+  // truncation. Only the latter is a disconnect: treating ordinary completion as an abort makes
+  // request.signal unusable for downstream work after `await request.text()`/`formData()`.
+  const abortOnIncompleteRequestClose = (): void => {
+    if (!nodeRequestComplete(nodeRequest)) abort();
+  };
   witnessReflectApply(nativeIncomingMessageOnce, nodeRequest, ['aborted', abort]);
-  witnessReflectApply(nativeIncomingMessageOnce, nodeRequest, ['close', abort]);
+  witnessReflectApply(nativeIncomingMessageOnce, nodeRequest, [
+    'close',
+    abortOnIncompleteRequestClose,
+  ]);
   witnessReflectApply(nativeSocketOnce, socket, ['close', abort]);
   // K1 (SPEC §9.5): the socket is reused across requests on a keep-alive connection, so a
   // never-removed `socket.once('close', abort)` accumulates one listener + AbortController
@@ -706,7 +715,10 @@ function nodeRequestToWebRequestFromSnapshot(
   if (nodeResponse) {
     const cleanup = (): void => {
       witnessReflectApply(nativeIncomingMessageOff, nodeRequest, ['aborted', abort]);
-      witnessReflectApply(nativeIncomingMessageOff, nodeRequest, ['close', abort]);
+      witnessReflectApply(nativeIncomingMessageOff, nodeRequest, [
+        'close',
+        abortOnIncompleteRequestClose,
+      ]);
       witnessReflectApply(nativeSocketOff, socket, ['close', abort]);
     };
     witnessReflectApply(nativeServerResponseOnce, nodeResponse, ['close', cleanup]);

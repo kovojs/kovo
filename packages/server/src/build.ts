@@ -1132,13 +1132,18 @@ function nodeRequestToWebRequestFromSnapshot(
   };
   const nodeRequest = pinnedNodeRequest.carrier;
   const socket = pinnedNodeRequest.socket;
+  // IncomingMessage close also fires after a normal body read. Preserve request.signal for
+  // downstream work after parsing, and abort on close only when the request stayed incomplete.
+  const abortOnIncompleteRequestClose = () => {
+    if (!nodeRequestComplete(nodeRequest)) abort();
+  };
   apply(nativeIncomingMessageOnce, nodeRequest, ['aborted', abort]);
-  apply(nativeIncomingMessageOnce, nodeRequest, ['close', abort]);
+  apply(nativeIncomingMessageOnce, nodeRequest, ['close', abortOnIncompleteRequestClose]);
   apply(nativeSocketOnce, socket, ['close', abort]);
   if (nodeResponse) {
     const cleanup = () => {
       apply(nativeIncomingMessageOff, nodeRequest, ['aborted', abort]);
-      apply(nativeIncomingMessageOff, nodeRequest, ['close', abort]);
+      apply(nativeIncomingMessageOff, nodeRequest, ['close', abortOnIncompleteRequestClose]);
       apply(nativeSocketOff, socket, ['close', abort]);
     };
     apply(nativeServerResponseOnce, nodeResponse, ['close', cleanup]);

@@ -4599,6 +4599,24 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     'http://127.0.0.1/from-url?x=1',
   );
 
+  for (const convert of [
+    (request: IncomingMessage) => liveNodeRequestToWebRequest(request),
+    (request: IncomingMessage) => adapter.nodeRequestToWebRequest(request),
+  ]) {
+    const completedBodyCarrier = adapterParityBodyRequest();
+    const completedBodyRequest = convert(completedBodyCarrier);
+    await expect(completedBodyRequest.text()).resolves.toBe('abc');
+    completedBodyCarrier.emit('close');
+    expect(completedBodyRequest.signal.aborted).toBe(false);
+    completedBodyCarrier.socket.emit('close');
+    expect(completedBodyRequest.signal.aborted).toBe(true);
+  }
+
+  const incompleteCarrier = adapterParityRequest();
+  const incompleteRequest = adapter.nodeRequestToWebRequest(incompleteCarrier);
+  incompleteCarrier.emit('close');
+  expect(incompleteRequest.signal.aborted).toBe(true);
+
   const validIpv6Authority = adapterParityRequest();
   delete validIpv6Authority.headers[':authority'];
   validIpv6Authority.headers.host = '[2001:db8::1]:8080';
@@ -4757,6 +4775,22 @@ function adapterParityRequest(): IncomingMessage {
     method: 'GET',
     socket,
     url: '/from-url?x=1',
+  }) as IncomingMessage;
+}
+
+function adapterParityBodyRequest(): IncomingMessage {
+  const socket = Object.assign(new EventEmitter(), {
+    encrypted: false,
+    remoteAddress: '203.0.113.9',
+  }) as Socket & { encrypted?: boolean };
+  return Object.assign(Readable.from([Buffer.from('abc')], { autoDestroy: false }), {
+    complete: true,
+    headers: { 'content-length': '3', host: 'app.example' },
+    httpVersion: '1.1',
+    method: 'POST',
+    rawHeaders: ['Host', 'app.example', 'Content-Length', '3'],
+    socket,
+    url: '/complete-body',
   }) as IncomingMessage;
 }
 
