@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    1 |     16 |
+| High     |    0 |     17 |
 | Medium   |    2 |     15 |
 | Low      |    0 |      3 |
 
@@ -221,7 +221,7 @@ rendering, Better Auth, and managed SQL.
     combined exact-tip security matrix (378/378); maximum enhanced/no-JS raw scopes are
     3,158/3,163 code units under the 4,096-code-unit store ceiling.
 
-- [ ] **H17 - Public raw endpoint responses could cache and replay credential state.**
+- [x] **H17 - Public raw endpoint responses could cache and replay credential state.**
   - A verifier-authorized raw `GET` endpoint could declare and emit `Cache-Control: public` with
     `Set-Cookie`. Header finalization normalized the privileged cookie but did not make the response
     client-private, so a shared cache could serve the authenticated response and cookie to a later
@@ -236,9 +236,11 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** the exact shared-cache dispatch regression now reaches the verifier twice and
     returns `401` without a cookie; focused integration tests passed 92/92 after integration, and
     all 13 classifier corpora plus response-boundary gates passed at the worker checkpoint.
-  - **Follow-up open:** apply the same final-wire floor to generic live/generated Node/Vercel
-    response adapters and static-export metadata, which do not pass through app response
-    finalization.
+  - **Follow-up fixed:** `9a5d59edd` applies the same floor to generic live/generated Node/Vercel
+    adapters and rejects durable browser-state instructions from static export.
+  - **Evidence:** the five residual live Node, emitted Node/Vercel, and static cases passed in the
+    combined exact-tip matrix (378/378). Generated Cloudflare dynamic output has no public
+    arbitrary-handler path and always uses the centrally finalized `createRequestHandler(app)`.
 
 ## Medium
 
