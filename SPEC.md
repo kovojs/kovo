@@ -252,6 +252,8 @@ The data plane connects schema facts, query read sets, mutation touch sets, acce
 
 The local invariant is default-deny plus freshness proof. Queries, mutations, endpoints, and routes need explicit access posture; owner/secret/governed facts flow from schema to wire eligibility and invalidation; and Kovo only claims "the engine is the sole authorization/confidentiality door" when the runtime is least-privilege and a closure audit proves every role-reachable object is `FORCE`-RLS+policy, proven `security_invoker`, or explicitly allowlisted. In-process PGlite is a single-tenant dev/test database whose bootstrap identity is superuser; production MUST refuse it before serving and requires an external Postgres URL whose runtime login passes the least-privilege boot invariant. Security-relevant boundary crossings are further constrained by C9: sinks must be reconstructed carriers, runtime boxes, or framework-owned doors, with a named sink inventory and hostile-value proof for each class. Raw or opaque SQL must declare the facts the analyzer cannot prove and is then runtime-verified.
 
+Capability URLs use replay domain `v3`, the first domain backed by the durable per-surface reclamation watermark. Pre-watermark `v2` tokens are invalid and MUST be rejected before replay-store access because deleted one-time truth from an older runtime cannot be reconstructed safely after database-clock rollback.
+
 ## 11. Static Analysis & Verification
 
 Normative modules: [spec/11-verification.md](spec/11-verification.md) and [spec/11-diagnostics.md](spec/11-diagnostics.md).

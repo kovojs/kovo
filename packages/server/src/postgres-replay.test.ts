@@ -140,7 +140,7 @@ describe('Postgres durable replay stores', () => {
     const afterRestart = createPostgresCapabilityReplayStoreFromExecutor(restarted.executor);
     await expect(verify(afterRestart)).resolves.toEqual({ ok: false, reason: 'replayed' });
     await expect(
-      afterRestart.consume('v2:receipts/ord_2.pdf:nonce', signed.claims.expiry),
+      afterRestart.consume('v3:receipts/ord_2.pdf:nonce', signed.claims.expiry),
     ).resolves.toBe(true);
   });
 
@@ -148,7 +148,7 @@ describe('Postgres durable replay stores', () => {
     const { executor } = await runtimeAt(dataDir());
     const store = createPostgresCapabilityReplayStoreFromExecutor(executor);
 
-    await expect(store.consume('v2:expired:nonce', Date.now() - 1)).resolves.toBe(false);
+    await expect(store.consume('v3:expired:nonce', Date.now() - 1)).resolves.toBe(false);
     const persisted = await executor.execute<{ count: number }>({
       text: "SELECT COUNT(*)::int AS count FROM public._kovo_replay WHERE surface = 'capability'",
       values: [],
@@ -251,7 +251,7 @@ describe('Postgres durable replay stores', () => {
 
     const { executor } = await runtimeAt(dir);
     const store = createPostgresCapabilityReplayStoreFromExecutor(executor);
-    await expect(store.consume('v2:migrated:nonce', Date.now() + 60_000)).resolves.toBe(true);
+    await expect(store.consume('v3:migrated:nonce', Date.now() + 60_000)).resolves.toBe(true);
   });
 
   it('fails closed instead of inventing expiry for legacy mutation or webhook truth', async () => {

@@ -18,6 +18,27 @@ const SECRET = 'capability-url-test-secret-at-least-32-characters-long';
 const OLD_SECRET = 'old-capability-secret-at-least-32-bytes';
 const NEW_SECRET = 'new-capability-secret-at-least-32-bytes';
 
+function legacyV2OneTimeCapabilityToken(key: string, expiry: number): string {
+  const version = 'v2';
+  const keyId = 'current';
+  const method = 'GET';
+  const nonce = Buffer.alloc(12, 0x2a).toString('base64url');
+  const fields = [version, keyId, method, key, String(expiry), '', '1', nonce];
+  const canonical = fields
+    .map((field) => `${String(Buffer.byteLength(field, 'utf8'))}:${field}`)
+    .join('|');
+  const ring = createSigningKeyRing({
+    keys: [{ id: keyId, secret: SECRET, state: 'active' }],
+  });
+  const signed = ring.sign({
+    audience: 'storage-download',
+    payload: Buffer.from(canonical, 'utf8'),
+    purpose: 'capability-url',
+  });
+  const payload = `{"v":"${version}","i":"${keyId}","m":"${method}","k":"${key}","e":${String(expiry)},"o":1,"n":"${nonce}"}`;
+  return `${Buffer.from(payload, 'utf8').toString('base64url')}.${signed.signature}`;
+}
+
 function rewritePayload(token: string, update: (payload: Record<string, unknown>) => void): string {
   const dot = token.indexOf('.');
   const payload = JSON.parse(
@@ -28,6 +49,82 @@ function rewritePayload(token: string, update: (payload: Record<string, unknown>
 }
 
 describe('capability-url: sign + constant-time verify before any storage read', () => {
+  it('mints v3 and rejects a valid pre-watermark v2 token before replay-store access', async () => {
+    const now = 1_000;
+    const expiry = now + 60_000;
+    const legacyToken = legacyV2OneTimeCapabilityToken('legacy.pdf', expiry);
+    let legacyConsumeCalls = 0;
+    await expect(
+      verifyCapability(
+        SECRET,
+        legacyToken,
+        { key: 'legacy.pdf', method: 'GET' },
+        {
+          now,
+          replayStore: {
+            consume() {
+              legacyConsumeCalls += 1;
+              return true;
+            },
+          },
+        },
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    expect(legacyConsumeCalls).toBe(0);
+
+    const current = await signCapability(
+      SECRET,
+      { expiresIn: 60_000, key: 'current.pdf', oneTime: true },
+      now,
+    );
+    const rewrittenV2 = rewritePayload(current.token, (rewritten) => {
+      rewritten.v = 'v2';
+    });
+    let rewrittenConsumeCalls = 0;
+    await expect(
+      verifyCapability(
+        SECRET,
+        rewrittenV2,
+        { key: 'current.pdf', method: 'GET' },
+        {
+          now: now + 1,
+          replayStore: {
+            consume() {
+              rewrittenConsumeCalls += 1;
+              return true;
+            },
+          },
+        },
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'malformed' });
+    expect(rewrittenConsumeCalls).toBe(0);
+
+    const payload = JSON.parse(
+      Buffer.from(current.token.slice(0, current.token.indexOf('.')), 'base64url').toString('utf8'),
+    ) as Record<string, unknown>;
+    expect(payload.v).toBe('v3');
+    const consumed: Array<{ expiresAt: number; id: string }> = [];
+    await expect(
+      verifyCapability(
+        SECRET,
+        current.token,
+        { key: 'current.pdf', method: 'GET' },
+        {
+          now: now + 1,
+          replayStore: {
+            consume(id, expiresAt) {
+              consumed.push({ expiresAt, id });
+              return true;
+            },
+          },
+        },
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(consumed).toEqual([
+      { expiresAt: current.claims.expiry, id: expect.stringMatching(/^v3:current\.pdf:/u) },
+    ]);
+  });
+
   it('round-trips: a token signed for key+method+scope verifies against the same expected claims', async () => {
     const now = 1_000_000;
     const { token, claims } = await signCapability(

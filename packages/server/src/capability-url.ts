@@ -63,7 +63,10 @@ import {
 import { resolveBootMode } from './env.js';
 import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 
-const TOKEN_VERSION = 'v2';
+// SPEC §6.6: v3 is the first capability/replay domain backed by a durable reclamation watermark.
+// Pre-watermark v2 tokens are deliberately not accepted: old runtimes may already have deleted
+// their one-time replay row, and no migration can reconstruct that missing maximum expiry safely.
+const TOKEN_VERSION = 'v3';
 const CAPABILITY_SIGNING_PURPOSE = 'capability-url';
 const DEFAULT_CAPABILITY_AUDIENCE = 'storage-download';
 const DEFAULT_CAPABILITY_REPLAY_MAX_ENTRIES = 10_000;
