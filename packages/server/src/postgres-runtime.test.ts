@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { kovo, sql, trustedSql } from '@kovojs/drizzle';
 import { eq } from 'drizzle-orm';
-import { PgDialect, pgTable, serial, text } from 'drizzle-orm/pg-core';
+import { PgDialect, bigint, pgTable, serial, text } from 'drizzle-orm/pg-core';
 import { Client, Pool } from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -90,6 +90,20 @@ const serialNotes = pgTable(
   },
   kovo({
     domain: 'runtime-serial-notes',
+    key: 'id',
+    owner: 'ownerId',
+  }),
+);
+
+const bigintNotes = pgTable(
+  'kovo_runtime_bigint_notes',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('ownerId').notNull(),
+    lastRequest: bigint('lastRequest', { mode: 'number' }).notNull(),
+  },
+  kovo({
+    domain: 'runtime-bigint-notes',
     key: 'id',
     owner: 'ownerId',
   }),
@@ -2803,6 +2817,32 @@ describe('createPostgresAppRuntimeDb', () => {
         detail: expect.stringContaining('kovo_runtime_sensitive_seq'),
       }),
     );
+  });
+
+  it('provisions and reads number-mode bigint columns without truncating epoch milliseconds', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-bigint-'));
+    roots.push(dataDir);
+    const bigintSchema = { bigintNotes };
+    const lastRequest = 1_765_432_109_876;
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: bigintSchema,
+      seedSql: [
+        `INSERT INTO kovo_runtime_bigint_notes (id, "ownerId", "lastRequest") VALUES ('n1', 'u1', ${lastRequest})`,
+      ],
+    });
+    try {
+      await runtime.ready;
+      const u1Db = usePostgresAppRuntimeDb(runtime, {
+        principalPosture: actAsRuntimePrincipal('u1'),
+      });
+      await expect(
+        u1Db.select({ id: bigintNotes.id, lastRequest: bigintNotes.lastRequest }).from(bigintNotes),
+      ).resolves.toEqual([{ id: 'n1', lastRequest }]);
+    } finally {
+      await runtime.close();
+    }
   });
 
   it('refuses default ACL grants that would give future objects to app roles', async () => {

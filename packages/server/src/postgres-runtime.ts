@@ -5499,6 +5499,8 @@ function columnDdl(column: PgColumn, options: { createTable: boolean }): string 
 
 function columnTypeDdl(column: PgColumn): string {
   switch (column.columnType) {
+    case 'PgBigInt53':
+      return 'bigint';
     case 'PgBoolean':
       return 'boolean';
     case 'PgInteger':
