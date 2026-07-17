@@ -23715,7 +23715,7 @@ interface RequestExactGlobalCallIndex {
   building: boolean;
   readonly callbackUses: Map<string, RequestExactGlobalCallbackUse[]>;
   readonly callableSession: RequestProvenanceSession;
-  readonly parameterInputs: Map<string, Node[]>;
+  readonly parameterInputs: Map<string, RequestExactGlobalBoundInput[]>;
 }
 
 interface RequestGlobalStorageLocation {
@@ -23725,7 +23725,24 @@ interface RequestGlobalStorageLocation {
 
 interface RequestExactGlobalBoundInput {
   readonly expression: Node;
+  /**
+   * A finite authored sequence that has no single source projection (for example a rest
+   * parameter). The backing expression is retained for diagnostics and bounded fallbacks; exact
+   * indexed reads are resolved from these slots.
+   */
+  readonly elements?: readonly (RequestExactGlobalBoundInput | undefined)[];
+  /** Possible values of one Set/materialized slot after duplicate collapse. */
+  readonly alternatives?: readonly RequestExactGlobalBoundInput[];
+  /** An object-rest copy is not its source identity, though its retained member reads project it. */
+  readonly objectRest?: boolean;
+  /** An authored spread/iterator can supply this slot, but its finite value set is unresolved. */
+  readonly opaque?: boolean;
   readonly path: readonly (string | undefined)[];
+}
+
+interface RequestExactGlobalIterableInputs {
+  readonly handled: boolean;
+  readonly inputs: readonly (RequestExactGlobalBoundInput | undefined)[];
 }
 
 const REQUEST_EXACT_GLOBAL_VALUE_SESSIONS = new WeakMap<
@@ -23830,11 +23847,11 @@ function requestExactGlobalBindingContextKey(session: RequestExactGlobalValueSes
   return session.bindingContextKeys.length > 0 ? `:${session.bindingContextKeys.join('/')}` : '';
 }
 
-function requestExactGlobalBoundParameterInput(
-  parameter: import('ts-morph').ParameterDeclaration,
+function requestExactGlobalBoundDeclarationInput(
+  declaration: Node,
   session: RequestExactGlobalValueSession,
 ): { readonly found: boolean; readonly input?: RequestExactGlobalBoundInput } {
-  const key = requestNodeIdentity(parameter);
+  const key = requestNodeIdentity(declaration);
   for (let index = session.bindingFrames.length - 1; index >= 0; index -= 1) {
     const frame = session.bindingFrames[index]!;
     if (!frame.has(key)) continue;
@@ -23842,6 +23859,549 @@ function requestExactGlobalBoundParameterInput(
     return input ? { found: true, input } : { found: true };
   }
   return { found: false };
+}
+
+function requestExactGlobalBoundInputResolvesToValue(
+  input: RequestExactGlobalBoundInput,
+  path: readonly (string | undefined)[],
+  session: RequestExactGlobalValueSession,
+  depth: number,
+): RequestExactGlobalProvenance {
+  if (input.opaque) return 'exhausted';
+  if (input.alternatives) {
+    return requestMergeExactGlobalDependencies(
+      input.alternatives.map((alternative) =>
+        requestExactGlobalBoundInputResolvesToValue(
+          alternative,
+          [...input.path, ...path],
+          session,
+          depth + 1,
+        ),
+      ),
+    );
+  }
+  const projectedPath = [...input.path, ...path];
+  if (input.objectRest && path.length === 0) return 'miss';
+  if (!input.elements) {
+    return requestProjectedExpressionResolvesToExactGlobalValue(
+      input.expression,
+      projectedPath,
+      session,
+      depth + 1,
+    );
+  }
+  if (projectedPath.length === 0) return 'miss';
+  const [member, ...rest] = projectedPath;
+  const candidates =
+    member === undefined
+      ? input.elements
+      : /^(?:0|[1-9][0-9]*)$/u.test(member)
+        ? [input.elements[Number(member)]]
+        : [];
+  return requestMergeExactGlobalDependencies(
+    candidates.map((candidate) =>
+      candidate
+        ? requestExactGlobalBoundInputResolvesToValue(candidate, rest, session, depth + 1)
+        : 'miss',
+    ),
+  );
+}
+
+function requestCallTargetsGlobalArrayOf(call: import('ts-morph').CallExpression): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  return !!(
+    receiver &&
+    requestStaticCallMember(callee) === 'of' &&
+    Node.isIdentifier(unwrapStaticExpression(receiver)) &&
+    unshadowedGlobalIdentifier(unwrapStaticExpression(receiver), 'Array')
+  );
+}
+
+function requestCallIsPristineGlobalArrayOf(call: import('ts-morph').CallExpression): boolean {
+  if (!requestCallTargetsGlobalArrayOf(call)) return false;
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  return !!receiver && requestGlobalNamespaceName(receiver, 'of') === 'Array';
+}
+
+function requestConstructIsPristineGlobalSet(construct: import('ts-morph').NewExpression): boolean {
+  const callee = unwrapStaticExpression(construct.getExpression());
+  return !!(
+    Node.isIdentifier(callee) &&
+    callee.getText() === 'Set' &&
+    unshadowedGlobalIdentifier(callee, 'Set') &&
+    !requestGlobalIntrinsicBindingIsMutated('Set', callee.getSourceFile())
+  );
+}
+
+function requestExactGlobalSetDuplicateKey(
+  input: RequestExactGlobalBoundInput | undefined,
+): string | undefined {
+  if (!input) return '<undefined>';
+  if (
+    input.alternatives ||
+    input.elements ||
+    input.objectRest ||
+    input.opaque ||
+    input.path.some((member) => member === undefined)
+  ) {
+    return undefined;
+  }
+  const node = unwrapStaticExpression(input.expression);
+  if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node);
+    return symbol ? `symbol:${requestSymbolKey(symbol)}:${input.path.join('.')}` : undefined;
+  }
+  if (
+    Node.isStringLiteral(node) ||
+    Node.isNoSubstitutionTemplateLiteral(node) ||
+    Node.isNumericLiteral(node) ||
+    Node.isBigIntLiteral(node) ||
+    Node.isTrueLiteral(node) ||
+    Node.isFalseLiteral(node) ||
+    node.getKind() === SyntaxKind.NullKeyword
+  ) {
+    return `primitive:${node.getKind()}:${node.getText()}:${input.path.join('.')}`;
+  }
+  return undefined;
+}
+
+function requestExactGlobalSetIterationInputs(
+  construct: import('ts-morph').NewExpression,
+  source: Node,
+  iterable: RequestExactGlobalIterableInputs,
+): RequestExactGlobalIterableInputs {
+  const seen = new Set<string>();
+  const inputs = iterable.inputs.filter((input) => {
+    const key = requestExactGlobalSetDuplicateKey(input);
+    if (key === undefined) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const opaque: RequestExactGlobalBoundInput | undefined = iterable.handled
+    ? undefined
+    : { expression: source, opaque: true, path: [undefined] };
+  const slots = inputs.map((input, index): RequestExactGlobalBoundInput | undefined => {
+    const alternatives = (index === 0 ? [input] : inputs.slice(index)).filter(
+      (candidate): candidate is RequestExactGlobalBoundInput => candidate !== undefined,
+    );
+    if (opaque) alternatives.push(opaque);
+    return alternatives.length > 0 ? { alternatives, expression: construct, path: [] } : undefined;
+  });
+  if (slots.length === 0 && opaque) slots.push(opaque);
+  return { handled: iterable.handled, inputs: slots };
+}
+
+function requestExactGlobalYieldedInputs(
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+  depth: number,
+): RequestExactGlobalIterableInputs {
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH) return { handled: false, inputs: [] };
+  const yields = [
+    ...(Node.isYieldExpression(callable.body) ? [callable.body] : []),
+    ...callable.body.getDescendantsOfKind(SyntaxKind.YieldExpression),
+  ].filter((yielded) => nodeBelongsToRequestCallable(yielded, callable));
+  if (yields.length === 0) return { handled: false, inputs: [] };
+  const inputs: (RequestExactGlobalBoundInput | undefined)[] = [];
+  let handled = true;
+  for (const yielded of yields) {
+    const ancestors = yielded.getAncestors();
+    const callableIndex = ancestors.indexOf(callable.declaration);
+    if (
+      ancestors
+        .slice(0, callableIndex < 0 ? ancestors.length : callableIndex)
+        .some(
+          (ancestor) =>
+            Node.isDoStatement(ancestor) ||
+            Node.isForInStatement(ancestor) ||
+            Node.isForOfStatement(ancestor) ||
+            Node.isForStatement(ancestor) ||
+            Node.isWhileStatement(ancestor),
+        )
+    ) {
+      handled = false;
+    }
+    const expression = yielded.getExpression();
+    if (!expression) {
+      inputs.push(undefined);
+      continue;
+    }
+    if (!yielded.getAsteriskToken()) {
+      inputs.push({ expression, path: [] });
+      continue;
+    }
+    const delegated = requestExactGlobalIterableBoundInputs(
+      expression,
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+    handled &&= delegated.handled;
+    inputs.push(...delegated.inputs);
+  }
+  // A conditional branch or early exit can skip earlier yield sites, so output slot N may be
+  // produced by any later authored yield. Loops are marked opaque above because one yield site can
+  // produce an unbounded number of slots.
+  return {
+    handled,
+    inputs: inputs.map((input, index) => {
+      const alternatives = inputs
+        .slice(index)
+        .filter((candidate): candidate is RequestExactGlobalBoundInput => candidate !== undefined);
+      return alternatives.length > 0
+        ? { alternatives, expression: callable.declaration, path: [] }
+        : input;
+    }),
+  };
+}
+
+function requestExactGlobalIterableBoundInputs(
+  expression: Node,
+  session: RequestProvenanceSession,
+  seen = new Set<string>(),
+  depth = 0,
+): RequestExactGlobalIterableInputs {
+  if (depth > REQUEST_EXACT_GLOBAL_PROVENANCE_DEPTH) return { handled: false, inputs: [] };
+  const node = unwrapStaticExpression(expression);
+  const nodeKey = `exact-global-iterable:${requestNodeIdentity(node)}`;
+  if (seen.has(nodeKey) || !requestProvenanceStep(session, node)) {
+    return { handled: false, inputs: [] };
+  }
+  seen.add(nodeKey);
+
+  if (Node.isArrayLiteralExpression(node)) {
+    const inputs: (RequestExactGlobalBoundInput | undefined)[] = [];
+    let handled = true;
+    for (const element of node.getElements()) {
+      if (Node.isOmittedExpression(element)) {
+        inputs.push(undefined);
+        continue;
+      }
+      if (!Node.isSpreadElement(element)) {
+        inputs.push({ expression: element, path: [] });
+        continue;
+      }
+      const spread = requestExactGlobalIterableBoundInputs(
+        element.getExpression(),
+        session,
+        new Set(seen),
+        depth + 1,
+      );
+      handled &&= spread.handled;
+      inputs.push(...spread.inputs);
+    }
+    return { handled, inputs };
+  }
+
+  if (Node.isConditionalExpression(node)) {
+    const whenTrue = requestExactGlobalIterableBoundInputs(
+      node.getWhenTrue(),
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+    const whenFalse = requestExactGlobalIterableBoundInputs(
+      node.getWhenFalse(),
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+    return {
+      handled: whenTrue.handled && whenFalse.handled,
+      inputs: [...whenTrue.inputs, ...whenFalse.inputs],
+    };
+  }
+
+  if (Node.isNewExpression(node) && requestConstructIsPristineGlobalSet(node)) {
+    const [input] = node.getArguments();
+    if (!input) return { handled: true, inputs: [] };
+    const iterable = requestExactGlobalIterableBoundInputs(
+      input,
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+    return requestExactGlobalSetIterationInputs(node, input, iterable);
+  }
+
+  if (Node.isCallExpression(node)) {
+    if (requestCallIsPristineGlobalArrayOf(node)) {
+      return requestExactGlobalInputsForArguments(
+        node.getArguments(),
+        session,
+        new Set(seen),
+        depth + 1,
+      );
+    }
+    if (requestCallTargetsGlobalArrayOf(node)) return { handled: false, inputs: [] };
+    const invocation = requestNormalizedCall(node);
+    const resolution = resolveRequestCallable(invocation.target, new Set(), 0, session);
+    const yielded = resolution.callables.map((callable) =>
+      requestExactGlobalYieldedInputs(callable, session, new Set(seen), depth + 1),
+    );
+    if (yielded.some((result) => result.handled)) {
+      return {
+        handled: yielded.every((result) => result.handled),
+        inputs: yielded.flatMap((result) => result.inputs),
+      };
+    }
+  }
+
+  if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node);
+    if (symbol) {
+      const symbolKey = `exact-global-iterable-symbol:${requestSymbolKey(symbol)}`;
+      if (seen.has(symbolKey)) return { handled: false, inputs: [] };
+      seen.add(symbolKey);
+      const initializers = symbol
+        .getDeclarations()
+        .map(valueDeclarationInitializer)
+        .filter((initializer): initializer is Node => initializer !== undefined);
+      if (initializers.length > 0) {
+        const results = initializers.map((initializer) =>
+          requestExactGlobalIterableBoundInputs(initializer, session, new Set(seen), depth + 1),
+        );
+        return {
+          handled: results.every((result) => result.handled),
+          inputs: results.flatMap((result) => result.inputs),
+        };
+      }
+    }
+  }
+
+  const iterators = dedupeRequestCallables(
+    requestAccessorCallablesForExpression(node, '@@iterator', new Set(), session),
+  );
+  if (iterators.length === 0) return { handled: false, inputs: [] };
+  const yielded = iterators.map((callable) =>
+    requestExactGlobalYieldedInputs(callable, session, new Set(seen), depth + 1),
+  );
+  return {
+    handled: yielded.every((result) => result.handled),
+    inputs: yielded.flatMap((result) => result.inputs),
+  };
+}
+
+function requestExactGlobalInputsForArguments(
+  arguments_: readonly Node[],
+  session: RequestProvenanceSession,
+  seen = new Set<string>(),
+  depth = 0,
+): RequestExactGlobalIterableInputs {
+  const inputs: (RequestExactGlobalBoundInput | undefined)[] = [];
+  let handled = true;
+  for (const argument of arguments_) {
+    if (!Node.isSpreadElement(argument)) {
+      inputs.push({ expression: argument, path: [] });
+      continue;
+    }
+    const spreadExpression = argument.getExpression();
+    const spread = requestExactGlobalIterableBoundInputs(
+      spreadExpression,
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+    handled &&= spread.handled;
+    inputs.push(...spread.inputs);
+    // An opaque spread can supply any positional value. Retain one wildcard slot so a single-
+    // parameter mutation helper remains fail closed instead of silently dropping the argument.
+    if (!spread.handled) {
+      inputs.push({ expression: spreadExpression, opaque: true, path: [undefined] });
+    }
+  }
+  return { handled, inputs };
+}
+
+function requestExactGlobalCallableParameterInput(
+  parameter: import('ts-morph').ParameterDeclaration,
+  parameterIndex: number,
+  inputs: readonly (RequestExactGlobalBoundInput | undefined)[],
+): RequestExactGlobalBoundInput | undefined {
+  const opaque = inputs.find((input) => input?.opaque);
+  if (opaque) {
+    // An unresolved spread can shift every following positional binding and can supply arbitrarily
+    // many rest slots. Bind the whole invocation fail closed instead of guessing one offset.
+    return { expression: opaque.expression, opaque: true, path: [] };
+  }
+  if (parameter.getDotDotDotToken() === undefined) return inputs[parameterIndex];
+  return {
+    elements: inputs.slice(parameterIndex),
+    expression: parameter,
+    path: [],
+  };
+}
+
+interface RequestExactGlobalBindingStep {
+  readonly index: number;
+  readonly kind: 'array' | 'object';
+  readonly member?: string;
+  readonly rest: boolean;
+}
+
+function requestExactGlobalBindingSteps(binding: import('ts-morph').BindingElement):
+  | {
+      readonly owner:
+        | import('ts-morph').ParameterDeclaration
+        | import('ts-morph').VariableDeclaration;
+      readonly steps: readonly RequestExactGlobalBindingStep[];
+    }
+  | undefined {
+  const steps: RequestExactGlobalBindingStep[] = [];
+  let element = binding;
+  while (true) {
+    const pattern = element.getParent();
+    if (!Node.isObjectBindingPattern(pattern) && !Node.isArrayBindingPattern(pattern)) {
+      return undefined;
+    }
+    const index = pattern.getElements().indexOf(element);
+    if (index < 0) return undefined;
+    const member = Node.isObjectBindingPattern(pattern)
+      ? requestCanonicalStaticMemberName(element.getPropertyNameNode() ?? element.getNameNode())
+      : String(index);
+    steps.unshift({
+      index,
+      kind: Node.isObjectBindingPattern(pattern) ? 'object' : 'array',
+      ...(member === undefined ? {} : { member }),
+      rest: element.getDotDotDotToken() !== undefined,
+    });
+    const owner = pattern.getParent();
+    if (Node.isParameterDeclaration(owner) || Node.isVariableDeclaration(owner)) {
+      return { owner, steps };
+    }
+    if (!Node.isBindingElement(owner)) return undefined;
+    element = owner;
+  }
+}
+
+function requestExactGlobalProjectBindingInputs(
+  roots: readonly RequestExactGlobalBoundInput[],
+  steps: readonly RequestExactGlobalBindingStep[],
+  session: RequestExactGlobalValueSession,
+): RequestExactGlobalBoundInput[] {
+  let inputs = [...roots];
+  for (const step of steps) {
+    if (step.kind === 'object') {
+      if (step.rest) {
+        // Object rest creates a fresh object, so its root is not the exact namespace. Retained
+        // member reads conservatively project the source object; excluded-key precision is not a
+        // prerequisite for this finite fail-closed grammar.
+        inputs = inputs
+          .filter((input) => input.elements === undefined)
+          .map((input) => ({ ...input, objectRest: true }));
+        continue;
+      }
+      if (step.member === undefined) return [];
+      inputs = inputs
+        .filter((input) => input.elements === undefined)
+        .map((input) => ({
+          ...(input.alternatives ? { alternatives: input.alternatives } : {}),
+          expression: input.expression,
+          ...(input.opaque ? { opaque: true } : {}),
+          path: [...input.path, step.member],
+        }));
+      continue;
+    }
+
+    const next: RequestExactGlobalBoundInput[] = [];
+    for (const input of inputs) {
+      let elements: readonly (RequestExactGlobalBoundInput | undefined)[];
+      let handled = true;
+      if (input.elements) {
+        elements = input.elements;
+      } else if (input.path.length === 0) {
+        const iterable = requestExactGlobalIterableBoundInputs(
+          input.expression,
+          session.callIndex.callableSession,
+        );
+        elements = iterable.inputs;
+        handled = iterable.handled;
+      } else {
+        const staticPath = input.path.filter((member): member is string => member !== undefined);
+        const projected =
+          staticPath.length === input.path.length
+            ? requestWireProjectedExpression(input.expression, staticPath, new Set(), 0)
+            : undefined;
+        if (projected) {
+          const iterable = requestExactGlobalIterableBoundInputs(
+            projected,
+            session.callIndex.callableSession,
+          );
+          elements = iterable.inputs;
+          handled = iterable.handled;
+        } else {
+          elements = [];
+          handled = false;
+        }
+      }
+
+      const wildcard: RequestExactGlobalBoundInput | undefined = handled
+        ? undefined
+        : {
+            expression: input.expression,
+            opaque: true,
+            path: [...input.path, undefined],
+          };
+      if (step.rest) {
+        const restElements = elements.slice(step.index);
+        if (wildcard) restElements.push(wildcard);
+        next.push({
+          elements: restElements,
+          expression: input.expression,
+          path: [],
+        });
+        continue;
+      }
+      const selected = elements[step.index];
+      if (selected) next.push(selected);
+      if (wildcard) next.push(wildcard);
+    }
+    inputs = next;
+  }
+  return inputs;
+}
+
+function requestExactGlobalBindingElementInputs(
+  binding: import('ts-morph').BindingElement,
+  session: RequestExactGlobalValueSession,
+): {
+  readonly exhausted: boolean;
+  readonly inputs: readonly RequestExactGlobalBoundInput[];
+} {
+  const projection = requestExactGlobalBindingSteps(binding);
+  if (!projection) return { exhausted: false, inputs: [] };
+  const { owner, steps } = projection;
+  if (Node.isVariableDeclaration(owner)) {
+    const initializer = owner.getInitializer();
+    if (!initializer) return { exhausted: false, inputs: [] };
+    return {
+      exhausted: false,
+      inputs: requestExactGlobalProjectBindingInputs(
+        [{ expression: initializer, path: [] }],
+        steps,
+        session,
+      ),
+    };
+  }
+
+  const bound = requestExactGlobalBoundDeclarationInput(owner, session);
+  if (bound.found) {
+    return {
+      exhausted: false,
+      inputs: bound.input
+        ? requestExactGlobalProjectBindingInputs([bound.input], steps, session)
+        : [],
+    };
+  }
+  const parameterInputs = requestExactGlobalParameterInputs(owner, session);
+  return {
+    exhausted: parameterInputs.exhausted,
+    inputs: requestExactGlobalProjectBindingInputs(parameterInputs.inputs, steps, session),
+  };
 }
 
 function requestWithExactGlobalCallableInputs<T>(
@@ -23853,7 +24413,10 @@ function requestWithExactGlobalCallableInputs<T>(
 ): T {
   const frame = new Map<string, RequestExactGlobalBoundInput | null>();
   for (const [index, parameter] of requestCallableParameters(callable.declaration).entries()) {
-    frame.set(requestNodeIdentity(parameter), inputs[index] ?? null);
+    frame.set(
+      requestNodeIdentity(parameter),
+      requestExactGlobalCallableParameterInput(parameter, index, inputs) ?? null,
+    );
   }
   session.bindingFrames.push(frame);
   session.bindingContextKeys.push(contextKey);
@@ -23993,8 +24556,13 @@ function requestExpressionResolvesToExactGlobalValueUncached(
     if (receiver && REQUEST_EXACT_GLOBAL_ARRAY_REDUCER_METHODS.has(member ?? '')) {
       return requestArrayReduceOutputsResolveToExactGlobalValue(node, [], session, depth + 1);
     }
+    const invocation = requestNormalizedCall(node);
+    const inputs = requestExactGlobalInputsForArguments(
+      invocation.args ?? node.getArguments(),
+      session.callIndex.callableSession,
+    );
     const resolutions = resolveRequestCallable(
-      callee,
+      invocation.target,
       new Set(),
       0,
       session.callIndex.callableSession,
@@ -24003,7 +24571,7 @@ function requestExpressionResolvesToExactGlobalValueUncached(
       requestExactGlobalCallableDependencies(resolutions, session, (callable) =>
         requestWithExactGlobalCallableInputs(
           callable,
-          node.getArguments().map((argument) => ({ expression: argument, path: [] })),
+          inputs.inputs,
           `call:${requestNodeIdentity(node)}:${requestNodeIdentity(callable.declaration)}`,
           session,
           () =>
@@ -24021,8 +24589,15 @@ function requestExpressionResolvesToExactGlobalValueUncached(
   const dependencies: RequestExactGlobalProvenance[] = [];
   for (const declaration of symbol.getDeclarations()) {
     if (Node.isBindingElement(declaration)) {
+      const invocation = requestExactGlobalBindingElementInputs(declaration, session);
+      if (invocation.exhausted) dependencies.push('exhausted');
+      dependencies.push(
+        ...invocation.inputs.map((input) =>
+          requestExactGlobalBoundInputResolvesToValue(input, [], session, depth + 1),
+        ),
+      );
       const binding = requestBindingElementProjection(declaration);
-      if (binding) {
+      if (binding && declaration.getDotDotDotToken() === undefined) {
         dependencies.push(
           requestProjectedExpressionResolvesToExactGlobalValue(
             binding.expression,
@@ -24044,16 +24619,11 @@ function requestExpressionResolvesToExactGlobalValueUncached(
     }
     if (Node.isParameterDeclaration(declaration)) {
       const fallback = declaration.getInitializer();
-      const binding = requestExactGlobalBoundParameterInput(declaration, session);
+      const binding = requestExactGlobalBoundDeclarationInput(declaration, session);
       if (binding.found) {
         if (binding.input) {
           dependencies.push(
-            requestProjectedExpressionResolvesToExactGlobalValue(
-              binding.input.expression,
-              binding.input.path,
-              session,
-              depth + 1,
-            ),
+            requestExactGlobalBoundInputResolvesToValue(binding.input, [], session, depth + 1),
           );
         } else if (fallback) {
           dependencies.push(
@@ -24071,7 +24641,7 @@ function requestExpressionResolvesToExactGlobalValueUncached(
       if (parameterInputs.exhausted) dependencies.push('exhausted');
       dependencies.push(
         ...parameterInputs.inputs.map((input) =>
-          requestExpressionResolvesToExactGlobalValue(input, session, depth + 1),
+          requestExactGlobalBoundInputResolvesToValue(input, [], session, depth + 1),
         ),
       );
       const callbackInput = requestExactGlobalCallbackParameterInput(declaration, session, depth);
@@ -24308,22 +24878,17 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
     return requestMergeExactGlobalDependencies(dependencies);
   }
   if (Node.isArrayLiteralExpression(node)) {
-    const elements = node.getElements();
-    const candidates =
-      member === undefined
-        ? elements
-        : elements.filter((_element, index) => String(index) === member);
-    return requestMergeExactGlobalDependencies(
-      candidates.map((element) => {
-        if (Node.isOmittedExpression(element)) return 'miss';
-        return requestProjectedExpressionResolvesToExactGlobalValue(
-          Node.isSpreadElement(element) ? element.getExpression() : element,
-          Node.isSpreadElement(element) ? [undefined, ...rest] : rest,
-          session,
-          depth + 1,
-        );
-      }),
-    );
+    const iterable = requestExactGlobalIterableBoundInputs(node, session.callIndex.callableSession);
+    const dependencies = [
+      requestExactGlobalBoundInputResolvesToValue(
+        { elements: iterable.inputs, expression: node, path: [] },
+        path,
+        session,
+        depth + 1,
+      ),
+    ];
+    if (!iterable.handled) dependencies.push('exhausted');
+    return requestMergeExactGlobalDependencies(dependencies);
   }
 
   const nestedProjection = requestStaticExpressionProjection(node);
@@ -24340,6 +24905,23 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
     const callee = unwrapStaticExpression(node.getExpression());
     const receiver = requestCallReceiver(callee);
     const callMember = requestStaticCallMember(callee);
+    if (requestCallIsPristineGlobalArrayOf(node)) {
+      const inputs = requestExactGlobalInputsForArguments(
+        node.getArguments(),
+        session.callIndex.callableSession,
+      );
+      const dependencies = [
+        requestExactGlobalBoundInputResolvesToValue(
+          { elements: inputs.inputs, expression: node, path: [] },
+          path,
+          session,
+          depth + 1,
+        ),
+      ];
+      if (!inputs.handled) dependencies.push('exhausted');
+      return requestMergeExactGlobalDependencies(dependencies);
+    }
+    if (requestCallTargetsGlobalArrayOf(node)) return 'exhausted';
     if (
       receiver &&
       callMember === 'create' &&
@@ -24399,8 +24981,13 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
     if (receiver && REQUEST_EXACT_GLOBAL_ARRAY_REDUCER_METHODS.has(callMember ?? '')) {
       return requestArrayReduceOutputsResolveToExactGlobalValue(node, path, session, depth + 1);
     }
+    const invocation = requestNormalizedCall(node);
+    const inputs = requestExactGlobalInputsForArguments(
+      invocation.args ?? node.getArguments(),
+      session.callIndex.callableSession,
+    );
     const resolution = resolveRequestCallable(
-      callee,
+      invocation.target,
       new Set(),
       0,
       session.callIndex.callableSession,
@@ -24409,7 +24996,7 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
       requestExactGlobalCallableDependencies(resolution, session, (callable) =>
         requestWithExactGlobalCallableInputs(
           callable,
-          node.getArguments().map((argument) => ({ expression: argument, path: [] })),
+          inputs.inputs,
           `call:${requestNodeIdentity(node)}:${requestNodeIdentity(callable.declaration)}`,
           session,
           () =>
@@ -24433,16 +25020,11 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
     for (const declaration of symbol.getDeclarations()) {
       if (Node.isParameterDeclaration(declaration)) {
         const fallback = declaration.getInitializer();
-        const binding = requestExactGlobalBoundParameterInput(declaration, session);
+        const binding = requestExactGlobalBoundDeclarationInput(declaration, session);
         if (binding.found) {
           if (binding.input) {
             dependencies.push(
-              requestProjectedExpressionResolvesToExactGlobalValue(
-                binding.input.expression,
-                [...binding.input.path, ...path],
-                session,
-                depth + 1,
-              ),
+              requestExactGlobalBoundInputResolvesToValue(binding.input, path, session, depth + 1),
             );
           } else if (fallback) {
             dependencies.push(
@@ -24470,14 +25052,21 @@ function requestProjectedExpressionResolvesToExactGlobalValueUncached(
         if (parameterInputs.exhausted) dependencies.push('exhausted');
         dependencies.push(
           ...parameterInputs.inputs.map((input) =>
-            requestProjectedExpressionResolvesToExactGlobalValue(input, path, session, depth + 1),
+            requestExactGlobalBoundInputResolvesToValue(input, path, session, depth + 1),
           ),
         );
         continue;
       }
       if (Node.isBindingElement(declaration)) {
+        const invocation = requestExactGlobalBindingElementInputs(declaration, session);
+        if (invocation.exhausted) dependencies.push('exhausted');
+        dependencies.push(
+          ...invocation.inputs.map((input) =>
+            requestExactGlobalBoundInputResolvesToValue(input, path, session, depth + 1),
+          ),
+        );
         const binding = requestBindingElementProjection(declaration);
-        if (binding) {
+        if (binding && declaration.getDotDotDotToken() === undefined) {
           dependencies.push(
             requestProjectedExpressionResolvesToExactGlobalValue(
               binding.expression,
@@ -24545,14 +25134,39 @@ function requestCallableOutputExpressions(callable: RequestCallable): Node[] {
 function requestExactGlobalParameterInputs(
   parameter: import('ts-morph').ParameterDeclaration,
   session: RequestExactGlobalValueSession,
-): { readonly exhausted: boolean; readonly inputs: readonly Node[] } {
+): { readonly exhausted: boolean; readonly inputs: readonly RequestExactGlobalBoundInput[] } {
   requestEnsureExactGlobalCallIndex(session);
   const key = requestNodeIdentity(parameter);
   const inputs = session.callIndex.parameterInputs.get(key);
   const exhausted =
     session.callIndex.building || session.callIndex.callableSession.exhaustedAt !== undefined;
   if (!inputs) return { exhausted, inputs: [] };
-  const result = dedupeRequestNodes(inputs);
+  const seen = new Set<string>();
+  const result = inputs.filter((input) => {
+    const key = `${requestNodeIdentity(input.expression)}:${input.path
+      .map((member) => member ?? '*')
+      .join('.')}:${input.objectRest ? 'object-rest' : 'direct'}:${
+      input.opaque ? 'opaque' : 'finite'
+    }:${input.alternatives
+      ?.map(
+        (alternative) =>
+          `${requestNodeIdentity(alternative.expression)}:${alternative.path
+            .map((member) => member ?? '*')
+            .join('.')}`,
+      )
+      .join(',')}:${input.elements
+      ?.map((element) =>
+        element
+          ? `${requestNodeIdentity(element.expression)}:${element.path
+              .map((member) => member ?? '*')
+              .join('.')}`
+          : '<hole>',
+      )
+      .join(',')}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   session.callIndex.parameterInputs.set(key, result);
   return { exhausted, inputs: result };
 }
@@ -24569,20 +25183,29 @@ function requestEnsureExactGlobalCallIndex(session: RequestExactGlobalValueSessi
   try {
     for (const file of session.project.getSourceFiles()) {
       for (const call of file.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        const invocation = requestNormalizedCall(call);
         const helpers = resolveRequestCallable(
-          call.getExpression(),
+          invocation.target,
           new Set(),
           0,
           index.callableSession,
         );
+        const invocationInputs = requestExactGlobalInputsForArguments(
+          invocation.args ?? call.getArguments(),
+          index.callableSession,
+        ).inputs;
         for (const helper of helpers.callables) {
           const parameters = requestCallableParameters(helper.declaration);
           for (const [parameterIndex, parameter] of parameters.entries()) {
-            const argument = call.getArguments()[parameterIndex];
-            if (!argument) continue;
+            const input = requestExactGlobalCallableParameterInput(
+              parameter,
+              parameterIndex,
+              invocationInputs,
+            );
+            if (!input) continue;
             const key = requestNodeIdentity(parameter);
             const inputs = index.parameterInputs.get(key) ?? [];
-            inputs.push(argument);
+            inputs.push(input);
             index.parameterInputs.set(key, inputs);
           }
         }
@@ -24701,7 +25324,10 @@ function requestExactGlobalCallbackParameterInput(
           verdicts.push(
             requestWithExactGlobalCallableInputs(
               helper,
-              call.getArguments().map((argument) => ({ expression: argument, path: [] })),
+              requestExactGlobalInputsForArguments(
+                requestNormalizedCall(call).args ?? call.getArguments(),
+                session.callIndex.callableSession,
+              ).inputs,
               `callback-call:${requestNodeIdentity(call)}:${requestNodeIdentity(helper.declaration)}`,
               session,
               () => requestExpressionResolvesToExactGlobalValue(input, session, depth + 1),
@@ -24769,23 +25395,24 @@ function requestIterableExpressionResolvesToExactGlobalValue(
   expression: Node,
   session: RequestExactGlobalValueSession,
   depth: number,
+  path: readonly (string | undefined)[] = [],
 ): RequestExactGlobalProvenance {
   const node = unwrapStaticExpression(expression);
-  if (Node.isNewExpression(node)) {
-    const callee = unwrapStaticExpression(node.getExpression());
-    if (unshadowedGlobalIdentifier(callee, 'Set')) {
-      const [input] = node.getArguments();
-      return input
-        ? requestIterableExpressionResolvesToExactGlobalValue(input, session, depth + 1)
-        : 'miss';
-    }
-  }
-  return requestProjectedExpressionResolvesToExactGlobalValue(
-    node,
-    [undefined],
-    session,
-    depth + 1,
+  const iterable = requestExactGlobalIterableBoundInputs(node, session.callIndex.callableSession);
+  const dependencies = iterable.inputs.flatMap((input) =>
+    input ? [requestExactGlobalBoundInputResolvesToValue(input, path, session, depth + 1)] : [],
   );
+  if (!iterable.handled) {
+    dependencies.push(
+      requestProjectedExpressionResolvesToExactGlobalValue(
+        node,
+        [undefined, ...path],
+        session,
+        depth + 1,
+      ),
+    );
+  }
+  return requestMergeExactGlobalDependencies(dependencies);
 }
 
 function requestArrayMapOutputsResolveToExactGlobalValue(

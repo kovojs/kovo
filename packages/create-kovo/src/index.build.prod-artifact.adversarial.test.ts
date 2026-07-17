@@ -45,6 +45,7 @@ const BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS = [
   'ordinary-carriers',
   'projection-carriers',
   'array-result-carriers',
+  'iterable-binding-carriers',
   'assignment-targets',
   'loop-and-exhaustion-targets',
 ] as const;
@@ -252,6 +253,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
   );
 
   // @kovo-security-certifies KV424 exact-global-array-carrier-family-prod-artifact
+  // @kovo-security-certifies KV424 exact-global-iterable-binding-family-prod-artifact
   it.each([...BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS])(
     'bugz-31: exact global member %s fail closed in a production artifact',
     (proof: Bugz31GlobalMemberCarrierProof) => {
@@ -847,6 +849,24 @@ function addBugz31GlobalMemberCarrierProof(
         "Object.defineProperty([JSON].findLast(() => true)!, 'stringify', {",
         '  value: () => Bugz31Deferred,',
         '});',
+      ];
+      break;
+    case 'iterable-binding-carriers':
+      poison = [
+        ...deferredClass,
+        "Object.defineProperty(Array.of(Promise)[0]!, 'resolve', {",
+        '  value: () => Bugz31Deferred,',
+        '});',
+        'const [responseNamespace] = new Set([Response]);',
+        "Object.defineProperty(responseNamespace!, 'json', { value: () => Bugz31Deferred });",
+        'function replaceArray(...targets: [ArrayConstructor]): void {',
+        "  Object.defineProperty(targets[0], 'isArray', { value: () => Bugz31Deferred });",
+        '}',
+        'replaceArray(Array);',
+        'function replaceJson({ target: alias }: { target: JSON }): void {',
+        "  Object.defineProperty(alias, 'stringify', { value: () => Bugz31Deferred });",
+        '}',
+        'replaceJson({ target: JSON });',
       ];
       break;
     case 'assignment-targets':

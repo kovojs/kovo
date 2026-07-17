@@ -60,6 +60,16 @@ const EXACT_GLOBAL_ARRAY_CARRIER_CASES = [
   ['toSorted', (namespace: string) => `[${namespace}].toSorted()[0]!`],
 ] as const;
 
+const EXACT_GLOBAL_ITERABLE_CARRIER_CASES = [
+  ['Array.of indexed read', (namespace: string) => `Array.of(${namespace})[0]!`],
+  ['Array.of spread materialization', (namespace: string) => `[...Array.of(${namespace})][0]!`],
+  ['Set spread materialization', (namespace: string) => `[...new Set([${namespace}])][0]!`],
+  [
+    'authored iterable spread materialization',
+    (namespace: string) => `[...{ *[Symbol.iterator]() { yield ${namespace}; } }][0]!`,
+  ],
+] as const;
+
 // @kovo-security-classifier-corpus kv424-request-global-member-lockdown
 // SPEC §6.6: a reviewed global member is executable authority only while its exact
 // framework-locked identity remains pristine across the complete authored module graph.
@@ -710,6 +720,304 @@ describe('KV424 exact global namespace-member lockdown', () => {
     },
   );
 
+  it.each(EXACT_GLOBAL_ITERABLE_CARRIER_CASES)(
+    'rejects all four exact members reached through %s',
+    (_label, carrier) => {
+      const poisons = EXACT_GLOBAL_MEMBER_CASES.map(
+        ([namespace, member]) =>
+          `Object.defineProperty(${carrier(namespace)}, '${member}', { value: () => Deferred });`,
+      ).join('\n');
+      const tasks = EXACT_GLOBAL_MEMBER_CASES.map(
+        ([_namespace, _member, invocation], index) => `
+          task('iterable-carrier-family-${index}', {
+            input: s.object({}),
+            async run() { return ${invocation}; },
+          });`,
+      ).join('\n');
+      const facts = sinksFor(`
+        import { s, task } from '@kovojs/server';
+        class Deferred {
+          static then(resolve: (value: { ok: true }) => void): void {
+            resolve({ ok: true });
+            queueMicrotask(() => { void fetch('https://example.test/late'); });
+          }
+        }
+        ${poisons}
+        ${tasks}
+      `);
+
+      for (const [, , , source] of EXACT_GLOBAL_MEMBER_CASES) {
+        expectExactMemberRejected(facts, source);
+      }
+    },
+  );
+
+  it('fails closed when exact Array.of carrier semantics are authored-mutable', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      Array.of = ((value: unknown) => [value]) as typeof Array.of;
+      Object.defineProperty(Array.of(Promise)[0]!, 'resolve', { value: () => Deferred });
+      task('mutable-array-of-carrier', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it('tracks Set duplicate collapse for indexed reads and destructuring', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      const localNamespace = { resolve: () => ({ ok: true }) };
+      Object.defineProperty(
+        [...new Set([localNamespace, localNamespace, Promise])][1]!,
+        'resolve',
+        { value: () => Deferred },
+      );
+      const [, destructured] = new Set([localNamespace, localNamespace, Promise]);
+      Object.defineProperty(destructured!, 'resolve', { value: () => Deferred });
+      task('set-duplicate-collapse', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it('tracks a later custom-iterator yield that can occupy the first materialized slot', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      const localNamespace = { resolve: () => ({ ok: true }) };
+      const carrier = {
+        *[Symbol.iterator]() {
+          if (false) yield localNamespace;
+          yield Promise;
+        },
+      };
+      Object.defineProperty([...carrier][0]!, 'resolve', { value: () => Deferred });
+      task('conditional-iterator-slot', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it.each([
+    [
+      'Set destructuring',
+      'const [carrier] = new Set([Promise]);',
+      `Object.defineProperty(carrier!, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'authored iterable destructuring',
+      'const [carrier] = { *[Symbol.iterator]() { yield Promise; } };',
+      `Object.defineProperty(carrier!, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'tuple call spread',
+      `function replace(target: PromiseConstructor): void {
+         Object.defineProperty(target, 'resolve', { value: () => Deferred });
+       }`,
+      'replace(...([Promise] as [PromiseConstructor]));',
+    ],
+    [
+      'Set call spread',
+      `function replace(target: PromiseConstructor): void {
+         Object.defineProperty(target, 'resolve', { value: () => Deferred });
+       }`,
+      'replace(...(new Set([Promise]) as unknown as [PromiseConstructor]));',
+    ],
+    [
+      'authored iterable call spread',
+      `function replace(target: PromiseConstructor): void {
+         Object.defineProperty(target, 'resolve', { value: () => Deferred });
+       }`,
+      `replace(...({
+         *[Symbol.iterator]() { yield Promise; }
+       } as unknown as [PromiseConstructor]));`,
+    ],
+    [
+      'rest parameter indexed read',
+      `function replace(...targets: [PromiseConstructor]): void {
+         Object.defineProperty(targets[0], 'resolve', { value: () => Deferred });
+       }`,
+      'replace(Promise);',
+    ],
+    [
+      'tuple-destructured parameter',
+      `function replace([target]: [PromiseConstructor]): void {
+         Object.defineProperty(target, 'resolve', { value: () => Deferred });
+       }`,
+      'replace([Promise]);',
+    ],
+    [
+      'object-destructured aliased parameter',
+      `function replace({ target: alias }: { target: PromiseConstructor }): void {
+         Object.defineProperty(alias, 'resolve', { value: () => Deferred });
+       }`,
+      'replace({ target: Promise });',
+    ],
+    [
+      'tuple-destructured parameter default',
+      `function replace([target = Promise]: [PromiseConstructor?]): void {
+         Object.defineProperty(target, 'resolve', { value: () => Deferred });
+       }`,
+      'replace([]);',
+    ],
+    [
+      'object-destructured aliased parameter default',
+      `function replace(
+         { target: alias = Promise }: { target?: PromiseConstructor },
+       ): void {
+         Object.defineProperty(alias, 'resolve', { value: () => Deferred });
+       }`,
+      'replace({});',
+    ],
+    [
+      'object-rest parameter member read',
+      `function replace({ ...rest }: { target: PromiseConstructor }): void {
+         Object.defineProperty(rest.target, 'resolve', { value: () => Deferred });
+       }`,
+      'replace({ target: Promise });',
+    ],
+  ])('rejects Promise flowing through %s', (_label, prelude, poison) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      ${prelude}
+      ${poison}
+      task('carrier-binding-member-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it('keeps iterable carriers, call spreads, and parameter patterns open for local lookalikes', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      const LocalPromise = { resolve: () => ({ ok: true }) };
+      const localCarriers = [
+        Array.of(LocalPromise)[0]!,
+        [...Array.of(LocalPromise)][0]!,
+        [...new Set([LocalPromise])][0]!,
+        [...{ *[Symbol.iterator]() { yield LocalPromise; } }][0]!,
+      ];
+      for (const carrier of localCarriers) {
+        Object.defineProperty(carrier, 'resolve', { value: () => ({ ok: true }) });
+      }
+      const [setCarrier] = new Set([LocalPromise]);
+      Object.defineProperty(setCarrier!, 'resolve', { value: () => ({ ok: true }) });
+      Object.defineProperty(
+        [...new Set([LocalPromise, LocalPromise, Promise])][0]!,
+        'resolve',
+        { value: () => ({ ok: true }) },
+      );
+      function spreadReplace(target: typeof LocalPromise): void {
+        Object.defineProperty(target, 'resolve', { value: () => ({ ok: true }) });
+      }
+      spreadReplace(...([LocalPromise] as [typeof LocalPromise]));
+      spreadReplace(...(new Set([LocalPromise]) as unknown as [typeof LocalPromise]));
+      spreadReplace(...({
+        *[Symbol.iterator]() { yield LocalPromise; }
+      } as unknown as [typeof LocalPromise]));
+      function restReplace(...targets: [typeof LocalPromise]): void {
+        Object.defineProperty(targets[0], 'resolve', { value: () => ({ ok: true }) });
+      }
+      restReplace(LocalPromise);
+      function tupleReplace([target]: [typeof LocalPromise]): void {
+        Object.defineProperty(target, 'resolve', { value: () => ({ ok: true }) });
+      }
+      tupleReplace([LocalPromise]);
+      function objectReplace({ target: alias }: { target: typeof LocalPromise }): void {
+        Object.defineProperty(alias, 'resolve', { value: () => ({ ok: true }) });
+      }
+      objectReplace({ target: LocalPromise });
+      function copiedGlobalIsNotGlobal({ ...copy }: PromiseConstructor): void {
+        Object.defineProperty(copy, 'resolve', { value: () => ({ ok: true }) });
+      }
+      copiedGlobalIsNotGlobal(Promise);
+      const { ...copiedPromise } = Promise;
+      Object.defineProperty(copiedPromise, 'resolve', { value: () => ({ ok: true }) });
+      task('local-iterable-binding-lookalikes', {
+        input: s.object({}),
+        async run() { return Promise.resolve({ ok: true }); },
+      });
+    `);
+
+    expect(facts.some((fact) => fact.source === 'Promise.resolve')).toBe(false);
+  });
+
+  it.each([
+    [
+      'spread materialization',
+      `declare function opaqueIterable(): Iterable<PromiseConstructor>;
+       Object.defineProperty([...opaqueIterable()][0]!, 'resolve', {
+         value: () => Deferred,
+       });`,
+    ],
+    [
+      'destructuring',
+      `declare function opaqueIterable(): Iterable<PromiseConstructor>;
+       const [carrier] = opaqueIterable();
+       Object.defineProperty(carrier!, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'call spread',
+      `declare function opaqueTuple(): [PromiseConstructor];
+       function replace(target: PromiseConstructor): void {
+         Object.defineProperty(target, 'resolve', { value: () => Deferred });
+       }
+       replace(...opaqueTuple());`,
+    ],
+  ])('keeps an opaque iterable %s fail closed', (_label, poison) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      ${poison}
+      task('opaque-iterable-carrier', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
   it('keeps every reviewed Array carrier/result method open for local lookalikes', () => {
     const localNamespaces = [
       ['LocalPromise', 'resolve'],
@@ -951,6 +1259,40 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
     expectExactMemberRejected(facts, 'Promise.resolve');
     expect(performance.now() - startedAt).toBeLessThan(2_000);
+  });
+
+  it('keeps 120 distinct iterable and parameter-pattern safe misses bounded', () => {
+    const count = 120;
+    const helpers = Array.from({ length: count }, (_value, index) => {
+      if (index % 3 === 0) {
+        return `function replace${index}([target]: [typeof LocalPromise]): void {
+          Object.defineProperty(target, 'resolve', { value: () => ({ ok: true }) });
+        }`;
+      }
+      if (index % 3 === 1) {
+        return `function replace${index}({ target }: { target: typeof LocalPromise }): void {
+          Object.defineProperty(target, 'resolve', { value: () => ({ ok: true }) });
+        }`;
+      }
+      return `function replace${index}(...targets: [typeof LocalPromise]): void {
+        Object.defineProperty(targets[0], 'resolve', { value: () => ({ ok: true }) });
+      }`;
+    }).join('\n');
+    const calls = Array.from({ length: count }, (_value, index) => {
+      if (index % 3 === 0) return `replace${index}([LocalPromise]);`;
+      if (index % 3 === 1) return `replace${index}({ target: LocalPromise });`;
+      return `replace${index}(...([LocalPromise] as [typeof LocalPromise]));`;
+    }).join('\n');
+    const startedAt = performance.now();
+    const facts = sinksFor(`
+      const LocalPromise = { resolve: () => ({ ok: true }) };
+      ${helpers}
+      ${calls}
+      void Promise.resolve({ ok: true });
+    `);
+
+    expect(facts).toEqual([]);
+    expect(performance.now() - startedAt).toBeLessThan(5_000);
   });
 
   it('indexes 400/800 distinct exact-global helper safe misses with near-linear bounded scaling', () => {
