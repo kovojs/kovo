@@ -808,7 +808,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'mutation-idem',
     marker: '@kovo-security-classifier-corpus mutation-idem',
-    testFiles: ['packages/server/src/mutation/replay-policy.test.ts'],
+    testFiles: [
+      'packages/server/src/mutation/replay-policy.test.ts',
+      'packages/server/src/webhook.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'bounded-base64url-wire-token',
@@ -817,6 +820,14 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'rejects a supplied %s no-JS token before replay-store access',
           'rejects an invalid supplied token even when replay storage is disabled',
           'admits the 1,024-character base64url boundary to replay storage',
+        ],
+      },
+      {
+        id: 'bounded-webhook-event-id',
+        file: 'packages/server/src/webhook.test.ts',
+        snippets: [
+          'rejects an %s webhook event id before replay-store or handler execution',
+          'admits a 1,024-character webhook event id',
         ],
       },
     ],

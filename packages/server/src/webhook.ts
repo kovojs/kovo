@@ -1227,6 +1227,13 @@ export async function runWebhook<
         response: webhookResponse(500, 'Internal Server Error'),
       };
     }
+    if (candidate !== undefined && (candidate.length === 0 || candidate.length > 1_024)) {
+      return {
+        changes: [],
+        replayed: false,
+        response: webhookResponse(500, 'Internal Server Error'),
+      };
+    }
     idem = candidate;
   } catch {
     return {
@@ -1242,11 +1249,8 @@ export async function runWebhook<
       response: webhookResponse(500, 'Internal Server Error'),
     };
   }
-  // L10-3 (SPEC §9.1:860): use ONE truthiness predicate for the whole replay
-  // lifecycle. An empty-string idem is a VALID provider event id, so the fast-path
-  // LOOKUP must be gated on `idem !== undefined` (treated active) exactly like the
-  // RESERVE/SET below — gating the lookup on a truthy `idem` skipped the fast path
-  // for '' while still reserving, leaving a latent double-execute window.
+  // SPEC §9.1/§10.3: a validated non-empty provider event id remains active for the complete
+  // lookup/reserve/store lifecycle. Undefined alone means that idempotency is disabled.
   const idemActive = idem !== undefined;
   const replayScope = webhookReplayScope(name);
   const replayed =

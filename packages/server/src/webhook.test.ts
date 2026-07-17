@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { customVerifier, hmacSignature } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import './sql-parser-authority-bootstrap.js';
 import { createApp, createRequestHandler } from './app.js';
@@ -1927,66 +1927,59 @@ describe('server webhook primitive', () => {
     expect(handled).toBe(1);
   });
 
-  // L10-3 (SPEC §9.1:860): idem truthiness is consistent. An empty-string idem is a
-  // valid key — the replay LOOKUP must be consulted (treated active) just like
-  // reserve/set, so a redelivered '' event replays the stored response and never
-  // re-runs the handler.
-  it('L10-3: an empty-string idem is active — fast-path lookup consulted, redelivery replays', async () => {
-    const memory = createMemoryWebhookReplayStore();
-    // Spy store: records the idem values the fast-path LOOKUP (`get`) is consulted
-    // with, plus whether `reserve` was attempted. With the truthy `idem` gate at
-    // webhook.ts:242, an '' idem skips the lookup entirely (latent double-execute
-    // window); with the consistent `idem !== undefined` predicate it is consulted.
-    const getCalls: string[] = [];
-    let reserveCalls = 0;
-    const replayStore = {
-      get(scope: string, idem: string) {
-        getCalls.push(idem);
-        return memory.get(scope, idem);
-      },
-      reserve(scope: string, idem: string) {
-        reserveCalls += 1;
-        return memory.reserve(scope, idem);
-      },
-      set(scope: string, idem: string, response: Parameters<typeof memory.set>[2]) {
-        memory.set(scope, idem, response);
-      },
-    };
-    let handled = 0;
-    const emptyIdemWebhook = webhook('/webhooks/empty-idem', {
-      handler(input: { id: string }) {
-        handled += 1;
-        return { received: input.id };
-      },
-      // Idempotency key is the empty string for every delivery.
-      idempotency: () => '',
+  it.each([
+    ['empty', ''],
+    ['oversized', 'a'.repeat(1_025)],
+  ])(
+    'rejects an %s webhook event id before replay-store or handler execution',
+    async (_label, idem) => {
+      const get = vi.fn(() => undefined);
+      const reserve = vi.fn(() => undefined);
+      const set = vi.fn();
+      const handler = vi.fn((input: { id: string }) => ({ received: input.id }));
+      const boundedIdemWebhook = webhook('/webhooks/bounded-idem', {
+        handler,
+        idempotency: () => idem,
+        input: s.object({ id: s.string() }),
+        replayStore: { get, reserve, set },
+        verify: 'none',
+        verifyJustification: 'fixture-only test webhook',
+      });
+      const request = new Request('https://example.test/webhooks/bounded-idem', {
+        body: JSON.stringify({ id: 'evt_bounded' }),
+        method: 'POST',
+      });
+
+      const result = await runWebhook(boundedIdemWebhook, request);
+
+      expect(result.response.status).toBe(500);
+      await expect(result.response.text()).resolves.toBe('Internal Server Error');
+      expect(get).not.toHaveBeenCalled();
+      expect(reserve).not.toHaveBeenCalled();
+      expect(set).not.toHaveBeenCalled();
+      expect(handler).not.toHaveBeenCalled();
+    },
+  );
+
+  it('admits a 1,024-character webhook event id', async () => {
+    const handler = vi.fn((input: { id: string }) => ({ received: input.id }));
+    const boundedIdemWebhook = webhook('/webhooks/bounded-idem-control', {
+      handler,
+      idempotency: () => 'a'.repeat(1_024),
       input: s.object({ id: s.string() }),
-      replayStore,
+      replayStore: createMemoryWebhookReplayStore(),
       verify: 'none',
       verifyJustification: 'fixture-only test webhook',
     });
+    const request = new Request('https://example.test/webhooks/bounded-idem-control', {
+      body: JSON.stringify({ id: 'evt_bounded' }),
+      method: 'POST',
+    });
 
-    const body = JSON.stringify({ id: 'evt_empty' });
-    const makeRequest = () =>
-      new Request('https://example.test/webhooks/empty-idem', { body, method: 'POST' });
+    const result = await runWebhook(boundedIdemWebhook, request);
 
-    const first = await runWebhook(emptyIdemWebhook, makeRequest());
-    expect(first.replayed).toBe(false);
-    expect(first.response.status).toBe(200);
-    // First delivery: fast-path lookup consulted with '' (idem treated active),
-    // then reserved. With the truthy gate the lookup is skipped (getCalls === []).
-    expect(getCalls).toEqual(['']);
-    expect(reserveCalls).toBe(1);
-
-    // Redelivery of the committed '' event must consult the fast-path lookup and
-    // replay the stored response — NOT re-run the handler (the double-execute window).
-    const second = await runWebhook(emptyIdemWebhook, makeRequest());
-    expect(second.replayed).toBe(true);
-    expect(second.response.status).toBe(200);
-    expect(handled).toBe(1);
-    // The redelivery replayed via the fast-path lookup, so no second reservation.
-    expect(getCalls).toEqual(['', '']);
-    expect(reserveCalls).toBe(1);
+    expect(result.response.status).toBe(200);
+    expect(handler).toHaveBeenCalledOnce();
   });
 
   // L2 (SPEC §9.2:876): webhook input parsing must not launder a non-validation throw
