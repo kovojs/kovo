@@ -30,6 +30,12 @@ type FragmentSnapshot = {
   target: string;
 };
 
+// SPEC §10.3: this parity fixture models a server-rendered enhanced form, whose
+// hidden retry token supplies the timestamp retained by the fresh submit nonce.
+function serverStampedMutationIdem(): string {
+  return `v1_${Date.now()}_0123456789abcdef0123456789abcdef`;
+}
+
 function fragmentSnapshots(
   fragments: readonly {
     html: RenderedFragmentHtml;
@@ -238,7 +244,7 @@ export async function expectInlineResponseApplyParity(
       }
     };
     globalRecord.FormData = function FormData() {
-      const values = new Map<string, unknown>();
+      const values = new Map<string, unknown>([['Kovo-Idem', serverStampedMutationIdem()]]);
       return {
         get(name: string) {
           return values.get(name) ?? null;

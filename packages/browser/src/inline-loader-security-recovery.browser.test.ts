@@ -10,6 +10,17 @@ type FrameHarness = {
 
 const frames: HTMLIFrameElement[] = [];
 
+// SPEC §10.3: enhanced mutation fixtures stand in for server-rendered forms.
+// Keep their stamped retry token within the runtime horizon; the loader retains
+// this timestamp and replaces only the nonce for each logical submit.
+function serverStampedMutationIdem(): string {
+  return `v1_${Date.now()}_0123456789abcdef0123456789abcdef`;
+}
+
+function serverStampedMutationIdemInput(): string {
+  return `<input type="hidden" name="Kovo-Idem" value="${serverStampedMutationIdem()}">`;
+}
+
 async function createFrame(body: string, head: string): Promise<FrameHarness> {
   const frame = document.createElement('iframe');
   let loads = 0;
@@ -365,7 +376,9 @@ it('keeps generated mutation on the response transport captured at boot', async 
     [
       '<main kovo-nav-segment="layout:a" kovo-nav-kind="layout" kovo-nav-name="a">',
       '<section kovo-fragment-target="account">INITIAL</section>',
-      '<form enhance data-mutation="account" action="/_m/account" method="post"><button>save</button></form>',
+      '<form enhance data-mutation="account" action="/_m/account" method="post">',
+      serverStampedMutationIdemInput(),
+      '<button>save</button></form>',
       '</main>',
     ].join(''),
     '<meta name="kovo-build" content="build-a">',
@@ -531,7 +544,7 @@ it('matches the live document base for mutation and navigation targets', async (
 });
 
 it('recovers an ambiguous mutation failure with one POST and one fresh replay key', async () => {
-  const renderedIdem = 'idem_rendered_old';
+  const renderedIdem = serverStampedMutationIdem();
   const harness = await createFrame(
     [
       '<form data-mutation="delete" action="/_m/delete" method="post">',
@@ -838,7 +851,9 @@ it.each([
   async (_posture, responseBuild) => {
     const harness = await createFrame(
       [
-        '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
+        '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post">',
+        serverStampedMutationIdemInput(),
+        '<button>send</button></form>',
         '<section kovo-fragment-target="messages">OLD BUILD TRUTH</section>',
       ].join(''),
       '<meta name="kovo-build" content="build-old">',
@@ -890,7 +905,9 @@ it.each([
   async (_name, fragment, terminator) => {
     const harness = await createFrame(
       [
-        '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
+        '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post">',
+        serverStampedMutationIdemInput(),
+        '<button>send</button></form>',
         '<section kovo-fragment-target="messages">AUTHORITATIVE</section>',
       ].join(''),
       '<meta name="kovo-build" content="build-a">',
@@ -927,6 +944,7 @@ it('never consults deferred-runtime native submit after an ambiguous POST failur
     [
       '<iframe hidden name="kovo-c210-deferred-sink"></iframe>',
       '<form enhance data-mutation="deferred-runtime" action="/_m/deferred-runtime" method="post" target="kovo-c210-deferred-sink">',
+      serverStampedMutationIdemInput(),
       '<input name="kovo-c210" value="deferred-runtime">',
       '<button>send</button>',
       '</form>',
@@ -966,7 +984,9 @@ it('never consults deferred-runtime native submit after an ambiguous POST failur
 it('keeps complete same-build stream behavior without hard recovery', async () => {
   const harness = await createFrame(
     [
-      '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
+      '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post">',
+      serverStampedMutationIdemInput(),
+      '<button>send</button></form>',
       '<section kovo-fragment-target="messages">AUTHORITATIVE</section>',
     ].join(''),
     '<meta name="kovo-build" content="build-a">',

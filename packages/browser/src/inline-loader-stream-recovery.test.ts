@@ -9,6 +9,13 @@ type StreamHarness = {
   reload: ReturnType<typeof vi.fn>;
 };
 
+// SPEC §10.3: enhanced submission refreshes the nonce of the server-stamped
+// no-JavaScript retry token. This streaming harness models a rendered Kovo form,
+// so its FormData must include that canonical hidden value.
+function serverStampedMutationIdem(): string {
+  return `v1_${Date.now()}_0123456789abcdef0123456789abcdef`;
+}
+
 function streamOf(parts: readonly string[]): ReadableStream<Uint8Array> {
   let index = 0;
   return new ReadableStream({
@@ -54,7 +61,7 @@ async function installStreamHarness(
 
   vi.stubGlobal('BroadcastChannel', undefined);
   vi.stubGlobal('FormData', function FormData() {
-    const values = new Map<string, unknown>();
+    const values = new Map<string, unknown>([['Kovo-Idem', serverStampedMutationIdem()]]);
     return {
       get: (name: string) => values.get(name) ?? null,
       set: (name: string, value: unknown) => values.set(name, value),

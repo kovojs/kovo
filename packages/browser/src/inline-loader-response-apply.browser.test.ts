@@ -16,6 +16,14 @@ const NativeBroadcastChannel = BroadcastChannel;
 const initialInlineApplyDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__kovo_a');
 const initialScrollRestoration = history.scrollRestoration;
 
+// SPEC §10.3: browser mutation fixtures model server-rendered forms, including
+// the current stamped token whose timestamp is retained when enhancement mints
+// a fresh nonce.
+function serverStampedMutationIdemInput(): string {
+  const token = `v1_${Date.now()}_0123456789abcdef0123456789abcdef`;
+  return `<input type="hidden" name="Kovo-Idem" value="${token}">`;
+}
+
 afterEach(() => {
   for (const entry of testWindowListeners.splice(0)) {
     nativeEventTargetRemoveEventListener.call(
@@ -50,6 +58,7 @@ describe('browser inline loader response apply', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
+      serverStampedMutationIdemInput(),
       '<section kovo-c="cart-form">',
       '<label kovo-key="label">Quantity</label>',
       '<div kovo-key="panel" class="scroll-panel"><p class="scroll-panel-fill">Panel</p></div>',
@@ -109,6 +118,7 @@ describe('browser inline loader response apply', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
+      serverStampedMutationIdemInput(),
       '<section kovo-fragment-target="cart" kovo-deps="cart">old cart</section>',
       '<aside kovo-c="cart">wrong target</aside>',
       '</form>',
@@ -146,6 +156,7 @@ describe('browser inline loader response apply', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
+      serverStampedMutationIdemInput(),
       "<section id='target\"bad-id'>old id</section>",
       "<section kovo-fragment-target='target\"bad-fragment'>old fragment target</section>",
       '</form>',
@@ -350,6 +361,7 @@ describe('browser inline loader response apply', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
+      serverStampedMutationIdemInput(),
       '<section kovo-fragment-target="cart">old cart</section>',
       '</form>',
     ].join('');
