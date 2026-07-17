@@ -1269,6 +1269,8 @@ interface CreatedRuntimeClient {
     role: string | false,
     roleSetting?: string,
   ): RuntimeSqlClient;
+  /** Privileged, framework-owned client used only for exact boot-posture catalog proofs. */
+  postureSql: RuntimeSqlClient;
   sql: RuntimeSqlClient;
   label: string;
 }
@@ -1555,6 +1557,7 @@ export function createPostgresAppRuntimeDb(
   const ready = initializeRuntimeDb(client.sql, {
     config,
     metadata,
+    postureClient: client.postureSql,
     schemaDdl: ddl,
     schemaTables,
   });
@@ -1831,6 +1834,7 @@ async function initializeRuntimeDb(
   input: {
     config: ResolvedPostgresRuntimeConfig;
     metadata: KovoRuntimeDbMetadata;
+    postureClient: RuntimeSqlClient;
     schemaDdl: string;
     schemaTables: readonly PgTable[];
   },
@@ -1847,9 +1851,15 @@ async function initializeRuntimeDb(
     await assertRuntimeConnectionLeastPrivilege(client, input.config);
   }
   if (input.config.postureCheckOnBoot) {
-    const report = await checkRuntimeDbPosture(client, {
-      ...input,
-      checkConnectionLeastPrivilege: input.config.driver === 'node-postgres',
+    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(input.config.databaseUrl);
+    const postureUsesRuntimeConnection = input.postureClient === client;
+    const report = await checkRuntimeDbPosture(input.postureClient, {
+      config: input.config,
+      metadata: input.metadata,
+      schemaTables: input.schemaTables,
+      checkConnectionLeastPrivilege:
+        input.config.driver === 'node-postgres' && postureUsesRuntimeConnection,
+      ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
     });
     if (!report.ok) {
       if (
@@ -3148,6 +3158,10 @@ async function provisionPostgresFrameworkReplayStore(
   await client.exec(
     `GRANT SELECT, UPDATE ON TABLE ${watermarkTable} TO ${quoteIdent(config.systemRole)}`,
   );
+  // The framework admin connection performs the exact boot-posture proof, including the three
+  // monotonic watermark rows. It receives read-only visibility into that non-secret clock state;
+  // mutation/webhook payload truth and every watermark write remain system-only (SPEC §10.3).
+  await client.exec(`GRANT SELECT ON TABLE ${watermarkTable} TO ${quoteIdent(config.adminRole)}`);
 }
 
 interface PostgresReplayPrivilegeRow {
@@ -3503,14 +3517,18 @@ async function postgresReplayStorePostureIssues(
         'public._kovo_replay_reclaimed must hold exactly one non-negative monotonic watermark for capability, mutation, and webhook replay cleanup',
     });
   }
-  const roles: { allow: boolean; role: string }[] = [
-    { allow: false, role: config.readerRole },
-    { allow: false, role: config.writerRole },
-    { allow: false, role: config.adminRole },
-    { allow: true, role: config.systemRole },
+  const roles: { allow: boolean; role: string; watermarkRead: boolean }[] = [
+    { allow: false, role: config.readerRole, watermarkRead: false },
+    { allow: false, role: config.writerRole, watermarkRead: false },
+    { allow: false, role: config.adminRole, watermarkRead: true },
+    { allow: true, role: config.systemRole, watermarkRead: true },
   ];
   if (runtimeLoginRole !== undefined) {
-    appendPostgresDenseValue(roles, { allow: false, role: runtimeLoginRole });
+    appendPostgresDenseValue(roles, {
+      allow: false,
+      role: runtimeLoginRole,
+      watermarkRead: false,
+    });
   }
   const seen = createWitnessSet<string>();
   for (let index = 0; index < roles.length; index += 1) {
@@ -3581,7 +3599,7 @@ async function postgresReplayStorePostureIssues(
       privilegeRow.watermark_can_any_column_insert === false &&
       privilegeRow.watermark_can_any_column_update === true &&
       privilegeRow.watermark_can_any_column_references === false;
-    const hasAny =
+    const hasAnyReplayPrivilege =
       privilegeRow.can_select === true ||
       privilegeRow.can_insert === true ||
       privilegeRow.can_update === true ||
@@ -3592,7 +3610,8 @@ async function postgresReplayStorePostureIssues(
       privilegeRow.can_any_column_select === true ||
       privilegeRow.can_any_column_insert === true ||
       privilegeRow.can_any_column_update === true ||
-      privilegeRow.can_any_column_references === true ||
+      privilegeRow.can_any_column_references === true;
+    const hasAnyWatermarkPrivilege =
       privilegeRow.watermark_can_select === true ||
       privilegeRow.watermark_can_insert === true ||
       privilegeRow.watermark_can_update === true ||
@@ -3604,12 +3623,32 @@ async function postgresReplayStorePostureIssues(
       privilegeRow.watermark_can_any_column_insert === true ||
       privilegeRow.watermark_can_any_column_update === true ||
       privilegeRow.watermark_can_any_column_references === true;
-    if ((expected.allow && (!hasAll || !watermarkHasAll)) || (!expected.allow && hasAny)) {
+    const watermarkHasReadOnly =
+      privilegeRow.watermark_can_select === true &&
+      privilegeRow.watermark_can_insert === false &&
+      privilegeRow.watermark_can_update === false &&
+      privilegeRow.watermark_can_delete === false &&
+      privilegeRow.watermark_can_truncate === false &&
+      privilegeRow.watermark_can_references === false &&
+      privilegeRow.watermark_can_trigger === false &&
+      privilegeRow.watermark_can_any_column_select === true &&
+      privilegeRow.watermark_can_any_column_insert === false &&
+      privilegeRow.watermark_can_any_column_update === false &&
+      privilegeRow.watermark_can_any_column_references === false;
+    const replayPrivilegesMatch = expected.allow ? hasAll : !hasAnyReplayPrivilege;
+    const watermarkPrivilegesMatch = expected.allow
+      ? watermarkHasAll
+      : expected.watermarkRead
+        ? watermarkHasReadOnly
+        : !hasAnyWatermarkPrivilege;
+    if (!replayPrivilegesMatch || !watermarkPrivilegesMatch) {
       appendPostgresDenseValue(issues, {
         code: 'KV433_REPLAY_STORE_ACL',
         detail: expected.allow
           ? `${expected.role} must have exactly SELECT, INSERT, UPDATE, DELETE on public._kovo_replay and SELECT, UPDATE on public._kovo_replay_reclaimed`
-          : `${expected.role} must not have effective access to the replay truth or reclamation-watermark relations`,
+          : expected.watermarkRead
+            ? `${expected.role} must have no access to public._kovo_replay and exactly SELECT on public._kovo_replay_reclaimed`
+            : `${expected.role} must not have effective access to the replay truth or reclamation-watermark relations`,
       });
     }
   }
@@ -4261,6 +4300,7 @@ function createPgliteRuntimeClient(
         client,
         postgresReadonlyClientOptions(config, principal, role, roleSetting, client),
       ),
+    postureSql: client,
     sql: client,
   };
 }
@@ -4503,6 +4543,8 @@ function createNodePostgresRuntimeClient(
   const systemTransactionalClient = createOptionalNodePostgresRuntimeClient(
     config.systemDatabaseUrl,
   );
+  const postureTransactionalClient =
+    adminTransactionalClient ?? systemTransactionalClient ?? transactionalClient;
   return {
     close: () =>
       closeNodePostgresRuntimeClients(
@@ -4551,6 +4593,7 @@ function createNodePostgresRuntimeClient(
         }),
         postgresReadonlyClientOptions(config, principal, role, roleSetting),
       ),
+    postureSql: postureTransactionalClient,
     sql: transactionalClient,
   };
 }
@@ -7431,10 +7474,23 @@ async function safeQuery<Row extends QueryResultRow>(
   query: string,
   params?: readonly unknown[],
 ): Promise<{ rows: Row[] } | undefined> {
+  const savepoint = 'kovo_posture_optional_query';
+  let savepointCreated = false;
   try {
+    await client.exec(`SAVEPOINT ${savepoint}`);
+    savepointCreated = true;
     const result = await client.query<Row>(query, snapshotPostgresQueryParams(params));
+    await client.exec(`RELEASE SAVEPOINT ${savepoint}`);
     return { rows: snapshotPostgresQueryRows(result.rows, 'Postgres catalog rows') };
   } catch {
+    if (savepointCreated) {
+      try {
+        await client.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        await client.exec(`RELEASE SAVEPOINT ${savepoint}`);
+      } catch {
+        // The outer posture transaction still fails closed if savepoint recovery is unavailable.
+      }
+    }
     return undefined;
   }
 }

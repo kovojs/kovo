@@ -259,9 +259,10 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
           runtimeDatabaseUrl: cluster.url(adoptedDb, adoptedRuntime),
           schema,
         });
-        expect(adoptedReport.ok).toBe(true);
+        expect(adoptedReport.ok, JSON.stringify(adoptedReport.issues)).toBe(true);
         expect(adoptedReport.issues).toEqual([]);
         await expectOwnerIsolation(cluster.url(adoptedDb, adoptedRuntime), {
+          adminDatabaseUrl: cluster.url(adoptedDb, adoptedAdmin),
           readerRole: adoptedReader,
           writerRole: adoptedWriter,
         });
