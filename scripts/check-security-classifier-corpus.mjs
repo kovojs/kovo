@@ -154,6 +154,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'egress-ip',
     marker: '@kovo-security-classifier-corpus egress-ip',
     testFiles: [
+      'packages/cli/src/commands/security-disposition.test.ts',
+      'packages/cli/src/index.kovo-db.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
       'packages/server/src/runtime-environment-authority.test.ts',
@@ -320,6 +322,29 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'KV433_POSTGRES_TLS_ENV',
           'fails closed on impossible Windows case-fold collisions',
           "{ Node_Env: 'production', NODE_ENV: 'development' }",
+        ],
+      },
+      {
+        id: 'windows-cli-operator-environment-casefold-regression',
+        file: 'packages/cli/src/commands/security-disposition.test.ts',
+        snippets: [
+          'mirrors Windows case-insensitive CLI posture lookup while preserving operator spellings',
+          "Kovo_Admin_Database_Url: 'postgres://admin@db.example:5432/app?sslmode=verify-full'",
+          "kovo_db_driver: 'node-postgres'",
+          "KOVO_ADMIN_DATABASE_URL: 'postgres://admin@db.example:5432/app?sslmode=verify-full'",
+          "KOVO_DB_DRIVER: 'node-postgres'",
+          'fails closed on impossible Windows CLI environment case collisions',
+          "{ Node_Env: 'production', NODE_ENV: 'development' }",
+        ],
+      },
+      {
+        id: 'windows-cli-database-carrier-regression',
+        file: 'packages/cli/src/index.kovo-db.test.ts',
+        snippets: [
+          'uses Windows-equivalent mixed-case DB carriers instead of falling back to PGlite',
+          "Kovo_Admin_Database_Url: 'postgres://bad@127.0.0.1:1/nope'",
+          "kovo_db_driver: 'node-postgres'",
+          "expect(check.stderr).not.toContain('DRIVER pglite')",
         ],
       },
     ],

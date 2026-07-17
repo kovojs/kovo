@@ -23,6 +23,7 @@ import {
   parsedStringOption,
   requireSinglePositional,
 } from '../commands-manifest.js';
+import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import type { CliCommandResult } from '../shared.js';
 import {
   kovoCommandBootSecurityDisposition,
@@ -427,22 +428,14 @@ function trustedLiveDevConfig(
   // The supported runner deliberately does not evaluate an undeclared vite.config.ts. Preserve the
   // generated starter's HOST/PORT operator contract through the immutable command-entry snapshot
   // instead of consulting ambient process.env after authored modules have run (SPEC §5.2/§6.6).
-  const invocationHost = buildOwnDataValue(
-    security.invocationEnv,
-    'HOST',
-    'Kovo invocation environment',
-  );
+  const invocationHost = kovoInvocationEnvironmentValue(security.invocationEnv, 'HOST');
   if (invocationHost !== undefined) {
     if (typeof invocationHost !== 'string' || invocationHost.length === 0) {
       throw new TypeError('Kovo invocation environment HOST must be a non-empty string.');
     }
     server.host = invocationHost;
   }
-  const invocationPort = buildOwnDataValue(
-    security.invocationEnv,
-    'PORT',
-    'Kovo invocation environment',
-  );
+  const invocationPort = kovoInvocationEnvironmentValue(security.invocationEnv, 'PORT');
   if (invocationPort !== undefined) {
     if (typeof invocationPort !== 'string') {
       throw new TypeError('Kovo invocation environment PORT must be a string.');

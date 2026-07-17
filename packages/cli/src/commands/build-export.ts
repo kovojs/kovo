@@ -99,6 +99,7 @@ import {
   requireSinglePositional,
 } from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
+import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import {
   buildOutputVersion,
   type CliCommandResult,
@@ -2160,7 +2161,7 @@ function selectedKovoBuildPreset(
 ): SelectedKovoBuildPreset {
   if (options.preset !== undefined) return { name: options.preset };
 
-  const envPreset = invocationEnv.KOVO_PRESET;
+  const envPreset = kovoInvocationEnvironmentValue(invocationEnv, 'KOVO_PRESET');
   if (envPreset) {
     const parsedPreset = parseKovoBuildPresetName(envPreset);
     if (!parsedPreset) throw new Error(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
@@ -2169,8 +2170,13 @@ function selectedKovoBuildPreset(
 
   if (configuredPreset !== undefined) return selectedConfiguredKovoBuildPreset(configuredPreset);
 
-  if (invocationEnv.VERCEL) return { name: 'vercel' };
-  if (invocationEnv.CF_PAGES || invocationEnv.CLOUDFLARE) return { name: 'cloudflare' };
+  if (kovoInvocationEnvironmentValue(invocationEnv, 'VERCEL')) return { name: 'vercel' };
+  if (
+    kovoInvocationEnvironmentValue(invocationEnv, 'CF_PAGES') ||
+    kovoInvocationEnvironmentValue(invocationEnv, 'CLOUDFLARE')
+  ) {
+    return { name: 'cloudflare' };
+  }
   return { name: 'node' };
 }
 

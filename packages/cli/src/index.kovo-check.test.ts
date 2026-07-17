@@ -2620,6 +2620,10 @@ describe('kovo check', () => {
       );
       writeFileSync(join(parent, 'package.json'), '{"type":"module"}\n', 'utf8');
       symlinkSync(new URL('./bin.ts', import.meta.url), entryPath);
+      symlinkSync(
+        new URL('./invocation-environment.ts', import.meta.url),
+        join(spacedDir, 'invocation-environment.ts'),
+      );
       symlinkSync(new URL('./index.ts', import.meta.url), join(spacedDir, 'index.js'));
       symlinkSync(new URL('./add-catalog.ts', import.meta.url), join(spacedDir, 'add-catalog.js'));
       symlinkSync(
@@ -2646,6 +2650,19 @@ describe('kovo check', () => {
 
     try {
       writeFileSync(entryPath, readFileSync(new URL('./bin.ts', import.meta.url), 'utf8'), 'utf8');
+      writeFileSync(
+        join(parent, 'invocation-environment.js'),
+        [
+          'export function snapshotKovoInvocationEnvironment(source) {',
+          '  return Object.freeze({ ...source });',
+          '}',
+          'export function kovoInvocationEnvironmentValue(environment, name) {',
+          '  return environment[name];',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
       writeFileSync(
         join(parent, 'index.js'),
         [

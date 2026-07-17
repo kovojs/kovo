@@ -31,6 +31,7 @@ import {
   parsedStringOption,
   parseCommandArgv,
 } from '../commands-manifest.js';
+import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { dbOutputVersion, stableValue, type CliCommandResult } from '../shared.js';
 import {
   kovoCommandBootSecurityDisposition,
@@ -478,7 +479,10 @@ function runtimeOptions(
   };
   const databaseUrl = resolveRuntimeDatabaseUrl(options);
   const configuredDataDir =
-    options.dataDir ?? result.dataDir ?? options.invocationEnv.KOVO_DATA_DIR ?? '.kovo/data';
+    options.dataDir ??
+    result.dataDir ??
+    invocationEnvironmentValue(options, 'KOVO_DATA_DIR') ??
+    '.kovo/data';
   result.dataDir = resolve(options.invocationCwd, configuredDataDir);
   if (databaseUrl !== undefined) result.databaseUrl = databaseUrl;
   if (options.driver !== undefined) result.driver = options.driver;
@@ -511,20 +515,20 @@ function applyRuntimeOptionOverrides(
 }
 
 function shouldProvisionEmbeddedPglite(options: ResolvedKovoDbOptions): boolean {
-  const driver = options.driver ?? options.invocationEnv.KOVO_DB_DRIVER;
+  const driver = options.driver ?? invocationEnvironmentValue(options, 'KOVO_DB_DRIVER');
   if (driver === 'pglite') return true;
   if (driver === 'pg' || driver === 'node-postgres') return false;
   return (
     nonEmptyValue(options.adminDatabaseUrl) === undefined &&
     resolveRuntimeDatabaseUrl(options) === undefined &&
-    nonEmptyValue(options.invocationEnv.KOVO_ADMIN_DATABASE_URL) === undefined &&
-    nonEmptyValue(options.invocationEnv.KOVO_RUNTIME_DATABASE_URL) === undefined &&
-    nonEmptyValue(options.invocationEnv.KOVO_DATABASE_URL) === undefined
+    nonEmptyValue(invocationEnvironmentValue(options, 'KOVO_ADMIN_DATABASE_URL')) === undefined &&
+    nonEmptyValue(invocationEnvironmentValue(options, 'KOVO_RUNTIME_DATABASE_URL')) === undefined &&
+    nonEmptyValue(invocationEnvironmentValue(options, 'KOVO_DATABASE_URL')) === undefined
   );
 }
 
 function shouldCheckEmbeddedPglite(options: ResolvedKovoDbOptions): boolean {
-  const driver = options.driver ?? options.invocationEnv.KOVO_DB_DRIVER;
+  const driver = options.driver ?? invocationEnvironmentValue(options, 'KOVO_DB_DRIVER');
   if (driver === 'pglite') return true;
   if (driver === 'pg' || driver === 'node-postgres') return false;
   return (
@@ -541,7 +545,7 @@ function checkTargetOptions(options: ResolvedKovoDbOptions): {
   overrides: Partial<KovoPostgresAppRuntimeOptions>;
   source: KovoDbTargetSource;
 } {
-  const driver = options.driver ?? options.invocationEnv.KOVO_DB_DRIVER;
+  const driver = options.driver ?? invocationEnvironmentValue(options, 'KOVO_DB_DRIVER');
   if (driver === 'pglite') return { overrides: { driver: 'pglite' }, source: 'explicit-driver' };
   const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
   if (driver === 'pg' || driver === 'node-postgres') {
@@ -575,7 +579,7 @@ function checkTargetOptions(options: ResolvedKovoDbOptions): {
 function generateDriverOptions(
   options: ResolvedKovoDbOptions,
 ): Partial<KovoPostgresAppRuntimeOptions> {
-  const driver = options.driver ?? options.invocationEnv.KOVO_DB_DRIVER;
+  const driver = options.driver ?? invocationEnvironmentValue(options, 'KOVO_DB_DRIVER');
   if (driver === 'pglite' || shouldCheckEmbeddedPglite(options)) return { driver: 'pglite' };
   const databaseUrl = nonEmptyValue(
     resolveAdminDatabaseUrl(options) ?? resolveRuntimeDatabaseUrl(options),
@@ -589,15 +593,24 @@ function generateDriverOptions(
 }
 
 function resolveAdminDatabaseUrl(options: ResolvedKovoDbOptions): string | undefined {
-  return nonEmptyValue(options.adminDatabaseUrl ?? options.invocationEnv.KOVO_ADMIN_DATABASE_URL);
+  return nonEmptyValue(
+    options.adminDatabaseUrl ?? invocationEnvironmentValue(options, 'KOVO_ADMIN_DATABASE_URL'),
+  );
 }
 
 function resolveRuntimeDatabaseUrl(options: ResolvedKovoDbOptions): string | undefined {
   return nonEmptyValue(
     options.databaseUrl ??
-      options.invocationEnv.KOVO_RUNTIME_DATABASE_URL ??
-      options.invocationEnv.KOVO_DATABASE_URL,
+      invocationEnvironmentValue(options, 'KOVO_RUNTIME_DATABASE_URL') ??
+      invocationEnvironmentValue(options, 'KOVO_DATABASE_URL'),
   );
+}
+
+function invocationEnvironmentValue(
+  options: ResolvedKovoDbOptions,
+  name: string,
+): string | undefined {
+  return kovoInvocationEnvironmentValue(options.invocationEnv, name);
 }
 
 function nonEmptyValue(value: string | undefined): string | undefined {

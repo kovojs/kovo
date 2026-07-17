@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { snapshotKovoInvocationEnvironment } from './security-disposition.js';
+import {
+  kovoInvocationEnvironmentValue,
+  snapshotKovoInvocationEnvironment,
+} from '../invocation-environment.js';
 
 describe('CLI invocation environment authority (SPEC §6.6 rule 6)', () => {
   it('copies only own values into an immutable null-prototype snapshot', () => {
@@ -48,5 +51,56 @@ describe('CLI invocation environment authority (SPEC §6.6 rule 6)', () => {
       },
     });
     expect(() => snapshotKovoInvocationEnvironment(unstable)).toThrow(/changed while/u);
+  });
+
+  it('mirrors Windows case-insensitive CLI posture lookup while preserving operator spellings', () => {
+    const source = {
+      Cf_Pages: '1',
+      Cloudflare: '1',
+      host: '127.0.0.1',
+      Kovo_Admin_Database_Url: 'postgres://admin@db.example:5432/app?sslmode=verify-full',
+      kovo_cli_transform_types: '1',
+      kovo_database_url: 'postgres://app@db.example:5432/app?sslmode=verify-full',
+      Kovo_Data_Dir: '.kovo/windows-data',
+      kovo_db_driver: 'node-postgres',
+      Kovo_Paranoid: 'true',
+      kovo_preset: 'node',
+      Kovo_Runtime_Database_Url: 'postgres://runtime@db.example:5432/app?sslmode=verify-full',
+      node_env: 'production',
+      Node_Tls_Reject_Unauthorized: '0',
+      Port: '4173',
+      vercel: '1',
+    } as NodeJS.ProcessEnv;
+    const snapshot = snapshotKovoInvocationEnvironment(source, true);
+    const expectedLookups = {
+      CF_PAGES: '1',
+      CLOUDFLARE: '1',
+      HOST: '127.0.0.1',
+      KOVO_ADMIN_DATABASE_URL: 'postgres://admin@db.example:5432/app?sslmode=verify-full',
+      KOVO_CLI_TRANSFORM_TYPES: '1',
+      KOVO_DATABASE_URL: 'postgres://app@db.example:5432/app?sslmode=verify-full',
+      KOVO_DATA_DIR: '.kovo/windows-data',
+      KOVO_DB_DRIVER: 'node-postgres',
+      KOVO_PARANOID: 'true',
+      KOVO_PRESET: 'node',
+      KOVO_RUNTIME_DATABASE_URL: 'postgres://runtime@db.example:5432/app?sslmode=verify-full',
+      NODE_ENV: 'production',
+      NODE_TLS_REJECT_UNAUTHORIZED: '0',
+      PORT: '4173',
+      VERCEL: '1',
+    } as const;
+
+    for (const [name, value] of Object.entries(expectedLookups)) {
+      expect(kovoInvocationEnvironmentValue(snapshot, name), name).toBe(value);
+    }
+    expect(Object.getOwnPropertyNames(snapshot)).toEqual(Object.keys(source));
+    expect(snapshot.node_env).toBe('production');
+    expect(snapshot.NODE_ENV).toBeUndefined();
+  });
+
+  it('fails closed on impossible Windows CLI environment case collisions', () => {
+    expect(() =>
+      snapshotKovoInvocationEnvironment({ Node_Env: 'production', NODE_ENV: 'development' }, true),
+    ).toThrow(/case-colliding Windows names Node_Env and NODE_ENV/u);
   });
 });

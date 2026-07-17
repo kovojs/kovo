@@ -37,46 +37,19 @@ registerHooks({
   },
 });
 
+const { kovoInvocationEnvironmentValue, snapshotKovoInvocationEnvironment } =
+  await import('./invocation-environment.js');
+
 // SPEC §6.6 rule 6: operator posture and invocation cwd are command authority. Capture them before
 // the dispatcher can evaluate authored config/app/plugin modules; later process.env/process.chdir
 // writes cannot change the security disposition or redirect framework-owned relative paths.
-const invocationEnv = snapshotInvocationEnvironment(process.env);
-const paranoidValue = invocationEnv.KOVO_PARANOID;
+const invocationEnv = snapshotKovoInvocationEnvironment(process.env);
+const paranoidValue = kovoInvocationEnvironmentValue(invocationEnv, 'KOVO_PARANOID');
 const commandSecurityDisposition = Object.freeze({
   invocationCwd: process.cwd(),
   invocationEnv,
   paranoidStaticAdvisory: paranoidValue === '1' || paranoidValue === 'true',
 });
-
-function snapshotInvocationEnvironment(source = process.env) {
-  const snapshot = Object.create(null);
-  for (const name of Object.keys(source)) {
-    const before = Object.getOwnPropertyDescriptor(source, name);
-    const after = Object.getOwnPropertyDescriptor(source, name);
-    const unchanged =
-      before === undefined || after === undefined
-        ? before === after
-        : 'value' in before &&
-          'value' in after &&
-          Object.is(before.value, after.value) &&
-          before.configurable === after.configurable &&
-          before.enumerable === after.enumerable &&
-          before.writable === after.writable;
-    if (!unchanged) {
-      throw new TypeError('Kovo invocation environment changed while it was inspected.');
-    }
-    if (before === undefined || !('value' in before) || typeof before.value !== 'string') {
-      throw new TypeError('Kovo invocation environment must contain own strings.');
-    }
-    Object.defineProperty(snapshot, name, {
-      configurable: false,
-      enumerable: true,
-      value: before.value,
-      writable: false,
-    });
-  }
-  return Object.freeze(snapshot);
-}
 
 // Import the complete trusted dispatcher graph before lockdown so framework modules that capture
 // Web/Node controls from data descriptors see the host-native descriptors. No authored module is

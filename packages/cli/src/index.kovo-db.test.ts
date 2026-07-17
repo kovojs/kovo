@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from './index.js';
 import { captureKovoCommandSecurityDisposition } from './commands/security-disposition.js';
+import { snapshotKovoInvocationEnvironment } from './invocation-environment.js';
 
 describe('kovo db', () => {
   const roots: string[] = [];
@@ -156,6 +157,29 @@ describe('kovo db', () => {
       restoreEnv('KOVO_DATABASE_URL', previousDatabaseUrl);
       restoreEnv('KOVO_RUNTIME_DATABASE_URL', previousRuntimeUrl);
     }
+  });
+
+  it('uses Windows-equivalent mixed-case DB carriers instead of falling back to PGlite', async () => {
+    const { schemaPath } = writeDbCommandFixture('windows-env-admin-url-check');
+    const security = Object.freeze({
+      invocationCwd: process.cwd(),
+      invocationEnv: snapshotKovoInvocationEnvironment(
+        {
+          Kovo_Admin_Database_Url: 'postgres://bad@127.0.0.1:1/nope',
+          kovo_db_driver: 'node-postgres',
+        },
+        true,
+      ),
+      paranoidStaticAdvisory: false,
+    });
+    const check = await captureWrites(() =>
+      mainAsync(['db', 'check', '--schema', schemaPath], security),
+    );
+
+    expect(check.result).toBe(1);
+    expect(check.stdout).toBe('');
+    expect(check.stderr).not.toContain('DRIVER pglite');
+    expect(check.stderr).toMatch(/ECONNREFUSED|connect/u);
   });
 
   it('applies reviewed SQL migrations before reasserting Postgres posture', async () => {
