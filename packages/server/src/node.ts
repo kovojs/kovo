@@ -1470,13 +1470,14 @@ function validNodeRequestAuthority(request: PinnedNodeRequest): boolean {
 
   // HTTP/2 :authority owns the request target and a divergent Host is ignored. For HTTP/1,
   // retain the raw occurrence count because Node's normalized header bag silently keeps only the
-  // first Host field, erasing an ambiguity RFC 9112 requires the server to reject.
+  // first Host field, erasing ambiguities RFC 9112 requires the server to reject. A native
+  // HTTP/1.1 request must also carry Host even when the embedding server disables Node's own
+  // requireHostHeader gate; HTTP/1.0 remains host-optional. Carriers without rawHeaders are custom
+  // synthetic integrations, so preserve their documented loopback-origin fallback.
   if (pseudoAuthority === undefined && request.rawHostHeaderCount !== undefined) {
-    if (
-      authority === undefined ? request.rawHostHeaderCount !== 0 : request.rawHostHeaderCount !== 1
-    ) {
-      return false;
-    }
+    if (authority === undefined) {
+      if (request.rawHostHeaderCount !== 0 || request.httpVersion !== '1.0') return false;
+    } else if (request.rawHostHeaderCount !== 1) return false;
   }
   if (authority === undefined) return true;
   if (typeof authority !== 'string' || authority.length === 0) return false;

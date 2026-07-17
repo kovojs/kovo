@@ -102,6 +102,26 @@ describe('server node adapter', () => {
       'Kovo Node adapter request authority must be one valid host[:port].',
     );
 
+    const missingHttp11Host = nodeRequest('/authority');
+    missingHttp11Host.headers = {};
+    missingHttp11Host.httpVersion = '1.1';
+    missingHttp11Host.rawHeaders = [];
+    expect(() => nodeRequestToWebRequest(missingHttp11Host)).toThrow(
+      'Kovo Node adapter request authority must be one valid host[:port].',
+    );
+
+    const missingHttp10Host = nodeRequest('/authority');
+    missingHttp10Host.headers = {};
+    missingHttp10Host.httpVersion = '1.0';
+    missingHttp10Host.rawHeaders = [];
+    expect(nodeRequestToWebRequest(missingHttp10Host).url).toBe('http://127.0.0.1/authority');
+
+    const customCarrierWithoutRawHeaders = nodeRequest('/authority');
+    customCarrierWithoutRawHeaders.headers = {};
+    expect(nodeRequestToWebRequest(customCarrierWithoutRawHeaders).url).toBe(
+      'http://127.0.0.1/authority',
+    );
+
     const invalidPseudoAuthority = nodeRequest('/authority');
     invalidPseudoAuthority.headers = {
       ':authority': 'victim.example@evil.example',
@@ -317,6 +337,37 @@ describe('server node adapter', () => {
       expect(handler).toHaveBeenCalledTimes(1);
     } finally {
       await server.close();
+    }
+  });
+
+  it('rejects a missing HTTP/1.1 Host when the embedding Node gate is disabled', async () => {
+    const handler = vi.fn(async (request: Request) => new Response(request.url));
+    const server = createServer({ requireHostHeader: false }, toNodeHandler(handler));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const origin = `http://127.0.0.1:${address.port}`;
+
+    try {
+      const missingHttp11Host = await rawHttpExchange(
+        origin,
+        'GET /authority HTTP/1.1\r\nConnection: close\r\n\r\n',
+      );
+      expect(missingHttp11Host).toContain('HTTP/1.1 400');
+      expect(missingHttp11Host).toContain('Bad Request');
+      expect(missingHttp11Host).toMatch(/cache-control: no-store/i);
+      expect(handler).not.toHaveBeenCalled();
+
+      const missingHttp10Host = await rawHttpExchange(
+        origin,
+        'GET /authority HTTP/1.0\r\nConnection: close\r\n\r\n',
+      );
+      expect(missingHttp10Host).toContain('HTTP/1.1 200');
+      expect(missingHttp10Host).toContain('http://127.0.0.1/authority');
+      expect(handler).toHaveBeenCalledTimes(1);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
     }
   });
 

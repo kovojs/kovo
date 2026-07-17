@@ -1602,6 +1602,20 @@ export default async function handler(request) {
           expect(invalidAuthority).not.toContain('body { color: navy; }');
         }
 
+        const missingHttp11Host = await rawHttpExchange(
+          baseUrl,
+          'GET /assets/cart.css HTTP/1.1\r\nConnection: close\r\n\r\n',
+        );
+        expect(missingHttp11Host).toContain('HTTP/1.1 400');
+        expect(missingHttp11Host).not.toContain('body { color: navy; }');
+
+        const missingHttp10Host = await rawHttpExchange(
+          baseUrl,
+          'GET /assets/cart.css HTTP/1.0\r\nConnection: close\r\n\r\n',
+        );
+        expect(missingHttp10Host).toContain('HTTP/1.1 200');
+        expect(missingHttp10Host).toContain('body { color: navy; }');
+
         const fetchedAsset = await fetch(`${baseUrl}/assets/cart.css`);
         await expect(fetchedAsset.text()).resolves.toBe('body { color: navy; }');
 
@@ -4553,6 +4567,37 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     body: 'Bad Request',
     status: 400,
   });
+
+  const missingHttp11Authority = adapterParityRequest();
+  missingHttp11Authority.headers = {};
+  missingHttp11Authority.httpVersion = '1.1';
+  missingHttp11Authority.rawHeaders = [];
+  expect(() => liveNodeRequestToWebRequest(missingHttp11Authority)).toThrow(
+    'Kovo Node adapter request authority must be one valid host[:port].',
+  );
+  expect(() => adapter.nodeRequestToWebRequest(missingHttp11Authority)).toThrow(
+    'Kovo Node adapter request authority must be one valid host[:port].',
+  );
+
+  const missingHttp10Authority = adapterParityRequest();
+  missingHttp10Authority.headers = {};
+  missingHttp10Authority.httpVersion = '1.0';
+  missingHttp10Authority.rawHeaders = [];
+  expect(liveNodeRequestToWebRequest(missingHttp10Authority).url).toBe(
+    'http://127.0.0.1/from-url?x=1',
+  );
+  expect(adapter.nodeRequestToWebRequest(missingHttp10Authority).url).toBe(
+    'http://127.0.0.1/from-url?x=1',
+  );
+
+  const customCarrierWithoutRawHeaders = adapterParityRequest();
+  customCarrierWithoutRawHeaders.headers = {};
+  expect(liveNodeRequestToWebRequest(customCarrierWithoutRawHeaders).url).toBe(
+    'http://127.0.0.1/from-url?x=1',
+  );
+  expect(adapter.nodeRequestToWebRequest(customCarrierWithoutRawHeaders).url).toBe(
+    'http://127.0.0.1/from-url?x=1',
+  );
 
   const validIpv6Authority = adapterParityRequest();
   delete validIpv6Authority.headers[':authority'];

@@ -1713,11 +1713,13 @@ function validNodeRequestAuthority(nodeRequest) {
   const pseudoAuthority = nodeRequest.headers[':authority'];
   const authority = pseudoAuthority === undefined ? nodeRequest.headers.host : pseudoAuthority;
   // HTTP/2 :authority owns the target. For HTTP/1, preserve the raw Host occurrence count because
-  // Node's normalized header bag silently keeps only the first duplicate field.
+  // Node's normalized header bag silently keeps only the first duplicate field. Native HTTP/1.1
+  // must also carry Host even when an embedding server disables Node's requireHostHeader gate;
+  // HTTP/1.0 remains host-optional, and custom carriers without rawHeaders keep the fallback.
   if (pseudoAuthority === undefined && nodeRequest.rawHostHeaderCount !== undefined) {
-    if (authority === undefined
-      ? nodeRequest.rawHostHeaderCount !== 0
-      : nodeRequest.rawHostHeaderCount !== 1) return false;
+    if (authority === undefined) {
+      if (nodeRequest.rawHostHeaderCount !== 0 || nodeRequest.httpVersion !== '1.0') return false;
+    } else if (nodeRequest.rawHostHeaderCount !== 1) return false;
   }
   if (authority === undefined) return true;
   if (typeof authority !== 'string' || authority.length === 0) return false;
