@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |     17 |
-| Medium   |    3 |     15 |
+| Medium   |    4 |     15 |
 | Low      |    0 |      4 |
 
 ## High
@@ -437,6 +437,20 @@ rendering, Better Auth, and managed SQL.
   - **Open:** canonicalize every built-in trusted-proxy client-IP source to one address-only IPv4 or
     IPv6 identity, strip only syntactically valid optional ports, reject malformed/obfuscated nodes,
     and prove shell/lifecycle plus live/generated parity.
+
+- [ ] **M19 - ASCII-case duplicate meta attributes bypassed the refresh navigation sink.**
+  - The JSX runtime compared the `content` name case-insensitively but found its paired
+    `http-equiv` value through only the exact `http-equiv`/`httpEquiv` object keys. HTML folds
+    attribute names and honors the first duplicate, so a persisted/query-backed dynamic spread
+    could supply attacker-first `HTTP-EQUIV="refresh"` and retain external refresh content (SPEC
+    §4.8/§5.2).
+  - **Evidence:** the ordinary compiler/plugin path emitted the live attacker-first pair with no
+    KV236 diagnostic; Chromium, Firefox, and WebKit navigated to the external `/phish`, while the
+    safe-first duplicate and canonical lowercase controls stayed on the app. `javascript:` and
+    `data:` controls did not execute or navigate.
+  - **Open:** classify the browser-effective first rendered `http-equiv` attribute with the same
+    ASCII-case, ordering, name, and value rules as emission, remove paired refresh content across
+    live/compiler paths, and enroll the remote case-folding bypass in the C13 corpus.
 
 ## Low
 
