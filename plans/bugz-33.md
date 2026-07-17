@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    1 |     16 |
+| High     |    2 |     15 |
 | Medium   |    2 |     15 |
 | Low      |    0 |      3 |
 
@@ -217,7 +217,7 @@ rendering, Better Auth, and managed SQL.
     anonymous/session credentials, and include independently proven principal identity in replay
     scope while preserving the declared anonymous flow.
 
-- [x] **H17 - Public raw endpoint responses could cache and replay credential state.**
+- [ ] **H17 - Public raw endpoint responses could cache and replay credential state.**
   - A verifier-authorized raw `GET` endpoint could declare and emit `Cache-Control: public` with
     `Set-Cookie`. Header finalization normalized the privileged cookie but did not make the response
     client-private, so a shared cache could serve the authenticated response and cookie to a later
@@ -232,6 +232,9 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** the exact shared-cache dispatch regression now reaches the verifier twice and
     returns `401` without a cookie; focused integration tests passed 92/92 after integration, and
     all 13 classifier corpora plus response-boundary gates passed at the worker checkpoint.
+  - **Follow-up open:** apply the same final-wire floor to generic live/generated Node/Vercel
+    response adapters and static-export metadata, which do not pass through app response
+    finalization.
 
 ## Medium
 
