@@ -12,12 +12,33 @@ import { validateCsrfToken } from './csrf.js';
 import { escapeText, kovoSafeJsxSpread, renderHtmlValue } from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { createElement, Fragment, jsx, jsxDEV, jsxs, type JsxChild } from './jsx-runtime.js';
-import { mutationFormAttributes } from './mutation.js';
+import { mutation, mutationFormAttributes } from './mutation.js';
+import { s } from './schema.js';
 import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 
 const html = (value: unknown): string => renderHtmlValue(value);
 const asyncHtml = async (value: unknown): Promise<string> => renderHtmlValue(await value);
 const TEST_CSRF_SECRET = 'test-csrf-secret-0123456789abcdef012345';
+
+function declaredMutation(key: string) {
+  return mutation(key, {
+    input: s.object({}),
+    handler() {
+      return null;
+    },
+  });
+}
+
+function csrfExemptMutation(key: string) {
+  return mutation(key, {
+    csrf: false,
+    csrfJustification: 'test fixture exercises form rendering without browser credentials',
+    input: s.object({}),
+    handler() {
+      return null;
+    },
+  });
+}
 
 function withParanoidStaticClassifiersStubbed<T>(callback: () => T): T {
   const previous = process.env.KOVO_PARANOID;
@@ -112,7 +133,7 @@ describe('server jsx runtime', () => {
   it('lowers typed mutation form values for direct server JSX forms', () => {
     // SPEC.md §6.3: server-rendered templates can bind the importable mutation
     // value instead of hard-coding the `/_m/*` endpoint string.
-    const addToCart = { key: 'cart/add' } as const;
+    const addToCart = declaredMutation('cart/add');
 
     const formHtml = html(
       jsx('form', {
@@ -127,10 +148,54 @@ describe('server jsx runtime', () => {
     expect(formHtml).toMatch(/name="Kovo-Idem" value="[^"]+"/);
   });
 
+  it('applies mutation authority to ASCII-mixed intrinsic form names', () => {
+    const request = { session: { id: 'mixed-case-session' } };
+    const csrf = {
+      field: 'csrf',
+      secret: TEST_CSRF_SECRET,
+      sessionId: (value: typeof request) => value.session.id,
+    };
+    const save = mutation('account/save', {
+      csrf,
+      input: s.object({}),
+      handler() {
+        return null;
+      },
+    });
+
+    const rendered = html(
+      runWithJsxRequestContext(request, () =>
+        jsx('fOrm', { ...mutationFormAttributes(save), children: '' }),
+      ),
+    );
+
+    expect(rendered).toContain('action="/_m/account/save"');
+    expect(rendered).toMatch(/name="Kovo-Idem" value="[^"]+"/);
+    expect(
+      validateCsrfToken({ csrf: hiddenInputValue(rendered, 'csrf') }, request, csrf, {
+        audience: 'account/save',
+      }),
+    ).toBe(true);
+  });
+
+  it('omits structurally forged direct mutation metadata', () => {
+    const rendered = html(
+      jsx('form', {
+        children: '',
+        enhance: true,
+        mutation: { csrf: false, key: 'account/delete' },
+      }),
+    );
+
+    expect(rendered).toBe('<form enhance></form>');
+    expect(rendered).not.toContain('/_m/account/delete');
+    expect(rendered).not.toContain('Kovo-Idem');
+  });
+
   it('lowers direct server JSX streaming mutation and text attributes', () => {
     // SPEC.md §5.2/§9.1: app source authors TSX-only `stream` and `streamText`;
     // served framework output exposes the runtime-visible data attributes.
-    const sendMessage = { key: 'chat/send' } as const;
+    const sendMessage = declaredMutation('chat/send');
 
     const formHtml = html(
       jsx('form', {
@@ -150,7 +215,7 @@ describe('server jsx runtime', () => {
   });
 
   it('renders JSX key identity as kovo-key for direct server JSX forms', () => {
-    const addToCart = { key: 'cart/add' } as const;
+    const addToCart = declaredMutation('cart/add');
 
     const formHtml = html(
       jsx(
@@ -180,7 +245,13 @@ describe('server jsx runtime', () => {
       secret: TEST_CSRF_SECRET,
       sessionId: (value: typeof request) => value.session.id,
     };
-    const addToCart = { csrf, key: 'cart/add' } as const;
+    const addToCart = mutation('cart/add', {
+      csrf,
+      input: s.object({}),
+      handler() {
+        return null;
+      },
+    });
 
     const rendered = html(
       runWithJsxRequestContext(request, () =>
@@ -210,8 +281,9 @@ describe('server jsx runtime', () => {
       formKey: string,
       titleMessage: string,
       formMessage: string,
-    ): Promise<string> =>
-      asyncHtml(
+    ): Promise<string> => {
+      const definition = declaredMutation(formKey);
+      return asyncHtml(
         runWithJsxRequestContext(
           {},
           {
@@ -231,7 +303,7 @@ describe('server jsx runtime', () => {
           },
           () =>
             jsx('form', {
-              mutation: { key: formKey },
+              mutation: definition,
               children: Promise.resolve().then(() => [
                 FieldError({ name: 'title' }),
                 FormError({ code: 'BLOCKED', message: formMessage }),
@@ -239,6 +311,7 @@ describe('server jsx runtime', () => {
             }),
         ),
       );
+    };
 
     const [first, second] = await Promise.all([
       renderFailureForm('post/save', 'First title is required.', 'First blocked.'),
@@ -254,6 +327,8 @@ describe('server jsx runtime', () => {
   });
 
   it('resolves deferred mutation form helpers against the nearest nested form scope', async () => {
+    const outer = declaredMutation('outer/save');
+    const inner = declaredMutation('inner/save');
     const rendered = await asyncHtml(
       runWithJsxRequestContext(
         {},
@@ -277,11 +352,11 @@ describe('server jsx runtime', () => {
         },
         () =>
           jsx('form', {
-            mutation: { key: 'outer/save' },
+            mutation: outer,
             children: [
               FieldError({ name: 'outerTitle' }),
               jsx('form', {
-                mutation: { key: 'inner/save' },
+                mutation: inner,
                 children: FieldError({ name: 'innerTitle' }),
               }),
             ],
@@ -295,6 +370,7 @@ describe('server jsx runtime', () => {
   });
 
   it('matches deferred mutation form helpers against tagged submitted form keys', async () => {
+    const addToCart = declaredMutation('cart/add');
     const formData = new FormData();
     formData.set('kovo-form-key', 'p2');
     formData.set('productId', 'p2');
@@ -319,12 +395,12 @@ describe('server jsx runtime', () => {
             children: [
               jsx('form', {
                 key: 'p1',
-                mutation: { key: 'cart/add' },
+                mutation: addToCart,
                 children: FormError({ code: 'OUT_OF_STOCK', message: 'p1 unavailable' }),
               }),
               jsx('form', {
                 key: 'p2',
-                mutation: { key: 'cart/add' },
+                mutation: addToCart,
                 children: FormError({
                   code: 'OUT_OF_STOCK',
                   message: (failure: { payload: { availableQuantity: number } }) =>
@@ -342,11 +418,12 @@ describe('server jsx runtime', () => {
   });
 
   it('does not render CSRF fields for csrf:false mutation forms but does render Kovo-Idem', () => {
+    const addToCart = csrfExemptMutation('cart/add');
     const rendered = html(
       runWithJsxRequestContext({ session: { id: 's1' } }, () =>
         jsx('form', {
           enhance: true,
-          mutation: { csrf: false, key: 'cart/add' },
+          mutation: addToCart,
           children: '',
         }),
       ),
@@ -365,7 +442,13 @@ describe('server jsx runtime', () => {
       secret: TEST_CSRF_SECRET,
       sessionId: (value: typeof request) => value.session.id,
     };
-    const addToCart = { csrf, key: 'cart/add' } as const;
+    const addToCart = mutation('cart/add', {
+      csrf,
+      input: s.object({}),
+      handler() {
+        return null;
+      },
+    });
 
     const rendered = html(
       runWithJsxRequestContext(request, () =>
@@ -388,9 +471,9 @@ describe('server jsx runtime', () => {
   it('rejects getter-bearing retained mutation key and csrf fields without invoking them', () => {
     for (const property of ['key', 'csrf'] as const) {
       let reads = 0;
-      const mutation: Record<string, unknown> = { csrf: false, key: 'cart/add' };
-      const attributes = mutationFormAttributes(mutation as never);
-      Object.defineProperty(mutation, property, {
+      const definition = csrfExemptMutation('cart/add');
+      const attributes = mutationFormAttributes(definition);
+      Object.defineProperty(definition, property, {
         configurable: true,
         enumerable: true,
         get() {
@@ -407,10 +490,11 @@ describe('server jsx runtime', () => {
   });
 
   it('rejects an empty retained mutation key before rendering a form action', () => {
+    const empty = csrfExemptMutation('');
     expect(() =>
       html(
         jsx('form', {
-          mutation: { csrf: false, key: '' },
+          mutation: empty,
           children: '',
         }),
       ),
@@ -432,8 +516,14 @@ describe('server jsx runtime', () => {
         secret: TEST_CSRF_SECRET,
         sessionId: (value: typeof request) => value.session.id,
       };
-      const mutation = { csrf, key: 'cart/add' };
-      const attributes = mutationFormAttributes(mutation as never);
+      const definition = mutation('cart/add', {
+        csrf,
+        input: s.object({}),
+        handler() {
+          return null;
+        },
+      });
+      const attributes = mutationFormAttributes(definition);
       Object.defineProperty(csrf, property, {
         configurable: true,
         enumerable: true,
@@ -469,8 +559,14 @@ describe('server jsx runtime', () => {
       secret: TEST_CSRF_SECRET,
       sessionId: (_value: typeof request) => undefined,
     };
-    const mutation = { csrf, key: 'cart/add' };
-    const attributes = mutationFormAttributes(mutation);
+    const definition = mutation('cart/add', {
+      csrf,
+      input: s.object({}),
+      handler() {
+        return null;
+      },
+    });
+    const attributes = mutationFormAttributes(definition);
     Object.defineProperty(anonymousCookie, 'name', {
       configurable: true,
       enumerable: true,
@@ -1144,13 +1240,13 @@ describe('server jsx runtime', () => {
   // No-JS forms must carry a fresh idem token each render so the server replay
   // store can dedup Back-resubmit / double-submit.
   it('A2: emits a Kovo-Idem hidden field for every mutation form', () => {
-    const addToCart = { key: 'cart/add' } as const;
+    const addToCart = declaredMutation('cart/add');
     const rendered = html(jsx('form', { mutation: addToCart, children: '' }));
     expect(rendered).toMatch(/name="Kovo-Idem" value="[^"]+"/);
   });
 
   it('A2: the Kovo-Idem value carries at least 128 exact cryptographic bits', () => {
-    const addToCart = { key: 'cart/add' } as const;
+    const addToCart = declaredMutation('cart/add');
     const rendered = html(jsx('form', { mutation: addToCart, children: '' }));
     const match = /name="Kovo-Idem" value="([^"]+)"/.exec(rendered);
     expect(match).not.toBeNull();
@@ -1159,7 +1255,7 @@ describe('server jsx runtime', () => {
   });
 
   it('A2: each render mints a distinct Kovo-Idem value (per-submit freshness)', () => {
-    const addToCart = { key: 'cart/add' } as const;
+    const addToCart = declaredMutation('cart/add');
     const html1 = html(jsx('form', { mutation: addToCart, children: '' }));
     const html2 = html(jsx('form', { mutation: addToCart, children: '' }));
     const match1 = /name="Kovo-Idem" value="([^"]+)"/.exec(html1);

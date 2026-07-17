@@ -37,6 +37,8 @@ describe('server JSX runtime types', () => {
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
 import { component, queryRef } from '@kovojs/core';
 import type { TrustedUrl } from '@kovojs/browser';
+import { mutation, s } from '@kovojs/server';
+import type { MutationFormDefinition } from '@kovojs/server';
 import type { JsxChild } from '@kovojs/server/jsx-runtime';
 
 type PanelProps = { title: string; children?: JsxChild };
@@ -95,11 +97,17 @@ const typedTrustedHref: TrustedUrl = trustedUrl('/typed-safe');
 const trustedTypedHref = <a href={typedTrustedHref}>Typed safe</a>;
 const trustedFormAction = <button formaction={trustedUrl('javascript:reviewed()')}>Go</button>;
 const trustedPoster = <video poster={trustedUrl('data:image/png;base64,AAAA')} />;
+const sendMessage = mutation({
+  input: s.object({}),
+  handler() { return null; },
+});
 const streaming = (
-  <form enhance stream mutation={{ key: 'chat/send' }}>
+  <form enhance stream mutation={sendMessage}>
     <p streamText="assistant:a1" aria-live="polite" />
   </form>
 );
+// @ts-expect-error SPEC §6.3/§6.6: structural objects cannot mint mutation form authority.
+const forgedMutation: MutationFormDefinition = { key: 'chat/send' };
 const uploadInput = <input type="file" accept="application/pdf" name="receipt" />;
 const kovoComponentOk = (
   <ProductCard productId="p1" selected style={{ color: 'red' }} kovo-key="p1">
@@ -142,6 +150,7 @@ void trustedTypedHref;
 void trustedFormAction;
 void trustedPoster;
 void streaming;
+void forgedMutation;
 void uploadInput;
 void kovoComponentOk;
 void plainFunctionComponentOk;

@@ -77,6 +77,10 @@ import { renderServerRenderable } from './renderable.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { isDocumentConfig, isStructuredDocumentNode } from './document-structured.js';
 import { revealUntrustedRequestValue } from './untrusted-request-body.js';
+import {
+  isDeclaredMutationDefinition,
+  type MutationFormDefinition,
+} from './mutation/definition.js';
 
 // Server-side JSX runtime. Components author JSX sugar (SPEC.md section 4.1)
 // and render to light-DOM HTML strings (SPEC.md section 3 pipeline, section
@@ -174,19 +178,25 @@ export function jsx(
     );
     return renderedHtml('');
   }
-  const attributes = renderJsxAttributes(type, intrinsicProps, key);
-  if (isVoidElement(type)) return renderedHtml(`<${type}${attributes}>`);
+  // HTML intrinsic identity is ASCII case-insensitive. The compiler already records `<fOrm>` as
+  // the host `form`; keep the runtime on the same identity so mutation/void/security semantics do
+  // not depend on authored casing. Function-valued `<Form>` components returned above never enter
+  // this string-host branch.
+  const intrinsicType = formHelperStringToLowerCase(type);
+  const attributes = renderJsxAttributes(intrinsicType, intrinsicProps, key);
+  if (isVoidElement(intrinsicType)) return renderedHtml(`<${type}${attributes}>`);
 
-  const children = renderJsxElementChildren(type, intrinsicProps);
-  const afterChildren = type === 'form' ? renderFormAfterChildrenContent(intrinsicProps, key) : '';
+  const children = renderJsxElementChildren(intrinsicType, intrinsicProps);
+  const afterChildren =
+    intrinsicType === 'form' ? renderFormAfterChildrenContent(intrinsicProps, key) : '';
   return isPromiseLike(children)
     ? formHelperPromiseThen(children, (html) =>
         renderedHtml(
-          `<${type}${attributes}>${renderFormChildrenContent(type, intrinsicProps, key, html)}${afterChildren}</${type}>`,
+          `<${type}${attributes}>${renderFormChildrenContent(intrinsicType, intrinsicProps, key, html)}${afterChildren}</${type}>`,
         ),
       )
     : renderedHtml(
-        `<${type}${attributes}>${renderFormChildrenContent(type, intrinsicProps, key, children)}${afterChildren}</${type}>`,
+        `<${type}${attributes}>${renderFormChildrenContent(intrinsicType, intrinsicProps, key, children)}${afterChildren}</${type}>`,
       );
 }
 
@@ -335,8 +345,10 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       const mutation = retainedMutationDefinition(value);
       if (mutation) {
         rendered += renderMutationFormAttributes(mutation.key, props);
-        continue;
       }
+      // `mutation` is compiler/runtime control metadata, never an authored HTML attribute. A
+      // structural lookalike is omitted rather than serialized after failing the private witness.
+      continue;
     }
     if (name === 'stream') {
       continue;
@@ -486,7 +498,14 @@ interface RetainedMutationDefinition {
 }
 
 function retainedMutationDefinition(value: unknown): RetainedMutationDefinition | undefined {
-  if (typeof value !== 'object' || value === null || formHelperIsArray(value)) return undefined;
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    formHelperIsArray(value) ||
+    !isDeclaredMutationDefinition(value)
+  ) {
+    return undefined;
+  }
   const key = retainedMutationOwnDataValue(value, 'key');
   if (typeof key !== 'string') return undefined;
   if (key.length === 0) {
@@ -1150,7 +1169,7 @@ export declare namespace JSX {
     method?: string;
     min?: AttributeValue;
     minLength?: AttributeValue;
-    mutation?: { key: string };
+    mutation?: MutationFormDefinition;
     name?: AttributeValue;
     onBlur?: (event?: unknown) => void;
     onChange?: (event?: unknown) => void;

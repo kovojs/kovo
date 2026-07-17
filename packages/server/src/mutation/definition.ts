@@ -15,6 +15,7 @@ import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
 import {
+  createWitnessWeakSet,
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
@@ -22,6 +23,8 @@ import {
   witnessIsArray,
   witnessObjectIs,
   witnessOwnKeys,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from '../security-witness-intrinsics.js';
 import type { TaskDefinition, TaskHandle } from '../task.js';
 import type { DurableTaskEnqueueInput } from '../task-queue.js';
@@ -29,6 +32,28 @@ import type { MutationStreamContext, MutationStreamSource } from './streaming.js
 import { validateMutationCsrfPosture } from './csrf-posture.js';
 
 declare const mutationRequestDbBrand: unique symbol;
+declare const mutationFormDefinitionBrand: unique symbol;
+
+// Keep the authority mint in the same private module scope as mutation(). If it lived in a shared
+// helper module, a production bundler would need to export the mint to this chunk and an app could
+// import that generated file by absolute URL even though package exports hide it.
+const declaredMutationDefinitions = createWitnessWeakSet<object>();
+
+function markDeclaredMutationDefinition<Definition extends object>(
+  definition: Definition,
+): Definition {
+  witnessWeakSetAdd(declaredMutationDefinitions, definition);
+  return definition;
+}
+
+/** @internal Test exact mutation() identity without exposing the authority mint. */
+export function isDeclaredMutationDefinition(value: unknown): value is object {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    witnessWeakSetHas(declaredMutationDefinitions, value)
+  );
+}
 
 /**
  * Framework-owned transaction-scoped database handle passed to mutation handlers
@@ -370,6 +395,7 @@ export type MutationCsrfDeclaration<Request = unknown> =
  * can inject the CSRF token into an enhanced form (SPEC §6.3/§9.1).
  */
 export interface MutationFormDefinition<Key extends string = string, Request = unknown> {
+  readonly [mutationFormDefinitionBrand]: 'kovo-mutation-form-definition';
   csrf?: CsrfOptions<Request> | false;
   enctype?: 'multipart/form-data';
   fileFields?: readonly string[];
@@ -440,9 +466,8 @@ export interface MutationFactory<Request = unknown> {
       'csrf' | 'csrfJustification' | 'key'
     > &
       MutationCsrfDeclaration<ContextRequest>,
-  ): MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest> & {
-    key: string;
-  };
+  ): MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest> &
+    MutationFormDefinition<string, ContextRequest>;
 }
 
 /**
@@ -493,9 +518,8 @@ export function mutation<
     'csrf' | 'csrfJustification' | 'key'
   > &
     MutationCsrfDeclaration<Request>,
-): MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest> & {
-  key: string;
-};
+): MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest> &
+  MutationFormDefinition<string, Request>;
 export function mutation<
   const Key extends string,
   InputSchema extends Schema<unknown>,
@@ -510,11 +534,12 @@ export function mutation<
     'csrf' | 'csrfJustification' | 'key'
   > &
     MutationCsrfDeclaration<Request>,
-): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key };
+): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> &
+  MutationFormDefinition<Key, Request>;
 export function mutation(
   keyOrDefinition: string | Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
   definition?: Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
-): MutationDefinition<string> & { key: string } {
+): MutationDefinition<string> & MutationFormDefinition<string> {
   if (typeof keyOrDefinition === 'string') {
     if (definition === undefined) {
       throw new TypeError('mutation(key, definition) requires a definition object.');
@@ -525,15 +550,19 @@ export function mutation(
       closedDefinition.queue === true
         ? keyOrDefinition
         : normalizeMutationQueue(closedDefinition.queue);
-    return pinAccessDecision(
-      {
-        ...closedDefinition,
-        ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
-        key: keyOrDefinition,
-        ...(queue === undefined ? {} : { queue }),
-      } as MutationDefinition<string> & { key: string },
-      closedDefinition.access,
-    );
+    return markDeclaredMutationDefinition(
+      pinAccessDecision(
+        {
+          ...closedDefinition,
+          ...(fileFields.length === 0
+            ? {}
+            : { enctype: 'multipart/form-data' as const, fileFields }),
+          key: keyOrDefinition,
+          ...(queue === undefined ? {} : { queue }),
+        } as MutationDefinition<string> & { key: string },
+        closedDefinition.access,
+      ),
+    ) as MutationDefinition<string> & MutationFormDefinition<string>;
   }
 
   // SPEC §6.3: app authors may write `mutation({ input, handler })`; the stable wire key is
@@ -543,14 +572,16 @@ export function mutation(
   const closedDefinition = snapshotMutationDefinition(keyOrDefinition);
   const fileFields = mutationInputFileFields(closedDefinition.input);
   const queue = normalizeMutationQueue(closedDefinition.queue);
-  return pinAccessDecision(
-    {
-      ...closedDefinition,
-      ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
-      ...(queue === undefined ? {} : { queue }),
-    } as MutationDefinition<string> & { key: string },
-    closedDefinition.access,
-  );
+  return markDeclaredMutationDefinition(
+    pinAccessDecision(
+      {
+        ...closedDefinition,
+        ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
+        ...(queue === undefined ? {} : { queue }),
+      } as MutationDefinition<string> & { key: string },
+      closedDefinition.access,
+    ),
+  ) as MutationDefinition<string> & MutationFormDefinition<string>;
 }
 
 function snapshotMutationDefinition(
@@ -630,6 +661,11 @@ export function mutationFormAttributes<const Key extends string, Request = unkno
   if (typeof definition !== 'object' || definition === null || witnessIsArray(definition)) {
     throw new TypeError('mutationFormAttributes() requires a stable mutation definition object.');
   }
+  if (!isDeclaredMutationDefinition(definition)) {
+    throw new TypeError(
+      'mutationFormAttributes() requires the exact definition returned by mutation().',
+    );
+  }
   const key = mutationFormDefinitionKey(definition);
   mutationFormDefinitionOwnDataValue(definition, 'csrf');
   const declaredFileFields = mutationFormDefinitionOwnDataValue(definition, 'fileFields');
@@ -655,7 +691,7 @@ export function mutationFormAttributes<const Key extends string, Request = unkno
  * from the typed mutation definition.
  */
 export function renderMutationFormAttributes<const Key extends string>(
-  definition: Pick<MutationDefinition<Key>, 'key'>,
+  definition: MutationFormDefinition<Key>,
 ): string {
   const attributes = mutationFormAttributes(definition);
   return `method="${attributes.method}" action="${escapeAttribute(

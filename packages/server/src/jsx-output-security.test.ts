@@ -10,6 +10,17 @@ import { component, FieldError, FormError } from '@kovojs/core';
 import { renderedHtml, renderHtmlValue } from './html.js';
 import { currentJsxMutationFormHelperRegistry, runWithJsxRequestContext } from './jsx-context.js';
 import { Fragment, jsx, type JsxChild } from './jsx-runtime.js';
+import { mutation } from './mutation.js';
+import { s } from './schema.js';
+
+const postSaveMutation = mutation('post/save', {
+  csrf: false,
+  csrfJustification: 'test fixture exercises server JSX output assembly',
+  input: s.object({}),
+  handler() {
+    return null;
+  },
+});
 
 describe('JSX output authority security', () => {
   it('escapes raw strings from runtime-constructed component renderers', async () => {
@@ -268,7 +279,7 @@ describe('JSX output authority security', () => {
             mutationKey: 'post/save',
           },
         },
-        () => jsx('form', { mutation: { key: 'post/save' }, children: promisedChildren }),
+        () => jsx('form', { mutation: postSaveMutation, children: promisedChildren }),
       );
       rendered = await rendered;
     } finally {
@@ -304,7 +315,7 @@ describe('JSX output authority security', () => {
         if (this[0] === ' method="post"') return payload;
         return Reflect.apply(originalJoin, this, [separator]) as string;
       };
-      rendered = renderHtmlValue(jsx('form', { mutation: { key: 'post/save' }, children: '' }));
+      rendered = renderHtmlValue(jsx('form', { mutation: postSaveMutation, children: '' }));
     } finally {
       Array.prototype.join = originalJoin;
     }
@@ -361,7 +372,7 @@ describe('JSX output authority security', () => {
         const codes = ['BLOCKED'];
         const deferred = jsx(FormError, { code: codes, message: 'Pinned blocked message.' });
         codes[0] = 'OTHER';
-        return jsx('form', { mutation: { key: 'post/save' }, children: deferred });
+        return jsx('form', { mutation: postSaveMutation, children: deferred });
       },
     );
 

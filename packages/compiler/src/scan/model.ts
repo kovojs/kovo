@@ -143,6 +143,8 @@ export interface CallExpressionModel {
   argumentTemporalReads: readonly (readonly TemporalReadModel[])[];
   end: number;
   exportedConstName?: string;
+  /** Parser-owned exact framework factory identity; a same-named local function never receives it. */
+  frameworkFactory?: 'endpoint' | 'mutation' | 'task' | 'webhook';
   name: string;
   start: number;
 }

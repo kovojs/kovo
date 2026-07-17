@@ -364,12 +364,25 @@ export function parseComponentModule(
       ts.isCallExpression(node) &&
       (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression))
     ) {
-      compilerArrayAppend(calls, callExpressionModel(sourceFile, source, node), 'Call models');
       const factoryIdentity = canonicalFrameworkExportForExpression(
         ts as FrameworkIdentityTypeScript,
         sourceFile,
         node.expression,
         { legacyGlobals: SERVER_CALL_FACTORY_IDENTITIES },
+      );
+      const frameworkFactory = frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)
+        ? 'endpoint'
+        : frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)
+          ? 'mutation'
+          : frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)
+            ? 'task'
+            : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
+              ? 'webhook'
+              : undefined;
+      compilerArrayAppend(
+        calls,
+        callExpressionModel(sourceFile, source, node, frameworkFactory),
+        'Call models',
       );
       if (frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)) {
         appendDenseValues(
@@ -4941,6 +4954,7 @@ function callExpressionModel(
   sourceFile: ts.SourceFile,
   source: string,
   node: ts.CallExpression,
+  frameworkFactory: CallExpressionModel['frameworkFactory'],
 ): CallExpressionModel {
   const argumentSources: string[] = [];
   const argumentArrowFunctionParts: (ArrowFunctionPartsModel | null)[] = [];
@@ -5008,6 +5022,7 @@ function callExpressionModel(
     argumentTemporalReads,
     end: node.getEnd(),
     ...exportedConstInitializerName(node),
+    ...(frameworkFactory === undefined ? {} : { frameworkFactory }),
     name: node.expression.getText(sourceFile),
     start: node.getStart(sourceFile),
   };

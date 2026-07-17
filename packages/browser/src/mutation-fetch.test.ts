@@ -220,7 +220,9 @@ describe('enhanced mutation fetch', () => {
       fetch: async () => ({
         headers: {
           get(name: string) {
-            return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+            const normalized = name.toLowerCase();
+            if (normalized === 'content-type') return 'text/vnd.kovo.fragment+html';
+            return normalized === 'kovo-session-transition' ? 'reload' : null;
           },
         },
         ok: true,
@@ -251,7 +253,9 @@ describe('enhanced mutation fetch', () => {
         body: streamBody,
         headers: {
           get(name: string) {
-            return name.toLowerCase() === 'kovo-session-transition' ? 'reload' : null;
+            const normalized = name.toLowerCase();
+            if (normalized === 'content-type') return 'text/vnd.kovo.fragment+html';
+            return normalized === 'kovo-session-transition' ? 'reload' : null;
           },
         },
         ok: true,

@@ -164,6 +164,24 @@ export async function fetchEnhancedMutation(
   assertSameOriginMutationResponse(response, transport, security);
   const failed = isFailedBoundMutationResponse(response, security);
   securityWeakMapSet(mutationResponseFailures, response, failed);
+  const status = responseStatus(response, security, 0);
+  const redirectLocation = readSuccessfulRedirectLocation(response, security);
+  // SPEC §9.1: Kovo response directives carry authority only inside the exact mutation media
+  // envelope. Ordinary same-origin HTTP redirects remain usable without a fragment body, but a
+  // text/html response cannot promote Kovo-* lookalike headers into session or DOM authority.
+  if (!isMutationFragmentContentType(response, security)) {
+    if (redirectLocation) {
+      followSuccessfulMutationRedirect(redirectLocation, security);
+      return {
+        body: '',
+        changes: [],
+        idem,
+        response,
+        targets: targetSnapshot.targets,
+      };
+    }
+    throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
+  }
   const sessionTransition = readSessionTransition(response, security);
   // SPEC §9.3 (bugz-25 M6): response headers are observable before the body settles. A slow
   // custom auth response must not leave the old-principal BroadcastChannel alive while text or a
@@ -181,7 +199,6 @@ export async function fetchEnhancedMutation(
       targets: targetSnapshot.targets,
     };
   }
-  const status = responseStatus(response, security, 0);
   const reauth = security.readHeader(response, 'Kovo-Reauth');
   if (status === 401 && reauth) {
     // C180 / SPEC §6.5/§9.3: Kovo-Reauth means the page-load principal is no longer
@@ -197,7 +214,6 @@ export async function fetchEnhancedMutation(
       targets: targetSnapshot.targets,
     };
   }
-  const redirectLocation = readSuccessfulRedirectLocation(response, security);
   if (redirectLocation) {
     followSuccessfulMutationRedirect(redirectLocation, security);
     return {
@@ -208,7 +224,6 @@ export async function fetchEnhancedMutation(
       targets: targetSnapshot.targets,
     };
   }
-  assertMutationFragmentContentType(response, security);
   const changesHeader = security.readHeader(response, 'Kovo-Changes');
   const changes = readMutationChangeHeader(
     { headers: { get: (name) => (name === 'Kovo-Changes' ? (changesHeader ?? null) : null) } },
@@ -357,10 +372,10 @@ function assertSameOriginMutationResponse(
   }
 }
 
-function assertMutationFragmentContentType(
+function isMutationFragmentContentType(
   response: EnhancedMutationResponseLike,
   security: BrowserNavigationSecurityControls,
-): void {
+): boolean {
   const contentType = security.readHeader(response, 'Content-Type');
   const separator = typeof contentType === 'string' ? security.indexOf(contentType, ';') : -1;
   const mediaType =
@@ -369,9 +384,7 @@ function assertMutationFragmentContentType(
           security.trim(separator < 0 ? contentType : security.slice(contentType, 0, separator)),
         )
       : '';
-  if (mediaType !== 'text/vnd.kovo.fragment+html') {
-    throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
-  }
+  return mediaType === 'text/vnd.kovo.fragment+html';
 }
 
 function readSessionTransition(

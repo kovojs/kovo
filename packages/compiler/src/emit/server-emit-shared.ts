@@ -6,15 +6,12 @@ import {
   compilerCreateSet,
   compilerJsonStringify,
   compilerMapGet,
-  compilerObjectKeys,
   compilerOwnDataValue,
-  compilerRegExpReplace,
   compilerRegExpTest,
   compilerSetAdd,
   compilerSetHas,
   compilerSnapshotDenseArray,
   compilerStringReplaceAll,
-  compilerStringStartsWith,
   compilerStringToLowerCase,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
@@ -26,7 +23,7 @@ import {
 import type { ComponentModuleModel, JsxAttributeModel, JsxElementModel } from '../scan/parse.js';
 import { componentOptionObjectEntries, componentRenderSlotsParam } from '../scan/parse.js';
 import { mutationInputFactsFromSource } from '../scan/mutation-inputs.js';
-import { deriveMutationKey } from '../mutation-names.js';
+import { localMutationKey } from '../mutation-form-binding.js';
 import {
   enhancedMutationFormBinding,
   isIntrinsicHtmlElement,
@@ -564,54 +561,7 @@ export function submittedFormCsrfReplacement(
   };
 }
 
-export function localMutationKey(
-  model: ComponentModuleModel,
-  localName: string,
-  registryFacts?: RegistryFacts,
-  fileName?: string,
-): string | null {
-  const calls = compilerSnapshotDenseArray(model.calls, 'Mutation declaration calls');
-  for (let index = 0; index < calls.length; index += 1) {
-    const candidate = calls[index]!;
-    if (
-      candidate.name === 'mutation' &&
-      candidate.exportedConstName === localName &&
-      typeof candidate.argumentStaticValues[0] === 'string'
-    ) {
-      return candidate.argumentStaticValues[0] as string;
-    }
-  }
-
-  for (let index = 0; index < calls.length; index += 1) {
-    const candidate = calls[index]!;
-    if (candidate.name !== 'mutation' || candidate.exportedConstName !== localName) continue;
-    const args = compilerSnapshotDenseArray(candidate.arguments, 'Mutation call arguments');
-    if (
-      args.length === 1 &&
-      compilerStringStartsWith(compilerRegExpReplace(/^\s+/, args[0]!, ''), '{') &&
-      fileName
-    ) {
-      return deriveMutationKey(fileName, localName);
-    }
-  }
-
-  const mutations = registryFacts?.mutations;
-  if (mutations === undefined) return null;
-  const keys = compilerObjectKeys(mutations);
-  for (let index = 0; index < keys.length; index += 1) {
-    const key = keys[index]!;
-    const typeSource = compilerOwnDataValue(mutations, key, 'Registry mutation type');
-    if (
-      typeof typeSource === 'string' &&
-      compilerStringTrim(typeSource) === `typeof ${localName}`
-    ) {
-      return key;
-    }
-  }
-  return null;
-}
-
-export { enhancedMutationFormBinding };
+export { enhancedMutationFormBinding, localMutationKey };
 
 export function staticStringAttributeValue(
   attribute: JsxAttributeModel | undefined,

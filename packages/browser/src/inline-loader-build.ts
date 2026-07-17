@@ -1534,8 +1534,24 @@ function installInlineKovoLoader(im) {
           throw new TypeError('Kovo refused an enhanced mutation response without same-origin URL proof.');
         }
         const status = rsp(response);
-        // SPEC §9.3: retirement wins over every redirect/body channel; a response carrying
-        // conflicting metadata cannot keep the old page-load principal alive.
+        const redirected = bns.readResponseField(response, 'redirected') === true;
+        const redirect = status >= 300 && status < 400
+          ? bns.readHeader(response, 'Location')
+          : redirected && typeof responseUrl === 'string'
+            ? responseUrl
+            : '';
+        // SPEC §9.1: Kovo response directives carry authority only inside the exact mutation
+        // media envelope. A standard same-origin HTTP redirect needs no fragment body, but
+        // text/html cannot promote Kovo-* lookalike headers into session or DOM authority.
+        if (mt(response) !== 'text/vnd.kovo.fragment+html') {
+          if (redirect) {
+            ng(redirect);
+            return;
+          }
+          throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
+        }
+        // SPEC §9.3: inside an authenticated mutation envelope, retirement wins over every
+        // redirect/body channel so conflicting metadata cannot preserve the old principal.
         if (rst(response)) {
           retireSession();
           return;
@@ -1548,18 +1564,9 @@ function installInlineKovoLoader(im) {
           ng(bns.safeSameOriginPath(reauth) || '/');
           return;
         }
-        const redirected = bns.readResponseField(response, 'redirected') === true;
-        const redirect = status >= 300 && status < 400
-          ? bns.readHeader(response, 'Location')
-          : redirected && typeof responseUrl === 'string'
-            ? responseUrl
-            : '';
         if (redirect) {
           ng(redirect);
           return;
-        }
-        if (mt(response) !== 'text/vnd.kovo.fragment+html') {
-          throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
         }
         const responseBody = bns.readResponseField(response, 'body');
         const failed = status >= 400 || bns.readResponseField(response, 'ok') === false;

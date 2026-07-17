@@ -613,6 +613,7 @@ export const OwnedSpreads = component({
   ),
 });
 `,
+      registryFacts: { mutations: { 'account/save': 'typeof save' } },
     });
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 

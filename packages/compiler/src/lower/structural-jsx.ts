@@ -48,6 +48,7 @@ import {
   mutationFormTransportAttributeName,
   mutationSubmitterTransportAttributeName,
 } from '../mutation-form-provenance.js';
+import { localMutationKey } from '../mutation-form-binding.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import {
   bindPropStampAttributeName,
@@ -197,7 +198,7 @@ export function lowerStructuralJsx(
 
   appendCompilerFacts(
     diagnostics,
-    mutationFormProvenanceDiagnostics(tree.elements, options),
+    mutationFormProvenanceDiagnostics(tree.elements, model, options),
     'Mutation form provenance diagnostics',
   );
   lowerPrimitiveSpreads(tree.elements);
@@ -339,6 +340,7 @@ export function lowerStructuralJsx(
  */
 function mutationFormProvenanceDiagnostics(
   elements: readonly JsxIrElement[],
+  model: ComponentModuleModel,
   options: StructuralJsxLoweringOptions,
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
@@ -353,7 +355,17 @@ function mutationFormProvenanceDiagnostics(
     const source = element.element;
     if (!isIntrinsicHtmlElement(source, 'form')) continue;
 
-    const binding = enhancedMutationFormBinding(source);
+    const syntacticBinding = enhancedMutationFormBinding(source);
+    const binding =
+      syntacticBinding !== null &&
+      localMutationKey(
+        model,
+        syntacticBinding.localName,
+        options.registryFacts,
+        options.fileName,
+      ) !== null
+        ? syntacticBinding
+        : null;
     if (binding !== null) {
       appendCompilerFact(mutationForms, element, 'Proven mutation form elements');
     }
@@ -403,14 +415,25 @@ function mutationFormProvenanceDiagnostics(
         spreadIndex,
         'Mutation form provenance spreads',
       ) as (typeof source.spreadAttributes)[number];
-      if (isMutationFormAttributesSpread(spread)) continue;
+      if (
+        isMutationFormAttributesSpread(spread) &&
+        spread.expressionCallArgumentBareIdentifierName !== undefined &&
+        localMutationKey(
+          model,
+          spread.expressionCallArgumentBareIdentifierName,
+          options.registryFacts,
+          options.fileName,
+        ) !== null
+      ) {
+        continue;
+      }
       if (isImportedMutationFormAttributesCall(spread)) {
         appendCompilerFact(
           diagnostics,
           mutationFormProvenanceDiagnostic(
             options,
             spread,
-            'mutationFormAttributes(...) requires a bare mutation binding so the compiler can prove its mutation identity',
+            'mutationFormAttributes(...) requires a compiler-proven mutation() declaration or generated registry binding',
           ),
           'Mutation form provenance diagnostics',
         );
@@ -458,6 +481,29 @@ function mutationFormProvenanceDiagnostics(
       continue;
     }
     const associatedMutationForm = mutationFormForSubmitter(element, mutationForms);
+    const directTransport = mutationSubmitterDirectTransport(element.element);
+    if (
+      associatedMutationForm === null &&
+      directTransport.hasFormAssociation &&
+      directTransport.overrides.length > 0
+    ) {
+      for (
+        let overrideIndex = 0;
+        overrideIndex < directTransport.overrides.length;
+        overrideIndex += 1
+      ) {
+        const attribute = directTransport.overrides[overrideIndex]!;
+        appendCompilerFact(
+          diagnostics,
+          mutationFormProvenanceDiagnostic(
+            options,
+            attribute,
+            `${attribute.name} on an externally associated submitter cannot be proven separate from a typed mutation form; use a separate native form`,
+          ),
+          'External mutation submitter diagnostics',
+        );
+      }
+    }
     const spreads = compilerSnapshotDenseArray(
       element.element.spreadAttributes,
       'Mutation submitter provenance spreads',
@@ -504,6 +550,11 @@ function mutationFormProvenanceDiagnostics(
       removeJsxIrSourceAttribute(element, spread);
     }
   }
+  appendCompilerFacts(
+    diagnostics,
+    componentMutationSubmitterOverrideDiagnostics(elements, model, mutationForms, options),
+    'Component mutation submitter diagnostics',
+  );
   return diagnostics;
 }
 
@@ -528,6 +579,118 @@ function mutationFormForSubmitter(
     if (descendant || (controlFormId !== null && formId === controlFormId)) return form;
   }
   return null;
+}
+
+function mutationSubmitterDirectTransport(element: JsxElementModel): {
+  hasFormAssociation: boolean;
+  overrides: JsxAttributeModel[];
+} {
+  let hasFormAssociation = false;
+  const overrides: JsxAttributeModel[] = [];
+  const attributes = compilerSnapshotDenseArray(
+    element.attributes,
+    'Direct mutation submitter attributes',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (mutationFormControlIsStaticallyAbsent(attribute)) continue;
+    const transport = mutationSubmitterTransportAttributeName(attribute.name);
+    if (transport === 'form') {
+      hasFormAssociation = true;
+    } else if (transport !== null) {
+      appendCompilerFact(overrides, attribute, 'Direct mutation submitter overrides');
+    }
+  }
+  return { hasFormAssociation, overrides };
+}
+
+function componentMutationSubmitterOverrideDiagnostics(
+  elements: readonly JsxIrElement[],
+  model: ComponentModuleModel,
+  mutationForms: readonly JsxIrElement[],
+  options: StructuralJsxLoweringOptions,
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const pending: string[] = [];
+  const seen = compilerCreateSet<string>();
+  const elementSnapshot = compilerSnapshotDenseArray(
+    elements,
+    'Component mutation submitter elements',
+  );
+  const formSnapshot = compilerSnapshotDenseArray(
+    mutationForms,
+    'Component mutation submitter forms',
+  );
+
+  for (let formIndex = 0; formIndex < formSnapshot.length; formIndex += 1) {
+    const form = formSnapshot[formIndex]!.element;
+    for (let elementIndex = 0; elementIndex < elementSnapshot.length; elementIndex += 1) {
+      const candidate = elementSnapshot[elementIndex]!;
+      if (
+        candidate.element.start < form.openingEnd ||
+        candidate.element.end > form.closingStart ||
+        !isComponentTag(candidate.tag)
+      ) {
+        continue;
+      }
+      appendCompilerFact(pending, candidate.tag, 'Nested mutation form components');
+    }
+  }
+
+  const components = compilerSnapshotDenseArray(
+    model.components,
+    'Component mutation submitter definitions',
+  );
+  for (let pendingIndex = 0; pendingIndex < pending.length; pendingIndex += 1) {
+    const localName = pending[pendingIndex]!;
+    if (compilerSetHas(seen, localName)) continue;
+    compilerSetAdd(seen, localName);
+
+    let component: (typeof components)[number] | undefined;
+    for (let componentIndex = 0; componentIndex < components.length; componentIndex += 1) {
+      if (components[componentIndex]!.localName === localName) {
+        component = components[componentIndex];
+        break;
+      }
+    }
+    const componentStart = component?.localNameSpan?.start;
+    if (component === undefined || componentStart === undefined) continue;
+
+    for (let elementIndex = 0; elementIndex < elementSnapshot.length; elementIndex += 1) {
+      const candidate = elementSnapshot[elementIndex]!;
+      if (
+        candidate.element.start < componentStart ||
+        candidate.element.end > component.declarationEnd
+      ) {
+        continue;
+      }
+      if (isComponentTag(candidate.tag)) {
+        appendCompilerFact(pending, candidate.tag, 'Nested mutation form components');
+        continue;
+      }
+      if (
+        !isIntrinsicHtmlElement(candidate.element, 'button') &&
+        !isIntrinsicHtmlElement(candidate.element, 'input')
+      ) {
+        continue;
+      }
+      const transport = mutationSubmitterDirectTransport(candidate.element);
+      for (let overrideIndex = 0; overrideIndex < transport.overrides.length; overrideIndex += 1) {
+        const attribute = transport.overrides[overrideIndex]!;
+        appendCompilerFact(
+          diagnostics,
+          mutationFormProvenanceDiagnostic(
+            options,
+            attribute,
+            `component-rendered ${attribute.name} cannot override a typed mutation form transport; use a separate native form`,
+          ),
+          'Component mutation submitter diagnostics',
+        );
+      }
+    }
+  }
+
+  return diagnostics;
 }
 
 function removeJsxIrSourceAttribute(

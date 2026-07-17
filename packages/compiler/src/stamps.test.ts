@@ -729,7 +729,7 @@ export const ShadowedMutationHelper = component({
 
     expect(messages).toEqual([
       expect.stringContaining(
-        'mutationFormAttributes(...) requires a bare mutation binding so the compiler can prove its mutation identity',
+        'mutationFormAttributes(...) requires a compiler-proven mutation() declaration or generated registry binding',
       ),
     ]);
     expect(serverSource).not.toContain('{...formAttributes(selectMutation(save))}');

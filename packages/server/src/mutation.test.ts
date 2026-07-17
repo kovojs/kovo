@@ -405,12 +405,14 @@ describe('server mutation lifecycle', () => {
   it('rejects getter-bearing retained mutation fields without invoking them', () => {
     for (const property of ['key', 'input', 'fileFields', 'csrf'] as const) {
       let reads = 0;
-      const definition: Record<string, unknown> = {
+      const definition = defineMutation('proof/write', {
         csrf: false,
-        fileFields: [],
+        csrfJustification: 'test fixture probes retained mutation descriptors',
         input: s.object({ value: s.string() }),
-        key: 'proof/write',
-      };
+        handler() {
+          return null;
+        },
+      });
       Object.defineProperty(definition, property, {
         configurable: true,
         enumerable: true,
@@ -425,6 +427,17 @@ describe('server mutation lifecycle', () => {
       );
       expect(reads).toBe(0);
     }
+  });
+
+  it('rejects structurally forged mutation form definitions at runtime', () => {
+    expect(() =>
+      mutationFormAttributes({
+        csrf: false,
+        fileFields: [],
+        input: undefined,
+        key: 'account/delete',
+      } as never),
+    ).toThrow('mutationFormAttributes() requires the exact definition returned by mutation().');
   });
 
   it('uses compiler-derived keys on object-form mutation values', () => {
