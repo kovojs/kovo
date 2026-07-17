@@ -16,7 +16,7 @@ rendering, Better Auth, and managed SQL.
 | -------- | ---: | -----: |
 | High     |    0 |     17 |
 | Medium   |    2 |     15 |
-| Low      |    1 |      3 |
+| Low      |    0 |      4 |
 
 ## High
 
@@ -428,15 +428,17 @@ rendering, Better Auth, and managed SQL.
 
 ## Low
 
-- [ ] **L4 - Stored upload filenames could preserve Unicode bidi spoofing into WebKit downloads.**
+- [x] **L4 - Stored upload filenames could preserve Unicode bidi spoofing into WebKit downloads.**
   - Upload filename sanitization removed paths and C0 controls but retained directional formatting
     controls in RFC 8187 `filename*`. A remote uploader could use U+202E to make a downloaded
     executable's trailing name appear reversed in WebKit download UX (SPEC §6.6/§9.1).
   - **Evidence:** the exact stored-file serializer emitted
     `filename*=UTF-8''invoice%E2%80%AEfdp.exe`; Playwright WebKit preserved U+202E in its suggested
     filename while Chromium and Firefox selected the ASCII fallback.
-  - **Open:** neutralize Unicode bidi formatting controls at the shared runtime/generated
-    Content-Disposition sink and at upload metadata ingestion, with browser and generated parity.
+  - **Fixed:** `42d87bf46` replaces the complete Unicode bidi-control set at upload metadata
+    ingestion and again at the shared live/generated Content-Disposition sink (SPEC §6.6/§9.1).
+  - **Evidence:** focused upload/response/generated/source-sink matrix 145/145; Chromium, Firefox,
+    and WebKit all report the neutralized `invoice_fdp.exe` suggested filename.
 
 - [x] **L1 - The Vercel preset copied framework metadata files into the public static root.**
   - `_headers` and `kovo-static-manifest.json` disclosed internal deploy/header metadata even though
@@ -476,5 +478,7 @@ rendering, Better Auth, and managed SQL.
   API, and TCB gates passed.
 - Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
-- Final exact-tip remote-boundary review remains open until H11 lands and the remaining fresh
-  rendering/static pass plus full gates complete without a new reachable issue.
+- Bidi filename live/generated/source-sink matrix: 145/145; three-engine download regression and
+  the C13 classifier corpus passed.
+- Final exact-tip remote-boundary review remains open until the fresh parser/browser-content passes
+  and full serial gates complete without a new remotely reachable issue.
