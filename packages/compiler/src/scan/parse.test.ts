@@ -1638,6 +1638,43 @@ export const SpreadShapes = component({
     ]);
   });
 
+  it('records complete classifier-only HTML wire entries without widening static lowering', () => {
+    const source = `
+const TYPE = 'type';
+const NAME = 'name';
+export const WireSpreads = component({
+  render: ({ profile }) => <form>
+    <input {...{ [TYPE]: 'hidden', [NAME]: '_charset_' }} />
+    <input {...{ TYPE: false, type: 'hidden', NAME: null, name: '_charset_' }} />
+    <input {...{ ...{ type: 'hidden' }, name: '_charset_' }} />
+    <input {...{ ...profile.attributes, name: '_charset_' }} />
+  </form>,
+});
+`;
+    const spreads = jsxElements(parseComponentModule('wire-spreads.tsx', source))
+      .filter((element) => element.tag === 'input')
+      .map((element) => element.spreadAttributes[0]);
+
+    expect(spreads[0]?.objectEntries).toBeUndefined();
+    expect(spreads[0]?.staticWireAttributeEntries).toEqual([
+      { key: 'type', staticValue: 'hidden' },
+      { key: 'name', staticValue: '_charset_' },
+    ]);
+    expect(spreads[1]?.staticWireAttributeEntries).toEqual([
+      { key: 'TYPE', staticValue: false },
+      { key: 'type', staticValue: 'hidden' },
+      { key: 'NAME', staticValue: null },
+      { key: 'name', staticValue: '_charset_' },
+    ]);
+    expect(spreads[2]?.objectEntries).toBeUndefined();
+    expect(spreads[2]?.staticWireAttributeEntries).toEqual([
+      { key: 'type', staticValue: 'hidden' },
+      { key: 'name', staticValue: '_charset_' },
+    ]);
+    expect(spreads[3]?.objectEntries).toBeUndefined();
+    expect(spreads[3]?.staticWireAttributeEntries).toBeUndefined();
+  });
+
   it('records mutation form controls across partial spreads, aliases, and static computed names', () => {
     const source = `
 const mutationName = 'data-mutation';

@@ -90,6 +90,7 @@ import type {
   RenderSlotsModel,
   SourceSpan,
   StateReturnObjectModel,
+  StaticJsxWireAttributeEntry,
   StringRenderModel,
   TaskRunHandlerModel,
   TemporalReadModel,
@@ -105,6 +106,11 @@ ensureTypescriptRuntime(ts);
 
 interface ComponentFactoryBindings {
   readonly sourceFile: ts.SourceFile;
+}
+
+interface ModuleScopeStaticStringBinding {
+  readonly identifier: ts.Identifier;
+  readonly value: string;
 }
 
 const COMPONENT_FACTORY_IDENTITY = frameworkExport('@kovojs/core', 'component');
@@ -302,6 +308,7 @@ export function parseComponentModule(
   const webhookHandlers: WebhookHandlerModel[] = [];
   const moduleScopeObjectEntries = moduleScopeObjectEntryModels(sourceFile, source);
   const moduleScopeMutationFormControlNames = moduleScopeMutationFormControlNameModels(sourceFile);
+  const moduleScopeStaticStringBindings = moduleScopeConstStaticStringBindings(sourceFile);
   const domainBindings = domainBindingKeys(sourceFile);
 
   const visit = (node: ts.Node): void => {
@@ -344,6 +351,7 @@ export function parseComponentModule(
           node,
           moduleScopeObjectEntries,
           moduleScopeMutationFormControlNames,
+          moduleScopeStaticStringBindings,
           namedImports,
         ),
         'JSX element models',
@@ -769,6 +777,66 @@ function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<s
     }
   }
 
+  return strings;
+}
+
+/**
+ * Module constants that may name a computed object property without runtime ambiguity.
+ * Unlike the older broad string-value inventory, this keeps the declaration identity so a local
+ * shadow or duplicate module binding makes the security fact unknown rather than manufacturing a
+ * static key (SPEC §5.2 rule 10).
+ */
+function moduleScopeConstStaticStringBindings(
+  sourceFile: ts.SourceFile,
+): ReadonlyMap<string, ModuleScopeStaticStringBinding> {
+  const strings = compilerCreateMap<string, ModuleScopeStaticStringBinding>();
+  const statementLength = compilerArrayLength(
+    sourceFile.statements,
+    'Module-scope const string statements',
+  );
+  for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Module-scope const string statements',
+    ) as ts.Statement | undefined;
+    if (!statement) {
+      throw new TypeError(
+        `Module-scope const string statements[${statementIndex}] must be own data.`,
+      );
+    }
+    if (!ts.isVariableStatement(statement)) continue;
+    const declarations = statement.declarationList.declarations;
+    const declarationLength = compilerArrayLength(
+      declarations,
+      'Module-scope const string declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarationLength; declarationIndex += 1) {
+      const declaration = compilerOwnDataValue(
+        declarations,
+        declarationIndex,
+        'Module-scope const string declarations',
+      ) as ts.VariableDeclaration | undefined;
+      if (!declaration) {
+        throw new TypeError(
+          `Module-scope const string declarations[${declarationIndex}] must be own data.`,
+        );
+      }
+      if (
+        !isConstVariableDeclaration(declaration) ||
+        !ts.isIdentifier(declaration.name) ||
+        declaration.initializer === undefined
+      ) {
+        continue;
+      }
+      const value = staticLiteralValue(declaration.initializer);
+      if (typeof value !== 'string') continue;
+      compilerMapSet(strings, declaration.name.text, {
+        identifier: declaration.name,
+        value,
+      });
+    }
+  }
   return strings;
 }
 
@@ -4500,6 +4568,7 @@ function jsxElementModel(
   node: ts.JsxElement | ts.JsxSelfClosingElement,
   moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
   moduleScopeMutationFormControlNames: ReadonlyMap<string, readonly string[]>,
+  moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
   namedImports: readonly NamedImportModel[],
 ): JsxElementModel {
   const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
@@ -4540,6 +4609,7 @@ function jsxElementModel(
       openingElement,
       moduleScopeObjectEntries,
       moduleScopeMutationFormControlNames,
+      moduleScopeStaticStringBindings,
       namedImports,
       unreviewedComponentTag,
     ),
@@ -4644,6 +4714,7 @@ function jsxSpreadAttributeModels(
   openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
   moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
   moduleScopeMutationFormControlNames: ReadonlyMap<string, readonly string[]>,
+  moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
   namedImports: readonly NamedImportModel[],
   unreviewedComponentTag: boolean,
 ): JsxElementModel['spreadAttributes'][number][] {
@@ -4696,6 +4767,13 @@ function jsxSpreadAttributeModels(
       : bareIdentifierName === undefined
         ? undefined
         : compilerMapGet(moduleScopeObjectEntries, bareIdentifierName);
+    const staticWireAttributeEntries = ts.isObjectLiteralExpression(unwrapped)
+      ? completeStaticJsxWireAttributeEntries(
+          sourceFile,
+          unwrapped,
+          moduleScopeStaticStringBindings,
+        )
+      : undefined;
     const mutationFormControlNames = ts.isObjectLiteralExpression(unwrapped)
       ? mutationFormControlNamesFromExpression(
           unwrapped,
@@ -4738,11 +4816,93 @@ function jsxSpreadAttributeModels(
         ...(mutationFormControlNames.length === 0 ? {} : { mutationFormControlNames }),
         ...(objectEntries === undefined ? {} : { objectEntries }),
         start: property.getStart(sourceFile),
+        ...(staticWireAttributeEntries === undefined ? {} : { staticWireAttributeEntries }),
       },
       'JSX spread attributes',
     );
   }
   return result;
+}
+
+/**
+ * Reconstruct only the enumerable key/value facts needed by the HTML cross-attribute classifier.
+ * A nested inline object spread is flattened in JavaScript property insertion order, including
+ * exact-key overwrites. Any carrier, accessor, method, dynamic key, or non-literal nested spread
+ * keeps the whole fact unknown so the emitted runtime sink remains authoritative.
+ */
+function completeStaticJsxWireAttributeEntries(
+  sourceFile: ts.SourceFile,
+  expression: ts.ObjectLiteralExpression,
+  moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
+): StaticJsxWireAttributeEntry[] | undefined {
+  const entries: StaticJsxWireAttributeEntry[] = [];
+  const properties = expression.properties;
+  const propertyLength = compilerArrayLength(properties, 'Static JSX wire spread properties');
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      properties,
+      index,
+      'Static JSX wire spread properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property) {
+      throw new TypeError(`Static JSX wire spread properties[${index}] must be own data.`);
+    }
+    if (ts.isSpreadAssignment(property)) {
+      const nestedExpression = unwrapExpression(property.expression);
+      if (!ts.isObjectLiteralExpression(nestedExpression)) return undefined;
+      const nested = completeStaticJsxWireAttributeEntries(
+        sourceFile,
+        nestedExpression,
+        moduleScopeStaticStringBindings,
+      );
+      if (nested === undefined) return undefined;
+      appendDenseValues(entries, nested, 'Nested static JSX wire spread entries');
+      continue;
+    }
+    if (ts.isShorthandPropertyAssignment(property)) {
+      compilerArrayAppend(entries, { key: property.name.text }, 'Static JSX wire spread entries');
+      continue;
+    }
+    if (!ts.isPropertyAssignment(property)) return undefined;
+    const key = staticJsxWireAttributeKey(
+      sourceFile,
+      property.name,
+      moduleScopeStaticStringBindings,
+    );
+    // `__proto__` object-literal setters are deliberately left on the runtime path. A computed
+    // own `['__proto__']` key is harmless here but keeping both shapes opaque avoids inventing an
+    // own attribute for the setter spelling.
+    if (!key || key === '__proto__') return undefined;
+    const staticValue = staticLiteralValue(property.initializer);
+    compilerArrayAppend(
+      entries,
+      {
+        key,
+        ...(staticValue === undefined ? {} : { staticValue }),
+      },
+      'Static JSX wire spread entries',
+    );
+  }
+  return entries;
+}
+
+function staticJsxWireAttributeKey(
+  sourceFile: ts.SourceFile,
+  name: ts.PropertyName,
+  moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
+): string | null {
+  if (!ts.isComputedPropertyName(name) || !ts.isIdentifier(name.expression)) {
+    return propertyNameText(name);
+  }
+  const binding = compilerMapGet(moduleScopeStaticStringBindings, name.expression.text);
+  if (
+    binding === undefined ||
+    identifierIsShadowedBeforeScope(name.expression, binding.identifier, sourceFile) ||
+    scopeDeclaresIdentifierNamed(sourceFile, name.expression.text, binding.identifier)
+  ) {
+    return null;
+  }
+  return binding.value;
 }
 
 function componentEventPropNamesForEntries(

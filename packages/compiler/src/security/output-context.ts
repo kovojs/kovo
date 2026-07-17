@@ -44,6 +44,7 @@ import {
   type JsxExpressionModel,
   type ObjectLiteralEntry,
   type SourceSpan,
+  type StaticJsxWireAttributeEntry,
 } from '../scan/parse.js';
 export type { OutputContext } from '../output-context-facts.js';
 
@@ -500,9 +501,28 @@ function staticEffectiveInputWireAttributes(
       continue;
     }
     if (spread === undefined) break;
+    if (spread.staticWireAttributeEntries !== undefined) {
+      const entryLength = compilerArrayLength(
+        spread.staticWireAttributeEntries,
+        'Static input wire spread entries',
+      );
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(
+          spread.staticWireAttributeEntries,
+          entryIndex,
+          'Static input wire spread entries',
+        );
+        setStaticRenderedAttribute(states, entry.key, staticWireSpreadAttributeValue(entry));
+      }
+      spreadIndex += 1;
+      continue;
+    }
     if (spread.objectEntries === undefined) return undefined;
-    const entryLength = compilerArrayLength(spread.objectEntries, 'Input wire spread entries');
-    for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+    const legacyEntryLength = compilerArrayLength(
+      spread.objectEntries,
+      'Input wire spread entries',
+    );
+    for (let entryIndex = 0; entryIndex < legacyEntryLength; entryIndex += 1) {
       const entry = outputArrayValue(spread.objectEntries, entryIndex, 'Input wire spread entries');
       setStaticRenderedAttribute(states, entry.key, staticSpreadAttributeValue(entry));
     }
@@ -532,6 +552,18 @@ function staticSpreadAttributeValue(entry: ObjectLiteralEntry): StaticRenderedAt
   return entry.staticStringValue === undefined
     ? { kind: 'unknown' }
     : { kind: 'known', value: entry.staticStringValue };
+}
+
+function staticWireSpreadAttributeValue(
+  entry: StaticJsxWireAttributeEntry,
+): StaticRenderedAttributeValue {
+  const value = entry.staticValue;
+  if (value === false || value === null) return { kind: 'omitted' };
+  if (typeof value === 'string') return { kind: 'known', value };
+  // A non-string static literal serializes to an empty/JSON/numeric blocker, never either reserved
+  // keyword. Keep the exact bytes irrelevant to this narrow tuple classifier.
+  if (value !== undefined) return { kind: 'known', value: '' };
+  return { kind: 'unknown' };
 }
 
 function setStaticRenderedAttribute(

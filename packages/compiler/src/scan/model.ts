@@ -22,6 +22,17 @@ export interface ObjectLiteralEntry {
   valuePropertyAccesses?: readonly PropertyAccessPathModel[];
 }
 
+/**
+ * Parser-owned fact for a statically enumerable JSX spread entry at the HTML wire boundary.
+ * `staticValue` is absent when the property value remains runtime-dynamic. This fact is separate
+ * from {@link ObjectLiteralEntry}: nested object spreads can be complete enough for a security
+ * verdict without being eligible for static spread lowering (SPEC §5.2 rule 10 / §13.2).
+ */
+export interface StaticJsxWireAttributeEntry {
+  key: string;
+  staticValue?: StaticLiteralValue;
+}
+
 export type HandlerWriteSinkSurface = 'endpoint' | 'mutation' | 'task' | 'webhook';
 
 export type HandlerWriteSinkOperationKind =
@@ -242,6 +253,8 @@ export interface JsxSpreadAttributeModel {
   mutationFormControlNames?: readonly string[];
   objectEntries?: readonly ObjectLiteralEntry[];
   start: number;
+  /** Complete parser-owned entries used only by cross-attribute HTML wire classifiers. */
+  staticWireAttributeEntries?: readonly StaticJsxWireAttributeEntry[];
 }
 
 export interface JsxElementModel {

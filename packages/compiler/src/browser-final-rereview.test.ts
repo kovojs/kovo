@@ -304,8 +304,23 @@ export const View = component({
       'first case-folded browser attribute',
       '<input TYPE="hidden" {...{ type: "text", name: "_charset_" }} />',
     ],
+    ['module-constant computed keys', '<input {...{ [TYPE]: "hidden", [NAME]: "_charset_" }} />'],
+    [
+      'false same-key override exposing a later case-folded type',
+      '<input TYPE="hidden" {...{ TYPE: false, type: "hidden", name: "_charset_" }} />',
+    ],
+    [
+      'null same-key override exposing a later case-folded name',
+      '<input type="hidden" NAME="_charset_" {...{ NAME: null, name: "_charset_" }} />',
+    ],
+    [
+      'nested fully-static object spread',
+      '<input {...{ ...{ type: "hidden" }, name: "_charset_" }} />',
+    ],
   ])('rejects the reserved _charset_ hidden-value rewrite from %s', (_label, element) => {
     const diagnostics = kv236(`
+const TYPE = 'type';
+const NAME = 'name';
 export const View = component({
   render: () => <form>${element}</form>,
 });
@@ -327,6 +342,24 @@ export const View = component({
     <input {...{ type: "hidden", name: "_charset_" }} type="text" value="record-4" />
     <input type="hidden" name="_charset_" {...{ type: "text" }} value="record-5" />
     <input TYPE="text" {...{ type: "hidden", name: "_charset_" }} value="record-6" />
+    <input TYPE="hidden" {...{ TYPE: false, type: "text", name: "_charset_" }} value="record-7" />
+    <input type="hidden" NAME="_charset_" {...{ NAME: null, name: "safe" }} value="record-8" />
+    <input {...{ ...{ type: "text" }, name: "_charset_" }} value="record-9" />
+  </form>,
+});
+`),
+    ).toEqual([]);
+  });
+
+  it('defers mutable and locally shadowed computed attribute names to the runtime sink', () => {
+    expect(
+      kv236(`
+let MUTABLE_TYPE = 'type';
+const TYPE = 'type';
+export const View = component({
+  render: ({ TYPE }) => <form>
+    <input {...{ [MUTABLE_TYPE]: "hidden", name: "_charset_" }} />
+    <input {...{ [TYPE]: "hidden", name: "_charset_" }} />
   </form>,
 });
 `),
