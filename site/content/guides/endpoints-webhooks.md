@@ -152,8 +152,8 @@ kovo-explain/v1
 ENDPOINTS
 ENDPOINT app-shell/order-paid surface=webhook method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=- rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
 ENDPOINT echo surface=endpoint method=POST path=/api/echo-json mount=exact auth=public:public echo endpoint is CSRF checked csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
-ENDPOINT health surface=endpoint method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
-ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
+ENDPOINT health surface=endpoint method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=safe:read-only cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
+ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=safe:read-only cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
 SUMMARY total=4
 ```
 
