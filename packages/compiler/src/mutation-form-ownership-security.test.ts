@@ -301,4 +301,86 @@ export const View = component({
       );
     }
   });
+
+  it('scopes stock route, list, and reviewed Button expressions to their actual form owner', () => {
+    const result = compile(`
+import { Button } from '@kovojs/ui/button';
+import { Badge } from '@kovojs/ui/badge';
+import { redirect, route } from '@kovojs/server';
+
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() { return null; },
+});
+
+function StockForm() {
+  return <form mutation={save}>{Button.definition.render({ children: 'Save', type: 'submit' })}</form>;
+}
+
+export const StockView = component({
+  render: (_queries, state) => <>
+    {Badge.definition.render({ children: 'Summary', variant: 'outline' })}
+    <StockForm />
+    <ul>{state.items.map((item) => <li>{item.label}</li>)}</ul>
+    <UnresolvedOrdinarySibling />
+  </>,
+});
+
+export const stock = route('/stock', {
+  page(_context, request) {
+    if (!request.session) return redirect('/login', {});
+    return <StockView />;
+  },
+});
+`);
+
+    expect(result.diagnostics.filter((entry) => entry.code === 'KV242')).toEqual([]);
+  });
+
+  it.each([
+    {
+      child: `<form mutation={save}>{Button.definition.render({ children: 'Save' })}</form>`,
+      label: 'structural definition.render lookalike nested in the form',
+      preamble: `const Button = { definition: { render() { return <button />; } } };`,
+    },
+    {
+      child: `<form mutation={save}>{Button.definition.render({ ...props, children: 'Save' })}</form>`,
+      label: 'reviewed Button spread nested in the form',
+      preamble: `import { Button } from '@kovojs/ui/button';\nconst props = getRuntimeProps();`,
+    },
+    {
+      child: `<form mutation={save}>{Button.definition.render({ children: 'Save', form: 'other' })}</form>`,
+      label: 'reviewed Button form reassociation nested in the form',
+      preamble: `import { Button } from '@kovojs/ui/button';`,
+    },
+    {
+      child: `<form mutation={save}>{runtimeButton()}</form>`,
+      label: 'opaque expression nested in the form',
+      preamble: '',
+    },
+  ])('keeps $label closed', ({ child, preamble }) => {
+    const result = compile(`
+${preamble}
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() { return null; },
+});
+export const View = component({ render: () => <>${child}</> });
+`);
+    expect(result.diagnostics.filter((entry) => entry.code === 'KV242')).not.toEqual([]);
+  });
+
+  it('keeps an unresolved explicit form-association carrier closed outside the form', () => {
+    const result = compile(`
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() { return null; },
+});
+export const View = component({ render: () => <>
+  <form id="account-save" mutation={save}><button>Save</button></form>
+  <UnresolvedCarrier form="account-save" />
+</> });
+`);
+    expect(result.diagnostics.filter((entry) => entry.code === 'KV242')).not.toEqual([]);
+  });
 });

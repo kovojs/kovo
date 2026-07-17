@@ -53,6 +53,7 @@ export type {
   MutationInputFieldCoercion,
   MutationInputFieldFact,
   PackageComponentPrefixFact,
+  ProjectMutationBindingFact,
   PublishToClientFact,
   QueryDeriveFact,
   RegistryFacts,
@@ -73,6 +74,11 @@ export type {
 } from './types.js';
 export type { LocalMutationInputFact } from './scan/mutation-inputs.js';
 export { mutationInputFactsFromSource } from './scan/mutation-inputs.js';
+export type {
+  ProjectMutationRegistryFacts,
+  ProjectMutationSourceFile,
+} from './scan/project-mutation-bindings.js';
+export { projectMutationRegistryFactsFromFiles } from './scan/project-mutation-bindings.js';
 export type {
   InlineOptimisticPlanFact,
   InlineOptimisticTransformFact,

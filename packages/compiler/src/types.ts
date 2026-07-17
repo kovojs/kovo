@@ -144,6 +144,12 @@ export interface RegistryFacts {
   fragmentTargets?: readonly string[];
   invalidations?: Readonly<Record<string, readonly string[]>>;
   liveTargets?: readonly LiveTargetFact[];
+  /**
+   * @internal Path-scoped proof that one component-local identifier resolves through an exact
+   * relative import/export chain to a framework-owned mutation definition. Produced only from the
+   * immutable project source snapshot; identifier spelling by itself is never authority.
+   */
+  mutationBindings?: readonly ProjectMutationBindingFact[];
   mutationInputs?: RegistryMutationInputFacts;
   mutations?: RegistryTypeFacts;
   queries?: RegistryTypeFacts;
@@ -154,6 +160,18 @@ export interface RegistryFacts {
 
 /** @internal Map of registry entry name to its emitted TypeScript type source. In-repo use only. */
 export type RegistryTypeFacts = Readonly<Record<string, string>>;
+
+/** @internal One exact project-level mutation import binding proven at the scanner boundary. */
+export interface ProjectMutationBindingFact {
+  fileName: string;
+  key: string;
+  localName: string;
+  source: {
+    exportName: string;
+    fileName: string;
+    kind: 'better-auth-sign-in' | 'better-auth-sign-out' | 'kovo-mutation';
+  };
+}
 
 /** @internal Field-level facts for one mutation input schema. In-repo use only. */
 export interface MutationInputFieldFact {

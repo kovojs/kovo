@@ -48,6 +48,23 @@ export function localMutationKey(
     }
   }
 
+  // SPEC §5.2 rule 10 / §6.3: cross-module form ownership is admitted only by a scanner-produced,
+  // path-scoped project fact. A global `typeof localName` registry spelling is retained below for
+  // generated registry callers, but it cannot distinguish two same-named imports in different
+  // modules and therefore does not own project-source provenance.
+  const projectBindings = registryFacts?.mutationBindings;
+  if (projectBindings !== undefined && fileName !== undefined) {
+    const bindings = compilerSnapshotDenseArray(projectBindings, 'Project mutation binding facts');
+    let resolved: string | null = null;
+    for (let index = 0; index < bindings.length; index += 1) {
+      const binding = bindings[index]!;
+      if (binding.fileName !== fileName || binding.localName !== localName) continue;
+      if (resolved !== null) return null;
+      resolved = binding.key;
+    }
+    if (resolved !== null) return resolved;
+  }
+
   const mutations = registryFacts?.mutations;
   if (mutations === undefined) return null;
   const keys = compilerObjectKeys(mutations);

@@ -50,6 +50,8 @@ import {
   mutationHandlerFingerprintFromRuntimeSource,
   mutationSessionAuthorityFacts,
   parseComponentModule,
+  projectMutationRegistryFactsFromFiles,
+  type ProjectMutationRegistryFacts,
   type QueryShapeFact,
   viteFrameworkIdentityFiles,
 } from '@kovojs/compiler/internal';
@@ -628,15 +630,31 @@ export async function runBuildCommand(
       writeKovoNeutralBuild,
     } = loadAndCheck.value;
     const outDir = resolve(invocationRoot, options.outDir);
+    const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
+    const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
+      resolvedAppModulePath,
+      clientRoot,
+      approvedSourceFiles,
+    );
+    const serverProjectMutationFacts = projectMutationRegistryFactsForBuild(
+      resolvedAppModulePath,
+      invocationRoot,
+      approvedSourceFiles,
+    );
     const staticRuntimeRegistry = await collectRuntimeRegistryFacts({
       appSourceDir: dirname(resolvedAppModulePath),
       root: invocationRoot,
     });
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
-      kovoClientBuildRoot(resolvedAppModulePath, invocationRoot),
+      clientRoot,
       resolvedAppModulePath,
-      { approvedSourceFiles, cache: options.cache, queryShapeFacts },
+      {
+        approvedSourceFiles,
+        cache: options.cache,
+        projectMutationFacts: clientProjectMutationFacts,
+        queryShapeFacts,
+      },
     );
     const buildCssAssets = mergeKovoBuildStylesheetAssets([
       buildStylesheetCss.assets,
@@ -646,6 +664,7 @@ export async function runBuildCommand(
     const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
       approvedSourceFiles,
       buildRoot: invocationRoot,
+      projectMutationFacts: serverProjectMutationFacts,
       queryShapeFacts,
       runtimeTarget: selectedPreset.name,
       runtimeRegistry: {
@@ -1485,6 +1504,10 @@ async function sourceGraphFactsFromFiles(
   const routePages: SourceRoutePageFacts[] = [];
 
   const sourceFiles = buildSnapshotDenseArray(files, 'Build-check source files');
+  // SPEC §5.2 rule 10 / §6.3: derive imported mutation-form ownership once from the same immutable
+  // source snapshot used by build/check. Lowering receives only typed, path-scoped facts and never
+  // infers authority from a bare identifier or a post-evaluation runtime object.
+  const projectMutationFacts = projectMutationRegistryFactsFromFiles(sourceFiles);
   for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
     const file = sourceFiles[fileIndex]!;
     const extraFiles = buildSnapshotDenseArray(
@@ -1494,6 +1517,9 @@ async function sourceGraphFactsFromFiles(
     const componentOptions = {
       ...(extraFiles.length === 0 ? {} : { extraFiles }),
       fileName: file.fileName,
+      ...(projectMutationFacts.mutationBindings.length === 0
+        ? {}
+        : { registryFacts: projectMutationFacts }),
       source: file.source,
       sourceProvenance: 'app',
     } as const;
@@ -2607,12 +2633,14 @@ async function buildKovoClientManifest(
   options: {
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     cache: boolean;
+    projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
   },
 ): Promise<KovoClientManifestBuild> {
   const viteAssetPlugin = kovoVitePlugin({
     include: [kovoBuildApprovedSourceFilter(appModulePath, root, options.approvedSourceFiles)],
     queryShapeFacts: options.queryShapeFacts,
+    registryFacts: options.projectMutationFacts,
   });
   const routeTargets = buildSnapshotDenseArray(
     extractAppRouteCssTargets({
@@ -2693,6 +2721,7 @@ async function buildKovoComponentClientModules(
   options: {
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     cache: boolean;
+    projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
   },
 ): Promise<{
@@ -2704,6 +2733,7 @@ async function buildKovoComponentClientModules(
   const kovoPlugin = kovoVitePlugin({
     include: [kovoBuildApprovedSourceFilter(appModulePath, root, options.approvedSourceFiles)],
     queryShapeFacts: options.queryShapeFacts,
+    registryFacts: options.projectMutationFacts,
   });
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-client-modules-'));
   const entryPath = join(tempDir, 'entry.ts');
@@ -3797,6 +3827,7 @@ async function bundleKovoServerHandler(
   options: {
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     buildRoot: string;
+    projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
     runtimeTarget: KovoBuildPresetName;
     runtimeRegistry: RuntimeRegistryWireFacts;
@@ -3811,6 +3842,7 @@ async function bundleKovoServerHandler(
       kovoBuildApprovedSourceFilter(appModulePath, options.buildRoot, options.approvedSourceFiles),
     ],
     queryShapeFacts: options.queryShapeFacts,
+    registryFacts: options.projectMutationFacts,
   });
   const stylesheetAssets = options.stylesheetAssets ?? emptyKovoBuildStylesheetAssets();
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-build-'));
@@ -3978,6 +4010,46 @@ function kovoBuildApprovedSourceFilter(
     buildSetAdd(approved, kovoBuildFilterFileName(resolve(sourceRoot, fileName), root));
   }
   return (fileName) => buildSetHas(approved, kovoBuildFilterFileName(fileName, root));
+}
+
+function projectMutationRegistryFactsForBuild(
+  appModulePath: string,
+  buildRoot: string,
+  sourceFiles: readonly BuildCheckSourceFile[],
+): ProjectMutationRegistryFacts {
+  const files = buildSnapshotDenseArray(sourceFiles, 'Project mutation build source files');
+  const sourceRoot = dirname(appModulePath);
+  const viteFiles: BuildCheckSourceFile[] = [];
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    if (!file || typeof file !== 'object') {
+      throw new TypeError(`Project mutation build source file[${index}] must be an own record.`);
+    }
+    const fileName = buildOwnDataValue(
+      file,
+      'fileName',
+      `Project mutation build source file[${index}]`,
+    );
+    const source = buildOwnDataValue(
+      file,
+      'source',
+      `Project mutation build source file[${index}]`,
+    );
+    if (typeof fileName !== 'string' || typeof source !== 'string') {
+      throw new TypeError(
+        `Project mutation build source file[${index}] must contain own string fileName/source values.`,
+      );
+    }
+    buildSecurityArrayAppend(
+      viteFiles,
+      {
+        fileName: kovoBuildFilterFileName(resolve(sourceRoot, fileName), buildRoot),
+        source,
+      },
+      'Project mutation Vite source files',
+    );
+  }
+  return projectMutationRegistryFactsFromFiles(viteFiles);
 }
 
 function kovoBuildFilterFileName(fileName: string, root: string): string {

@@ -1296,6 +1296,11 @@ function sliceRegistryFacts(
   if (!facts) return undefined;
 
   const mutationInputs = sliceRecord(facts.mutationInputs, mutationKeys);
+  const mutationBindings = sliceProjectMutationBindings(
+    facts.mutationBindings,
+    usage.fileName,
+    mutationKeys,
+  );
   const fragmentTargetKeys = compilerCreateSet<string>();
   const fragmentTargetsSnapshot = compilerSnapshotDenseArray(
     usage.fragmentTargets,
@@ -1320,6 +1325,7 @@ function sliceRegistryFacts(
     ...(fragmentTargets === undefined ? {} : { fragmentTargets }),
     ...(facts.invalidations === undefined ? {} : { invalidations: facts.invalidations }),
     ...(facts.liveTargets === undefined ? {} : { liveTargets: facts.liveTargets }),
+    ...(mutationBindings === undefined ? {} : { mutationBindings }),
     ...(mutationInputs === undefined ? {} : { mutationInputs }),
     ...(facts.mutations === undefined ? {} : { mutations: facts.mutations }),
     ...(facts.queries === undefined ? {} : { queries: facts.queries }),
@@ -1327,6 +1333,20 @@ function sliceRegistryFacts(
     ...(viewTransitions === undefined ? {} : { viewTransitions }),
   };
   return compilerObjectKeys(sliced).length === 0 ? undefined : sliced;
+}
+
+function sliceProjectMutationBindings(
+  bindings: RegistryFacts['mutationBindings'],
+  fileName: string,
+  mutationKeys: ReadonlySet<string>,
+): RegistryFacts['mutationBindings'] | undefined {
+  if (!bindings || compilerSetValues(mutationKeys).length === 0) return undefined;
+  const selected = compilerFilterDense(
+    bindings,
+    'Project mutation binding facts',
+    (binding) => binding.fileName === fileName && compilerSetHas(mutationKeys, binding.key),
+  );
+  return selected.length === 0 ? undefined : selected;
 }
 
 function sliceRecord<T>(

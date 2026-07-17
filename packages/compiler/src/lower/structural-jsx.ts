@@ -18,6 +18,7 @@ import {
 import { isHtmlWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 import { diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
+import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
 import {
   outputContextForAttribute,
   trustedHtmlBrandLocalNames,
@@ -771,9 +772,11 @@ interface MutationDocumentControlInstance extends MutationDocumentElementInstanc
 }
 
 interface MutationDocumentOpaqueInstance {
+  readonly associationCarrier: boolean;
   readonly descendantClassified: boolean;
   readonly diagnosticSpan: SourceSpan;
   readonly inheritedForm: MutationDocumentFormInstance | undefined;
+  readonly kind: 'cycle' | 'expression' | 'unresolved-component';
   readonly tag: string;
 }
 
@@ -883,9 +886,15 @@ function documentMutationFormOwnershipDiagnostics(
     const opaque = compilerSnapshotDenseArray(census.opaque, 'Document mutation opaque output');
     for (let opaqueIndex = 0; opaqueIndex < opaque.length; opaqueIndex += 1) {
       const candidate = opaque[opaqueIndex]!;
+      const insideTypedForm = candidate.inheritedForm?.typed === true;
+      // SPEC §§5.2/6.3: typed-form ownership follows the proven form subtree and explicit
+      // association carriers. An unrelated expression elsewhere in the same component/route does
+      // not become form-owned merely because another branch renders a mutation form. Cycles remain
+      // closed because their output can recursively acquire an association after this census.
+      if (!insideTypedForm && !candidate.associationCarrier && candidate.kind !== 'cycle') continue;
       // The descendant-only classifier already owns this exact closed verdict. This census adds
       // the sibling/document-wide relation that the descendant walk cannot observe.
-      if (candidate.inheritedForm?.typed === true && candidate.descendantClassified) continue;
+      if (insideTypedForm && candidate.descendantClassified) continue;
       appendMutationDocumentDiagnostic(
         diagnostics,
         seen,
@@ -1278,9 +1287,11 @@ function appendMutationDocumentImplementation(
     appendCompilerFact(
       census.opaque,
       {
+        associationCarrier: true,
         descendantClassified: true,
         diagnosticSpan: rootSpan,
         inheritedForm,
+        kind: 'cycle',
         tag: mutationImplementationDisplayName(implementation),
       },
       'Mutation document opaque implementations',
@@ -1590,9 +1601,11 @@ function appendMutationDocumentElement(
       appendCompilerFact(
         census.opaque,
         {
+          associationCarrier: mutationDocumentComponentCarriesFormAssociation(element),
           descendantClassified: true,
           diagnosticSpan: invocationSpan,
           inheritedForm,
+          kind: 'unresolved-component',
           tag: element.tag,
         },
         'Mutation document opaque components',
@@ -1809,6 +1822,7 @@ function appendMutationDocumentOutputExpression(
   }
 
   const expression = unwrapMutationComponentExpression(node.expression);
+  if (mutationDocumentExpressionIsReviewedUiRender(node)) return;
   if (ts.isCallExpression(expression)) {
     if (ts.isIdentifier(expression.expression)) {
       const implementation = resolveMutationComponent(
@@ -2007,13 +2021,79 @@ function appendMutationDocumentOpaqueExpression(
   appendCompilerFact(
     opaque,
     {
+      associationCarrier: false,
       descendantClassified: false,
       diagnosticSpan: node.implementation.source === project.root ? node.span : rootSpan,
       inheritedForm,
+      kind: 'expression',
       tag: 'JSX expression',
     },
     'Mutation document opaque expressions',
   );
+}
+
+function mutationDocumentComponentCarriesFormAssociation(element: JsxElementModel): boolean {
+  if (mutationDocumentAttribute(element, 'form') !== undefined) return true;
+  return element.spreadAttributes.length > 0;
+}
+
+/**
+ * Recognize the stock framework-owned `Button.definition.render({...})` carrier without granting
+ * authority to arbitrary structural `.definition.render` lookalikes. Button is safe for ownership
+ * only when its closed literal props cannot name/reassociate a successful control; any spread,
+ * computed key, `form`, `name`, or transport override remains opaque and therefore fails closed
+ * when nested in a typed form.
+ */
+function mutationDocumentExpressionIsReviewedUiRender(
+  node: MutationDocumentExpressionNode,
+): boolean {
+  const expression = unwrapMutationComponentExpression(node.expression);
+  if (!ts.isCallExpression(expression) || expression.arguments.length !== 1) return false;
+  if (!ts.isPropertyAccessExpression(expression.expression)) return false;
+  if (expression.expression.name.text !== 'render') return false;
+  const definition = expression.expression.expression;
+  if (!ts.isPropertyAccessExpression(definition) || definition.name.text !== 'definition') {
+    return false;
+  }
+  if (!ts.isIdentifier(definition.expression)) return false;
+  const localName = definition.expression.text;
+  const imports = compilerSnapshotDenseArray(
+    node.implementation.source.model.namedImports,
+    'Reviewed UI render imports',
+  );
+  let reviewed = false;
+  for (let index = 0; index < imports.length; index += 1) {
+    const imported = imports[index]!;
+    if (
+      imported.localName === localName &&
+      imported.moduleSpecifier === '@kovojs/ui/button' &&
+      isReviewedComponentEventBoundary(imported.moduleSpecifier, imported.importedName) &&
+      imported.importedName === 'Button'
+    ) {
+      if (reviewed) return false;
+      reviewed = true;
+    }
+  }
+  if (!reviewed) return false;
+
+  const props = unwrapMutationComponentExpression(expression.arguments[0]!);
+  if (!ts.isObjectLiteralExpression(props)) return false;
+  const properties = compilerSnapshotDenseArray(props.properties, 'Reviewed Button render props');
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!ts.isPropertyAssignment(property) || property.name === undefined) return false;
+    const name = mutationDocumentPropertyName(property.name);
+    if (name === null) return false;
+    const normalized = compilerStringToLowerCase(name);
+    if (
+      normalized === 'form' ||
+      normalized === 'name' ||
+      mutationSubmitterTransportAttributeName(normalized) !== null
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function mutationDocumentFormIsTyped(
