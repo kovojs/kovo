@@ -1,3 +1,5 @@
+import { cpuUsage } from 'node:process';
+
 import { describe, expect, it } from 'vitest';
 
 import { collectUnregisteredSinksFromProject } from '@kovojs/drizzle/internal/static';
@@ -9,6 +11,13 @@ function sinksFor(source: string) {
 
 function sinksForFiles(files: readonly TrustEscapeSourceFileInput[]) {
   return collectUnregisteredSinksFromProject({ files });
+}
+
+function elapsedClassifierCpuMs(startedAt: ReturnType<typeof cpuUsage>): number {
+  // C13 runs files concurrently. Process CPU time measures classifier work without turning
+  // unrelated worker scheduling contention into a false performance-bound failure.
+  const elapsed = cpuUsage(startedAt);
+  return (elapsed.user + elapsed.system) / 1_000;
 }
 
 function expectExactMemberRejected(
@@ -1220,7 +1229,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
   });
 
   it('keeps cyclic exact-global aliases sound and bounded', () => {
-    const startedAt = performance.now();
+    const startedAt = cpuUsage();
     const facts = sinksFor(`
       import { s, task } from '@kovojs/server';
       function noop(value: PromiseConstructor): void { void value; }
@@ -1237,7 +1246,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     `);
 
     expectExactMemberRejected(facts, 'Promise.resolve');
-    expect(performance.now() - startedAt).toBeLessThan(2_000);
+    expect(elapsedClassifierCpuMs(startedAt)).toBeLessThan(2_000);
   });
 
   it('keeps diamond alias provenance bounded', () => {
@@ -1245,7 +1254,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
       { length: 18 },
       (_value, index) => `const alias${index + 1} = true ? alias${index} : alias${index};`,
     ).join('\n');
-    const startedAt = performance.now();
+    const startedAt = cpuUsage();
     const facts = sinksFor(`
       import { s, task } from '@kovojs/server';
       const alias0 = Promise;
@@ -1258,7 +1267,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     `);
 
     expectExactMemberRejected(facts, 'Promise.resolve');
-    expect(performance.now() - startedAt).toBeLessThan(2_000);
+    expect(elapsedClassifierCpuMs(startedAt)).toBeLessThan(2_000);
   });
 
   it('keeps 120 distinct iterable and parameter-pattern safe misses bounded', () => {
@@ -1283,7 +1292,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
       if (index % 3 === 1) return `replace${index}({ target: LocalPromise });`;
       return `replace${index}(...([LocalPromise] as [typeof LocalPromise]));`;
     }).join('\n');
-    const startedAt = performance.now();
+    const startedAt = cpuUsage();
     const facts = sinksFor(`
       const LocalPromise = { resolve: () => ({ ok: true }) };
       ${helpers}
@@ -1292,7 +1301,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     `);
 
     expect(facts).toEqual([]);
-    expect(performance.now() - startedAt).toBeLessThan(5_000);
+    expect(elapsedClassifierCpuMs(startedAt)).toBeLessThan(5_000);
   });
 
   it('indexes 400/800 distinct exact-global helper safe misses with near-linear bounded scaling', () => {
@@ -1308,7 +1317,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
         { length: count },
         (_value, index) => `replace${index}(LocalPromise);`,
       ).join('\n');
-      const startedAt = performance.now();
+      const startedAt = cpuUsage();
       const facts = sinksFor(`
         const LocalPromise = { resolve: () => ({ ok: true }) };
         ${helpers}
@@ -1318,7 +1327,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
         void retainDistinctSafeMissCalls;
         void Promise.resolve({ ok: true });
       `);
-      const elapsed = performance.now() - startedAt;
+      const elapsed = elapsedClassifierCpuMs(startedAt);
       expect(facts).toEqual([]);
       return elapsed;
     };
