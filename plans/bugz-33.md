@@ -14,8 +14,8 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    0 |      7 |
-| Medium   |    1 |     11 |
+| High     |    1 |      7 |
+| Medium   |    1 |     12 |
 | Low      |    0 |      3 |
 
 ## High
@@ -89,6 +89,16 @@ rendering, Better Auth, and managed SQL.
     and callback failures still abort it for a safe retry.
   - **Evidence:** focused exactly-once/mutation/webhook replay matrix 138/138; server dist/DTS and
     API-surface checks passed.
+
+- [ ] **H8 - Transient authenticated webhook failures were committed as long-lived replay truth.**
+  - A webhook handler returning `context.fail(...)` with status `429` or `500` rolled back its work
+    but still settled the replay reservation with that response. Provider retries then replayed the
+    cached failure for the full retention horizon instead of rerunning the handler.
+  - **Evidence:** real signed webhook requests with an in-memory replay store reproduced
+    `retry.replayed === true` for both transient statuses before the fix.
+  - **Open:** abort replay reservations for retryable `429`/`500` handler outcomes while retaining
+    deterministic client failures, and prove sequential and concurrent provider retries rerun only
+    when safe (SPEC §9.1.1/§10.3).
 
 ## Medium
 
@@ -200,16 +210,29 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** direct/live/generated Node and Vercel target-parity matrix 95/95; wire-output
     boundary gate passed.
 
-- [ ] **M12 - HTTP/1 Host authority could disagree across raw-header and WHATWG parsing.**
+- [x] **M12 - HTTP/1 Host authority could disagree across raw-header and WHATWG parsing.**
   - Node accepts delimiter-bearing Host values such as `victim.example@evil.example` and
     `victim.example/ignored`. Kovo preserved that raw Host for application policy while WHATWG URL
     construction interpreted userinfo or path semantics, producing a different request authority;
     generated static selection could also run before any authority parse.
   - **Evidence:** a real HTTP/1 socket reached the handler with divergent raw Host and request URL;
     HTTP/2 rejects the same delimiters at its transport parser.
-  - **Open:** validate one canonical HTTP authority before static selection and request assembly,
-    preserve valid hostname/port and bracketed-IPv6 controls, and prove live/generated adapter
-    parity (SPEC §9.5).
+  - **Fixed:** `1ee903917` preserves raw Host occurrence count, requires exactly one syntactically
+    valid scalar authority before URL construction, static selection, or handler loading, and keeps
+    HTTP/2 `:authority` precedence plus valid hostname/port, bracketed-IPv6, and HTTP/1.0 controls
+    (SPEC §9.5).
+  - **Evidence:** real-wire/live/generated Node and Vercel authority matrix 97/97; broader
+    adapter/mutation/CSRF/cookie/posture matrix 244/244; server dist, wire, API, and VP gates passed.
+
+- [ ] **M13 - Trusted proxy schemes silently coerced malformed values to HTTP.**
+  - With `trustedProxy` enabled, present noncanonical `:scheme` values were read through a generic
+    header helper and every value other than exact `https` became `http`. A malformed trusted field
+    could therefore suppress secure-cookie and HSTS posture rather than fail closed.
+  - **Evidence:** real h2c `:scheme: javascript` reached the handler as an HTTP URL; an encrypted
+    carrier with the same present-invalid field was also downgraded. Vercel's edge XFP path had the
+    equivalent present-invalid fallback.
+  - **Open:** validate exact trusted scheme fields, reject malformed scalar/array values across
+    live and emitted adapters, and retain the already-proven closest-hop XFP semantics (SPEC §9.5).
 
 ## Low
 
@@ -240,7 +263,8 @@ rendering, Better Auth, and managed SQL.
 - Capability/route/Postgres focused matrix: 106/106.
 - Document/app-document focused matrix: 96/96.
 - Normalized raw-target Node/build parity matrix: 95/95; wire-output boundary gate passed.
+- Host-authority live/generated matrix: 97/97; wire-output boundary gate passed.
 - Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
-- Final exact-tip remote-boundary review remains open until M12 lands and a fresh pass finds no new
-  remotely reachable issue.
+- Final exact-tip remote-boundary review remains open until H8 and M13 land and the parallel fresh
+  passes find no new remotely reachable issue.
