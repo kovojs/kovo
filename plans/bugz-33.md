@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    1 |      8 |
-| Medium   |    0 |     13 |
+| Medium   |    0 |     14 |
 | Low      |    0 |      3 |
 
 ## High
@@ -249,6 +249,18 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** Node/request-scheme/build matrix 106/106; cookie/CSRF/response-posture/document
     matrix 163/163; server dist, wire, API, and VP gates passed.
 
+- [x] **M14 - Native HTTP/1.1 requests could reach Kovo without a Host authority.**
+  - When an embedding Node server disabled its built-in Host requirement, a real HTTP/1.1 request
+    without Host reached static/app dispatch with a synthesized loopback URL. The raw request and
+    framework URL therefore disagreed about whether any authority had been supplied.
+  - **Evidence:** `createServer({ requireHostHeader: false }, toNodeHandler(...))` returned `200`,
+    invoked the handler, and exposed a loopback-origin URL for a raw Host-less HTTP/1.1 request.
+  - **Fixed:** `d52cda8ba` requires authority whenever native wire evidence identifies HTTP/1.1 or
+    newer, before static or app dispatch. Host-optional HTTP/1.0 and custom synthetic carriers
+    without raw-wire evidence retain their documented fallback (SPEC §9.5).
+  - **Evidence:** real-wire/live/generated Node matrix 99/99; server dist, wire, API, and VP gates
+    passed.
+
 ## Low
 
 - [x] **L1 - The Vercel preset copied framework metadata files into the public static root.**
@@ -280,6 +292,7 @@ rendering, Better Auth, and managed SQL.
 - Normalized raw-target Node/build parity matrix: 95/95; wire-output boundary gate passed.
 - Host-authority live/generated matrix: 97/97; wire-output boundary gate passed.
 - Trusted-scheme live/generated matrix: 106/106; wire-output boundary gate passed.
+- Missing-authority real/live/generated matrix: 99/99; wire-output boundary gate passed.
 - Webhook signed replay/retry matrix: 72/72; wire-output boundary gate passed.
 - Better Auth/SQLite/PGlite matrix: 200/200; real PostgreSQL and multi-process SQLite concurrency
   each admitted 3/20 with one row; replay 429-abort regression, dist, API, and TCB gates passed.
