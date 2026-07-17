@@ -876,8 +876,8 @@ export const diagnosticDefinitions = {
     code: 'KV415',
     help: [
       'Would lower to: a typed response header record that serializes only framework-allowed header names and cookie values produced by the typed cookie builder.',
-      'Blocked reason: arbitrary header names/values can smuggle forbidden response metadata or split headers when they contain CR/LF/NUL/control characters.',
-      'Fixes: use the typed response-header allowlist, route cookies through the typed cookie builder, or remove the forbidden header write.',
+      'Blocked reason: arbitrary header names/values can smuggle forbidden response metadata, override adapter-owned framing/hop-by-hop fields, or split headers when they contain CR/LF/NUL/control characters.',
+      'Fixes: use the typed response-header allowlist, route cookies through the typed cookie builder, and remove Content-Length/Connection/Transfer-Encoding or other transport-owned writes.',
       'SPEC §9.1.1 keeps response headers in a typed channel so generated wire responses remain auditable.',
     ].join('\n'),
     severity: 'error',

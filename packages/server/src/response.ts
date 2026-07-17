@@ -58,6 +58,11 @@ import {
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
+import {
+  assertSafeTransportResponseHeaders,
+  createTransportResponseHeaderClassifier,
+  type TransportResponseHeaderEntry,
+} from './response-transport-headers.js';
 
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
@@ -197,11 +202,28 @@ export function frameworkDocumentResponseBuildToken(response: unknown): string |
 }
 
 /** Options for `respond.file`: content type and optional filename/etag/headers. */
-export interface RouteFileOptions {
+export interface RouteFileOptions<Headers extends Record<string, string> = Record<string, string>> {
   contentType: string;
   etag?: string;
   filename?: string;
-  headers?: Record<string, string>;
+  headers?: Headers & {
+    [Name in keyof Headers]: Name extends string
+      ? Lowercase<Name> extends
+          | 'connection'
+          | 'content-length'
+          | 'http2-settings'
+          | 'keep-alive'
+          | 'proxy-authenticate'
+          | 'proxy-authorization'
+          | 'proxy-connection'
+          | 'te'
+          | 'trailer'
+          | 'transfer-encoding'
+          | 'upgrade'
+        ? never
+        : Headers[Name]
+      : Headers[Name];
+  };
 }
 
 /**
@@ -267,7 +289,9 @@ function unsafeInlineAcceptanceSnapshot(value: unknown): UnsafeInlineAcceptance 
 }
 
 /** Options for `respond.stream`: `RouteFileOptions` plus inline/attachment disposition. */
-export interface RouteStreamOptions extends RouteFileOptions {
+export interface RouteStreamOptions<
+  Headers extends Record<string, string> = Record<string, string>,
+> extends RouteFileOptions<Headers> {
   disposition?: 'attachment' | 'inline';
   /**
    * KV428 inline opt-in (SPEC §6.6/§9.1): set ONLY when the body bytes have been proven safe to
@@ -617,7 +641,10 @@ export function shouldEmitDocumentHsts(secureRequest: boolean): boolean {
  * });
  */
 export const respond = witnessFreeze({
-  file(body: Exclude<RouteResponseBody, ReadableStream<Uint8Array>>, options: RouteFileOptions) {
+  file<Headers extends Record<string, string> = Record<string, string>>(
+    body: Exclude<RouteResponseBody, ReadableStream<Uint8Array>>,
+    options: RouteFileOptions<Headers>,
+  ) {
     return routeResponseOutcome(body, options, 'attachment');
   },
   /**
@@ -701,7 +728,10 @@ export const respond = witnessFreeze({
       ...(etag === undefined ? {} : { etag }),
     });
   },
-  stream(body: RouteResponseBody, options: RouteStreamOptions) {
+  stream<Headers extends Record<string, string> = Record<string, string>>(
+    body: RouteResponseBody,
+    options: RouteStreamOptions<Headers>,
+  ) {
     const rawDisposition = stableOwnDataValue(options, 'disposition');
     const declaredContentType = stableOwnDataValue(options, 'contentType');
     const unsafeInlineReceipt = stableOwnDataValue(options, 'unsafeInline');
@@ -980,6 +1010,7 @@ function routeResponseOutcome(
     rawHeaders === undefined
       ? undefined
       : witnessFreeze(snapshotStringHeaderRecord(rawHeaders, 'respond.file()/stream() headers'));
+  assertSafeRouteTransportHeaders(headers);
   const contentDisposition = filename
     ? contentDispositionWithFilename(disposition, filename)
     : disposition;
@@ -1064,6 +1095,27 @@ function safeRouteOutcomeHeaders(
     safeHeaders[name] = value;
   }
   return safeHeaders;
+}
+
+const classifyRouteTransportResponseHeaders = createTransportResponseHeaderClassifier({
+  lowerCase: securityStringToLowerCase,
+});
+
+function assertSafeRouteTransportHeaders(
+  headers: Readonly<Record<string, string>> | undefined,
+): void {
+  if (headers === undefined) return;
+  const entries: TransportResponseHeaderEntry[] = [];
+  const names = securityObjectKeys(headers);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const value = stableOwnDataValue(headers, name);
+    if (typeof value !== 'string') {
+      throw new TypeError(`Kovo route outcome header ${name} must be a string.`);
+    }
+    entries[entries.length] = { name, value };
+  }
+  assertSafeTransportResponseHeaders(entries, classifyRouteTransportResponseHeaders);
 }
 
 const contentDispositionWithFilename = createContentDispositionWithFilename({

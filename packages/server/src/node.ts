@@ -30,6 +30,11 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
+import {
+  assertSafeTransportResponseHeaders,
+  createTransportResponseHeaderClassifier,
+  type TransportResponseHeaderEntry,
+} from './response-transport-headers.js';
 
 /** Options for adapting a Web `RequestHandler` to a Node `http` listener. */
 export interface NodeHandlerOptions {
@@ -104,6 +109,9 @@ const nativeStringLastIndexOf = NativeString.prototype.lastIndexOf;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const classifyNodeTransportResponseHeaders = createTransportResponseHeaderClassifier({
+  lowerCase: (value) => witnessReflectApply<string>(nativeStringToLowerCase, value, []),
+});
 const nativeRequestMethodGetter = requiredGetter(NativeRequest.prototype, 'method');
 const nativeIncomingMessageHeadersGetter = stablePrototypeGetter(
   NativeIncomingMessage.prototype,
@@ -790,6 +798,10 @@ export async function writeWebResponseToNode(
   // SPEC §6.6 rule 5: the final transport pins the complete Response once. Authored code may
   // share this realm, so no status/header/body getter is re-read after this boundary decision.
   const pinnedResponse = snapshotWebResponse(response);
+  assertSafeTransportResponseHeaders(
+    nodeTransportHeaderEntries(pinnedResponse.headers),
+    classifyNodeTransportResponseHeaders,
+  );
   const compression = responseCompression(pinnedResponse, options, method);
   const responseHeaders = pinnedResponse.headers;
   if (nodeResponseShouldKeepAlive(nodeResponse) === false && options.httpVersion !== '2.0') {
@@ -1692,6 +1704,14 @@ function responseHeadersToNodeHeaders(headers: Headers): Record<string, string |
     });
   });
   return nodeHeaders;
+}
+
+function nodeTransportHeaderEntries(headers: Headers): TransportResponseHeaderEntry[] {
+  const entries: TransportResponseHeaderEntry[] = [];
+  forEachHeader(headers, (value, name) => {
+    entries[entries.length] = { name, value };
+  });
+  return entries;
 }
 
 function appendHeader(headers: Headers, name: string, value: string): void {

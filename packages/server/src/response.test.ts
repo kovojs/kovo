@@ -695,6 +695,43 @@ describe('server response adapters', () => {
     ).toThrow(/KV428/u);
   });
 
+  it('rejects transport-owned headers on typed file and stream outcomes', () => {
+    const fileHeaders: Record<string, string> = { 'Content-Length': '0' };
+    const streamHeaders: Record<string, string> = { 'tRaNsFeR-EnCoDiNg': 'chunked' };
+
+    expect(() =>
+      respond.file('undeclared bytes', {
+        contentType: 'text/plain; charset=utf-8',
+        headers: fileHeaders,
+      }),
+    ).toThrow(/KV415.*Content-Length.*message-framing/u);
+    expect(() =>
+      respond.stream('undeclared bytes', {
+        contentType: 'text/plain; charset=utf-8',
+        headers: streamHeaders,
+      }),
+    ).toThrow(/KV415.*tRaNsFeR-EnCoDiNg.*message-framing/u);
+
+    if (false) {
+      // Runtime finalization remains the proof for dynamic records, but literal transport-owned
+      // keys are rejected at author time as a SPEC §9.1.1 security ergonomics guardrail.
+      respond.file('blocked', {
+        contentType: 'text/plain',
+        // @ts-expect-error Content-Length is owned by the HTTP adapter.
+        headers: { 'Content-Length': '0' },
+      });
+      respond.stream('blocked', {
+        contentType: 'text/plain',
+        // @ts-expect-error Header-name checks are case-insensitive.
+        headers: { cOnNeCtIoN: 'keep-alive' },
+      });
+      respond.file('runtime checked', {
+        contentType: 'text/plain',
+        headers: fileHeaders,
+      });
+    }
+  });
+
   it('does not let poisoned byte globals forge an inline stream sniff result (KV428)', () => {
     const NativeArrayBuffer = globalThis.ArrayBuffer;
     const NativeUint8Array = globalThis.Uint8Array;

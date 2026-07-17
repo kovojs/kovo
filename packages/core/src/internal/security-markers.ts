@@ -325,7 +325,8 @@ export const SECURITY_CODE_REGISTRY = {
     chokeId: 'server.response.emit-to-wire',
     code: 'KV415',
     enforcement: 'runtime-choke',
-    property: 'Response header names and values stay in typed, framework-owned channels.',
+    property:
+      'Response header names and values stay in framework-owned channels; app-authored framing and hop-by-hop fields fail before adapter mutation.',
     propertyDependsOn: 'request-state',
   },
   KV416: {

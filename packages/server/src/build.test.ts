@@ -78,6 +78,7 @@ interface NodeAdapterModule {
     response: Response,
     nodeResponse: ServerResponse,
     method?: string,
+    options?: { httpVersion?: string },
   ): Promise<void>;
 }
 
@@ -1516,6 +1517,7 @@ export default async function handler(request) {
       expect(nodeAdapter).toContain('export function rejectNodeRequestTargetLimit');
       expect(nodeAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
+      expect(nodeAdapter).toContain('export function assertSafeTransportResponseHeaderEntries');
       expect(nodeAdapter).toContain('const setCookies = apply(nativeHeadersGetSetCookie');
       expect(nodeAdapter).not.toContain('typeof headers.getSetCookie');
       expect(nodeAdapter).toContain("[nodeHeaders, 'set-cookie', {");
@@ -2960,6 +2962,7 @@ export default async function handler(request) {
       expect(vercelAdapter).toContain('export function rejectNodeRequestTargetLimit');
       expect(vercelAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
+      expect(vercelAdapter).toContain('export function assertSafeTransportResponseHeaderEntries');
       expect(vercelAdapter).toContain('const setCookies = apply(nativeHeadersGetSetCookie');
       expect(vercelAdapter).not.toContain('typeof headers.getSetCookie');
       expect(vercelAdapter).toContain("[nodeHeaders, 'set-cookie', {");
@@ -4756,6 +4759,19 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     'session=s1; Path=/; HttpOnly',
     'csrf=c1; Path=/; SameSite=Strict',
   ]);
+
+  for (const writeResponse of [liveWriteWebResponseToNode, adapter.writeWebResponseToNode]) {
+    for (const httpVersion of ['1.0', '1.1', '2.0']) {
+      for (const name of ['Content-Length', 'cOnNeCtIoN', 'Transfer-Encoding']) {
+        await expectAdapterTransportHeaderRejection(writeResponse, name, httpVersion);
+      }
+    }
+  }
+
+  const emittedConnectionClose = await capturedFrameworkConnectionClose(
+    adapter.writeWebResponseToNode,
+  );
+  expect(emittedConnectionClose).toBe('close');
 }
 
 function adapterParityRequest(): IncomingMessage {
@@ -4833,6 +4849,54 @@ async function capturedNodeHeaders(
 
   await writeWebResponseToNode(response, nodeResponse, 'GET');
   return captured;
+}
+
+async function expectAdapterTransportHeaderRejection(
+  writeWebResponseToNode: NodeAdapterModule['writeWebResponseToNode'],
+  name: string,
+  httpVersion: string,
+): Promise<void> {
+  let writeHeadCalls = 0;
+  const nodeResponse = {
+    end() {
+      return this;
+    },
+    shouldKeepAlive: false,
+    writeHead() {
+      writeHeadCalls += 1;
+      return this;
+    },
+  } as unknown as ServerResponse;
+
+  await expect(
+    writeWebResponseToNode(
+      new Response('blocked', { headers: { [name]: 'attacker-controlled' }, status: 200 }),
+      nodeResponse,
+      'GET',
+      { httpVersion },
+    ),
+  ).rejects.toThrow(/KV415.*owned by the HTTP adapter/u);
+  expect(writeHeadCalls).toBe(0);
+}
+
+async function capturedFrameworkConnectionClose(
+  writeWebResponseToNode: NodeAdapterModule['writeWebResponseToNode'],
+): Promise<string | string[] | undefined> {
+  let connection: string | string[] | undefined;
+  const nodeResponse = {
+    end() {
+      return this;
+    },
+    shouldKeepAlive: false,
+    writeHead(_status: number, _statusText: string, headers: Record<string, string | string[]>) {
+      connection = headers.connection;
+      return this;
+    },
+  } as unknown as ServerResponse;
+  await writeWebResponseToNode(new Response(null, { status: 204 }), nodeResponse, 'GET', {
+    httpVersion: '1.1',
+  });
+  return connection;
 }
 
 interface GeneratedServerProcess {

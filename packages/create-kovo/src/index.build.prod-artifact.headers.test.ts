@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { connect as netConnect } from 'node:net';
 
 import { describe, expect, it } from 'vitest';
 
@@ -45,7 +46,7 @@ describe('create-kovo starter (build integration: production response header art
         {
           proof: {
             evidence:
-              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes route outcome headers, guarded cache floors, structural-forgery escaping, typed file outcomes, omitted cache policy, and KV415 CRLF failure in the production server artifact',
+              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes route outcome headers, guarded cache floors, structural-forgery escaping, typed file outcomes, omitted cache policy, and KV415 CRLF/transport-framing failure in the production server artifact',
             kind: 'proof',
           },
           sink: 'response headers / route outcome headers',
@@ -58,6 +59,7 @@ describe('create-kovo starter (build integration: production response header art
             'header-route-omitted-policy.bin',
             'header-route-access-private.txt',
             'header-sink-unsafe.txt',
+            'header-transport-unsafe.txt',
           ],
         },
         {
@@ -138,6 +140,22 @@ describe('create-kovo starter (build integration: production response header art
       expect(unsafe.headers.get('x-kovo-header-proof')).toBeNull();
       expect(unsafe.headers.getSetCookie()).toEqual([]);
       expect(unsafeBody).toContain('Server Error');
+
+      const unsafeTransport = await fetch(`${origin}/header-transport-unsafe.txt`, {
+        headers: { 'x-declared-length': '0' },
+      });
+      const unsafeTransportBody = await unsafeTransport.text();
+      expect(unsafeTransport.status, unsafeTransportBody).toBe(500);
+      expect(unsafeTransport.headers.get('content-length')).not.toBe('0');
+      expect(unsafeTransportBody).not.toContain('UNDECLARED_ROUTE_BYTES');
+
+      const pipelinedWire = await pipelinedTransportHeaderExchange(port);
+      expect(pipelinedWire).toContain('HTTP/1.1 500');
+      expect(pipelinedWire).toContain('HTTP/1.1 200');
+      expect(pipelinedWire).toContain('safe header proof');
+      expect(pipelinedWire).not.toContain('UNDECLARED_ROUTE_BYTES');
+      expect(pipelinedWire).not.toContain('\r\n\r\nUNDECLARED_ROUTE_BYTESHTTP/1.1');
+      expect(pipelinedWire.match(/HTTP\/1\.1 /gu)).toHaveLength(2);
 
       const rollingMissing = await fetch(`${origin}/rolling-cookie-404`, {
         headers: { 'x-kovo-rolling-proof': '1' },
@@ -223,6 +241,12 @@ describe('create-kovo starter (build integration: production response header art
       // transport/runtime-derived instead of being frozen into the production build output.
       expect(rawCookies[0]).not.toContain('Secure');
       expect(rawCookies[0]).toContain('SameSite=Lax');
+
+      const rawTransport = await fetch(`${origin}/raw-header-transport`);
+      const rawTransportBody = await rawTransport.text();
+      expect(rawTransport.status, rawTransportBody).toBe(500);
+      expect(rawTransport.headers.get('content-length')).not.toBe('0');
+      expect(rawTransportBody).not.toContain('RAW_UNDECLARED_BYTES');
 
       const rawRedirect = await fetch(`${origin}/raw-header-redirect`, { redirect: 'manual' });
       const rawRedirectBody = await rawRedirect.text();
@@ -368,6 +392,20 @@ function addHeaderSinkProofRoutes(root: string): void {
       '    });',
       '  },',
       '});',
+      "const rawHeaderTransportEndpoint = endpoint('/raw-header-transport', {",
+      "  access: publicAccess('public raw endpoint transport-header sink proof'),",
+      "  auth: { kind: 'none', justification: 'public read-only transport-header proof endpoint' },",
+      "  method: 'GET',",
+      "  reason: 'raw endpoint transport-header sink proof',",
+      '  csrf: false,',
+      "  csrfJustification: 'read-only raw transport-header proof endpoint',",
+      "  response: { appOwnedSafety: true, body: 'text', cache: 'no-store', reservedHeaders: ['Content-Length'] },",
+      '  handler() {',
+      "    return new Response('RAW_UNDECLARED_BYTES', {",
+      "      headers: { 'Cache-Control': 'no-store', 'Content-Length': '0' },",
+      '    });',
+      '  },',
+      '});',
       "const rawHeaderRedirectEndpoint = endpoint('/raw-header-redirect', {",
       "  access: publicAccess('public raw endpoint redirect Location header sink proof'),",
       "  auth: { kind: 'none', justification: 'public read-only redirect sink proof endpoint' },",
@@ -409,7 +447,7 @@ function addHeaderSinkProofRoutes(root: string): void {
   const withEndpointRegistration = replaceRequired(
     withMutationRegistration,
     '  endpoints: [healthEndpoint],',
-    '  endpoints: [healthEndpoint, rawHeaderEndpoint, rawHeaderRedirectEndpoint],',
+    '  endpoints: [healthEndpoint, rawHeaderEndpoint, rawHeaderTransportEndpoint, rawHeaderRedirectEndpoint],',
     'response-header proof raw endpoint registration',
   );
   const withRoutes = replaceRequired(
@@ -435,6 +473,16 @@ function addHeaderSinkProofRoutes(root: string): void {
       "        return respond.file('safe header proof\\n', {",
       "          contentType: 'text/plain; charset=utf-8',",
       "          headers: { 'X-Kovo-Header-Proof': 'safe-header-value' },",
+      '        });',
+      '      },',
+      '    }),',
+      "    route('/header-transport-unsafe.txt', {",
+      "      access: publicAccess('public response transport-header sink proof'),",
+      '      page(_context, request: AppRequest) {',
+      "        const headers: Record<string, string> = { 'Content-Length': request.headers.get('x-declared-length') ?? '0' };",
+      "        return respond.file('UNDECLARED_ROUTE_BYTES', {",
+      "          contentType: 'text/plain; charset=utf-8',",
+      '          headers,',
       '        });',
       '      },',
       '    }),',
@@ -537,6 +585,39 @@ function addHeaderSinkProofRoutes(root: string): void {
     'response-header proof routes',
   );
   writeFileSync(appPath, withRoutes, 'utf8');
+}
+
+function pipelinedTransportHeaderExchange(port: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = netConnect(port, '127.0.0.1');
+    let output = '';
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('Timed out waiting for the production transport-header pipeline proof.'));
+    }, 5_000);
+    socket.setEncoding('latin1');
+    socket.once('connect', () => {
+      socket.write(
+        'GET /header-transport-unsafe.txt HTTP/1.1\r\n' +
+          'Host: 127.0.0.1\r\n' +
+          'X-Declared-Length: 0\r\n\r\n' +
+          'GET /header-sink-safe.txt HTTP/1.1\r\n' +
+          'Host: 127.0.0.1\r\n' +
+          'Connection: close\r\n\r\n',
+      );
+    });
+    socket.on('data', (chunk) => {
+      output += chunk;
+    });
+    socket.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    socket.once('end', () => {
+      clearTimeout(timeout);
+      resolve(output);
+    });
+  });
 }
 
 function replaceRequired(

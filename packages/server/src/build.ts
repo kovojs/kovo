@@ -63,6 +63,7 @@ import {
   staticHostImmutableAssetPathPatternSource,
 } from './static-host-header-policy.js';
 import { MAX_REQUEST_QUERY_ENTRIES, MAX_REQUEST_URL_CHARACTERS } from './request-url-limits.js';
+import { createTransportResponseHeaderClassifier } from './response-transport-headers.js';
 
 const immutableAssetPathPatternSourceLiteral = buildSecuritySourceLiteral(
   staticHostImmutableAssetPathPatternSource,
@@ -1066,6 +1067,11 @@ const nativeStringLastIndexOf = String.prototype.lastIndexOf;
 const nativeStringSlice = String.prototype.slice;
 const nativeStringToLowerCase = String.prototype.toLowerCase;
 const nativeStringTrim = String.prototype.trim;
+const classifyTransportResponseHeaders = (${generatedTransportResponseHeaderClassifierSource})({
+  lowerCase(value) {
+    return apply(nativeStringToLowerCase, value, []);
+  },
+});
 const bodylessMethods = new Set(['GET', 'HEAD']);
 const requestTargetAnalysisOrigin = 'https://kovo.invalid';
 const maxRequestUrlLength = ${MAX_REQUEST_URL_CHARACTERS};
@@ -1589,6 +1595,7 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
   // accessors. The transport never consults its mutable prototype again after this snapshot.
   const pinnedResponse = snapshotWebResponse(response);
   const responseHeaders = pinnedResponse.headers;
+  assertSafeTransportResponseHeaderEntries(transportResponseHeaderEntries(responseHeaders));
   if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
     apply(nativeHeadersSet, responseHeaders, ['connection', 'close']);
   }
@@ -1619,6 +1626,23 @@ function snapshotWebResponse(response) {
     status: apply(nativeResponseStatusGetter, response, []),
     statusText: apply(nativeResponseStatusTextGetter, response, []),
   };
+}
+
+function transportResponseHeaderEntries(headers) {
+  const entries = [];
+  apply(nativeHeadersForEach, headers, [(value, name) => {
+    entries[entries.length] = { name, value };
+  }]);
+  return entries;
+}
+
+export function assertSafeTransportResponseHeaderEntries(entries) {
+  const violation = classifyTransportResponseHeaders(entries);
+  if (violation === undefined) return;
+  throw new TypeError(
+    'KV415 Response header channel contains a forbidden header name or unsafe header value. ' +
+      violation.detail,
+  );
 }
 
 function nodeRequestUrl(nodeRequest, options) {
@@ -3301,6 +3325,9 @@ const generatedNodeDiagnosticFactorySource = buildSecurityFunctionSource(
 const generatedContentDispositionFactorySource = buildSecurityFunctionSource(
   createContentDispositionWithFilename,
 );
+const generatedTransportResponseHeaderClassifierSource = buildSecurityFunctionSource(
+  createTransportResponseHeaderClassifier,
+);
 const generatedRequestSafeRuntimeLockSource = buildSecurityFunctionSource(
   lockRequestSafeRuntimeRealmWithInventory,
 );
@@ -3339,6 +3366,7 @@ lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
 
 const {
   armIncompleteNodeRequestClose,
+  assertSafeTransportResponseHeaderEntries,
   nodeRequestToWebRequest,
   rejectInvalidNodeRequestAuthority,
   rejectNodeRequestTargetLimit,
@@ -3964,6 +3992,12 @@ function safeRouteOutcomeHeaders(headers) {
   const safeHeaders = apply(nativeObjectCreate, NativeObject, [null]);
   if (headers === undefined) return safeHeaders;
   const names = apply(nativeObjectKeys, NativeObject, [headers]);
+  const transportEntries = [];
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    transportEntries[index] = { name, value: ownDataValue(headers, name) };
+  }
+  assertSafeTransportResponseHeaderEntries(transportEntries);
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index];
     const normalizedName = apply(nativeStringToLowerCase, name, []);

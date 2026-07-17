@@ -22,6 +22,7 @@ import {
 import { assertNoSecretEgressValue } from './secret-egress.js';
 import { witnessArrayAppend, witnessFreeze } from './security-witness-intrinsics.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
+import { createTransportResponseHeaderClassifier } from './response-transport-headers.js';
 
 interface StaticExportHeaderSinkOptions {
   path: string;
@@ -38,6 +39,9 @@ interface StaticExportHeaderSink {
 }
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const classifyStaticTransportResponseHeaders = createTransportResponseHeaderClassifier({
+  lowerCase: securityStringToLowerCase,
+});
 
 /**
  * @internal Static export writes durable metadata, so response and configured asset headers pass
@@ -232,6 +236,10 @@ function normalizeStaticExportHeaderName(
   }
 
   const normalizedName = securityStringToLowerCase(text);
+  const transportViolation = classifyStaticTransportResponseHeaders([{ name: text, value: '' }]);
+  if (transportViolation !== undefined) {
+    throw staticExportHeaderError(options, `KV415 ${transportViolation.detail}`);
+  }
   if (normalizedName === 'set-cookie') {
     throw staticExportHeaderError(
       options,

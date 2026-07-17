@@ -439,6 +439,70 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'response-transport-headers',
+    marker: '@kovo-security-classifier-corpus response-transport-headers',
+    testFiles: [
+      'packages/server/src/response-transport-headers.test.ts',
+      'packages/server/src/response-posture.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+      'packages/server/src/static-export-headers.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'exact-runtime-and-type-set',
+        file: 'packages/server/src/response-transport-headers.test.ts',
+        snippets: [
+          'keeps the runtime rejection set aligned with the exhaustive type-level set',
+          "'content-length'",
+          "'connection'",
+          "'http2-settings'",
+          "'keep-alive'",
+          "'proxy-authenticate'",
+          "'proxy-authorization'",
+          "'proxy-connection'",
+          "'te'",
+          "'trailer'",
+          "'transfer-encoding'",
+          "'upgrade'",
+          'MissingTransportOwnedResponseHeaderName',
+        ],
+      },
+      {
+        id: 'structured-and-raw-response-corpus',
+        file: 'packages/server/src/response-posture.test.ts',
+        snippets: [
+          'rejects the transport-owned response-header corpus for structured and raw endpoints',
+          'finalizeServerResponse',
+          'finalizeRawWebResponse',
+        ],
+      },
+      {
+        id: 'pipelined-wire-regression',
+        file: 'packages/server/src/node.test.ts',
+        snippets: [
+          'fails a framing-header response before bytes can desynchronize a pipelined connection',
+          "expect(wire).not.toContain('HELLO')",
+          'expect(wire.match(/HTTP\\/1\\.1 /gu)).toHaveLength(2)',
+        ],
+      },
+      {
+        id: 'generated-node-vercel-parity',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'assertSafeTransportResponseHeaderEntries',
+          'expectAdapterTransportHeaderRejection',
+          "for (const httpVersion of ['1.0', '1.1', '2.0'])",
+        ],
+      },
+      {
+        id: 'static-export-transport-policy',
+        file: 'packages/server/src/static-export-headers.test.ts',
+        snippets: ['rejects transport-owned framing and hop-by-hop static metadata with KV415'],
+      },
+    ],
+  },
+  {
     id: 'kv418-request-authority',
     marker: '@kovo-security-classifier-corpus kv418-request-authority',
     testFiles: ['packages/compiler/src/scan/parse.test.ts'],

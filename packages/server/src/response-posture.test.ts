@@ -17,6 +17,86 @@ import {
 } from './response-posture.js';
 
 describe('central response posture finalization', () => {
+  // @kovo-security-classifier-corpus response-transport-headers
+  it('rejects the transport-owned response-header corpus for structured and raw endpoints', () => {
+    const transportOwnedNames = [
+      'cOnTeNt-LeNgTh',
+      'Connection',
+      'Keep-Alive',
+      'Proxy-Connection',
+      'TE',
+      'Trailer',
+      'Transfer-Encoding',
+      'Upgrade',
+      'Proxy-Authenticate',
+      'Proxy-Authorization',
+      'HTTP2-Settings',
+    ] as const;
+
+    for (const name of transportOwnedNames) {
+      expect(() =>
+        finalizeServerResponse(
+          {
+            body: 'blocked',
+            headers: { [name]: 'attacker-controlled' },
+            status: 200,
+          },
+          { method: 'GET' },
+        ),
+      ).toThrow(/KV415.*owned by the HTTP adapter/u);
+
+      expect(() =>
+        finalizeRawWebResponse(
+          new Response('blocked', {
+            headers: { [name]: 'attacker-controlled' },
+            status: 200,
+          }),
+          { method: 'GET' },
+        ),
+      ).toThrow(/KV415.*owned by the HTTP adapter/u);
+    }
+  });
+
+  it('rejects array-valued Connection metadata before nominated fields can reach an adapter', () => {
+    expect(() =>
+      finalizeServerResponse(
+        {
+          body: 'blocked',
+          headers: {
+            Connection: ['X-Hop', 'keep-alive'],
+            'X-Hop': 'attacker-controlled',
+          },
+          status: 200,
+        },
+        { method: 'GET' },
+      ),
+    ).toThrow(/KV415.*field and every header it nominates are rejected/u);
+  });
+
+  it('preserves legitimate end-to-end metadata on structured and raw responses', () => {
+    const safeHeaders = {
+      'Cache-Control': 'public, max-age=60',
+      'Content-Disposition': 'attachment; filename="report.txt"',
+      ETag: '"report-v1"',
+      'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
+      Vary: 'Accept-Encoding',
+    };
+    const structured = finalizeServerResponse(
+      { body: 'safe', headers: safeHeaders, status: 200 },
+      { method: 'GET' },
+    );
+    const raw = finalizeRawWebResponse(
+      new Response('safe', { headers: safeHeaders, status: 200 }),
+      { method: 'GET' },
+    );
+
+    for (const response of [structured, raw]) {
+      expect(response.headers.get('cache-control')).toBe('public, max-age=60');
+      expect(response.headers.get('etag')).toBe('"report-v1"');
+      expect(response.headers.get('vary')).toBe('Accept-Encoding');
+    }
+  });
+
   it('rejects response-header controls through the pinned KV415 classifier', () => {
     const originalCharCodeAt = String.prototype.charCodeAt;
     let observed: unknown;

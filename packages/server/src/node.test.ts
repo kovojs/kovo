@@ -32,6 +32,7 @@ import { mutation } from './mutation.js';
 import { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
 import { query } from './query.js';
 import { endpointRequestWithoutSession, resolveKovoLifecycleRequest } from './response-posture.js';
+import { respond, routeOutcomeResponse, routeResponseToWebResponse } from './response.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 import { MAX_REQUEST_QUERY_ENTRIES, MAX_REQUEST_URL_CHARACTERS } from './request-url-limits.js';
@@ -562,7 +563,6 @@ describe('server node adapter', () => {
         async () =>
           new Response('compress me'.repeat(128), {
             headers: {
-              'Content-Length': String('compress me'.repeat(128).length),
               'Content-Type': 'text/html; charset=utf-8',
             },
           }),
@@ -1365,6 +1365,105 @@ describe('responseHeadersToNodeHeaders (B1)', () => {
     expect(cookies).toHaveLength(2);
     expect(cookies[0]).toBe('session=abc; HttpOnly; Path=/');
     expect(cookies[1]).toBe('csrf=xyz; SameSite=Strict; Path=/');
+  });
+
+  it('rejects app-authored framing before HTTP/1.0, HTTP/1.1, or HTTP/2 adapter writes', async () => {
+    for (const httpVersion of ['1.0', '1.1', '2.0']) {
+      const writeHead = vi.fn();
+      const nodeResponse = {
+        end: vi.fn(),
+        shouldKeepAlive: false,
+        writeHead,
+      } as unknown as ServerResponse;
+      const response = new Response('HELLO', {
+        headers: { 'Content-Length': '0' },
+        status: 200,
+      });
+
+      await expect(
+        writeWebResponseToNode(response, nodeResponse, 'GET', { httpVersion }),
+      ).rejects.toThrow(/KV415.*content-length.*message-framing/iu);
+      expect(writeHead).not.toHaveBeenCalled();
+    }
+  });
+
+  it('adds framework-owned Connection close only after authored headers pass validation', async () => {
+    let capturedHeaders: Record<string, string | string[]> | undefined;
+    const nodeResponse = {
+      end: vi.fn(),
+      shouldKeepAlive: false,
+      writeHead(_status: number, _statusText: string, headers: Record<string, string | string[]>) {
+        capturedHeaders = headers;
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    await writeWebResponseToNode(new Response(null, { status: 204 }), nodeResponse, 'GET', {
+      httpVersion: '1.1',
+    });
+
+    expect(capturedHeaders?.connection).toBe('close');
+  });
+
+  // H14 / SPEC §9.1.1 and §9.5: prove over a real pipelined socket that a declared
+  // Content-Length cannot hide the first response body and turn it into a queued response prefix.
+  it('fails a framing-header response before bytes can desynchronize a pipelined connection', async () => {
+    let requestCount = 0;
+    const nodeServer = createServer(
+      toNodeHandler(
+        async (request) => {
+          requestCount += 1;
+          if (requestCount === 1) {
+            const dynamicHeaders: Record<string, string> = { 'Content-Length': '0' };
+            const outcome = respond.file('HELLO', {
+              contentType: 'text/plain; charset=utf-8',
+              headers: dynamicHeaders,
+            });
+            return routeResponseToWebResponse(routeOutcomeResponse(outcome, request), request);
+          }
+          return new Response('SECOND', {
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            status: 200,
+          });
+        },
+        { compression: false },
+      ),
+    );
+    await new Promise<void>((resolve) => nodeServer.listen(0, '127.0.0.1', resolve));
+    const address = nodeServer.address();
+    if (address === null || typeof address === 'string') {
+      throw new Error('Expected a TCP address for the pipeline regression server.');
+    }
+
+    try {
+      const wire = await new Promise<string>((resolve, reject) => {
+        const socket = netConnect(address.port, '127.0.0.1');
+        let output = '';
+        socket.setEncoding('latin1');
+        socket.on('connect', () => {
+          socket.write(
+            'GET /first HTTP/1.1\r\nHost: example.test\r\n\r\n' +
+              'GET /second HTTP/1.1\r\nHost: example.test\r\nConnection: close\r\n\r\n',
+          );
+        });
+        socket.on('data', (chunk) => {
+          output += chunk;
+        });
+        socket.on('end', () => resolve(output));
+        socket.on('error', reject);
+      });
+
+      expect(wire).toContain('HTTP/1.1 500');
+      expect(wire).toContain('HTTP/1.1 200');
+      expect(wire).toContain('SECOND');
+      expect(wire).not.toContain('HELLO');
+      expect(wire).not.toContain('\r\n\r\nHELLOHTTP/1.1');
+      expect(wire.match(/HTTP\/1\.1 /gu)).toHaveLength(2);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        nodeServer.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 });
 

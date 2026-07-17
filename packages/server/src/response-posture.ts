@@ -68,10 +68,21 @@ import {
   securityStringTrim,
   securityUint8ArraySlice,
 } from './response-security-intrinsics.js';
+import {
+  assertSafeTransportResponseHeaders,
+  createTransportResponseHeaderClassifier,
+  ResponseHeaderChannelError,
+  type TransportResponseHeaderEntry,
+} from './response-transport-headers.js';
+
+export { ResponseHeaderChannelError } from './response-transport-headers.js';
 
 const nativeStringIncludes = String.prototype.includes;
 const nativeStringStartsWith = String.prototype.startsWith;
 const nativeStringToLowerCase = String.prototype.toLowerCase;
+const classifyTransportResponseHeaders = createTransportResponseHeaderClassifier({
+  lowerCase: (value) => witnessReflectApply<string>(nativeStringToLowerCase, value, []),
+});
 const NativeResponse = Response;
 const readNativeResponseBody = responseIntrinsicGetter<ReadableStream<Uint8Array> | null>('body');
 const readNativeResponseHeaders = responseIntrinsicGetter<Headers>('headers');
@@ -98,15 +109,6 @@ export interface WireOutputProvenance {
  */
 
 export type RequestLifecycleSurface = 'document' | 'endpoint' | 'mutation' | 'query' | 'system';
-
-export class ResponseHeaderChannelError extends Error {
-  readonly code = 'KV415' as const;
-
-  constructor(message: string) {
-    super(`KV415 ${message}`);
-    this.name = 'ResponseHeaderChannelError';
-  }
-}
 
 type LifecycleCommonOptions<RawRequest, SessionValue, DbValue> = Pick<
   RequestLifecycleOptions<RawRequest, SessionValue, DbValue>,
@@ -684,6 +686,10 @@ function finalizeResponseHeaders(
     assertNoSecretEgressValue(descriptor.value, `response header "${name}"`);
   }
   const stableHeaders = cloneResponseHeaders(headers);
+  assertSafeTransportResponseHeaders(
+    structuredTransportHeaderEntries(stableHeaders),
+    classifyTransportResponseHeaders,
+  );
   const names = witnessObjectKeys(stableHeaders);
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index]!;
@@ -727,6 +733,10 @@ function finalizeRawResponseHeaders(
   options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[]; secure?: true },
 ): Headers {
   const headers = readNativeResponseHeaders(response);
+  assertSafeTransportResponseHeaders(
+    nativeTransportHeaderEntries(headers),
+    classifyTransportResponseHeaders,
+  );
   const hasRedirectLocation =
     isRedirectStatus(readNativeResponseStatus(response)) && nativeHeaderHas(headers, 'location');
   const setCookies = rawSetCookieHeaders(headers);
@@ -765,6 +775,46 @@ function finalizeRawResponseHeaders(
   }
 
   return webHeaders;
+}
+
+function structuredTransportHeaderEntries(
+  headers: ResponseHeaders,
+): TransportResponseHeaderEntry[] {
+  const entries: TransportResponseHeaderEntry[] = [];
+  const names = witnessObjectKeys(headers);
+  for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+    const name = names[nameIndex]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(headers, name);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`Response header ${name} must be a stable own data property.`);
+    }
+    const value = descriptor.value;
+    if (witnessIsArray(value)) {
+      for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
+        const entry = value[valueIndex];
+        if (typeof entry !== 'string') {
+          throw new TypeError(`Response header ${name} values must be strings.`);
+        }
+        entries[entries.length] = { name, value: entry };
+      }
+      continue;
+    }
+    if (typeof value !== 'string') {
+      throw new TypeError(`Response header ${name} values must be strings.`);
+    }
+    entries[entries.length] = { name, value };
+  }
+  return entries;
+}
+
+function nativeTransportHeaderEntries(headers: Headers): TransportResponseHeaderEntry[] {
+  const entries: TransportResponseHeaderEntry[] = [];
+  witnessReflectApply(nativeHeadersForEach as Function, headers, [
+    (value: string, name: string): void => {
+      entries[entries.length] = { name, value };
+    },
+  ]);
+  return entries;
 }
 
 function redirectLocationOptions(

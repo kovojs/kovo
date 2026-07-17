@@ -52,6 +52,26 @@ describe('server static export header sink', () => {
     ).toThrow(/framework-reserved 'Kovo-Build' headers/);
   });
 
+  it('rejects transport-owned framing and hop-by-hop static metadata with KV415', () => {
+    for (const name of [
+      'Content-Length',
+      'Connection',
+      'Keep-Alive',
+      'Proxy-Connection',
+      'TE',
+      'Trailer',
+      'Transfer-Encoding',
+      'Upgrade',
+      'Proxy-Authenticate',
+      'Proxy-Authorization',
+      'HTTP2-Settings',
+    ]) {
+      expect(() =>
+        staticExportHeaders({ [name]: 'attacker-controlled' }, { path: '/assets/app.css' }),
+      ).toThrow(/KV229 KV415.*owned by the HTTP adapter/u);
+    }
+  });
+
   it('pins the header map write after name/value validation', () => {
     const originalSet = Map.prototype.set;
     try {
