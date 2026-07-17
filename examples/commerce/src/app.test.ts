@@ -295,6 +295,7 @@ function expectCommerceShellDocument(html: string): void {
 async function signInCookie(db: ReturnType<typeof createCommerceTestApp>['db']): Promise<string> {
   const request = {
     authCsrfId: 'commerce-shell-login',
+    clientIp: '203.0.113.34',
     db,
     // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
     headers: new Headers({ 'x-forwarded-for': '203.0.113.34' }),

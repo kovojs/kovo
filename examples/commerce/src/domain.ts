@@ -49,6 +49,7 @@ export interface CommerceRequest {
 
 export interface CommerceAuthRequest extends CommerceRequest {
   authCsrfId?: string | null;
+  clientIp?: string;
   headers: Headers;
 }
 
@@ -131,51 +132,82 @@ const commerceAuthUsers = new Map<
 export function createCommerceBetterAuth() {
   const sessionUserIds = new Map<string, string>();
 
+  const api = {
+    getSession(options: { headers: Headers }) {
+      const token = readCookie(options.headers, commerceAuthCookieName);
+      const userId = token ? sessionUserIds.get(token) : undefined;
+      const user = userId
+        ? [...commerceAuthUsers.values()].find((candidate) => candidate.id === userId)
+        : undefined;
+
+      if (!token || !user) return null;
+
+      return {
+        session: { id: token },
+        user: {
+          email: user.email,
+          id: user.id,
+          roles: user.roles,
+        },
+      };
+    },
+    signInEmail(options: {
+      asResponse: true;
+      body: { email: string; password: string };
+      headers: Headers;
+    }) {
+      const user = commerceAuthUsers.get(options.body.email);
+      if (!user || user.password !== options.body.password) {
+        return commerceAuthResponse([], 401);
+      }
+
+      const token = `session-${user.id}`;
+      sessionUserIds.set(token, user.id);
+
+      return commerceAuthResponse([
+        `${commerceAuthCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax`,
+      ]);
+    },
+    signOut(options: { asResponse: true; headers: Headers }) {
+      const token = readCookie(options.headers, commerceAuthCookieName);
+      if (token) sessionUserIds.delete(token);
+
+      return commerceAuthResponse([
+        `${commerceAuthCookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
+      ]);
+    },
+  };
+
   return {
-    api: {
-      getSession(options: { headers: Headers }) {
-        const token = readCookie(options.headers, commerceAuthCookieName);
-        const userId = token ? sessionUserIds.get(token) : undefined;
-        const user = userId
-          ? [...commerceAuthUsers.values()].find((candidate) => candidate.id === userId)
-          : undefined;
+    api,
+    $context: Promise.resolve({
+      baseURL: 'https://commerce.test/api/auth',
+      options: { basePath: '/api/auth' },
+    }),
+    async handler(request: Request): Promise<Response> {
+      const url = new URL(request.url);
+      if (request.method !== 'POST' || url.pathname !== '/api/auth/sign-in/email') {
+        return new Response(null, { status: 404 });
+      }
 
-        if (!token || !user) return null;
+      const body: unknown = await request.json();
+      if (
+        typeof body !== 'object' ||
+        body === null ||
+        !('email' in body) ||
+        typeof body.email !== 'string' ||
+        !('password' in body) ||
+        typeof body.password !== 'string'
+      ) {
+        return new Response(null, { status: 400 });
+      }
 
-        return {
-          session: { id: token },
-          user: {
-            email: user.email,
-            id: user.id,
-            roles: user.roles,
-          },
-        };
-      },
-      signInEmail(options: {
-        asResponse: true;
-        body: { email: string; password: string };
-        headers: Headers;
-      }) {
-        const user = commerceAuthUsers.get(options.body.email);
-        if (!user || user.password !== options.body.password) {
-          return commerceAuthResponse([], 401);
-        }
-
-        const token = `session-${user.id}`;
-        sessionUserIds.set(token, user.id);
-
-        return commerceAuthResponse([
-          `${commerceAuthCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax`,
-        ]);
-      },
-      signOut(options: { asResponse: true; headers: Headers }) {
-        const token = readCookie(options.headers, commerceAuthCookieName);
-        if (token) sessionUserIds.delete(token);
-
-        return commerceAuthResponse([
-          `${commerceAuthCookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
-        ]);
-      },
+      const response = api.signInEmail({
+        asResponse: true,
+        body: { email: body.email, password: body.password },
+        headers: request.headers,
+      });
+      return new Response(null, { headers: response.headers, status: response.status });
     },
   };
 }

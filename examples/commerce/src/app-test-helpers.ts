@@ -142,6 +142,7 @@ export function commerceAuthRequest(cookie?: string, db = createCommerceDb()) {
 
   return {
     authCsrfId: 'login-csrf',
+    clientIp: '203.0.113.10',
     db,
     headers,
   };

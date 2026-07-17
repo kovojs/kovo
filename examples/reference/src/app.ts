@@ -31,6 +31,7 @@ export interface ReferenceSession {
 
 export interface ReferenceRequest {
   authCsrfId?: string | null;
+  clientIp?: string;
   headers: Headers;
   session?: ReferenceSession | null;
 }
@@ -106,52 +107,83 @@ const referenceUsers = new Map<string, ReferenceBetterAuthUser & { password: str
 export function createReferenceBetterAuth() {
   const sessionUserIds = new Map<string, string>();
 
+  const api = {
+    getSession(options: { headers: Headers }) {
+      const token = readCookie(options.headers, referenceCookieName);
+      const userId = token ? sessionUserIds.get(token) : undefined;
+      const user = userId
+        ? [...referenceUsers.values()].find((candidate) => candidate.id === userId)
+        : undefined;
+
+      if (!token || !user) return null;
+
+      return {
+        session: { id: token },
+        user: {
+          email: user.email,
+          id: user.id,
+          name: user.name ?? user.email,
+          roles: user.roles ?? defaultRolesForEmail(user.email),
+        },
+      };
+    },
+    signInEmail(options: {
+      asResponse: true;
+      body: { email: string; password: string };
+      headers: Headers;
+    }) {
+      const user = referenceUsers.get(options.body.email);
+      if (!user || user.password !== options.body.password) {
+        return referenceAuthResponse([], 401);
+      }
+
+      const token = `session-${user.id}`;
+      sessionUserIds.set(token, user.id);
+
+      return referenceAuthResponse([
+        `${referenceCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax`,
+      ]);
+    },
+    signOut(options: { asResponse: true; headers: Headers }) {
+      const token = readCookie(options.headers, referenceCookieName);
+      if (token) sessionUserIds.delete(token);
+
+      return referenceAuthResponse([
+        `${referenceCookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
+      ]);
+    },
+  };
+
   return {
-    api: {
-      getSession(options: { headers: Headers }) {
-        const token = readCookie(options.headers, referenceCookieName);
-        const userId = token ? sessionUserIds.get(token) : undefined;
-        const user = userId
-          ? [...referenceUsers.values()].find((candidate) => candidate.id === userId)
-          : undefined;
+    api,
+    $context: Promise.resolve({
+      baseURL: 'https://reference.test/api/auth',
+      options: { basePath: '/api/auth' },
+    }),
+    async handler(request: Request): Promise<Response> {
+      const url = new URL(request.url);
+      if (request.method !== 'POST' || url.pathname !== '/api/auth/sign-in/email') {
+        return new Response(null, { status: 404 });
+      }
 
-        if (!token || !user) return null;
+      const body: unknown = await request.json();
+      if (
+        typeof body !== 'object' ||
+        body === null ||
+        !('email' in body) ||
+        typeof body.email !== 'string' ||
+        !('password' in body) ||
+        typeof body.password !== 'string'
+      ) {
+        return new Response(null, { status: 400 });
+      }
 
-        return {
-          session: { id: token },
-          user: {
-            email: user.email,
-            id: user.id,
-            name: user.name ?? user.email,
-            roles: user.roles ?? defaultRolesForEmail(user.email),
-          },
-        };
-      },
-      signInEmail(options: {
-        asResponse: true;
-        body: { email: string; password: string };
-        headers: Headers;
-      }) {
-        const user = referenceUsers.get(options.body.email);
-        if (!user || user.password !== options.body.password) {
-          return referenceAuthResponse([], 401);
-        }
-
-        const token = `session-${user.id}`;
-        sessionUserIds.set(token, user.id);
-
-        return referenceAuthResponse([
-          `${referenceCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax`,
-        ]);
-      },
-      signOut(options: { asResponse: true; headers: Headers }) {
-        const token = readCookie(options.headers, referenceCookieName);
-        if (token) sessionUserIds.delete(token);
-
-        return referenceAuthResponse([
-          `${referenceCookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
-        ]);
-      },
+      const response = api.signInEmail({
+        asResponse: true,
+        body: { email: body.email, password: body.password },
+        headers: request.headers,
+      });
+      return new Response(null, { headers: response.headers, status: response.status });
     },
   };
 }
@@ -271,6 +303,7 @@ export function referenceAuthRequest(cookie?: string): ReferenceRequest {
 
   return {
     authCsrfId: 'login-csrf',
+    clientIp: '203.0.113.20',
     headers,
   };
 }
