@@ -34,6 +34,7 @@ import { query } from './query.js';
 import { endpointRequestWithoutSession, resolveKovoLifecycleRequest } from './response-posture.js';
 import { route } from './route.js';
 import { s } from './schema.js';
+import { MAX_REQUEST_QUERY_ENTRIES, MAX_REQUEST_URL_CHARACTERS } from './request-url-limits.js';
 
 function nodeRequest(url: string): IncomingMessage {
   const request = new EventEmitter() as IncomingMessage;
@@ -45,6 +46,20 @@ function nodeRequest(url: string): IncomingMessage {
 }
 
 describe('server node adapter', () => {
+  it('rejects raw request-target limits before Request construction or origin callbacks', () => {
+    const origin = vi.fn(() => 'https://app.example');
+    const tooManyEntries = `/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`;
+    const tooManyCharacters = `/${'a'.repeat(MAX_REQUEST_URL_CHARACTERS)}`;
+
+    expect(() => nodeRequestToWebRequest(nodeRequest(tooManyEntries), { origin })).toThrow(
+      'Kovo Node request target exceeds the SPEC §9.5 resource ceiling.',
+    );
+    expect(() => nodeRequestToWebRequest(nodeRequest(tooManyCharacters), { origin })).toThrow(
+      'Kovo Node request target exceeds the SPEC §9.5 resource ceiling.',
+    );
+    expect(origin).not.toHaveBeenCalled();
+  });
+
   it('uses a pinned origin for absolute-form and protocol-relative request targets', () => {
     const absolute = nodeRequestToWebRequest(nodeRequest('http://evil.example/admin?next=1'), {
       origin: 'https://app.example',
@@ -118,11 +133,8 @@ describe('server node adapter', () => {
       createApp({
         queries: [cartQuery],
         requestLimits: {
-          global: false,
-          maxBodyBytes: false,
-          mutations: { global: false, perIp: false },
-          perIp: false,
-          queries: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+          mutations: {},
+          queries: { perIp: { max: 1, windowMs: 60_000 } },
         },
       }),
     );
@@ -807,11 +819,9 @@ describe('toNodeHandler incomplete request transport closure', () => {
         }),
       ],
       requestLimits: {
-        global: false,
         maxBodyBytes: 1_024,
-        mutations: { global: false, perIp: false },
-        perIp: false,
-        queries: { global: false, perIp: false },
+        mutations: {},
+        queries: {},
       },
     });
     const server = await serveWithNode(toNodeHandler(createRequestHandler(app)));
@@ -1120,6 +1130,44 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
 
       expect(status).toBe(200);
       expect(body).toBe('ok /h2-path');
+    } finally {
+      client.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  it('rejects separator-heavy HTTP/2 targets with 414 before the Web handler', async () => {
+    const webHandler = vi.fn(async () => new Response('handler reached'));
+    const nodeHandler = toNodeHandler(webHandler);
+    const server = createHttp2Server((request, response) => {
+      void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const client = http2Connect(`http://127.0.0.1:${address.port}`);
+
+    try {
+      const outcome = await new Promise<{ body: string; status: number }>((resolve, reject) => {
+        const target = `/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`;
+        const request = client.request({ ':method': 'GET', ':path': target });
+        let body = '';
+        let status = 0;
+        request.on('response', (headers) => {
+          status = Number(headers[':status'] ?? 0);
+        });
+        request.setEncoding('utf8');
+        request.on('data', (chunk: string) => {
+          body += chunk;
+        });
+        request.on('end', () => resolve({ body, status }));
+        request.on('error', reject);
+        request.end();
+      });
+
+      expect(outcome).toEqual({ body: 'URI Too Long', status: 414 });
+      expect(webHandler).not.toHaveBeenCalled();
     } finally {
       client.close();
       await new Promise<void>((resolve, reject) =>

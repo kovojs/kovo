@@ -3,7 +3,11 @@ import {
   snapshotVersionedClientModuleRegistry,
 } from './client-modules.js';
 import { snapshotAuditJustification } from './audit-justification.js';
-import { handleAppRequest, reportAppStartupError } from './app-request.js';
+import {
+  appRequestUrlLimitResponse,
+  handleAppRequest,
+  reportAppStartupError,
+} from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import {
@@ -771,6 +775,8 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
   registerAppTaskRuntime(app, taskRuntime);
 
   return async (request) => {
+    const urlLimitResponse = appRequestUrlLimitResponse(request);
+    if (urlLimitResponse) return urlLimitResponse;
     void taskRuntime?.ensureStarted(request).catch((error: unknown) => {
       reportAppStartupError(app, request, error);
     });

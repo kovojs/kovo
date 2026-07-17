@@ -9,6 +9,7 @@ import { createApp, createRequestHandler } from './app.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
 import { appRateLimitKeyCounts } from './app-load-shed.js';
 import { handleAppStartupErrorResponse } from './app-request.js';
+import { MAX_REQUEST_QUERY_ENTRIES } from './request-url-limits.js';
 import { versionedClientModuleHref } from './client-modules.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { csrfToken } from './csrf.js';
@@ -1848,11 +1849,9 @@ describe('server createApp request shell', () => {
           }),
         ],
         requestLimits: {
-          global: false,
           maxBodyBytes: 4,
-          perIp: false,
-          queries: { global: false, perIp: false },
-          mutations: { global: false, perIp: false },
+          queries: {},
+          mutations: {},
         },
       }),
     );
@@ -1948,6 +1947,103 @@ describe('server createApp request shell', () => {
     expect(second.status).toBe(429);
   });
 
+  it.each([
+    ['the whole posture', false, 'requestLimits }) cannot be false'],
+    [
+      'the body budget',
+      { maxBodyBytes: false },
+      'requestLimits.maxBodyBytes }) must be an integer',
+    ],
+    ['the base global rate', { global: false }, 'requestLimits.global }) cannot be false'],
+    ['the base per-IP rate', { perIp: false }, 'requestLimits.perIp }) cannot be false'],
+    ['the mutation posture', { mutations: false }, 'requestLimits.mutations }) must be'],
+    [
+      'the mutation global rate',
+      { mutations: { global: false } },
+      'requestLimits.mutations.global }) cannot be false',
+    ],
+    [
+      'the mutation per-IP rate',
+      { mutations: { perIp: false } },
+      'requestLimits.mutations.perIp }) cannot be false',
+    ],
+    ['the query posture', { queries: false }, 'requestLimits.queries }) must be'],
+    [
+      'the query global rate',
+      { queries: { global: false } },
+      'requestLimits.queries.global }) cannot be false',
+    ],
+    [
+      'the query per-IP rate',
+      { queries: { perIp: false } },
+      'requestLimits.queries.perIp }) cannot be false',
+    ],
+  ] as const)('rejects false for %s', (_label, requestLimits, message) => {
+    expect(() => createApp({ requestLimits: requestLimits as never })).toThrow(message);
+  });
+
+  it('makes every request-limit false posture unrepresentable in the public types', () => {
+    if (false) {
+      // @ts-expect-error SPEC §9.5: the complete pre-dispatch posture is mandatory.
+      createApp({ requestLimits: false });
+      // @ts-expect-error SPEC §9.5: the coarse body budget cannot be disabled.
+      createApp({ requestLimits: { maxBodyBytes: false } });
+      // @ts-expect-error SPEC §9.5: base rates are mandatory finite budgets.
+      createApp({ requestLimits: { global: false } });
+      // @ts-expect-error SPEC §9.5: per-surface rates are mandatory finite budgets.
+      createApp({ requestLimits: { mutations: { perIp: false } } });
+      // @ts-expect-error SPEC §9.5: per-surface rate postures are objects, not opt-outs.
+      createApp({ requestLimits: { queries: false } });
+    }
+    expect(true).toBe(true);
+  });
+
+  it.each([
+    [
+      'body bytes',
+      { maxBodyBytes: 67_108_865 },
+      'requestLimits.maxBodyBytes }) must be an integer between 0 and 67108864',
+    ],
+    [
+      'query/list items',
+      { maxQueryListItems: 100_001 },
+      'requestLimits.maxQueryListItems }) must be an integer between 1 and 100000',
+    ],
+    [
+      'requests per window',
+      { global: { max: 1_000_001 } },
+      'requestLimits.*.max }) must be an integer between 1 and 1000000',
+    ],
+    [
+      'retained rate keys',
+      { global: { max: 1, maxKeys: 100_001 } },
+      'requestLimits.*.maxKeys }) must be an integer between 1 and 100000',
+    ],
+    [
+      'rate window duration',
+      { global: { max: 1, windowMs: 86_400_001 } },
+      'requestLimits.*.windowMs }) must be an integer between 1 and 86400000',
+    ],
+  ] as const)('rejects an unbounded %s maximum', (_label, requestLimits, message) => {
+    expect(() => createApp({ requestLimits })).toThrow(message);
+  });
+
+  it('accepts the exact finite request-limit maxima', () => {
+    const app = createApp({
+      requestLimits: {
+        global: { max: 1_000_000, maxKeys: 100_000, windowMs: 86_400_000 },
+        maxBodyBytes: 67_108_864,
+        maxQueryListItems: 100_000,
+      },
+    });
+
+    expect(app.requestLimits).toMatchObject({
+      global: { max: 1_000_000, maxKeys: 100_000, windowMs: 86_400_000 },
+      maxBodyBytes: 67_108_864,
+      maxQueryListItems: 100_000,
+    });
+  });
+
   it('rejects accessor-backed request-limit authority instead of cross-binding reads', () => {
     let maxBodyReads = 0;
     const requestLimits = {
@@ -1973,6 +2069,57 @@ describe('server createApp request shell', () => {
       'createApp({ requestLimits.mutations.global }) must be a stable own data property.',
     );
   });
+
+  it.each([
+    ['route', '/limited-route', 'GET'],
+    ['query', '/_q/limited-query', 'GET'],
+    ['mutation', '/_m/limited-mutation', 'POST'],
+    ['endpoint', '/limited-endpoint', 'GET'],
+    ['not-found', '/limited-missing', 'GET'],
+  ] as const)(
+    'rejects an over-breadth URL with 414 before %s dispatch',
+    async (_surface, pathname, method) => {
+      const routeRender = vi.fn(() => renderedHtml('<main>route</main>'));
+      const queryLoad = vi.fn(() => ({ ok: true }));
+      const mutationHandler = vi.fn(() => ({ ok: true }));
+      const endpointHandler = vi.fn(() => new Response('endpoint'));
+      const app = createApp({
+        endpoints: [
+          endpoint('/limited-endpoint', {
+            handler: endpointHandler,
+            method: 'GET',
+            reason: 'request-target resource preflight regression',
+            response: rawTextResponse,
+          }),
+        ],
+        mutations: [
+          mutation('limited-mutation', {
+            csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
+            handler: mutationHandler,
+            input: s.object({}),
+          }),
+        ],
+        queries: [query('limited-query', { load: queryLoad, reads: [] })],
+        routes: [route('/limited-route', { page: routeRender })],
+      });
+      const queryString = `${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`;
+
+      const response = await createRequestHandler(app)(
+        new Request(`https://example.test${pathname}?${queryString}`, { method }),
+      );
+
+      expect(response.status).toBe(414);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+      await expect(response.text()).resolves.toBe('URI Too Long');
+      expect(routeRender).not.toHaveBeenCalled();
+      expect(queryLoad).not.toHaveBeenCalled();
+      expect(mutationHandler).not.toHaveBeenCalled();
+      expect(endpointHandler).not.toHaveBeenCalled();
+    },
+  );
 
   it('enforces the default request body cap before endpoint dispatch', async () => {
     const endpointHandler = vi.fn(() => new Response('ok'));
@@ -2029,11 +2176,9 @@ describe('server createApp request shell', () => {
         }),
       ],
       requestLimits: {
-        global: false,
         maxBodyBytes: 4,
-        mutations: { global: false, perIp: false },
-        perIp: false,
-        queries: { global: false, perIp: false },
+        mutations: {},
+        queries: {},
       },
     });
     const handler = createRequestHandler(app);
@@ -2068,11 +2213,9 @@ describe('server createApp request shell', () => {
       createApp({
         mutations: [upload],
         requestLimits: {
-          global: false,
           maxBodyBytes: 1,
-          mutations: { global: false, perIp: false },
-          perIp: false,
-          queries: { global: false, perIp: false },
+          mutations: {},
+          queries: {},
         },
       }),
     );
@@ -2109,11 +2252,9 @@ describe('server createApp request shell', () => {
           }),
         ],
         requestLimits: {
-          global: false,
           maxBodyBytes: 1,
-          mutations: { global: false, perIp: false },
-          perIp: false,
-          queries: { global: false, perIp: false },
+          mutations: {},
+          queries: {},
         },
       }),
     );
@@ -2167,11 +2308,9 @@ describe('server createApp request shell', () => {
           }),
         ],
         requestLimits: {
-          global: false,
           maxBodyBytes: 4,
-          mutations: { global: false, perIp: false },
-          perIp: false,
-          queries: { global: false, perIp: false },
+          mutations: {},
+          queries: {},
         },
       }),
     );
@@ -2214,11 +2353,9 @@ describe('server createApp request shell', () => {
           }),
         ],
         requestLimits: {
-          global: false,
           maxBodyBytes: 4,
-          mutations: { global: false, perIp: false },
-          perIp: false,
-          queries: { global: false, perIp: false },
+          mutations: {},
+          queries: {},
         },
       }),
     );
@@ -2260,11 +2397,9 @@ describe('server createApp request shell', () => {
           }),
         ],
         requestLimits: {
-          global: false,
           maxBodyBytes: 4,
-          mutations: { global: false, perIp: false },
-          perIp: false,
-          queries: { global: false, perIp: false },
+          mutations: {},
+          queries: {},
         },
       }),
     );
@@ -2347,11 +2482,8 @@ describe('server createApp request shell', () => {
       mutations: [addToCart],
       requestLimits: {
         clientIp: (request) => request.headers.get('x-kovo-client-ip') ?? undefined,
-        global: false,
-        maxBodyBytes: false,
-        perIp: false,
-        queries: { global: false, perIp: false },
-        mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+        queries: {},
+        mutations: { perIp: { max: 1, windowMs: 60_000 } },
       },
     });
     const handler = createRequestHandler(app);
@@ -2578,11 +2710,8 @@ describe('server createApp request shell', () => {
             }),
           ],
           requestLimits: {
-            global: false,
-            maxBodyBytes: false,
-            mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
-            perIp: false,
-            queries: { global: false, perIp: false },
+            mutations: { perIp: { max: 1, windowMs: 60_000 } },
+            queries: {},
             trustedProxy,
           },
         }),
@@ -2613,11 +2742,8 @@ describe('server createApp request shell', () => {
     const app = createApp({
       mutations: [addToCart],
       requestLimits: {
-        global: false,
-        maxBodyBytes: false,
-        mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
-        perIp: false,
-        queries: { global: false, perIp: false },
+        mutations: { perIp: { max: 1, windowMs: 60_000 } },
+        queries: {},
       },
     });
     const handler = createRequestHandler(app);
@@ -2642,11 +2768,8 @@ describe('server createApp request shell', () => {
     const app = createApp({
       mutations: [addToCart],
       requestLimits: {
-        global: false,
-        maxBodyBytes: false,
-        mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
-        perIp: false,
-        queries: { global: false, perIp: false },
+        mutations: { perIp: { max: 1, windowMs: 60_000 } },
+        queries: {},
         trustedProxy: true,
       },
     });
@@ -2673,11 +2796,9 @@ describe('server createApp request shell', () => {
     const app = createApp({
       mutations: [addToCart],
       requestLimits: {
-        global: false,
-        maxBodyBytes: false,
-        mutations: { global: false, perIp: { max: 1, maxKeys: 8, windowMs: 60_000 } },
-        perIp: false,
-        queries: { global: false, perIp: false },
+        mutations: { perIp: { max: 1, maxKeys: 8, windowMs: 60_000 } },
+        perIp: { max: 1_000, maxKeys: 8, windowMs: 60_000 },
+        queries: {},
         trustedProxy: true,
       },
     });
@@ -2697,20 +2818,20 @@ describe('server createApp request shell', () => {
 
     for (let index = 0; index < 8; index += 1) {
       expect((await handler(request(index))).status).toBe(303);
-      expect(appRateLimitKeyCounts(app).perIp).toBe(index + 1);
+      expect(appRateLimitKeyCounts(app).perIp).toBe((index + 1) * 2);
     }
 
     for (let index = 8; index < 2_048; index += 1) {
       const saturated = await handler(request(index));
       expect(saturated.status).toBe(429);
       expectActiveWindowRetryAfter(saturated);
-      expect(appRateLimitKeyCounts(app).perIp).toBe(8);
+      expect(appRateLimitKeyCounts(app).perIp).toBe(16);
     }
 
     const activeOldest = await handler(request(0));
     expect(activeOldest.status).toBe(429);
     expectActiveWindowRetryAfter(activeOldest);
-    expect(appRateLimitKeyCounts(app).perIp).toBe(8);
+    expect(appRateLimitKeyCounts(app).perIp).toBe(16);
   });
 
   it("does not let one rate-limit check evict another check's window", async () => {
@@ -2721,11 +2842,9 @@ describe('server createApp request shell', () => {
     const app = createApp({
       queries: [cartQuery],
       requestLimits: {
-        global: false,
-        maxBodyBytes: false,
-        mutations: { global: false, perIp: false },
+        mutations: {},
         perIp: { max: 1_000, windowMs: 5 },
-        queries: { global: false, perIp: { max: 2, windowMs: 60_000 } },
+        queries: { perIp: { max: 2, windowMs: 60_000 } },
         trustedProxy: true,
       },
     });
@@ -2755,11 +2874,8 @@ describe('server createApp request shell', () => {
     const app = createApp({
       queries: [cartQuery],
       requestLimits: {
-        global: false,
-        maxBodyBytes: false,
-        perIp: false,
-        mutations: { global: false, perIp: false },
-        queries: { global: { max: 1, windowMs: 60_000 }, perIp: false },
+        mutations: {},
+        queries: { global: { max: 1, windowMs: 60_000 } },
       },
     });
     const handler = createRequestHandler(app);
@@ -2791,11 +2907,8 @@ describe('server createApp request shell', () => {
     const app = createApp({
       queries: [rateLimitedQuery],
       requestLimits: {
-        global: false,
-        maxBodyBytes: false,
-        mutations: { global: false, perIp: false },
-        perIp: false,
-        queries: { global: false, perIp: false },
+        mutations: {},
+        queries: {},
         trustedProxy: true,
       },
       routes: [rateLimitedRoute],
@@ -2829,12 +2942,9 @@ describe('server createApp request shell', () => {
       createApp({
         queries: [catalogQuery],
         requestLimits: {
-          global: false,
-          maxBodyBytes: false,
           maxQueryListItems: 4,
-          mutations: { global: false, perIp: false },
-          perIp: false,
-          queries: { global: false, perIp: false },
+          mutations: {},
+          queries: {},
         },
       }),
     );

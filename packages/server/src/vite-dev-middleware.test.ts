@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { AddressInfo, Socket } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
@@ -15,8 +16,57 @@ import {
 } from './internal/app-shell-vite.js';
 import { nodeFetch } from './vite-test-http.js';
 import { renderedHtml } from './html.js';
+import { MAX_REQUEST_QUERY_ENTRIES } from './request-url-limits.js';
 
 describe('server app shell Vite plugin', () => {
+  it('rejects over-breadth targets before loading the Vite SSR or app graph', () => {
+    const middlewares: KovoAppShellViteMiddleware[] = [];
+    const loadedModuleIds: string[] = [];
+    let nextCalls = 0;
+    let responseBody = '';
+    let responseStatus = 0;
+    const plugin = kovoAppShellViteDevPlugin();
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+      async ssrLoadModule(id) {
+        loadedModuleIds.push(id);
+        return {};
+      },
+    });
+    const request = {
+      complete: true,
+      headers: {},
+      httpVersion: '1.1',
+      method: 'GET',
+      socket: { remoteAddress: '203.0.113.7' } as Socket,
+      url: `/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`,
+    } as IncomingMessage;
+    const response = {
+      end(body?: string) {
+        responseBody = body ?? '';
+        return this;
+      },
+      headersSent: false,
+      writeHead(status: number) {
+        responseStatus = status;
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    middlewares[0]?.(request, response, () => {
+      nextCalls += 1;
+    });
+
+    expect(responseStatus).toBe(414);
+    expect(responseBody).toBe('URI Too Long');
+    expect(loadedModuleIds).toEqual([]);
+    expect(nextCalls).toBe(0);
+  });
+
   it('owns the app-shell dev plugin option matrix for generated module loading', async () => {
     const app = createApp({
       routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>') })],

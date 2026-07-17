@@ -82,6 +82,16 @@ interface RateLimitDecision {
 const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_MAX_RATE_KEYS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
+/** @internal Hard body ceiling retained even when a file schema raises the app default. */
+export const MAX_APP_REQUEST_BODY_BYTES = 67_108_864;
+/** @internal */
+export const MAX_APP_REQUEST_QUERY_LIST_ITEMS = 100_000;
+/** @internal */
+export const MAX_APP_REQUEST_RATE = 1_000_000;
+/** @internal */
+export const MAX_APP_REQUEST_RATE_KEYS = 100_000;
+/** @internal */
+export const MAX_APP_REQUEST_RATE_WINDOW_MS = 86_400_000;
 const MAX_REQUEST_BODY_CHUNKS = 4_096;
 const DEFAULT_MAX_QUERY_LIST_ITEMS = 100;
 const DEFAULT_GLOBAL_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
@@ -189,18 +199,12 @@ const pinnedIngressBodyStreams = createWitnessWeakSet<object>();
 const pinnedIngressBodyReaders = createWitnessWeakSet<object>();
 
 export function normalizeAppRequestLimits(
-  options: AppRequestLimitOptions | false | undefined,
+  options: AppRequestLimitOptions | undefined,
 ): ResolvedAppRequestLimitOptions {
-  if (options === false) {
-    return witnessFreeze({
-      global: false,
-      maxBodyBytes: false,
-      maxQueryListItems: DEFAULT_MAX_QUERY_LIST_ITEMS,
-      mutations: frozenRequestRateLimits(false, false),
-      perIp: false,
-      queries: frozenRequestRateLimits(false, false),
-      trustedProxy: false,
-    });
+  if ((options as unknown) === false) {
+    throw new TypeError(
+      'createApp({ requestLimits }) cannot be false; SPEC §9.5 requires finite request limits.',
+    );
   }
 
   const source =
@@ -208,7 +212,6 @@ export function normalizeAppRequestLimits(
   const clientIp = requestLimitOwnDataValue(source, 'clientIp', 'requestLimits.clientIp');
   const global = requestLimitOwnDataValue(source, 'global', 'requestLimits.global') as
     | AppRateLimitOptions
-    | false
     | undefined;
   const maxBodyBytes = requestLimitOwnDataValue(
     source,
@@ -223,7 +226,6 @@ export function normalizeAppRequestLimits(
   const mutations = requestLimitOwnDataValue(source, 'mutations', 'requestLimits.mutations');
   const perIp = requestLimitOwnDataValue(source, 'perIp', 'requestLimits.perIp') as
     | AppRateLimitOptions
-    | false
     | undefined;
   const queries = requestLimitOwnDataValue(source, 'queries', 'requestLimits.queries');
   const trustedProxy = requestLimitOwnDataValue(
@@ -276,11 +278,9 @@ function normalizeRequestRateLimits(
   const source = value === undefined ? undefined : requestLimitRecord(value, label);
   const global = requestLimitOwnDataValue(source, 'global', `${label}.global`) as
     | AppRateLimitOptions
-    | false
     | undefined;
   const perIp = requestLimitOwnDataValue(source, 'perIp', `${label}.perIp`) as
     | AppRateLimitOptions
-    | false
     | undefined;
   return frozenRequestRateLimits(
     normalizeRate(global, defaultGlobal, `${label}.global`),
@@ -289,8 +289,8 @@ function normalizeRequestRateLimits(
 }
 
 function frozenRequestRateLimits(
-  global: ResolvedAppRateLimitOptions | false,
-  perIp: ResolvedAppRateLimitOptions | false,
+  global: ResolvedAppRateLimitOptions,
+  perIp: ResolvedAppRateLimitOptions,
 ): ResolvedAppRequestRateLimitOptions {
   return witnessFreeze({ global, perIp });
 }
@@ -300,7 +300,7 @@ export function preDispatchLoadShedResponse(
   request: Request,
   surface: LoadShedSurface,
   buildToken?: string,
-  maxBodyBytes: number | false = app.requestLimits.maxBodyBytes,
+  maxBodyBytes: number = app.requestLimits.maxBodyBytes,
 ): Response | undefined {
   const bodyFailure = requestBodySizeFailure(maxBodyBytes, request, surface, buildToken);
   if (bodyFailure) return bodyFailure;
@@ -320,31 +320,42 @@ export function preDispatchLoadShedResponse(
   });
 }
 
-function normalizeBodyLimit(maxBodyBytes: unknown): number | false {
-  if (maxBodyBytes === false) return false;
-  if (!requestStateIsSafeInteger(maxBodyBytes) || maxBodyBytes < 0) {
+function normalizeBodyLimit(maxBodyBytes: unknown): number {
+  if (
+    !requestStateIsSafeInteger(maxBodyBytes) ||
+    maxBodyBytes < 0 ||
+    maxBodyBytes > MAX_APP_REQUEST_BODY_BYTES
+  ) {
     throw new TypeError(
-      'createApp({ requestLimits.maxBodyBytes }) must be a non-negative integer.',
+      `createApp({ requestLimits.maxBodyBytes }) must be an integer between 0 and ${MAX_APP_REQUEST_BODY_BYTES}.`,
     );
   }
   return maxBodyBytes;
 }
 
 function normalizeQueryListLimit(maxQueryListItems: unknown): number {
-  if (!requestStateIsSafeInteger(maxQueryListItems) || maxQueryListItems < 1) {
+  if (
+    !requestStateIsSafeInteger(maxQueryListItems) ||
+    maxQueryListItems < 1 ||
+    maxQueryListItems > MAX_APP_REQUEST_QUERY_LIST_ITEMS
+  ) {
     throw new TypeError(
-      'createApp({ requestLimits.maxQueryListItems }) must be a positive integer.',
+      `createApp({ requestLimits.maxQueryListItems }) must be an integer between 1 and ${MAX_APP_REQUEST_QUERY_LIST_ITEMS}.`,
     );
   }
   return maxQueryListItems;
 }
 
 function normalizeRate(
-  options: AppRateLimitOptions | false | undefined,
+  options: AppRateLimitOptions | undefined,
   defaults: ResolvedAppRateLimitOptions,
   label: string,
-): ResolvedAppRateLimitOptions | false {
-  if (options === false) return false;
+): ResolvedAppRateLimitOptions {
+  if ((options as unknown) === false) {
+    throw new TypeError(
+      `createApp({ ${label} }) cannot be false; SPEC §9.5 requires a finite rate budget.`,
+    );
+  }
   if (options === undefined) return defaults;
   const source = requestLimitRecord(options, label);
   const authoredMax = requestLimitOwnDataValue(source, 'max', `${label}.max`);
@@ -353,14 +364,24 @@ function normalizeRate(
   const max = authoredMax ?? defaults.max;
   const maxKeys = authoredMaxKeys ?? defaults.maxKeys;
   const windowMs = authoredWindowMs ?? defaults.windowMs;
-  if (!requestStateIsSafeInteger(max) || max < 1) {
-    throw new TypeError('createApp({ requestLimits.*.max }) must be a positive integer.');
+  if (!requestStateIsSafeInteger(max) || max < 1 || max > MAX_APP_REQUEST_RATE) {
+    throw new TypeError(
+      `createApp({ requestLimits.*.max }) must be an integer between 1 and ${MAX_APP_REQUEST_RATE}.`,
+    );
   }
-  if (!requestStateIsSafeInteger(maxKeys) || maxKeys < 1) {
-    throw new TypeError('createApp({ requestLimits.*.maxKeys }) must be a positive integer.');
+  if (!requestStateIsSafeInteger(maxKeys) || maxKeys < 1 || maxKeys > MAX_APP_REQUEST_RATE_KEYS) {
+    throw new TypeError(
+      `createApp({ requestLimits.*.maxKeys }) must be an integer between 1 and ${MAX_APP_REQUEST_RATE_KEYS}.`,
+    );
   }
-  if (!requestStateIsSafeInteger(windowMs) || windowMs < 1) {
-    throw new TypeError('createApp({ requestLimits.*.windowMs }) must be a positive integer.');
+  if (
+    !requestStateIsSafeInteger(windowMs) ||
+    windowMs < 1 ||
+    windowMs > MAX_APP_REQUEST_RATE_WINDOW_MS
+  ) {
+    throw new TypeError(
+      `createApp({ requestLimits.*.windowMs }) must be an integer between 1 and ${MAX_APP_REQUEST_RATE_WINDOW_MS}.`,
+    );
   }
   return witnessFreeze({ max, maxKeys, windowMs });
 }
@@ -392,7 +413,6 @@ function requestBodySizeFailure(
   surface: LoadShedSurface,
   buildToken?: string,
 ): Response | undefined {
-  if (maxBodyBytes === false) return undefined;
   const size = requestContentLength(request);
   if (size === undefined || size <= maxBodyBytes) return undefined;
 
@@ -424,12 +444,17 @@ function rateLimitFailure(
   const checks: Array<{
     id: string;
     key: string;
-    limit: ResolvedAppRateLimitOptions | false;
+    limit: ResolvedAppRateLimitOptions;
     scope: RateBucketScope;
-  }> = [
-    { id: 'all:global', key: 'global', limit: limits.global, scope: 'global' },
-    { id: `${surface}:global`, key: 'global', limit: scoped.global, scope: 'global' },
-  ];
+  }> = [{ id: 'all:global', key: 'global', limit: limits.global, scope: 'global' }];
+  if (scoped !== undefined) {
+    appendLoadShedValue(checks, {
+      id: `${surface}:global`,
+      key: 'global',
+      limit: scoped.global,
+      scope: 'global',
+    });
+  }
   if (ip !== undefined) {
     appendLoadShedValue(checks, {
       id: 'all:per-ip',
@@ -437,12 +462,14 @@ function rateLimitFailure(
       limit: limits.perIp,
       scope: 'perIp',
     });
-    appendLoadShedValue(checks, {
-      id: `${surface}:per-ip`,
-      key: ip,
-      limit: scoped.perIp,
-      scope: 'perIp',
-    });
+    if (scoped !== undefined) {
+      appendLoadShedValue(checks, {
+        id: `${surface}:per-ip`,
+        key: ip,
+        limit: scoped.perIp,
+        scope: 'perIp',
+      });
+    }
   }
 
   for (let index = 0; index < checks.length; index += 1) {
@@ -451,7 +478,6 @@ function rateLimitFailure(
       return { retryAfterSeconds: 1 };
     }
     const check = descriptor.value;
-    if (check.limit === false) continue;
     const store = appRateBucketStore(state, check.id, check.scope);
     const decision = consumeRateLimit(store, check.key, check.limit, now);
     if (decision) return decision;
@@ -463,10 +489,10 @@ function rateLimitFailure(
 function surfaceRateLimits(
   limits: ResolvedAppRequestLimitOptions,
   surface: LoadShedSurface,
-): ResolvedAppRequestRateLimitOptions {
+): ResolvedAppRequestRateLimitOptions | undefined {
   if (surface === 'mutation') return limits.mutations;
   if (surface === 'query') return limits.queries;
-  return { global: false, perIp: false };
+  return undefined;
 }
 
 function consumeRateLimit(
@@ -555,9 +581,9 @@ export function appRateLimitKeyCounts(app: KovoApp): { global: number; perIp: nu
 }
 
 /** @internal */
-export function requestWithBodyLimit(request: Request, maxBodyBytes: number | false): Request {
+export function requestWithBodyLimit(request: Request, maxBodyBytes: number): Request {
   if (witnessWeakSetHas(verifiedBodyRequests, request)) return request;
-  if (maxBodyBytes === false || readNativeRequestBody(request) === null) return request;
+  if (readNativeRequestBody(request) === null) return request;
   const limited = witnessProxy(request, {
     get(target, property) {
       if (property === 'arrayBuffer') {
@@ -622,9 +648,9 @@ function authorityNeutralBodyLimitedClone(request: Request, maxBodyBytes: number
 /** @internal */
 export async function requestWithVerifiedBodyLimit(
   request: Request,
-  maxBodyBytes: number | false,
+  maxBodyBytes: number,
 ): Promise<Request> {
-  if (maxBodyBytes === false || readNativeRequestBody(request) === null) {
+  if (readNativeRequestBody(request) === null) {
     pinRequestIngressSurface(request);
     witnessWeakSetAdd(verifiedBodyRequests, request);
     return request;

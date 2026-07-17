@@ -54,6 +54,7 @@ import { s } from './schema.js';
 import { task } from './api/data.js';
 import { verifyCsrfRequestOriginFloor } from './csrf.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
+import { MAX_REQUEST_QUERY_ENTRIES, MAX_REQUEST_URL_CHARACTERS } from './request-url-limits.js';
 
 const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
@@ -67,6 +68,7 @@ interface NodeAdapterModule {
     options?: { trustedProxy?: boolean },
     response?: ServerResponse,
   ): Request;
+  rejectNodeRequestTargetLimit(request: IncomingMessage, response: ServerResponse): boolean;
   vercelRequestToWebRequest(request: IncomingMessage, response?: ServerResponse): Request;
   writeWebResponseToNode(
     response: Response,
@@ -1506,6 +1508,7 @@ export default async function handler(request) {
       expect(nodeServer).not.toContain("from './node-adapter.mjs';");
       const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(nodeAdapter).toContain('export function rejectNodeRequestTargetLimit');
       expect(nodeAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
       expect(nodeAdapter).toContain('const setCookies = apply(nativeHeadersGetSetCookie');
@@ -1528,6 +1531,12 @@ export default async function handler(request) {
       expect(nodeServer).toContain('const createNodeDiagnosticRecord = (');
       expect(nodeServer).toContain("await import('./server/handler.mjs')");
       expect(nodeServer).not.toContain('sanitizeDiagnosticUrl.toString');
+      expect(
+        nodeServer.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
+      ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
+      expect(
+        nodeServer.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
+      ).toBeLessThan(nodeServer.indexOf('await loadHandler()'));
 
       const emittedNodeAdapter = (await import(
         `${pathToFileURL(join(nodeOutDir, 'node-adapter.mjs')).href}?t=${Date.now()}`
@@ -2844,6 +2853,7 @@ export default async function handler(request) {
         'utf8',
       );
       expect(vercelAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(vercelAdapter).toContain('export function rejectNodeRequestTargetLimit');
       expect(vercelAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
       expect(vercelAdapter).toContain('const setCookies = apply(nativeHeadersGetSetCookie');
@@ -2858,7 +2868,11 @@ export default async function handler(request) {
       expect(vercelFunction).not.toContain('function nodeRequestToWebRequest');
       expect(vercelFunction).not.toContain('function responseHeadersToNodeHeaders');
       expect(vercelFunction).toContain('nodeResponse.destroy()');
+      expect(vercelFunction).toContain('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)');
       expect(vercelFunction).toContain('rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)');
+      expect(
+        vercelFunction.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
+      ).toBeLessThan(vercelFunction.indexOf('await loadHandler()'));
       await expect(
         readJson(join(vercelOutDir, 'functions/kovo.func/.vc-config.json')),
       ).resolves.toEqual({
@@ -3016,11 +3030,8 @@ export default async function handler(request) {
       const app = createApp({
         queries: [cartQuery],
         requestLimits: {
-          global: false,
-          maxBodyBytes: false,
-          mutations: { global: false, perIp: false },
-          perIp: false,
-          queries: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+          mutations: {},
+          queries: { perIp: { max: 1, windowMs: 60_000 } },
         },
       });
       const handler = createRequestHandler(app);
@@ -3598,6 +3609,7 @@ export default async function handler(request) {
         immutableAssetProbe,
         assetErrorProbe,
         routeProbe,
+        overLimitProbe,
       ] = runGeneratedCloudflareWorker(join(cloudflareOutDir, 'worker.mjs'), [
         {
           asset: { body: 'STATIC_POST_MUST_NOT_WIN' },
@@ -3633,6 +3645,10 @@ export default async function handler(request) {
         {
           asset: { body: 'Not Found', status: 404 },
           url: 'https://worker.test/hello',
+        },
+        {
+          asset: { body: 'OVER_LIMIT_ASSET_MUST_NOT_RUN' },
+          url: `https://worker.test/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`,
         },
       ]);
 
@@ -3677,6 +3693,12 @@ export default async function handler(request) {
       const routeResponse = routeProbe!.response;
       await expect(routeResponse.text()).resolves.toBe('cloudflare:/hello');
       expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+
+      const overLimit = overLimitProbe!;
+      expect(overLimit.assetCalls).toBe(0);
+      expect(overLimit.response.status).toBe(414);
+      expect(overLimit.response.headers.get('cache-control')).toBe('no-store');
+      await expect(overLimit.response.text()).resolves.toBe('URI Too Long');
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -3714,6 +3736,12 @@ export default async function handler(request) {
       const workerSource = await readFile(workerPath, 'utf8');
       expect(workerSource).toContain('cloudflareRequestForDispatch(request)');
       expect(workerSource).toContain('does not support HTTP Service Binding ingress');
+      expect(workerSource.indexOf('requestUrlLimitFailure(requestUrl)')).toBeLessThan(
+        workerSource.indexOf('new NativeURL(requestUrl)'),
+      );
+      expect(workerSource.indexOf('requestUrlLimitFailure(requestUrl)')).toBeLessThan(
+        workerSource.indexOf("ownDataValue(env, 'ASSETS')"),
+      );
       expect(workerSource.indexOf('cloudflareRequestForDispatch(request)')).toBeLessThan(
         workerSource.indexOf('await loadHandler()'),
       );
@@ -4270,6 +4298,33 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   expect(emittedRequest.headers.get('x-from-test')).toBe(liveRequest.headers.get('x-from-test'));
   expect(emittedRequest.headers.get('host')).toBeNull();
   expect(() => emittedRequest.headers.get(':authority')).toThrow();
+
+  for (const target of [
+    `/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`,
+    `/${'a'.repeat(MAX_REQUEST_URL_CHARACTERS)}`,
+  ]) {
+    const overLimitRequest = adapterParityRequest();
+    Object.assign(overLimitRequest, { complete: true, url: target });
+    expect(() => adapter.nodeRequestToWebRequest(overLimitRequest)).toThrow(
+      'Kovo Node request target exceeds the SPEC §9.5 resource ceiling.',
+    );
+
+    let body = '';
+    let status = 0;
+    const response = {
+      end(value?: string) {
+        body = value ?? '';
+        return this;
+      },
+      headersSent: false,
+      writeHead(value: number) {
+        status = value;
+        return this;
+      },
+    } as unknown as ServerResponse;
+    expect(adapter.rejectNodeRequestTargetLimit(overLimitRequest, response)).toBe(true);
+    expect({ body, status }).toEqual({ body: 'URI Too Long', status: 414 });
+  }
 
   for (const target of [
     '/%2e/_m/a/b',

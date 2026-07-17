@@ -111,9 +111,8 @@ describe('request-state intrinsic membrane', () => {
     const app = createApp({
       requestLimits: {
         global: { max: 1, maxKeys: 2, windowMs: 60_000 },
-        mutations: { global: false, perIp: false },
-        perIp: false,
-        queries: { global: false, perIp: false },
+        mutations: {},
+        queries: {},
       },
     });
     const request = () => new Request('https://example.test/protected');

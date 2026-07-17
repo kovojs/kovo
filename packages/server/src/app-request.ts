@@ -18,6 +18,7 @@ import type {
 import { appSystemResponse } from './app-system-response.js';
 import {
   pinRequestIngressSurface,
+  MAX_APP_REQUEST_BODY_BYTES,
   preDispatchLoadShedResponse,
   requestWithBodyLimit,
   RequestBodyLimitExceededError,
@@ -37,11 +38,15 @@ import {
   requestUrl,
   requestUrlSnapshot,
 } from './request-body-intrinsics.js';
+import { requestStateIsSafeInteger } from './request-state-intrinsics.js';
+import { requestUrlLimitFailure } from './request-url-limits.js';
 
 const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 
 export async function handleAppRequest(app: KovoApp, request: Request): Promise<Response> {
   pinRequestIngressSurface(request);
+  const urlLimitResponse = appRequestUrlLimitResponse(request);
+  if (urlLimitResponse) return urlLimitResponse;
   const appDiagnostics = blockingAppDiagnostics(app);
   if (appDiagnostics.length > 0) {
     return routeResponseToWebResponse(renderDiagnosticDocument(appDiagnostics), request);
@@ -161,6 +166,9 @@ export async function handleAppStartupErrorResponse(
   request: Request,
   error: unknown,
 ): Promise<Response> {
+  pinRequestIngressSurface(request);
+  const urlLimitResponse = appRequestUrlLimitResponse(request);
+  if (urlLimitResponse) return urlLimitResponse;
   const method = requestMethod(request);
   const url = requestCreateUrl(requestUrl(request));
   const urlSnapshot = requestUrlSnapshot(url);
@@ -195,13 +203,28 @@ export function reportAppStartupError(app: KovoApp, request: Request, error: unk
   });
 }
 
+/** @internal Reject oversized serialized request URLs before URL/URLSearchParams construction. */
+export function appRequestUrlLimitResponse(request: Request): Response | undefined {
+  const method = requestMethod(request);
+  if (requestUrlLimitFailure(requestUrl(request)) === undefined) return undefined;
+  return appSystemResponse('URI Too Long', {
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+    method,
+    status: 414,
+    surface: 'other',
+  });
+}
+
 function requestBodyLimitForMatch(
   app: KovoApp,
   match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>,
   reservedKey: string | undefined,
-): number | false {
+): number {
   const baseLimit = app.requestLimits.maxBodyBytes;
-  if (baseLimit === false || match.kind !== 'mutation') return baseLimit;
+  if (match.kind !== 'mutation') return baseLimit;
 
   const mutation = denseOwnRegistryEntryByExactKey(
     app.mutations,
@@ -215,6 +238,13 @@ function requestBodyLimitForMatch(
   // SPEC §6.3/§9.1: a declared file limit is the field-level validation contract. Keep the global
   // pre-dispatch floor, but raise it enough for multipart envelope bytes so the schema can return
   // the typed 422 field error instead of a misleading bare 413 for ordinary bounded uploads.
+  if (
+    !requestStateIsSafeInteger(uploadBytes) ||
+    uploadBytes < 0 ||
+    uploadBytes > MAX_APP_REQUEST_BODY_BYTES - FILE_MUTATION_BODY_OVERHEAD_BYTES
+  ) {
+    return MAX_APP_REQUEST_BODY_BYTES;
+  }
   const uploadBodyLimit = uploadBytes + FILE_MUTATION_BODY_OVERHEAD_BYTES;
   return baseLimit >= uploadBodyLimit ? baseLimit : uploadBodyLimit;
 }

@@ -142,18 +142,18 @@ export interface AppRouteRenderContext<Route extends AnyRouteDeclaration = AnyRo
 
 /** Coarse request-rate budget enforced by the request shell before dispatch (SPEC §9.5). */
 export interface AppRateLimitOptions {
-  /** Maximum accepted requests within `windowMs`. */
+  /** Maximum accepted requests within `windowMs` (1..1,000,000). */
   max: number;
-  /** Maximum distinct keys retained for this budget. Defaults to the request-shell key cap. */
+  /** Maximum distinct keys retained for this budget (1..100,000). */
   maxKeys?: number;
-  /** Sliding bucket duration in milliseconds. Defaults to the request-shell default window. */
+  /** Sliding bucket duration in milliseconds (1..86,400,000). */
   windowMs?: number;
 }
 
 /** Per-surface request-rate budgets enforced before dispatch (SPEC §9.5). */
 export interface AppRequestRateLimitOptions {
-  global?: AppRateLimitOptions | false;
-  perIp?: AppRateLimitOptions | false;
+  global?: AppRateLimitOptions;
+  perIp?: AppRateLimitOptions;
 }
 
 /**
@@ -164,13 +164,13 @@ export interface AppRequestLimitOptions extends AppRequestRateLimitOptions {
   /**
    * Maximum accepted request body size. The shell rejects an oversized `Content-Length`
    * before dispatch and wraps body readers so chunked/missing-length bodies fail with 413
-   * before parse. `false` disables the coarse body-size gate.
+   * before parse. Must be between 0 and 67,108,864 bytes; the gate cannot be disabled.
    */
-  maxBodyBytes?: number | false;
+  maxBodyBytes?: number;
   /**
    * Maximum array length a framework-owned query/list result may ship to the client wire.
-   * Defaults to the API4 resource-consumption floor; set a larger integer for an audited
-   * large-read surface (SPEC §9.5).
+   * Defaults to the API4 resource-consumption floor; an audited large-read surface may raise it
+   * up to 100,000 (SPEC §9.5).
    */
   maxQueryListItems?: number;
   /** Optional IP key extractor used by the coarse per-IP limiter. */
@@ -195,14 +195,14 @@ export interface ResolvedAppRateLimitOptions {
 
 /** Normalized per-surface request-rate budgets stored on the app aggregate. */
 export interface ResolvedAppRequestRateLimitOptions {
-  global: ResolvedAppRateLimitOptions | false;
-  perIp: ResolvedAppRateLimitOptions | false;
+  global: ResolvedAppRateLimitOptions;
+  perIp: ResolvedAppRateLimitOptions;
 }
 
 /** Normalized request-shell load-shedding posture stored on `KovoApp`. */
 export interface ResolvedAppRequestLimitOptions extends ResolvedAppRequestRateLimitOptions {
   clientIp?: (request: Request) => string | undefined;
-  maxBodyBytes: number | false;
+  maxBodyBytes: number;
   maxQueryListItems: number;
   mutations: ResolvedAppRequestRateLimitOptions;
   queries: ResolvedAppRequestRateLimitOptions;
@@ -291,7 +291,7 @@ export interface CreateAppOptions<
   onError?: ServerErrorHandler;
   queries?: AppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>;
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
-  requestLimits?: AppRequestLimitOptions | false;
+  requestLimits?: AppRequestLimitOptions;
   routes?: AppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */

@@ -25,6 +25,7 @@ import {
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import { requestForAuthorityNeutralMetadata } from './request-carrier.js';
+import { MAX_REQUEST_QUERY_ENTRIES } from './request-url-limits.js';
 
 /**
  * Package-private intrinsic membrane for attacker-controlled Request and FormData carriers.
@@ -53,7 +54,7 @@ const MAX_REQUEST_BODY_CHUNKS = 4_096;
 // carriers. Keep native parsing aligned with KV430's default breadth floor; count URL query/form
 // entries before record reconstruction or allocating slices/FormData parts so one compact request
 // cannot fan out into an unbounded carrier graph.
-const MAX_REQUEST_INPUT_ENTRIES = 10_000;
+const MAX_REQUEST_INPUT_ENTRIES = MAX_REQUEST_QUERY_ENTRIES;
 
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];

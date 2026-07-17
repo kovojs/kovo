@@ -14,6 +14,7 @@ import {
 import { Socket as NativeSocket, type Socket } from 'node:net';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app-types.js';
+import { requestUrlLimitFailure } from './request-url-limits.js';
 import {
   witnessCreateNullRecord,
   createWitnessWeakMap,
@@ -381,6 +382,12 @@ interface PinnedNodeRequest {
   readonly socket: Socket;
 }
 
+interface PinnedNodeRequestTarget {
+  readonly carrier: IncomingMessage;
+  readonly method: string;
+  readonly rawTarget: string;
+}
+
 function snapshotNodeHandlerOptions(options: NodeHandlerOptions): PinnedNodeHandlerOptions {
   const compression = optionalOwnDataProperty(options, 'compression');
   const earlyHints = optionalOwnDataProperty(options, 'earlyHints');
@@ -483,6 +490,25 @@ function snapshotNodeRequest(nodeRequest: IncomingMessage): PinnedNodeRequest {
   };
 }
 
+function snapshotNodeRequestTarget(nodeRequest: IncomingMessage): PinnedNodeRequestTarget {
+  const isHttp2 = hasPrototype(nodeRequest, NativeHttp2ServerRequest.prototype);
+  return {
+    carrier: nodeRequest,
+    method: requestStringProperty(
+      nodeRequest,
+      'method',
+      'GET',
+      isHttp2 ? nativeHttp2ServerRequestMethodGetter : undefined,
+    ),
+    rawTarget: requestStringProperty(
+      nodeRequest,
+      'url',
+      '/',
+      isHttp2 ? nativeHttp2ServerRequestUrlGetter : undefined,
+    ),
+  };
+}
+
 function requestStringProperty(
   value: object,
   property: PropertyKey,
@@ -525,6 +551,7 @@ export function toNodeHandler(
       // SPEC §6.6 rules 5-6: reconstruct the complete wire authority carrier once through
       // boot-captured controls before any authored handler or option callback can run.
       const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
+      if (rejectPinnedNodeRequestTargetLimit(pinnedNodeRequest, nodeResponse)) return;
       if (rejectUnsafePinnedNodeMutationTarget(pinnedNodeRequest, nodeResponse)) return;
       const request = nodeRequestToWebRequestFromSnapshot(
         pinnedNodeRequest,
@@ -584,11 +611,22 @@ export function nodeRequestToWebRequest(
   );
 }
 
+/** @internal Reject an over-budget raw Node target before any URL construction or handler load. */
+export function rejectNodeRequestTargetLimit(
+  nodeRequest: IncomingMessage,
+  nodeResponse: ServerResponse,
+): boolean {
+  return rejectPinnedNodeRequestTargetLimit(snapshotNodeRequestTarget(nodeRequest), nodeResponse);
+}
+
 function nodeRequestToWebRequestFromSnapshot(
   pinnedNodeRequest: PinnedNodeRequest,
   options: PinnedNodeHandlerOptions,
   nodeResponse?: ServerResponse,
 ): Request {
+  if (requestUrlLimitFailure(pinnedNodeRequest.rawTarget) !== undefined) {
+    throw new RangeError('Kovo Node request target exceeds the SPEC §9.5 resource ceiling.');
+  }
   if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
@@ -868,6 +906,31 @@ function rejectUnsafePinnedNodeMutationTarget(
     },
   ]);
   witnessReflectApply(responseTransport.end, nodeResponse, ['Not Found']);
+  return true;
+}
+
+/** Reject before URL construction, static routing, or authored adapter callbacks. */
+function rejectPinnedNodeRequestTargetLimit(
+  pinnedNodeRequest: PinnedNodeRequestTarget,
+  nodeResponse: ServerResponse,
+): boolean {
+  if (requestUrlLimitFailure(pinnedNodeRequest.rawTarget) === undefined) return false;
+
+  const responseTransport = pinNodeResponseTransport(nodeResponse);
+  armIncompleteNodeRequestClose(pinnedNodeRequest.carrier, nodeResponse);
+  witnessReflectApply(responseTransport.writeHead, nodeResponse, [
+    414,
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  ]);
+  witnessReflectApply(
+    responseTransport.end,
+    nodeResponse,
+    pinnedNodeRequest.method === 'HEAD' ? [] : ['URI Too Long'],
+  );
   return true;
 }
 

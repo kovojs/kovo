@@ -151,7 +151,7 @@ Keep the file checks close to the field:
 
 The request shell still owns the coarse body limit. If your app uses a small global
 `requestLimits.maxBodyBytes`, the file schema can raise the effective limit for that mutation up to
-the file field's declared max size.
+the file field's declared max size. The shell's 67,108,864-byte hard body ceiling still applies.
 
 ## Handle failure
 

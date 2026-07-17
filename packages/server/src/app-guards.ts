@@ -3,6 +3,13 @@ import { isDocumentConfig } from './document-structured.js';
 import { isFrameworkManagedDbProvider } from './guards.js';
 import { isFrameworkCsrfSigningSecret } from './keyring.js';
 import {
+  MAX_APP_REQUEST_BODY_BYTES,
+  MAX_APP_REQUEST_QUERY_LIST_ITEMS,
+  MAX_APP_REQUEST_RATE,
+  MAX_APP_REQUEST_RATE_KEYS,
+  MAX_APP_REQUEST_RATE_WINDOW_MS,
+} from './app-load-shed.js';
+import {
   createWitnessWeakSet,
   witnessWeakSetAdd,
   witnessWeakSetHas,
@@ -80,12 +87,18 @@ function isAppRequestLimits(value: unknown): value is KovoApp['requestLimits'] {
     isRecord(value) &&
     isResolvedRateLimit(value.global) &&
     isResolvedRateLimit(value.perIp) &&
-    (typeof value.maxBodyBytes === 'number' || value.maxBodyBytes === false) &&
+    typeof value.maxBodyBytes === 'number' &&
+    Number.isSafeInteger(value.maxBodyBytes) &&
+    value.maxBodyBytes >= 0 &&
+    value.maxBodyBytes <= MAX_APP_REQUEST_BODY_BYTES &&
     typeof value.maxQueryListItems === 'number' &&
     Number.isSafeInteger(value.maxQueryListItems) &&
+    value.maxQueryListItems > 0 &&
+    value.maxQueryListItems <= MAX_APP_REQUEST_QUERY_LIST_ITEMS &&
     isOptionalFunction(value.clientIp) &&
     isResolvedRateLimitScope(value.mutations) &&
-    isResolvedRateLimitScope(value.queries)
+    isResolvedRateLimitScope(value.queries) &&
+    typeof value.trustedProxy === 'boolean'
   );
 }
 
@@ -95,14 +108,19 @@ function isResolvedRateLimitScope(value: unknown): boolean {
 
 function isResolvedRateLimit(value: unknown): boolean {
   return (
-    value === false ||
-    (isRecord(value) &&
-      typeof value.max === 'number' &&
-      Number.isSafeInteger(value.max) &&
-      typeof value.maxKeys === 'number' &&
-      Number.isSafeInteger(value.maxKeys) &&
-      typeof value.windowMs === 'number' &&
-      Number.isSafeInteger(value.windowMs))
+    isRecord(value) &&
+    typeof value.max === 'number' &&
+    Number.isSafeInteger(value.max) &&
+    value.max > 0 &&
+    value.max <= MAX_APP_REQUEST_RATE &&
+    typeof value.maxKeys === 'number' &&
+    Number.isSafeInteger(value.maxKeys) &&
+    value.maxKeys > 0 &&
+    value.maxKeys <= MAX_APP_REQUEST_RATE_KEYS &&
+    typeof value.windowMs === 'number' &&
+    Number.isSafeInteger(value.windowMs) &&
+    value.windowMs > 0 &&
+    value.windowMs <= MAX_APP_REQUEST_RATE_WINDOW_MS
   );
 }
 

@@ -113,8 +113,14 @@ Because there is no middleware chain, the shell/adapter owns coarse pre-dispatch
 before replay lookup, schema parse/coercion, and guards:
 
 - Request/body size over the configured maximum returns **413** before the body is read or parsed.
+- A request target over 65,536 characters, or with more than 10,000 query entries, returns **414**
+  before Kovo constructs `URL` or `URLSearchParams`.
 - Per-IP and global request budgets return **429** with `Retry-After`.
 - A bound on query/list result size prevents one response from shipping an unbounded list payload.
+
+These budgets stay on. `false` is not a valid body or rate-limit setting. You can raise a budget for
+an audited surface, but each option has a hard finite maximum so a config typo cannot turn the shell
+into an unbounded parser or in-memory key store.
 
 Fine-grained `guards.rateLimit()` still belongs in the guard chain for per-principal policy. It
 composes with shell limits; it does not replace them, especially for anonymous floods.

@@ -62,6 +62,7 @@ import {
   staticHostImmutableAssetPathPatternFlags,
   staticHostImmutableAssetPathPatternSource,
 } from './static-host-header-policy.js';
+import { MAX_REQUEST_QUERY_ENTRIES, MAX_REQUEST_URL_CHARACTERS } from './request-url-limits.js';
 
 const immutableAssetPathPatternSourceLiteral = buildSecuritySourceLiteral(
   staticHostImmutableAssetPathPatternSource,
@@ -1040,6 +1041,8 @@ const nativeStringIndexOf = String.prototype.indexOf;
 const nativeStringTrim = String.prototype.trim;
 const bodylessMethods = new Set(['GET', 'HEAD']);
 const requestTargetAnalysisOrigin = 'https://kovo.invalid';
+const maxRequestUrlLength = ${MAX_REQUEST_URL_CHARACTERS};
+const maxRequestQueryEntries = ${MAX_REQUEST_QUERY_ENTRIES};
 const nodeRequestSnapshots = new NativeWeakMap();
 
 export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
@@ -1078,6 +1081,9 @@ function nodeRequestToWebRequestFromSnapshot(
   nodeResponse,
   clientIp,
 ) {
+  if (requestUrlLimitFailure(pinnedNodeRequest.rawTarget) !== undefined) {
+    throw new RangeError('Kovo Node request target exceeds the SPEC §9.5 resource ceiling.');
+  }
   if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
@@ -1295,6 +1301,20 @@ function descriptorHasValue(descriptor, expected) {
   return typeof descriptor.get === 'function' && apply(descriptor.get, globalThis, []) === expected;
 }
 
+export function rejectNodeRequestTargetLimit(nodeRequest, nodeResponse) {
+  const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
+  if (requestUrlLimitFailure(pinnedNodeRequest.rawTarget) === undefined) return false;
+  pinNodeResponseTransport(nodeResponse);
+  armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+  nodeResponse.writeHead(414, {
+    'cache-control': 'no-store',
+    'content-type': 'text/plain; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+  });
+  nodeResponse.end(pinnedNodeRequest.method === 'HEAD' ? undefined : 'URI Too Long');
+  return true;
+}
+
 export function rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse) {
   pinNodeResponseTransport(nodeResponse);
   const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
@@ -1307,6 +1327,32 @@ export function rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse) {
   });
   nodeResponse.end('Not Found');
   return true;
+}
+
+function requestUrlLimitFailure(value) {
+  if (value.length > maxRequestUrlLength) return 'url-length';
+  let queryStart = -1;
+  let entryStart = -1;
+  let entries = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (queryStart < 0) {
+      if (character === '#') return undefined;
+      if (character === '?') {
+        queryStart = index;
+        entryStart = index + 1;
+      }
+      continue;
+    }
+    if (character !== '&' && character !== '#') continue;
+    if (index > entryStart && ++entries > maxRequestQueryEntries) return 'query-entries';
+    if (character === '#') return undefined;
+    entryStart = index + 1;
+  }
+  if (queryStart >= 0 && value.length > entryStart && ++entries > maxRequestQueryEntries) {
+    return 'query-entries';
+  }
+  return undefined;
 }
 
 export function armIncompleteNodeRequestClose(nodeRequest, nodeResponse) {
@@ -1741,11 +1787,13 @@ module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
     const {
       armIncompleteNodeRequestClose,
       nodeRequestTransportMetadata,
+      rejectNodeRequestTargetLimit,
       rejectUnsafeNodeMutationTarget,
       vercelRequestToWebRequest,
       writeWebResponseToNode,
     } = await loadNodeAdapter();
     closeIncompleteRequest = armIncompleteNodeRequestClose;
+    if (rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)) return;
     if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
     const transport = nodeRequestTransportMetadata(nodeRequest);
     // Vercel documents x-vercel-forwarded-for and x-forwarded-proto as edge-overwritten request
@@ -1827,12 +1875,25 @@ const immutableAssetHeaders = ${immutableAssetHeadersSource};
 const revalidatingAssetHeaders = ${revalidatingAssetHeadersSource};
 const documentStaticHeaders = ${documentStaticHeadersSource};
 const staticErrorHeaders = ${staticErrorHeadersSource};
+const maxRequestUrlLength = ${MAX_REQUEST_URL_CHARACTERS};
+const maxRequestQueryEntries = ${MAX_REQUEST_QUERY_ENTRIES};
 let handlerPromise;
 
 export default {
   async fetch(request, env) {
     const method = apply(nativeRequestMethodGetter, request, []);
     const requestUrl = apply(nativeRequestUrlGetter, request, []);
+    if (requestUrlLimitFailure(requestUrl) !== undefined) {
+      return new NativeResponse(method === 'HEAD' ? null : 'URI Too Long', {
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+          'x-content-type-options': 'nosniff',
+        },
+        status: 414,
+        statusText: 'URI Too Long',
+      });
+    }
     const url = new NativeURL(requestUrl);
     const pathname = apply(nativeUrlPathnameGetter, url, []);
     const assets = ownDataValue(env, 'ASSETS');
@@ -1879,6 +1940,32 @@ export default {
 
 function apply(fn, receiver, args) {
   return nativeReflectApply(fn, receiver, args);
+}
+
+function requestUrlLimitFailure(value) {
+  if (value.length > maxRequestUrlLength) return 'url-length';
+  let queryStart = -1;
+  let entryStart = -1;
+  let entries = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (queryStart < 0) {
+      if (character === '#') return undefined;
+      if (character === '?') {
+        queryStart = index;
+        entryStart = index + 1;
+      }
+      continue;
+    }
+    if (character !== '&' && character !== '#') continue;
+    if (index > entryStart && ++entries > maxRequestQueryEntries) return 'query-entries';
+    if (character === '#') return undefined;
+    entryStart = index + 1;
+  }
+  if (queryStart >= 0 && value.length > entryStart && ++entries > maxRequestQueryEntries) {
+    return 'query-entries';
+  }
+  return undefined;
 }
 
 function sameDataDescriptor(left, right) {
@@ -3066,6 +3153,7 @@ lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
 const {
   armIncompleteNodeRequestClose,
   nodeRequestToWebRequest,
+  rejectNodeRequestTargetLimit,
   rejectUnsafeNodeMutationTarget,
   writeWebResponseToNode,
 } = await import('./node-adapter.mjs');
@@ -3267,6 +3355,7 @@ export function createKovoNodeServer(options = {}) {
   const server = createNodeHttpServer(async (nodeRequest, nodeResponse) => {
     let diagnosticRequestUrl;
     try {
+      if (rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)) return;
       if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
       const method = ownStringOr(nodeRequest, 'method', 'GET');
       const rawTarget = ownStringOr(nodeRequest, 'url', '/');
