@@ -2811,13 +2811,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         publicAccess,
         s,
         webhook,
+        webhookReplayIdentity,
       } from '@kovojs/server';
       const orders = domain('orders');
       const replayStore = createMemoryWebhookReplayStore();
       webhook('/events/deferred-record-change', {
         access: publicAccess('deferred recordChange boundary proof'),
-        input: s.object({ id: s.string() }),
-        idempotency: (input) => input.id,
+        input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+        idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
         replayStore,
         verify: 'none',
         verifyJustification: 'deferred recordChange boundary proof',
@@ -3132,6 +3133,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         publicAccess,
         s,
         webhook,
+        webhookReplayIdentity,
       } from '@kovojs/server';
       import { contacts } from './schema.js';
       const replayStore = createMemoryWebhookReplayStore();
@@ -3143,8 +3145,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         source: `${webhookPrelude}
           webhook('/events/immediate-root-authority', {
             access: publicAccess('immediate root authority proof'),
-            input: s.object({ id: s.string() }),
-            idempotency: (input) => input.id,
+            input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+            idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
             replayStore,
             verify: 'none',
             verifyJustification: 'immediate root authority proof',
@@ -3166,8 +3168,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         source: `${webhookPrelude}
           webhook('/events/deferred-root-authority', {
             access: publicAccess('deferred root authority proof'),
-            input: s.object({ id: s.string() }),
-            idempotency: (input) => input.id,
+            input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+            idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
             replayStore,
             verify: 'none',
             verifyJustification: 'deferred root authority proof',
@@ -4975,7 +4977,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       const hook = webhook('/hook', {
         access: [() => { execFileSync('webhook-access'); return true; }],
         handler() { return { ok: true }; },
-        idempotency() { return 'event'; },
+        idempotency() { return webhookReplayIdentity('event', 1_700_000_000_000); },
         input: schema,
         replayStore,
         transaction(_context, run) { return run({}); },
@@ -7426,14 +7428,15 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         publicAccess,
         s,
         webhook,
+        webhookReplayIdentity,
       } from '@kovojs/server';
       ${declaration}
       ${extra}
       export const hook = webhook('/webhooks/memory', {
         access: publicAccess('memory replay classifier fixture'),
         handler() { return { ok: true }; },
-        idempotency(input) { return input.id; },
-        input: s.object({ id: s.string() }),
+        idempotency(input) { return webhookReplayIdentity(input.id, input.occurredAtMs); },
+        input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
         ${replayProperty}
         verify: 'none',
         verifyJustification: 'memory replay classifier fixture',
@@ -7496,6 +7499,69 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
+  it('accepts only the exact pristine webhook replay identity constructor', () => {
+    const source = ({
+      extra = '',
+      identityCall = 'webhookReplayIdentity(input.id, input.occurredAtMs)',
+      identityImport = 'webhookReplayIdentity',
+    }: {
+      extra?: string;
+      identityCall?: string;
+      identityImport?: string;
+    } = {}) => `
+      import {
+        createMemoryWebhookReplayStore,
+        publicAccess,
+        s,
+        webhook,
+        ${identityImport}
+      } from '@kovojs/server';
+      ${extra}
+      const replayStore = createMemoryWebhookReplayStore();
+      webhook('/webhooks/identity-constructor', {
+        access: publicAccess('replay identity classifier fixture'),
+        handler() { return { ok: true }; },
+        idempotency(input) { return ${identityCall}; },
+        input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+        replayStore,
+        verify: 'none',
+        verifyJustification: 'replay identity classifier fixture',
+      });
+    `;
+
+    expect(sinksFor(source())).toEqual([]);
+
+    for (const [label, candidate] of [
+      [
+        'aliased import',
+        source({
+          identityCall: 'makeReplayIdentity(input.id, input.occurredAtMs)',
+          identityImport: 'webhookReplayIdentity as makeReplayIdentity',
+        }),
+      ],
+      [
+        'local carrier alias',
+        source({
+          extra: 'const makeReplayIdentity = webhookReplayIdentity;',
+          identityCall: 'makeReplayIdentity(input.id, input.occurredAtMs)',
+        }),
+      ],
+      [
+        'Function.call',
+        source({
+          identityCall: 'webhookReplayIdentity.call(undefined, input.id, input.occurredAtMs)',
+        }),
+      ],
+      ['wrong arity', source({ identityCall: 'webhookReplayIdentity(input.id)' })],
+      [
+        'optional call',
+        source({ identityCall: 'webhookReplayIdentity?.(input.id, input.occurredAtMs)' }),
+      ],
+    ] as const) {
+      expect(sinksFor(candidate), label).not.toEqual([]);
+    }
+  });
+
   it('accepts the exact generated durable Postgres webhook replay-store grammar', () => {
     const files = [
       {
@@ -7535,14 +7601,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       {
         fileName: 'webhooks.ts',
         source: `
-          import { publicAccess, s, webhook } from '@kovojs/server';
+          import { publicAccess, s, webhook, webhookReplayIdentity } from '@kovojs/server';
           import { appRuntimeWebhookReplayStore } from './_kovo/app-runtime-db.js';
           const webhookReplayStore = appRuntimeWebhookReplayStore;
           export const hook = webhook('/webhooks/exact', {
             access: publicAccess('exact generated replay-store fixture'),
             handler() { return { ok: true }; },
-            idempotency(input) { return input.id; },
-            input: s.object({ id: s.string() }),
+            idempotency(input) { return webhookReplayIdentity(input.id, input.occurredAtMs); },
+            input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
             replayStore: webhookReplayStore,
             verify: 'none',
             verifyJustification: 'exact generated replay-store fixture',
@@ -11459,6 +11525,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         publicAccess,
         s,
         webhook,
+        webhookReplayIdentity,
       } from '@kovojs/server';
       const contact = domain('model/contact');
       const replayStore = createMemoryWebhookReplayStore();
@@ -11469,8 +11536,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           ${recordChange}
           return { ok: true };
         },
-        idempotency: (input) => input.id,
-        input: s.object({ id: s.string() }),
+        idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
+        input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
         replayStore,
         verify: 'none',
         verifyJustification: 'recordChange classifier fixture',

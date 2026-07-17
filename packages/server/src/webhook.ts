@@ -484,9 +484,9 @@ export interface WebhookRunResult<Input = unknown, Value = unknown> {
 /**
  * Create an in-memory webhook replay store for local development and tests.
  *
- * The store implements SPEC §10.3's reservation shape: `reserve()` atomically claims
- * `(webhook, provider-event-id)`, concurrent `get()` calls wait for the committed response, and
- * `abort()` releases a failed in-flight reservation so the provider can retry.
+ * The store implements SPEC §10.3's reservation shape: `reserve()` atomically claims one
+ * authenticated provider-event identity, concurrent `get()` calls wait for the committed response,
+ * committed truth retires at its exact event horizon, and pending truth never auto-expires.
  */
 export function createMemoryWebhookReplayStore(
   options: { maxEntries?: number; maxPending?: number } = {},
@@ -506,13 +506,23 @@ export function createMemoryWebhookReplayStore(
   assertWebhookReplayStoreOptions({ maxEntries, maxPending });
   const responses = createWitnessMap<string, WebhookReplayRecord>();
   let pendingCount = 0;
+  // Volatile stores lose this floor on restart by design. Within one store lifetime it prevents
+  // wall-clock rollback from reopening canonical identities whose truth was already reclaimed.
+  let reclaimedThroughMs = -9_007_199_254_740_991;
+
+  const advanceReclamationWatermark = (now: number): void => {
+    if (now > reclaimedThroughMs) reclaimedThroughMs = now;
+  };
 
   const retireExpiredCommitted = (now: number): void => {
+    let retired = false;
     witnessMapForEach(responses, (record, key) => {
       if (record.kind === 'committed' && record.expiresAtMs <= now) {
         witnessMapDelete(responses, key);
+        retired = true;
       }
     });
+    if (retired) advanceReclamationWatermark(now);
   };
 
   const store: WebhookReplayStore = {
@@ -524,8 +534,10 @@ export function createMemoryWebhookReplayStore(
       const key = webhookReplayKey(scope, identity.key);
       const record = witnessMapGet(responses, key);
       if (record === undefined) return undefined;
-      if (record.kind === 'committed' && record.expiresAtMs <= requestStateNow()) {
+      const now = requestStateNow();
+      if (record.kind === 'committed' && record.expiresAtMs <= now) {
         witnessMapDelete(responses, key);
+        advanceReclamationWatermark(now);
         return undefined;
       }
       assertWebhookReplayIdentityMatches(record, identity);
@@ -537,11 +549,19 @@ export function createMemoryWebhookReplayStore(
         identitySource,
         'WebhookReplayStore.reserve() identity',
       );
-      retireExpiredCommitted(requestStateNow());
+      const now = requestStateNow();
+      retireExpiredCommitted(now);
       const key = webhookReplayKey(scope, identity.key);
       const existing = witnessMapGet(responses, key);
       if (existing !== undefined) {
         assertWebhookReplayIdentityMatches(existing, identity);
+        return undefined;
+      }
+      // SPEC §9.1/§10.3: the request-level check is intentionally not the only clock
+      // boundary. Verification/parsing may cross the authenticated event horizon; never admit
+      // a fresh claim after that crossing. An already-retained pending claim was handled above
+      // and remains joinable because pending ambiguity must never expire automatically.
+      if (identity.expiresAtMs <= now || identity.expiresAtMs <= reclaimedThroughMs) {
         return undefined;
       }
       // SPEC §10.3 requires every duplicate to replay, so capacity may refuse unseen work but
@@ -591,6 +611,14 @@ export function createMemoryWebhookReplayStore(
           ) {
             return;
           }
+          // Settlement after the authenticated horizon cannot become immediately removable
+          // committed truth. Leave the claim pending/fail-closed for operator reconciliation.
+          if (
+            identity.expiresAtMs <= requestStateNow() ||
+            identity.expiresAtMs <= reclaimedThroughMs
+          ) {
+            throw new Error('Webhook replay event horizon elapsed before reservation settlement.');
+          }
           pendingCount -= 1;
           witnessMapSet(responses, key, {
             expiresAtMs: identity.expiresAtMs,
@@ -607,10 +635,14 @@ export function createMemoryWebhookReplayStore(
         identitySource,
         'WebhookReplayStore.set() identity',
       );
-      retireExpiredCommitted(requestStateNow());
+      const now = requestStateNow();
+      retireExpiredCommitted(now);
       const key = webhookReplayKey(scope, identity.key);
       const existing = witnessMapGet(responses, key);
       if (existing !== undefined) assertWebhookReplayIdentityMatches(existing, identity);
+      if (identity.expiresAtMs <= now || identity.expiresAtMs <= reclaimedThroughMs) {
+        throw new Error('Webhook replay event horizon elapsed before response settlement.');
+      }
       if (existing === undefined && witnessMapSize(responses) >= maxEntries) {
         throw new Error('Webhook replay store is saturated; cannot admit a new event id.');
       }

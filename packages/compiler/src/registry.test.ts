@@ -1633,8 +1633,8 @@ export const recordInvoice = mutation('billing/record-invoice', {
 });
 
 export const stripeWebhook = webhook('/webhooks/stripe', {
-  input: s.object({ id: s.string() }),
-  idempotency: (input) => input.id,
+  input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
   replayStore,
   verify: 'none',
   verifyJustification: 'fixture-only webhook test',
@@ -1682,8 +1682,8 @@ export const stripeWebhook = webhook('/webhooks/stripe', {
       fileName: 'src/webhooks.ts',
       source: `
 export const stripeWebhook = webhook('/webhooks/stripe', {
-  input: s.object({ id: s.string() }),
-  idempotency: (input) => input.id,
+  input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
   replayStore,
   verify: 'none',
   verifyJustification: 'fixture-only webhook test',
@@ -1732,8 +1732,8 @@ export const stripeWebhook = webhook('/webhooks/stripe', {
       fileName: 'src/webhooks.ts',
       source: `
 export const stripeWebhook = webhook('/webhooks/stripe', {
-  input: s.object({ id: s.string() }),
-  idempotency: (input) => input.id,
+  input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
   replayStore,
   verify: 'none',
   verifyJustification: 'fixture-only webhook test',

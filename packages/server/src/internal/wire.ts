@@ -52,6 +52,7 @@ export {
 } from '../query.js';
 export { assignDerivedTaskKey } from '../task.js';
 export type {
+  WebhookReplayIdentity,
   WebhookReplayReservation,
   WebhookReplayStore,
   WebhookWireResponse,

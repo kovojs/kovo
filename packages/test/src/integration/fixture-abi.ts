@@ -6,6 +6,7 @@ import { verifierDenseArraySnapshot, verifierTypeError } from '../verifier-secur
 
 export { createMemoryStorage } from '@kovojs/core/internal/storage';
 export type {
+  WebhookReplayIdentity,
   WebhookReplayReservation,
   WebhookReplayStore,
   WebhookWireResponse,

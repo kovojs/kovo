@@ -548,9 +548,10 @@ async function expectPostgresTaskAndWebhook(
   expect(taskResponse.status, `${taskBody}\n${output()}`).toBe(303);
 
   const webhookId = `${marker}-webhook`;
+  const webhookOccurredAtMs = Date.now();
   const webhookRequest = () =>
     fetch(`${origin}/webhooks/phase5-pg-read`, {
-      body: JSON.stringify({ id: webhookId }),
+      body: JSON.stringify({ id: webhookId, occurredAtMs: webhookOccurredAtMs }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     });

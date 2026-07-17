@@ -1,42 +1,27 @@
 // SPEC.md §9.1: webhook idempotency replays the stored response for repeated
 // provider event ids without re-executing the handler.
 import { hmacSignature } from '@kovojs/core';
-import { createApp, domain, mutation, s, webhook } from '@kovojs/server';
-import type {
-  WebhookReplayReservation,
-  WebhookReplayStore,
-  WebhookWireResponse,
-} from '@kovojs/test/internal/integration/fixture-abi';
+import {
+  createApp,
+  createMemoryWebhookReplayStore,
+  domain,
+  mutation,
+  s,
+  webhook,
+  webhookReplayIdentity,
+} from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const WEBHOOK_HMAC_SECRET = 'a0a1a2a3a4a5a6a7a8a9aaabacadaeaf';
 
 type WebhookRequest = Request & KovoFixtureRequest;
 
-function createReplayStore(): WebhookReplayStore {
-  const entries = new Map<string, WebhookWireResponse>();
-  const keyFor = (scope: string, idem: string) => `${scope}\0${idem}`;
-
-  return {
-    get(scope, idem) {
-      return entries.get(keyFor(scope, idem));
-    },
-    reserve(scope, idem): WebhookReplayReservation {
-      const key = keyFor(scope, idem);
-      return {
-        commit(response) {
-          entries.set(key, response);
-        },
-      };
-    },
-    set(scope, idem, response) {
-      entries.set(keyFor(scope, idem), response);
-    },
-  };
-}
-
 const invoiceDomain = domain('invoice');
-const webhookEventInput = s.object({ id: s.string(), type: s.string() });
+const webhookEventInput = s.object({
+  id: s.string(),
+  occurredAtMs: s.number().int(),
+  type: s.string(),
+});
 
 const recordWebhookAttempt = mutation('webhook-idempotency/record-attempt', {
   async handler(input, request) {
@@ -53,14 +38,18 @@ const recordWebhookAttempt = mutation('webhook-idempotency/record-attempt', {
 
 export default defineFixture({
   app: () => {
-    const replayStore = createReplayStore();
+    const replayStore = createMemoryWebhookReplayStore();
     const idempotentWebhook = webhook('/webhooks/stripe-idempotent', {
       async handler(input, context) {
         return context
           .declareSystemWrite('record verified Stripe webhook delivery attempt')
-          .runMutation(recordWebhookAttempt, { id: input.id, type: input.type });
+          .runMutation(recordWebhookAttempt, {
+            id: input.id,
+            occurredAtMs: input.occurredAtMs,
+            type: input.type,
+          });
       },
-      idempotency: (input) => input.id,
+      idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
       input: webhookEventInput,
       replayStore,
       verify: hmacSignature({

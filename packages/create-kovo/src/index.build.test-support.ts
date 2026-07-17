@@ -923,7 +923,7 @@ export function addRuntimeMutationSafetyProofs(
     join(root, 'src/runtime-safety-proofs.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      `import { ${includeWebhookTransactionProof ? 'createMemoryWebhookReplayStore, ' : ''}domain, endpoint, mutation, publicAccess, ${includeReadonlyRuntimeChokeProbe ? 'query, ' : ''}s, serverValue, webhook, type MutationContext${includeReadonlyRuntimeChokeProbe ? ', type QueryLoadContext' : ''} } from '@kovojs/server';`,
+      `import { ${includeWebhookTransactionProof ? 'createMemoryWebhookReplayStore, ' : ''}domain, endpoint, mutation, publicAccess, ${includeReadonlyRuntimeChokeProbe ? 'query, ' : ''}s, serverValue, webhook, ${includeWebhookTransactionProof ? 'webhookReplayIdentity, ' : ''}type MutationContext${includeReadonlyRuntimeChokeProbe ? ', type QueryLoadContext' : ''} } from '@kovojs/server';`,
       '',
       `import { readonlyAppDb${includeReadonlyRuntimeChokeProbe ? ', type AppDb' : ''} } from './db.js';`,
       [
@@ -946,7 +946,9 @@ export function addRuntimeMutationSafetyProofs(
         ? ['const webhookReplayStore = createMemoryWebhookReplayStore();']
         : []),
       ...(includeWebhookTransactionProof || includeWebhookTxEscapeAttempt
-        ? ['const webhookTxProofInput = s.object({ id: s.string() });']
+        ? [
+            'const webhookTxProofInput = s.object({ id: s.string(), occurredAtMs: s.number().int() });',
+          ]
         : []),
       ...(includeRawTableDrift || includeSqliteAuthorizerTriggerDrift
         ? [
@@ -1022,7 +1024,7 @@ export function addRuntimeMutationSafetyProofs(
         ? [
             "export const txProofWebhook = webhook('/webhooks/tx-proof', {",
             '  access: publicProof,',
-            '  idempotency: (input) => input.id,',
+            '  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),',
             '  input: webhookTxProofInput,',
             '  replayStore: webhookReplayStore,',
             "  verify: 'none',",
@@ -4022,7 +4024,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { eq } from 'drizzle-orm';",
       "import { alias, pgTable, text } from 'drizzle-orm/pg-core';",
-      "import { domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, type EndpointDbContext, type JsonValue, type QueryLoadContext, type Reader, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, webhookReplayIdentity, type EndpointDbContext, type JsonValue, type QueryLoadContext, type Reader, type TaskSchedulingRequest } from '@kovojs/server';",
       '',
       "import { appRuntimeWebhookReplayStore } from './_kovo/app-runtime-db.js';",
       "import { appAuthed, appCsrf, type AppRequest } from './auth.js';",
@@ -4307,7 +4309,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '',
       'const webhookReplayStore = appRuntimeWebhookReplayStore;',
       "export const phase5PgWebhook = webhook('/webhooks/phase5-pg-read', {",
-      '  access: publicProof, idempotency: (input) => input.id, input: s.object({ id: s.string() }), replayStore: webhookReplayStore, verify: "none", verifyJustification: "local phase 5 postgres webhook proof", writes: [eventDomain],',
+      '  access: publicProof, idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs), input: s.object({ id: s.string(), occurredAtMs: s.number().int() }), replayStore: webhookReplayStore, verify: "none", verifyJustification: "local phase 5 postgres webhook proof", writes: [eventDomain],',
       '  async handler(input, context) {',
       '    const principal = context.actAs("demo-user");',
       '    await principal.runMutation(phase5PgTaskRecord, { marker: input.id });',

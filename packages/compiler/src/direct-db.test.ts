@@ -432,7 +432,7 @@ export const sendReceipt = task({
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
-import { webhook } from '@kovojs/server';
+import { webhook, webhookReplayIdentity } from '@kovojs/server';
 import { appRuntimeDbProvider } from './db.js';
 
 const payment = domain('payment');
@@ -484,7 +484,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     await appRuntimeDbProvider().insert(payments).values({ id: input.id });
     return { ok: true };
   },
-  idempotency: (input) => input.id,
+  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
   input: paymentInput,
   replayStore,
   verify: 'none',
@@ -517,7 +517,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
-import { webhook } from '@kovojs/server';
+import { webhook, webhookReplayIdentity } from '@kovojs/server';
 
 const payment = domain('payment');
 
@@ -528,7 +528,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     await context.runMutation(recordPayment, { id: input.id });
     return { ok: true };
   },
-  idempotency: (input) => input.id,
+  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
   input: paymentInput,
   replayStore,
   verify: 'none',

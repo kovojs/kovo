@@ -882,6 +882,7 @@ declare global {
   var viewerQuery: any;
   var verifyWebhook: any;
   var webhook: <Value = any>(...args: any[]) => any;
+  var webhookReplayIdentity: any;
   var write: any;
 }
 
@@ -1078,6 +1079,7 @@ export const trustedUrl: any;
 export const verifiedAccess: any;
 export const vercel: any;
 export const webhook: any;
+export const webhookReplayIdentity: any;
 export const write: any;
 `;
 
@@ -1166,6 +1168,7 @@ export const trustedUrl = anyFn;
 export const verifiedAccess = anyFn;
 export const vercel = anyFn;
 export const webhook = anyFn;
+export const webhookReplayIdentity = anyFn;
 export const write = anyFn;
 export const tokens = new Proxy({}, { get: () => 'var(--kovo-snippet-token)' }) as any;
 

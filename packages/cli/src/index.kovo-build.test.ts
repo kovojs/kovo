@@ -2234,6 +2234,7 @@ import {
   hmacSignature,
   s,
   webhook,
+  webhookReplayIdentity,
 } from '@kovojs/server';
 
 const payment = domain('payment');
@@ -2243,8 +2244,8 @@ const paymentWebhook = webhook('/webhooks/payment', {
   handler() {
     return { ok: true };
   },
-  idempotency: (input) => input.id,
-  input: s.object({ id: s.string() }),
+  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
+  input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
   path: '/webhooks/payment',
   replayStore: paymentWebhookReplayStore,
   verify: hmacSignature({
@@ -2283,7 +2284,7 @@ export default createApp({
       const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);
       try {
-        const body = JSON.stringify({ id: 'evt-1' });
+        const body = JSON.stringify({ id: 'evt-1', occurredAtMs: Date.now() });
         const signature = createHmac('sha256', BUILD_FIXTURE_WEBHOOK_HMAC_SECRET)
           .update(body)
           .digest('hex');
@@ -3891,7 +3892,7 @@ export default createApp({
 
 function handlerWriteSinkPreflightAppModuleSource(): string {
   return `
-import { createApp, createMemoryWebhookReplayStore, mutation, s, task, webhook } from '@kovojs/server';
+import { createApp, createMemoryWebhookReplayStore, mutation, s, task, webhook, webhookReplayIdentity } from '@kovojs/server';
 
 const webhookReplayStore = createMemoryWebhookReplayStore();
 const appDb = {
@@ -3925,8 +3926,8 @@ const paymentWebhook = webhook('/webhooks/payment', {
     appDb.insert(payments).values({ id: input.id });
     return { ok: true };
   },
-  idempotency: (input) => input.id,
-  input: s.object({ id: s.string() }),
+  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
+  input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
   replayStore: webhookReplayStore,
   verify: 'none',
   verifyJustification: 'build preflight regression fixture',
@@ -3942,7 +3943,7 @@ export default createApp({
 
 function webhookRecordChangePreflightAppModuleSource(): string {
   return `
-import { createApp, createMemoryWebhookReplayStore, domain, s, webhook } from '@kovojs/server';
+import { createApp, createMemoryWebhookReplayStore, domain, s, webhook, webhookReplayIdentity } from '@kovojs/server';
 
 const contact = domain('model/contact');
 const billing = domain('billing');
@@ -3955,8 +3956,8 @@ const paymentWebhook = webhook('/webhooks/payment', {
     (context as unknown as { recordChange(domain: typeof billing): unknown }).recordChange(billing);
     return { ok: true };
   },
-  idempotency: (input) => input.id,
-  input: s.object({ id: s.string(), kind: s.string().optional() }),
+  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
+  input: s.object({ id: s.string(), kind: s.string().optional(), occurredAtMs: s.number().int() }),
   replayStore: webhookReplayStore,
   verify: 'none',
   verifyJustification: 'build preflight regression fixture',

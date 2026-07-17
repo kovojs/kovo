@@ -75,8 +75,11 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
       expect(() =>
         bundleB.webhook('/webhooks/cross-bundle', {
           handler() {},
-          idempotency: (input) => input.id,
-          input: bundleB.s.object({ id: bundleB.s.string() }),
+          idempotency: (input) => bundleB.webhookReplayIdentity(input.id, input.occurredAtMs),
+          input: bundleB.s.object({
+            id: bundleB.s.string(),
+            occurredAtMs: bundleB.s.number().int(),
+          }),
           replayStore: webhookStoreFromA,
           verify: 'none',
           verifyJustification: 'cross-bundle production replay posture test',
@@ -116,8 +119,11 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
       expect(() =>
         bundleB.webhook('/webhooks/cross-bundle-forged', {
           handler() {},
-          idempotency: (input) => input.id,
-          input: bundleB.s.object({ id: bundleB.s.string() }),
+          idempotency: (input) => bundleB.webhookReplayIdentity(input.id, input.occurredAtMs),
+          input: bundleB.s.object({
+            id: bundleB.s.string(),
+            occurredAtMs: bundleB.s.number().int(),
+          }),
           replayStore: forgedWebhookStore(),
           verify: 'none',
           verifyJustification: 'cross-bundle production replay posture test',

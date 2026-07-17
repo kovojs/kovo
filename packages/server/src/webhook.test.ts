@@ -187,34 +187,38 @@ describe('server webhook primitive', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
-  it('retires committed replay truth at the authenticated event horizon', () => {
+  it('retires committed replay truth at the authenticated event horizon', async () => {
     const store = createPublicMemoryWebhookReplayStore({ maxEntries: 1 });
-    const expired = webhookReplayIdentity(
+    const expiring = webhookReplayIdentity(
       'evt_reused_after_horizon',
-      Date.now() - WEBHOOK_REPLAY_HORIZON_MS - 1,
+      Date.now() - WEBHOOK_REPLAY_HORIZON_MS + 100,
     );
-    const current = webhookReplayIdentity('evt_reused_after_horizon', Date.now());
     const response: WebhookWireResponse = { body: 'old', headers: {}, status: 200 };
 
-    store.set('webhook:horizon', expired, response);
-    expect(store.get('webhook:horizon', expired)).toBeUndefined();
+    store.set('webhook:horizon', expiring, response);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(store.get('webhook:horizon', expiring)).toBeUndefined();
+
+    const current = webhookReplayIdentity('evt_reused_after_horizon', Date.now());
     const replacement = store.reserve('webhook:horizon', current);
     expect(replacement).toBeDefined();
     replacement?.abort?.();
   });
 
-  it('never auto-evicts a pending replay claim after its event horizon', () => {
+  it('never auto-evicts a pending replay claim after its event horizon', async () => {
     const store = createPublicMemoryWebhookReplayStore({ maxEntries: 1, maxPending: 1 });
-    const expired = webhookReplayIdentity(
+    const expiring = webhookReplayIdentity(
       'evt_pending',
-      Date.now() - WEBHOOK_REPLAY_HORIZON_MS - 1,
+      Date.now() - WEBHOOK_REPLAY_HORIZON_MS + 100,
     );
-    const current = webhookReplayIdentity('evt_pending', Date.now());
 
-    const pending = store.reserve('webhook:horizon', expired);
+    const pending = store.reserve('webhook:horizon', expiring);
     expect(pending).toBeDefined();
-    expect(store.reserve('webhook:horizon', expired)).toBeUndefined();
-    expect(store.get('webhook:horizon', expired)).toBeInstanceOf(Promise);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(store.reserve('webhook:horizon', expiring)).toBeUndefined();
+    expect(store.get('webhook:horizon', expiring)).toBeInstanceOf(Promise);
+
+    const current = webhookReplayIdentity('evt_pending', Date.now());
     expect(() => store.reserve('webhook:horizon', current)).toThrow(
       /different authenticated occurrence/u,
     );
@@ -258,6 +262,86 @@ describe('server webhook primitive', () => {
       expect(handler).not.toHaveBeenCalled();
     },
   );
+
+  it('refuses a fresh replay claim when verification crosses the event horizon', async () => {
+    const handler = vi.fn();
+    const occurredAtMs = Date.now() - WEBHOOK_REPLAY_HORIZON_MS + 80;
+    const declaration = webhook('/webhooks/crossing-event-horizon', {
+      handler,
+      idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
+      input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
+      replayStore: createPublicMemoryWebhookReplayStore(),
+      verify: customVerifier('delayed-authenticated-event', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return true;
+      }),
+    });
+
+    const result = await runWebhook(
+      declaration,
+      new Request('https://example.test/webhooks/crossing-event-horizon', {
+        body: JSON.stringify({ id: 'evt_crossed_horizon', occurredAtMs }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(429);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('refuses expired direct admission and leaves an expired pending settlement unresolved', async () => {
+    const store = createPublicMemoryWebhookReplayStore();
+    const expired = webhookReplayIdentity(
+      'evt_expired_admission',
+      Date.now() - WEBHOOK_REPLAY_HORIZON_MS - 1,
+    );
+    const response: WebhookWireResponse = { body: 'expired', headers: {}, status: 200 };
+
+    expect(store.reserve('webhook:horizon-admission', expired)).toBeUndefined();
+    expect(() => store.set('webhook:horizon-admission', expired, response)).toThrow(
+      /event horizon elapsed/u,
+    );
+
+    const expiring = webhookReplayIdentity(
+      'evt_expired_settlement',
+      Date.now() - WEBHOOK_REPLAY_HORIZON_MS + 100,
+    );
+    const reservation = store.reserve('webhook:horizon-admission', expiring);
+    expect(reservation).toBeDefined();
+    const pending = store.get('webhook:horizon-admission', expiring);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+
+    expect(() => reservation?.commit(response)).toThrow(/event horizon elapsed/u);
+    expect(store.get('webhook:horizon-admission', expiring)).toBe(pending);
+    reservation?.abort?.();
+    await expect(pending).rejects.toThrow(/reservation aborted/u);
+  });
+
+  it('does not reopen reclaimed exact identity after the volatile store clock rolls back', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    vi.resetModules();
+    try {
+      const isolatedWebhook = await import('./webhook.js');
+      const store = isolatedWebhook.createMemoryWebhookReplayStore();
+      const occurredAtMs = Date.now() - WEBHOOK_REPLAY_HORIZON_MS + 60_000;
+      const identity = isolatedWebhook.webhookReplayIdentity('evt_clock_rollback', occurredAtMs);
+      const response: WebhookWireResponse = { body: 'committed', headers: {}, status: 200 };
+      store.set('webhook:clock-rollback', identity, response);
+
+      vi.setSystemTime(identity.expiresAtMs + 1);
+      expect(store.get('webhook:clock-rollback', identity)).toBeUndefined();
+
+      vi.setSystemTime(identity.expiresAtMs - 30_000);
+      expect(store.reserve('webhook:clock-rollback', identity)).toBeUndefined();
+      expect(() => store.set('webhook:clock-rollback', identity, response)).toThrow(
+        /event horizon elapsed/u,
+      );
+    } finally {
+      vi.useRealTimers();
+      vi.resetModules();
+    }
+  });
 
   it('rejects a legacy raw-string idempotency callback with a sanitized 500', async () => {
     const get = vi.fn();

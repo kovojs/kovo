@@ -19389,6 +19389,7 @@ function requestExpressionIsProtocolSafeUncached(
     ) {
       return true;
     }
+    if (requestCallIsExactWebhookReplayIdentity(node)) return true;
     if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(node, session)) return true;
     if (requestCallIsExactReadableStreamControllerMethod(node, callable)) return true;
     if (requestCallIsExactKovoTrustedSql(node) || requestCallIsExactKovoSqlRawInput(node)) {
@@ -24088,6 +24089,10 @@ function requestCallIsKnownSafe(
     requestExpressionIsFrameworkSchemaBuilderCall(call) &&
     requestFrameworkSchemaBuilderCallIsPristine(call, context.provenance)
   ) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
+  if (requestCallIsExactWebhookReplayIdentity(call)) {
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -30551,6 +30556,24 @@ function requestCallIsExactWebhookRecordChange(
     target &&
     requestCallIsExactWebhookRecordChangeForTarget(call, target, session) &&
     requestExactDomainResultIsPristine(target, session)
+  );
+}
+
+/**
+ * SPEC §9.1 / §10.3: the opaque webhook replay carrier has one exact request-time constructor.
+ * Admit only the pristine, unaliased root export with its fixed arity. Runtime provenance and
+ * temporal validation remain authoritative; this exception proves solely that constructing the
+ * carrier cannot invoke an app-authored callable or return an authored thenable/protocol object.
+ */
+function requestCallIsExactWebhookReplayIdentity(call: import('ts-morph').CallExpression): boolean {
+  return !!(
+    !call.getQuestionDotTokenNode() &&
+    call.getArguments().length === 2 &&
+    requestExactPristineDirectImport(
+      call.getExpression(),
+      '@kovojs/server',
+      'webhookReplayIdentity',
+    )
   );
 }
 

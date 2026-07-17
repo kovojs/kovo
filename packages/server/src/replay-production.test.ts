@@ -7,7 +7,7 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import type { MutationReplayResponse } from './replay.js';
-import type { WebhookWireResponse } from './webhook.js';
+import type { WebhookReplayIdentity, WebhookWireResponse } from './webhook.js';
 
 const previousNodeEnv = process.env.NODE_ENV;
 process.env.NODE_ENV = 'test';
@@ -56,11 +56,11 @@ function declaredMutation() {
 function structuralMutationReplayStore() {
   const responses = new Map<string, MutationReplayResponse>();
   return {
-    get(scope: string, idem: string) {
-      return responses.get(`${scope}\u0000${idem}`);
+    get(scope: string, identity: WebhookReplayIdentity) {
+      return responses.get(`${scope}\u0000${identity.key}`);
     },
-    reserve(scope: string, idem: string) {
-      const key = `${scope}\u0000${idem}`;
+    reserve(scope: string, identity: WebhookReplayIdentity) {
+      const key = `${scope}\u0000${identity.key}`;
       return {
         commit(response: MutationReplayResponse) {
           responses.set(key, response);
@@ -88,8 +88,8 @@ function structuralWebhookReplayStore() {
         },
       };
     },
-    set(scope: string, idem: string, response: WebhookWireResponse) {
-      responses.set(`${scope}\u0000${idem}`, response);
+    set(scope: string, identity: WebhookReplayIdentity, response: WebhookWireResponse) {
+      responses.set(`${scope}\u0000${identity.key}`, response);
     },
     [Symbol.for('kovo.durable-replay-store')]: true,
   };
@@ -151,8 +151,8 @@ describe('production replay truth posture', () => {
     expect(() =>
       webhookApi.webhook('/webhooks/volatile', {
         handler() {},
-        idempotency: (input) => input.id,
-        input: s.object({ id: s.string() }),
+        idempotency: (input) => webhookApi.webhookReplayIdentity(input.id, input.occurredAtMs),
+        input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
         replayStore: webhookApi.createMemoryWebhookReplayStore(),
         verify: 'none',
         verifyJustification: 'production posture test fixture',
@@ -166,8 +166,8 @@ describe('production replay truth posture', () => {
     expect(() =>
       webhookApi.webhook('/webhooks/missing', {
         handler() {},
-        idempotency: (input) => input.id,
-        input: s.object({ id: s.string() }),
+        idempotency: (input) => webhookApi.webhookReplayIdentity(input.id, input.occurredAtMs),
+        input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
         verify: 'none',
         verifyJustification: 'production posture test fixture',
         writes: [records],
@@ -181,8 +181,8 @@ describe('production replay truth posture', () => {
     expect(() =>
       webhookApi.webhook('/webhooks/forged', {
         handler() {},
-        idempotency: (input) => input.id,
-        input: s.object({ id: s.string() }),
+        idempotency: (input) => webhookApi.webhookReplayIdentity(input.id, input.occurredAtMs),
+        input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
         replayStore: structuralWebhookReplayStore(),
         verify: 'none',
         verifyJustification: 'production posture test fixture',
@@ -197,8 +197,8 @@ describe('production replay truth posture', () => {
 
     const declaration = webhookApi.webhook('/webhooks/durable', {
       handler() {},
-      idempotency: (input) => input.id,
-      input: s.object({ id: s.string() }),
+      idempotency: (input) => webhookApi.webhookReplayIdentity(input.id, input.occurredAtMs),
+      input: s.object({ id: s.string(), occurredAtMs: s.number().int() }),
       replayStore,
       verify: 'none',
       verifyJustification: 'production posture test fixture',

@@ -1,43 +1,27 @@
 // SPEC.md §9.1: webhook() captures raw bytes, verifies before parsing, accepts
 // loose provider fields, writes Kovo-owned data, and emits unified changes.
 import { hmacSignature } from '@kovojs/core';
-import { createApp, domain, mutation, s, webhook } from '@kovojs/server';
+import {
+  createApp,
+  createMemoryWebhookReplayStore,
+  domain,
+  mutation,
+  s,
+  webhook,
+  webhookReplayIdentity,
+} from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type WebhookRequest = Request & KovoFixtureRequest;
-type ReplayResponse = {
-  body: string;
-  headers: Record<string, string>;
-  status: 200 | 400 | 401 | 422 | 429 | 500;
-};
-
 const WEBHOOK_HMAC_SECRET = '909192939495969798999a9b9c9d9e9f';
 
-function createReplayStore() {
-  const entries = new Map<string, ReplayResponse>();
-  const keyFor = (scope: string, idem: string) => `${scope}\0${idem}`;
-
-  return {
-    get(scope, idem) {
-      return entries.get(keyFor(scope, idem));
-    },
-    reserve(scope, idem) {
-      const key = keyFor(scope, idem);
-      return {
-        commit(response: ReplayResponse) {
-          entries.set(key, response);
-        },
-      };
-    },
-    set(scope: string, idem: string, response: ReplayResponse) {
-      entries.set(keyFor(scope, idem), response);
-    },
-  };
-}
-
 const invoiceDomain = domain('invoice');
-const replayStore = createReplayStore();
-const webhookEventInput = s.object({ id: s.string(), type: s.string() });
+const replayStore = createMemoryWebhookReplayStore();
+const webhookEventInput = s.object({
+  id: s.string(),
+  occurredAtMs: s.number().int(),
+  type: s.string(),
+});
 const recordWebhookEventInput = s.object({
   id: s.string(),
   rawAmount: s.number(),
@@ -75,7 +59,7 @@ const stripeLite = webhook('/webhooks/stripe-lite', {
     context.recordChange(invoiceDomain, { keys: [input.id] });
     return result;
   },
-  idempotency: (input) => input.id,
+  idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
   input: webhookEventInput,
   replayStore,
   verify: hmacSignature({

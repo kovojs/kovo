@@ -15,7 +15,11 @@ test('duplicate provider event id replays without re-executing handler', async (
   request,
   kovoApp,
 }) => {
-  const body = JSON.stringify({ id: 'evt_repeat_1', type: 'invoice.paid' });
+  const body = JSON.stringify({
+    id: 'evt_repeat_1',
+    occurredAtMs: Date.now(),
+    type: 'invoice.paid',
+  });
   const headers = {
     'content-type': 'application/json',
     'x-signature': sign(body),

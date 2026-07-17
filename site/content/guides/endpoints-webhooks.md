@@ -43,7 +43,7 @@ Use `webhook()` for third-party POSTs that write Kovo-owned data:
 
 ```ts
 import { hmacSignature } from '@kovojs/core';
-import { domain, s, webhook } from '@kovojs/server';
+import { domain, s, webhook, webhookReplayIdentity } from '@kovojs/server';
 
 const order = domain('order');
 declare const providerWebhookReplayStore: any;
@@ -59,9 +59,10 @@ export const orderWebhook = webhook('/hooks/order-provider', {
   }),
   input: s.object({
     id: s.string(),
+    occurredAtMs: s.number().int(),
     type: s.string(),
   }),
-  idempotency: (event) => event.id,
+  idempotency: (event) => webhookReplayIdentity(event.id, event.occurredAtMs),
   replayStore: providerWebhookReplayStore,
   writes: [order],
   async handler(event, context) {
@@ -83,11 +84,17 @@ Kovo-owned data must declare both `idempotency` and `replayStore`, then choose a
 `actAs(...)` or `declareSystemWrite(...)` posture before composing through mutations or managed DB
 work.
 
+Use the provider event's own signed occurrence timestamp for `occurredAtMs`. Do not use `Date.now()`
+or the signature delivery timestamp. Kovo accepts up to five minutes of future clock skew and keeps
+replay truth for 30 days from that authenticated occurrence. Stale or farther-future events return
+422 before the replay store or handler runs.
+
 The lifecycle is fixed: capture raw bytes, verify, parse/coerce a loose input schema, reserve replay
-by provider event id, run the handler with `tx`, commit, emit every `recordChange()` as the unified
-change record, and return the provider-appropriate 2xx. A redelivered event id replays the stored
-response and does not re-execute the handler. The `writes` list is the static audit fact; the
-`recordChange()` calls are the runtime key-level records.
+by the opaque provider event identity, run the handler with `tx`, commit, emit every
+`recordChange()` as the unified change record, and return the provider-appropriate 2xx. A
+redelivered event inside the horizon replays the stored response and does not re-execute the
+handler. The `writes` list is the static audit fact; the `recordChange()` calls are the runtime
+key-level records.
 
 The verifier kit includes generic HMAC and Standard Webhooks helpers. Provider-specific recipes,
 including Stripe's exact signature format, can live in app/example code on top of those helpers; the

@@ -134,8 +134,9 @@ describe('create-kovo starter (build integration: production transaction artifac
       expect(after.count).toBe(1);
 
       const webhookId = `webhook-default-${Date.now()}`;
+      const webhookOccurredAtMs = Date.now();
       const firstWebhook = await fetch(`${origin}/webhooks/tx-proof`, {
-        body: JSON.stringify({ id: webhookId }),
+        body: JSON.stringify({ id: webhookId, occurredAtMs: webhookOccurredAtMs }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       });
@@ -149,7 +150,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       expect(afterFirstWebhook.count).toBe(2);
 
       const replayWebhook = await fetch(`${origin}/webhooks/tx-proof`, {
-        body: JSON.stringify({ id: webhookId }),
+        body: JSON.stringify({ id: webhookId, occurredAtMs: webhookOccurredAtMs }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       });
@@ -282,8 +283,9 @@ describe('create-kovo starter (build integration: production transaction artifac
       expect(afterSuccess.count).toBe(1);
 
       const webhookId = `webhook-sqlite-${Date.now()}`;
+      const webhookOccurredAtMs = Date.now();
       const firstWebhook = await fetch(`${origin}/webhooks/tx-proof`, {
-        body: JSON.stringify({ id: webhookId }),
+        body: JSON.stringify({ id: webhookId, occurredAtMs: webhookOccurredAtMs }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       });
@@ -297,7 +299,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       expect(afterFirstWebhook.count).toBe(2);
 
       const replayWebhook = await fetch(`${origin}/webhooks/tx-proof`, {
-        body: JSON.stringify({ id: webhookId }),
+        body: JSON.stringify({ id: webhookId, occurredAtMs: webhookOccurredAtMs }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       });

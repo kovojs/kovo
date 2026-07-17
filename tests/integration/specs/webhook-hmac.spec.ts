@@ -17,6 +17,7 @@ test('signed webhook writes once and emits a unified change record', async ({
 }) => {
   const body = JSON.stringify({
     id: 'evt_hmac_1',
+    occurredAtMs: Date.now(),
     provider_extra: { amount: 4900, livemode: false },
     type: 'invoice.paid',
   });
