@@ -191,6 +191,78 @@ describe('temporal exact-tip adversarial review', () => {
     expect(facts, `${label}: ${JSON.stringify(facts)}`).toEqual([]);
   });
 
+  it('keeps a primitive copied through Object.fromEntries independent from its source root', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('from-entries-fresh-slot', {
+        input: s.object({ item: s.object({ value: s.string() }) }),
+        run(input) {
+          const copy = Object.fromEntries([['value', input.item.value]]);
+          copy.value = 'local';
+          return input.item.value;
+        },
+      });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
+  it.each([
+    [
+      'retained object reference',
+      `const copy = Object.fromEntries([['item', input.item]]);
+       copy.item.value = 'mutated';`,
+    ],
+    [
+      'last duplicate entry retaining the object reference',
+      `const copy = Object.fromEntries([
+         ['item', { value: 'local' }],
+         ['item', input.item],
+       ]);
+       copy.item.value = 'mutated';`,
+    ],
+    [
+      'unknown possibly-colliding key',
+      `const copy = Object.fromEntries([[input.key, input.item]]);
+       copy.item = { value: 'local' };`,
+    ],
+  ])('keeps Object.fromEntries %s mutations linked to the source root', (label, mutation) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('from-entries-live-reference', {
+        input: s.object({ key: s.string(), item: s.object({ value: s.string() }) }),
+        run(input) {
+          ${mutation}
+          return input.item.value;
+        },
+      });
+    `);
+
+    expect(
+      facts.some((fact) => fact.sink.startsWith('request-handler.opaque')),
+      `${label}: ${JSON.stringify(facts)}`,
+    ).toBe(true);
+  });
+
+  it('uses the last Object.fromEntries duplicate when projecting a fresh record', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('from-entries-last-write-wins', {
+        input: s.object({ item: s.object({ value: s.string() }) }),
+        run(input) {
+          const copy = Object.fromEntries([
+            ['item', input.item],
+            ['item', { value: 'local' }],
+          ]);
+          copy.item.value = 'mutated';
+          return input.item.value;
+        },
+      });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
   it('demonstrates that the authored microtask runs after framework settlement', async () => {
     const trace: string[] = [];
     const value = {

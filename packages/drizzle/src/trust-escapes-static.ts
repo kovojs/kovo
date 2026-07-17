@@ -16896,6 +16896,14 @@ function requestExpressionIsProvablyOrdinaryMutationTarget(
     }
   }
 
+  if (requestWireStaticFromEntries(node) !== undefined) {
+    // A pristine finite Object.fromEntries construction always allocates its own ordinary record.
+    // Member projections are handled below through requestWireProjectedExpression, so a retained
+    // object value is still rejected when that selected value (rather than the fresh container)
+    // becomes the mutation target.
+    return true;
+  }
+
   const projection = requestStaticExpressionProjection(node);
   if (projection) {
     const base = unwrapStaticExpression(projection.base);
@@ -23047,6 +23055,56 @@ function requestWireCollectPatternBindings(
   requestWireCollectPatternBindingCandidates(name, [{ expression, path }], bindings);
 }
 
+interface RequestWireStaticFromEntriesEntry {
+  readonly key: string;
+  readonly value: Node;
+}
+
+/**
+ * Recover the exact own-property projection of a pristine `Object.fromEntries` call when both the
+ * outer iterable and every entry are direct finite array literals. Unknown/spread/aliased entry
+ * containers remain conservative because mutation or a colliding later key can change the result.
+ */
+function requestWireStaticFromEntries(
+  expression: Node,
+): readonly RequestWireStaticFromEntriesEntry[] | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(node) || node.getArguments().length !== 1) return undefined;
+  const callee = unwrapStaticExpression(node.getExpression());
+  const receiver = requestCallReceiver(callee);
+  const member = requestStaticCallMember(callee);
+  if (
+    !receiver ||
+    member !== 'fromEntries' ||
+    !requestGlobalNamespaceMemberIsPristine(receiver, 'Object', member)
+  ) {
+    return undefined;
+  }
+  const iterable = unwrapStaticExpression(node.getArguments()[0]!);
+  if (!Node.isArrayLiteralExpression(iterable)) return undefined;
+  const entries = iterable.getElements();
+  const result: RequestWireStaticFromEntriesEntry[] = [];
+  for (const entry of entries) {
+    if (Node.isOmittedExpression(entry) || Node.isSpreadElement(entry)) return undefined;
+    const pairExpression = unwrapStaticExpression(entry);
+    const pair = Node.isArrayLiteralExpression(pairExpression)
+      ? pairExpression.getElements()
+      : undefined;
+    if (
+      !pair ||
+      pair.length !== 2 ||
+      pair.some((element) => Node.isOmittedExpression(element) || Node.isSpreadElement(element))
+    ) {
+      return undefined;
+    }
+    const key = requestStablePropertyKeyValue(pair[0]!);
+    const value = pair[1];
+    if (key === undefined || !value) return undefined;
+    result.push({ key, value });
+  }
+  return result;
+}
+
 function requestWireCarrierForBoundValue(
   binding: RequestWireBinding,
   state: RequestWireAnalysisState,
@@ -23147,6 +23205,17 @@ function requestWireProjectedExpression(
     const element = node.getElements()[index];
     if (!element || Node.isOmittedExpression(element)) return undefined;
     return requestWireProjectedExpression(element, rest, seen, depth + 1);
+  }
+  const fromEntries = requestWireStaticFromEntries(node);
+  if (fromEntries) {
+    const [member, ...rest] = path;
+    // Object.fromEntries uses the last entry for duplicate keys.
+    for (let index = fromEntries.length - 1; index >= 0; index -= 1) {
+      const entry = fromEntries[index];
+      if (!entry || entry.key !== member) continue;
+      return requestWireProjectedExpression(entry.value, rest, seen, depth + 1);
+    }
+    return undefined;
   }
   if (!Node.isObjectLiteralExpression(node)) return undefined;
   const [member, ...rest] = path;
@@ -33352,6 +33421,11 @@ function requestRootRoleReferencePlans(
 const REQUEST_ROOT_ROLE_PRISTINE_MEMO = new WeakMap<object, Map<string, boolean>>();
 const REQUEST_ROOT_ROLE_PRISTINE_ACTIVE = new WeakMap<object, Set<string>>();
 
+function requestRootRoleExpressionCreatesFreshRecord(expression: Node): boolean {
+  const node = unwrapStaticExpression(expression);
+  return Node.isObjectLiteralExpression(node) || requestWireStaticFromEntries(node) !== undefined;
+}
+
 /**
  * Trusted input/request roles describe framework-provided values, not mutable authored storage.
  * Once the exact binding (or a live projection/alias) is written or escapes to an unresolved
@@ -33561,11 +33635,11 @@ function requestRootRoleBindingIsPristineUncached(
     if (
       initializerKind === undefined &&
       Node.isIdentifier(name) &&
-      Node.isObjectLiteralExpression(unwrapStaticExpression(initializer))
+      requestRootRoleExpressionCreatesFreshRecord(initializer)
     ) {
-      // An object literal is fresh storage. Its nested member projections can still retain a live
-      // request reference (resolved above), but replacing one of the fresh object's own slots must
-      // not invalidate the untouched source root (SPEC §6.6 / bugz-31 C3).
+      // A proven record construction is fresh storage. Its nested member projections can still
+      // retain a live request reference (resolved above), but replacing one of the fresh object's
+      // own slots must not invalidate the untouched source root (SPEC §6.6 / bugz-31 C3).
       continue;
     }
     for (const identifier of names) {
