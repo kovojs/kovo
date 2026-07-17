@@ -503,6 +503,37 @@ describe('server webhook primitive', () => {
     expect(handlerCalls).toBe(0);
   });
 
+  it('rejects loose unknown webhook fields that exceed the input-shape budget', async () => {
+    let handlerCalls = 0;
+    const boundedWebhook = webhook('/webhooks/bounded-shape', {
+      handler() {
+        handlerCalls += 1;
+      },
+      input: s.object({ id: s.string() }),
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook shape-budget regression',
+    });
+    let nested: unknown = 'leaf';
+    for (let depth = 0; depth < 70; depth += 1) nested = [nested];
+    const body = JSON.stringify({ id: 'evt_shape_budget', provider_extra: nested });
+
+    const result = await runWebhook(
+      boundedWebhook,
+      new Request('https://example.test/webhooks/bounded-shape', {
+        body,
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(422);
+    await expect(result.response.json()).resolves.toMatchObject({
+      error: { code: 'VALIDATION' },
+      ok: false,
+    });
+    expect(handlerCalls).toBe(0);
+  });
+
   it('wraps WebhookTxDb with the managed SQL runtime floor before the handler sees it', async () => {
     const replayStore = createMemoryWebhookReplayStore();
     const calls: string[] = [];

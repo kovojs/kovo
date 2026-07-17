@@ -50,7 +50,7 @@ import {
   securityJsonStringify,
   securityUint8ArraySlice,
 } from './response-security-intrinsics.js';
-import { isSchemaValidationError, snapshotSchemaForRuntime } from './schema.js';
+import { isSchemaValidationError, parseSchemaAsync, snapshotSchemaForRuntime } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { reserveReplayBeforeRun } from './replay.js';
@@ -1540,7 +1540,10 @@ async function parseLooseWebhookInput<InputSchema extends Schema<unknown>>(
   | { issues: readonly ValidationIssue[]; ok: false }
 > {
   try {
-    const parsed = await parseSchema(schema, rawInput);
+    // SPEC §6.6/§9.5 KV430: loose provider fields are still attacker-controlled input. Run the
+    // whole envelope through the same depth/breadth/node budget as mutations before preserving
+    // unknown provider fields for the handler.
+    const parsed = await parseSchemaAsync(schema, rawInput);
     const looseInput = revealUntrustedRequestValue(rawInput, 'verified loose webhook input');
     const value =
       isPlainRecord(looseInput) && isPlainRecord(parsed) ? { ...looseInput, ...parsed } : parsed;
@@ -1556,11 +1559,6 @@ async function parseLooseWebhookInput<InputSchema extends Schema<unknown>>(
     }
     throw error;
   }
-}
-
-async function parseSchema<T>(schema: Schema<T>, input: unknown): Promise<T> {
-  const asyncSchema = schema as Schema<T> & { parseAsync?: (input: unknown) => Promise<T> };
-  return asyncSchema.parseAsync ? asyncSchema.parseAsync(input) : schema.parse(input);
 }
 
 function webhookHandlerContext<Input, Tx>(
