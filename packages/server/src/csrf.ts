@@ -7,7 +7,7 @@ import {
 } from './auth-principal.js';
 import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
-import { escapeWireAttribute } from './html.js';
+import { escapeWireAttribute, renderedHtml, type RenderedHtml } from './html.js';
 import { currentJsxFrameworkContext } from './jsx-context.js';
 import {
   isFrameworkCsrfSigningSecret,
@@ -526,6 +526,21 @@ export function mintIdemToken(): string {
  */
 export function renderMutationIdemField(): string {
   return renderHiddenSubmittedField(KOVO_IDEM_FIELD_NAME, mintIdemToken());
+}
+
+/**
+ * @internal Compiler-only JSX child carrier for framework-generated mutation fields.
+ *
+ * `renderMutationCsrfField` and `renderMutationIdemField` intentionally expose strings for their
+ * direct internal callers. Compiler-lowered forms, however, insert the fields as a JSX child after
+ * removing `mutation={...}`. Brand that already-validated framework HTML here so the JSX runtime
+ * does not correctly treat it as app-authored text and escape the hidden inputs (SPEC §4.5/§10.3).
+ */
+export function renderGeneratedMutationFormFields<Request>(definition: {
+  csrf?: CsrfOptions<Request> | false;
+  key: string;
+}): RenderedHtml {
+  return renderedHtml(renderMutationCsrfField(definition) + renderMutationIdemField());
 }
 
 /**

@@ -42,7 +42,7 @@ import {
   enhancedMutationFormBinding,
   enhancedMutationFormLowering,
   formLoweringOutputContext,
-  importsMutationCsrfField,
+  importsGeneratedMutationFormFields,
   localMutationKey,
   mutationInputFileFieldsForLocalName,
   mutationFormErrorIdExpression,
@@ -454,7 +454,7 @@ export function enhancedMutationFormRenderLowering(
   const diagnostics: CompilerDiagnostic[] = [];
   const replacements: SourceReplacement[] = [];
   const outputContexts: GeneratedOutputWriteFact[] = [];
-  let needsCsrfImport = false;
+  let needsGeneratedMutationFormFieldsImport = false;
   const elements = compilerSnapshotDenseArray(model.jsxElements, 'Enhanced mutation form elements');
 
   for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
@@ -485,7 +485,7 @@ export function enhancedMutationFormRenderLowering(
       lowering.replacements,
       'Enhanced mutation form replacements',
     );
-    needsCsrfImport ||= lowering.importsMutationCsrfField;
+    needsGeneratedMutationFormFieldsImport ||= lowering.importsGeneratedMutationFormFields;
     appendMutationValues(
       outputContexts,
       lowering.outputContexts,
@@ -513,16 +513,20 @@ export function enhancedMutationFormRenderLowering(
     }
   }
 
-  if (needsCsrfImport && options && !importsMutationCsrfField(model)) {
+  if (
+    needsGeneratedMutationFormFieldsImport &&
+    options &&
+    !importsGeneratedMutationFormFields(model)
+  ) {
     const start = compilerHelperImportInsertionOffset(options.source);
     compilerArrayAppend(
       replacements,
       {
         end: start,
-        // SPEC.md §10.3:1063/1065: also import renderMutationIdemField so each
-        // emitted form body includes a per-submit idempotency token alongside CSRF.
+        // SPEC §4.5/§10.3: the helper returns framework-branded RenderedHtml so generated hidden
+        // fields remain markup when inserted as a JSX child, while ordinary strings stay escaped.
         replacement:
-          "import { renderMutationCsrfField as __kovoRenderMutationCsrfField, renderMutationIdemField as __kovoRenderMutationIdemField } from '@kovojs/server/internal/csrf';\n",
+          "import { renderGeneratedMutationFormFields as __kovoRenderGeneratedMutationFormFields } from '@kovojs/server/internal/csrf';\n",
         start,
       },
       'Compiler packages/compiler/src/emit/mutation-form.ts collection',

@@ -886,10 +886,12 @@ function normalizeGeneratedSemanticExpression(expression: string): string {
   // asymmetry between authored and lowered sources is caught (fails closed), not silently
   // equated. The mutation-field helpers are generated-only with no authored equivalent and
   // are always stripped.
-  if (!compilerStringIncludes(expression, '__kovoRenderMutation')) return expression;
+  if (!compilerStringIncludes(expression, '__kovoRenderGeneratedMutationFormFields')) {
+    return expression;
+  }
   return compilerRegExpReplace(
-    /\b__kovoRenderMutationIdemField\(\)/g,
-    compilerRegExpReplace(/\b__kovoRenderMutationCsrfField\([^()]*\)/g, expression, ''),
+    /\b__kovoRenderGeneratedMutationFormFields\([^()]*\)/g,
+    expression,
     '',
   );
 }

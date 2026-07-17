@@ -241,11 +241,14 @@ export const AddToCartForm = component({
       '<form enhance method="post" action="/_m/add-to-cart-form/add-to-cart" data-mutation="add-to-cart-form/add-to-cart" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId} class="add"',
     );
     expect(loweredSource).toContain(
-      "import { renderMutationCsrfField as __kovoRenderMutationCsrfField, renderMutationIdemField as __kovoRenderMutationIdemField } from '@kovojs/server/internal/csrf';",
+      "import { renderGeneratedMutationFormFields as __kovoRenderGeneratedMutationFormFields } from '@kovojs/server/internal/csrf';",
     );
-    expect(loweredSource.match(/__kovoRenderMutationCsrfField\(addToCart\)/g)).toHaveLength(1);
-    // A2 (SPEC §10.3): a per-submit Kovo-Idem hidden field is emitted alongside the CSRF field.
-    expect(loweredSource.match(/__kovoRenderMutationIdemField\(\)/g)).toHaveLength(1);
+    expect(
+      loweredSource.match(/__kovoRenderGeneratedMutationFormFields\(addToCart\)/g),
+    ).toHaveLength(1);
+    // SPEC §4.5/§10.3: the single branded child carries both CSRF and Kovo-Idem fields.
+    expect(loweredSource).not.toContain('__kovoRenderMutationCsrfField');
+    expect(loweredSource).not.toContain('__kovoRenderMutationIdemField');
     expect(loweredSource).not.toContain('mutation={addToCart}');
     expect(loweredSource).not.toMatch(/\skey=\{slots\.productId\}/);
     expect(result.outputContextFacts).toEqual(
@@ -458,7 +461,9 @@ export const ProductGrid = component({
     expect(loweredSource).toContain(
       '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId}',
     );
-    expect(loweredSource.match(/__kovoRenderMutationCsrfField\(addToCart\)/g)).toHaveLength(1);
+    expect(
+      loweredSource.match(/__kovoRenderGeneratedMutationFormFields\(addToCart\)/g),
+    ).toHaveLength(1);
     expect(() => assertRenderEquivalence(result)).not.toThrow();
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -485,7 +490,9 @@ export const AddToCartForm = component({
 
     expect(result.diagnostics).toEqual([]);
     expect(result.loweredSource).toContain('mutation={addToCart}');
-    expect(result.loweredSource).not.toContain('__kovoRenderMutationCsrfField(addToCart)');
+    expect(result.loweredSource).not.toContain(
+      '__kovoRenderGeneratedMutationFormFields(addToCart)',
+    );
     expect(() => assertRenderEquivalence(result)).not.toThrow();
     expect(() => assertFixpoint(result)).not.toThrow();
   });

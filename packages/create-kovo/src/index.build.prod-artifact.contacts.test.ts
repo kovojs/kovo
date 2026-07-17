@@ -63,6 +63,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
       const loginHtml = await loginResponse.text();
       expect(loginHtml).toContain('Sign in');
       const loginCsrf = fieldValue(loginHtml, 'csrf');
+      const loginIdem = fieldValue(loginHtml, 'Kovo-Idem');
       const demoPassword =
         new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
           readFileSync(join(root, '.env'), 'utf8'),
@@ -74,6 +75,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
         body: new URLSearchParams({
           csrf: loginCsrf,
           email: 'demo@example.com',
+          'Kovo-Idem': loginIdem,
           next: '/',
           password: demoPassword,
         }),

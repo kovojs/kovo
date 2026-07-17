@@ -458,6 +458,9 @@ type InternalVersionedClientModuleResponse =
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalRenderMutationCsrfField =
   typeof import('@kovojs/server/internal/csrf').renderMutationCsrfField;
+// eslint-disable-next-line no-unused-vars -- compile-time compiler-only boundary assertion.
+type InternalRenderGeneratedMutationFormFields =
+  typeof import('@kovojs/server/internal/csrf').renderGeneratedMutationFormFields;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalFrameworkCsrfRequestSnapshot =
   typeof import('@kovojs/server/internal/csrf').frameworkCsrfRequestSnapshot;
@@ -997,6 +1000,7 @@ describe('server app-shell public API barrels', () => {
       'KOVO_IDEM_FIELD_NAME',
       'frameworkCsrfRequestSnapshot',
       'mintIdemToken',
+      'renderGeneratedMutationFormFields',
       'renderMutationCsrfField',
       'renderMutationIdemField',
     ]);

@@ -8,7 +8,7 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 import * as style from '@kovojs/style';
 
-import { validateCsrfToken } from './csrf.js';
+import { renderGeneratedMutationFormFields, validateCsrfToken } from './csrf.js';
 import { escapeText, kovoSafeJsxSpread, renderHtmlValue } from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { createElement, Fragment, jsx, jsxDEV, jsxs, type JsxChild } from './jsx-runtime.js';
@@ -146,6 +146,42 @@ describe('server jsx runtime', () => {
     // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field.
     expect(formHtml).toContain('action="/_m/cart/add" data-mutation="cart/add" class="add"');
     expect(formHtml).toMatch(/name="Kovo-Idem" value="[^"]+"/);
+  });
+
+  it('renders compiler-generated CSRF and idem fields as branded markup, not escaped text', () => {
+    const request = { session: { id: 'compiled-form-session' } };
+    const csrf = {
+      field: 'csrf',
+      secret: TEST_CSRF_SECRET,
+      sessionId: (value: typeof request) => value.session.id,
+    };
+    const addToCart = mutation('cart/add', {
+      csrf,
+      input: s.object({}),
+      handler() {
+        return null;
+      },
+    });
+
+    const rendered = html(
+      runWithJsxRequestContext(request, () =>
+        jsx('form', {
+          action: '/_m/cart/add',
+          children: renderGeneratedMutationFormFields(addToCart),
+          'data-mutation': 'cart/add',
+          method: 'post',
+        }),
+      ),
+    );
+
+    expect(rendered).not.toContain('&lt;input');
+    expect(rendered).toMatch(/<input type="hidden" name="csrf" value="[^"]+">/);
+    expect(rendered).toMatch(/<input type="hidden" name="Kovo-Idem" value="[^"]+">/);
+    expect(
+      validateCsrfToken({ csrf: hiddenInputValue(rendered, 'csrf') }, request, csrf, {
+        audience: 'cart/add',
+      }),
+    ).toBe(true);
   });
 
   it('applies mutation authority to ASCII-mixed intrinsic form names', () => {

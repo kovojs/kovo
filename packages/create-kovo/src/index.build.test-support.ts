@@ -4494,6 +4494,7 @@ export async function signInDemoUser(
   mergeCookies(jar, loginResponse.headers.getSetCookie());
   const loginHtml = await loginResponse.text();
   const loginCsrf = fieldValue(loginHtml, 'csrf');
+  const loginIdem = fieldValue(loginHtml, 'Kovo-Idem');
   const demoPassword =
     new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
       readFileSync(join(root, '.env'), 'utf8'),
@@ -4505,6 +4506,7 @@ export async function signInDemoUser(
     body: new URLSearchParams({
       csrf: loginCsrf,
       email: 'demo@example.com',
+      'Kovo-Idem': loginIdem,
       next: '/',
       password: demoPassword,
     }),

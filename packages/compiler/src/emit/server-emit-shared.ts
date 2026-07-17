@@ -195,7 +195,7 @@ export interface EnhancedMutationFormConflict {
 export interface EnhancedMutationFormLowering {
   conflicts: readonly EnhancedMutationFormConflict[];
   generatedAttributeNames: ReadonlySet<string>;
-  importsMutationCsrfField: boolean;
+  importsGeneratedMutationFormFields: boolean;
   outputContexts: readonly GeneratedOutputWriteFact[];
   replacements: readonly SourceReplacement[];
   semanticAttributes: readonly string[];
@@ -245,7 +245,7 @@ export function enhancedMutationFormLowering(
     return {
       conflicts,
       generatedAttributeNames: serverEmitStringSet([]),
-      importsMutationCsrfField: false,
+      importsGeneratedMutationFormFields: false,
       outputContexts: [],
       replacements: [],
       semanticAttributes: [],
@@ -328,7 +328,7 @@ export function enhancedMutationFormLowering(
   if (!preserveRuntimeMutation) {
     compilerArrayAppend(
       replacements,
-      submittedFormCsrfReplacement(element, mutationAttribute.expressionBareIdentifierName),
+      submittedFormFieldsReplacement(element, mutationAttribute.expressionBareIdentifierName),
       'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
     );
   }
@@ -449,7 +449,7 @@ export function enhancedMutationFormLowering(
   return {
     conflicts,
     generatedAttributeNames,
-    importsMutationCsrfField: !preserveRuntimeMutation,
+    importsGeneratedMutationFormFields: !preserveRuntimeMutation,
     outputContexts,
     replacements,
     semanticAttributes,
@@ -501,15 +501,15 @@ function mutationInputFieldsForLocalName(
   return compilerArrayIsArray(fields) ? (fields as readonly MutationInputFieldFact[]) : [];
 }
 
-export function importsMutationCsrfField(model: ComponentModuleModel): boolean {
-  // Compiler-emitted helper import de-dupe: this checks for the exact internal CSRF helper import
+export function importsGeneratedMutationFormFields(model: ComponentModuleModel): boolean {
+  // Compiler-emitted helper import de-dupe: this checks for the exact internal helper import
   // already present in lowered output, not a security decision about app-authored source.
-  const imports = compilerSnapshotDenseArray(model.namedImports, 'Mutation CSRF imports');
+  const imports = compilerSnapshotDenseArray(model.namedImports, 'Generated mutation form imports');
   for (let index = 0; index < imports.length; index += 1) {
     const entry = imports[index]!;
     if (
       entry.moduleSpecifier === '@kovojs/server/internal/csrf' &&
-      entry.importedName === 'renderMutationCsrfField'
+      entry.importedName === 'renderGeneratedMutationFormFields'
     ) {
       return true;
     }
@@ -545,18 +545,18 @@ export function enhancedMutationFormConflicts(
   return conflicts;
 }
 
-export function submittedFormCsrfReplacement(
+export function submittedFormFieldsReplacement(
   element: JsxElementModel,
   localName: string,
 ): SourceReplacement {
   const position = element.childBody
     ? element.childBody.offset + element.childBody.source.length
     : element.closingStart;
-  // SPEC.md §10.3:1063/1065: emit both the CSRF token and a per-submit idem field
-  // so the server replay store can deduplicate no-JS double-submits / Back-resubmits.
+  // SPEC §4.5/§10.3: emit one framework-branded JSX child containing both the CSRF token and a
+  // per-submit idem field. A plain string child would be app-text and must be escaped at runtime.
   return {
     end: position,
-    replacement: `{__kovoRenderMutationCsrfField(${localName})}{__kovoRenderMutationIdemField()}`,
+    replacement: `{__kovoRenderGeneratedMutationFormFields(${localName})}`,
     start: position,
   };
 }

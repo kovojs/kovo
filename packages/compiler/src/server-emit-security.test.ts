@@ -89,13 +89,38 @@ export const SafeLinks = component({
 });
 
 describe('compiler server emit — A2: Kovo-Idem hidden field', () => {
-  it('A2: compiling a <form mutation> with slots param emits __kovoRenderMutationIdemField() in the server source', () => {
-    // Red path (pre-fix): only __kovoRenderMutationCsrfField was emitted; the idem
-    // field was absent, leaving no-JS forms with zero replay protection.
-    //
-    // The compiler injects idem+CSRF into forms when the render function declares a
-    // slots param (i.e., `render: (_queries, _state, slots) => ...`) — this is the
-    // "compiler-lowered" path where `preserveRuntimeMutation` is false.
+  it('emits one branded hidden-field helper child for a local mutation form', () => {
+    const result = compileComponentModule({
+      fileName: 'local-add-to-cart.tsx',
+      source: `
+export const addToCart = mutation({
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  mutations: { addToCart },
+  render: (_queries, _state, slots) => (
+    <form mutation={addToCart}>
+      <button type="submit">Add</button>
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    expect(serverSource).toContain(
+      'renderGeneratedMutationFormFields as __kovoRenderGeneratedMutationFormFields',
+    );
+    expect(serverSource).toContain('__kovoRenderGeneratedMutationFormFields(addToCart)');
+    expect(serverSource).not.toContain('__kovoRenderMutationCsrfField');
+    expect(serverSource).not.toContain('__kovoRenderMutationIdemField');
+  });
+
+  it('emits one branded hidden-field helper child for an imported mutation form', () => {
     const result = compileComponentModule({
       fileName: 'add-to-cart.tsx',
       source: `
@@ -122,13 +147,31 @@ export const AddToCartForm = component({
     expect(serverFile, 'server file should be emitted').toBeDefined();
     const serverSource = serverFile?.source ?? '';
 
-    // The emitted source must include both the CSRF and idem runtime calls.
-    expect(serverSource).toContain('__kovoRenderMutationCsrfField');
-    expect(serverSource).toContain('__kovoRenderMutationIdemField');
-
-    // Both must be imported from @kovojs/server/internal/csrf.
+    // The internal helper returns one branded JSX child containing both framework fields.
+    expect(serverSource).toContain('__kovoRenderGeneratedMutationFormFields(addToCart)');
     expect(serverSource).toContain("from '@kovojs/server/internal/csrf'");
-    expect(serverSource).toContain('renderMutationIdemField as __kovoRenderMutationIdemField');
+    expect(serverSource).toContain(
+      'renderGeneratedMutationFormFields as __kovoRenderGeneratedMutationFormFields',
+    );
+    expect(serverSource).not.toContain('__kovoRenderMutationCsrfField');
+    expect(serverSource).not.toContain('__kovoRenderMutationIdemField');
+  });
+
+  it('keeps the branded hidden-field helper unavailable to app-authored source', () => {
+    const result = compileComponentModule({
+      fileName: 'forged-fields.tsx',
+      source: `
+import { renderGeneratedMutationFormFields } from '@kovojs/server/internal/csrf';
+
+export const ForgedFields = component({
+  render: () => <form>{renderGeneratedMutationFormFields({ key: 'admin/delete' })}</form>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'KV235' })]),
+    );
   });
 
   it('A2: the Kovo-Idem field name constant is "Kovo-Idem" (contract for SRV-MUT lane)', () => {
