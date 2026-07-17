@@ -80,6 +80,7 @@ export interface KovoSecurityReportSnapshot {
 }
 
 const MAX_REPORT_BODY_BYTES = 64 * 1024;
+const MAX_REPORT_BODY_CHUNKS = 1_024;
 const MAX_REPORTS_PER_REQUEST = 20;
 const MAX_REPORT_AGGREGATES = 512;
 const REPORT_RATE_LIMIT = 1200;
@@ -272,6 +273,7 @@ async function readBoundedReportBody(
   const reader = apply<ReadableStreamDefaultReader<Uint8Array>>(nativeStreamGetReader, body, []);
   const decoder = new NativeTextDecoder();
   const chunks: string[] = [];
+  let chunkCount = 0;
   let size = 0;
   let truncated = false;
 
@@ -283,6 +285,12 @@ async function readBoundedReportBody(
         [],
       );
       if (done) break;
+      chunkCount += 1;
+      if (chunkCount > MAX_REPORT_BODY_CHUNKS) {
+        truncated = true;
+        requestStateIgnorePromiseRejection(apply(nativeReaderCancel, reader, []));
+        break;
+      }
       const chunkLength = securityUint8ArrayLength(value);
       size += chunkLength;
       if (size > maxBytes) {

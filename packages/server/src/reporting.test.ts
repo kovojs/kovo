@@ -133,6 +133,40 @@ describe('security reporting intrinsic boundary', () => {
     expect(kovoSecurityReportSnapshot(app)).toEqual({ aggregates: [], dropped: 2 });
   });
 
+  it('drops a report stream with unbounded zero-byte chunks', async () => {
+    const app = createApp();
+    const payload = new TextEncoder().encode(
+      JSON.stringify(report('https://cdn.example.test/after-empty-chunks')),
+    );
+    let emptyChunks = 0;
+    let cancelCalls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      cancel() {
+        cancelCalls += 1;
+      },
+      pull(controller) {
+        if (emptyChunks < 2_048) {
+          emptyChunks += 1;
+          controller.enqueue(new Uint8Array(0));
+          return;
+        }
+        controller.enqueue(payload);
+        controller.close();
+      },
+    });
+    const request = new Request(endpoint, {
+      body,
+      duplex: 'half',
+      headers: { 'Content-Type': 'application/reports+json' },
+      method: 'POST',
+    } as RequestInit & { duplex: 'half' });
+
+    expect((await kovoSecurityReportResponse(app, request)).status).toBe(204);
+    expect(kovoSecurityReportSnapshot(app)).toEqual({ aggregates: [], dropped: 1 });
+    expect(cancelCalls).toBe(1);
+    expect(emptyChunks).toBeLessThan(2_048);
+  });
+
   it('preserves aggregate identity after selective WeakMap/Map and clock poisoning', async () => {
     const app = createApp();
     const body = report('https://cdn.example.test/one.js?secret=one');
