@@ -34,7 +34,27 @@ describe('trusted request scheme provenance', () => {
       Array.isArray = originalIsArray;
     }
 
-    expect(scheme).toBe('https');
+    expect(scheme).toBe('http');
+  });
+
+  it('uses the closest trusted proxy value from a comma-joined forwarding chain', () => {
+    const request = nodeRequest({ 'x-forwarded-proto': 'http, \t https \t' });
+
+    expect(trustedNodeRequestScheme(request, { trustedProxy: true })).toBe('https');
+  });
+
+  it('rejects an invalid closest-hop scheme without falling through to other HTTPS signals', () => {
+    for (const value of ['', 'https, ', 'https, ftp', []] as const) {
+      const request = nodeRequest({
+        ':scheme': 'https',
+        'x-forwarded-proto': value,
+      });
+      (request.socket as { encrypted?: boolean }).encrypted = true;
+
+      expect(() => trustedNodeRequestScheme(request, { trustedProxy: true })).toThrow(
+        /must end in http or https|must end in an own string/u,
+      );
+    }
   });
 
   it('rejects accessor-backed array entries instead of treating them as transport authority', () => {
@@ -45,6 +65,6 @@ describe('trusted request scheme provenance', () => {
       trustedNodeRequestScheme(nodeRequest({ 'x-forwarded-proto': forwarded }), {
         trustedProxy: true,
       }),
-    ).toThrow(/stable own strings/);
+    ).toThrow(/own string/);
   });
 });

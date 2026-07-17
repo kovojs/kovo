@@ -4410,6 +4410,35 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   expect(untrustedLiveRequest.url).toBe('http://h2.example.test/from-url?x=1');
   expect(untrustedEmittedRequest.url).toBe(untrustedLiveRequest.url);
 
+  const appendedForwardingChain = adapterParityRequest();
+  appendedForwardingChain.headers['x-forwarded-proto'] = 'http, https';
+  const emittedAppendedForwardingChain = adapter.nodeRequestToWebRequest(appendedForwardingChain, {
+    trustedProxy: true,
+  });
+  expect(emittedAppendedForwardingChain.url).toBe('https://h2.example.test/from-url?x=1');
+
+  const duplicateForwardingHeaders = adapterParityRequest();
+  duplicateForwardingHeaders.headers['x-forwarded-proto'] = ['https', 'http'];
+  const emittedDuplicateForwardingHeaders = adapter.nodeRequestToWebRequest(
+    duplicateForwardingHeaders,
+    { trustedProxy: true },
+  );
+  expect(emittedDuplicateForwardingHeaders.url).toBe('http://h2.example.test/from-url?x=1');
+
+  const forwardingOws = adapterParityRequest();
+  forwardingOws.headers['x-forwarded-proto'] = 'attacker-value, \t https \t';
+  expect(adapter.nodeRequestToWebRequest(forwardingOws, { trustedProxy: true }).url).toBe(
+    'https://h2.example.test/from-url?x=1',
+  );
+
+  for (const invalid of ['', 'https, ', 'https, ftp', []] as const) {
+    const invalidForwarding = adapterParityRequest();
+    invalidForwarding.headers['x-forwarded-proto'] = invalid;
+    expect(() =>
+      adapter.nodeRequestToWebRequest(invalidForwarding, { trustedProxy: true }),
+    ).toThrow(/must end in http or https|must end in an own string/u);
+  }
+
   const liveRequest = liveNodeRequestToWebRequest(adapterParityRequest(), { trustedProxy: true });
   const emittedRequest = adapter.nodeRequestToWebRequest(adapterParityRequest(), {
     trustedProxy: true,

@@ -144,6 +144,71 @@ describe('server node adapter', () => {
     expect(nodeRequestToWebRequest(encryptedHttp2, { trustedProxy: true }).url).toBe(
       'http://app.example/h2-encrypted',
     );
+
+    const appendedForwardingChain = nodeRequest('/proxy-chain');
+    appendedForwardingChain.headers = {
+      host: 'app.example',
+      'x-forwarded-proto': 'http, https',
+    };
+    expect(nodeRequestToWebRequest(appendedForwardingChain, { trustedProxy: true }).url).toBe(
+      'https://app.example/proxy-chain',
+    );
+
+    const duplicateForwardingHeaders = nodeRequest('/proxy-duplicates');
+    duplicateForwardingHeaders.headers = {
+      host: 'app.example',
+      'x-forwarded-proto': ['https', 'http'],
+    };
+    expect(nodeRequestToWebRequest(duplicateForwardingHeaders, { trustedProxy: true }).url).toBe(
+      'http://app.example/proxy-duplicates',
+    );
+
+    const forwardingOws = nodeRequest('/proxy-ows');
+    forwardingOws.headers = {
+      host: 'app.example',
+      'x-forwarded-proto': 'attacker-value, \t https \t',
+    };
+    expect(nodeRequestToWebRequest(forwardingOws, { trustedProxy: true }).url).toBe(
+      'https://app.example/proxy-ows',
+    );
+
+    for (const invalid of ['', 'https, ', 'https, ftp', []] as const) {
+      const invalidForwarding = nodeRequest('/proxy-invalid');
+      invalidForwarding.headers = {
+        ':authority': 'app.example',
+        ':scheme': 'https',
+        'x-forwarded-proto': invalid,
+      };
+      (invalidForwarding.socket as Socket & { encrypted?: boolean }).encrypted = true;
+      expect(() => nodeRequestToWebRequest(invalidForwarding, { trustedProxy: true })).toThrow(
+        /must end in http or https|must end in an own string/u,
+      );
+    }
+  });
+
+  it('uses the closest trusted proxy scheme from real duplicate HTTP/1 headers', async () => {
+    const server = createServer(
+      toNodeHandler(async (request) => new Response(request.url), { trustedProxy: true }),
+    );
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+
+    try {
+      const response = await rawHttpExchange(
+        `http://127.0.0.1:${address.port}`,
+        'GET /proxy-chain HTTP/1.1\r\n' +
+          'Host: app.example\r\n' +
+          'X-Forwarded-Proto: http\r\n' +
+          'X-Forwarded-Proto: https\r\n' +
+          'Connection: close\r\n\r\n',
+      );
+
+      expect(response).toContain('https://app.example/proxy-chain');
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
   });
 
   it('threads the socket peer address into default pre-dispatch per-IP limiting', async () => {

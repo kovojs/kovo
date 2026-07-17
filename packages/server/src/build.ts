@@ -1061,6 +1061,8 @@ const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.pro
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
 const nativeUrlSearchGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'search').get;
 const nativeStringIndexOf = String.prototype.indexOf;
+const nativeStringLastIndexOf = String.prototype.lastIndexOf;
+const nativeStringSlice = String.prototype.slice;
 const nativeStringTrim = String.prototype.trim;
 const bodylessMethods = new Set(['GET', 'HEAD']);
 const requestTargetAnalysisOrigin = 'https://kovo.invalid';
@@ -1651,8 +1653,10 @@ function defaultOrigin(nodeRequest, options) {
   // still send a divergent regular \`Host\`, but recipients must not use it to determine the
   // target URI when \`:authority\` is present.
   const host = firstHeaderValue(nodeRequest.headers[':authority']) ?? firstHeaderValue(nodeRequest.headers.host) ?? '127.0.0.1';
+  // SPEC §9.5: Node joins duplicate forwarding headers with commas. The closest trusted proxy
+  // owns the rightmost value; reject an empty/unknown terminal scheme rather than falling through.
   const forwardedProto = options.trustedProxy
-    ? firstHeaderValue(nodeRequest.headers['x-forwarded-proto'])
+    ? rightmostHeaderListValue(nodeRequest.headers['x-forwarded-proto'])
     : undefined;
   // SPEC §9.5 / RFC 9113 §8.3.1: :scheme is peer-supplied request-target control data, not proof
   // that this hop is encrypted. Accept it only with explicit trusted-proxy posture.
@@ -1788,6 +1792,30 @@ function firstHeaderValue(value) {
   if (!apply(nativeArrayIsArray, NativeArray, [value])) return value;
   const first = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, 0])?.value;
   return typeof first === 'string' ? first : undefined;
+}
+
+function rightmostHeaderListValue(value) {
+  if (value === undefined) return undefined;
+  let list = value;
+  if (apply(nativeArrayIsArray, NativeArray, [value])) {
+    const descriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, value.length - 1]);
+    if (
+      value.length === 0 ||
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError('Trusted proxy scheme headers must end in an own string.');
+    }
+    list = descriptor.value;
+  }
+  const comma = apply(nativeStringLastIndexOf, list, [',']);
+  const candidate = apply(nativeStringSlice, list, [comma + 1]);
+  const scheme = apply(nativeStringTrim, candidate, []);
+  if (scheme !== 'http' && scheme !== 'https') {
+    throw new TypeError('Trusted proxy scheme headers must end in http or https.');
+  }
+  return scheme;
 }
 
 function hasPrototype(value, expected) {

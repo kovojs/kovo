@@ -100,6 +100,8 @@ const nativeAbortSignalAbortedGetter = stablePrototypeGetter(
 );
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringFromCharCode = NativeString.fromCharCode;
+const nativeStringLastIndexOf = NativeString.prototype.lastIndexOf;
+const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringTrim = NativeString.prototype.trim;
 const nativeRequestMethodGetter = requiredGetter(NativeRequest.prototype, 'method');
 const nativeIncomingMessageHeadersGetter = stablePrototypeGetter(
@@ -1391,8 +1393,11 @@ function defaultOrigin(request: PinnedNodeRequest, options: PinnedNodeHandlerOpt
     firstHeaderValue(request.headers[':authority']) ??
     firstHeaderValue(request.headers.host) ??
     '127.0.0.1';
+  // SPEC §9.5: Node joins duplicate forwarding headers with commas. Under explicit proxy trust,
+  // the closest trusted hop owns the rightmost value; earlier values remain attacker-controlled.
+  // Reject an empty/unknown closest-hop scheme instead of falling through to another authority.
   const forwardedProto = options.trustedProxy
-    ? firstHeaderValue(request.headers['x-forwarded-proto'])
+    ? rightmostHeaderListValue(request.headers['x-forwarded-proto'])
     : undefined;
   // SPEC §9.5 / RFC 9113 §8.3.1: `:scheme` is request-target control data supplied by the peer,
   // not transport authentication. A cleartext h2c peer can spell `https`, and a TLS peer can
@@ -1580,4 +1585,28 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
   if (!witnessIsArray(value)) return value;
   const first = witnessGetOwnPropertyDescriptor(value, 0)?.value;
   return typeof first === 'string' ? first : undefined;
+}
+
+function rightmostHeaderListValue(value: string | string[] | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  let list = value;
+  if (witnessIsArray(value)) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, value.length - 1);
+    if (
+      value.length === 0 ||
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError('Trusted proxy scheme headers must end in an own string.');
+    }
+    list = descriptor.value;
+  }
+  const comma = witnessReflectApply<number>(nativeStringLastIndexOf, list, [',']);
+  const candidate = witnessReflectApply<string>(nativeStringSlice, list, [comma + 1]);
+  const scheme = witnessReflectApply<string>(nativeStringTrim, candidate, []);
+  if (scheme !== 'http' && scheme !== 'https') {
+    throw new TypeError('Trusted proxy scheme headers must end in http or https.');
+  }
+  return scheme;
 }

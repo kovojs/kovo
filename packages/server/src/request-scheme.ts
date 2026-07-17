@@ -6,7 +6,15 @@ import {
   requestUrl,
   requestUrlSnapshot,
 } from './request-body-intrinsics.js';
-import { witnessGetOwnPropertyDescriptor, witnessIsArray } from './security-witness-intrinsics.js';
+import {
+  witnessGetOwnPropertyDescriptor,
+  witnessIsArray,
+  witnessReflectApply,
+} from './security-witness-intrinsics.js';
+
+const nativeStringLastIndexOf = String.prototype.lastIndexOf;
+const nativeStringSlice = String.prototype.slice;
+const nativeStringTrim = String.prototype.trim;
 
 /**
  * Trusted transport scheme provenance for framework security decisions.
@@ -38,8 +46,10 @@ export function trustedNodeRequestScheme(
   options: { trustedProxy?: boolean } = {},
 ): TrustedRequestScheme {
   const pseudoHeaders = request.headers as Record<string, string | string[] | undefined>;
+  // SPEC §9.5: use only the closest trusted proxy's rightmost list member. Invalid/empty terminal
+  // values reject instead of falling through to peer-controlled pseudo-header or socket posture.
   const forwardedProto = options.trustedProxy
-    ? firstHeaderValue(request.headers['x-forwarded-proto'])
+    ? rightmostHeaderListValue(request.headers['x-forwarded-proto'])
     : undefined;
   // SPEC §9.5 / RFC 9113 §8.3.1: `:scheme` is peer-supplied request-target control data, not
   // proof that this hop is encrypted. Treat it like other proxy-carried scheme metadata and
@@ -62,4 +72,28 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
     throw new TypeError('Trusted request scheme headers must contain stable own strings.');
   }
   return first.value;
+}
+
+function rightmostHeaderListValue(value: string | string[] | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  let list = value;
+  if (witnessIsArray(value)) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, value.length - 1);
+    if (
+      value.length === 0 ||
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError('Trusted request scheme headers must end in an own string.');
+    }
+    list = descriptor.value;
+  }
+  const comma = witnessReflectApply<number>(nativeStringLastIndexOf, list, [',']);
+  const candidate = witnessReflectApply<string>(nativeStringSlice, list, [comma + 1]);
+  const scheme = witnessReflectApply<string>(nativeStringTrim, candidate, []);
+  if (scheme !== 'http' && scheme !== 'https') {
+    throw new TypeError('Trusted request scheme headers must end in http or https.');
+  }
+  return scheme;
 }
