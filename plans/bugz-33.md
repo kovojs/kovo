@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    1 |     10 |
+| High     |    2 |     10 |
 | Medium   |    0 |     15 |
 | Low      |    0 |      3 |
 
@@ -141,6 +141,18 @@ rendering, Better Auth, and managed SQL.
   - **Open:** require exact authenticated `sslmode=verify-full` for every non-loopback/non-Unix
     runtime/admin/system/CLI URL, fail before any socket or credential use, and retain cleartext only
     for genuinely local loopback/Unix development endpoints (SPEC §6.6/§9.4/§10.3).
+
+- [ ] **H12 - SVG SMIL transfer attributes could animate a link into a JavaScript URL.**
+  - Server JSX and browser fragment/live-binding sinks treated SVG `<animate>`/`<set>` transfer
+    attributes as ordinary text. Remotely controlled `attributeName="href"` combined with
+    `values`/`to` could materialize a `javascript:` URL on an ancestor SVG link after Kovo's initial
+    render-time URL check; activating that link executed attacker script.
+  - **Evidence:** a real Chromium reproduction changed the ancestor SVG `<a>` target through SMIL
+    and set an attacker-controlled DOM marker on activation. CSP could mask the execution, but the
+    contextual-output guarantee cannot delegate this sink proof to CSP (SPEC §4.8/§5.2).
+  - **Open:** enforce one shared fail-closed cross-attribute policy for server rendering and browser
+    fragment/live-binding updates, including namespace/casing and all SMIL transfer-value forms,
+    with server/browser parity and real-browser exploit regressions.
 
 ## Medium
 
