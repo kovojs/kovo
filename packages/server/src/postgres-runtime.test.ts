@@ -400,6 +400,75 @@ describe('createPostgresAppRuntimeDb', () => {
     ).resolves.toMatchObject({ ok: true, issues: [] });
   });
 
+  it('fails posture and repairs a missing durable replay identity primary key', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-identity-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec('ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_pkey');
+    await weakened.close();
+
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'KV433_REPLAY_STORE_SCHEMA' }),
+      ]),
+    });
+
+    const repaired = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await repaired.ready;
+    const owner = await repaired.mutationReplayStore.reserve(
+      'session:save',
+      'same-idem',
+      'same-fingerprint',
+    );
+    const duplicate = await repaired.mutationReplayStore.reserve(
+      'session:save',
+      'same-idem',
+      'same-fingerprint',
+    );
+    expect(owner).toBeDefined();
+    expect(duplicate).toBeUndefined();
+    await owner?.abort?.();
+    await repaired.close();
+
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({ ok: true, issues: [] });
+  });
+
+  it('fails provisioning when duplicate replay truth prevents identity-key repair', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-duplicate-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec(
+      [
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_pkey;',
+        'INSERT INTO _kovo_replay ',
+        '(surface, scope, idem, fingerprint, generation, state, admission_slot) VALUES ',
+        "('mutation', 'same-scope', 'same-idem', NULL, 'generation-1', 'pending', 1),",
+        "('mutation', 'same-scope', 'same-idem', NULL, 'generation-2', 'pending', 2)",
+      ].join(' '),
+    );
+    await weakened.close();
+
+    const rejected = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    try {
+      await expect(rejected.ready).rejects.toThrow(/unique|duplicate/i);
+    } finally {
+      await rejected.close();
+    }
+  });
+
   it('does not dispatch a one-shot Array.join poison while committing owner RLS', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-primordial-'));
     roots.push(dataDir);

@@ -2968,6 +2968,12 @@ async function provisionPostgresFrameworkReplayStore(
   );
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS expires_at bigint`);
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS admission_slot integer`);
+  const identityConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_pkey`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${identityConstraint}`);
+  await client.exec(
+    `ALTER TABLE ${table} ADD CONSTRAINT ${identityConstraint} ` +
+      'PRIMARY KEY (surface, scope, idem)',
+  );
   await client.exec(
     `WITH ranked AS (` +
       `SELECT ctid, ROW_NUMBER() OVER (` +
@@ -3059,6 +3065,7 @@ interface PostgresReplayShapeRow {
   exact_expiry_constraint: boolean;
   exact_expiry_index: boolean;
   exact_expiry_column: boolean;
+  exact_identity_constraint: boolean;
   exact_response_constraint: boolean;
   exact_surface_constraint: boolean;
 }
@@ -3119,6 +3126,22 @@ async function postgresReplayStorePostureIssues(
         "AND column_row.attname = 'admission_slot' AND column_row.attnum > 0",
         'AND NOT column_row.attisdropped AND NOT column_row.attnotnull',
         "AND format_type(column_row.atttypid, column_row.atttypmod) = 'integer') AS exact_admission_column,",
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        'JOIN pg_attribute AS surface_column ON surface_column.attrelid = relation_row.oid',
+        'AND surface_column.attnum = constraint_row.conkey[1]',
+        'JOIN pg_attribute AS scope_column ON scope_column.attrelid = relation_row.oid',
+        'AND scope_column.attnum = constraint_row.conkey[2]',
+        'JOIN pg_attribute AS idem_column ON idem_column.attrelid = relation_row.oid',
+        'AND idem_column.attnum = constraint_row.conkey[3]',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND constraint_row.contype = 'p' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_pkey'",
+        'AND cardinality(constraint_row.conkey) = 3',
+        "AND surface_column.attname = 'surface' AND scope_column.attname = 'scope'",
+        "AND idem_column.attname = 'idem') AS exact_identity_constraint,",
         'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
         'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
         'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
@@ -3211,6 +3234,7 @@ async function postgresReplayStorePostureIssues(
     shapeRow?.exact_admission_column !== true ||
     shapeRow.exact_admission_constraint !== true ||
     shapeRow.exact_admission_index !== true ||
+    shapeRow.exact_identity_constraint !== true ||
     shapeRow.exact_response_constraint !== true ||
     shapeRow.exact_expiry_column !== true ||
     shapeRow.exact_surface_constraint !== true ||
@@ -3221,7 +3245,7 @@ async function postgresReplayStorePostureIssues(
     appendPostgresDenseValue(issues, {
       code: 'KV433_REPLAY_STORE_SCHEMA',
       detail:
-        'public._kovo_replay must have exact expiry/admission columns, capability/mutation/webhook constraints, and bounded cleanup/admission indexes; run the current framework provisioner',
+        'public._kovo_replay must have the exact replay-identity primary key, expiry/admission columns, capability/mutation/webhook constraints, and bounded cleanup/admission indexes; run the current framework provisioner',
     });
   }
   const roles: { allow: boolean; role: string }[] = [
