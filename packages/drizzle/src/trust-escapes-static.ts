@@ -15601,6 +15601,13 @@ function scanRequestThenableCallbackOutput(
     context.provenance.promiseSettlementCallables.add(requestNodeIdentity(then.declaration));
     scanRequestCallable(then, context);
   }
+  if (thenCallables.length > 0 && classValues.length === 0) {
+    // SPEC §6.6 / §9.6: Promise resolution does not merely call an authored `then`
+    // implementation. It lets that implementation decide when settlement occurs, so work queued
+    // after the first resolve/reject can outlive the framework's authoritative task boundary.
+    // Inspecting the hook body remains useful for diagnostics, but cannot prove temporal closure.
+    appendRequestProtocolFact(context, site, 'authored-thenable', output);
+  }
   if (thenCallables.length > 0 || classValues.length > 0) return;
   const defaultedParameter = requestCallbackOutputReferencesDefaultedParameter(output);
   if (
@@ -18812,7 +18819,14 @@ function scanRequestProtocolUse(
         }
       }
     }
-    for (const nested of dedupeRequestCallables(callables)) {
+    const resolvedCallables = dedupeRequestCallables(callables);
+    if (hook === 'then' && resolvedCallables.length > 0 && classValues.length === 0) {
+      // An ordinary object/function/Array with an authored callable `then` owns Promise
+      // settlement just as a class instance does. Fail closed even when the hook is locally
+      // inspectable: it can resolve first and schedule authority for a later microtask.
+      appendRequestProtocolFact(context, site, 'authored-thenable', node);
+    }
+    for (const nested of resolvedCallables) {
       resolved = true;
       if (hook === 'then') {
         context.provenance.promiseSettlementCallables.add(requestNodeIdentity(nested.declaration));
@@ -19118,6 +19132,12 @@ function scanRequestProtocolPrototypeMutations(
   }
   for (const candidate of mutations.candidates) {
     const resolution = resolveRequestCallable(candidate, new Set(), 0, context.provenance);
+    if (hook === 'then') {
+      // A callable installed on a known global prototype can participate in Promise assimilation
+      // for otherwise-plain values. Its local body is not a proof that post-settlement work stays
+      // inside the authoritative request/task lifetime.
+      appendRequestProtocolFact(context, candidate, 'prototype-then', candidate);
+    }
     if (resolution.callables.length === 0) {
       appendRequestProtocolFact(context, candidate, `prototype-${hook}`, candidate);
       continue;
@@ -37259,6 +37279,8 @@ function requestCallableMemberName(node: Node | undefined): string | undefined {
   const candidate = node && Node.isComputedPropertyName(node) ? node.getExpression() : node;
   const expression = candidate ? unwrapStaticExpression(candidate) : undefined;
   if (!expression) return undefined;
+  const stableName = requestStablePropertyKeyValue(expression);
+  if (stableName !== undefined) return stableName;
   if (!Node.isPropertyAccessExpression(expression) && !Node.isElementAccessExpression(expression)) {
     return undefined;
   }

@@ -13,21 +13,114 @@ const lateAuthorityThenHook = `
   }
 `;
 
+const lateAuthorityThenFunction = `
+  (resolve: (value: { ok: true }) => void) => {
+    resolve({ ok: true });
+    queueMicrotask(() => { void fetch('https://example.test/late'); });
+  }
+`;
+
 // SPEC §6.6 / §9.6, bugz-31 C2: framework/native-Promise assimilation must fail closed for every
 // authored thenable shape, not only a class constructor with a static `then` member.
 describe('temporal exact-tip adversarial review', () => {
   it.each([
+    ['ordinary object', `return { ${lateAuthorityThenHook} };`, 'authored-thenable'],
     [
-      'ordinary object',
-      `return { ${lateAuthorityThenHook} };`,
+      'aliased ordinary object',
+      `const value = { ${lateAuthorityThenHook} };
+       const alias = value;
+       return alias;`,
+      'authored-thenable',
+    ],
+    [
+      'ordinary object with an aliased then function',
+      `const settle = ${lateAuthorityThenFunction};
+       return { then: settle };`,
+      'authored-thenable',
+    ],
+    [
+      'ordinary object with a computed then method',
+      `const hook = 'then' as const;
+       return {
+         [hook](resolve: (value: { ok: true }) => void) {
+           resolve({ ok: true });
+           queueMicrotask(() => { void fetch('https://example.test/late'); });
+         },
+       };`,
+      'authored-thenable',
+    ],
+    [
+      'ordinary object with a then getter',
+      `const settle = ${lateAuthorityThenFunction};
+       return { get then() { return settle; } };`,
+      'authored-thenable',
+    ],
+    [
+      'helper-returned ordinary object',
+      `function makeDeferred() { return { ${lateAuthorityThenHook} }; }
+       return makeDeferred();`,
+      'authored-thenable',
+    ],
+    [
+      'Object.create inherited thenable',
+      `const prototype = { ${lateAuthorityThenHook} };
+       return Object.create(prototype);`,
+      'authored-thenable',
+    ],
+    [
+      'array with an assigned then function',
+      `const value: unknown[] & { then?: typeof settle } = [];
+       const settle = ${lateAuthorityThenFunction};
+       value.then = settle;
+       return value;`,
+      'authored-thenable',
+    ],
+    [
+      'function with an assigned then function',
+      `const settle = ${lateAuthorityThenFunction};
+       function value() { return undefined; }
+       value.then = settle;
+       return value;`,
+      'authored-thenable',
     ],
     [
       'class instance',
       `class DeferredValue { ${lateAuthorityThenHook} }
        return new DeferredValue();`,
+      'authored-thenable',
     ],
-  ])('rejects a returned %s thenable before late authority can escape settlement', (label, body) => {
-    const facts = sinksFor(`
+    [
+      'class instance with an inherited then method',
+      `class DeferredBase { ${lateAuthorityThenHook} }
+       class DeferredValue extends DeferredBase {}
+       return new DeferredValue();`,
+      'authored-thenable',
+    ],
+    [
+      'class instance with a computed then method',
+      `const hook = 'then' as const;
+       class DeferredValue {
+         [hook](resolve: (value: { ok: true }) => void) {
+           resolve({ ok: true });
+           queueMicrotask(() => { void fetch('https://example.test/late'); });
+         }
+       }
+       return new DeferredValue();`,
+      'authored-thenable',
+    ],
+    [
+      'class instance with a constructor-assigned then function',
+      `class DeferredValue {
+         then: (resolve: (value: { ok: true }) => void) => void;
+         constructor() { this.then = ${lateAuthorityThenFunction}; }
+       }
+       return new DeferredValue();`,
+      'authored-thenable',
+    ],
+  ])(
+    'rejects a returned %s thenable before late authority can escape settlement',
+    (label, body, protocol) => {
+      const facts = sinksFor(`
       import { s, task } from '@kovojs/server';
       task('object-thenable-rereview', {
         input: s.object({}),
@@ -35,10 +128,67 @@ describe('temporal exact-tip adversarial review', () => {
       });
     `);
 
+      expect(
+        facts.some(
+          (fact) =>
+            fact.sink === 'request-handler.opaque-protocol' &&
+            fact.source?.startsWith(`<${protocol}:`),
+        ),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    },
+  );
+
+  it.each([
+    [
+      'Promise.resolve',
+      `const value = { ${lateAuthorityThenHook} };
+       return Promise.resolve(value);`,
+    ],
+    [
+      'await',
+      `const value = { ${lateAuthorityThenHook} };
+       const settled = await value;
+       return settled;`,
+    ],
+    [
+      'native Promise callback output',
+      `return Promise.resolve({ ok: true }).then(() => ({ ${lateAuthorityThenHook} }));`,
+    ],
+  ])('rejects authored thenables assimilated through %s', (label, body) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('thenable-assimilation-rereview', {
+        input: s.object({}),
+        async run() { ${body} },
+      });
+    `);
+
     expect(
-      facts.some((fact) => fact.sink.startsWith('request-handler.opaque')),
+      facts.some(
+        (fact) =>
+          fact.sink === 'request-handler.opaque-protocol' &&
+          fact.source?.startsWith('<authored-thenable:'),
+      ),
       `${label}: ${JSON.stringify(facts)}`,
     ).toBe(true);
+  });
+
+  it.each([
+    ['plain object', `return { ok: true, nested: { value: 'plain' } };`],
+    ['object with non-callable then data', `return { ok: true, then: 'metadata' };`],
+    ['plain Array', `return [{ ok: true }];`],
+    ['exact native Promise', `return Promise.resolve({ ok: true });`],
+  ])('keeps the %s precision control inside the plain-data subset', (label, body) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      task('thenable-precision-rereview', {
+        input: s.object({}),
+        run() { ${body} },
+      });
+    `);
+
+    expect(facts, `${label}: ${JSON.stringify(facts)}`).toEqual([]);
   });
 
   it('demonstrates that the authored microtask runs after framework settlement', async () => {
