@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |      7 |
-| Medium   |    2 |      7 |
+| Medium   |    3 |      7 |
 | Low      |    0 |      3 |
 
 ## High
@@ -166,6 +166,16 @@ rendering, Better Auth, and managed SQL.
     in source and emitted Node/Vercel adapters (SPEC §9.5; RFC 9113 §8.3.1).
   - **Evidence:** Node/scheme/build matrix 97/97; cookie/CSRF/response-posture matrix 163/163;
     server dist, wire-output boundary, and API-surface gates passed.
+
+- [ ] **M10 - Trusted-proxy scheme resolution selected the attacker-nearest list member.**
+  - Generic Node consumed the first/raw `X-Forwarded-Proto` value. A proxy that preserved or
+    appended to an inbound chain therefore let a remote leftmost value override the closest trusted
+    hop, forging or suppressing HTTPS request, cookie, HSTS, callback, and redirect posture.
+  - **Evidence:** real duplicate HTTP/1 headers arrived as `http, https` but resolved to `http`; an
+    inverse `https, http` control falsely resolved to secure. Six new live/internal/emitted parity
+    assertions failed before the fix while 93 existing controls passed.
+  - **Open:** parse the bounded header list from the rightmost trusted hop and prove identical
+    source Node, internal scheme, and emitted Node/Vercel behavior (SPEC §9.5).
 
 ## Low
 
