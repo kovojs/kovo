@@ -4055,6 +4055,69 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it('copies exact mutation number-schema projections without opening adjacent carriers', () => {
+    const safe = sinksFor(`
+      import { mutation, s } from '@kovojs/server';
+      const state = { count: 0 };
+      mutation('cart/add', {
+        input: s.object({ quantity: s.number().int().min(1).default(1) }),
+        handler(input) {
+          state.count += input.quantity;
+          const quantity = input.quantity;
+          state.count = quantity;
+          return { count: state.count };
+        },
+      });
+    `);
+    expect(safe, JSON.stringify(safe)).toEqual([]);
+
+    const adjacent = [
+      [
+        'object-valued schema',
+        `
+          input: s.object({ quantity: s.json() }),
+          handler(input) {
+            state.count = input.quantity;
+            return \`count:\${input.quantity}\`;
+          },
+        `,
+      ],
+      [
+        'non-literal number default',
+        `
+          input: s.object({ quantity: s.number().default(fallback) }),
+          handler(input) {
+            state.count += input.quantity;
+            return { count: state.count };
+          },
+        `,
+      ],
+      [
+        'written scalar projection',
+        `
+          input: s.object({ quantity: s.number() }),
+          handler(input) {
+            input.quantity = fallback;
+            state.count += input.quantity;
+            return { count: state.count };
+          },
+        `,
+      ],
+    ] as const;
+    for (const [label, definition] of adjacent) {
+      const facts = sinksFor(`
+        import { mutation, s } from '@kovojs/server';
+        const state = { count: 0 };
+        const fallback = { valueOf() { return 1; } };
+        mutation('cart/${label}', { ${definition} });
+      `);
+      expect(
+        facts.some((fact) => fact.sink === 'request-handler.opaque-protocol'),
+        `${label}: ${JSON.stringify(facts)}`,
+      ).toBe(true);
+    }
+  });
+
   it('invalidates trusted roots through reference-preserving Array call results', () => {
     const aliases = [
       ['find', 'input.items.find(() => true)!'],

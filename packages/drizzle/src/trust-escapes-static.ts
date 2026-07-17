@@ -33444,6 +33444,198 @@ function requestRootRoleReferencePlans(
 const REQUEST_ROOT_ROLE_PRISTINE_MEMO = new WeakMap<object, Map<string, boolean>>();
 const REQUEST_ROOT_ROLE_PRISTINE_ACTIVE = new WeakMap<object, Set<string>>();
 
+function requestExactNumericLiteralValue(expression: Node): number | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (Node.isNumericLiteral(node)) {
+    const value = node.getLiteralValue();
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (!Node.isPrefixUnaryExpression(node)) return undefined;
+  const operand = unwrapStaticExpression(node.getOperand());
+  if (!Node.isNumericLiteral(operand)) return undefined;
+  const value = operand.getLiteralValue();
+  if (!Number.isFinite(value)) return undefined;
+  if (node.getOperatorToken() === SyntaxKind.PlusToken) return value;
+  if (node.getOperatorToken() === SyntaxKind.MinusToken) return -value;
+  return undefined;
+}
+
+function requestExactFrameworkNumberSchema(
+  expression: Node,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): boolean {
+  let node = unwrapStaticExpression(expression);
+  if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+    if (!symbol) return false;
+    const symbolKey = requestSymbolKey(symbol);
+    if (seen.has(symbolKey) || requestAssignedBindingProjections(symbol, session).length > 0) {
+      return false;
+    }
+    seen.add(symbolKey);
+    const declarations = symbol.getDeclarations();
+    if (declarations.length !== 1 || !Node.isVariableDeclaration(declarations[0])) return false;
+    const declaration = declarations[0];
+    if (
+      declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+    ) {
+      return false;
+    }
+    const initializer = declaration.getInitializer();
+    return !!initializer && requestExactFrameworkNumberSchema(initializer, session, seen);
+  }
+  if (!Node.isCallExpression(node) || node.getQuestionDotTokenNode()) return false;
+  const callee = unwrapStaticExpression(node.getExpression());
+  if (!Node.isPropertyAccessExpression(callee) || callee.getQuestionDotTokenNode()) return false;
+  if (!requestFrameworkSchemaBuilderCallIsPristine(node, session)) return false;
+
+  const member = callee.getName();
+  const receiver = unwrapStaticExpression(callee.getExpression());
+  if (requestExpressionIsFrameworkSchemaNamespace(receiver)) {
+    return (
+      member === 'number' &&
+      node.getArguments().length === 0 &&
+      requestFrameworkSchemaNamespaceIsPristine(receiver)
+    );
+  }
+  if (!requestExactFrameworkNumberSchema(receiver, session, new Set(seen))) return false;
+  if (member === 'int' || member === 'optional') return node.getArguments().length === 0;
+  if (member !== 'default' && member !== 'min' && member !== 'max') return false;
+  const [value, ...extra] = node.getArguments();
+  return !!value && extra.length === 0 && requestExactNumericLiteralValue(value) !== undefined;
+}
+
+function requestExactOwnDataPropertyInitializer(
+  object: import('ts-morph').ObjectLiteralExpression,
+  name: string,
+): Node | undefined {
+  if (object.getProperties().some(Node.isSpreadAssignment)) return undefined;
+  const matches = object
+    .getProperties()
+    .filter((property) => staticMemberName(requestObjectLiteralElementNameNode(property)) === name);
+  if (matches.length !== 1) return undefined;
+  const [property] = matches;
+  if (!property || !Node.isPropertyAssignment(property)) return undefined;
+  return property.getInitializer();
+}
+
+function requestExactDirectRootDefinition(
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): import('ts-morph').ObjectLiteralExpression | undefined {
+  const owner = callable.declaration;
+  let property: import('ts-morph').MethodDeclaration | import('ts-morph').PropertyAssignment;
+  let definition: Node | undefined;
+  if (Node.isMethodDeclaration(owner)) {
+    property = owner;
+    definition = owner.getParent();
+  } else {
+    const parent = owner.getParent();
+    if (!Node.isPropertyAssignment(parent)) return undefined;
+    const initializer = parent.getInitializer();
+    if (!initializer || !requestNodesAreSame(unwrapStaticExpression(initializer), owner)) {
+      return undefined;
+    }
+    property = parent;
+    definition = parent.getParent();
+  }
+  if (
+    !Node.isObjectLiteralExpression(definition) ||
+    staticMemberName(requestObjectLiteralElementNameNode(property)) !== callable.rootCallback
+  ) {
+    return undefined;
+  }
+
+  let current: Node = definition;
+  while (
+    Node.isParenthesizedExpression(current.getParent()) ||
+    Node.isAsExpression(current.getParent()) ||
+    Node.isSatisfiesExpression(current.getParent()) ||
+    Node.isTypeAssertion(current.getParent()) ||
+    Node.isNonNullExpression(current.getParent())
+  ) {
+    current = current.getParent()!;
+  }
+  const declarationCall = current.getParentIfKind(SyntaxKind.CallExpression);
+  if (!declarationCall) return undefined;
+  const exactRoot = requestHandlerFactoryInvocationsForCall(declarationCall, session).some(
+    (invocation) => invocation.factory.exportName === callable.rootFactory,
+  );
+  return exactRoot ? definition : undefined;
+}
+
+/**
+ * SPEC §6.3/§6.6: an exact pristine `s.object({ field: s.number()... })` mutation schema
+ * reconstructs `field` as a number before the handler runs. That projection is a copied scalar,
+ * not a live alias of the validated input carrier. Keep the proof deliberately narrow: indirect
+ * definitions, computed fields, object-valued schemas, non-literal refinements, and non-pristine
+ * schema builders all retain the conservative carrier verdict.
+ */
+function requestExpressionIsExactMutationNumberInputProjection(
+  expression: Node | undefined,
+  rootSymbol: NonNullable<ReturnType<Node['getSymbol']>>,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  if (
+    !expression ||
+    callable.rootFactory !== 'mutation' ||
+    callable.rootCallback !== 'handler' ||
+    callable.rootParameterRoles?.[0] !== 'input'
+  ) {
+    return false;
+  }
+  const parameter = requestCallableParameters(callable.declaration)[0];
+  const parameterName = parameter?.getNameNode();
+  if (
+    !parameter ||
+    parameter.getInitializer() ||
+    parameter.getDotDotDotToken() ||
+    !Node.isIdentifier(parameterName) ||
+    parameterName.getSymbol() !== rootSymbol
+  ) {
+    return false;
+  }
+  const projection = requestStaticExpressionProjection(expression);
+  if (
+    !projection ||
+    projection.path.length !== 1 ||
+    projection.path[0] === undefined ||
+    !Node.isIdentifier(projection.base) ||
+    projection.base.getSymbol() !== rootSymbol
+  ) {
+    return false;
+  }
+  const definition = requestExactDirectRootDefinition(callable, session);
+  const input = definition
+    ? requestExactOwnDataPropertyInitializer(definition, 'input')
+    : undefined;
+  const objectSchema = input ? unwrapStaticExpression(input) : undefined;
+  if (
+    !objectSchema ||
+    !Node.isCallExpression(objectSchema) ||
+    objectSchema.getQuestionDotTokenNode()
+  ) {
+    return false;
+  }
+  const objectCallee = unwrapStaticExpression(objectSchema.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(objectCallee) ||
+    objectCallee.getQuestionDotTokenNode() ||
+    objectCallee.getName() !== 'object' ||
+    !requestFrameworkSchemaNamespaceIsPristine(objectCallee.getExpression()) ||
+    !requestFrameworkSchemaBuilderCallIsPristine(objectSchema, session)
+  ) {
+    return false;
+  }
+  const [shapeSource, ...extra] = objectSchema.getArguments();
+  const shape = shapeSource ? unwrapStaticExpression(shapeSource) : undefined;
+  if (extra.length !== 0 || !shape || !Node.isObjectLiteralExpression(shape)) return false;
+  const field = requestExactOwnDataPropertyInitializer(shape, projection.path[0]);
+  return !!field && requestExactFrameworkNumberSchema(field, session, new Set());
+}
+
 function requestRootRoleExpressionCreatesFreshRecord(expression: Node): boolean {
   const node = unwrapStaticExpression(expression);
   return Node.isObjectLiteralExpression(node) || requestWireStaticFromEntries(node) !== undefined;
@@ -33516,6 +33708,16 @@ function requestRootRoleBindingIsPristineUncached(
       !initializer ||
       !Node.isIdentifier(name) ||
       declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+    ) {
+      continue;
+    }
+    if (
+      requestExpressionIsExactMutationNumberInputProjection(
+        initializer,
+        symbol,
+        callable,
+        referenceSession,
+      )
     ) {
       continue;
     }
@@ -33636,7 +33838,12 @@ function requestRootRoleBindingIsPristineUncached(
   const directCarrier = (candidate: Node | undefined): boolean =>
     referenceKind(candidate) === 'direct';
   const anyCarrier = (candidate: Node | undefined): boolean =>
-    referenceKind(candidate) !== undefined;
+    !requestExpressionIsExactMutationNumberInputProjection(
+      candidate,
+      symbol,
+      callable,
+      referenceSession,
+    ) && referenceKind(candidate) !== undefined;
   const containsCarrier = (candidate: Node | undefined): boolean =>
     requestExpressionContainsIdentityCarrier(candidate, anyCarrier, new Set());
 
