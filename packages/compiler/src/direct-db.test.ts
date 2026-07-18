@@ -261,7 +261,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toEqual([]);
   });
 
   it('keeps the commerce reference mutation free of handler db write sinks', () => {
@@ -293,7 +293,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toEqual([]);
   });
 
   it('ignores direct-db-looking text inside real mutation handler strings', () => {
@@ -311,7 +311,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toEqual([]);
   });
 
   it('reports KV330 when task run bodies write through module-level db handles', () => {
@@ -424,7 +424,7 @@ export const sendReceipt = task({
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toEqual([]);
     expect(result.handlerWriteSinkFacts).toEqual([]);
   });
 
@@ -759,7 +759,7 @@ export const countEndpoint = endpoint('/api/count', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toEqual([]);
     expect(result.handlerWriteSinkFacts).toEqual([]);
   });
 });

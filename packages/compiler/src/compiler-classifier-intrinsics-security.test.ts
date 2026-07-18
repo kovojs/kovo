@@ -1903,7 +1903,11 @@ export const PayButton = component({
     } finally {
       Array.prototype.map = nativeMap;
     }
-    expect(result?.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
+    expect(result?.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV210',
+      'KV201',
+      'KV449',
+    ]);
   });
 
   it('cannot erase compiler snapshots through inherited numeric setters', () => {
@@ -1940,7 +1944,11 @@ export const PayButton = component({
       }
     }
 
-    expect(result?.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
+    expect(result?.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV210',
+      'KV201',
+      'KV449',
+    ]);
     expect(poisonHits).toBe(0);
   });
 

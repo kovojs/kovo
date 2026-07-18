@@ -363,7 +363,8 @@ export const PaymentButton = component({
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('ERROR KV437');
       expect(output).toContain('ERROR KV201');
-      expect(output).toContain('SUMMARY artifacts=0 diagnostics=2');
+      expect(output).toContain('ERROR KV449');
+      expect(output).toContain('SUMMARY artifacts=0 diagnostics=3');
       expect(existsSync(outPath)).toBe(false);
       expect(existsSync(clientPath)).toBe(false);
     } finally {

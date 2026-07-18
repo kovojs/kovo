@@ -83,7 +83,7 @@ export const ProductPage = component({
     expect(serverSource).toContain('data-style-src="product-page.tsx#badge"');
     expect(serverSource).toMatch(/class="kv-product-page-bg-[^"]+ kv-product-page-fg-[^"]+"/);
     expect(clientSource).toContain(
-      "import { derive, handler, kovoStyleProperty, runQueryUpdatePlan } from '@kovojs/browser/generated';",
+      "import { derive, kovoStyleProperty, runQueryUpdatePlan, securityHandler } from '@kovojs/browser/generated';",
     );
     expect(clientSource).toContain(
       'export const ProductPage$a_title_derive = derive(["product"], (product) => product.name.toUpperCase());',
