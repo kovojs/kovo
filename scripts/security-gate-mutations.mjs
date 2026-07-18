@@ -783,6 +783,21 @@ const weakenedAnalyzerSummaryImmutableBindingBranch = [
   '    ? helper',
   '    : undefined;',
 ].join('\n');
+const analyzerSummaryDirectCallableGrammarBranch = [
+  '  } else if (!Node.isFunctionDeclaration(declaration)) {',
+  '    // SPEC §6.6/§10.3: the positive grammar is deliberately limited to one direct,',
+  '    // immutable same-file callable binding. A method/property declaration lives behind a mutable',
+  '    // object identity: Object.assign/defineProperty, Reflect.set, aliases, and opaque mutators can',
+  "    // replace it without mutating the property's TypeScript symbol. Enumerating those write shapes",
+  '    // is not a proof, so object-carried summary targets fail closed unconditionally.',
+  '    return undefined;',
+  '  }',
+].join('\n');
+const weakenedAnalyzerSummaryDirectCallableGrammarBranch = [
+  '  } else if (Node.isPropertyAssignment(declaration)) {',
+  '    declaration = declaration.getInitializer();',
+  '  }',
+].join('\n');
 const analyzerSummaryThisCarrierClosureBranch = [
   '  const root = unwrappedStaticExpressionNode(carrier);',
   '  // SPEC §6.6/§10.3 admits only a structurally enrolled request/context parameter. `this` is the',
@@ -799,6 +814,54 @@ const analyzerSummaryStaticCallCarrierBranch =
   '  if (!privateScopeHelperCallCarrierIsProven(node)) return undefined;';
 const weakenedAnalyzerSummaryStaticCallCarrierBranch =
   '  if (false && !privateScopeHelperCallCarrierIsProven(node)) return undefined;';
+const analyzerSummaryDirectCallCalleeBranch = [
+  '  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {',
+  '    // SPEC §6.6/§10.3: a const receiver is not an immutable property cell. Reflective',
+  '    // writes, aliases, opaque mutators, and cross-file writes can replace an object/tuple member',
+  '    // without rebinding its root. Positive private provenance therefore admits only direct helper',
+  '    // identifiers or direct const aliases below, never a property/container invocation.',
+  '    return undefined;',
+  '  }',
+].join('\n');
+const weakenedAnalyzerSummaryDirectCallCalleeBranch = [
+  '  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {',
+  '    return strictHelperSummaryForStaticReference(node, sessionContext.helpers);',
+  '  }',
+].join('\n');
+const analyzerSummaryOwnerValueContainerClosureBranch = [
+  '  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {',
+  '    // Direct framework-carrier chains were handled above. Extending a local object/container alias',
+  '    // would trust a mutable property cell that reflective or opaque writes can replace.',
+  '    return undefined;',
+  '  }',
+].join('\n');
+const weakenedAnalyzerSummaryOwnerValueContainerClosureBranch = [
+  '  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {',
+  '    return privateScopeForExpression(expression.getExpression(), context, depth + 1);',
+  '  }',
+].join('\n');
+const analyzerSummaryServerValueContainerClosureBranch = [
+  '  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {',
+  '    // `serverValue` shares the same direct-carrier grammar. A const receiver does not make one of',
+  '    // its property cells immutable, so local object/tuple projections remain unknown.',
+  '    return undefined;',
+  '  }',
+].join('\n');
+const weakenedAnalyzerSummaryServerValueContainerClosureBranch = [
+  '  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {',
+  '    return privateScopeSourceForExpression(expression.getExpression(), context, depth + 1);',
+  '  }',
+].join('\n');
+const analyzerSummaryConstValueAliasBranch =
+  '  if (!isConstVariableBindingDeclaration(declaration)) return false;';
+const weakenedAnalyzerSummaryConstValueAliasBranch =
+  '  if (false && !isConstVariableBindingDeclaration(declaration)) return false;';
+const analyzerSummaryValueAliasEscapeClosureBranch = [
+  '  return !statements',
+  '    .slice(declarationIndex + 1, useIndex)',
+  '    .some((statement) => statementContainsAliasIdentifier(statement, name));',
+].join('\n');
+const weakenedAnalyzerSummaryValueAliasEscapeClosureBranch = '  return true;';
 const serverValueMissingInputClosureBranch = [
   '      if (!inner) {',
   "        return { ok: false, provenance: 'unknown', detail: expression.getText() };",
@@ -885,6 +948,16 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertAnalyzerSummaryImmutableBindingIsPinned,
   },
   {
+    description: 'Restores mutable object properties as positive analyzer-summary callables.',
+    expectedKiller: 'private summary targets must remain direct same-file callable bindings',
+    name: 'drizzle-analyzer-summary/allow-object-property-callable',
+    replacement: weakenedAnalyzerSummaryDirectCallableGrammarBranch,
+    search: analyzerSummaryDirectCallableGrammarBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryDirectCallableGrammarIsPinned,
+  },
+  {
     description: 'Lets a caller-controlled `this` receiver mint private context provenance.',
     expectedKiller: 'private helper calls must reject `this` as a request/context carrier',
     name: 'drizzle-analyzer-summary/trust-this-carrier',
@@ -903,6 +976,56 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSummariesPath,
     sourceOnly: true,
     test: assertAnalyzerSummaryStaticCallCarrierIsPinned,
+  },
+  {
+    description: 'Restores mutable property/container invocations as positive private summaries.',
+    expectedKiller: 'private summary calls must use a direct helper or direct const alias',
+    name: 'drizzle-analyzer-summary/allow-property-callable-invocation',
+    replacement: weakenedAnalyzerSummaryDirectCallCalleeBranch,
+    search: analyzerSummaryDirectCallCalleeBranch,
+    sourceFile: drizzleSummariesPath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryDirectCallCalleeIsPinned,
+  },
+  {
+    description: 'Lets a mutable local value-container cell preserve owner provenance.',
+    expectedKiller: 'owner predicates must reject private provenance through local containers',
+    name: 'drizzle-analyzer-summary/allow-owner-value-container',
+    replacement: weakenedAnalyzerSummaryOwnerValueContainerClosureBranch,
+    search: analyzerSummaryOwnerValueContainerClosureBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryOwnerValueContainerClosureIsPinned,
+  },
+  {
+    description: 'Lets serverValue trust a private value routed through a mutable container cell.',
+    expectedKiller: 'serverValue must reject private provenance through local containers',
+    name: 'drizzle-analyzer-summary/allow-server-value-container',
+    replacement: weakenedAnalyzerSummaryServerValueContainerClosureBranch,
+    search: analyzerSummaryServerValueContainerClosureBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryServerValueContainerClosureIsPinned,
+  },
+  {
+    description: 'Lets a reassignable local value binding preserve private provenance.',
+    expectedKiller: 'private value aliases must retain immutable bindings',
+    name: 'drizzle-analyzer-summary/allow-mutable-value-alias',
+    replacement: weakenedAnalyzerSummaryConstValueAliasBranch,
+    search: analyzerSummaryConstValueAliasBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryConstValueAliasIsPinned,
+  },
+  {
+    description: 'Lets an escaped or reflectively mutated local value preserve provenance.',
+    expectedKiller: 'private value aliases must close after any intervening use',
+    name: 'drizzle-analyzer-summary/allow-value-alias-escape',
+    replacement: weakenedAnalyzerSummaryValueAliasEscapeClosureBranch,
+    search: analyzerSummaryValueAliasEscapeClosureBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryValueAliasEscapeClosureIsPinned,
   },
   {
     description: 'Lets serverValue treat a missing value as proven non-input.',
@@ -1913,6 +2036,15 @@ async function assertAnalyzerSummaryImmutableBindingIsPinned(_moduleUnderTest, {
   }
 }
 
+async function assertAnalyzerSummaryDirectCallableGrammarIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryDirectCallableGrammarBranch)) {
+    throw new Error('private analyzer summaries no longer require a direct callable binding');
+  }
+}
+
 async function assertAnalyzerSummaryThisCarrierClosureIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(analyzerSummaryThisCarrierClosureBranch)) {
     throw new Error('private helper calls no longer reject `this` as a context carrier');
@@ -1922,6 +2054,45 @@ async function assertAnalyzerSummaryThisCarrierClosureIsPinned(_moduleUnderTest,
 async function assertAnalyzerSummaryStaticCallCarrierIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(analyzerSummaryStaticCallCarrierBranch)) {
     throw new Error('a static helper-summary consumer no longer checks its call carrier');
+  }
+}
+
+async function assertAnalyzerSummaryDirectCallCalleeIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryDirectCallCalleeBranch)) {
+    throw new Error('private analyzer-summary calls no longer require a direct callable');
+  }
+}
+
+async function assertAnalyzerSummaryOwnerValueContainerClosureIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryOwnerValueContainerClosureBranch)) {
+    throw new Error('owner provenance no longer rejects mutable local value containers');
+  }
+}
+
+async function assertAnalyzerSummaryServerValueContainerClosureIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryServerValueContainerClosureBranch)) {
+    throw new Error('serverValue provenance no longer rejects mutable local value containers');
+  }
+}
+
+async function assertAnalyzerSummaryConstValueAliasIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryConstValueAliasBranch)) {
+    throw new Error('private value provenance no longer requires an immutable local binding');
+  }
+}
+
+async function assertAnalyzerSummaryValueAliasEscapeClosureIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryValueAliasEscapeClosureBranch)) {
+    throw new Error('private value provenance no longer closes after local alias escape');
   }
 }
 

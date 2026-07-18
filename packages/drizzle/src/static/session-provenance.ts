@@ -160,16 +160,21 @@ function exactLocalFunctionDeclaration(
   if (Node.isVariableDeclaration(declaration)) {
     if (!isConstVariableBindingDeclaration(declaration)) return undefined;
     declaration = declaration.getInitializer();
-  } else if (Node.isPropertyAssignment(declaration)) {
-    declaration = declaration.getInitializer();
+  } else if (!Node.isFunctionDeclaration(declaration)) {
+    // SPEC §6.6/§10.3: the positive grammar is deliberately limited to one direct,
+    // immutable same-file callable binding. A method/property declaration lives behind a mutable
+    // object identity: Object.assign/defineProperty, Reflect.set, aliases, and opaque mutators can
+    // replace it without mutating the property's TypeScript symbol. Enumerating those write shapes
+    // is not a proof, so object-carried summary targets fail closed unconditionally.
+    return undefined;
   }
-  const helper = declaration &&
+  const helper =
+    declaration &&
     (Node.isArrowFunction(declaration) ||
       Node.isFunctionDeclaration(declaration) ||
-      Node.isFunctionExpression(declaration) ||
-      Node.isMethodDeclaration(declaration))
-    ? declaration
-    : undefined;
+      Node.isFunctionExpression(declaration))
+      ? declaration
+      : undefined;
   const symbolKey = resolvedSymbolKey(symbol);
   return helper && symbolKey && !sourceFileMutatesSymbol(sourceFile, symbolKey)
     ? helper
@@ -201,7 +206,7 @@ function sourceFileMutatesSymbol(sourceFile: SourceFile, symbolKey: string): boo
 function nodeContainsSymbolKey(node: Node, symbolKey: string): boolean {
   return [node, ...node.getDescendants()].some((candidate) => {
     const symbol = Node.isIdentifier(candidate)
-      ? symbolForIdentifierReference(candidate) ?? candidate.getSymbol()
+      ? (symbolForIdentifierReference(candidate) ?? candidate.getSymbol())
       : candidate.getSymbol();
     return resolvedSymbolKey(symbol) === symbolKey;
   });
@@ -299,9 +304,12 @@ function addSessionAliasesForVariableDeclaration(
 
   const nameNode = declaration.getNameNode();
   if (Node.isIdentifier(nameNode)) {
+    const initializerExpression = unwrappedStaticExpressionNode(initializer);
     const provenance =
-      privateScopeForExpression(initializer, context) ??
-      directPrivateScopeForExpression(initializer);
+      isConstVariableBindingDeclaration(declaration) && !Node.isIdentifier(initializerExpression)
+        ? (privateScopeForExpression(initializer, context) ??
+          directPrivateScopeForExpression(initializer))
+        : undefined;
     const key = resolvedSymbolKey(symbolForIdentifierReference(nameNode) ?? nameNode.getSymbol());
     if (provenance && key) {
       aliases.set(key, {
@@ -506,20 +514,17 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
     const alias =
       (key ? context.aliases.get(key) : undefined) ??
       [...context.aliases.values()].find((candidate) => candidate.name === expression.getText());
-    return alias && (!alias.requiresGuard || sessionAliasGuardDominatesUse(alias, expression))
-      ? { kind: alias.kind, path: alias.path }
-      : undefined;
+    if (!alias || !isConstVariableBindingDeclaration(alias.declaration)) return undefined;
+    const stable = alias.requiresGuard
+      ? sessionAliasGuardDominatesUse(alias, expression)
+      : privateScopeAliasIsStableAtUse(alias, expression);
+    return stable ? { kind: alias.kind, path: alias.path } : undefined;
   }
 
   if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
-    const objectProperty = localObjectPropertyPrivateScope(expression, context, depth);
-    if (objectProperty) return objectProperty;
-
-    const base = privateScopeForExpression(expression.getExpression(), context, depth + 1);
-    const name = staticAccessName(expression);
-    return base && name
-      ? { kind: base.kind, path: joinPrivateScopePath(base.path, name) }
-      : undefined;
+    // Direct framework-carrier chains were handled above. Extending a local object/container alias
+    // would trust a mutable property cell that reflective or opaque writes can replace.
+    return undefined;
   }
 
   if (Node.isCallExpression(expression)) {
@@ -646,7 +651,7 @@ function exactFrameworkPrivateScopeCarrierRole(
 
   if (Node.isIdentifier(expression)) {
     const alias = privateScopeAliasForIdentifier(expression, context);
-    if (alias && isConstVariableBindingDeclaration(alias.declaration)) {
+    if (alias && privateScopeAliasIsStableAtUse(alias, expression)) {
       return { kind: alias.kind, path: alias.path };
     }
 
@@ -654,21 +659,28 @@ function exactFrameworkPrivateScopeCarrierRole(
     const declaration = symbol?.getDeclarations()?.[0];
     if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
     if (!isConstVariableBindingDeclaration(declaration)) return undefined;
+    if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+    if (
+      !privateScopeBindingIsStableAtUse(
+        declaration,
+        declaration.getNameNode().getText(),
+        expression,
+      )
+    ) {
+      return undefined;
+    }
     const initializer = declaration.getInitializer();
+    if (initializer && Node.isIdentifier(unwrappedStaticExpressionNode(initializer)))
+      return undefined;
     return initializer
       ? privateScopeSourceForExpression(initializer, context, depth + 1)
       : undefined;
   }
 
   if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
-    const objectProperty = localObjectPropertyPrivateScope(expression, context, depth);
-    if (objectProperty) return objectProperty;
-
-    const base = privateScopeSourceForExpression(expression.getExpression(), context, depth + 1);
-    const name = staticAccessName(expression);
-    return base && name
-      ? { kind: base.kind, path: joinPrivateScopePath(base.path, name) }
-      : undefined;
+    // `serverValue` shares the same direct-carrier grammar. A const receiver does not make one of
+    // its property cells immutable, so local object/tuple projections remain unknown.
+    return undefined;
   }
 
   if (Node.isBinaryExpression(expression) && isSafePrivateScopeFallbackExpression(expression)) {
@@ -692,6 +704,55 @@ function isConstVariableBindingDeclaration(declaration: Node): boolean {
     Node.isVariableDeclarationList(declarationList) &&
     (declarationList.getDeclarationKind?.() ?? 'const') === 'const'
   );
+}
+
+/**
+ * SPEC §6.6/§10.3 finite local-value rule. `const` prevents rebinding but does not make an
+ * object value immutable, so any use between capture and the audited sink is an escape/mutation
+ * opportunity and closes provenance. This is intentionally stricter than a write-shape blacklist.
+ *
+ * @internal
+ */
+export function privateScopeAliasIsStableAtUse(alias: SessionAlias, use: Node): boolean {
+  return privateScopeBindingIsStableAtUse(alias.declaration, alias.name, use);
+}
+
+/** @internal */ export function privateScopeIdentifierBindingIsStableAtUse(
+  identifier: Node,
+  use: Node,
+): boolean {
+  const expression = unwrappedStaticExpressionNode(identifier);
+  if (!Node.isIdentifier(expression)) return false;
+  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  return declaration && Node.isVariableDeclaration(declaration)
+    ? privateScopeBindingIsStableAtUse(declaration, expression.getText(), use)
+    : false;
+}
+
+function privateScopeBindingIsStableAtUse(declaration: Node, name: string, use: Node): boolean {
+  if (!isConstVariableBindingDeclaration(declaration)) return false;
+
+  const variable = Node.isVariableDeclaration(declaration)
+    ? declaration
+    : declaration.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const declarationList = variable?.getParentIfKind(SyntaxKind.VariableDeclarationList);
+  if (!variable || !declarationList || declarationList.getDeclarations().length !== 1) return false;
+
+  const declared = blockStatementAncestor(declaration);
+  const used = blockStatementAncestor(use);
+  if (!declared || !used || !sameSourceNode(declared.block, used.block)) return false;
+
+  const statements = declared.block.getStatements();
+  const declarationIndex = statements.findIndex((statement) =>
+    sameSourceNode(statement, declared.statement),
+  );
+  const useIndex = statements.findIndex((statement) => sameSourceNode(statement, used.statement));
+  if (declarationIndex < 0 || useIndex <= declarationIndex) return false;
+
+  return !statements
+    .slice(declarationIndex + 1, useIndex)
+    .some((statement) => statementContainsAliasIdentifier(statement, name));
 }
 
 function privateScopeAliasForIdentifier(
@@ -721,65 +782,6 @@ function literalFallbackExpression(node: Node): boolean {
     expression.getKind() === SyntaxKind.FalseKeyword ||
     expression.getKind() === SyntaxKind.NullKeyword
   );
-}
-
-function localObjectPropertyPrivateScope(
-  node: Node,
-  context: SessionProvenanceContext,
-  depth: number,
-): PrivateScopeProvenance | undefined {
-  if (depth > 4) return undefined;
-  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
-    return undefined;
-  }
-
-  const property = staticAccessName(node);
-  if (!property) return undefined;
-
-  const base = unwrappedStaticExpressionNode(node.getExpression());
-  if (!Node.isIdentifier(base)) return undefined;
-
-  const symbol = symbolForIdentifierReference(base) ?? base.getSymbol();
-  const declaration = symbol?.getDeclarations()?.[0];
-  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
-  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
-
-  const declarationList = declaration.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-
-  const initializer = declaration.getInitializer();
-  const object = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
-
-  const value = objectLiteralStaticPropertyValue(object, property);
-  if (!value) return undefined;
-  return (
-    privateScopeForExpression(value, context, depth + 1) ?? directPrivateScopeForExpression(value)
-  );
-}
-
-function objectLiteralStaticPropertyValue(
-  object: ObjectLiteralExpression,
-  name: string,
-): Node | undefined {
-  let value: Node | undefined;
-  for (const property of object.getProperties()) {
-    if (Node.isSpreadAssignment(property)) return undefined;
-
-    if (Node.isPropertyAssignment(property)) {
-      if (propertyNameText(property.getNameNode()) !== name) continue;
-      if (value) return undefined;
-      value = property.getInitializer();
-      continue;
-    }
-    if (Node.isShorthandPropertyAssignment(property)) {
-      if (propertyNameText(property.getNameNode()) !== name) continue;
-      if (value) return undefined;
-      value = property.getNameNode();
-    }
-  }
-  return value;
 }
 
 function helperSummaryForCallCallee(

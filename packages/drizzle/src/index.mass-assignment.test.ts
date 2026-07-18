@@ -235,6 +235,42 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
   });
 
+  it.each([
+    ['Object.assign', 'Object.assign(principal, { ownerId: input.ownerId });'],
+    [
+      'Object.defineProperty',
+      'Object.defineProperty(principal, "ownerId", { value: input.ownerId });',
+    ],
+    ['Reflect.set', 'Reflect.set(principal, "ownerId", input.ownerId);'],
+  ])(
+    'rejects serverValue private provenance through a %s value-container write',
+    (_label, write) => {
+      const result = facts(
+        [
+          HEADER,
+          'import { mutation, s } from "@kovojs/server";',
+          'function currentGuard(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+          'kovoAnalyzerSummary(currentGuard, { returns: { kind: "guard", path: "userId" } });',
+          'export const updateAccount = mutation({',
+          '  input: s.object({ id: s.string(), ownerId: s.string() }),',
+          '  async handler(input, request: { db: PgAsyncDatabase<any, any>; guard: { userId: string } }) {',
+          '    const principal = { ownerId: currentGuard(request) };',
+          `    ${write}`,
+          '    await request.db.update(accounts).set({ ownerId: serverValue(principal.ownerId, "private owner") }).where(eq(accounts.id, input.id));',
+          '  },',
+          '});',
+        ].join('\n'),
+      );
+      expect(result).toMatchObject([
+        {
+          column: 'ownerId',
+          provenance: 'unknown',
+          via: 'set',
+        },
+      ]);
+    },
+  );
+
   it('adversarial review rejects nested mutation input laundered through a summary', () => {
     const result = facts(
       [

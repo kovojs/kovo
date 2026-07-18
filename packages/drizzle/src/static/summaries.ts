@@ -34,8 +34,10 @@ import { assertNever } from './exhaustive.js';
 import {
   emptySessionProvenanceContext,
   opaqueAliasReasonForExpression,
+  privateScopeAliasIsStableAtUse,
   privateScopeForExpression,
   privateScopeHelperCallCarrierIsProven,
+  privateScopeIdentifierBindingIsStableAtUse,
   privateScopeKey,
   sessionProvenanceContextForNodes,
 } from './session-provenance.js';
@@ -1511,60 +1513,17 @@ function relationalWithObjectTableExpressions(
       return { privateKey: privateScopeKey(acceptedGuardAlias) };
     }
 
-    const tupleElement = localConstTupleElementPrivateScope(expression, sessionContext);
-    if (tupleElement) {
+    const finiteAlias = localConstFinitePrivateScope(expression, sessionContext);
+    if (finiteAlias) {
       return {
-        privateKey: privateScopeKey(tupleElement),
-        ...(tupleElement.kind === 'session' ? { sessionKey: tupleElement.path } : {}),
+        privateKey: privateScopeKey(finiteAlias),
+        ...(finiteAlias.kind === 'session' ? { sessionKey: finiteAlias.path } : {}),
       };
     }
 
-    const destructuredTupleElement = localConstArrayBindingPrivateScope(expression, sessionContext);
-    if (destructuredTupleElement) {
-      return {
-        privateKey: privateScopeKey(destructuredTupleElement),
-        ...(destructuredTupleElement.kind === 'session'
-          ? { sessionKey: destructuredTupleElement.path }
-          : {}),
-      };
-    }
-
-    const destructuredObjectProperty = localConstObjectBindingPrivateScope(
-      expression,
-      sessionContext,
-    );
-    if (destructuredObjectProperty) {
-      return {
-        privateKey: privateScopeKey(destructuredObjectProperty),
-        ...(destructuredObjectProperty.kind === 'session'
-          ? { sessionKey: destructuredObjectProperty.path }
-          : {}),
-      };
-    }
-
-    const constLiteralAccess = localConstLiteralAccessPrivateScope(expression, sessionContext);
-    if (constLiteralAccess) {
-      return {
-        privateKey: privateScopeKey(constLiteralAccess),
-        ...(constLiteralAccess.kind === 'session' ? { sessionKey: constLiteralAccess.path } : {}),
-      };
-    }
-
-    const frozenScalar = localConstFrozenScalarPrivateScope(expression, sessionContext);
-    if (frozenScalar) {
-      return {
-        privateKey: privateScopeKey(frozenScalar),
-        ...(frozenScalar.kind === 'session' ? { sessionKey: frozenScalar.path } : {}),
-      };
-    }
-
-    const staticScalar = localConstStaticScalarPrivateScope(expression, sessionContext);
-    if (staticScalar) {
-      return {
-        privateKey: privateScopeKey(staticScalar),
-        ...(staticScalar.kind === 'session' ? { sessionKey: staticScalar.path } : {}),
-      };
-    }
+    // SPEC §6.6/§10.3: tuple/object/destructuring wrappers are mutable property cells,
+    // even when their receiver binding is const or their source uses readonly syntax. Positive
+    // owner provenance is intentionally limited to direct values and direct const scalar aliases.
 
     // SPEC §11.1 / KV414 (minimal session-via-local tracing): recognize a session
     // value bound to a local const and then used in the scoping predicate, e.g.
@@ -1583,6 +1542,83 @@ function relationalWithObjectTableExpressions(
     privateKey: privateScopeKey(provenance),
     ...(provenance.kind === 'session' ? { sessionKey: provenance.path } : {}),
   };
+}
+
+/**
+ * SPEC §6.6/§10.3 finite owner-provenance IR: a local value alias is admitted only when
+ * its immutable binding contains a direct proven value, `await`, or a closed conditional/logical
+ * expression whose every reachable value has the same private provenance. Object, tuple,
+ * destructuring, property, and `Object.freeze` wrappers are deliberately outside this grammar:
+ * their property cells require a broader mutation proof and therefore fail closed.
+ */
+function localConstFinitePrivateScope(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+  if (!privateScopeIdentifierBindingIsStableAtUse(node, node)) return undefined;
+  const initializer = stableLocalConstInitializer(node);
+  return initializer ? finitePrivateScopeValue(initializer, sessionContext, 0) : undefined;
+}
+
+function finitePrivateScopeValue(
+  expression: Node,
+  sessionContext: SessionProvenanceContext,
+  depth: number,
+): PrivateScopeProvenance | undefined {
+  if (depth > 4) return undefined;
+  const node = unwrappedStaticExpressionNode(expression);
+
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    return privateScopeForOwnerPredicateExpression(node, sessionContext);
+  }
+  if (Node.isAwaitExpression(node)) {
+    return finitePrivateScopeValue(node.getExpression(), sessionContext, depth + 1);
+  }
+  if (Node.isConditionalExpression(node)) {
+    return matchingFinitePrivateScopeBranches(
+      node.getWhenTrue(),
+      node.getWhenFalse(),
+      sessionContext,
+      depth + 1,
+    );
+  }
+  if (Node.isBinaryExpression(node)) {
+    const operator = node.getOperatorToken().getKind();
+    if (
+      operator !== SyntaxKind.QuestionQuestionToken &&
+      operator !== SyntaxKind.BarBarToken &&
+      operator !== SyntaxKind.AmpersandAmpersandToken
+    ) {
+      return undefined;
+    }
+    return matchingFinitePrivateScopeBranches(
+      node.getLeft(),
+      node.getRight(),
+      sessionContext,
+      depth + 1,
+    );
+  }
+
+  return (
+    privateScopeForOwnerPredicateExpression(node, sessionContext) ??
+    acceptedGuardPrivateScopeForExpression(node, sessionContext) ??
+    summarizedStaticCallPrivateScope(node, sessionContext)
+  );
+}
+
+function matchingFinitePrivateScopeBranches(
+  left: Node,
+  right: Node,
+  sessionContext: SessionProvenanceContext,
+  depth: number,
+): PrivateScopeProvenance | undefined {
+  const leftScope = finitePrivateScopeValue(left, sessionContext, depth);
+  const rightScope = finitePrivateScopeValue(right, sessionContext, depth);
+  return leftScope && rightScope && privateScopeKey(leftScope) === privateScopeKey(rightScope)
+    ? leftScope
+    : undefined;
 }
 
 function acceptedGuardPrivateScopeForExpression(
@@ -1612,7 +1648,9 @@ function localConstAcceptedGuardAliasPrivateScope(
   if (!alias || alias.kind !== 'guard') return undefined;
   const privateKey = `guard:${alias.path}`;
   if (!sessionContext.acceptedGuardPrivateKeys?.has(privateKey)) return undefined;
-  if (!aliasDeclarationIsConst(alias.declaration)) return undefined;
+  if (!aliasDeclarationIsConst(alias.declaration) || !privateScopeAliasIsStableAtUse(alias, node)) {
+    return undefined;
+  }
   return { kind: 'guard', path: alias.path, requiresGuard: false };
 }
 
@@ -1625,109 +1663,6 @@ function aliasDeclarationIsConst(declaration: Node): boolean {
     current = current.getParent();
   }
   return false;
-}
-
-function localConstTupleElementPrivateScope(
-  expression: Node,
-  sessionContext: SessionProvenanceContext,
-): PrivateScopeProvenance | undefined {
-  const node = unwrappedStaticExpressionNode(expression);
-  if (!Node.isElementAccessExpression(node)) return undefined;
-
-  const argument = node.getArgumentExpression();
-  if (!Node.isNumericLiteral(argument)) return undefined;
-  const index = Number(argument.getText());
-  if (!Number.isInteger(index) || index < 0) return undefined;
-
-  const base = unwrappedStaticExpressionNode(node.getExpression());
-  if (!Node.isIdentifier(base)) return undefined;
-
-  const symbol = symbolForIdentifierReference(base) ?? base.getSymbol();
-  const declaration = symbol?.getDeclarations()?.[0];
-  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
-  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
-
-  const declarationList = declaration.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-
-  const initializer = declaration.getInitializer();
-  const tuple = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  if (!tuple || !Node.isArrayLiteralExpression(tuple)) return undefined;
-
-  const value = tuple.getElements()[index];
-  if (!value || Node.isSpreadElement(value)) return undefined;
-  return staticWrapperValuePrivateScope(value, sessionContext);
-}
-
-function localConstArrayBindingPrivateScope(
-  expression: Node,
-  sessionContext: SessionProvenanceContext,
-): PrivateScopeProvenance | undefined {
-  const node = unwrappedStaticExpressionNode(expression);
-  if (!Node.isIdentifier(node)) return undefined;
-
-  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
-  const declaration = symbol?.getDeclarations()?.[0];
-  if (!declaration || !Node.isBindingElement(declaration)) return undefined;
-  if (isRestBindingElement(declaration)) return undefined;
-  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
-  if (declaration.getInitializer()) return undefined;
-
-  const pattern = declaration.getParent();
-  if (!Node.isArrayBindingPattern(pattern)) return undefined;
-  const variable = pattern.getParent();
-  if (!Node.isVariableDeclaration(variable)) return undefined;
-  const declarationList = variable.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-
-  const index = pattern.getElements().findIndex((element) => element === declaration);
-  if (index < 0) return undefined;
-
-  const initializer = variable.getInitializer();
-  const tuple = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  if (!tuple || !Node.isArrayLiteralExpression(tuple)) return undefined;
-
-  const value = tuple.getElements()[index];
-  if (!value || Node.isSpreadElement(value)) return undefined;
-  return staticWrapperValuePrivateScope(value, sessionContext);
-}
-
-function localConstObjectBindingPrivateScope(
-  expression: Node,
-  sessionContext: SessionProvenanceContext,
-): PrivateScopeProvenance | undefined {
-  const node = unwrappedStaticExpressionNode(expression);
-  if (!Node.isIdentifier(node)) return undefined;
-
-  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
-  const declaration = symbol?.getDeclarations()?.[0];
-  if (!declaration || !Node.isBindingElement(declaration)) return undefined;
-  if (isRestBindingElement(declaration)) return undefined;
-  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
-  if (declaration.getInitializer()) return undefined;
-
-  const binding = objectBindingPathAndVariable(declaration);
-  if (!binding) return undefined;
-  const { path, variable } = binding;
-  const declarationList = variable.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-
-  const initializer = variable.getInitializer();
-  const baseScope = initializer && staticWrapperValuePrivateScope(initializer, sessionContext);
-  if (baseScope) {
-    return {
-      ...baseScope,
-      path: appendPrivateScopePath(baseScope.path, path.join('.')),
-    };
-  }
-
-  const object = initializer ? localConstLiteralRootValue(initializer) : undefined;
-  if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
-
-  return objectLiteralStaticPathPrivateScope(object, path, sessionContext);
 }
 
 function objectBindingPathAndVariable(
@@ -1754,48 +1689,6 @@ function objectBindingPathAndVariable(
   return undefined;
 }
 
-function localConstLiteralAccessPrivateScope(
-  expression: Node,
-  sessionContext: SessionProvenanceContext,
-): PrivateScopeProvenance | undefined {
-  const staticPropertyAccess = localConstLiteralStaticAccessPrivatePropertyScope(
-    expression,
-    sessionContext,
-  );
-  if (staticPropertyAccess) return staticPropertyAccess;
-
-  const value = localConstLiteralStaticAccessValue(expression);
-  if (!value) return undefined;
-  return staticWrapperValuePrivateScope(value, sessionContext);
-}
-
-function localConstLiteralStaticAccessPrivatePropertyScope(
-  expression: Node,
-  sessionContext: SessionProvenanceContext,
-): PrivateScopeProvenance | undefined {
-  const node = unwrappedStaticExpressionNode(expression);
-  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
-    return undefined;
-  }
-
-  const property = staticAccessName(node);
-  if (!property) return undefined;
-
-  const baseValue = localConstLiteralStaticAccessValue(node.getExpression());
-  if (!baseValue) return undefined;
-  const provenance = staticWrapperValuePrivateScope(baseValue, sessionContext);
-  if (!provenance) return undefined;
-
-  return {
-    ...provenance,
-    path: appendPrivateScopePath(provenance.path, property),
-  };
-}
-
-function appendPrivateScopePath(base: string, segment: string): string {
-  return base.length === 0 ? segment : `${base}.${segment}`;
-}
-
 function localConstLiteralStaticAccessValue(expression: Node, depth = 0): Node | undefined {
   if (depth > 4) return undefined;
   const node = unwrappedStaticExpressionNode(expression);
@@ -1820,52 +1713,6 @@ function localConstLiteralStaticAccessValue(expression: Node, depth = 0): Node |
   if (!Number.isInteger(index) || index < 0) return undefined;
   const value = baseValue.getElements()[index];
   return value && !Node.isSpreadElement(value) ? value : undefined;
-}
-
-function localConstFrozenScalarPrivateScope(
-  expression: Node,
-  sessionContext: SessionProvenanceContext,
-): PrivateScopeProvenance | undefined {
-  const node = unwrappedStaticExpressionNode(expression);
-  if (!Node.isIdentifier(node)) return undefined;
-
-  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
-  const declaration = symbol
-    ?.getDeclarations()
-    ?.find((candidate): candidate is BindingElement => Node.isBindingElement(candidate));
-  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
-  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
-
-  const declarationList = declaration.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-
-  const initializer = declaration.getInitializer();
-  const value = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  if (!value || !isObjectFreezeCall(value)) return undefined;
-
-  const argument = singleObjectFreezeArgument(value);
-  return argument ? staticWrapperValuePrivateScope(argument, sessionContext) : undefined;
-}
-
-function localConstStaticScalarPrivateScope(
-  expression: Node,
-  sessionContext: SessionProvenanceContext,
-): PrivateScopeProvenance | undefined {
-  const node = unwrappedStaticExpressionNode(expression);
-  if (!Node.isIdentifier(node)) return undefined;
-
-  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
-  const declaration = symbol?.getDeclarations()?.[0];
-  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
-  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
-
-  const declarationList = declaration.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-
-  const initializer = declaration.getInitializer();
-  return initializer ? staticWrapperValuePrivateScope(initializer, sessionContext) : undefined;
 }
 
 function localConstLiteralStaticAccessBaseValue(expression: Node, depth: number): Node | undefined {
@@ -1916,33 +1763,6 @@ function localConstLiteralRootValue(expression: Node): Node | undefined {
     : undefined;
 }
 
-function objectLiteralStaticPathPrivateScope(
-  object: ObjectLiteralExpression,
-  path: readonly string[],
-  sessionContext: SessionProvenanceContext,
-): PrivateScopeProvenance | undefined {
-  let value: Node | undefined = object;
-  for (const [index, segment] of path.entries()) {
-    const current = unwrappedStaticExpressionNode(value);
-    if (!Node.isObjectLiteralExpression(current)) {
-      const provenance = staticWrapperValuePrivateScope(current, sessionContext);
-      if (provenance) {
-        return {
-          ...provenance,
-          path: appendPrivateScopePath(provenance.path, path.slice(index).join('.')),
-        };
-      }
-      const alias = localConstLiteralAliasValue(current);
-      if (!alias || !Node.isObjectLiteralExpression(alias)) return undefined;
-      value = alias;
-      continue;
-    }
-    value = objectLiteralSingleStaticPropertyValue(current, segment);
-    if (!value) return undefined;
-  }
-  return staticWrapperValuePrivateScope(value, sessionContext);
-}
-
 function staticWrapperValuePrivateScope(
   value: Node | undefined,
   sessionContext: SessionProvenanceContext,
@@ -1964,10 +1784,6 @@ function staticWrapperValuePrivateScope(
   const binary = binaryExpressionPrivateScope(node, sessionContext, depth + 1);
   if (binary) return binary;
   if (!Node.isIdentifier(node)) {
-    if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
-      const provenance = staticWrapperAccessPrivateScope(node, sessionContext, depth + 1);
-      if (provenance || staticAccessRootVariableDeclaration(node)) return provenance;
-    }
     return (
       privateScopeForOwnerPredicateExpression(node, sessionContext) ??
       summarizedStaticCallPrivateScope(node, sessionContext)
@@ -1988,35 +1804,6 @@ function staticWrapperValuePrivateScope(
   const initializer = declaration.getInitializer();
   return initializer
     ? staticWrapperValuePrivateScope(initializer, sessionContext, depth + 1)
-    : undefined;
-}
-
-function staticWrapperAccessPrivateScope(
-  node: Node,
-  sessionContext: SessionProvenanceContext,
-  depth: number,
-): PrivateScopeProvenance | undefined {
-  if (depth > 4) return undefined;
-  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
-    return undefined;
-  }
-
-  const property = staticAccessName(node);
-  if (!property) return undefined;
-  const accessValue = localConstLiteralStaticAccessValue(node);
-  if (accessValue) return staticWrapperValuePrivateScope(accessValue, sessionContext, depth + 1);
-
-  const base = node.getExpression();
-  const baseDeclaration = staticAccessRootVariableDeclaration(base);
-  if (!baseDeclaration) return undefined;
-
-  const declarationList = baseDeclaration.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-
-  const baseScope = staticWrapperValuePrivateScope(base, sessionContext, depth + 1);
-  return baseScope
-    ? { ...baseScope, path: appendPrivateScopePath(baseScope.path, property) }
     : undefined;
 }
 
@@ -2134,16 +1921,11 @@ function summarizedStaticCallablePrivateScope(
 
   const node = unwrappedStaticExpressionNode(expression);
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
-    const rootDeclaration = staticAccessRootVariableDeclaration(node);
-    if (rootDeclaration && !staticCallableAccessHasStableStaticRoot(node)) return undefined;
-
-    const direct = strictHelperSummaryForStaticReference(node, sessionContext.helpers);
-    if (direct) return direct;
-
-    const value = rootDeclaration ? localConstLiteralStaticAccessValue(node) : undefined;
-    return value
-      ? summarizedStaticCallablePrivateScope(value, sessionContext, depth + 1)
-      : undefined;
+    // SPEC §6.6/§10.3: a const receiver is not an immutable property cell. Reflective
+    // writes, aliases, opaque mutators, and cross-file writes can replace an object/tuple member
+    // without rebinding its root. Positive private provenance therefore admits only direct helper
+    // identifiers or direct const aliases below, never a property/container invocation.
+    return undefined;
   }
 
   const direct = strictHelperSummaryForStaticReference(node, sessionContext.helpers);
@@ -2157,13 +1939,6 @@ function summarizedStaticCallablePrivateScope(
   }
 
   return undefined;
-}
-
-function staticCallableAccessHasStableStaticRoot(node: Node): boolean {
-  return (
-    staticAccessRootHasStableConstBinding(node) &&
-    localConstLiteralStaticAccessValue(node) !== undefined
-  );
 }
 
 function strictHelperSummaryForStaticReference(

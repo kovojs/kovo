@@ -1872,7 +1872,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'finite-security-operation-ir',
     marker: '@kovo-security-classifier-corpus finite-security-operation-ir',
-    testFiles: ['packages/compiler/src/security-operation-ir.security.test.ts'],
+    testFiles: [
+      'packages/compiler/src/security-operation-ir.security.test.ts',
+      'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'exact-emitted-browser-and-server-operation-manifests',
@@ -1927,6 +1930,16 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'computed managed database method',
           'raw Response from mutation',
           'requires static justifications on the trustedSql and trustedHtml exceptional doors',
+        ],
+      },
+      {
+        id: 'raw-response-provenance-closure',
+        file: 'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
+        snippets: [
+          'fails closed when a mutation launders raw Response through %s',
+          'a module-scope immutable alias',
+          'a same-file helper without an authority argument',
+          'qualified ambient access',
         ],
       },
       {
@@ -2481,13 +2494,14 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/drizzle/src/index.scope-audits.test.ts',
       'packages/drizzle/src/index.mass-assignment.test.ts',
       'packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts',
+      'packages/drizzle/src/index.summary-callable-stability.test.ts',
     ],
     verdictAnchors: [
       {
         id: 'private-summary-structural-proof-boundary',
         file: 'packages/drizzle/src/index.scope-audits.test.ts',
         snippets: [
-          'accepts an explicitly summarized guard principal on the owner-column predicate',
+          'accepts an explicitly summarized guard principal from an exact query context',
           'rejects guard/session/tenant declarations that do not match exact local structure',
           'forgedGuard(input)',
           'forgedSession(input)',
@@ -2499,6 +2513,28 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "{ name: 'mismatchedOrders', scope: 'unknown' }",
           'renamedCarrierOrders',
           "{ name: 'renamedCarrierOrders', scope: 'unknown' }",
+        ],
+      },
+      {
+        id: 'private-summary-direct-callable-stability',
+        file: 'packages/drizzle/src/index.summary-callable-stability.test.ts',
+        snippets: [
+          'analyzer-summary callable stability',
+          'fails closed after %s',
+          'Object.assign',
+          'Object.defineProperty',
+          'Reflect.set',
+          'an opaque mutator',
+          'later receiver reassignment',
+          'a reflectively replaced direct-helper container',
+          'a frozen-syntax callable container',
+          'outside the direct-callable positive grammar',
+          'a direct function declaration',
+          'replaces a private value-container cell',
+          'a reassigned local value binding',
+          'a reflectively mutated local value',
+          'an aliased local value escape',
+          'an opaque local value escape',
         ],
       },
       {
@@ -2518,6 +2554,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'rejects serverValue when opaque helper flow is not proven non-input',
           'serverValue(opaque(input.role)',
           'serverValue(container.role',
+          'rejects serverValue private provenance through a %s value-container write',
+          'serverValue(principal.ownerId',
           'rejects serverValue with no value argument',
           "detail: 'serverValue()'",
         ],
