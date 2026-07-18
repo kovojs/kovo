@@ -4,6 +4,7 @@ import { builtinModules as nodeBuiltinModules } from 'node:module';
 
 import { ts } from 'ts-morph';
 import { describe, expect, it } from 'vitest';
+import type { SecuritySemanticGraph } from '@kovojs/core/internal/security-operation-ir';
 
 import {
   collectStaticBuildTrustFactsFromProject,
@@ -13910,6 +13911,225 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         }),
       ]),
     );
+  });
+
+  // @kovo-security-certifies KV424 compiler-semantic-helper-proof
+  it('uses only byte-and-span-bound compiler summaries to discharge nested request-helper noise', () => {
+    const source = `
+      import { kovoAnalyzerSummary } from '@kovojs/drizzle';
+      import { mutation, serverValue } from '@kovojs/server';
+      import { eq } from 'drizzle-orm';
+      import { account } from './schema.js';
+      function exactGuard(context) { return context.guard.userId; }
+      kovoAnalyzerSummary(exactGuard, { returns: { kind: 'guard', path: 'userId' } });
+      export const update = mutation({
+        async handler(input, request) {
+          async function nestedWrite(db, carrier) {
+            await db
+              .update(account)
+              .set({ userId: serverValue(exactGuard(carrier), 'claimed owner') })
+              .where(eq(account.id, input.id));
+          }
+          await nestedWrite(request.db, input);
+          return { ok: true };
+        },
+      });
+    `;
+    const parsed = ts.createSourceFile(
+      'summary-carrier.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let nestedWrite: import('typescript').FunctionDeclaration | undefined;
+    const visit = (node: import('typescript').Node): void => {
+      if (ts.isFunctionDeclaration(node) && node.name?.text === 'nestedWrite') {
+        nestedWrite = node;
+        return;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(nestedWrite).toBeDefined();
+    const callableSpan = {
+      end: nestedWrite!.getEnd(),
+      start: nestedWrite!.getStart(parsed),
+    };
+    const graph: SecuritySemanticGraph = {
+      budgets: { callDepth: 16, nodes: 50_000, operations: 4_096, summaries: 256 },
+      roots: [
+        {
+          root: 'mutation:update',
+          summaries: [
+            {
+              authorityInputs: ['arg0=database'],
+              callable: 'local:nestedWrite',
+              callableSpan,
+              operationKinds: ['server.database.write'] as const,
+              verdict: 'proved' as const,
+            },
+          ],
+          traces: [],
+        },
+      ],
+      schema: 'kovo-security-semantic-graph/v1' as const,
+    };
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const account = pgTable('account', {
+        id: text('id').notNull(),
+        userId: text('user_id').notNull(),
+      });
+    `;
+    const files = [
+      { fileName: 'summary-carrier.ts', source },
+      { fileName: 'schema.ts', source: schemaSource },
+    ];
+
+    const closed = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: [
+        { fileName: 'summary-carrier.ts', graphs: [graph], source },
+        { fileName: 'schema.ts', graphs: [], source: schemaSource },
+      ],
+      files,
+    });
+    expect(closed).toEqual([]);
+
+    const byteMismatched = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: [
+        { fileName: 'summary-carrier.ts', graphs: [graph], source: `${source}\n` },
+        { fileName: 'schema.ts', graphs: [], source: schemaSource },
+      ],
+      files,
+    });
+    expect(byteMismatched).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+
+    const verdictClosed = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: [
+        {
+          fileName: 'summary-carrier.ts',
+          graphs: [
+            {
+              ...graph,
+              roots: [
+                {
+                  ...graph.roots[0]!,
+                  summaries: [{ ...graph.roots[0]!.summaries[0]!, verdict: 'closed' as const }],
+                },
+              ],
+            },
+          ],
+          source,
+        },
+        { fileName: 'schema.ts', graphs: [], source: schemaSource },
+      ],
+      files,
+    });
+    expect(verdictClosed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+
+    const semanticSinks = (candidate: SecuritySemanticGraph) =>
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [
+          { fileName: 'summary-carrier.ts', graphs: [candidate], source },
+          { fileName: 'schema.ts', graphs: [], source: schemaSource },
+        ],
+        files,
+      });
+    const provedSummary = graph.roots[0]!.summaries[0]!;
+    for (const [label, candidate] of [
+      [
+        'callable identity mismatch',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              summaries: [{ ...provedSummary, callable: 'local:notNestedWrite' }],
+            },
+          ],
+        },
+      ],
+      [
+        'authority category mismatch',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              summaries: [{ ...provedSummary, authorityInputs: ['arg0=request'] }],
+            },
+          ],
+        },
+      ],
+      ['root family mismatch', { ...graph, roots: [{ ...graph.roots[0]!, root: 'query:update' }] }],
+      [
+        'multiple root identities for one helper',
+        {
+          ...graph,
+          roots: [graph.roots[0]!, { ...graph.roots[0]!, root: 'mutation:other-update' }],
+        },
+      ],
+      [
+        'compiler-control operation in terminal summary',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              summaries: [{ ...provedSummary, operationKinds: ['server.helper.call'] }],
+            },
+          ],
+        },
+      ],
+      [
+        'same-span closed sibling summary',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              summaries: [provedSummary, { ...provedSummary, verdict: 'closed' as const }],
+            },
+          ],
+        },
+      ],
+      [
+        'closed root trace',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              traces: [
+                {
+                  detail: 'closed sibling path',
+                  reason: 'opaque-transfer' as const,
+                  root: 'mutation:update',
+                  sink: 'closed sibling path',
+                  transfers: [],
+                  verdict: 'closed' as const,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    ] as const) {
+      expect(semanticSinks(candidate), label).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+        ]),
+      );
+    }
   });
 
   it('keeps reviewed imports open and skips large unused lazy bodies within a low-second bound', () => {

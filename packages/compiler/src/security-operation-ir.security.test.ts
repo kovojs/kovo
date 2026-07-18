@@ -168,10 +168,41 @@ export const Demo = component({
     expect(browserSource).toContain('"kind":"browser.timer.schedule"');
   });
 
+  it.each([
+    ['direct string timer', "setTimeout('owned()', 0)"],
+    ['timer alias', 'const later = setInterval; later(`owned()`, 0)'],
+    ['global timer member', 'globalThis.setTimeout(`owned-${input}`, 0)'],
+  ])('closes %s through the finite browser timer operation', (_label, operation) => {
+    const diagnostics = kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain('semantic root=serialized-browser-handler:onClick@');
+    expect(diagnostics[0]?.message).toContain('transfers=<direct>');
+    expect(diagnostics[0]?.message).toContain('string timer callbacks execute source text');
+    expect(diagnostics[0]?.message).toContain('verdict=closed:unsupported-authority-use');
+  });
+
+  it('closes a captured unknown receiver mutation instead of silently treating it as scalar code', () => {
+    const diagnostics = kv449(`
+const element = document.createElement('div');
+export const Demo = component({
+  render: () => <button onClick={() => { element.innerHTML = '<script>owned</script>'; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain('browser assignment element.innerHTML');
+    expect(diagnostics[0]?.message).toContain('verdict=closed:unknown-operation');
+  });
+
   it('accepts exact structured server operations and named justified exceptional doors', () => {
     const diagnostics = kv449(`
 import { trustedHtml } from '@kovojs/browser';
-import { trustedSql } from '@kovojs/drizzle';
+import { sql, trustedSql } from '@kovojs/drizzle';
 import { endpoint } from '@kovojs/server';
 
 export const report = endpoint('/report', {
@@ -205,6 +236,73 @@ export const report = endpoint('/report', {
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
     expect(serverSource).toContain(
       '{"door":"Response","kind":"server.response.raw","target":"new Response","justification":"endpoint access/CSRF posture"}',
+    );
+  });
+
+  it('classifies exact module and global Response aliases as reviewed endpoint outcomes', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+const RawResponse = Response;
+export const report = endpoint('/report', {
+  handler(input) {
+    return input.global
+      ? globalThis.Response.json({ ok: true })
+      : new RawResponse('ok');
+  },
+});
+`);
+    const rawOperations =
+      result.componentGraphFacts[0]?.securityOperations?.filter(
+        (operation) => operation.kind === 'server.response.raw',
+      ) ?? [];
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(rawOperations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ target: 'globalThis.Response.json' }),
+        expect.objectContaining({ target: 'new Response' }),
+      ]),
+    );
+  });
+
+  it.each([
+    ['module Response alias', 'const RawResponse = Response;', "return new RawResponse('raw')"],
+    [
+      'zero-authority helper outcome',
+      "function raw() { return new Response('raw'); }",
+      'return raw()',
+    ],
+    [
+      'module Response container',
+      'const responses = { RawResponse: Response };',
+      "return new responses.RawResponse('raw')",
+    ],
+    [
+      'constructor-return helper',
+      'function responseConstructor() { return Response; }',
+      "return new (responseConstructor())('raw')",
+    ],
+    [
+      'module constructor-return alias',
+      'function identity(value) { return value; } const RawResponse = identity(Response);',
+      "return new RawResponse('raw')",
+    ],
+    ['global Response member', '', "return new globalThis.Response('raw')"],
+  ])('closes raw mutation Response through %s', (_label, prelude, outcome) => {
+    const diagnostics = kv449(`
+import { mutation } from '@kovojs/server';
+${prelude}
+export const update = mutation({
+  handler() { ${outcome}; },
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes('semantic root='))).toBe(
+      true,
+    );
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes('verdict=closed:'))).toBe(
+      true,
     );
   });
 
@@ -253,7 +351,7 @@ import * as drizzle from '@kovojs/drizzle';
 import { endpoint } from '@kovojs/server';
 export const report = endpoint('/report', {
   async handler(_input, ctx) {
-    await ctx.db.execute(drizzle.trustedSql(sql\`select 1\`, {
+    await ctx.db.execute(drizzle.trustedSql(drizzle.sql\`select 1\`, {
       justification: 'reviewed namespace query',
     }));
     return Response.json({
@@ -431,18 +529,18 @@ export const report = endpoint('/report', {
       expect.objectContaining({
         root: 'endpoint:/report',
         summaries: expect.arrayContaining([
-          {
+          expect.objectContaining({
             authorityInputs: ['arg0=operation:server.egress.request'],
             callable: 'local:dial',
             operationKinds: ['server.egress.request'],
             verdict: 'proved',
-          },
-          {
+          }),
+          expect.objectContaining({
             authorityInputs: ['arg0=context'],
             callable: 'local:consume',
             operationKinds: ['server.egress.request'],
             verdict: 'proved',
-          },
+          }),
         ]),
         traces: expect.arrayContaining([
           {
@@ -481,18 +579,18 @@ export const report = endpoint('/report', {
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
     expect(summaries).toEqual(
       expect.arrayContaining([
-        {
+        expect.objectContaining({
           authorityInputs: ['arg0=database'],
           callable: 'local:inspect',
           operationKinds: [],
           verdict: 'proved',
-        },
-        {
+        }),
+        expect.objectContaining({
           authorityInputs: ['arg0=storage'],
           callable: 'local:inspect',
           operationKinds: [],
           verdict: 'proved',
-        },
+        }),
       ]),
     );
   });
@@ -980,7 +1078,7 @@ export const save = mutation('save', { handler: async (_input, _request, ctx) =>
     expect(
       kv449(`
 import { trustedHtml } from '@kovojs/browser';
-import { trustedSql } from '@kovojs/drizzle';
+import { sql, trustedSql } from '@kovojs/drizzle';
 import { endpoint } from '@kovojs/server';
 export const report = endpoint('/report', {
   handler(_input, ctx) {

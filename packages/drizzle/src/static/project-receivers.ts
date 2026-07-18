@@ -60,6 +60,7 @@ import {
   isReadSourceCall,
   isSelectQueryCallName,
   lineForIndex,
+  privateScopeForExpression,
   queryCallChainReceiver,
   resolvedSymbolKey,
   staticAccessExpression,
@@ -920,6 +921,7 @@ function relationalReadWithObjectTableExpressions(
   const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(body, (node) =>
     isProjectDrizzleReceiverIdentifier(node, receivers),
   );
+  const sessionContext = sessionProvenanceContextForNodes(body.getSourceFile(), [body]);
   return [
     ...extractProjectExternalDbArgumentCalls(
       body,
@@ -935,6 +937,7 @@ function relationalReadWithObjectTableExpressions(
         projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys) !== undefined ||
         isDrizzleReceiver(argument),
       (argument) => projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys),
+      (call) => privateScopeForExpression(call, sessionContext) !== undefined,
     ),
     ...extractReceiverMethodAliasCallsFromBody(body, (node) =>
       isProjectDrizzleReceiverIdentifier(node, receivers),

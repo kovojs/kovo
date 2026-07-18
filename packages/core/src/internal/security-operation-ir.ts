@@ -162,6 +162,8 @@ export type SecuritySemanticTrace = SecuritySemanticProvedTrace | SecuritySemant
 export interface SecuritySemanticSummary {
   readonly authorityInputs: readonly string[];
   readonly callable: string;
+  /** Exact authored declaration identity within the root's immutable source snapshot. */
+  readonly callableSpan: { readonly end: number; readonly start: number };
   readonly operationKinds: readonly ServerSecurityOperationKind[];
   readonly verdict: 'closed' | 'proved';
 }

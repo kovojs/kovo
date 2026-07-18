@@ -103,6 +103,7 @@ export {
 
 /** @internal */
 /** @internal */ export type {
+  CompilerSecuritySemanticSource,
   TrustEscapeProjectOptions,
   TrustEscapeSourceFileInput,
 } from './trust-escapes-static.js';

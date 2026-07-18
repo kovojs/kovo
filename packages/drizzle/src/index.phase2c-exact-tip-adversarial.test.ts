@@ -47,6 +47,13 @@ function ownerVerdict(
   };
 }
 
+function fullVerdict(source: string) {
+  const analysis = extractStaticBuildAnalysisFactsFromProject({
+    files: [DB_TYPES, { fileName: 'phase2c-adversarial.ts', source }],
+  });
+  return { analysis, check: kovoCheck(analysis) };
+}
+
 function carrierMutationSource(mutation: string): string {
   return ownerSource([
     'function poison(target: Context, replacement: Context["request"]) { target.request = replacement; }',
@@ -121,6 +128,23 @@ describe('Phase 2C exact-tip adversarial review', () => {
     expect(result.scope).not.toBe('session');
     expect(result.check.exitCode).toBe(1);
     expect(result.check.output).toContain('KV414');
+  });
+
+  it('fails closed when an input-named nested helper hides an owner read', () => {
+    const source = ownerSource([
+      'export const list = query("list", {',
+      '  args: s.object({ guard: s.object({ userId: s.string() }) }),',
+      '  async load(input: { guard: { userId: string } }, actual: Context) {',
+      '    async function nested(context: { guard: { userId: string } }) {',
+      '      return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, context.guard.userId)) };',
+      '    }',
+      '    return nested(input);',
+      '  },',
+      '});',
+    ]);
+    const full = fullVerdict(source);
+    expect(full.check.exitCode).toBe(1);
+    expect(full.check.output).toMatch(/KV406|KV414/u);
   });
 
   it('does not let destructuring mint a private principal from validated input named context', () => {

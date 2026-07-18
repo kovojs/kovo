@@ -196,6 +196,7 @@ import {
   localFunctionsByKey: ReadonlyMap<string, Pick<ExtractedFunction, 'receiverParameters'>>,
   isDirectReceiverArgument: (argument: Node) => boolean,
   receiverArgumentReference: (argument: Node) => Node | undefined,
+  isProvenNonDrizzleTransfer?: (call: CallExpression) => boolean,
   bodyOffset = bodySourceStart(body),
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
@@ -206,6 +207,7 @@ import {
     const key = localFunctionKeyForReference(expression, localFunctionKeys);
     if (!key || !localFunctionKeys.has(key)) continue;
     if (!call.getArguments().some((argument) => receiverArgumentReference(argument))) continue;
+    if (isProvenNonDrizzleTransfer?.(call)) continue;
 
     const requirements = localFunctionsByKey.get(key)?.receiverParameters ?? [];
     if (

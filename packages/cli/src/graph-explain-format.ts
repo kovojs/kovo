@@ -1758,7 +1758,14 @@ export function semanticLintSeverity(lint: CoreGraph.SemanticLint): DiagnosticSe
 }
 
 export function missedQueryInvalidations(
-  queries: readonly CoreGraph.QueryReadSet[],
+  queries: readonly (
+    | CoreGraph.QueryReadSet
+    | {
+        query: string;
+        readOnlyDomains?: readonly string[];
+        reads: readonly string[];
+      }
+  )[],
   touchGraph: CoreGraph.TouchGraph,
   mutations: readonly CoreGraph.MutationExplain[],
 ): { domain: string; query: string }[] {
@@ -1771,7 +1778,8 @@ export function missedQueryInvalidations(
 
   return queries.flatMap((query) => {
     const readOnlyDomains = new Set(query.readOnlyDomains ?? []);
-    return query.domains
+    const domains = 'domains' in query ? query.domains : query.reads;
+    return domains
       .filter((domain) => !readOnlyDomains.has(domain))
       .filter((domain) => !touchedDomains.has(domain) && !mutationDomains.has(domain))
       .map((domain) => ({ domain, query: query.query }));

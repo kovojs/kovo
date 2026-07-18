@@ -291,6 +291,27 @@ Measurements are versioned and reproducible:
 
 - [ ] Route TASK B roots through capability closure, finite IR, and normalized provenance; unknown
       roots, package summaries, transfers, or sinks fail closed with actionable traces.
+  - [x] Route exact authored request-handler snapshots through the compiler-owned semantic graph
+        before evaluation, bind helper summaries to exact source bytes, callable span/name, root
+        family, authority categories, terminal-operation inventory, and all-path proved verdict,
+        then use that proof in Drizzle request/process analysis only for the reviewed plain-data and
+        static-column reads it covers. Any byte/span/name/root/category/operation mismatch, closed
+        sibling summary, or closed root trace falls back to the legacy closed verdict.
+    - Evidence: `pnpm exec vitest run packages/compiler/src/security-operation-ir.security.test.ts packages/compiler/src/security-operation-ir.response-provenance.test.ts`
+      passes 169/169; the finite-IR C13 anchor inventory passes with no missing verdict anchors;
+      focused CLI/Drizzle regressions prove cross-file Response/protocol closure and every
+      byte/span/callable/root/authority/operation semantic-proof mismatch.
+  - [x] Preserve the specialized exact Drizzle private-scope proof while the compiler carrier is
+        introduced; do not describe that legacy KV406 discharge as compiler-owned or delete its
+        survivor until the full TASK B migration proves replacement. Keep actual Drizzle writes,
+        referenced/shared mutation handlers, distinct write keys, and target-id derivation visible.
+    - Evidence: `index.mutation-private-scope-transfers.test.ts` proves adjacent alias/container/
+      rebinding rejects plus `account/exact`, `account/shared-one`, and `account/shared-two` effects.
+  - [x] Close the adversarial gaps found during exact-tip review: zero-authority raw `Response`
+        laundering through aliases/containers/wrappers/rebinding/shadowing/cross-file imports, and
+        owner-table reads hidden in a nested query helper invoked with validated input.
+    - Evidence: the focused compiler/CLI suites pass; `index.phase2c-exact-tip-adversarial.test.ts`
+      emits KV406 for the nested owner read, and both families are enrolled in C13.
 - [ ] Delete each superseded syntax/name predicate only after its C13 and mutation evidence passes.
       Record the remaining P obligations and explain every survivor.
 - [ ] Run full classifier, compiler, integration, browser, build, package, performance, and memory

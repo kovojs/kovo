@@ -18,6 +18,7 @@ import type {
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type {
   CompileComponentOptions,
+  CompileResult,
   CompileRouteModuleOptions,
   RouteComponentImportRewrite,
 } from '@kovojs/compiler';
@@ -1165,11 +1166,17 @@ async function runCompileDrizzleStaticCommand(
       output.cookieDowngrades = collectCookieDowngradesFromProject({ files });
     }
     if (extract.has('unregisteredSinks')) {
-      // SPEC §6.6 (KV424, error-severity): app handler-body writes/calls to the dangerous imperative
-      // -DOM lexicon (el.innerHTML=, eval, setTimeout('string'), document.write, new Function) ride
-      // into `graph.unregisteredSinks` so `kovo check` fails. Conservative handler-boundary pass;
-      // verified 0 false positives over the example app corpus.
-      output.unregisteredSinks = collectUnregisteredSinksFromProject({ files });
+      // SPEC §5.2/§6.6: standalone static extraction follows the same compiler-owned finite
+      // handler graph as `kovo build`. The exact supplied byte snapshot supplies both framework
+      // identity and semantic summaries; TASK B keeps its non-handler request/process coverage.
+      const compilerVerdict = await compileStaticHandlerSecurityVerdict(files);
+      if (compilerVerdict.diagnostics.length > 0) {
+        output.diagnostics = compilerVerdict.diagnostics;
+      }
+      output.unregisteredSinks = collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: compilerVerdict.semanticSources,
+        files,
+      });
     }
     if (extract.has('symbolicEffects'))
       output.symbolicEffects = extractSymbolicEffectsFromProject({ files });
@@ -1252,6 +1259,53 @@ async function runCompileDrizzleStaticCommand(
   }
 
   return artifact;
+}
+
+interface StaticHandlerSecurityVerdict {
+  diagnostics: CoreGraph.StaticDiagnosticFact[];
+  semanticSources: {
+    fileName: string;
+    graphs: NonNullable<CoreGraph.ComponentExplain['securitySemanticGraph']>[];
+    source: string;
+  }[];
+}
+
+async function compileStaticHandlerSecurityVerdict(
+  files: readonly { fileName: string; source: string }[],
+): Promise<StaticHandlerSecurityVerdict> {
+  const diagnostics: CoreGraph.StaticDiagnosticFact[] = [];
+  const semanticSources: StaticHandlerSecurityVerdict['semanticSources'] = [];
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index]!;
+    const extraFiles = files.filter((_, candidateIndex) => candidateIndex !== index);
+    const options = {
+      ...(extraFiles.length === 0 ? {} : { extraFiles }),
+      fileName: file.fileName,
+      source: file.source,
+      sourceProvenance: 'app',
+    } as CompileComponentOptions & {
+      readonly extraFiles?: readonly { fileName: string; source: string }[];
+    };
+    const result: CompileResult = await compileFrameworkComponentModule(options);
+    for (const diagnostic of result.diagnostics) {
+      if (diagnostic.code !== 'KV449') continue;
+      diagnostics.push({
+        code: diagnostic.code,
+        message: diagnostic.message,
+        severity: diagnostic.severity ?? 'error',
+        site: diagnostic.fileName,
+        ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+      });
+    }
+    semanticSources.push({
+      fileName: file.fileName,
+      graphs: result.componentGraphFacts.flatMap((fact) =>
+        fact.securitySemanticGraph === undefined ? [] : [fact.securitySemanticGraph],
+      ),
+      source: file.source,
+    });
+  }
+  return { diagnostics, semanticSources };
 }
 
 interface SqlSafetyDiagnosticLike {

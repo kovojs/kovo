@@ -229,7 +229,8 @@ function tableSyntheticNameForDerivation(synthetic: string): string {
 /** All callback bodies in a file that may carry a Drizzle write call, with resolvable keys. */
 function deriveWriteCallbacks(sourceFile: SourceFile): DeriveCallback[] {
   const callbacks: DeriveCallback[] = [];
-  const seen = new Set<number>();
+  const keyedStarts = new Set<number>();
+  const seen = new Set<string>();
   const push = (fn: Node | undefined, key?: string): void => {
     if (!fn) return;
     let body: Node;
@@ -238,8 +239,12 @@ function deriveWriteCallbacks(sourceFile: SourceFile): DeriveCallback[] {
     } catch {
       return;
     }
-    if (seen.has(fn.getStart())) return;
-    seen.add(fn.getStart());
+    const start = fn.getStart();
+    if (key === undefined && keyedStarts.has(start)) return;
+    const identity = `${start}:${key ?? '<anonymous>'}`;
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    if (key !== undefined) keyedStarts.add(start);
     callbacks.push(key === undefined ? { body, fn } : { body, fn, key });
   };
 
@@ -247,6 +252,12 @@ function deriveWriteCallbacks(sourceFile: SourceFile): DeriveCallback[] {
   for (const callback of projectDomainWriteCallbacks(sourceFile).values()) {
     push(callback.fn, callback.name);
   }
+  // SPEC §10.5: exact mutation handlers are keyed write roots. Enroll them before the generic
+  // object-literal callback walk so source-position dedupe preserves the mutation key instead of
+  // retaining an anonymous copy of the same handler body.
+  forEachMutationConfig(sourceFile, (key, config) => {
+    push(mutationHandlerCallback(config), key);
+  });
   // Top-level function declarations / variable-assigned callbacks.
   for (const fn of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
     push(fn, fn.getName());

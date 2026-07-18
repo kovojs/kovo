@@ -1506,7 +1506,13 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
 ): TouchGraphDiagnostic[] {
-  if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
+  if (
+    receiverReferences.projectContainers !== true &&
+    receiverReferences.names.size === 0 &&
+    receiverReferences.symbolKeys.size === 0
+  ) {
+    return [];
+  }
 
   const diagnostics: TouchGraphDiagnostic[] = [];
   for (const callbackBody of queryCallbackBodies(body, queryReceiverMode(receiverReferences))) {
@@ -1515,7 +1521,12 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
 
       const name = propertyAccessCallName(call);
       if (!name || !isQueryReadCallName(name)) continue;
-      if (!isQueryCallOnReceiver(call, receiverReferences)) continue;
+      const surface = directDrizzleReceiverCallSurface(call);
+      const exactProjectMemberRead =
+        receiverReferences.projectContainers === true &&
+        surface !== undefined &&
+        isProjectDrizzleReceiverMemberExpression(surface.receiver);
+      if (!exactProjectMemberRead && !isQueryCallOnReceiver(call, receiverReferences)) continue;
 
       diagnostics.push(
         drizzleDiagnostic({

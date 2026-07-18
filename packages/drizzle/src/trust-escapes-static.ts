@@ -23,6 +23,11 @@ import type {
   UnregisteredSinkFact,
 } from '@kovojs/core/internal/graph';
 import {
+  serverSecurityOperationKinds,
+  type SecuritySemanticGraph,
+  type ServerSecurityOperationKind,
+} from '@kovojs/core/internal/security-operation-ir';
+import {
   canonicalFrameworkExportForExpression,
   expressionResolvesToFrameworkExport,
   frameworkExport,
@@ -43,10 +48,25 @@ export interface TrustEscapeSourceFileInput {
   source: string;
 }
 
+/**
+ * Compiler-owned semantic facts bound to the exact source carrier from which they were parsed.
+ * The request/process classifier uses them only to recognize a proved helper declaration; a
+ * missing, duplicate, or byte-mismatched carrier silently falls back to the legacy closed verdict.
+ *
+ * @internal
+ */
+export interface CompilerSecuritySemanticSource {
+  fileName: string;
+  graphs: readonly SecuritySemanticGraph[];
+  source: string;
+}
+
 /** @internal */
 export interface TrustEscapeProjectOptions {
   /** Exact authored build-config entry whose deferred preset authority must use built-in witnesses. */
   buildConfigEntryFileName?: string;
+  /** Same-snapshot compiler verdicts; never an app-authored assertion. */
+  compilerSecuritySemanticSources?: readonly CompilerSecuritySemanticSource[];
   files: readonly TrustEscapeSourceFileInput[];
 }
 
@@ -392,6 +412,7 @@ export function collectUnregisteredSinksFromProject(
         options.files,
         sourceFiles,
         options.buildConfigEntryFileName,
+        options.compilerSecuritySemanticSources,
       ),
     );
     return facts.sort(
@@ -466,6 +487,7 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
         options.files,
         sourceFiles,
         options.buildConfigEntryFileName,
+        options.compilerSecuritySemanticSources,
       ),
     );
     return {
@@ -1501,6 +1523,8 @@ interface RequestCallable {
    * data (SPEC §5.2 / §6.6).
    */
   readonly compilerOwnedJsxEventHandlers?: boolean;
+  /** Exact byte/span-bound compiler summary proved this helper under the attached input roles. */
+  readonly compilerSemanticHelper?: boolean;
   /** Exact universally closed module-local helper reached only from declared framework roots. */
   readonly declaredRootHelper?: boolean;
   readonly declaration: Node;
@@ -1531,6 +1555,29 @@ interface RequestProcessScanContext {
   readonly scanned: Set<string>;
 }
 
+interface RequestCompilerSemanticHelperProof {
+  readonly authorityInputs: readonly string[];
+  readonly callable: string;
+  readonly operationKinds: readonly ServerSecurityOperationKind[];
+  readonly root: string;
+}
+
+const REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS = runtimeSet<ServerSecurityOperationKind>();
+for (
+  let index = 0;
+  index < runtimeArrayLength(serverSecurityOperationKinds, 'Compiler semantic operation inventory');
+  index += 1
+) {
+  const kind = runtimeArrayValue(
+    serverSecurityOperationKinds,
+    index,
+    'Compiler semantic operation inventory',
+  );
+  if (kind !== 'server.handler.root' && kind !== 'server.helper.call') {
+    runtimeSetAdd(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, kind);
+  }
+}
+
 const REQUEST_PROVENANCE_BUDGET = 250_000;
 // Independent framework roots multiply every downstream provenance phase. Keep that fan-out
 // explicitly bounded as well as the individual graph walk so adversarial source breadth cannot
@@ -1553,6 +1600,10 @@ interface RequestProvenanceSession {
   readonly callableSymbolMemo: Map<string, RequestCallableResolution>;
   readonly carrierActive: Set<string>;
   readonly carrierMemo: Map<string, RequestWireCarrier | null>;
+  readonly compilerSemanticHelperProofs: ReadonlyMap<
+    string,
+    readonly RequestCompilerSemanticHelperProof[]
+  >;
   readonly declaredRootHelperActive: Set<string>;
   readonly declaredRootHelperMemo: Map<string, readonly RequestCallable[] | null>;
   readonly drizzleTablePristineMemo: Map<string, boolean>;
@@ -1592,7 +1643,12 @@ interface RequestProvenanceSession {
   readonly writeMemo: Map<string, readonly RequestWireAuthority[]>;
 }
 
-function createRequestProvenanceSession(): RequestProvenanceSession {
+function createRequestProvenanceSession(
+  compilerSemanticHelperProofs: ReadonlyMap<
+    string,
+    readonly RequestCompilerSemanticHelperProof[]
+  > = new Map(),
+): RequestProvenanceSession {
   return {
     assignedBindingMemo: new Map(),
     bootOnlySetupMemo: new Map(),
@@ -1606,6 +1662,7 @@ function createRequestProvenanceSession(): RequestProvenanceSession {
     callableSymbolMemo: new Map(),
     carrierActive: new Set(),
     carrierMemo: new Map(),
+    compilerSemanticHelperProofs,
     declaredRootHelperActive: new Set(),
     declaredRootHelperMemo: new Map(),
     drizzleTablePristineMemo: new Map(),
@@ -1665,6 +1722,7 @@ function requestProcessSinksForProject(
   files: readonly TrustEscapeSourceFileInput[],
   sourceFiles: readonly SourceFile[],
   buildConfigEntryFileName?: string,
+  compilerSecuritySemanticSources?: readonly CompilerSecuritySemanticSource[],
 ): UnregisteredSinkFact[] {
   const filesByPath = new Map<string, TrustEscapeSourceFileInput>();
   for (const [index, sourceFile] of sourceFiles.entries()) {
@@ -1676,7 +1734,9 @@ function requestProcessSinksForProject(
     ...(buildConfigEntryFileName === undefined ? {} : { buildConfigEntryFileName }),
     facts: [],
     filesByPath,
-    provenance: createRequestProvenanceSession(),
+    provenance: createRequestProvenanceSession(
+      requestCompilerSemanticHelperProofs(files, sourceFiles, compilerSecuritySemanticSources),
+    ),
     retainedConfigTargets: new Set(),
     scanned: new Set(),
   };
@@ -1746,6 +1806,67 @@ function requestProcessSinksForProject(
   }
 
   return context.facts;
+}
+
+function requestCompilerSemanticHelperProofs(
+  files: readonly TrustEscapeSourceFileInput[],
+  sourceFiles: readonly SourceFile[],
+  semanticSources: readonly CompilerSecuritySemanticSource[] | undefined,
+): ReadonlyMap<string, readonly RequestCompilerSemanticHelperProof[]> {
+  if (!semanticSources || semanticSources.length !== files.length) return new Map();
+  const sourcesByName = new Map<string, CompilerSecuritySemanticSource>();
+  for (const source of semanticSources) {
+    if (sourcesByName.has(source.fileName)) return new Map();
+    sourcesByName.set(source.fileName, source);
+  }
+
+  const proofs = new Map<string, RequestCompilerSemanticHelperProof[]>();
+  const invalidProofKeys = new Set<string>();
+  for (const [index, file] of files.entries()) {
+    const sourceFile = sourceFiles[index];
+    const semanticSource = sourcesByName.get(file.fileName);
+    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) return new Map();
+    for (const graph of semanticSource.graphs) {
+      if (graph.schema !== 'kovo-security-semantic-graph/v1') return new Map();
+      for (const root of graph.roots) {
+        const rootClosed = root.traces.some((trace) => trace.verdict === 'closed');
+        for (const summary of root.summaries) {
+          const { end, start } = summary.callableSpan;
+          if (
+            !Number.isSafeInteger(start) ||
+            !Number.isSafeInteger(end) ||
+            start < 0 ||
+            end <= start ||
+            end > file.source.length
+          ) {
+            continue;
+          }
+          const key = `${sourceFile.getFilePath()}:${start}:${end}`;
+          if (
+            summary.verdict !== 'proved' ||
+            rootClosed ||
+            !summary.callable.startsWith('local:') ||
+            summary.operationKinds.some(
+              (kind) => !runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, kind),
+            )
+          ) {
+            invalidProofKeys.add(key);
+            continue;
+          }
+          const values = proofs.get(key) ?? [];
+          values.push({
+            authorityInputs: [...summary.authorityInputs],
+            callable: summary.callable,
+            operationKinds: [...summary.operationKinds],
+            root: root.root,
+          });
+          proofs.set(key, values);
+        }
+      }
+    }
+  }
+  for (const key of invalidProofKeys) proofs.delete(key);
+  return proofs;
 }
 
 function scanRequestModuleInitializers(
@@ -13760,7 +13881,7 @@ function requestObjectLiteralElementNameNode(
 }
 
 function scanRequestCallable(callable: RequestCallable, context: RequestProcessScanContext): void {
-  const key = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.rootFactory ?? 'nested'}:${callable.rootCallback ?? (callable.moduleInitializer ? 'module-initializer' : 'helper')}:${callable.rootParameterRoles?.join(',') ?? 'untyped'}:${callable.lexicalParent ? requestNodeIdentity(callable.lexicalParent.declaration) : 'no-lexical-parent'}`;
+  const key = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.rootFactory ?? 'nested'}:${callable.rootCallback ?? (callable.moduleInitializer ? 'module-initializer' : 'helper')}:${callable.rootParameterRoles?.join(',') ?? 'untyped'}:${callable.compilerSemanticHelper ? 'compiler-semantic' : 'legacy'}:${callable.lexicalParent ? requestNodeIdentity(callable.lexicalParent.declaration) : 'no-lexical-parent'}`;
   if (context.scanned.has(key)) return;
   context.scanned.add(key);
 
@@ -16556,7 +16677,8 @@ function scanRequestPropertyAccessProtocols(
     !write &&
     (requestExactLexicalComponentSlotProjectionRole(access, callable) !== undefined ||
       requestPropertyAccessIsExactRequestPrimitive(access, callable) ||
-      requestPropertyAccessIsExactUrlSearchParams(access, callable, context.provenance))
+      requestPropertyAccessIsExactUrlSearchParams(access, callable, context.provenance) ||
+      requestCompilerSemanticHelperPlainDataRead(receiver, callable, context.provenance))
   ) {
     return;
   }
@@ -16594,7 +16716,13 @@ function scanRequestPropertyAccessProtocols(
   if (
     !write &&
     member !== undefined &&
-    requestPropertyAccessIsReviewedDrizzleColumn(access, member, callable, context)
+    (requestPropertyAccessIsReviewedDrizzleColumn(access, member, callable, context) ||
+      requestCompilerSemanticHelperReviewedDrizzleColumn(
+        access,
+        member,
+        callable,
+        context.provenance,
+      ))
   ) {
     return;
   }
@@ -16638,6 +16766,120 @@ function scanRequestPropertyAccessProtocols(
     callable,
     context,
     write ? 'property-setter' : 'property-getter',
+  );
+}
+
+function requestCompilerSemanticHelperReviewedDrizzleColumn(
+  access: import('ts-morph').PropertyAccessExpression | import('ts-morph').ElementAccessExpression,
+  member: string,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  if (!callable.compilerSemanticHelper) return false;
+  const table = requestReviewedDrizzleTableForDirectReference(access.getExpression());
+  if (
+    table &&
+    requestReviewedDrizzleTableHasColumn(table, member) &&
+    requestReviewedDrizzleTableIdentityHasNoStaticMutation(table) &&
+    (requestNodeIsReviewedDrizzleDataArgument(access, callable) ||
+      requestNodeIsReviewedDrizzleDataArgumentInDeclaredRoot(access, session))
+  ) {
+    return true;
+  }
+  return requestCompilerSemanticHelperStaticTableColumn(access, member, callable, session);
+}
+
+function requestCompilerSemanticHelperStaticTableColumn(
+  access: import('ts-morph').PropertyAccessExpression | import('ts-morph').ElementAccessExpression,
+  member: string,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const receiver = unwrapStaticExpression(access.getExpression());
+  if (!Node.isIdentifier(receiver)) return false;
+  const initial = requestIdentifierValueSymbol(receiver) ?? receiver.getSymbol();
+  if (!initial || requestAssignedBindingProjections(initial, session).length > 0) return false;
+  const symbols = [initial];
+  const seen = new Set<string>();
+  while (symbols.length > 0) {
+    const symbol = symbols.pop()!;
+    const key = requestSymbolKey(symbol);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    try {
+      const aliased = symbol.getAliasedSymbol();
+      if (aliased && aliased !== symbol) symbols.push(aliased);
+    } catch {
+      // Unresolved imports never acquire a table witness.
+    }
+    for (const declaration of symbol.getDeclarations()) {
+      if (
+        !Node.isVariableDeclaration(declaration) ||
+        declaration.getVariableStatement()?.getDeclarationKind() !==
+          VariableDeclarationKind.Const ||
+        declaration.getVariableStatement()?.getParent() !== declaration.getSourceFile()
+      ) {
+        continue;
+      }
+      const initializer = declaration.getInitializer();
+      const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+      if (
+        !call ||
+        !Node.isCallExpression(call) ||
+        !requestCallUsesExactReviewedDrizzleTableFactory(call)
+      ) {
+        continue;
+      }
+      const columns = call.getArguments()[1];
+      const record = columns ? unwrapStaticExpression(columns) : undefined;
+      if (
+        !record ||
+        !Node.isObjectLiteralExpression(record) ||
+        !record
+          .getProperties()
+          .some(
+            (property) =>
+              Node.isPropertyAssignment(property) &&
+              staticMemberName(property.getNameNode()) === member,
+          )
+      ) {
+        continue;
+      }
+      return (
+        requestNodeIsReviewedDrizzleDataArgument(access, callable) ||
+        requestNodeIsReviewedDrizzleDataArgumentInDeclaredRoot(access, session)
+      );
+    }
+  }
+  return false;
+}
+
+function requestCompilerSemanticHelperPlainDataRead(
+  receiver: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  if (!callable.compilerSemanticHelper) return false;
+  if (
+    requestRootRoleIncludesInput(
+      requestExpressionRootParameterRole(receiver, callable, new Set(), 0),
+    )
+  ) {
+    return true;
+  }
+  // A nested helper may close over the schema-parsed input parameter of its exact framework root.
+  // Bind that lexical read back to the root symbol; the compiler proof does not bless arbitrary
+  // module objects, imported containers, or capability receivers.
+  const lexicalOwner = requestEnclosingCallable(callable.declaration);
+  if (!lexicalOwner) return false;
+  const roots = requestCallableDeclaredRootContexts(lexicalOwner, session);
+  return (
+    roots.length > 0 &&
+    roots.every((root) =>
+      requestRootRoleIncludesInput(
+        requestExpressionRootParameterRole(receiver, root, new Set(), 0),
+      ),
+    )
   );
 }
 
@@ -24210,6 +24452,12 @@ function requestCallIsKnownSafe(
     return true;
   }
 
+  if (callable.moduleInitializer && requestCallIsExactKovoAnalyzerSummary(call)) {
+    // This exact declaration records static analyzer metadata; it does not invoke the summarized
+    // callable. The data-plane analyzer validates the summary grammar and provenance separately.
+    return true;
+  }
+
   // Module-initializer scanning reaches the same exact framework constructors and request-root
   // factories that the retained-config pass reviews below. Their authored callbacks are still
   // scanned as independent roots; accepting the constructor call itself grants no package-wide
@@ -24602,6 +24850,13 @@ function requestCallIsKnownSafe(
     return requestKnownCallbacksAreClosed(call, member, context);
   }
   return false;
+}
+
+function requestCallIsExactKovoAnalyzerSummary(call: import('ts-morph').CallExpression): boolean {
+  return expressionResolvesToFrameworkExport(
+    call.getExpression(),
+    frameworkExport('@kovojs/drizzle', 'kovoAnalyzerSummary'),
+  );
 }
 
 function requestRootCapabilityKey(
@@ -31816,9 +32071,10 @@ function requestExactClosedDeclaredRootHelperContexts(
   session: RequestProvenanceSession,
 ): readonly RequestCallable[] | undefined {
   const declaration = direct.declaration;
+  const compilerProofs = requestCompilerSemanticProofsForDeclaration(declaration, session);
   if (
     !Node.isFunctionDeclaration(declaration) ||
-    declaration.getParent() !== declaration.getSourceFile() ||
+    (declaration.getParent() !== declaration.getSourceFile() && compilerProofs.length === 0) ||
     declaration.getAsteriskToken() ||
     declaration
       .getModifiers()
@@ -31915,13 +32171,147 @@ function requestExactClosedDeclaredRootHelperContexts(
       const roleKey = roles.join(',');
       if (expectedRoles !== undefined && expectedRoles !== roleKey) return reject();
       expectedRoles = roleKey;
-      contexts.push({ ...direct, declaredRootHelper: true, rootParameterRoles: roles });
+      contexts.push({
+        ...direct,
+        ...(requestCompilerSemanticProofMatchesContext(compilerProofs, roles, declaration, root)
+          ? { compilerSemanticHelper: true }
+          : {}),
+        declaredRootHelper: true,
+        rootParameterRoles: roles,
+      });
     }
   }
   if (contexts.length === 0) return reject();
+  if (
+    declaration.getParent() !== declaration.getSourceFile() &&
+    contexts.some((context) => !context.compilerSemanticHelper)
+  ) {
+    return reject();
+  }
   session.declaredRootHelperActive.delete(key);
   session.declaredRootHelperMemo.set(key, contexts);
   return contexts;
+}
+
+function requestCompilerSemanticProofsForDeclaration(
+  declaration: Node,
+  session: RequestProvenanceSession,
+): readonly RequestCompilerSemanticHelperProof[] {
+  const key = `${declaration.getSourceFile().getFilePath()}:${declaration.getStart()}:${declaration.getEnd()}`;
+  return session.compilerSemanticHelperProofs.get(key) ?? [];
+}
+
+function requestCompilerSemanticProofMatchesContext(
+  proofs: readonly RequestCompilerSemanticHelperProof[],
+  roles: readonly RequestRootParameterRole[],
+  declaration: Node,
+  root: RequestCallable,
+): boolean {
+  const callableName = requestCompilerSemanticCallableName(declaration);
+  const rootFactory = root.rootFactory;
+  if (!callableName || !rootFactory || !requestCompilerSemanticRootCallbackMatches(root)) {
+    return false;
+  }
+  const exactRoot = proofs[0]?.root;
+  if (
+    !exactRoot ||
+    !exactRoot.startsWith(`${rootFactory}:`) ||
+    exactRoot.length === rootFactory.length + 1 ||
+    proofs.some((proof) => proof.root !== exactRoot)
+  ) {
+    return false;
+  }
+  return proofs.some((proof) => {
+    if (
+      proof.callable !== `local:${callableName}` ||
+      proof.root !== exactRoot ||
+      proof.operationKinds.some(
+        (kind) => !runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, kind),
+      )
+    ) {
+      return false;
+    }
+    const actualAuthority = new Map<number, string>();
+    for (const authorityInput of proof.authorityInputs) {
+      const match = /^arg(\d+)=(.+)$/u.exec(authorityInput);
+      if (!match) return false;
+      const index = Number(match[1]);
+      const provenance = match[2];
+      if (
+        !Number.isSafeInteger(index) ||
+        index < 0 ||
+        provenance === undefined ||
+        actualAuthority.has(index)
+      ) {
+        return false;
+      }
+      actualAuthority.set(index, provenance);
+    }
+    if (actualAuthority.size > roles.length) return false;
+    return roles.every((role, index) =>
+      requestCompilerSemanticAuthorityMatchesRole(actualAuthority.get(index), role, rootFactory),
+    );
+  });
+}
+
+function requestCompilerSemanticCallableName(declaration: Node): string | undefined {
+  const parent = declaration.getParent();
+  if (Node.isVariableDeclaration(parent) && Node.isIdentifier(parent.getNameNode())) {
+    return parent.getNameNode().getText();
+  }
+  if (Node.isPropertyAssignment(parent)) {
+    return staticMemberName(parent.getNameNode());
+  }
+  if (
+    Node.isFunctionDeclaration(declaration) ||
+    Node.isFunctionExpression(declaration) ||
+    Node.isMethodDeclaration(declaration)
+  ) {
+    return declaration.getName();
+  }
+  return undefined;
+}
+
+function requestCompilerSemanticRootCallbackMatches(root: RequestCallable): boolean {
+  switch (root.rootFactory) {
+    case 'endpoint':
+    case 'mutation':
+    case 'webhook':
+      return root.rootCallback === 'handler';
+    case 'query':
+      return root.rootCallback === 'load';
+    case 'task':
+      return root.rootCallback === 'run';
+    default:
+      return false;
+  }
+}
+
+function requestCompilerSemanticAuthorityMatchesRole(
+  provenance: string | undefined,
+  role: RequestRootParameterRole,
+  rootFactory: RequestHandlerFactoryName,
+): boolean {
+  if (role === 'input' || role === 'stream-controller') return provenance === undefined;
+  if (role === 'request') {
+    return rootFactory === 'mutation' ? provenance === 'request' : provenance === undefined;
+  }
+  if (provenance === undefined) return false;
+  switch (provenance) {
+    case 'context':
+    case 'database':
+    case 'database-read-namespace':
+    case 'database-relational-query-namespace':
+    case 'database-relational-table-namespace':
+    case 'database-table-namespace':
+    case 'database-write-namespace':
+    case 'headers':
+    case 'respond':
+    case 'storage':
+      return true;
+    default:
+      return false;
+  }
 }
 
 function requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(

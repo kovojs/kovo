@@ -85,7 +85,12 @@ export const validateFiniteBrowserSecurityOperations = securityClassifier(
           );
           continue;
         }
-        appendViolations(found, diagnostics, arrow.securityOperationViolations);
+        appendBrowserViolations(
+          found,
+          diagnostics,
+          arrow.securityOperationViolations,
+          `serialized-browser-handler:${attribute.name}@${attribute.start}`,
+        );
         const operations = arrow.securityOperations;
         if (operations === undefined) continue;
         const operationLength = compilerArrayLength(operations, 'Browser security-IR operations');
@@ -286,6 +291,36 @@ function appendViolations(
       compilerFailClosed(`Security-IR violations[${index}] must be dense own data.`);
     }
     appendFiniteIrDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
+  }
+}
+
+function appendBrowserViolations(
+  found: CompilerDiagnostic[],
+  diagnostics: DiagnosticFactory,
+  violations: readonly SecurityOperationViolationModel[] | undefined,
+  root: string,
+): void {
+  if (violations === undefined) return;
+  const violationLength = compilerArrayLength(violations, 'Browser security-IR violations');
+  for (let index = 0; index < violationLength; index += 1) {
+    const violation = compilerOwnDataValue(violations, index, 'Browser security-IR violations') as
+      | SecurityOperationViolationModel
+      | undefined;
+    if (!violation) {
+      compilerFailClosed(`Browser security-IR violations[${index}] must be dense own data.`);
+    }
+    const reason =
+      violation.kind === 'computed-security-operation'
+        ? 'opaque-transfer'
+        : violation.kind === 'unknown-security-operation'
+          ? 'unknown-operation'
+          : 'unsupported-authority-use';
+    appendFiniteIrDiagnostic(
+      found,
+      diagnostics,
+      violation.span,
+      `semantic root=${root}; transfers=<direct>; sink=${violation.detail}; verdict=closed:${reason}.`,
+    );
   }
 }
 
