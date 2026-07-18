@@ -68,4 +68,27 @@ describe('standalone anonymous CSRF mint isolation', () => {
       ),
     ).toThrow(/unprefixed logical name/u);
   });
+
+  it('keeps standalone bindings isolated between exact request objects', () => {
+    const first = mintCsrfToken(new Request('https://shop.example.test/forms'), options, {
+      audience: 'first',
+    });
+    const second = mintCsrfToken(new Request('https://shop.example.test/forms'), options, {
+      audience: 'first',
+    });
+
+    expect(second.setCookie).not.toBe(first.setCookie);
+    const submitWithSecondCookie = new Request('https://shop.example.test/_m/first', {
+      headers: {
+        cookie: cookiePair(second.setCookie),
+        origin: 'https://shop.example.test',
+      },
+      method: 'POST',
+    });
+    expect(
+      validateCsrfToken({ 'kovo-csrf': first.token }, submitWithSecondCookie, options, {
+        audience: 'first',
+      }),
+    ).toBe(false);
+  });
 });

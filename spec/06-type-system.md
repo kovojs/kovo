@@ -238,6 +238,10 @@ logical anonymous-cookie name MUST have exactly one Path, Max-Age, SameSite, and
 App construction rejects conflicting or prefixed aliases because Cookie request headers omit those
 attributes: multiple same-name secrets would otherwise collapse to a browser last-wins value or
 arrive as indistinguishable duplicate-name pairs and make another emitted form unverifiable.
+Standalone `mintCsrfToken`/`mintCsrfField` calls made for the same exact request MUST likewise reuse
+one anonymous binding and one identical `Set-Cookie` value per logical cookie posture. A conflicting
+same-name posture or authored browser-prefix alias fails before a second token can be emitted, so a
+raw response containing multiple forms cannot silently invalidate an earlier form.
 
 Every independently resolved authorization principal entering a CSRF or replay identity, and every
 source-derived mutation identity, MUST likewise be a non-empty string of at most 1,024 JavaScript

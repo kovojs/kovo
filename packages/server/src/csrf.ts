@@ -694,6 +694,16 @@ interface AnonymousCsrfCookiePosture {
   readonly secure: boolean | 'request';
 }
 
+interface StandaloneAnonymousCsrfMintState {
+  readonly bindings: Map<string, CsrfBinding>;
+  readonly postures: Map<string, AnonymousCsrfCookiePosture>;
+}
+
+const standaloneAnonymousCsrfMintStates = createWitnessWeakMap<
+  object,
+  StandaloneAnonymousCsrfMintState
+>();
+
 /**
  * Refuse app aggregates whose anonymous-CSRF declarations can create ambiguous browser cookies.
  *
@@ -735,7 +745,7 @@ export function assertCompatibleAnonymousCsrfCookiePostures<Request>(
 
 function assertCompatibleAnonymousCsrfCookiePosture<Request>(
   byName: Map<string, AnonymousCsrfCookiePosture>,
-  options: CsrfOptions<Request>,
+  options: Pick<CsrfOptions<Request>, 'anonymousCookie'>,
   label: string,
 ): void {
   const source = mutationCsrfOptionOwnDataValue(options, 'anonymousCookie');
@@ -790,6 +800,32 @@ function assertCompatibleAnonymousCsrfCookiePosture<Request>(
       `between ${existing.label} and ${label}; one logical name must use one Path, Max-Age, ` +
       'SameSite, and Secure posture across the app.',
   );
+}
+
+function standaloneAnonymousCsrfMintState<Request>(
+  request: Request,
+  options: Pick<CsrfOptions<Request>, 'anonymousCookie'>,
+): StandaloneAnonymousCsrfMintState {
+  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
+    throw new TypeError(
+      'mintCsrfToken() requires an exact request object before it can mint anonymous browser authority.',
+    );
+  }
+  const exactRequest = request as object;
+  let state = witnessWeakMapGet(standaloneAnonymousCsrfMintStates, exactRequest);
+  if (state === undefined) {
+    state = witnessFreeze({
+      bindings: createSecurityMap<string, CsrfBinding>(),
+      postures: createSecurityMap<string, AnonymousCsrfCookiePosture>(),
+    });
+    witnessWeakMapSet(standaloneAnonymousCsrfMintStates, exactRequest, state);
+  }
+  assertCompatibleAnonymousCsrfCookiePosture(
+    state.postures,
+    options,
+    'standalone anonymous CSRF mint',
+  );
+  return state;
 }
 
 function anonymousCsrfCookieOption<Key extends keyof CsrfAnonymousCookieOptions>(
@@ -1005,6 +1041,10 @@ function resolveAnonymousCsrfBinding<Request>(
 
   const cookieOptions = options.anonymousCookie ?? {};
   const name = cookieOptions.name ?? DEFAULT_ANONYMOUS_CSRF_COOKIE;
+  const standaloneState =
+    mintOptions.mintAnonymous === true && mintOptions.anonymousCache === undefined
+      ? standaloneAnonymousCsrfMintState(request, options)
+      : undefined;
   // The cookie is set with the `session`-class floor, which prepends a `__Host-`/`__Secure-`
   // browser-prefix when `Secure` is in effect (SPEC §9.1.1). Read the prefixed names first so the
   // binding round-trips, falling back to the bare name for the dev/no-Secure case and for cookies
@@ -1020,10 +1060,9 @@ function resolveAnonymousCsrfBinding<Request>(
 
   const cookie = buildAnonymousCsrfCookieOptions(request, cookieOptions);
   const cacheKey = anonymousCsrfCacheKey(name, cookie);
+  const anonymousCache = mintOptions.anonymousCache ?? standaloneState?.bindings;
   const cached =
-    mintOptions.anonymousCache === undefined
-      ? undefined
-      : securityMapGet(mintOptions.anonymousCache, cacheKey);
+    anonymousCache === undefined ? undefined : securityMapGet(anonymousCache, cacheKey);
   if (cached) {
     markAnonymousCsrfResponsePersonalization(request);
     return cached;
@@ -1031,14 +1070,17 @@ function resolveAnonymousCsrfBinding<Request>(
 
   const anonymousSecret = securityBufferToString(securityRandomBytes(32), 'base64url');
   const binding = createCsrfBinding('anonymous', anonymousSecret);
-  if (mintOptions.anonymousCache !== undefined) {
-    securityMapSet(mintOptions.anonymousCache, cacheKey, binding);
+  const setCookie = serializeCookie(name, anonymousSecret, cookie);
+  const responseBinding = { ...binding, setCookie };
+  if (anonymousCache !== undefined) {
+    securityMapSet(
+      anonymousCache,
+      cacheKey,
+      standaloneState === undefined ? binding : responseBinding,
+    );
   }
   markAnonymousCsrfResponsePersonalization(request);
-  return {
-    ...binding,
-    setCookie: serializeCookie(name, anonymousSecret, cookie),
-  };
+  return responseBinding;
 }
 
 /**
