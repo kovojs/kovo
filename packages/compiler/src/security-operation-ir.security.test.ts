@@ -188,6 +188,64 @@ export const report = endpoint('/report', {
     expect(diagnostics).toEqual([]);
   });
 
+  it('treats an exact raw endpoint Response as a reviewed outcome, not escaped authority', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler() {
+    const response = new Response('ok', {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+    return response;
+  },
+});
+`);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(serverSource).toContain(
+      '{"door":"Response","kind":"server.response.raw","target":"new Response","justification":"endpoint access/CSRF posture"}',
+    );
+  });
+
+  it('keeps scalar request URL projections plain through a local URL parser and helper summary', () => {
+    const diagnostics = kv449(`
+import { query } from '@kovojs/server';
+function page(url) {
+  return { target: url.searchParams.get('target') ?? '/' };
+}
+export const report = query({
+  reads: [],
+  load(_input, context) {
+    return page(new URL(context?.request.url ?? 'http://app.test/'));
+  },
+});
+`);
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it.each([
+    ['raw Response from a mutation', "return new Response('raw')"],
+    [
+      'raw Response hidden in a structured endpoint outcome',
+      "return { response: new Response('raw') }",
+    ],
+    ['raw Response thrown by an endpoint', "throw new Response('raw')"],
+    ['server authority passed through a local constructor', 'return new Box(ctx.db)'],
+  ])('keeps %s outside the reviewed response-outcome subset', (_label, handlerBody) => {
+    const surface = _label.includes('mutation') ? 'mutation' : 'endpoint';
+    expect(
+      kv449(`
+import { endpoint, mutation } from '@kovojs/server';
+class Box { constructor(value) { this.value = value; } }
+export const report = ${surface}(${surface === 'endpoint' ? "'/report', " : ''}{
+  handler(_input, ctx) { ${handlerBody}; },
+});
+`),
+    ).not.toEqual([]);
+  });
+
   it('preserves exact framework identity through namespace exceptional-door imports', () => {
     const result = compile(`
 import * as browser from '@kovojs/browser';

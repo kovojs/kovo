@@ -75,6 +75,7 @@ type ServerValueProvenance =
   | 'respond'
   | 'request'
   | 'response-constructor'
+  | 'response-outcome'
   | 'safe-call'
   | 'scope-call'
   | 'storage'
@@ -1522,20 +1523,28 @@ function scanServerSecurityOperationsDirect(
         'raw-capability-operation',
         'server capability members and containers cannot be incremented or decremented',
       );
-    } else if (
-      (ts.isReturnStatement(node) || ts.isThrowStatement(node)) &&
-      node.expression &&
-      serverExpressionCarriesAuthority(node.expression, aliases)
-    ) {
-      appendViolation(
-        node.expression,
-        'raw-capability-operation',
-        'server capability cannot escape a structured handler outcome',
-      );
+    } else if ((ts.isReturnStatement(node) || ts.isThrowStatement(node)) && node.expression) {
+      const outcome = serverExpressionProvenance(node.expression, aliases);
+      const isReviewedRawResponseOutcome =
+        ts.isReturnStatement(node) &&
+        (surface === 'endpoint' || surface === 'webhook') &&
+        outcome === 'response-outcome';
+      if (serverProvenanceCarriesAuthority(outcome) && !isReviewedRawResponseOutcome) {
+        appendViolation(
+          node.expression,
+          'raw-capability-operation',
+          'server capability cannot escape a structured handler outcome',
+        );
+      }
     }
     ts.forEachChild(node, visit);
   };
-  if (!ts.isBlock(body) && serverExpressionCarriesAuthority(body, aliases)) {
+  const conciseOutcome = !ts.isBlock(body) ? serverExpressionProvenance(body, aliases) : undefined;
+  if (
+    conciseOutcome !== undefined &&
+    serverProvenanceCarriesAuthority(conciseOutcome) &&
+    !((surface === 'endpoint' || surface === 'webhook') && conciseOutcome === 'response-outcome')
+  ) {
     appendViolation(
       body,
       'raw-capability-operation',
@@ -1877,9 +1886,34 @@ function serverExpressionProvenance(
 ): ServerValueProvenance {
   const current = unwrapExpression(expression);
   if (ts.isIdentifier(current)) return compilerMapGet(aliases, current.text) ?? 'local';
+  if (ts.isNewExpression(current)) {
+    const constructor = serverExpressionProvenance(current.expression, aliases);
+    if (constructor === 'response-constructor') return 'response-outcome';
+    if (
+      serverProvenanceCarriesAuthority(constructor) ||
+      serverArgumentsContainAuthority(current.arguments ?? [], aliases)
+    ) {
+      return 'unknown-authority';
+    }
+    return 'local';
+  }
   if (ts.isCallExpression(current)) {
     const callee = serverExpressionProvenance(current.expression, aliases);
     return callee === 'scope-call' ? 'context' : 'local';
+  }
+  if (ts.isBinaryExpression(current)) {
+    const left = serverExpressionProvenance(current.left, aliases);
+    const right = serverExpressionProvenance(current.right, aliases);
+    return serverProvenanceCarriesAuthority(left) || serverProvenanceCarriesAuthority(right)
+      ? 'unknown-authority'
+      : 'local';
+  }
+  if (ts.isConditionalExpression(current)) {
+    const whenTrue = serverExpressionProvenance(current.whenTrue, aliases);
+    const whenFalse = serverExpressionProvenance(current.whenFalse, aliases);
+    return serverProvenanceCarriesAuthority(whenTrue) || serverProvenanceCarriesAuthority(whenFalse)
+      ? 'unknown-authority'
+      : 'local';
   }
   const member = staticMember(current);
   if (member) {
@@ -1988,6 +2022,7 @@ function serverMemberProvenance(
     }
     return 'unknown-authority';
   }
+  if (receiver === 'response-outcome') return 'unknown-authority';
   return 'local';
 }
 
