@@ -406,6 +406,36 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
       );
     }
 
+    for (const semanticRoot of component.securitySemanticGraph?.roots ?? []) {
+      for (const summary of semanticRoot.summaries) {
+        lines.push(
+          [
+            'SEMANTIC-SUMMARY',
+            `root=${semanticRoot.root}`,
+            `callable=${summary.callable}`,
+            `authority-inputs=${list(summary.authorityInputs)}`,
+            `effects=${list(summary.operationKinds)}`,
+            `verdict=${summary.verdict}`,
+          ].join(' '),
+        );
+      }
+      for (const trace of semanticRoot.traces) {
+        const sink =
+          trace.verdict === 'proved'
+            ? `${trace.sink.kind}:${trace.sink.target ?? trace.sink.door}`
+            : trace.sink;
+        lines.push(
+          [
+            'SEMANTIC-TRACE',
+            `root=${trace.root}`,
+            `transfers=${list(trace.transfers)}`,
+            `sink=${sink}`,
+            `verdict=${trace.verdict === 'closed' ? `closed:${trace.reason}` : 'proved'}`,
+          ].join(' '),
+        );
+      }
+    }
+
     for (const substitution of component.platformSubstitutions ?? []) {
       lines.push(
         [

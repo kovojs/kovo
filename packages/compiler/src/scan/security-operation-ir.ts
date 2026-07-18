@@ -10,18 +10,26 @@ import {
 import { securityOperationDoorForKind } from '@kovojs/core/internal/security-operation-ir';
 import type {
   BrowserSecurityOperationKind,
+  SecuritySemanticBudgets,
+  SecuritySemanticClosedReason,
+  SecuritySemanticRoot,
+  SecuritySemanticSummary,
+  SecuritySemanticTrace,
   ServerSecurityOperationKind,
 } from '@kovojs/core/internal/security-operation-ir';
 
 import {
   compilerArrayAppend,
+  compilerArrayJoin,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerFailClosed,
   compilerMapGet,
   compilerMapSet,
   compilerOwnDataValue,
   compilerSetAdd,
+  compilerSetDelete,
   compilerSetHas,
   compilerSnapshotDenseArray,
   compilerStringSlice,
@@ -37,6 +45,7 @@ import type {
 
 interface SecurityOperationScanResult<Operation> {
   readonly operations: readonly Operation[];
+  readonly semanticRoot?: SecuritySemanticRoot;
   readonly violations: readonly SecurityOperationViolationModel[];
 }
 
@@ -695,15 +704,689 @@ function classifyBrowserCall(
 }
 
 /** Scanner/source-text boundary for structured server effects. */
+const SECURITY_SEMANTIC_CALL_DEPTH_BUDGET = 16;
+const SECURITY_SEMANTIC_NODE_BUDGET = 50_000;
+const SECURITY_SEMANTIC_OPERATION_BUDGET = 4_096;
+const SECURITY_SEMANTIC_SUMMARY_BUDGET = 256;
+
+interface SecuritySemanticState {
+  readonly active: Set<string>;
+  readonly summaryKeys: Set<string>;
+  nodes: number;
+  operations: number;
+  summaries: number;
+}
+
+interface SecuritySemanticInvocationResult {
+  readonly closed: boolean;
+  readonly operations: readonly ServerSecurityOperationModel[];
+  readonly summaries: readonly SecuritySemanticSummary[];
+  readonly traces: readonly SecuritySemanticTrace[];
+  readonly violations: readonly SecurityOperationViolationModel[];
+}
+
+interface SecuritySemanticHelperInvocation {
+  readonly authorityInputs: readonly string[];
+  readonly call: ts.CallExpression;
+  readonly callable: ResolvedSecurityIrCallable;
+  readonly parameterProvenances: readonly ServerValueProvenance[];
+  readonly transfer: string;
+  readonly unsupportedDetail?: string;
+}
+
+/**
+ * SPEC §5.2/§6.6 narrow normalized abstract interpreter.
+ *
+ * The finite scanner remains the syntax-to-operation boundary. This pass consumes only its exact
+ * same-file `server.helper.call` edges, evaluates the small provenance lattice above, and builds
+ * bottom-up summaries. It deliberately does not execute or otherwise model general JavaScript.
+ */
 export function scanServerSecurityOperations(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
   surface: SecurityOperationSurface,
   parameters: readonly ts.ParameterDeclaration[] = [],
+  root = `${surface}:<anonymous>`,
+): SecurityOperationScanResult<ServerSecurityOperationModel> {
+  const state: SecuritySemanticState = {
+    active: compilerCreateSet<string>(),
+    nodes: 0,
+    operations: 0,
+    summaryKeys: compilerCreateSet<string>(),
+    summaries: 0,
+  };
+  const result = analyzeServerSecurityCallable({
+    body,
+    callable: undefined,
+    depth: 0,
+    parameterProvenances: undefined,
+    parameters,
+    root,
+    sourceFile,
+    state,
+    surface,
+    transfers: [],
+  });
+  return {
+    operations: dedupeServerOperations(result.operations),
+    semanticRoot: {
+      root,
+      summaries: dedupeSemanticSummaries(result.summaries),
+      traces: dedupeSemanticTraces(result.traces),
+    },
+    violations: dedupeViolations(result.violations),
+  };
+}
+
+function analyzeServerSecurityCallable(options: {
+  body: ts.ConciseBody;
+  callable: ResolvedSecurityIrCallable | undefined;
+  depth: number;
+  parameterProvenances: readonly ServerValueProvenance[] | undefined;
+  parameters: readonly ts.ParameterDeclaration[];
+  root: string;
+  sourceFile: ts.SourceFile;
+  state: SecuritySemanticState;
+  surface: SecurityOperationSurface;
+  transfers: readonly string[];
+}): SecuritySemanticInvocationResult {
+  const {
+    body,
+    callable,
+    depth,
+    parameterProvenances,
+    parameters,
+    root,
+    sourceFile,
+    state,
+    surface,
+    transfers,
+  } = options;
+  const operations: ServerSecurityOperationModel[] = [];
+  const summaries: SecuritySemanticSummary[] = [];
+  const traces: SecuritySemanticTrace[] = [];
+  const violations: SecurityOperationViolationModel[] = [];
+  const authorityInputs = semanticAuthorityInputs(parameterProvenances ?? []);
+  const signature =
+    callable === undefined
+      ? undefined
+      : `${surface}\0${callable.name}\0${compilerArrayJoin(authorityInputs, ',')}`;
+
+  if (signature !== undefined && compilerSetHas(state.active, signature)) {
+    appendSemanticClosure(
+      sourceFile,
+      callable?.declaration ?? body,
+      root,
+      transfers,
+      surface,
+      'helper-cycle',
+      `recursive semantic helper cycle at local:${callable?.name ?? '<unknown>'}`,
+      traces,
+      violations,
+    );
+    compilerArrayAppend(
+      summaries,
+      {
+        authorityInputs,
+        callable: `local:${callable?.name ?? '<unknown>'}`,
+        operationKinds: [],
+        verdict: 'closed',
+      },
+      'Closed semantic helper summaries',
+    );
+    return { closed: true, operations, summaries, traces, violations };
+  }
+
+  if (callable !== undefined) {
+    if (signature === undefined) {
+      compilerFailClosed(
+        'Semantic helper summary signature was not constructed for a resolved callable.',
+      );
+    }
+    if (!compilerSetHas(state.summaryKeys, signature)) {
+      compilerSetAdd(state.summaryKeys, signature);
+      state.summaries += 1;
+      if (state.summaries > SECURITY_SEMANTIC_SUMMARY_BUDGET) {
+        appendSemanticClosure(
+          sourceFile,
+          callable.declaration,
+          root,
+          transfers,
+          surface,
+          'budget-summary-count',
+          `semantic helper summary budget exceeded at local:${callable.name}`,
+          traces,
+          violations,
+        );
+        compilerArrayAppend(
+          summaries,
+          {
+            authorityInputs,
+            callable: `local:${callable.name}`,
+            operationKinds: [],
+            verdict: 'closed',
+          },
+          'Budget-closed semantic helper summaries',
+        );
+        return { closed: true, operations, summaries, traces, violations };
+      }
+    }
+    compilerSetAdd(state.active, signature);
+  }
+
+  let closed = false;
+  try {
+    state.nodes += semanticNodeCount(body);
+    if (state.nodes > SECURITY_SEMANTIC_NODE_BUDGET) {
+      appendSemanticClosure(
+        sourceFile,
+        callable?.declaration ?? body,
+        root,
+        transfers,
+        surface,
+        'budget-node-count',
+        `semantic node budget exceeded while analyzing ${callable ? `local:${callable.name}` : root}`,
+        traces,
+        violations,
+      );
+      closed = true;
+    } else {
+      const direct = scanServerSecurityOperationsDirect(
+        sourceFile,
+        body,
+        surface,
+        parameters,
+        parameterProvenances,
+      );
+      appendServerOperations(operations, direct.operations);
+      state.operations += direct.operations.length;
+      if (state.operations > SECURITY_SEMANTIC_OPERATION_BUDGET) {
+        appendSemanticClosure(
+          sourceFile,
+          callable?.declaration ?? body,
+          root,
+          transfers,
+          surface,
+          'budget-operation-count',
+          `semantic operation budget exceeded while analyzing ${callable ? `local:${callable.name}` : root}`,
+          traces,
+          violations,
+        );
+        closed = true;
+      }
+
+      const operationSnapshot = compilerSnapshotDenseArray(
+        direct.operations,
+        'Direct semantic operations',
+      );
+      for (let index = 0; index < operationSnapshot.length; index += 1) {
+        const operation = operationSnapshot[index]!;
+        if (operation.kind === 'server.helper.call' || operation.kind === 'server.handler.root') {
+          continue;
+        }
+        compilerArrayAppend(
+          traces,
+          {
+            root,
+            sink: {
+              door: operation.door,
+              kind: operation.kind,
+              ...(operation.target === undefined ? {} : { target: operation.target }),
+            },
+            transfers: compilerSnapshotDenseArray(transfers, 'Semantic transfer path'),
+            verdict: 'proved',
+          },
+          'Proved semantic traces',
+        );
+      }
+
+      const violationSnapshot = compilerSnapshotDenseArray(
+        direct.violations,
+        'Direct semantic violations',
+      );
+      for (let index = 0; index < violationSnapshot.length; index += 1) {
+        const violation = violationSnapshot[index]!;
+        const reason = semanticReasonForViolation(violation);
+        const trace: SecuritySemanticTrace = {
+          detail: violation.detail,
+          reason,
+          root,
+          sink: violation.detail,
+          transfers: compilerSnapshotDenseArray(transfers, 'Semantic transfer path'),
+          verdict: 'closed',
+        };
+        compilerArrayAppend(traces, trace, 'Closed semantic traces');
+        compilerArrayAppend(
+          violations,
+          {
+            ...violation,
+            detail: semanticClosedDetail(root, transfers, violation.detail, reason),
+          },
+          'Rooted semantic violations',
+        );
+        closed = true;
+      }
+
+      if (!closed || state.operations <= SECURITY_SEMANTIC_OPERATION_BUDGET) {
+        const aliases = serverAliasProvenance(body, parameters, surface, parameterProvenances);
+        const helpers = semanticHelperInvocations(sourceFile, body, direct.operations, aliases);
+        const helperSnapshot = compilerSnapshotDenseArray(
+          helpers,
+          'Normalized semantic helper invocations',
+        );
+        for (let index = 0; index < helperSnapshot.length; index += 1) {
+          const helper = helperSnapshot[index]!;
+          const nextTransfers = appendSemanticTransfer(transfers, helper.transfer);
+          if (helper.unsupportedDetail !== undefined) {
+            appendSemanticClosure(
+              sourceFile,
+              helper.call,
+              root,
+              nextTransfers,
+              surface,
+              'opaque-transfer',
+              helper.unsupportedDetail,
+              traces,
+              violations,
+            );
+            compilerArrayAppend(
+              summaries,
+              {
+                authorityInputs: helper.authorityInputs,
+                callable: `local:${helper.callable.name}`,
+                operationKinds: [],
+                verdict: 'closed',
+              },
+              'Unsupported semantic helper summaries',
+            );
+            closed = true;
+            continue;
+          }
+          if (depth + 1 > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) {
+            appendSemanticClosure(
+              sourceFile,
+              helper.call,
+              root,
+              nextTransfers,
+              surface,
+              'budget-call-depth',
+              `semantic call-depth budget exceeded at local:${helper.callable.name}`,
+              traces,
+              violations,
+            );
+            compilerArrayAppend(
+              summaries,
+              {
+                authorityInputs: helper.authorityInputs,
+                callable: `local:${helper.callable.name}`,
+                operationKinds: [],
+                verdict: 'closed',
+              },
+              'Depth-closed semantic helper summaries',
+            );
+            closed = true;
+            continue;
+          }
+
+          const child = analyzeServerSecurityCallable({
+            body: helper.callable.body,
+            callable: helper.callable,
+            depth: depth + 1,
+            parameterProvenances: helper.parameterProvenances,
+            parameters: helper.callable.parameters,
+            root,
+            sourceFile,
+            state,
+            surface,
+            transfers: nextTransfers,
+          });
+          appendServerOperations(operations, child.operations);
+          appendSemanticSummaries(summaries, child.summaries);
+          appendSemanticTraces(traces, child.traces);
+          appendSemanticViolations(violations, child.violations);
+          if (child.closed) closed = true;
+        }
+      }
+    }
+
+    if (callable !== undefined) {
+      const operationKinds = semanticOperationKinds(operations);
+      compilerArrayAppend(
+        summaries,
+        {
+          authorityInputs,
+          callable: `local:${callable.name}`,
+          operationKinds,
+          verdict: closed ? 'closed' : 'proved',
+        },
+        'Bottom-up semantic helper summaries',
+      );
+    }
+    return { closed, operations, summaries, traces, violations };
+  } finally {
+    if (signature !== undefined) compilerSetDelete(state.active, signature);
+  }
+}
+
+function semanticHelperInvocations(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  operations: readonly ServerSecurityOperationModel[],
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): SecuritySemanticHelperInvocation[] {
+  const helperEdges = compilerCreateSet<string>();
+  const operationSnapshot = compilerSnapshotDenseArray(
+    operations,
+    'Semantic helper-edge operations',
+  );
+  for (let index = 0; index < operationSnapshot.length; index += 1) {
+    const operation = operationSnapshot[index]!;
+    if (operation.kind !== 'server.helper.call' || operation.target === undefined) continue;
+    compilerSetAdd(
+      helperEdges,
+      `${operation.span.start}\0${operation.span.end}\0${operation.target}`,
+    );
+  }
+
+  const helpers: SecuritySemanticHelperInvocation[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      if (ts.isIdentifier(callee)) {
+        const callable = resolveSameFileSecurityIrCallable(sourceFile, callee);
+        const edgeKey = callable
+          ? `${node.getStart(sourceFile)}\0${node.getEnd()}\0local:${callable.name}`
+          : undefined;
+        if (callable && edgeKey && compilerSetHas(helperEdges, edgeKey)) {
+          compilerArrayAppend(
+            helpers,
+            semanticHelperInvocation(sourceFile, node, callable, aliases),
+            'Normalized semantic helper invocations',
+          );
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return helpers;
+}
+
+function semanticHelperInvocation(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  callable: ResolvedSecurityIrCallable,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): SecuritySemanticHelperInvocation {
+  const argumentSnapshot = compilerSnapshotDenseArray(call.arguments, 'Semantic helper arguments');
+  const parameterSnapshot = compilerSnapshotDenseArray(
+    callable.parameters,
+    'Semantic helper parameters',
+  );
+  const parameterProvenances: ServerValueProvenance[] = [];
+  const authorityInputs: string[] = [];
+  let unsupportedDetail: string | undefined;
+  let restParameterIndex: number | undefined;
+  for (let index = 0; index < parameterSnapshot.length; index += 1) {
+    if (parameterSnapshot[index]?.dotDotDotToken) {
+      restParameterIndex = index;
+      break;
+    }
+  }
+
+  for (let index = 0; index < argumentSnapshot.length; index += 1) {
+    const argument = argumentSnapshot[index]!;
+    const spread = ts.isSpreadElement(argument);
+    const expression = spread ? argument.expression : argument;
+    const provenance = serverExpressionProvenance(expression, aliases);
+    if (serverProvenanceCarriesAuthority(provenance)) {
+      compilerArrayAppend(
+        authorityInputs,
+        `arg${index}=${provenance}`,
+        'Semantic helper authority inputs',
+      );
+      if (spread) {
+        unsupportedDetail = `authority-bearing spread argument into local:${callable.name} has no finite parameter mapping`;
+      } else if (restParameterIndex !== undefined && index >= restParameterIndex) {
+        unsupportedDetail = `authority-bearing rest argument into local:${callable.name} is outside the finite summary semantics`;
+      } else if (index >= parameterSnapshot.length) {
+        unsupportedDetail = `authority-bearing extra argument into local:${callable.name} has no finite parameter mapping`;
+      }
+    }
+    if (index < parameterSnapshot.length) {
+      compilerArrayAppend(parameterProvenances, provenance, 'Semantic helper parameter provenance');
+    }
+  }
+  while (parameterProvenances.length < parameterSnapshot.length) {
+    compilerArrayAppend(parameterProvenances, 'local', 'Semantic helper parameter provenance');
+  }
+
+  for (let index = 0; index < parameterSnapshot.length; index += 1) {
+    const parameter = parameterSnapshot[index]!;
+    if (parameter.dotDotDotToken && serverProvenanceCarriesAuthority(parameterProvenances[index])) {
+      unsupportedDetail = `authority-bearing rest parameter in local:${callable.name} is outside the finite summary semantics`;
+    }
+  }
+  if (authorityInputs.length > 0 && semanticBodyUsesArguments(callable.body)) {
+    unsupportedDetail = `arguments-object authority recovery in local:${callable.name} is outside the finite summary semantics`;
+  }
+
+  const transfer = `local:${callable.name}[${compilerArrayJoin(authorityInputs, ',')}]`;
+  return {
+    authorityInputs,
+    call,
+    callable,
+    parameterProvenances,
+    transfer,
+    ...(unsupportedDetail === undefined ? {} : { unsupportedDetail }),
+  };
+}
+
+function semanticBodyUsesArguments(body: ts.ConciseBody): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (ts.isIdentifier(node) && node.text === 'arguments') {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return found;
+}
+
+function semanticNodeCount(node: ts.Node): number {
+  let count = 0;
+  const visit = (current: ts.Node): void => {
+    count += 1;
+    ts.forEachChild(current, visit);
+  };
+  visit(node);
+  return count;
+}
+
+function semanticAuthorityInputs(provenances: readonly ServerValueProvenance[]): string[] {
+  const result: string[] = [];
+  const snapshot = compilerSnapshotDenseArray(provenances, 'Semantic parameter provenance');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    if (!serverProvenanceCarriesAuthority(snapshot[index])) continue;
+    compilerArrayAppend(
+      result,
+      `arg${index}=${snapshot[index]}`,
+      'Semantic authority-input summary',
+    );
+  }
+  return result;
+}
+
+function semanticOperationKinds(
+  operations: readonly ServerSecurityOperationModel[],
+): ServerSecurityOperationKind[] {
+  const result: ServerSecurityOperationKind[] = [];
+  const seen = compilerCreateSet<ServerSecurityOperationKind>();
+  const snapshot = compilerSnapshotDenseArray(operations, 'Semantic summary operations');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const kind = snapshot[index]!.kind;
+    if (
+      kind === 'server.handler.root' ||
+      kind === 'server.helper.call' ||
+      compilerSetHas(seen, kind)
+    ) {
+      continue;
+    }
+    compilerSetAdd(seen, kind);
+    compilerArrayAppend(result, kind, 'Semantic summary operation kinds');
+  }
+  return result;
+}
+
+function semanticReasonForViolation(
+  violation: SecurityOperationViolationModel,
+): SecuritySemanticClosedReason {
+  switch (violation.kind) {
+    case 'computed-security-operation':
+      return 'opaque-transfer';
+    case 'unknown-security-operation':
+      return 'unknown-operation';
+    case 'incomplete-mutation-form':
+    case 'raw-capability-operation':
+    case 'raw-dom-operation':
+      return 'unsupported-authority-use';
+  }
+}
+
+function appendSemanticClosure(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+  root: string,
+  transfers: readonly string[],
+  surface: SecurityOperationSurface,
+  reason: SecuritySemanticClosedReason,
+  detail: string,
+  traces: SecuritySemanticTrace[],
+  violations: SecurityOperationViolationModel[],
+): void {
+  const transferSnapshot = compilerSnapshotDenseArray(transfers, 'Semantic transfer path');
+  compilerArrayAppend(
+    traces,
+    {
+      detail,
+      reason,
+      root,
+      sink: detail,
+      transfers: transferSnapshot,
+      verdict: 'closed',
+    },
+    'Synthetic closed semantic traces',
+  );
+  compilerArrayAppend(
+    violations,
+    {
+      detail: semanticClosedDetail(root, transfers, detail, reason),
+      kind: 'computed-security-operation',
+      span: { end: node.getEnd(), start: node.getStart(sourceFile) },
+      surface,
+    },
+    'Synthetic closed semantic violations',
+  );
+}
+
+function semanticClosedDetail(
+  root: string,
+  transfers: readonly string[],
+  sink: string,
+  reason: SecuritySemanticClosedReason,
+): string {
+  const path = transfers.length === 0 ? '<direct>' : compilerArrayJoin(transfers, ' -> ');
+  return `semantic root=${root}; transfers=${path}; sink=${sink}; verdict=closed:${reason}`;
+}
+
+function appendSemanticTransfer(transfers: readonly string[], transfer: string): string[] {
+  const result = compilerSnapshotDenseArray(transfers, 'Semantic transfer path');
+  compilerArrayAppend(result, transfer, 'Semantic transfer path');
+  return result;
+}
+
+function appendServerOperations(
+  target: ServerSecurityOperationModel[],
+  values: readonly ServerSecurityOperationModel[],
+): void {
+  const snapshot = compilerSnapshotDenseArray(values, 'Semantic server operations');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerArrayAppend(target, snapshot[index]!, 'Semantic server operations');
+  }
+}
+
+function appendSemanticSummaries(
+  target: SecuritySemanticSummary[],
+  values: readonly SecuritySemanticSummary[],
+): void {
+  const snapshot = compilerSnapshotDenseArray(values, 'Semantic helper summaries');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerArrayAppend(target, snapshot[index]!, 'Semantic helper summaries');
+  }
+}
+
+function appendSemanticTraces(
+  target: SecuritySemanticTrace[],
+  values: readonly SecuritySemanticTrace[],
+): void {
+  const snapshot = compilerSnapshotDenseArray(values, 'Semantic traces');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerArrayAppend(target, snapshot[index]!, 'Semantic traces');
+  }
+}
+
+function appendSemanticViolations(
+  target: SecurityOperationViolationModel[],
+  values: readonly SecurityOperationViolationModel[],
+): void {
+  const snapshot = compilerSnapshotDenseArray(values, 'Semantic violations');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerArrayAppend(target, snapshot[index]!, 'Semantic violations');
+  }
+}
+
+function dedupeSemanticSummaries(
+  values: readonly SecuritySemanticSummary[],
+): SecuritySemanticSummary[] {
+  return dedupeByKey(
+    values,
+    (value) =>
+      `${value.callable}\0${compilerArrayJoin(value.authorityInputs, ',')}\0${compilerArrayJoin(value.operationKinds, ',')}\0${value.verdict}`,
+  );
+}
+
+function dedupeSemanticTraces(values: readonly SecuritySemanticTrace[]): SecuritySemanticTrace[] {
+  return dedupeByKey(values, (value) => {
+    const sink =
+      value.verdict === 'proved'
+        ? `${value.sink.kind}\0${value.sink.door}\0${value.sink.target ?? ''}`
+        : `${value.reason}\0${value.sink}\0${value.detail}`;
+    return `${value.root}\0${compilerArrayJoin(value.transfers, '\0')}\0${value.verdict}\0${sink}`;
+  });
+}
+
+export function serverSecuritySemanticBudgets(): SecuritySemanticBudgets {
+  return {
+    callDepth: SECURITY_SEMANTIC_CALL_DEPTH_BUDGET,
+    nodes: SECURITY_SEMANTIC_NODE_BUDGET,
+    operations: SECURITY_SEMANTIC_OPERATION_BUDGET,
+    summaries: SECURITY_SEMANTIC_SUMMARY_BUDGET,
+  };
+}
+
+function scanServerSecurityOperationsDirect(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  surface: SecurityOperationSurface,
+  parameters: readonly ts.ParameterDeclaration[] = [],
+  parameterProvenances?: readonly ServerValueProvenance[],
 ): SecurityOperationScanResult<ServerSecurityOperationModel> {
   const operations: ServerSecurityOperationModel[] = [];
   const violations: SecurityOperationViolationModel[] = [];
-  const aliases = serverAliasProvenance(body, parameters, surface);
+  const aliases = serverAliasProvenance(body, parameters, surface, parameterProvenances);
   const appendOperation = (
     kind: ServerSecurityOperationKind,
     node: ts.Node,
@@ -740,6 +1423,26 @@ export function scanServerSecurityOperations(
   };
 
   const visit = (node: ts.Node): void => {
+    if (isSecurityIrFunctionScope(node)) {
+      if (nestedServerFunctionCapturesAuthority(node, aliases)) {
+        appendViolation(
+          node,
+          'computed-security-operation',
+          'server authority cannot be captured by an unsummarized nested callable',
+        );
+      }
+      return;
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      const initializerProvenance = serverExpressionProvenance(node.initializer, aliases);
+      if (initializerProvenance === 'unknown-authority') {
+        appendViolation(
+          node.initializer,
+          'computed-security-operation',
+          'server authority cannot move through an opaque container or control-flow join',
+        );
+      }
+    }
     if (ts.isCallExpression(node)) {
       classifyServerCall(sourceFile, node, surface, aliases, appendOperation, appendViolation);
     } else if (ts.isNewExpression(node)) {
@@ -785,6 +1488,13 @@ export function scanServerSecurityOperations(
           `server capability alias ${left.text} cannot be reassigned`,
         );
       }
+      if (!ts.isIdentifier(left) && serverExpressionCarriesAuthority(left, aliases)) {
+        appendViolation(
+          left,
+          'raw-capability-operation',
+          'server capability members and containers cannot be mutated',
+        );
+      }
       if (serverExpressionCarriesAuthority(node.right, aliases)) {
         appendViolation(
           node.right,
@@ -792,6 +1502,26 @@ export function scanServerSecurityOperations(
           'server authority cannot move through a mutable or computed alias',
         );
       }
+    } else if (
+      ts.isDeleteExpression(node) &&
+      serverExpressionCarriesAuthority(node.expression, aliases)
+    ) {
+      appendViolation(
+        node,
+        'raw-capability-operation',
+        'server capability members and containers cannot be deleted',
+      );
+    } else if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      serverExpressionCarriesAuthority(node.operand, aliases)
+    ) {
+      appendViolation(
+        node,
+        'raw-capability-operation',
+        'server capability members and containers cannot be incremented or decremented',
+      );
     } else if (
       (ts.isReturnStatement(node) || ts.isThrowStatement(node)) &&
       node.expression &&
@@ -818,6 +1548,34 @@ export function scanServerSecurityOperations(
     operations: dedupeServerOperations(operations),
     violations: dedupeViolations(violations),
   };
+}
+
+function nestedServerFunctionCapturesAuthority(
+  functionNode: ts.Node,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== functionNode && isSecurityIrFunctionScope(node)) return;
+    if (ts.isIdentifier(node)) {
+      const parent = node.parent;
+      if (
+        !(
+          (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+          (ts.isPropertyAssignment(parent) && parent.name === node)
+        ) &&
+        serverProvenanceCarriesAuthority(compilerMapGet(aliases, node.text)) &&
+        !identifierIsShadowedWithinBoundary(node, functionNode)
+      ) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(functionNode);
+  return found;
 }
 
 function classifyServerCall(
@@ -1003,18 +1761,25 @@ function serverAliasProvenance(
   body: ts.ConciseBody,
   parameters: readonly ts.ParameterDeclaration[],
   surface: SecurityOperationSurface,
+  parameterProvenances?: readonly ServerValueProvenance[],
 ): ReadonlyMap<string, ServerValueProvenance> {
   const aliases = compilerCreateMap<string, ServerValueProvenance>();
   compilerMapSet(aliases, 'Response', 'response-constructor');
 
   const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Security-IR parameters');
   for (let index = 0; index < parameterSnapshot.length; index += 1) {
-    setServerAliasPattern(parameterSnapshot[index]!.name, 'local', aliases);
+    setServerAliasPattern(
+      parameterSnapshot[index]!.name,
+      parameterProvenances === undefined ? 'local' : (parameterProvenances[index] ?? 'local'),
+      aliases,
+    );
   }
-  const contextParameter = parameterSnapshot[surface === 'mutation' ? 2 : 1];
-  if (contextParameter) setServerAliasPattern(contextParameter.name, 'context', aliases);
-  if (surface === 'mutation' && parameterSnapshot[1]) {
-    setServerAliasPattern(parameterSnapshot[1]!.name, 'request', aliases);
+  if (parameterProvenances === undefined) {
+    const contextParameter = parameterSnapshot[surface === 'mutation' ? 2 : 1];
+    if (contextParameter) setServerAliasPattern(contextParameter.name, 'context', aliases);
+    if (surface === 'mutation' && parameterSnapshot[1]) {
+      setServerAliasPattern(parameterSnapshot[1]!.name, 'request', aliases);
+    }
   }
 
   let changed = true;
@@ -1135,8 +1900,15 @@ function serverMemberProvenance(
     receiver === serverOperationProvenance('server.database.read') ||
     receiver === serverOperationProvenance('server.database.write')
   ) {
-    return isRawDatabaseCapabilityMember(member) ? 'unknown-authority' : receiver;
+    // Managed principal scopes expose exact `db.read.select` / `db.write.insert` namespaces. Keep
+    // only a terminal whose reviewed DB kind agrees with the namespace; Function-prototype
+    // laundering (`bind`/`call`/`apply`) and arbitrary members remain opaque.
+    return databaseOperationKind(member) === compilerStringSlice(receiver, 'operation:'.length)
+      ? receiver
+      : 'unknown-authority';
   }
+  // Every other finite operation is an exact callable sink, not a first-class capability object.
+  if (compilerStringStartsWith(receiver, 'operation:')) return 'unknown-authority';
   if (receiver === 'context') {
     if (member === 'db' || member === 'readonlyAppDb' || member === 'tx') return 'database';
     if (member === 'headers') return 'headers';

@@ -11,6 +11,17 @@ import { freezeSecurityValue } from './security-witness-intrinsics.js';
  */
 export const securityOperationIrSchema = 'kovo-security-operation-ir/v1' as const;
 
+/**
+ * Compiler-owned normalized provenance graph layered over the finite operation IR.
+ *
+ * The graph is audit evidence produced by the compiler, not an app-authored program or runtime
+ * opcode surface. It records only the narrow cross-helper facts that remain after capability and
+ * finite-operation closure (SPEC §5.2 and §6.6).
+ *
+ * @internal
+ */
+export const securitySemanticGraphSchema = 'kovo-security-semantic-graph/v1' as const;
+
 /** @internal Closed browser-effect inventory; C9 maps every entry to one reviewed boundary owner. */
 export const browserSecurityOperationKinds = freezeSecurityValue([
   'browser.dialog.close',
@@ -101,6 +112,72 @@ export interface SecurityOperationIr {
   readonly target?: string;
   /** Required only for the three named exceptional doors. */
   readonly justification?: string;
+}
+
+/** @internal Deterministic resource ceilings for the narrow semantic interpreter. */
+export interface SecuritySemanticBudgets {
+  readonly callDepth: number;
+  readonly nodes: number;
+  readonly operations: number;
+  readonly summaries: number;
+}
+
+/** @internal Every non-proved semantic path closes under one stable reason. */
+export type SecuritySemanticClosedReason =
+  | 'budget-call-depth'
+  | 'budget-node-count'
+  | 'budget-operation-count'
+  | 'budget-summary-count'
+  | 'helper-cycle'
+  | 'opaque-transfer'
+  | 'unknown-operation'
+  | 'unsupported-authority-use';
+
+/** @internal One finite reviewed operation reached through the normalized helper graph. */
+export interface SecuritySemanticProvedTrace {
+  readonly root: string;
+  readonly sink: {
+    readonly door: SecurityOperationDoor;
+    readonly kind: ServerSecurityOperationKind;
+    readonly target?: string;
+  };
+  readonly transfers: readonly string[];
+  readonly verdict: 'proved';
+}
+
+/** @internal One unsupported or exhausted path and its explicit fail-closed verdict. */
+export interface SecuritySemanticClosedTrace {
+  readonly detail: string;
+  readonly reason: SecuritySemanticClosedReason;
+  readonly root: string;
+  readonly sink: string;
+  readonly transfers: readonly string[];
+  readonly verdict: 'closed';
+}
+
+/** @internal */
+export type SecuritySemanticTrace = SecuritySemanticProvedTrace | SecuritySemanticClosedTrace;
+
+/** @internal Bottom-up result for one exact same-file callable and authority-input shape. */
+export interface SecuritySemanticSummary {
+  readonly authorityInputs: readonly string[];
+  readonly callable: string;
+  readonly operationKinds: readonly ServerSecurityOperationKind[];
+  readonly verdict: 'closed' | 'proved';
+}
+
+/** @internal Root-scoped normalized provenance facts. */
+export interface SecuritySemanticRoot {
+  readonly root: string;
+  readonly summaries: readonly SecuritySemanticSummary[];
+  readonly traces: readonly SecuritySemanticTrace[];
+}
+
+/** @internal Compiler artifact consumed by graph/explain and generated-manifest verification. */
+export interface SecuritySemanticGraph {
+  readonly budgets: SecuritySemanticBudgets;
+  readonly roots: readonly SecuritySemanticRoot[];
+  readonly schema: typeof securitySemanticGraphSchema;
 }
 
 /**

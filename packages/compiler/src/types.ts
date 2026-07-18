@@ -83,6 +83,7 @@ export type ComponentGraphFact = Pick<
   | 'name'
   | 'mutationForms'
   | 'queries'
+  | 'securitySemanticGraph'
   | 'securityOperations'
   | 'styleRules'
 >;

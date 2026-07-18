@@ -106,7 +106,10 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
-import { componentSecurityOperationFacts } from './security-operation-facts.js';
+import {
+  componentSecurityOperationFacts,
+  componentSecuritySemanticGraphFacts,
+} from './security-operation-facts.js';
 import { compilerEmittedSourceProvenanceToken } from './source-provenance.js';
 import { ensureTypescriptRuntime } from './ts-api.js';
 import type {
@@ -643,6 +646,7 @@ function emitRegistryCssPhase(
         fact.component,
         parsed.options.fileName,
         index === 0 ? componentSecurityOperationFacts(lowered.model, client.versionedHandlers) : [],
+        index === 0 ? componentSecuritySemanticGraphFacts(lowered.model) : undefined,
       ),
   );
   const cssAssets = cssSource

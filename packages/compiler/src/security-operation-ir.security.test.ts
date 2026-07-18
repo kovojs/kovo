@@ -322,6 +322,322 @@ export const report = endpoint('/report', {
     });
   });
 
+  it('discharges multi-hop helper edges through bottom-up normalized summaries', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+async function dial(outbound) {
+  return outbound('https://api.example.test/report');
+}
+async function consume(context) {
+  const { fetch: outbound } = context;
+  return dial(outbound);
+}
+export const report = endpoint('/report', {
+  async handler(_input, ctx) {
+    await consume(ctx);
+    return Response.json({ ok: true });
+  },
+});
+`);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const semanticGraph = result.componentGraphFacts[0]?.securitySemanticGraph;
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(serverSource).toContain('kovo-security-semantic-graph/v1');
+    expect(serverSource).toContain('local:consume[arg0=context]');
+    expect(serverSource).toContain('local:dial[arg0=operation:server.egress.request]');
+    expect(semanticGraph?.roots).toContainEqual(
+      expect.objectContaining({
+        root: 'endpoint:/report',
+        summaries: expect.arrayContaining([
+          {
+            authorityInputs: ['arg0=operation:server.egress.request'],
+            callable: 'local:dial',
+            operationKinds: ['server.egress.request'],
+            verdict: 'proved',
+          },
+          {
+            authorityInputs: ['arg0=context'],
+            callable: 'local:consume',
+            operationKinds: ['server.egress.request'],
+            verdict: 'proved',
+          },
+        ]),
+        traces: expect.arrayContaining([
+          {
+            root: 'endpoint:/report',
+            sink: {
+              door: 'ctx.fetch',
+              kind: 'server.egress.request',
+              target: 'outbound',
+            },
+            transfers: [
+              'local:consume[arg0=context]',
+              'local:dial[arg0=operation:server.egress.request]',
+            ],
+            verdict: 'proved',
+          },
+        ]),
+      }),
+    );
+  });
+
+  it('keeps helper summaries context-sensitive to exact authority inputs', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+function inspect(_capability) { return 'ok'; }
+export const report = endpoint('/report', {
+  handler(_input, ctx) {
+    inspect(ctx.db);
+    inspect(ctx.storage);
+    return Response.json({ ok: true });
+  },
+});
+`);
+    const summaries =
+      result.componentGraphFacts[0]?.securitySemanticGraph?.roots[0]?.summaries ?? [];
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(summaries).toEqual(
+      expect.arrayContaining([
+        {
+          authorityInputs: ['arg0=database'],
+          callable: 'local:inspect',
+          operationKinds: [],
+          verdict: 'proved',
+        },
+        {
+          authorityInputs: ['arg0=storage'],
+          callable: 'local:inspect',
+          operationKinds: [],
+          verdict: 'proved',
+        },
+      ]),
+    );
+  });
+
+  it('shows root, transfers, sink, and closed reason for helper alias mutation', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+function consume(database, input) {
+  let mutable = database;
+  mutable = input.other;
+  return mutable.select();
+}
+export const report = endpoint('/report', {
+  handler(input, ctx) {
+    consume(ctx.db, input);
+    return Response.json({ ok: true });
+  },
+});
+`);
+    const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
+    const closed =
+      result.componentGraphFacts[0]?.securitySemanticGraph?.roots[0]?.traces.filter(
+        (trace) => trace.verdict === 'closed',
+      ) ?? [];
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain('semantic root=endpoint:/report');
+    expect(diagnostics[0]?.message).toContain('local:consume[arg0=database]');
+    expect(diagnostics[0]?.message).toContain('sink=');
+    expect(diagnostics[0]?.message).toContain('verdict=closed:');
+    expect(closed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'unsupported-authority-use',
+          root: 'endpoint:/report',
+          transfers: ['local:consume[arg0=database]'],
+          verdict: 'closed',
+        }),
+      ]),
+    );
+  });
+
+  it('fails closed on recursive helper cycles with an explicit normalized verdict', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+function first(database) { return second(database); }
+function second(database) { return first(database); }
+export const report = endpoint('/report', {
+  handler(_input, ctx) {
+    first(ctx.db);
+    return Response.json({ ok: true });
+  },
+});
+`);
+    const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes('helper-cycle'))).toBe(
+      true,
+    );
+    expect(result.componentGraphFacts[0]?.securitySemanticGraph?.roots[0]?.traces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ reason: 'helper-cycle', verdict: 'closed' }),
+      ]),
+    );
+  });
+
+  it('propagates query no-write posture through summarized helpers', () => {
+    const result = compile(`
+import { query } from '@kovojs/server';
+function write(database) { return database.insert('catalog'); }
+export const catalog = query('catalog/read', {
+  load(_input, ctx) { return write(ctx.db); },
+});
+`);
+    const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain(
+      'query loaders cannot perform a managed database write',
+    );
+    expect(diagnostics[0]?.message).toContain('semantic root=query:catalog/read');
+  });
+
+  it('closes arguments-object recovery and deterministic call-depth exhaustion', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+function consume(_database) { return arguments[0].select(); }
+export const report = endpoint('/report', {
+  handler(_input, ctx) { consume(ctx.db); return Response.json({ ok: true }); },
+});
+`)[0]?.message,
+    ).toContain('arguments-object authority recovery');
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+function consumePlain(_plain) { return 'ok'; }
+export const report = endpoint('/report', {
+  handler(_input, ctx) { consumePlain('plain', ctx.db); return Response.json({ ok: true }); },
+});
+`)[0]?.message,
+    ).toContain('authority-bearing extra argument');
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+function consumeRest(_plain, ..._rest) { return 'ok'; }
+export const report = endpoint('/report', {
+  handler(_input, ctx) { consumeRest('plain', 'also plain', ctx.db); return Response.json({ ok: true }); },
+});
+`)[0]?.message,
+    ).toContain('authority-bearing rest argument');
+
+    const helperCount = 18;
+    const helpers = Array.from({ length: helperCount }, (_unused, index) =>
+      index === helperCount - 1
+        ? `function helper${index}(database) { return database.select(); }`
+        : `function helper${index}(database) { return helper${index + 1}(database); }`,
+    ).join('\n');
+    const diagnostics = kv449(`
+import { endpoint } from '@kovojs/server';
+${helpers}
+export const report = endpoint('/report', {
+  handler(_input, ctx) { return helper0(ctx.db); },
+});
+`);
+
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes('budget-call-depth'))).toBe(
+      true,
+    );
+  });
+
+  it('closes every normalized semantic resource budget with its exact reason', () => {
+    const oversizedBody = Array.from({ length: 50_100 }, () => ';').join('\n');
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler() { ${oversizedBody} return Response.json({ ok: true }); },
+});
+`).some((diagnostic) => diagnostic.message.includes('budget-node-count')),
+    ).toBe(true);
+
+    const operations = Array.from({ length: 4_097 }, () => 'ctx.db.select();').join('\n');
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { ${operations} return Response.json({ ok: true }); },
+});
+`).some((diagnostic) => diagnostic.message.includes('budget-operation-count')),
+    ).toBe(true);
+
+    const helperCount = 257;
+    const helpers = Array.from(
+      { length: helperCount },
+      (_unused, index) => `function helper${index}(database) { return database.select(); }`,
+    ).join('\n');
+    const calls = Array.from(
+      { length: helperCount },
+      (_unused, index) => `helper${index}(ctx.db);`,
+    ).join('\n');
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+${helpers}
+export const report = endpoint('/report', {
+  handler(_input, ctx) { ${calls} return Response.json({ ok: true }); },
+});
+`).some((diagnostic) => diagnostic.message.includes('budget-summary-count')),
+    ).toBe(true);
+
+    const repeatedCalls = Array.from({ length: 300 }, () => 'read(ctx.db);').join('\n');
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+function read(database) { return database.select(); }
+export const report = endpoint('/report', {
+  handler(_input, ctx) { ${repeatedCalls} return Response.json({ ok: true }); },
+});
+`),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'operation-function member laundering',
+      `const outbound = ctx.fetch.bind(null); await outbound('https://api.example.test')`,
+    ],
+    [
+      'capability member mutation',
+      `ctx.fetch.custom = () => null; await ctx.fetch('https://api.example.test')`,
+    ],
+    ['ignored authority container', `const hidden = { database: ctx.db }; void hidden`],
+    [
+      'nested callable authority capture',
+      `const delayed = () => ctx.db.select(); return Response.json({ delayed: Boolean(delayed) })`,
+    ],
+  ])('fails closed for %s in normalized server semantics', (_label, handlerBody) => {
+    const diagnostics = kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(_input, ctx) { ${handlerBody}; return Response.json({ ok: true }); },
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+  });
+
+  it('allows nested plain-data transforms after a reviewed operation result', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(_input, ctx) {
+    const rows = await ctx.db.select();
+    const sizes = rows.map((row) => String(row).length);
+    return Response.json({ sizes });
+  },
+});
+`),
+    ).toEqual([]);
+  });
+
   it('enrolls inline and same-file referenced server roots in emitted manifests', () => {
     const result = compile(`
 import { endpoint, mutation, query, task, webhook } from '@kovojs/server';

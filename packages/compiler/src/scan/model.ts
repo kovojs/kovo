@@ -2,6 +2,7 @@ import type * as ts from 'typescript';
 import type {
   BrowserSecurityOperationKind,
   SecurityOperationDoor,
+  SecuritySemanticRoot,
   ServerSecurityOperationKind,
 } from '@kovojs/core/internal/security-operation-ir';
 
@@ -107,6 +108,7 @@ export interface MutationHandlerModel {
   paramSpans: readonly SourceSpan[];
   securityOperations?: readonly ServerSecurityOperationModel[];
   securityOperationViolations?: readonly SecurityOperationViolationModel[];
+  securitySemanticRoot?: SecuritySemanticRoot;
 }
 
 export interface BrowserSecurityOperationModel {

@@ -37,6 +37,10 @@ const coreFrameworkIdentityPath = path.join(
 );
 const compilerCompilePath = path.join(repoRoot, 'packages/compiler/src/compile.ts');
 const compilerVitePath = path.join(repoRoot, 'packages/compiler/src/vite.ts');
+const compilerSecuritySemanticGraphPath = path.join(
+  repoRoot,
+  'packages/compiler/src/scan/security-operation-ir.ts',
+);
 const trustedHtmlProvenancePath = path.join(
   repoRoot,
   'packages/compiler/src/validate/trusted-html-provenance.ts',
@@ -599,7 +603,181 @@ const webhookEgressCapabilitySeal = [
 ].join('\n');
 const removedWebhookEgressCapabilitySeal = '';
 
+const semanticCycleClosureBranch =
+  '  if (signature !== undefined && compilerSetHas(state.active, signature)) {';
+const removedSemanticCycleClosureBranch =
+  '  if (false && signature !== undefined && compilerSetHas(state.active, signature)) {';
+const semanticDepthClosureBranch =
+  '          if (depth + 1 > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) {';
+const removedSemanticDepthClosureBranch =
+  '          if (false && depth + 1 > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) {';
+const semanticNodeBudgetClosureBranch = '    if (state.nodes > SECURITY_SEMANTIC_NODE_BUDGET) {';
+const removedSemanticNodeBudgetClosureBranch =
+  '    if (false && state.nodes > SECURITY_SEMANTIC_NODE_BUDGET) {';
+const semanticOperationBudgetClosureBranch =
+  '      if (state.operations > SECURITY_SEMANTIC_OPERATION_BUDGET) {';
+const removedSemanticOperationBudgetClosureBranch =
+  '      if (false && state.operations > SECURITY_SEMANTIC_OPERATION_BUDGET) {';
+const semanticSummaryBudgetClosureBranch =
+  '    if (state.summaries > SECURITY_SEMANTIC_SUMMARY_BUDGET) {';
+const removedSemanticSummaryBudgetClosureBranch =
+  '    if (false && state.summaries > SECURITY_SEMANTIC_SUMMARY_BUDGET) {';
+const semanticSurfacePropagationBranch = [
+  '            state,',
+  '            surface,',
+  '            transfers: nextTransfers,',
+].join('\n');
+const weakenedSemanticSurfacePropagationBranch = [
+  '            state,',
+  "            surface: 'endpoint',",
+  '            transfers: nextTransfers,',
+].join('\n');
+const semanticOperationMemberClosureBranch =
+  "  if (compilerStringStartsWith(receiver, 'operation:')) return 'unknown-authority';";
+const weakenedSemanticOperationMemberClosureBranch =
+  "  if (compilerStringStartsWith(receiver, 'operation:')) return receiver;";
+const semanticMemberMutationClosureBranch =
+  '      if (!ts.isIdentifier(left) && serverExpressionCarriesAuthority(left, aliases)) {';
+const removedSemanticMemberMutationClosureBranch =
+  '      if (false && !ts.isIdentifier(left) && serverExpressionCarriesAuthority(left, aliases)) {';
+const semanticArgumentsClosureBranch =
+  '  if (authorityInputs.length > 0 && semanticBodyUsesArguments(callable.body)) {';
+const removedSemanticArgumentsClosureBranch =
+  '  if (false && authorityInputs.length > 0 && semanticBodyUsesArguments(callable.body)) {';
+const semanticNestedCaptureClosureBranch =
+  '      if (nestedServerFunctionCapturesAuthority(node, aliases)) {';
+const removedSemanticNestedCaptureClosureBranch =
+  '      if (false && nestedServerFunctionCapturesAuthority(node, aliases)) {';
+const semanticOpaqueContainerClosureBranch =
+  "      if (initializerProvenance === 'unknown-authority') {";
+const removedSemanticOpaqueContainerClosureBranch =
+  "      if (false && initializerProvenance === 'unknown-authority') {";
+const semanticRestArgumentClosureBranch =
+  '      } else if (restParameterIndex !== undefined && index >= restParameterIndex) {';
+const removedSemanticRestArgumentClosureBranch =
+  '      } else if (false && restParameterIndex !== undefined && index >= restParameterIndex) {';
+
 export const SECURITY_GATE_MUTANTS = [
+  {
+    description: 'Deletes normalized helper-cycle absorption.',
+    expectedKiller: 'recursive helper summaries must retain the helper-cycle closed verdict',
+    name: 'compiler-semantic-graph/drop-helper-cycle-closure',
+    replacement: removedSemanticCycleClosureBranch,
+    search: semanticCycleClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticCycleClosureIsPinned,
+  },
+  {
+    description: 'Deletes the normalized helper call-depth ceiling.',
+    expectedKiller: 'helper summary paths must retain deterministic call-depth closure',
+    name: 'compiler-semantic-graph/drop-call-depth-closure',
+    replacement: removedSemanticDepthClosureBranch,
+    search: semanticDepthClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticDepthClosureIsPinned,
+  },
+  {
+    description: 'Deletes the normalized interpreted-node ceiling.',
+    expectedKiller: 'semantic roots must retain deterministic AST-node budget closure',
+    name: 'compiler-semantic-graph/drop-node-budget-closure',
+    replacement: removedSemanticNodeBudgetClosureBranch,
+    search: semanticNodeBudgetClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticNodeBudgetClosureIsPinned,
+  },
+  {
+    description: 'Deletes the normalized finite-operation ceiling.',
+    expectedKiller: 'semantic roots must retain deterministic operation budget closure',
+    name: 'compiler-semantic-graph/drop-operation-budget-closure',
+    replacement: removedSemanticOperationBudgetClosureBranch,
+    search: semanticOperationBudgetClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticOperationBudgetClosureIsPinned,
+  },
+  {
+    description: 'Deletes the normalized helper-summary ceiling.',
+    expectedKiller: 'semantic roots must retain deterministic summary budget closure',
+    name: 'compiler-semantic-graph/drop-summary-budget-closure',
+    replacement: removedSemanticSummaryBudgetClosureBranch,
+    search: semanticSummaryBudgetClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticSummaryBudgetClosureIsPinned,
+  },
+  {
+    description: 'Forgets the query/task/mutation root posture when entering a helper summary.',
+    expectedKiller: 'helper summaries must preserve the originating security surface',
+    name: 'compiler-semantic-graph/drop-root-surface-propagation',
+    replacement: weakenedSemanticSurfacePropagationBranch,
+    search: semanticSurfacePropagationBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticSurfacePropagationIsPinned,
+  },
+  {
+    description: 'Treats members of an exact operation function as the same reviewed sink.',
+    expectedKiller: 'operation-function call/apply/bind laundering must remain opaque',
+    name: 'compiler-semantic-graph/allow-operation-member-laundering',
+    replacement: weakenedSemanticOperationMemberClosureBranch,
+    search: semanticOperationMemberClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticOperationMemberClosureIsPinned,
+  },
+  {
+    description: 'Deletes capability-member mutation closure from normalized semantics.',
+    expectedKiller: 'authority-bearing members must remain immutable in the semantic lattice',
+    name: 'compiler-semantic-graph/drop-member-mutation-closure',
+    replacement: removedSemanticMemberMutationClosureBranch,
+    search: semanticMemberMutationClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticMemberMutationClosureIsPinned,
+  },
+  {
+    description: 'Allows authority recovery through a helper arguments object.',
+    expectedKiller: 'arguments-object recovery must remain outside finite helper summaries',
+    name: 'compiler-semantic-graph/allow-arguments-authority-recovery',
+    replacement: removedSemanticArgumentsClosureBranch,
+    search: semanticArgumentsClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticArgumentsClosureIsPinned,
+  },
+  {
+    description: 'Allows authority capture by an unsummarized nested callable.',
+    expectedKiller: 'nested callable captures must remain absorbing semantic closure',
+    name: 'compiler-semantic-graph/allow-nested-authority-capture',
+    replacement: removedSemanticNestedCaptureClosureBranch,
+    search: semanticNestedCaptureClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticNestedCaptureClosureIsPinned,
+  },
+  {
+    description: 'Allows authority to move through an opaque container or join.',
+    expectedKiller: 'opaque authority containers must remain closed',
+    name: 'compiler-semantic-graph/allow-opaque-authority-container',
+    replacement: removedSemanticOpaqueContainerClosureBranch,
+    search: semanticOpaqueContainerClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticOpaqueContainerClosureIsPinned,
+  },
+  {
+    description: 'Allows authority to enter a helper rest-parameter mapping.',
+    expectedKiller: 'authority-bearing rest arguments must remain outside finite summaries',
+    name: 'compiler-semantic-graph/allow-rest-authority-mapping',
+    replacement: removedSemanticRestArgumentClosureBranch,
+    search: semanticRestArgumentClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticRestArgumentClosureIsPinned,
+  },
   {
     description: 'Weakens the session-owner builder cell to allow cross-owner reads.',
     expectedKiller: 'authorization matrix owner-read canary must retain allow-own-only',
@@ -1239,6 +1417,78 @@ function installMutantScriptLib(tempRoot) {
     readFileSync(path.join(scriptsDir, 'check-security-brands.mjs'), 'utf8'),
     'utf8',
   );
+}
+
+async function assertSemanticCycleClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticCycleClosureBranch)) {
+    throw new Error('normalized semantic graph no longer absorbs an active helper-summary cycle');
+  }
+}
+
+async function assertSemanticDepthClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticDepthClosureBranch)) {
+    throw new Error('normalized semantic graph no longer closes exhausted helper depth');
+  }
+}
+
+async function assertSemanticNodeBudgetClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticNodeBudgetClosureBranch)) {
+    throw new Error('normalized semantic graph no longer closes exhausted node budgets');
+  }
+}
+
+async function assertSemanticOperationBudgetClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticOperationBudgetClosureBranch)) {
+    throw new Error('normalized semantic graph no longer closes exhausted operation budgets');
+  }
+}
+
+async function assertSemanticSummaryBudgetClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticSummaryBudgetClosureBranch)) {
+    throw new Error('normalized semantic graph no longer closes exhausted summary budgets');
+  }
+}
+
+async function assertSemanticSurfacePropagationIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticSurfacePropagationBranch)) {
+    throw new Error('normalized helper summary no longer inherits its originating surface');
+  }
+}
+
+async function assertSemanticOperationMemberClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticOperationMemberClosureBranch)) {
+    throw new Error('normalized operation members no longer become absorbing unknown authority');
+  }
+}
+
+async function assertSemanticMemberMutationClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticMemberMutationClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects capability-member mutation');
+  }
+}
+
+async function assertSemanticArgumentsClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticArgumentsClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects arguments-object recovery');
+  }
+}
+
+async function assertSemanticNestedCaptureClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticNestedCaptureClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects nested authority capture');
+  }
+}
+
+async function assertSemanticOpaqueContainerClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticOpaqueContainerClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects opaque authority containers');
+  }
+}
+
+async function assertSemanticRestArgumentClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticRestArgumentClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects authority-bearing rest mappings');
+  }
 }
 
 async function assertAuthorizationMatrixDocumentIsClosed(_moduleUnderTest, { sourceText }) {

@@ -1,4 +1,9 @@
-import type { SecurityOperationIr } from '@kovojs/core/internal/security-operation-ir';
+import {
+  securitySemanticGraphSchema,
+  type SecurityOperationIr,
+  type SecuritySemanticGraph,
+  type SecuritySemanticRoot,
+} from '@kovojs/core/internal/security-operation-ir';
 
 import {
   compilerArrayAppend,
@@ -10,6 +15,7 @@ import {
 } from './compiler-security-intrinsics.js';
 import type { ComponentModuleModel } from './scan/parse.js';
 import type { MutationHandlerModel, ServerSecurityOperationModel } from './scan/model.js';
+import { serverSecuritySemanticBudgets } from './scan/security-operation-ir.js';
 import type { BrowserSecurityOperationFact, HandlerLowering } from './types.js';
 
 /** Compiler-owned, span-free operation facts suitable for generated artifacts and explain JSON. */
@@ -46,6 +52,43 @@ export function serverSecurityOperationFacts(model: ComponentModuleModel): Secur
   appendHandlerSecurityOperations(operations, seen, model.webhookHandlers, 'Webhook security IR');
   appendHandlerSecurityOperations(operations, seen, model.taskRunHandlers, 'Task security IR');
   return operations;
+}
+
+/** Compiler-owned normalized helper summaries and root-to-sink provenance for graph/explain. */
+export function componentSecuritySemanticGraphFacts(
+  model: ComponentModuleModel,
+): SecuritySemanticGraph | undefined {
+  const roots: SecuritySemanticRoot[] = [];
+  const seen = compilerCreateSet<string>();
+  appendHandlerSemanticRoots(roots, seen, model.mutationHandlers, 'Mutation semantic roots');
+  appendHandlerSemanticRoots(roots, seen, model.endpointHandlers, 'Endpoint semantic roots');
+  appendHandlerSemanticRoots(roots, seen, model.queryHandlers, 'Query semantic roots');
+  appendHandlerSemanticRoots(roots, seen, model.webhookHandlers, 'Webhook semantic roots');
+  appendHandlerSemanticRoots(roots, seen, model.taskRunHandlers, 'Task semantic roots');
+  if (roots.length === 0) return undefined;
+  return {
+    budgets: serverSecuritySemanticBudgets(),
+    roots,
+    schema: securitySemanticGraphSchema,
+  };
+}
+
+function appendHandlerSemanticRoots(
+  target: SecuritySemanticRoot[],
+  seen: Set<string>,
+  handlers: readonly MutationHandlerModel[],
+  label: string,
+): void {
+  const handlerSnapshot = compilerSnapshotDenseArray(handlers, `${label} handlers`);
+  for (let index = 0; index < handlerSnapshot.length; index += 1) {
+    const root = handlerSnapshot[index]!.securitySemanticRoot;
+    if (root === undefined) continue;
+    const key = compilerJsonStringify(root);
+    if (key === undefined) throw new TypeError(`${label}[${index}] must be JSON-serializable.`);
+    if (compilerSetHas(seen, key)) continue;
+    compilerSetAdd(seen, key);
+    compilerArrayAppend(target, root, label);
+  }
 }
 
 function appendHandlerSecurityOperations(
