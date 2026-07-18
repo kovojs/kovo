@@ -519,21 +519,8 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
   }
 
   if (Node.isIdentifier(expression)) {
-    const key = resolvedSymbolKey(
-      symbolForIdentifierReference(expression) ?? expression.getSymbol(),
-    );
-    const opaqueAlias = key
-      ? context.opaqueAliases.get(key)
-      : context.opaqueAliases.get(`name:${expression.getText()}`);
-    if (opaqueAlias) {
-      return undefined;
-    }
-    // A resolved lexical symbol is the identity boundary. Falling back to the same identifier
-    // text lets an attacker-controlled shadow inherit a different binding's private provenance.
-    // The `name:*` path exists only for genuinely unresolved AST bindings (SPEC §6.6/§10.3).
-    const alias = key
-      ? context.aliases.get(key)
-      : context.aliases.get(`name:${expression.getText()}`);
+    if (opaqueAliasReasonForExpression(expression, context)) return undefined;
+    const alias = privateScopeAliasForIdentifier(expression, context);
     if (!alias || !isConstVariableBindingDeclaration(alias.declaration)) return undefined;
     const stable = alias.requiresGuard
       ? sessionAliasGuardDominatesUse(alias, expression)
@@ -1064,14 +1051,13 @@ function privateScopeBindingIsStableAtUse(declaration: Node, name: string, use: 
     });
 }
 
-function privateScopeAliasForIdentifier(
+/** @internal Exact-symbol lookup shared by every private-alias consumer. */
+export function privateScopeAliasForIdentifier(
   expression: Node & { getText(): string },
   context: SessionProvenanceContext,
 ): SessionAlias | undefined {
   const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
-  return key
-    ? context.aliases.get(key)
-    : context.aliases.get(`name:${expression.getText()}`);
+  return key ? context.aliases.get(key) : context.aliases.get(`name:${expression.getText()}`);
 }
 
 function isSafePrivateScopeFallbackExpression(node: Node): boolean {

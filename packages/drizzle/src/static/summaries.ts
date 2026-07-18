@@ -35,6 +35,7 @@ import {
   emptySessionProvenanceContext,
   opaqueAliasReasonForExpression,
   privateScopeAliasIsStableAtUse,
+  privateScopeAliasForIdentifier,
   privateScopeCarrierBindingIsProven,
   privateScopeForExpression,
   privateScopeHelperCallCarrierIsProven,
@@ -1630,13 +1631,7 @@ function localConstAcceptedGuardAliasPrivateScope(
   const node = unwrappedStaticExpressionNode(expression);
   if (!Node.isIdentifier(node)) return undefined;
 
-  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
-  const key = resolvedSymbolKey(symbol);
-  // A resolved lexical symbol must never inherit a same-text unresolved alias. The name fallback
-  // exists only for nodes whose symbol genuinely could not be resolved (SPEC §6.6/§10.3).
-  const alias = key
-    ? sessionContext.aliases.get(key)
-    : sessionContext.aliases.get(`name:${node.getText()}`);
+  const alias = privateScopeAliasForIdentifier(node, sessionContext);
   if (!alias || alias.kind !== 'guard') return undefined;
   const privateKey = `guard:${alias.path}`;
   if (!sessionContext.acceptedGuardPrivateKeys?.has(privateKey)) return undefined;

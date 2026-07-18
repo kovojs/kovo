@@ -804,12 +804,14 @@ const analyzerSummaryOpaqueCarrierEscapeBranch = [
   '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
   '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
   '    if (exactFrameworkPrivateScopeValueCall(call)) continue;',
+  '    if (exactFinitePrivateScopeProofConsumer(call)) continue;',
   '    return false;',
 ].join('\n');
 const weakenedAnalyzerSummaryOpaqueCarrierEscapeBranch = [
   '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
   '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
   '    if (exactFrameworkPrivateScopeValueCall(call)) continue;',
+  '    if (exactFinitePrivateScopeProofConsumer(call)) continue;',
   '    continue;',
 ].join('\n');
 const analyzerSummaryPrivatePathPrefixBranch =
@@ -844,6 +846,10 @@ const weakenedAnalyzerSummaryFiniteExitGrammarBranch = [
   '  // exact or merely same-named—does not exit JavaScript control flow; the app must return it.',
   '  return Node.isExpressionStatement(statement);',
 ].join('\n');
+const analyzerSummaryExactAliasIdentityBranch =
+  '  return key ? context.aliases.get(key) : context.aliases.get(`name:${expression.getText()}`);';
+const weakenedAnalyzerSummaryExactAliasIdentityBranch =
+  '  return (key ? context.aliases.get(key) : undefined) ?? context.aliases.get(`name:${expression.getText()}`);';
 const analyzerSummaryImmutableBindingBranch = [
   '  return helper && symbolKey && !sourceFileMutatesSymbol(sourceFile, symbolKey)',
   '    ? helper',
@@ -1137,6 +1143,16 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
     test: assertAnalyzerSummaryFiniteExitGrammarIsPinned,
+  },
+  {
+    description: 'Lets a resolved lexical shadow inherit a same-text private alias.',
+    expectedKiller: 'private alias consumers must bind exact lexical symbols',
+    name: 'drizzle-analyzer-summary/allow-same-text-private-alias-shadow',
+    replacement: weakenedAnalyzerSummaryExactAliasIdentityBranch,
+    search: analyzerSummaryExactAliasIdentityBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryExactAliasIdentityIsPinned,
   },
   {
     description: 'Keeps a summary trusted after its callable binding is reassigned.',
@@ -2319,6 +2335,12 @@ async function assertAnalyzerSummaryMutableScalarTransferClosureIsPinned(
 async function assertAnalyzerSummaryFiniteExitGrammarIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(analyzerSummaryFiniteExitGrammarBranch)) {
     throw new Error('private guard dominance no longer requires an explicit control-flow exit');
+  }
+}
+
+async function assertAnalyzerSummaryExactAliasIdentityIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryExactAliasIdentityBranch)) {
+    throw new Error('private alias consumers no longer require exact lexical symbol identity');
   }
 }
 
