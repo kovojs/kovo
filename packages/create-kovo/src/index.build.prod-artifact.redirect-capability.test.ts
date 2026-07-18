@@ -26,6 +26,7 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-redirect-capability-'));
     const port = await reservePort();
+    const origin = `http://127.0.0.1:${port}`;
     let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
@@ -71,7 +72,7 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
       expect(capabilityEndpoint).toMatchObject({
         auth: 'verifier:kovo-capability-url',
         cache: 'private',
-        csrf: 'exempt',
+        csrf: 'safe:read-only',
         mount: 'prefix',
       });
 
@@ -80,13 +81,13 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: origin,
           HOST: '127.0.0.1',
           NODE_ENV: 'test',
           PORT: String(port),
         },
       });
       const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
 
       const capabilityPage = await fetchTextWhenReady(`${origin}/capability-url-proof`, output);
       const href = capabilityPage.match(/<a\b[^>]*id="capability-proof"[^>]*href="([^"]+)"/)?.[1];

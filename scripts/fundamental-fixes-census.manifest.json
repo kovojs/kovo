@@ -1100,7 +1100,7 @@
       "m1": {
         "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot (1 passed, 30.37s)",
         "dialects": {
-          "postgres": "default/postgres prod artifact /header-sink-unsafe.txt returns 500 without X-Kovo-Header-Proof or injected Set-Cookie",
+          "postgres": "default/postgres prod artifact /header-sink-unsafe.txt returns 500 without Vary or injected Set-Cookie",
           "sqlite": "same server/header sink code path; dialect-independent response-header proof is exercised by the default production artifact"
         },
         "independentReviewer": "agent/followup-outputwire-1782923950 re-ran the existing prod-artifact route-header proof in this worker branch"

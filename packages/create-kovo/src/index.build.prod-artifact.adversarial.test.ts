@@ -28,6 +28,7 @@ import {
   attributeValue,
   buildProductionArtifact,
   execFileSyncErrorOutput,
+  freshProductionArtifactIdempotencyToken,
 } from './index.build.test-support.js';
 import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
 import {
@@ -395,7 +396,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
           expect(queryRead.headers.get('cache-control')).toContain('private');
           expect(queryRead.headers.get('kovo-warn')).toBe('QUERY_LIST_LIMIT $.rows;limit=2');
           expect(queryBody).toContain(
-            '<kovo-query name="runtime-contract-proofs/warning-items-query">',
+            '<kovo-query name="runtime-contract-proofs/warning-items-query"',
           );
           expect(queryBody).toContain('"label":"item-1"');
           expect(queryBody).not.toContain('"label":"item-2"');
@@ -422,6 +423,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
                 cookie: cookieHeader(runtimeJar),
                 'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
                 'Kovo-Fragment': 'true',
+                'Kovo-Idem': freshProductionArtifactIdempotencyToken(),
                 'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,
                 'Kovo-Targets': `${liveTarget}=${liveDeps}`,
               },
@@ -486,9 +488,10 @@ describe('create-kovo starter (build integration: adversarial production artifac
           expect(headerCookieAction).toBeTruthy();
           if (!headerCookieAction) throw new Error('Expected M1 header cookie form action.');
 
+          const cookieIdem = freshProductionArtifactIdempotencyToken();
           const cookie = await fetch(`${origin}${headerCookieAction}`, {
             body: new URLSearchParams({
-              'Kovo-Idem': `m1-cookie-${Date.now()}`,
+              'Kovo-Idem': cookieIdem,
               csrf: headerCookieCsrf ?? '',
               mode: 'safe',
             }),
@@ -497,6 +500,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
               'content-type': 'application/x-www-form-urlencoded',
               cookie: cookieHeader(headerCookieJar),
               origin,
+              'Kovo-Idem': cookieIdem,
             },
             method: 'POST',
           });
@@ -506,9 +510,10 @@ describe('create-kovo starter (build integration: adversarial production artifac
             expect.stringContaining('m1_cookie=safe'),
           ]);
 
+          const unsafeCookieIdem = freshProductionArtifactIdempotencyToken();
           const unsafeCookie = await fetch(`${origin}${headerCookieAction}`, {
             body: new URLSearchParams({
-              'Kovo-Idem': `m1-unsafe-cookie-${Date.now()}`,
+              'Kovo-Idem': unsafeCookieIdem,
               csrf: headerCookieCsrf ?? '',
               mode: 'unsafe',
             }),
@@ -517,6 +522,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
               'content-type': 'application/x-www-form-urlencoded',
               cookie: cookieHeader(headerCookieJar),
               origin,
+              'Kovo-Idem': unsafeCookieIdem,
             },
             method: 'POST',
           });
@@ -1168,6 +1174,7 @@ async function withRunningProject(
       detached: process.platform !== 'win32',
       env: {
         ...withRepoBinOnPath(),
+        BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
         HOST: '127.0.0.1',
         NODE_ENV: 'test',
         PORT: String(port),

@@ -10,6 +10,7 @@ import {
   addRawSqlOwnerWriteProof,
   buildProductionArtifact,
   execFileSyncErrorOutput,
+  PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
 } from './index.build.test-support.js';
 
 function captureProductionBuildFailure(build: () => void): unknown {
@@ -59,24 +60,28 @@ describe('create-kovo starter (build integration: production raw-SQL artifacts)'
   });
 
   // @kovo-security-certifies KV414 raw-sql-owner-write-prod-artifact
-  it('blocks raw owner-table db.execute writes from the production build artifact', () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-raw-sql-write-'));
+  it(
+    'blocks raw owner-table db.execute writes from the production build artifact',
+    () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-raw-sql-write-'));
 
-    try {
-      writeKovoProject(root, { name: 'Prod Raw SQL Write Proof' });
-      linkStarterBuildDependencies(root);
-      addRawSqlOwnerWriteProof(root, { staticStatement: true });
+      try {
+        writeKovoProject(root, { name: 'Prod Raw SQL Write Proof' });
+        linkStarterBuildDependencies(root);
+        addRawSqlOwnerWriteProof(root, { staticStatement: true });
 
-      const output = execFileSyncErrorOutput(
-        captureProductionBuildFailure(() => buildProductionArtifact(root)),
-      );
-      expect(output).toContain('KV414');
-      expect(output).toContain('WRITE');
-      expect(output).toContain('domain=raw-owner');
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
+        const output = execFileSyncErrorOutput(
+          captureProductionBuildFailure(() => buildProductionArtifact(root)),
+        );
+        expect(output).toContain('KV414');
+        expect(output).toContain('WRITE');
+        expect(output).toContain('domain=raw-owner');
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+  );
 });

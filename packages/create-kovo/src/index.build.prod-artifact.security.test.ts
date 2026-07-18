@@ -43,6 +43,8 @@ import {
   fieldValue,
   firstFormHtml,
   formHtmlByAction,
+  freshProductionArtifactIdempotencyToken,
+  PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   signInDemoUser,
 } from './index.build.test-support.js';
 
@@ -150,6 +152,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
           NODE_ENV: 'test',
@@ -233,6 +236,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
           NODE_ENV: 'test',
@@ -388,6 +392,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
           NODE_ENV: 'test',
@@ -528,6 +533,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
           NODE_ENV: 'test',
@@ -582,50 +588,58 @@ describe('create-kovo starter (build integration: production security artifacts)
   }, 240_000);
 
   // @kovo-security-certifies KV235 internal-raw-html-import
-  it('blocks internal raw-HTML helper imports from authored .ts modules in production build', () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-internal-html-import-'));
+  it(
+    'blocks internal raw-HTML helper imports from authored .ts modules in production build',
+    () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-internal-html-import-'));
 
-    try {
-      writeKovoProject(root, { name: 'Prod Internal HTML Import Proof' });
-      linkStarterBuildDependencies(root);
-      addInternalHtmlImportProof(root);
+      try {
+        writeKovoProject(root, { name: 'Prod Internal HTML Import Proof' });
+        linkStarterBuildDependencies(root);
+        addInternalHtmlImportProof(root);
 
-      const output = captureBuildFailure(() => buildProductionArtifact(root));
-      expect(output).toContain('KV235');
-      expect(output).toContain('App source imports a non-public Kovo subpath');
-      expect(output).toContain('raw-helper.ts');
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
+        const output = captureBuildFailure(() => buildProductionArtifact(root));
+        expect(output).toContain('KV235');
+        expect(output).toContain('App source imports a non-public Kovo subpath');
+        expect(output).toContain('raw-helper.ts');
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+  );
 
   // @kovo-security-certifies KV433 storage-query-write-prod-artifact
   // Exact put/delete/upload authorities reach KV433; the opaque file-store sibling is covered
   // separately by the M1 adversarial KV424 fixture.
-  it('blocks storage writes from query loaders in the production build artifact', () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-storage-query-write-'));
+  it(
+    'blocks storage writes from query loaders in the production build artifact',
+    () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-storage-query-write-'));
 
-    try {
-      writeKovoProject(root, { name: 'Prod Storage Query Write Proof' });
-      linkStarterBuildDependencies(root);
-      addStorageQueryWriteProof(root);
+      try {
+        writeKovoProject(root, { name: 'Prod Storage Query Write Proof' });
+        linkStarterBuildDependencies(root);
+        addStorageQueryWriteProof(root);
 
-      const output = captureBuildFailure(() => buildProductionArtifact(root));
-      expect(output).toContain('KV433');
-      expect(output).toContain('storage-put-write-query');
-      expect(output).toContain('storage-delete-write-query');
-      expect(output).toContain('storage-upload-write-query');
-      expect(output).toContain('operation=put');
-      expect(output).toContain('operation=delete');
-      expect(output).toContain('operation=upload');
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
+        const output = captureBuildFailure(() => buildProductionArtifact(root));
+        expect(output).toContain('KV433');
+        expect(output).toContain('storage-put-write-query');
+        expect(output).toContain('storage-delete-write-query');
+        expect(output).toContain('storage-upload-write-query');
+        expect(output).toContain('operation=put');
+        expect(output).toContain('operation=delete');
+        expect(output).toContain('operation=upload');
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+  );
 
   it('serves declared mutation storage writes through the production artifact', async () => {
     const tempParent = tmpdir();
@@ -647,6 +661,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           NODE_ENV: 'test',
           PORT: String(port),
@@ -676,6 +691,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           'content-type': 'application/x-www-form-urlencoded',
           cookie: cookieHeader(jar),
           'Kovo-Fragment': 'true',
+          'Kovo-Idem': fieldValue(putForm, 'Kovo-Idem'),
           origin,
         },
         method: 'POST',
@@ -704,6 +720,7 @@ describe('create-kovo starter (build integration: production security artifacts)
             'content-type': 'application/x-www-form-urlencoded',
             cookie: cookieHeader(jar),
             'Kovo-Fragment': 'true',
+            'Kovo-Idem': fieldValue(deleteForm, 'Kovo-Idem'),
             origin,
           },
           method: 'POST',
@@ -754,23 +771,27 @@ describe('create-kovo starter (build integration: production security artifacts)
   }, 240_000);
 
   // @kovo-security-certifies KV426 trusted-url-attribute-type-gate
-  it('blocks TrustedUrl values in non-URL JSX attributes during production build', () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-trusted-url-attribute-'));
+  it(
+    'blocks TrustedUrl values in non-URL JSX attributes during production build',
+    () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-trusted-url-attribute-'));
 
-    try {
-      writeKovoProject(root, { name: 'Prod TrustedUrl Attribute Proof' });
-      linkStarterBuildDependencies(root);
-      addTrustedUrlAttributeTypeGateProof(root);
+      try {
+        writeKovoProject(root, { name: 'Prod TrustedUrl Attribute Proof' });
+        linkStarterBuildDependencies(root);
+        addTrustedUrlAttributeTypeGateProof(root);
 
-      const output = captureBuildFailure(() => buildProductionArtifact(root));
-      expect(output).toContain('TrustedUrl');
-      expect(output).toContain('AttributeValue');
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
+        const output = captureBuildFailure(() => buildProductionArtifact(root));
+        expect(output).toContain('TrustedUrl');
+        expect(output).toContain('AttributeValue');
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+  );
 
   it('serves escaped runtime security wires from shared production artifacts', async () => {
     for (const dialect of ['postgres', 'sqlite'] as const) {
@@ -797,6 +818,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           detached: process.platform !== 'win32',
           env: {
             ...withRepoBinOnPath(),
+            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
             HOST: '127.0.0.1',
             NODE_ENV: 'test',
             PORT: String(port),
@@ -834,6 +856,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           NODE_ENV: 'test',
           PORT: String(port),
@@ -933,6 +956,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           NODE_ENV: 'test',
           PORT: String(port),
@@ -966,6 +990,7 @@ describe('create-kovo starter (build integration: production security artifacts)
             accept: 'text/vnd.kovo.fragment+html',
             'content-type': 'application/x-www-form-urlencoded',
             'Kovo-Fragment': 'true',
+            'Kovo-Idem': fieldValue(form, 'Kovo-Idem'),
             origin,
           },
           method: 'POST',
@@ -992,6 +1017,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           'content-type': 'application/x-www-form-urlencoded',
           cookie: cookieHeader(jar),
           'Kovo-Fragment': 'true',
+          'Kovo-Idem': fieldValue(signOutForm, 'Kovo-Idem'),
           origin,
         },
         method: 'POST',
@@ -1122,9 +1148,10 @@ async function assertEnhancedMutationWireServed(
   expect(pageHtml).toContain('&lt;img src=x onerror="alert(1)"&gt;');
   expect(pageHtml).not.toContain('<img src=x onerror="alert(1)">');
 
+  const idem = freshProductionArtifactIdempotencyToken();
   const response = await fetch(`${origin}${action}`, {
     body: new URLSearchParams({
-      'Kovo-Idem': `enhanced-wire-${Date.now()}-${dialect}`,
+      'Kovo-Idem': idem,
       csrf: fieldValue(form, 'csrf'),
       note: '<img src=x onerror="alert(1)"><script>alert(1)</script>',
     }),
@@ -1135,6 +1162,7 @@ async function assertEnhancedMutationWireServed(
       'Kovo-Current-Url': `${origin}/enhanced-mutation-wire-proof`,
       'Kovo-Form-Target': target,
       'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
       'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
       'Kovo-Targets': `${target}=${deps}`,
       origin,

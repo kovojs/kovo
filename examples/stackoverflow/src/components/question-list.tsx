@@ -192,8 +192,8 @@ export const QuestionListRegion = component({
           <input type="hidden" name="id" value={freshId('q')} />
           <p style={listStyles.composerTitle}>Ask a public question</p>
           <p style={listStyles.composerHint}>
-            {totalVotes} votes cast across the community — be specific and imagine you&rsquo;re asking
-            another person.
+            {totalVotes} votes cast across the community — be specific and imagine you&rsquo;re
+            asking another person.
           </p>
           <label style={listStyles.label} for="ask-title">
             Title

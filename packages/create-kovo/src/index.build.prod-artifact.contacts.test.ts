@@ -22,361 +22,66 @@ import {
   elementOpeningTagByAttribute,
   fieldValue,
   formHtmlByAction,
+  PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   signInDemoUser,
 } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production contact artifacts)', () => {
-  it('serves non-empty enhanced add-contact truth from the production build artifact', async () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-add-contact-'));
-    const port = await reservePort();
-    let server: ChildProcessWithoutNullStreams | undefined;
+  it(
+    'serves non-empty enhanced add-contact truth from the production build artifact',
+    async () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-add-contact-'));
+      const port = await reservePort();
+      let server: ChildProcessWithoutNullStreams | undefined;
 
-    try {
-      writeKovoProject(root, { name: 'Prod Add Contact Proof' });
-      linkStarterBuildDependencies(root);
+      try {
+        writeKovoProject(root, { name: 'Prod Add Contact Proof' });
+        linkStarterBuildDependencies(root);
 
-      buildReusableProductionArtifact(root);
+        buildReusableProductionArtifact(root);
 
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          HOST: '127.0.0.1',
-          NODE_ENV: 'test',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
-      const jar = new Map<string, string>();
-
-      await fetchTextWhenReady(`${origin}/login`, output);
-      const anonymousHome = await fetch(`${origin}/`, { redirect: 'manual' });
-      expect([302, 303, 307]).toContain(anonymousHome.status);
-      expect(anonymousHome.headers.get('location')).toBe('/login?next=%2F');
-
-      const loginResponse = await fetch(`${origin}/login`);
-      mergeCookies(jar, loginResponse.headers.getSetCookie());
-      const loginHtml = await loginResponse.text();
-      expect(loginHtml).toContain('Sign in');
-      const loginCsrf = fieldValue(loginHtml, 'csrf');
-      const loginIdem = fieldValue(loginHtml, 'Kovo-Idem');
-      const demoPassword =
-        new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
-          readFileSync(join(root, '.env'), 'utf8'),
-        )?.[1] ?? '';
-      expect(loginCsrf).toBeTruthy();
-      expect(demoPassword).toBeTruthy();
-
-      const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
-        body: new URLSearchParams({
-          csrf: loginCsrf,
-          email: 'demo@example.com',
-          'Kovo-Idem': loginIdem,
-          next: '/',
-          password: demoPassword,
-        }),
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          cookie: cookieHeader(jar),
-          origin,
-        },
-        method: 'POST',
-        redirect: 'manual',
-      });
-      mergeCookies(jar, signIn.headers.getSetCookie());
-      expect(signIn.status).toBe(303);
-
-      const homeResponse = await fetchTextWhenReady(`${origin}/`, output, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      expect(homeResponse).toContain('3 contacts');
-      const addForm = formHtmlByAction(homeResponse, '/_m/mutations/add-contact');
-      const contactRegion = elementOpeningTagByAttribute(
-        homeResponse,
-        'kovo-fragment-target',
-        'contacts-region',
-      );
-      const target = attributeValue(contactRegion, 'kovo-fragment-target');
-      const deps = attributeValue(contactRegion, 'kovo-deps');
-      const component = attributeValue(contactRegion, 'kovo-live-component');
-      const liveToken = attributeValue(contactRegion, 'kovo-live-token');
-      const props = attributeValue(contactRegion, 'kovo-props') ?? '{}';
-      expect(target).toBe('contacts-region');
-      expect(deps).toBeTruthy();
-      expect(component).toBe('components/contacts/contacts-region');
-      expect(liveToken).toBeTruthy();
-
-      const email = `grace-${Date.now()}@example.com`;
-      const idem = fieldValue(addForm, 'Kovo-Idem');
-      const addContactRequest = (): Promise<Response> =>
-        fetch(`${origin}/_m/mutations/add-contact`, {
-          body: new URLSearchParams({
-            company: 'Navy',
-            csrf: fieldValue(addForm, 'csrf'),
-            email,
-            'Kovo-Idem': idem,
-            name: 'Grace Hopper',
-          }),
-          headers: {
-            accept: 'text/vnd.kovo.fragment+html',
-            'content-type': 'application/x-www-form-urlencoded',
-            cookie: cookieHeader(jar),
-            'Kovo-Current-Url': `${origin}/`,
-            'Kovo-Form-Target': target,
-            'Kovo-Fragment': 'true',
-            'Kovo-Idem': idem,
-            'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
-            'Kovo-Targets': `${target}=${deps}`,
-            origin,
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: {
+            ...withRepoBinOnPath(),
+            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            HOST: '127.0.0.1',
+            NODE_ENV: 'test',
+            PORT: String(port),
           },
-          method: 'POST',
         });
-      const [firstAddContact, duplicateAddContact] = await Promise.all([
-        addContactRequest(),
-        addContactRequest(),
-      ]);
-      const [firstBody, duplicateBody] = await Promise.all([
-        firstAddContact.text(),
-        duplicateAddContact.text(),
-      ]);
+        const output = collectOutput(server);
+        const origin = `http://127.0.0.1:${port}`;
+        const jar = new Map<string, string>();
 
-      for (const response of [firstAddContact, duplicateAddContact]) {
-        expect(response.status).toBe(200);
-        expect(response.headers.get('content-type')).toContain('text/vnd.kovo.fragment+html');
-        expect(response.headers.get('kovo-changes')).toBe('[{"domain":"model/contact"}]');
-      }
-      expect(duplicateBody).toBe(firstBody);
-      expect(firstBody).toContain('<kovo-query');
-      expect(firstBody).toContain('<kovo-fragment target="contacts-region"');
-      expect(firstBody).toContain('Grace Hopper');
-      expect(firstBody).toContain(email);
-      expect(firstBody).toContain('4 contacts');
+        await fetchTextWhenReady(`${origin}/login`, output);
+        const anonymousHome = await fetch(`${origin}/`, { redirect: 'manual' });
+        expect([302, 303, 307]).toContain(anonymousHome.status);
+        expect(anonymousHome.headers.get('location')).toBe('/login?next=%2F');
 
-      const updatedHome = await fetch(`${origin}/`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const updatedHtml = await updatedHome.text();
-      expect(updatedHtml).toContain('Grace Hopper');
-      expect(updatedHtml).toContain('4 contacts');
-    } finally {
-      await stopProcess(server);
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
+        const loginResponse = await fetch(`${origin}/login`);
+        mergeCookies(jar, loginResponse.headers.getSetCookie());
+        const loginHtml = await loginResponse.text();
+        expect(loginHtml).toContain('Sign in');
+        const loginCsrf = fieldValue(loginHtml, 'csrf');
+        const loginIdem = fieldValue(loginHtml, 'Kovo-Idem');
+        const demoPassword =
+          new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
+            readFileSync(join(root, '.env'), 'utf8'),
+          )?.[1] ?? '';
+        expect(loginCsrf).toBeTruthy();
+        expect(demoPassword).toBeTruthy();
 
-  it('serves generated SQLite add-contact mutations from the production build artifact', async () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-add-contact-'));
-    const port = await reservePort();
-    let server: ChildProcessWithoutNullStreams | undefined;
-
-    try {
-      writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Add Contact Proof' });
-      linkStarterBuildDependencies(root);
-
-      buildReusableProductionArtifact(root);
-
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          HOST: '127.0.0.1',
-          NODE_ENV: 'test',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
-      const jar = new Map<string, string>();
-
-      await signInDemoUser(root, origin, jar, output);
-      const homeResponse = await fetch(`${origin}/`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const homeHtml = await homeResponse.text();
-      const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
-      const email = `sqlite-${Date.now()}@example.com`;
-
-      const addContact = await fetch(`${origin}/_m/mutations/add-contact`, {
-        body: new URLSearchParams({
-          company: 'SQLite Lab',
-          csrf: fieldValue(addForm, 'csrf'),
-          email,
-          'Kovo-Idem': fieldValue(addForm, 'Kovo-Idem'),
-          name: 'SQLite Ada',
-        }),
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          cookie: cookieHeader(jar),
-          origin,
-        },
-        method: 'POST',
-        redirect: 'manual',
-      });
-      mergeCookies(jar, addContact.headers.getSetCookie());
-      await addContact.text();
-      expect(addContact.status).toBe(303);
-
-      const updatedHome = await fetch(`${origin}/`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const updatedHtml = await updatedHome.text();
-      expect(updatedHtml).toContain('SQLite Ada');
-      expect(updatedHtml).toContain(email);
-      expect(updatedHtml).toContain('4 contacts');
-    } finally {
-      await stopProcess(server);
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
-
-  it('refreshes later query-backed components from multi-component modules in production artifacts', async () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-multi-live-target-'));
-    const port = await reservePort();
-    let server: ChildProcessWithoutNullStreams | undefined;
-
-    try {
-      writeKovoProject(root, { name: 'Prod Multi Live Target Proof' });
-      linkStarterBuildDependencies(root);
-      addMultiComponentLiveTargetProof(root);
-
-      buildReusableProductionArtifact(root);
-
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          HOST: '127.0.0.1',
-          NODE_ENV: 'test',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
-      const jar = new Map<string, string>();
-
-      await signInDemoUser(root, origin, jar, output);
-      const homeHtml = await (
-        await fetch(`${origin}/`, {
-          headers: { cookie: cookieHeader(jar) },
-        })
-      ).text();
-      expect(homeHtml).toContain('Live stats: 3');
-
-      const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
-      const contactRegion = elementOpeningTagByAttribute(
-        homeHtml,
-        'kovo-fragment-target',
-        'contacts-region',
-      );
-      const statsRegion = elementOpeningTagByAttribute(
-        homeHtml,
-        'data-live-proof',
-        'contact-stats',
-      );
-      const contactDescriptor = liveTargetDescriptor(contactRegion);
-      const statsDescriptor = liveTargetDescriptor(statsRegion);
-      expect(contactDescriptor.target).toBe('contacts-region');
-      expect(statsDescriptor.target).toBe('contact-stats-region');
-      expect(statsDescriptor.component).toBe('components/interaction-lab/contact-stats-region');
-
-      const email = `multi-live-${Date.now()}@example.com`;
-      const idem = fieldValue(addForm, 'Kovo-Idem');
-      const addContact = await fetch(`${origin}/_m/mutations/add-contact`, {
-        body: new URLSearchParams({
-          company: 'Compiler Lab',
-          csrf: fieldValue(addForm, 'csrf'),
-          email,
-          'Kovo-Idem': idem,
-          name: 'Multi Live Ada',
-        }),
-        headers: {
-          accept: 'text/vnd.kovo.fragment+html',
-          'content-type': 'application/x-www-form-urlencoded',
-          cookie: cookieHeader(jar),
-          'Kovo-Current-Url': `${origin}/`,
-          'Kovo-Form-Target': contactDescriptor.target,
-          'Kovo-Fragment': 'true',
-          'Kovo-Idem': idem,
-          'Kovo-Live-Targets': [
-            formatLiveTargetDescriptor(contactDescriptor),
-            formatLiveTargetDescriptor(statsDescriptor),
-          ].join('; '),
-          'Kovo-Targets': [
-            `${contactDescriptor.target}=${contactDescriptor.deps}`,
-            `${statsDescriptor.target}=${statsDescriptor.deps}`,
-          ].join('; '),
-          origin,
-        },
-        method: 'POST',
-      });
-      const body = await addContact.text();
-      expect(addContact.status).toBe(200);
-      expect(body).toContain('<kovo-fragment target="contacts-region"');
-      expect(body).toContain('<kovo-fragment target="contact-stats-region"');
-      expect(body).toContain('Multi Live Ada');
-      expect(body).toContain('Live stats: 4');
-    } finally {
-      await stopProcess(server);
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
-
-  it('rejects no-JS add-contact idempotency token collisions from the production artifact', async () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-nojs-idem-'));
-    const port = await reservePort();
-    let server: ChildProcessWithoutNullStreams | undefined;
-
-    try {
-      writeKovoProject(root, { name: 'Prod NoJS Idem Proof' });
-      linkStarterBuildDependencies(root);
-
-      buildReusableProductionArtifact(root);
-
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          HOST: '127.0.0.1',
-          NODE_ENV: 'test',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
-      const jar = new Map<string, string>();
-
-      await signInDemoUser(root, origin, jar, output);
-      const homeResponse = await fetch(`${origin}/`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const homeHtml = await homeResponse.text();
-      const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
-      const csrf = fieldValue(addForm, 'csrf');
-      const idem = fieldValue(addForm, 'Kovo-Idem');
-      expect(csrf).toBeTruthy();
-      expect(idem).toBeTruthy();
-
-      const submitNoJs = (name: string, email: string): Promise<Response> =>
-        fetch(`${origin}/_m/mutations/add-contact`, {
+        const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
           body: new URLSearchParams({
-            company: 'Integrity Lab',
-            csrf,
-            email,
-            'Kovo-Idem': idem,
-            name,
+            csrf: loginCsrf,
+            email: 'demo@example.com',
+            'Kovo-Idem': loginIdem,
+            next: '/',
+            password: demoPassword,
           }),
           headers: {
             'content-type': 'application/x-www-form-urlencoded',
@@ -386,26 +91,342 @@ describe('create-kovo starter (build integration: production contact artifacts)'
           method: 'POST',
           redirect: 'manual',
         });
+        mergeCookies(jar, signIn.headers.getSetCookie());
+        expect(signIn.status).toBe(303);
 
-      const first = await submitNoJs('First Idem Contact', 'first-idem@example.com');
-      const second = await submitNoJs('Second Idem Contact', 'second-idem@example.com');
-      const secondBody = await second.text();
+        const homeResponse = await fetchTextWhenReady(`${origin}/`, output, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        expect(homeResponse).toContain('3 contacts');
+        const addForm = formHtmlByAction(homeResponse, '/_m/mutations/add-contact');
+        const contactRegion = elementOpeningTagByAttribute(
+          homeResponse,
+          'kovo-fragment-target',
+          'contacts-region',
+        );
+        const target = attributeValue(contactRegion, 'kovo-fragment-target');
+        const deps = attributeValue(contactRegion, 'kovo-deps');
+        const component = attributeValue(contactRegion, 'kovo-live-component');
+        const liveToken = attributeValue(contactRegion, 'kovo-live-token');
+        const props = attributeValue(contactRegion, 'kovo-props') ?? '{}';
+        expect(target).toBe('contacts-region');
+        expect(deps).toBeTruthy();
+        expect(component).toBe('components/contacts/contacts-region');
+        expect(liveToken).toBeTruthy();
 
-      expect(first.status).toBe(303);
-      expect(second.status).toBe(422);
-      expect(secondBody).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+        const email = `grace-${Date.now()}@example.com`;
+        const idem = fieldValue(addForm, 'Kovo-Idem');
+        const addContactRequest = (): Promise<Response> =>
+          fetch(`${origin}/_m/mutations/add-contact`, {
+            body: new URLSearchParams({
+              company: 'Navy',
+              csrf: fieldValue(addForm, 'csrf'),
+              email,
+              'Kovo-Idem': idem,
+              name: 'Grace Hopper',
+            }),
+            headers: {
+              accept: 'text/vnd.kovo.fragment+html',
+              'content-type': 'application/x-www-form-urlencoded',
+              cookie: cookieHeader(jar),
+              'Kovo-Current-Url': `${origin}/`,
+              'Kovo-Form-Target': target,
+              'Kovo-Fragment': 'true',
+              'Kovo-Idem': idem,
+              'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
+              'Kovo-Targets': `${target}=${deps}`,
+              origin,
+            },
+            method: 'POST',
+          });
+        const [firstAddContact, duplicateAddContact] = await Promise.all([
+          addContactRequest(),
+          addContactRequest(),
+        ]);
+        const [firstBody, duplicateBody] = await Promise.all([
+          firstAddContact.text(),
+          duplicateAddContact.text(),
+        ]);
 
-      const updatedHome = await fetch(`${origin}/`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const updatedHtml = await updatedHome.text();
-      expect(updatedHtml).toContain('First Idem Contact');
-      expect(updatedHtml).not.toContain('Second Idem Contact');
-    } finally {
-      await stopProcess(server);
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
+        for (const response of [firstAddContact, duplicateAddContact]) {
+          expect(response.status).toBe(200);
+          expect(response.headers.get('content-type')).toContain('text/vnd.kovo.fragment+html');
+          expect(response.headers.get('kovo-changes')).toBe('[{"domain":"model/contact"}]');
+        }
+        expect(duplicateBody).toBe(firstBody);
+        expect(firstBody).toContain('<kovo-query');
+        expect(firstBody).toContain('<kovo-fragment target="contacts-region"');
+        expect(firstBody).toContain('Grace Hopper');
+        expect(firstBody).toContain(email);
+        expect(firstBody).toContain('4 contacts');
+
+        const updatedHome = await fetch(`${origin}/`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const updatedHtml = await updatedHome.text();
+        expect(updatedHtml).toContain('Grace Hopper');
+        expect(updatedHtml).toContain('4 contacts');
+      } finally {
+        await stopProcess(server);
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'serves generated SQLite add-contact mutations from the production build artifact',
+    async () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-add-contact-'));
+      const port = await reservePort();
+      let server: ChildProcessWithoutNullStreams | undefined;
+
+      try {
+        writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Add Contact Proof' });
+        linkStarterBuildDependencies(root);
+
+        buildReusableProductionArtifact(root);
+
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: {
+            ...withRepoBinOnPath(),
+            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            HOST: '127.0.0.1',
+            NODE_ENV: 'test',
+            PORT: String(port),
+          },
+        });
+        const output = collectOutput(server);
+        const origin = `http://127.0.0.1:${port}`;
+        const jar = new Map<string, string>();
+
+        await signInDemoUser(root, origin, jar, output);
+        const homeResponse = await fetch(`${origin}/`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const homeHtml = await homeResponse.text();
+        const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
+        const email = `sqlite-${Date.now()}@example.com`;
+
+        const addContact = await fetch(`${origin}/_m/mutations/add-contact`, {
+          body: new URLSearchParams({
+            company: 'SQLite Lab',
+            csrf: fieldValue(addForm, 'csrf'),
+            email,
+            'Kovo-Idem': fieldValue(addForm, 'Kovo-Idem'),
+            name: 'SQLite Ada',
+          }),
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            cookie: cookieHeader(jar),
+            origin,
+          },
+          method: 'POST',
+          redirect: 'manual',
+        });
+        mergeCookies(jar, addContact.headers.getSetCookie());
+        await addContact.text();
+        expect(addContact.status).toBe(303);
+
+        const updatedHome = await fetch(`${origin}/`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const updatedHtml = await updatedHome.text();
+        expect(updatedHtml).toContain('SQLite Ada');
+        expect(updatedHtml).toContain(email);
+        expect(updatedHtml).toContain('4 contacts');
+      } finally {
+        await stopProcess(server);
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'refreshes later query-backed components from multi-component modules in production artifacts',
+    async () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-multi-live-target-'));
+      const port = await reservePort();
+      let server: ChildProcessWithoutNullStreams | undefined;
+
+      try {
+        writeKovoProject(root, { name: 'Prod Multi Live Target Proof' });
+        linkStarterBuildDependencies(root);
+        addMultiComponentLiveTargetProof(root);
+
+        buildReusableProductionArtifact(root);
+
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: {
+            ...withRepoBinOnPath(),
+            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            HOST: '127.0.0.1',
+            NODE_ENV: 'test',
+            PORT: String(port),
+          },
+        });
+        const output = collectOutput(server);
+        const origin = `http://127.0.0.1:${port}`;
+        const jar = new Map<string, string>();
+
+        await signInDemoUser(root, origin, jar, output);
+        const homeHtml = await (
+          await fetch(`${origin}/`, {
+            headers: { cookie: cookieHeader(jar) },
+          })
+        ).text();
+        expect(homeHtml).toContain('Live stats: 3');
+
+        const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
+        const contactRegion = elementOpeningTagByAttribute(
+          homeHtml,
+          'kovo-fragment-target',
+          'contacts-region',
+        );
+        const statsRegion = elementOpeningTagByAttribute(
+          homeHtml,
+          'data-live-proof',
+          'contact-stats',
+        );
+        const contactDescriptor = liveTargetDescriptor(contactRegion);
+        const statsDescriptor = liveTargetDescriptor(statsRegion);
+        expect(contactDescriptor.target).toBe('contacts-region');
+        expect(statsDescriptor.target).toBe('contact-stats-region');
+        expect(statsDescriptor.component).toBe('components/interaction-lab/contact-stats-region');
+
+        const email = `multi-live-${Date.now()}@example.com`;
+        const idem = fieldValue(addForm, 'Kovo-Idem');
+        const addContact = await fetch(`${origin}/_m/mutations/add-contact`, {
+          body: new URLSearchParams({
+            company: 'Compiler Lab',
+            csrf: fieldValue(addForm, 'csrf'),
+            email,
+            'Kovo-Idem': idem,
+            name: 'Multi Live Ada',
+          }),
+          headers: {
+            accept: 'text/vnd.kovo.fragment+html',
+            'content-type': 'application/x-www-form-urlencoded',
+            cookie: cookieHeader(jar),
+            'Kovo-Current-Url': `${origin}/`,
+            'Kovo-Form-Target': contactDescriptor.target,
+            'Kovo-Fragment': 'true',
+            'Kovo-Idem': idem,
+            'Kovo-Live-Targets': [
+              formatLiveTargetDescriptor(contactDescriptor),
+              formatLiveTargetDescriptor(statsDescriptor),
+            ].join('; '),
+            'Kovo-Targets': [
+              `${contactDescriptor.target}=${contactDescriptor.deps}`,
+              `${statsDescriptor.target}=${statsDescriptor.deps}`,
+            ].join('; '),
+            origin,
+          },
+          method: 'POST',
+        });
+        const body = await addContact.text();
+        expect(addContact.status).toBe(200);
+        expect(body).toContain('<kovo-fragment target="contacts-region"');
+        expect(body).toContain('<kovo-fragment target="contact-stats-region"');
+        expect(body).toContain('Multi Live Ada');
+        expect(body).toContain('Live stats: 4');
+      } finally {
+        await stopProcess(server);
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'rejects no-JS add-contact idempotency token collisions from the production artifact',
+    async () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-nojs-idem-'));
+      const port = await reservePort();
+      let server: ChildProcessWithoutNullStreams | undefined;
+
+      try {
+        writeKovoProject(root, { name: 'Prod NoJS Idem Proof' });
+        linkStarterBuildDependencies(root);
+
+        buildReusableProductionArtifact(root);
+
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: {
+            ...withRepoBinOnPath(),
+            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            HOST: '127.0.0.1',
+            NODE_ENV: 'test',
+            PORT: String(port),
+          },
+        });
+        const output = collectOutput(server);
+        const origin = `http://127.0.0.1:${port}`;
+        const jar = new Map<string, string>();
+
+        await signInDemoUser(root, origin, jar, output);
+        const homeResponse = await fetch(`${origin}/`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const homeHtml = await homeResponse.text();
+        const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
+        const csrf = fieldValue(addForm, 'csrf');
+        const idem = fieldValue(addForm, 'Kovo-Idem');
+        expect(csrf).toBeTruthy();
+        expect(idem).toBeTruthy();
+
+        const submitNoJs = (name: string, email: string): Promise<Response> =>
+          fetch(`${origin}/_m/mutations/add-contact`, {
+            body: new URLSearchParams({
+              company: 'Integrity Lab',
+              csrf,
+              email,
+              'Kovo-Idem': idem,
+              name,
+            }),
+            headers: {
+              'content-type': 'application/x-www-form-urlencoded',
+              cookie: cookieHeader(jar),
+              origin,
+            },
+            method: 'POST',
+            redirect: 'manual',
+          });
+
+        const first = await submitNoJs('First Idem Contact', 'first-idem@example.com');
+        const second = await submitNoJs('Second Idem Contact', 'second-idem@example.com');
+        const secondBody = await second.text();
+
+        expect(first.status).toBe(303);
+        expect(second.status).toBe(422);
+        expect(secondBody).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+
+        const updatedHome = await fetch(`${origin}/`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const updatedHtml = await updatedHome.text();
+        expect(updatedHtml).toContain('First Idem Contact');
+        expect(updatedHtml).not.toContain('Second Idem Contact');
+      } finally {
+        await stopProcess(server);
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+  );
 });
 
 interface LiveTargetDescriptor {

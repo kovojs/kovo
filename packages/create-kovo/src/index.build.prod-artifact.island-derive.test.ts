@@ -16,7 +16,10 @@ import { chromium, type Browser } from 'playwright';
 import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject } from './index.js';
-import { buildReusableProductionArtifact } from './index.build.test-support.js';
+import {
+  buildReusableProductionArtifact,
+  PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+} from './index.build.test-support.js';
 import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
 import {
   collectOutput,
@@ -69,6 +72,7 @@ describe('create-kovo starter (build integration: production island derives)', (
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           NODE_ENV: 'test',
           PORT: String(port),
@@ -170,25 +174,29 @@ describe('create-kovo starter (build integration: production island derives)', (
   }, 180_000);
 
   // @kovo-security-certifies KV311 module-helper-derive-prod-artifact
-  it('rejects unbound module-helper state derives during production build preflight', () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-helper-derive-'));
+  it(
+    'rejects unbound module-helper state derives during production build preflight',
+    () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-helper-derive-'));
 
-    try {
-      writeKovoProject(root, { name: 'Prod Helper Derive Proof' });
-      linkStarterBuildDependencies(root);
-      addModuleHelperDeriveProof(root);
+      try {
+        writeKovoProject(root, { name: 'Prod Helper Derive Proof' });
+        linkStarterBuildDependencies(root);
+        addModuleHelperDeriveProof(root);
 
-      expect(() => buildReusableProductionArtifact(root)).toThrow(/KV311/u);
+        expect(() => buildReusableProductionArtifact(root)).toThrow(/KV311/u);
 
-      const clientSources = clientArtifactSources(root).join('\n');
-      expect(clientSources).not.toContain('format(state.count)');
-      expect(clientSources).not.toContain('format =');
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
+        const clientSources = clientArtifactSources(root).join('\n');
+        expect(clientSources).not.toContain('format(state.count)');
+        expect(clientSources).not.toContain('format =');
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
+  );
 });
 
 async function expectOutputText(

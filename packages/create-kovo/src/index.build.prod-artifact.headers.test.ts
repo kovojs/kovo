@@ -12,6 +12,7 @@ import {
   buildReusableProductionArtifact,
   fieldValue,
   firstFormHtml,
+  freshProductionArtifactIdempotencyToken,
 } from './index.build.test-support.js';
 import {
   assertProdArtifactSinkCensus,
@@ -53,7 +54,7 @@ describe('create-kovo starter (build integration: production response header art
           witnesses: [
             'finalizeResponseHeaders',
             'ResponseHeaderChannelError',
-            'X-Kovo-Header-Proof',
+            'Wed, 21 Oct 2015 07:28:00 GMT',
             'header-route-forged.html',
             'header-route-typed-file.bin',
             'header-route-omitted-policy.bin',
@@ -87,6 +88,7 @@ describe('create-kovo starter (build integration: production response header art
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           KOVO_VERIFY_ENDPOINT_POSTURE: '1',
           NODE_ENV: 'test',
@@ -160,11 +162,12 @@ describe('create-kovo starter (build integration: production response header art
 
       const pipelinedWire = await pipelinedTransportHeaderExchange(port);
       expect(pipelinedWire).toContain('HTTP/1.1 500');
-      expect(pipelinedWire).toContain('HTTP/1.1 200');
-      expect(pipelinedWire).toContain('safe header proof');
+      expect(pipelinedWire).toMatch(/connection: close/iu);
+      expect(pipelinedWire).not.toContain('HTTP/1.1 200');
+      expect(pipelinedWire).not.toContain('safe header proof');
       expect(pipelinedWire).not.toContain('UNDECLARED_ROUTE_BYTES');
       expect(pipelinedWire).not.toContain('\r\n\r\nUNDECLARED_ROUTE_BYTESHTTP/1.1');
-      expect(pipelinedWire.match(/HTTP\/1\.1 /gu)).toHaveLength(2);
+      expect(pipelinedWire.match(/HTTP\/1\.1 /gu)).toHaveLength(1);
 
       const rollingMissing = await fetch(`${origin}/rolling-cookie-404`, {
         headers: { 'x-kovo-rolling-proof': '1' },
@@ -195,37 +198,41 @@ describe('create-kovo starter (build integration: production response header art
       const action = attributeValue(cookieForm, 'action');
       if (!action) throw new Error('Expected header cookie proof form action.');
 
+      const cookieIdem = freshProductionArtifactIdempotencyToken();
       const cookie = await fetch(`${origin}${action}`, {
         body: new URLSearchParams({
           csrf: fieldValue(cookieForm, 'csrf'),
-          'Kovo-Idem': `cookie-${Date.now()}`,
+          'Kovo-Idem': cookieIdem,
           mode: 'safe',
         }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
           cookie: cookieHeader(cookieJar),
           'Kovo-Fragment': 'true',
+          'Kovo-Idem': cookieIdem,
           origin,
         },
         method: 'POST',
       });
-      await cookie.text();
-      expect(cookie.status).toBe(200);
+      const cookieBody = await cookie.text();
+      expect(cookie.status, cookieBody).toBe(200);
       expect(cookie.headers.getSetCookie()).toEqual([
         expect.stringContaining('c2_cookie=hello%20world'),
       ]);
       expect(cookie.headers.getSetCookie()[0]).toContain('SameSite=Lax');
 
+      const unsafeCookieIdem = freshProductionArtifactIdempotencyToken();
       const unsafeCookie = await fetch(`${origin}${action}`, {
         body: new URLSearchParams({
           csrf: fieldValue(cookieForm, 'csrf'),
-          'Kovo-Idem': `unsafe-cookie-${Date.now()}`,
+          'Kovo-Idem': unsafeCookieIdem,
           mode: 'unsafe',
         }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
           cookie: cookieHeader(cookieJar),
           'Kovo-Fragment': 'true',
+          'Kovo-Idem': unsafeCookieIdem,
           origin,
         },
         method: 'POST',
@@ -321,7 +328,7 @@ function addHeaderSinkProofRoutes(root: string): void {
       readFileSync(authPath, 'utf8'),
       'export const appSessionProvider = appSession.provider(authBindings.sessionProvider);',
       [
-        'export const appSessionProvider = appSession.provider(async (request: { headers: Headers }) => {',
+        'export const appSessionProvider = appSession.provider(async (request: { headers: Headers; url: string }) => {',
         "  if (request.headers.get('x-kovo-rolling-proof') === '1') {",
         '    return {',
         "      setCookies: ['rolling_proof=victim-token; Path=/; HttpOnly; SameSite=Lax'],",

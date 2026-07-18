@@ -20,6 +20,7 @@ import {
   buildReusableProductionArtifact,
   fieldValue,
   formHtmlByAction,
+  freshProductionArtifactIdempotencyToken,
 } from './index.build.test-support.js';
 
 interface DurableTaskArtifactServer {
@@ -36,6 +37,7 @@ export async function withDurableTaskArtifactServer(
   mkdirSync(tempParent, { recursive: true });
   const root = mkdtempSync(join(tempParent, options.tempPrefix));
   const port = await reservePort();
+  const origin = `http://127.0.0.1:${port}`;
   let server: ChildProcessWithoutNullStreams | undefined;
 
   try {
@@ -50,13 +52,13 @@ export async function withDurableTaskArtifactServer(
       detached: process.platform !== 'win32',
       env: {
         ...withRepoBinOnPath(),
+        BETTER_AUTH_URL: origin,
         HOST: '127.0.0.1',
         NODE_ENV: 'test',
         PORT: String(port),
       },
     });
     const output = collectOutput(server);
-    const origin = `http://127.0.0.1:${port}`;
     await fetchTextWhenReady(`${origin}/api/task-proof-count`, output);
 
     await run({ origin, output, root });
@@ -260,12 +262,16 @@ export function addDurableTaskProofs(root: string): void {
     [
       '/** @jsxImportSource @kovojs/server */',
       "import { component } from '@kovojs/core';",
-      "import { mutationFormAttributes } from '@kovojs/server';",
       "import { scheduleTaskProof } from './durable-task-proofs.js';",
       '',
       'export const DurableTaskProofForm = component({',
       '  mutations: { scheduleTaskProof },',
-      '  render: () => <form data-proof="durable-task-schedule" {...mutationFormAttributes(scheduleTaskProof)} />',
+      '  render: () => (',
+      '    <form data-proof="durable-task-schedule" mutation={scheduleTaskProof} enhance>',
+      '      <input type="hidden" name="proofId" value="artifact-proof" />',
+      '      <input type="hidden" name="mode" value="normal" />',
+      '    </form>',
+      '  )',
       '});',
       '',
     ].join('\n'),
@@ -330,13 +336,23 @@ export async function postScheduleMode(
   const pageResponse = await fetch(`${origin}/durable-task-proof`);
   mergeCookies(jar, pageResponse.headers.getSetCookie());
   const pageHtml = await pageResponse.text();
-  const form = formHtmlByAction(pageHtml, '/_m/durable-task-proofs/schedule-task-proof');
-  return fetch(`${origin}/_m/durable-task-proofs/schedule-task-proof`, {
+  const action = '/_m/durable-task-proofs/schedule-task-proof';
+  let form: string;
+  try {
+    form = formHtmlByAction(pageHtml, action);
+  } catch (error) {
+    const renderedForms = pageHtml.match(/<form\b[^>]*>/g) ?? [];
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${cause} Page status: ${pageResponse.status}. Rendered forms: ${JSON.stringify(renderedForms)}.`,
+    );
+  }
+  return fetch(`${origin}${action}`, {
     body: new URLSearchParams({
       csrf: fieldValue(form, 'csrf'),
       mode,
       proofId,
-      'Kovo-Idem': uniqueProofId(`idem-${mode}`),
+      'Kovo-Idem': freshProductionArtifactIdempotencyToken(),
     }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',

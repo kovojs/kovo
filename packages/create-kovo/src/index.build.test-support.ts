@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createConnection } from 'node:net';
 import { join } from 'node:path';
@@ -13,6 +14,16 @@ import {
   resolveStarterBin,
   withStarterBinOnPath,
 } from './index.test-support.js';
+
+// Production artifact proofs compile an entire generated application. Shared GitHub runners can
+// be several times slower under the full matrix, so keep the semantic test deadline distinct from
+// local feedback while still bounding a genuinely stuck build.
+export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 180_000;
+
+/** Mint the production wire grammar from SPEC §10.3 with a full 128 random nonce bits. */
+export function freshProductionArtifactIdempotencyToken(): string {
+  return `v1_${Date.now()}_${randomBytes(16).toString('hex')}`;
+}
 
 export function addNoJsFailureProof(root: string): void {
   writeFileSync(
@@ -868,11 +879,8 @@ export function addRuntimeMutationSafetyProofs(
     ? replaceRequired(
         replaceRequired(
           runtimeDbSource,
-          "import { account, authSchema, contacts, rateLimit, session, user, verification } from '../schema.js';",
-          [
-            "import * as schema from '../schema.js';",
-            "import { account, authSchema, contacts, rateLimit, session, user, verification } from '../schema.js';",
-          ].join('\n'),
+          'import {\n  account,',
+          ["import * as schema from '../schema.js';", 'import {', '  account,'].join('\n'),
           'runtime mutation safety SQLite schema namespace import',
         ),
         'const APP_TABLES = [contacts, user, session, account, verification, rateLimit] as const;',
@@ -1005,6 +1013,11 @@ export function addRuntimeMutationSafetyProofs(
       'export const failAfterWrite = mutation({',
       '  access: publicProof,',
       '  input: s.object({ id: s.string() }),',
+      ...(includeReadonlyRuntimeChokeProbe
+        ? [
+            "  optimistic: { 'runtime-safety-proofs/readonly-runtime-choke-probe': 'await-fragment' },",
+          ]
+        : []),
       "  registry: { tables: ['tx_proofs'], touches: [txProof] },",
       '  async handler(input: { id: string }, request: AppRequest) {',
       '    await insertTxProofRow(request.db, input.id);',
@@ -1015,6 +1028,11 @@ export function addRuntimeMutationSafetyProofs(
       'export const writeTxProof = mutation({',
       '  access: publicProof,',
       '  input: s.object({ id: s.string() }),',
+      ...(includeReadonlyRuntimeChokeProbe
+        ? [
+            "  optimistic: { 'runtime-safety-proofs/readonly-runtime-choke-probe': 'await-fragment' },",
+          ]
+        : []),
       "  registry: { tables: ['tx_proofs'], touches: [txProof] },",
       '  async handler(input: { id: string }, request: AppRequest) {',
       '    await insertTxProofRow(request.db, input.id);',
@@ -1254,6 +1272,7 @@ export function addRuntimeMutationSafetyProofs(
         ? [
             'export const readonlyRuntimeChokeProbe = query({',
             '  access: publicProof,',
+            '  output: s.object({ ok: s.boolean() }),',
             '  reads: [txProof],',
             '  async load(_input: unknown, context?: RuntimeSafetyQueryContext): Promise<{ ok: true }> {',
             '    const reader = context?.db;',
@@ -1279,21 +1298,31 @@ export function addRuntimeMutationSafetyProofs(
     ...(includeSqliteAuthorizerTriggerDrift ? ['sqliteAuthorizerTriggerDrift'] : []),
     'writeTxProof',
   ];
+  const runtimeSafetyProofFormFields: Record<string, readonly string[]> = {
+    failAfterWrite: ['id'],
+    managedWriteEscapeAttempt: ['id'],
+    rawTableDrift: ['id', 'label'],
+    sqliteAuthorizerTriggerDrift: ['id', 'label'],
+    writeTxProof: ['id'],
+  };
   writeFileSync(
     join(root, 'src/runtime-safety-proof-forms.tsx'),
     [
       '/** @jsxImportSource @kovojs/server */',
       "import { component } from '@kovojs/core';",
-      "import { mutationFormAttributes } from '@kovojs/server';",
       `import { ${runtimeSafetyProofFormMutations.join(', ')} } from './runtime-safety-proofs.js';`,
       '',
       'export const RuntimeSafetyProofForms = component({',
       `  mutations: { ${runtimeSafetyProofFormMutations.join(', ')} },`,
       '  render: () => (',
       '    <main data-proof="runtime-safety-forms">',
-      ...runtimeSafetyProofFormMutations.map(
-        (name) => `      <form data-proof="${name}" {...mutationFormAttributes(${name})} />`,
-      ),
+      ...runtimeSafetyProofFormMutations.flatMap((name) => [
+        `      <form data-proof="${name}" mutation={${name}} enhance>`,
+        ...(runtimeSafetyProofFormFields[name] ?? []).map(
+          (field) => `        <input type="hidden" name="${field}" value="fixture" />`,
+        ),
+        '      </form>',
+      ]),
       '    </main>',
       '  ),',
       '});',

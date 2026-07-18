@@ -129,7 +129,11 @@ export const commerceRegistryFacts = {
 
 export const crmRegistryFacts = {
   mutationInputs: {
-    'mutations/add-contact': [requiredString('id'), requiredString('name'), requiredString('email')],
+    'mutations/add-contact': [
+      requiredString('id'),
+      requiredString('name'),
+      requiredString('email'),
+    ],
     'mutations/close-deal': [requiredString('dealId')],
     'mutations/create-deal': [
       requiredString('id'),

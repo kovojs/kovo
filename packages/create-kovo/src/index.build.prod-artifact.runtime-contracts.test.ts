@@ -20,6 +20,7 @@ import {
 import {
   addRuntimeContractProofs,
   buildReusableProductionArtifact,
+  freshProductionArtifactIdempotencyToken,
 } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production runtime contract artifacts)', () => {
@@ -42,6 +43,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           NODE_ENV: 'test',
           PORT: String(port),
@@ -66,9 +68,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
       const queryBody = await queryRead.text();
       expect(queryRead.status).toBe(200);
       expect(queryRead.headers.get('kovo-warn')).toBe('QUERY_LIST_LIMIT $.rows;limit=2');
-      expect(queryBody).toContain(
-        '<kovo-query name="runtime-contract-proofs/warning-items-query">',
-      );
+      expect(queryBody).toContain('<kovo-query name="runtime-contract-proofs/warning-items-query"');
       expect(queryBody).toContain('"label":"item-1"');
       expect(queryBody).not.toContain('"label":"item-2"');
 
@@ -88,6 +88,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
             cookie: cookieHeader(jar),
             'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
             'Kovo-Fragment': 'true',
+            'Kovo-Idem': freshProductionArtifactIdempotencyToken(),
             'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,
             'Kovo-Targets': `${liveTarget}=${liveDeps}`,
           },
@@ -98,7 +99,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
       expect(mutationRefresh.status, `${mutationRefreshBody}\n${output()}`).toBe(200);
       expect(mutationRefresh.headers.get('kovo-warn')).toContain('QUERY_LIST_LIMIT $.rows;limit=2');
       expect(mutationRefreshBody).toContain(
-        '<kovo-query name="runtime-contract-proofs/warning-items-query">',
+        '<kovo-query name="runtime-contract-proofs/warning-items-query"',
       );
       expect(mutationRefreshBody).toContain('<kovo-fragment');
       expect(mutationRefreshBody).toContain('data-warning-count="2"');
@@ -123,6 +124,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
             cookie: cookieHeader(jar),
             'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
             'Kovo-Fragment': 'true',
+            'Kovo-Idem': freshProductionArtifactIdempotencyToken(),
             'Kovo-Live-Targets': `${refreshedTarget}#${refreshedComponent}@${refreshedToken}:${refreshedProps}`,
             'Kovo-Targets': `${refreshedTarget}=${refreshedDeps}`,
           },
@@ -151,12 +153,14 @@ describe('create-kovo starter (build integration: production runtime contract ar
           type: 'image/png',
         }) as unknown as Blob,
       );
-      forgedHtmlUpload.set('Kovo-Idem', `forged-${Date.now()}`);
+      const forgedHtmlUploadIdem = freshProductionArtifactIdempotencyToken();
+      forgedHtmlUpload.set('Kovo-Idem', forgedHtmlUploadIdem);
       const rejected = await fetch(`${origin}/_m/runtime-contract-proofs/accept-png-upload`, {
         body: forgedHtmlUpload,
         headers: {
           'Kovo-Form-Target': 'runtime-upload-form',
           'Kovo-Fragment': 'true',
+          'Kovo-Idem': forgedHtmlUploadIdem,
           origin,
         },
         method: 'POST',
@@ -173,11 +177,13 @@ describe('create-kovo starter (build integration: production runtime contract ar
         'avatar',
         new File([png], 'avatar.png', { type: 'text/html' }) as unknown as Blob,
       );
-      clientMimeLie.set('Kovo-Idem', `accepted-${Date.now()}`);
+      const clientMimeLieIdem = freshProductionArtifactIdempotencyToken();
+      clientMimeLie.set('Kovo-Idem', clientMimeLieIdem);
       const accepted = await fetch(`${origin}/_m/runtime-contract-proofs/accept-png-upload`, {
         body: clientMimeLie,
         headers: {
           'Kovo-Fragment': 'true',
+          'Kovo-Idem': clientMimeLieIdem,
           origin,
         },
         method: 'POST',

@@ -37,11 +37,8 @@ export const commerceViteConfig = defineConfig({
         }),
       ]
     : isVitest
-    ? [kovo({ app: '/src/app.tsx' })]
-    : [
-        exampleKovoCompilerPlugin({ include: ['src'] }),
-        kovo({ app: '/src/app.tsx' }),
-      ],
+      ? [kovo({ app: '/src/app.tsx' })]
+      : [exampleKovoCompilerPlugin({ include: ['src'] }), kovo({ app: '/src/app.tsx' })],
   // The Drizzle/PGlite (WASM) data layer makes the build/dev tests (which spawn
   // real vite builds and a dev server) run well past Vitest's 5s default,
   // especially under the suite's parallelism. Give them room.

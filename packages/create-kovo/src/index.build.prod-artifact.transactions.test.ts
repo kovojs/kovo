@@ -24,6 +24,7 @@ import {
   execFileSyncErrorOutput,
   fieldValue,
   formHtmlByAction,
+  freshProductionArtifactIdempotencyToken,
 } from './index.build.test-support.js';
 
 function captureProductionBuildFailure(build: () => void): unknown {
@@ -70,6 +71,7 @@ describe('create-kovo starter (build integration: production transaction artifac
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           NODE_ENV: 'test',
           PORT: String(port),
@@ -90,7 +92,7 @@ describe('create-kovo starter (build integration: production transaction artifac
         body: new URLSearchParams({
           csrf: writeCsrf.token,
           id: writeId,
-          'Kovo-Idem': `idem-success-${Date.now()}`,
+          'Kovo-Idem': freshProductionArtifactIdempotencyToken(),
         }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
@@ -115,7 +117,7 @@ describe('create-kovo starter (build integration: production transaction artifac
         body: new URLSearchParams({
           csrf: rollbackCsrf.token,
           id: `partial-${Date.now()}`,
-          'Kovo-Idem': `idem-tx-${Date.now()}`,
+          'Kovo-Idem': freshProductionArtifactIdempotencyToken(),
         }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
@@ -190,6 +192,7 @@ describe('create-kovo starter (build integration: production transaction artifac
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
           NODE_ENV: 'test',
@@ -246,6 +249,7 @@ describe('create-kovo starter (build integration: production transaction artifac
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           NODE_ENV: 'test',
           PORT: String(port),
@@ -265,7 +269,7 @@ describe('create-kovo starter (build integration: production transaction artifac
         body: new URLSearchParams({
           csrf: writeCsrf.token,
           id: `sqlite-success-${Date.now()}`,
-          'Kovo-Idem': `idem-sqlite-success-${Date.now()}`,
+          'Kovo-Idem': freshProductionArtifactIdempotencyToken(),
         }),
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
