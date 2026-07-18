@@ -78,6 +78,35 @@ describe('kovo explain', () => {
                   target: 'trustedHtml',
                 },
               ],
+              securitySemanticGraph: {
+                budgets: { callDepth: 16, nodes: 50_000, operations: 4_096, summaries: 256 },
+                roots: [
+                  {
+                    root: 'endpoint:/report',
+                    summaries: [
+                      {
+                        authorityInputs: ['arg0=context'],
+                        callable: 'local:consume',
+                        operationKinds: ['server.egress.request'],
+                        verdict: 'proved',
+                      },
+                    ],
+                    traces: [
+                      {
+                        root: 'endpoint:/report',
+                        sink: {
+                          door: 'ctx.fetch',
+                          kind: 'server.egress.request',
+                          target: 'outbound',
+                        },
+                        transfers: ['local:consume[arg0=context]'],
+                        verdict: 'proved',
+                      },
+                    ],
+                  },
+                ],
+                schema: 'kovo-security-semantic-graph/v1',
+              },
               styleRules: [
                 {
                   className: 'kv-button-bg-a1b2c3',
@@ -114,6 +143,8 @@ describe('kovo explain', () => {
         'HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
         'OPERATION server.helper.call door=local-call-edge root=endpoint:/report target=local:consume justification=-',
         'OPERATION server.output.trusted-html door=trustedHtml root=- target=trustedHtml justification=reviewed static empty state',
+        'SEMANTIC-SUMMARY root=endpoint:/report callable=local:consume authority-inputs=arg0=context effects=server.egress.request verdict=proved',
+        'SEMANTIC-TRACE root=endpoint:/report transfers=local:consume[arg0=context] sink=server.egress.request:outbound verdict=proved',
         'SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal',
         'DERIVE CartBadge$isEmpty inputs=cart ref=/c/cart-badge.client.js#CartBadge$isEmpty target=button[data-bind:disabled]',
         'TRIGGER visible export=CartBadge$mountChart ref=/c/cart-badge.client.js#CartBadge$mountChart deps=cart justification=chart boots when visible',

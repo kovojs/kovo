@@ -30,7 +30,10 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { serverSecurityOperationFacts } from '../security-operation-facts.js';
+import {
+  componentSecuritySemanticGraphFacts,
+  serverSecurityOperationFacts,
+} from '../security-operation-facts.js';
 import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
 import {
   emitElementParamTypes,
@@ -113,8 +116,13 @@ function appendServerSecurityOperationManifest(
     securityOperationIrSchema,
     'Server security-operation schema',
   );
+  const semanticGraph = componentSecuritySemanticGraphFacts(model);
+  const semanticGraphSource =
+    semanticGraph === undefined
+      ? 'undefined'
+      : serverJsonSource(semanticGraph, 'Server security semantic graph');
   return `${renderedSource}\n/** @generated SPEC §5.2 compiler-owned finite server security IR. */
-export const ${GENERATED_SERVER_SECURITY_MANIFEST} = Object.freeze({ operations: Object.freeze(${operationsSource}), schema: ${schemaSource} });\n`;
+export const ${GENERATED_SERVER_SECURITY_MANIFEST} = Object.freeze({ operations: Object.freeze(${operationsSource}), schema: ${schemaSource}, semanticGraph: ${semanticGraphSource} });\n`;
 }
 
 export function serverRenderLowering(

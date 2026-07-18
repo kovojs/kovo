@@ -1915,6 +1915,32 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'normalized-helper-summary-provenance',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'discharges multi-hop helper edges through bottom-up normalized summaries',
+          'kovo-security-semantic-graph/v1',
+          'local:consume[arg0=context]',
+          'local:dial[arg0=operation:server.egress.request]',
+          'shows root, transfers, sink, and closed reason for helper alias mutation',
+          'keeps helper summaries context-sensitive to exact authority inputs',
+        ],
+      },
+      {
+        id: 'normalized-helper-cycle-budget-and-posture-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'fails closed on recursive helper cycles with an explicit normalized verdict',
+          'helper-cycle',
+          'propagates query no-write posture through summarized helpers',
+          'closes arguments-object recovery and deterministic call-depth exhaustion',
+          'budget-call-depth',
+          'fails closed for %s in normalized server semantics',
+          'operation-function member laundering',
+          'nested callable authority capture',
+        ],
+      },
+      {
         id: 'server-root-census-and-query-closure',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [

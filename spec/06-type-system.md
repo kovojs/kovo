@@ -329,8 +329,8 @@ raw-response, and redirect response effects; storage read/write; task compositio
 compiler-control records `server.handler.root` and `server.helper.call`. The root record enrolls each
 supported query, mutation, endpoint, webhook, and task body even when it has no terminal effects.
 The helper-call record names an exact immutable same-file callable that received authority and
-carries the source-derived handler root on the edge; it is an open semantic-summary edge, not
-evidence about effects inside that helper. The inventory in
+carries the source-derived handler root on the edge. The normalized interpreter below MUST
+discharge that edge before the build can treat the root as closed. The inventory in
 `securityOperationKinds` is the canonical union. C9 assigns terminal effects to one real boundary
 owner and the two control records to capability closure. Adding a kind without exactly one owner, or
 an inventory row that names an unknown/duplicate kind, fails `check:c9-sink-inventory`.
@@ -343,8 +343,8 @@ An ambiguous/mutable join, computed terminal method, raw database client member,
 container or constructor, or return of authority is unsupported and MUST fail closed with
 **KV449**. Authority may pass to an exact immutable same-file function only by emitting a
 `server.helper.call` edge with its local identity. Imported, foreign, computed, aliased, reassigned,
-or unresolved helpers remain KV449. This finite edge enrollment does not inspect or summarize the
-helper body: Phase 2C MUST discharge it with an explicit bottom-up semantic summary before Kovo can
+or unresolved helpers remain KV449. The finite edge enrollment itself does not guess about the
+helper body; the normalized interpreter MUST produce an explicit bottom-up summary before Kovo can
 claim cross-helper effect closure. A helper may always consume plain data returned by a reviewed
 operation, or the capability-closed module graph may terminate at an exact reviewed framework door.
 Namespace and named imports of the three exceptional operations preserve exact
@@ -360,8 +360,53 @@ function or one exact immutable same-file function. Definition spreads/computed 
 roots, imported/aliased/reassigned roots, and dynamic definition carriers are KV449. This includes
 `query({ load })`: query roots appear in the emitted manifest even when the loader is effect-free,
 and a directly reached managed DB write from a query remains KV449. Value-flow beyond the closed
-alias/receiver and explicit local-call-edge rules above belongs to the normalized abstract
-interpreter; the edge preserves that obligation rather than guessing its downstream verdict.
+alias/receiver and explicit local-call-edge rules above belongs only to the normalized abstract
+interpreter defined next; the edge preserves that obligation rather than guessing its downstream
+verdict.
+
+**Normalized helper provenance (normative, narrow abstract interpreter).** The compiler MUST
+discharge every `server.helper.call` over `kovo-security-semantic-graph/v1`, a normalized graph whose
+nodes are enrolled handler roots, exact same-file callables, finite operations, and explicit closed
+verdicts. This is not a JavaScript evaluator, SSA optimizer, or type-inference engine. Its complete
+value lattice is: plain local data; request/context authority; managed database, structured-header,
+storage, response-constructor, response-outcome, and principal-scope authority; one exact
+`operation:<securityOperationKind>` terminal; and absorbing unknown authority. The scanner is the
+only raw-syntax boundary; validation, emission, graph, and explain consumers decide from these
+typed facts (SPEC §5.2 rule 10).
+
+Transfer semantics are finite. An exact immutable alias preserves its lattice value. Static object
+destructuring applies the reviewed member transition one property at a time. Results of finite
+operations are plain data, except the explicit principal-scope acquisition that returns a scoped
+context. Passing authority to an exact immutable same-file helper maps each positional argument to
+that helper's parameter binding and computes a context-sensitive summary keyed by the complete
+authority-input vector. Summaries are computed callee-first and merged back into the caller; nested
+helper operations retain the source root and ordered transfer path. Returning or throwing
+authority, placing it in an opaque container, mutating an authority alias/member, using a mutable or
+ambiguous join, capturing it in an unsummarized nested callable, recovering it through `arguments`
+or a rest/spread mapping, invoking an operation through `call`/`apply`/`bind`, or using an imported,
+computed, aliased, reassigned, unresolved, or otherwise foreign callable is unsupported and MUST
+remain KV449. A query root's no-managed-write posture propagates unchanged through every summary.
+
+The resource contract is deterministic and has no app-authored widening knob: at most 16 helper
+edges on one path, 50,000 interpreted AST nodes, 4,096 finite operations, and 256 helper summaries
+per root. A repeated active summary key is a recursion cycle, not a fixpoint guess. The only closed
+reasons are `helper-cycle`, `opaque-transfer`, `unknown-operation`,
+`unsupported-authority-use`, and the four named `budget-*` reasons. A cycle, unsupported construct,
+or exhausted call-depth/node/operation/summary budget MUST produce KV449 before output, with
+`root`, ordered `transfers`, `sink`, and `verdict=closed:<reason>` in the diagnostic. Successful
+generated server manifests and `kovo explain` expose the same root-to-transfer-to-sink trace and
+bottom-up summaries. These artifacts are audit evidence; they neither grant runtime authority nor
+replace the C9 sink owner.
+
+**Authorization-gates-DATA scope (normative honesty boundary).** The normalized substrate may
+contribute to OPP-28 only when the data analyzer has an exact private principal symbol, an exact
+owner-column identity, and an equality-equivalent predicate (`eq` or singleton membership) whose
+accepted guard principal is the same symbol. That structurally proven subset may be reported as
+owner-scoped. Arbitrary JavaScript guard correctness, semantic equivalence between general
+predicates, multi-principal policy composition, database policy correctness, and whether an opaque
+helper actually enforces the intended business rule are not proved by this interpreter. They remain
+an explicit database-engine/runtime-policy and audit responsibility; unknown correspondence stays
+`scope: unknown` and MUST NOT be promoted by naming, types, or a permissive helper summary.
 
 **Build-preset capability boundary (normative).** `KovoPreset` is an opaque, framework-owned
 selection token, not a public structural deployment descriptor. `node()`, `vercel()`, and

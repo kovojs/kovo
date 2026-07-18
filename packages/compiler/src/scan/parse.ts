@@ -4228,8 +4228,11 @@ function serverSecurityOperationModel(
   surface: SecurityOperationSurface,
   parameters: readonly ts.ParameterDeclaration[],
   root: string,
-): Pick<MutationHandlerModel, 'securityOperations' | 'securityOperationViolations'> {
-  const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters);
+): Pick<
+  MutationHandlerModel,
+  'securityOperations' | 'securityOperationViolations' | 'securitySemanticRoot'
+> {
+  const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters, root);
   const securityOperations: ServerSecurityOperationModel[] = [
     {
       door: 'handler-root',
@@ -4254,6 +4257,7 @@ function serverSecurityOperationModel(
   }
   return {
     securityOperations,
+    ...(facts.semanticRoot === undefined ? {} : { securitySemanticRoot: facts.semanticRoot }),
     ...(facts.violations.length === 0 ? {} : { securityOperationViolations: facts.violations }),
   };
 }

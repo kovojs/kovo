@@ -1,5 +1,8 @@
 import type { DerivationStatus } from './derivation.js';
-import type { SecurityOperationIr } from './internal/security-operation-ir.js';
+import type {
+  SecurityOperationIr,
+  SecuritySemanticGraph,
+} from './internal/security-operation-ir.js';
 
 import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
 import { snapshotAuditText } from './internal/audit-text.js';
@@ -257,6 +260,7 @@ export interface ComponentExplain {
   mutableLocalState?: boolean;
   platformSubstitutions?: readonly PlatformSubstitutionExplain[];
   queries?: readonly string[];
+  securitySemanticGraph?: SecuritySemanticGraph;
   securityOperations?: readonly SecurityOperationIr[];
   styleRules?: readonly StyleRuleExplain[];
   triggers?: readonly TriggerExplain[];

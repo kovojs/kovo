@@ -36,7 +36,7 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
     `kovo-security-operation-ir/v1` operation before emission (§4.3, §6.6). The same closed union
     contains two compiler-control records: `server.handler.root` proves that each supported
     query/mutation/endpoint/webhook/task root was enrolled, and `server.helper.call` records an exact
-    same-file authority transfer whose semantic-summary obligation remains §6.6/Phase 2C work.
+    same-file authority transfer discharged by the bounded bottom-up summaries in §6.6.
     Generated client
     modules carry their browser subset through the compiler-only `@kovojs/browser/generated`
     `securityHandler` ABI; generated server modules carry the corresponding immutable manifest for
