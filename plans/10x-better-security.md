@@ -213,8 +213,10 @@ Measurements are versioned and reproducible:
 
 - [ ] For every remaining dynamic fact, identify the real sink, classify-and-pin or reconstruct
       its carrier, and enroll the door plus hostile-value evidence in the C9 inventory.
-- [ ] Prove no TypeScript brand, module-private sentinel, proxy, or static diagnostic is treated as
+- [x] Prove no TypeScript brand, module-private sentinel, proxy, or static diagnostic is treated as
       the runtime security mechanism.
+  - Evidence: `pnpm run check:c9-sink-inventory` passes; C9 rejects `brand`, `sentinel`, `proxy`,
+    and `static-diagnostic`, leaving only reconstruct/box/own mechanisms.
 - [ ] Obtain an independent architecture review of the 2A–2D design before deleting a production
       classifier family.
 

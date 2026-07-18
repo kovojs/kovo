@@ -38,6 +38,7 @@ const requiredC9SinkNames = [
   'Better Auth credential/non-egress',
   'dynamic module/process execution',
 ] as const;
+const allowedBoundaryCrossingMechanisms = new Set(['reconstruct', 'box', 'own']);
 
 function assertNonBlank(value: string, label: string): void {
   if (value.trim() === '') throw new Error(`${label} must be non-blank.`);
@@ -68,6 +69,11 @@ function assertC9SinkInventoryComplete(
     if (!requiredSinks.has(entry.sink)) throw new Error(`Unknown C9 sink row: ${entry.sink}.`);
     seenSinks.add(entry.sink);
 
+    if (!allowedBoundaryCrossingMechanisms.has(entry.mechanism)) {
+      throw new Error(
+        `${entry.sink} has an unknown boundary-crossing mechanism: ${entry.mechanism}.`,
+      );
+    }
     assertNonBlank(entry.mechanismDetail, `${entry.sink} mechanism detail`);
     assertNonBlank(entry.soleDoor, `${entry.sink} sole door`);
     assertNonBlank(entry.owner, `${entry.sink} owner`);
@@ -375,6 +381,18 @@ describe('boundary crossing sink inventory', () => {
       ),
     ).toThrow(expected);
   });
+
+  it.each(['brand', 'sentinel', 'proxy', 'static-diagnostic'])(
+    'does not treat %s as a boundary-crossing mechanism',
+    (mechanism) => {
+      const inventory = mutableBoundaryInventory();
+      expect(Reflect.set(inventory[0]!, 'mechanism', mechanism)).toBe(true);
+
+      expect(() =>
+        assertC9SinkInventoryComplete(frameworkSourceSinkInventory(), inventory),
+      ).toThrow(/unknown boundary-crossing mechanism/u);
+    },
+  );
 
   it('keeps browser-state cache poisoning in the C13 header/cookie superset corpus', () => {
     const headerInventory = frameworkSourceSinkInventory().find(
