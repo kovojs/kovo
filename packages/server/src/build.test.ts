@@ -26,7 +26,7 @@ import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
@@ -146,6 +146,186 @@ describe('server build-time deployment API', () => {
         }),
       ),
     ).toMatchObject({ name: 'node' });
+  });
+
+  it('shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells', async () => {
+    const packageRoot = fileURLToPath(new URL('../', import.meta.url));
+    const root = await mkdtemp(join(packageRoot, '.csrf-packed-runtime-'));
+    let nodeServer: GeneratedServerProcess | undefined;
+    let vercelServer: GeneratedServerProcess | undefined;
+
+    try {
+      const packedOut = join(root, 'packed');
+      execFileSync(
+        'pnpm',
+        ['exec', 'vp', 'pack', 'src/index.ts', '--out-dir', packedOut, '--logLevel', 'error'],
+        { cwd: packageRoot, stdio: 'pipe' },
+      );
+
+      const packedFiles = (await readdir(packedOut, { recursive: true })).filter((file) =>
+        file.endsWith('.mjs'),
+      );
+      const packedSources = await Promise.all(
+        packedFiles.map((file) => readFile(join(packedOut, file), 'utf8')),
+      );
+      const witnessDeclaration = 'anonymousCsrfResponsePersonalizations = createWitnessWeakSet()';
+      expect(
+        packedSources.reduce(
+          (count, source) => count + source.split(witnessDeclaration).length - 1,
+          0,
+        ),
+      ).toBe(1);
+
+      // A source-workspace package intentionally externalizes sibling @kovojs/* entrypoints.
+      // Materialize minimal published-package-shaped siblings beside this packed entry so the
+      // generated runtimes exercise real Node package resolution instead of Vitest's TS loader.
+      const workspaceSpecifiers = new Map<string, Set<string>>();
+      const workspaceImportPattern =
+        /from\s+["'](@kovojs\/(core|browser|drizzle|style)(?:\/[^"']+)?)['"]/gu;
+      for (const source of packedSources) {
+        for (const match of source.matchAll(workspaceImportPattern)) {
+          const specifier = match[1];
+          const packageDirectory = match[2];
+          if (specifier === undefined || packageDirectory === undefined) continue;
+          const packageName = `@kovojs/${packageDirectory}`;
+          const specifiers = workspaceSpecifiers.get(packageName) ?? new Set<string>();
+          specifiers.add(specifier);
+          workspaceSpecifiers.set(packageName, specifiers);
+        }
+      }
+      for (const packageName of workspaceSpecifiers.keys()) {
+        const packageDirectory = packageName.slice('@kovojs/'.length);
+        const workspacePackageRoot = fileURLToPath(
+          new URL(`../../${packageDirectory}/`, import.meta.url),
+        );
+        const packageManifest = JSON.parse(
+          await readFile(join(workspacePackageRoot, 'package.json'), 'utf8'),
+        ) as { exports: Record<string, string> };
+        const runtimeExports: Record<string, string> = {};
+        const packageEntries = Object.entries(packageManifest.exports).map(
+          ([subpath, sourceEntry]) => {
+            if (!sourceEntry.startsWith('./src/')) {
+              throw new Error(`Missing source export ${subpath} for ${packageName}`);
+            }
+            runtimeExports[subpath] =
+              `./dist/${sourceEntry.slice('./src/'.length, -'.ts'.length)}.mjs`;
+            return sourceEntry.slice('./'.length);
+          },
+        );
+        const packedPackageRoot = join(packedOut, `node_modules/${packageName}`);
+        await mkdir(packedPackageRoot, { recursive: true });
+        execFileSync(
+          'pnpm',
+          [
+            'exec',
+            'vp',
+            'pack',
+            ...packageEntries,
+            '--out-dir',
+            join(packedPackageRoot, 'dist'),
+            '--logLevel',
+            'error',
+          ],
+          {
+            cwd: workspacePackageRoot,
+            stdio: 'pipe',
+          },
+        );
+        await writeFile(
+          join(packedPackageRoot, 'package.json'),
+          `${JSON.stringify({
+            exports: runtimeExports,
+            name: packageName,
+            type: 'module',
+          })}\n`,
+        );
+      }
+      const materialScope = join(packedOut, 'node_modules/@material');
+      await mkdir(materialScope, { recursive: true });
+      await symlink(
+        fileURLToPath(
+          new URL('../../style/node_modules/@material/material-color-utilities', import.meta.url),
+        ),
+        join(materialScope, 'material-color-utilities'),
+        'dir',
+      );
+
+      const packedIndexUrl = pathToFileURL(join(packedOut, 'index.mjs')).href;
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/packed-csrf', {
+              guard: () => true,
+              page: () => renderedHtml('<main>packed</main>'),
+            }),
+          ],
+        }),
+        outDir: join(root, 'neutral'),
+        serverHandlerSource: `
+import {
+  createApp,
+  createRequestHandler,
+  mintCsrfToken,
+  route,
+} from ${JSON.stringify(packedIndexUrl)};
+
+const csrf = {
+  secret: 'packed-anonymous-csrf-witness-secret-0123456789abcdef',
+  sessionId: () => undefined,
+};
+const tokenRoute = route('/packed-csrf', {
+  page(_context, request) {
+    return mintCsrfToken(request, csrf, { audience: 'packed-csrf-response' }).token;
+  },
+});
+const app = createApp({
+  csrf,
+  egress: { enabled: false, justification: 'packed cache fixture performs no outbound I/O' },
+  routes: [tokenRoute],
+});
+export default createRequestHandler(app);
+`,
+      });
+      const nodeOut = join(root, 'node');
+      const vercelOut = join(root, 'vercel');
+      await Promise.all([
+        node({ dockerfile: false }).emit!(build, {
+          declaredEnv: [],
+          log() {},
+          outDir: nodeOut,
+          readNeutral() {
+            return build;
+          },
+        }),
+        vercel().emit!(build, {
+          declaredEnv: [],
+          log() {},
+          outDir: vercelOut,
+          readNeutral() {
+            return build;
+          },
+        }),
+      ]);
+
+      nodeServer = await startGeneratedNodeServer(join(nodeOut, 'server.mjs'));
+      vercelServer = await startGeneratedVercelServer(
+        join(vercelOut, 'functions/kovo.func/index.cjs'),
+      );
+      for (const server of [nodeServer, vercelServer]) {
+        const response = await fetch(`${server.baseUrl}/packed-csrf`, {
+          headers: { Cookie: `__Host-kovo_csrf=${'A'.repeat(43)}` },
+        });
+        expect(response.status, server.stderr()).toBe(200);
+        await expect(response.text()).resolves.not.toBe('');
+        expect(response.headers.get('cache-control')).toBe('private, no-store');
+        expect(response.headers.get('vary')).toContain('Cookie');
+        expect(response.headers.get('set-cookie')).toBeNull();
+      }
+    } finally {
+      await nodeServer?.close();
+      await vercelServer?.close();
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('rejects symlinked built-in preset roots and destination parents without writing outside', async () => {
@@ -4879,6 +5059,20 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   expect(emittedHeaders['cache-control']).toBe('private, no-store');
   expect(emittedHeaders.vary).toBe('Accept-Language, Cookie');
 
+  // SPEC §9.1: an existing anonymous CSRF binding can personalize response authority without a
+  // new Set-Cookie. Prove both emitted Node and Vercel adapters preserve the final app boundary's
+  // explicit private/no-store + Vary: Cookie floor in that no-browser-state-header case.
+  const livePersonalizedHeaders = await capturedCookiePersonalizedNodeHeaders(
+    liveWriteWebResponseToNode,
+  );
+  const emittedPersonalizedHeaders = await capturedCookiePersonalizedNodeHeaders(
+    adapter.writeWebResponseToNode,
+  );
+  expect(emittedPersonalizedHeaders).toEqual(livePersonalizedHeaders);
+  expect(emittedPersonalizedHeaders['cache-control']).toBe('private, no-store');
+  expect(emittedPersonalizedHeaders.vary).toBe('Accept, Cookie');
+  expect(emittedPersonalizedHeaders['set-cookie']).toBeUndefined();
+
   for (const writeResponse of [liveWriteWebResponseToNode, adapter.writeWebResponseToNode]) {
     for (const httpVersion of ['1.0', '1.1', '2.0']) {
       for (const name of ['Content-Length', 'cOnNeCtIoN', 'Transfer-Encoding']) {
@@ -4958,6 +5152,31 @@ async function capturedNodeHeaders(
   response.headers.set('cache-control', 'public, max-age=3600');
   response.headers.set('vary', 'Accept-Language');
   response.headers.set('x-from-test', 'kept');
+  let captured: Record<string, string | string[]> = {};
+  const nodeResponse = {
+    end() {
+      return this;
+    },
+    writeHead(_status: number, _statusText: string, headers: Record<string, string | string[]>) {
+      captured = headers;
+      return this;
+    },
+  } as unknown as ServerResponse;
+
+  await writeWebResponseToNode(response, nodeResponse, 'GET');
+  return captured;
+}
+
+async function capturedCookiePersonalizedNodeHeaders(
+  writeWebResponseToNode: NodeAdapterModule['writeWebResponseToNode'],
+): Promise<Record<string, string | string[]>> {
+  const response = new Response(null, {
+    headers: {
+      'Cache-Control': 'private, no-store',
+      Vary: 'Accept, Cookie',
+    },
+    status: 204,
+  });
   let captured: Record<string, string | string[]> = {};
   const nodeResponse = {
     end() {

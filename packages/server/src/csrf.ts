@@ -8,7 +8,7 @@ import {
 import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
 import { escapeWireAttribute, renderedHtml, type RenderedHtml } from './html.js';
-import { currentJsxFrameworkContext } from './jsx-context.js';
+import { currentJsxFrameworkContext, type JsxAnonymousCsrfBinding } from './jsx-context.js';
 import {
   isFrameworkCsrfSigningSecret,
   isSigningKeyRing,
@@ -30,6 +30,7 @@ import {
 import { isSafeEndpointMethod } from './request-method.js';
 import {
   createWitnessWeakMap,
+  createWitnessWeakSet,
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
@@ -39,6 +40,8 @@ import {
   witnessReflectApply,
   witnessWeakMapGet,
   witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import {
   createSecurityMap,
@@ -69,6 +72,7 @@ const nativeRequestUrl = witnessGetOwnPropertyDescriptor(Request.prototype, 'url
 const nativeUrlOrigin = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'origin')?.get;
 const nativeNumberIsSafeInteger = Number.isSafeInteger;
 const pinnedAnonymousLiveTargetBindings = createWitnessWeakMap<object, string>();
+const anonymousCsrfResponsePersonalizations = createWitnessWeakSet<object>();
 if (
   typeof nativeRequestMethod !== 'function' ||
   typeof nativeRequestUrl !== 'function' ||
@@ -757,6 +761,58 @@ function resolveCsrfBinding<Request>(
   return resolveAnonymousCsrfBinding(request, options, mintOptions);
 }
 
+function markAnonymousCsrfResponsePersonalization(request: unknown): void {
+  if ((typeof request === 'object' || typeof request === 'function') && request !== null) {
+    witnessWeakSetAdd(anonymousCsrfResponsePersonalizations, request as object);
+  }
+}
+
+/**
+ * Whether the exact request carrier resolved anonymous CSRF response authority.
+ *
+ * The module-private WeakSet is the proof: request properties, symbols, structural clones, cookie
+ * text, and app-controlled metadata cannot forge this verdict. Final document/raw response sinks
+ * consume it to prevent a shared cache from replaying cookie-bound tokens or attestations.
+ *
+ * @internal App response-finalization bridge; not exported from the public server entrypoint.
+ */
+export function anonymousCsrfResponsePersonalizationWitness(request: unknown): boolean {
+  return (
+    (typeof request === 'object' || typeof request === 'function') &&
+    request !== null &&
+    witnessWeakSetHas(anonymousCsrfResponsePersonalizations, request as object)
+  );
+}
+
+/**
+ * Resolve the CSRF binding a deferred response may need before its headers cross the wire.
+ *
+ * The caller supplies the exact response-owned JSX cache, so a first-anonymous deferred form later
+ * reuses the binding whose Set-Cookie is returned here instead of minting an undeliverable second
+ * binding after headers have been committed.
+ *
+ * @internal App document preflight bridge; not exported from the public server entrypoint.
+ */
+export function primeAnonymousCsrfBindingForDeferredResponse<Request>(
+  request: Request,
+  options: Pick<CsrfOptions<Request>, 'anonymousCookie'>,
+  anonymousCache: Map<string, JsxAnonymousCsrfBinding>,
+): string | undefined {
+  // Do not invoke the app-authored sessionId callback during document preflight. A deferred page
+  // can register mutations it never renders, and preflight must not make an unrelated callback's
+  // side effects or failure part of that route. Framework-proven sessions cannot use the anonymous
+  // fallback, while an unresolved session must fail closed rather than mint fresh authority.
+  const frameworkPosture = frameworkSessionPrincipalPostureFromRequest(request);
+  if (frameworkPosture?.kind === 'proven' || frameworkPosture?.kind === 'unresolved') {
+    return undefined;
+  }
+  const binding = resolveAnonymousCsrfBinding(request, options, {
+    anonymousCache,
+    mintAnonymous: true,
+  });
+  return binding?.setCookie;
+}
+
 function resolveCsrfSessionBinding<Request>(
   request: Request,
   options: Pick<CsrfOptions<Request>, 'sessionId'>,
@@ -836,9 +892,10 @@ function resolveAnonymousCsrfBinding<Request>(
   // minted before the floor existed.
   const existing = readAnonymousCsrfCookie(request, name);
   if (existing !== undefined) {
-    return isUsableAnonymousSigningSecret(existing)
-      ? createCsrfBinding('anonymous', existing)
-      : undefined;
+    if (!isUsableAnonymousSigningSecret(existing)) return undefined;
+    const binding = createCsrfBinding('anonymous', existing);
+    markAnonymousCsrfResponsePersonalization(request);
+    return binding;
   }
   if (!mintOptions.mintAnonymous) return undefined;
 
@@ -848,13 +905,17 @@ function resolveAnonymousCsrfBinding<Request>(
     mintOptions.anonymousCache === undefined
       ? undefined
       : securityMapGet(mintOptions.anonymousCache, cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    markAnonymousCsrfResponsePersonalization(request);
+    return cached;
+  }
 
   const anonymousSecret = securityBufferToString(securityRandomBytes(32), 'base64url');
   const binding = createCsrfBinding('anonymous', anonymousSecret);
   if (mintOptions.anonymousCache !== undefined) {
     securityMapSet(mintOptions.anonymousCache, cacheKey, binding);
   }
+  markAnonymousCsrfResponsePersonalization(request);
   return {
     ...binding,
     setCookie: serializeCookie(name, anonymousSecret, cookie),

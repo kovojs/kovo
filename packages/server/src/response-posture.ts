@@ -93,6 +93,7 @@ export type WireOutputChannel = 'framework-response' | 'raw-endpoint-response';
 
 export interface WireOutputProvenance {
   blessedRedirect?: boolean;
+  cookiePersonalized?: true;
   method: string;
   redirectAllowlist?: readonly RedirectLocationAllowlistEntry[];
   secure?: true;
@@ -295,6 +296,7 @@ export function finalizeRawWebResponse(
   response: Response,
   request: Pick<Request, 'method'> | Request,
   options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[] } = {},
+  frameworkPosture: { cookiePersonalized?: true } = {},
 ): Response {
   const status = readNativeResponseStatus(response);
   return emitToWire(response, 'raw-endpoint-response', {
@@ -303,6 +305,7 @@ export function finalizeRawWebResponse(
     ...(options.redirectAllowlist === undefined
       ? {}
       : { redirectAllowlist: options.redirectAllowlist }),
+    ...(frameworkPosture.cookiePersonalized === true ? { cookiePersonalized: true } : {}),
     status,
   });
 }
@@ -325,6 +328,7 @@ export const emitToWire = wireEmitter(
       }
       const status = readNativeResponseStatus(value);
       const finalizedHeaders = finalizeRawResponseHeaders(value, {
+        ...(provenance.cookiePersonalized === true ? { cookiePersonalized: true as const } : {}),
         ...(provenance.redirectAllowlist === undefined
           ? {}
           : { redirectAllowlist: provenance.redirectAllowlist }),
@@ -731,7 +735,11 @@ function finalizeResponseHeaders(
 
 function finalizeRawResponseHeaders(
   response: Response,
-  options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[]; secure?: true },
+  options: {
+    cookiePersonalized?: true;
+    redirectAllowlist?: readonly RedirectLocationAllowlistEntry[];
+    secure?: true;
+  },
 ): Headers {
   const headers = readNativeResponseHeaders(response);
   assertSafeTransportResponseHeaders(
@@ -775,19 +783,23 @@ function finalizeRawResponseHeaders(
     );
   }
 
-  stampBrowserStateResponseCacheFloor(webHeaders);
+  stampBrowserStateResponseCacheFloor(webHeaders, options.cookiePersonalized === true);
   return webHeaders;
 }
 
 /**
- * SPEC §6.6/§9.1: browser-state responses are per-client and must never survive in a
- * shared cache. RFC 9111 §7.3 explicitly says `Set-Cookie` does not inhibit caching, so this
- * floor must live at the final structured/raw wire reconstruction rather than relying on an
- * endpoint's declared or authored cache policy. Cached `Clear-Site-Data` is destructive too: a
- * replay can clear an unrelated visitor's cookies/storage without reaching the endpoint verifier.
+ * SPEC §6.6/§9.1: browser-state and cookie-personalized responses are per-client and must never
+ * survive in a shared cache. RFC 9111 §7.3 explicitly says `Set-Cookie` does not inhibit caching,
+ * so this floor must live at the final structured/raw wire reconstruction rather than relying on
+ * an endpoint's declared or authored cache policy. Cached `Clear-Site-Data` is destructive too;
+ * anonymous synchronizer authority without a new Set-Cookie still varies by the existing cookie.
  */
-function stampBrowserStateResponseCacheFloor(headers: Headers): void {
-  if (!nativeHeaderHas(headers, 'Set-Cookie') && !nativeHeaderHas(headers, 'Clear-Site-Data')) {
+function stampBrowserStateResponseCacheFloor(headers: Headers, cookiePersonalized = false): void {
+  if (
+    !cookiePersonalized &&
+    !nativeHeaderHas(headers, 'Set-Cookie') &&
+    !nativeHeaderHas(headers, 'Clear-Site-Data')
+  ) {
     return;
   }
 

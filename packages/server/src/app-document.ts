@@ -11,6 +11,12 @@ import {
   stampCredentialBearingResponseCacheFloor,
 } from './document-core.js';
 import { forwardSetCookie } from './cookies.js';
+import {
+  anonymousCsrfResponsePersonalizationWitness,
+  mutationCsrfOptions,
+  primeAnonymousCsrfBindingForDeferredResponse,
+  type CsrfOptions,
+} from './csrf.js';
 import { signSessionFingerprintWithSecret, type SigningSecret } from './keyring.js';
 import {
   createSignUrl,
@@ -53,6 +59,7 @@ import type { KovoApp } from './app-types.js';
 import { appLiveTargetAttestationAuthority } from './live-target-app-identity.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-carrier.js';
+import type { JsxAnonymousCsrfBinding } from './jsx-context.js';
 import {
   requestCreateUrl,
   requestUrl,
@@ -61,7 +68,9 @@ import {
   requestUrlSnapshot,
 } from './request-body-intrinsics.js';
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
+import { createSecurityMap } from './response-security-intrinsics.js';
 import {
+  createWitnessSet,
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
@@ -70,6 +79,8 @@ import {
   witnessObjectKeys,
   witnessReflectApply,
   witnessReflectGet,
+  witnessSetAdd,
+  witnessSetHas,
   witnessStringToLowerCase,
 } from './security-witness-intrinsics.js';
 
@@ -156,6 +167,10 @@ export async function renderAppRouteDocumentResponse({
   // re-emit them on the document response so a continuously-active user's session actually extends
   // instead of being hard-logged-out at the original boundary.
   const refreshSetCookies: RefreshSetCookie[] = [];
+  // Shared with the route JSX context and deferred preflight. A first-anonymous deferred form must
+  // render against the same binding whose cookie was committed before streaming headers.
+  const anonymousCsrfBindings = createSecurityMap<string, JsxAnonymousCsrfBinding>();
+  let acceptsCsrfSetCookie = true;
   const routeSessionProvider =
     sessionProvider === false ? undefined : (sessionProvider ?? app.sessionProvider);
   const routeResponse = await renderRoutePageResponse(
@@ -172,6 +187,7 @@ export async function renderAppRouteDocumentResponse({
           })
         : renderDefaultRouteValue(value),
     {
+      anonymousCsrfBindings,
       attestationAuthority: liveTargetAttestationAuthority,
       currentUrl: appRequestUrl(url),
       ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
@@ -179,8 +195,14 @@ export async function renderAppRouteDocumentResponse({
         ? {}
         : { mutationFailure: jsxContext.mutationFailure }),
       maxListItems: app.requestLimits.maxQueryListItems,
-      onCsrfSetCookie: (rawSetCookie) =>
-        appendRefreshSetCookie(refreshSetCookies, rawSetCookie, 'csrf'),
+      onCsrfSetCookie: (rawSetCookie) => {
+        if (!acceptsCsrfSetCookie) {
+          throw new Error(
+            'Deferred CSRF authority attempted to mint an unprimed cookie after document headers were finalized.',
+          );
+        }
+        appendRefreshSetCookie(refreshSetCookies, rawSetCookie, 'csrf');
+      },
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       onSessionSetCookie: (rawSetCookie) =>
@@ -244,11 +266,30 @@ export async function renderAppRouteDocumentResponse({
   const sessionRequest = isNativeRequest(routeResponse.lifecycleRequest)
     ? routeResponse.lifecycleRequest
     : request;
+  const mayDeferCsrfPersonalization = routeResponseHasDeferredChunks(routeResponse);
+  if (mayDeferCsrfPersonalization) {
+    primeDeferredCsrfBindings(app, sessionRequest, anonymousCsrfBindings, refreshSetCookies);
+  }
+  acceptsCsrfSetCookie = false;
   const principalPosture = principalPostureFromRequest(sessionRequest);
   const sessionFingerprint =
     principalPosture.kind === 'proven'
       ? hmacSessionFingerprint(principalPosture.principal, app.csrf?.secret)
       : undefined;
+
+  // SPEC §9.1: an anonymous synchronizer token or live-target attestation is derived from the
+  // exact anonymous-cookie binding. The CSRF module records that dependency in a boot-captured,
+  // module-private WeakSet instead of trusting app-visible properties. Check both request
+  // identities that authored rendering can legitimately receive: the original app render context
+  // and the lifecycle carrier used by route/page JSX.
+  const csrfPersonalized =
+    anonymousCsrfResponsePersonalizationWitness(request) ||
+    anonymousCsrfResponsePersonalizationWitness(routeResponse.lifecycleRequest);
+  // Deferred region callbacks can first touch local mutation CSRF after response headers have
+  // already crossed the streaming boundary. The shell cannot know which callback paths will run,
+  // so every pending deferred document selects the safe posture up front; waiting for a late exact
+  // witness would make cache safety timing-dependent.
+  const anonymousCsrfSensitive = csrfPersonalized || mayDeferCsrfPersonalization;
 
   // part-4 G1 + bugz-3 L2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a document
   // that varies by identity MUST never be stored by a shared CDN/proxy cache nor restored from
@@ -270,6 +311,7 @@ export async function renderAppRouteDocumentResponse({
   const noStore =
     routeHasEnforcedAuthorization(route) ||
     refreshSetCookies.length > 0 ||
+    anonymousCsrfSensitive ||
     sessionFingerprint !== undefined ||
     principalPosture.kind === 'unresolved';
   const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
@@ -281,7 +323,7 @@ export async function renderAppRouteDocumentResponse({
   // already reflected in Request.url by the adapter.
   const secure = isTrustedSecureRequest(request);
 
-  const documentResponse = renderRouteDocumentResponse(
+  let documentResponse = renderRouteDocumentResponse(
     routeResponseToDocumentResponse(routeResponse),
     {
       // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
@@ -328,6 +370,12 @@ export async function renderAppRouteDocumentResponse({
     },
   );
 
+  if (anonymousCsrfSensitive) {
+    // This response is not merely non-restorable: its body bytes vary by Cookie. Force the stronger
+    // private cache floor after document assembly so authored Cache-Control cannot relax it.
+    documentResponse = stampCredentialBearingResponseCacheFloor(documentResponse);
+  }
+
   if (enhancedNavigationDocument && documentResponse.status === 200) {
     documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');
   }
@@ -344,6 +392,60 @@ export async function renderAppRouteDocumentResponse({
 interface RefreshSetCookie {
   readonly raw: string;
   readonly source: 'csrf' | 'session-provider';
+}
+
+function routeResponseHasDeferredChunks(response: RoutePageResponse): boolean {
+  const descriptor = witnessGetOwnPropertyDescriptor(response, 'deferredChunks');
+  return (
+    descriptor !== undefined &&
+    'value' in descriptor &&
+    witnessIsArray(descriptor.value) &&
+    descriptor.value.length > 0
+  );
+}
+
+function primeDeferredCsrfBindings(
+  app: KovoApp,
+  request: Request,
+  anonymousCsrfBindings: Map<string, JsxAnonymousCsrfBinding>,
+  refreshSetCookies: RefreshSetCookie[],
+): void {
+  const primed = createWitnessSet<CsrfOptions<any>>();
+  for (let index = 0; index < app.mutations.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(app.mutations, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Kovo app mutations must remain a dense exact snapshot.');
+    }
+    const csrf = mutationCsrfOptions(descriptor.value, app.csrf);
+    if (csrf === undefined || csrf === false || witnessSetHas(primed, csrf)) continue;
+    witnessSetAdd(primed, csrf);
+    const setCookie = primeAnonymousCsrfBindingForDeferredResponse(
+      request,
+      csrf,
+      anonymousCsrfBindings,
+    );
+    if (setCookie !== undefined) {
+      appendRefreshSetCookie(refreshSetCookies, setCookie, 'csrf');
+    }
+  }
+
+  // A deferred live-target attestation can use the app-wide authority without rendering a form or
+  // touching a registered mutation. Prime that configuration independently when no mutation used
+  // it above.
+  if (
+    app.csrf !== undefined &&
+    app.liveTargetRenderers.length > 0 &&
+    !witnessSetHas(primed, app.csrf)
+  ) {
+    const setCookie = primeAnonymousCsrfBindingForDeferredResponse(
+      request,
+      app.csrf,
+      anonymousCsrfBindings,
+    );
+    if (setCookie !== undefined) {
+      appendRefreshSetCookie(refreshSetCookies, setCookie, 'csrf');
+    }
+  }
 }
 
 function appendRefreshSetCookie(

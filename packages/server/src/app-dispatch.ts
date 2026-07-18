@@ -1,5 +1,9 @@
 import { renderVersionedClientModuleResponse } from './client-modules.js';
-import { validateCsrfToken, type CsrfOptions } from './csrf.js';
+import {
+  anonymousCsrfResponsePersonalizationWitness,
+  validateCsrfToken,
+  type CsrfOptions,
+} from './csrf.js';
 import { runEndpoint, runEndpointAccessDecision, runEndpointAuth } from './endpoint.js';
 import {
   renderQueryRegistryEndpointResponse,
@@ -120,17 +124,19 @@ export async function dispatchMatchedAppRequest({
       surface: 'endpoint',
     });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
-    if (authFailure) return finalizeRawWebResponse(authFailure, request);
+    if (authFailure) return finalizeMatchedEndpointResponse(authFailure, request, endpointRequest);
     const csrfFailure = await validateEndpointCsrf(
       match.endpoint,
       request,
       app.csrf,
       match.endpoint.method,
     );
-    if (csrfFailure) return finalizeRawWebResponse(csrfFailure, request);
+    if (csrfFailure) return finalizeMatchedEndpointResponse(csrfFailure, request, endpointRequest);
     if (isWebhookEndpoint(match.endpoint)) {
       const accessFailure = await runEndpointAccessDecision(match.endpoint, endpointRequest);
-      if (accessFailure) return finalizeRawWebResponse(accessFailure, request);
+      if (accessFailure) {
+        return finalizeMatchedEndpointResponse(accessFailure, request, endpointRequest);
+      }
       const taskScheduler = appTaskScheduler(app);
       const mutationOptions = {
         clientIp: (req: Request) => resolveRequestClientIp(app, req),
@@ -146,15 +152,21 @@ export async function dispatchMatchedAppRequest({
         })
       ).response;
       assertEndpointResponsePosture(match.endpoint, response, { request: endpointRequest });
-      return finalizeRawWebResponse(response, request, match.endpoint.response);
+      return finalizeMatchedEndpointResponse(
+        response,
+        request,
+        endpointRequest,
+        match.endpoint.response,
+      );
     }
-    return finalizeRawWebResponse(
+    return finalizeMatchedEndpointResponse(
       await runEndpoint(
         match.endpoint,
         endpointRequest,
         app.db === undefined ? {} : { db: app.db },
       ),
       request,
+      endpointRequest,
       match.endpoint.response,
     );
   }
@@ -179,6 +191,26 @@ export async function dispatchMatchedAppRequest({
   return routeResponseToWebResponse(await renderAppErrorDocumentResponse(app, request, 404), {
     method: exactMethod,
   });
+}
+
+function finalizeMatchedEndpointResponse(
+  response: Response,
+  ingressRequest: Request,
+  endpointRequest: Request,
+  options: Parameters<typeof finalizeRawWebResponse>[2] = {},
+): Response {
+  // The endpoint handler receives a framework-neutralized lifecycle Request, while trusted-scheme
+  // and method finalization intentionally consume the accepted ingress Request. Carry only the
+  // module-private exact-request CSRF witness across that identity split; never copy Cookie or any
+  // other browser authority back onto ingress.
+  return finalizeRawWebResponse(
+    response,
+    ingressRequest,
+    options,
+    anonymousCsrfResponsePersonalizationWitness(endpointRequest)
+      ? { cookiePersonalized: true }
+      : {},
+  );
 }
 
 function isWebhookEndpoint(

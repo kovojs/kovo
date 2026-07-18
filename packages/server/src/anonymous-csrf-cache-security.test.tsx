@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
-import { mintCsrfField } from './csrf.js';
+import { mintCsrfField, mintCsrfToken } from './csrf.js';
 import { Defer } from './deferred-region.js';
 import {
   endpoint,
@@ -141,12 +141,7 @@ describe('anonymous mutation-form document cache posture', () => {
 
     // A conforming shared cache reuses the primed representation only when Kovo omitted both
     // no-store and Cookie variance. With either floor present it performs the victim's own GET.
-    const victimHtml = await selectCachedOrFreshHtml(
-      handler,
-      primed,
-      primedHtml,
-      victimBinding,
-    );
+    const victimHtml = await selectCachedOrFreshHtml(handler, primed, primedHtml, victimBinding);
 
     // Model the shared-cache replay exactly: victim receives the attacker's cached HTML, keeps the
     // victim cookie, and submits the otherwise ordinary no-JS form values from that document.
@@ -190,12 +185,7 @@ describe('anonymous mutation-form document cache posture', () => {
       }),
     );
     const primedHtml = await primed.text();
-    const victimHtml = await selectCachedOrFreshHtml(
-      handler,
-      primed,
-      primedHtml,
-      victimBinding,
-    );
+    const victimHtml = await selectCachedOrFreshHtml(handler, primed, primedHtml, victimBinding);
     const idem = hiddenValue(victimHtml, 'Kovo-Idem');
     const response = await handler(
       new Request('https://shop.example.test/_m/account/request-link', {
@@ -245,6 +235,7 @@ describe('anonymous mutation-form document cache posture', () => {
       releaseRegion = resolve;
     });
     const submit = mutation('account/deferred-request-link', {
+      csrf,
       input: s.object({ email: s.string() }),
       handler: (input) => input,
     });
@@ -269,7 +260,6 @@ describe('anonymous mutation-form document cache posture', () => {
     });
     const handler = createRequestHandler(
       createApp({
-        csrf,
         egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
         mutations: [submit],
         routes: [deferred],
@@ -285,6 +275,112 @@ describe('anonymous mutation-form document cache posture', () => {
     expect(response.headers.get('vary')).toContain('Cookie');
     releaseRegion();
     await expect(response.text()).resolves.toContain('name="kovo-csrf"');
+  });
+
+  it('pre-delivers the binding cookie when a first-time deferred form owns local CSRF', async () => {
+    let releaseRegion!: () => void;
+    const regionGate = new Promise<void>((resolve) => {
+      releaseRegion = resolve;
+    });
+    let submissions = 0;
+    const submit = mutation('account/first-deferred-request-link', {
+      csrf,
+      input: s.object({ email: s.string() }),
+      handler(input) {
+        submissions += 1;
+        return input;
+      },
+    });
+    const deferred = route('/first-deferred-login', {
+      page: () => (
+        <main>
+          <Defer
+            fallback={<p>Loading form</p>}
+            priority="after-paint"
+            render={async () => {
+              await regionGate;
+              return (
+                <form mutation={submit}>
+                  <input name="email" />
+                </form>
+              );
+            }}
+            target="first-login-form"
+          />
+        </main>
+      ),
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        mutations: [submit],
+        routes: [deferred],
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/first-deferred-login'));
+    const setCookies = response.headers.getSetCookie();
+    expect(setCookies).toHaveLength(1);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+    releaseRegion();
+    const html = await response.text();
+    const cookiePair = setCookies[0]?.split(';')[0];
+    if (cookiePair === undefined) throw new Error('expected deferred anonymous binding cookie');
+    const result = await handler(
+      new Request('https://shop.example.test/_m/account/first-deferred-request-link', {
+        body: new URLSearchParams({
+          'Kovo-Idem': hiddenValue(html, 'Kovo-Idem'),
+          email: 'visitor@example.test',
+          'kovo-csrf': hiddenValue(html, 'kovo-csrf'),
+        }),
+        headers: { Cookie: cookiePair, Origin: 'https://shop.example.test' },
+        method: 'POST',
+      }),
+    );
+
+    expect(result.status).toBe(303);
+    expect(submissions).toBe(1);
+  });
+
+  it('does not invoke an unrelated mutation session extractor during deferred preflight', async () => {
+    let sessionIdCalls = 0;
+    const unrelated = mutation('account/unrelated-deferred-mutation', {
+      csrf: {
+        ...csrf,
+        sessionId() {
+          sessionIdCalls += 1;
+          throw new Error('unrelated mutation session extractor ran');
+        },
+      },
+      input: s.object({ value: s.string() }),
+      handler: (input) => input,
+    });
+    const deferred = route('/deferred-public-copy', {
+      page: () => (
+        <main>
+          <Defer
+            fallback={<p>Loading public copy</p>}
+            priority="after-paint"
+            render={async () => <p>Public copy ready</p>}
+            target="public-copy"
+          />
+        </main>
+      ),
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        mutations: [unrelated],
+        routes: [deferred],
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/deferred-public-copy'));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain('Public copy ready');
+    expect(sessionIdCalls).toBe(0);
   });
 
   it('preserves the private posture through the live Node adapter', async () => {
@@ -317,6 +413,11 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
   const publicHtmlResponse = {
     appOwnedSafety: true,
     body: 'html',
+    cache: 'public',
+  } satisfies EndpointResponsePosture;
+  const publicJsonResponse = {
+    appOwnedSafety: true,
+    body: 'json',
     cache: 'public',
   } satisfies EndpointResponsePosture;
 
@@ -369,6 +470,55 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
 
     expect(sawCookie).toBe(cookieHeader('B'.repeat(43)));
     expect(hiddenValue(attackerHtml, 'kovo-csrf')).not.toBe(hiddenValue(victimHtml, 'kovo-csrf'));
+    expect(attacker.headers.get('cache-control')).toBe('private, no-store');
+    expect(attacker.headers.get('vary')).toContain('Cookie');
+  });
+
+  it('does the same for mintCsrfToken JSON output from the exact endpoint request', async () => {
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/csrf-token-bootstrap', {
+        auth: { kind: 'custom', name: 'framework-csrf-token-bootstrap' },
+        handler(request) {
+          // Passing the exact supported endpoint request is load-bearing: finalization consumes the
+          // module-private identity witness set by this helper, not app-visible Cookie text.
+          const minted = mintCsrfToken(request, csrf, {
+            audience: 'endpoint:/csrf-token-bootstrap-submit',
+          });
+          if (minted.setCookie !== undefined) {
+            throw new Error('preexisting anonymous binding unexpectedly rotated');
+          }
+          return Response.json(
+            { token: minted.token },
+            { headers: { 'Cache-Control': 'public, max-age=60' } },
+          );
+        },
+        method: 'GET',
+        reason: 'framework-owned browser CSRF token bootstrap adapter',
+        response: publicJsonResponse,
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [bootstrap],
+      }),
+    );
+
+    const attacker = await handler(
+      new Request('https://shop.example.test/csrf-token-bootstrap', {
+        headers: { Cookie: cookieHeader('A'.repeat(43)) },
+      }),
+    );
+    const attackerToken = (await attacker.json()) as { token: string };
+    const victim = await handler(
+      new Request('https://shop.example.test/csrf-token-bootstrap', {
+        headers: { Cookie: cookieHeader('B'.repeat(43)) },
+      }),
+    );
+    const victimToken = (await victim.json()) as { token: string };
+
+    expect(attackerToken.token).not.toBe(victimToken.token);
     expect(attacker.headers.get('cache-control')).toBe('private, no-store');
     expect(attacker.headers.get('vary')).toContain('Cookie');
   });

@@ -637,9 +637,10 @@ function stampPerPrincipalRouteOutcomeFloor(
 }
 
 /**
- * SPEC §7/§9.4: any response carrying a newly emitted credential is identity-varying, including a
- * matched route's early 403/404/500 outcome. Apply this at the credential-forwarding sink so an
- * otherwise cacheable status cannot replay one principal's Set-Cookie through a shared cache.
+ * SPEC §7/§9.1/§9.4: any response carrying a newly emitted credential or cookie-personalized
+ * authority is identity-varying, including a matched route's early 403/404/500 outcome. Apply this
+ * at the credential/personalization sink so an otherwise cacheable status cannot replay one
+ * principal's Set-Cookie or anonymous synchronizer authority through a shared cache.
  *
  * @internal
  */

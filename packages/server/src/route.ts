@@ -33,13 +33,16 @@ import {
 } from './guards.js';
 import type { PageHintOptions, RouteMetaSource } from './hints.js';
 import type { SignUrlContext } from './capability-route.js';
-import { runWithJsxRequestContext } from './jsx-context.js';
+import {
+  runWithJsxRequestContext,
+  type DeferredRegionCollector,
+  type JsxAnonymousCsrfBinding,
+} from './jsx-context.js';
 import type { CsrfOptions } from './csrf.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
-import type { DeferredRegionCollector } from './jsx-context.js';
 import type { MutationFail } from './mutation.js';
 import {
   createLiveTargetAttestationWithAuthority,
@@ -671,6 +674,7 @@ export function notFound(): NotFound {
 }
 
 export interface RouteJsxContextOptions<Request> {
+  anonymousCsrfBindings?: Map<string, JsxAnonymousCsrfBinding>;
   attestationAuthority?: LiveTargetAttestationAuthority;
   csrf?: CsrfOptions<Request>;
   deferredRegions?: DeferredRegionCollector;
@@ -1691,6 +1695,9 @@ function routeJsxContextOptions<Request>(
   deferredRegions?: DeferredRegionCollector,
 ): RouteJsxContextOptions<Request> {
   return {
+    ...(options.anonymousCsrfBindings === undefined
+      ? {}
+      : { anonymousCsrfBindings: options.anonymousCsrfBindings }),
     ...(options.attestationAuthority === undefined
       ? {}
       : { attestationAuthority: options.attestationAuthority }),
