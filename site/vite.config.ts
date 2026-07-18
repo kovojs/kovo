@@ -2,7 +2,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { defineConfig } from 'vite-plus';
 
-import { exampleKovoCompilerPlugin } from '../examples/vite-kovo-compiler.js';
+import {
+  exampleKovoCompilerPlugin,
+  tutorialAppRegistryFacts,
+  tutorialMutationRegistryFacts,
+} from '../examples/vite-kovo-compiler.js';
 
 // The docs site is a real Kovo app authored in src/app.tsx. Vite builds the document CSS (with a
 // manifest) into dist-css/; the app-shell export bridge replays the declared route documents into
@@ -22,7 +26,18 @@ export default defineConfig({
     },
   },
   plugins: [
-    exampleKovoCompilerPlugin({ include: ['tutorial/steps'] }),
+    exampleKovoCompilerPlugin({
+      include: ['tutorial/steps/04-mutations'],
+      registryFacts: tutorialMutationRegistryFacts,
+    }),
+    exampleKovoCompilerPlugin({
+      include: [
+        'tutorial/steps/05-optimistic',
+        'tutorial/steps/06-streaming',
+        'tutorial/steps/07-verification',
+      ],
+      registryFacts: tutorialAppRegistryFacts,
+    }),
     siteSharedAppShellDevPlugin(),
   ],
   run: {

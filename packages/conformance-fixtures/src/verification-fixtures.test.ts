@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-import { csrfField, csrfToken, domain, mutation, query, s } from '@kovojs/server';
+import { domain, mutation, query, s } from '@kovojs/server';
+import { csrfField, csrfToken } from '@kovojs/server/internal/csrf';
 
 import { createKovoTestHarness } from '@kovojs/test/harness';
 import { createDbVerifier } from '@kovojs/test/internal/verifier';

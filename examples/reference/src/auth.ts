@@ -1,5 +1,4 @@
 import {
-  csrfToken,
   guard,
   guards,
   mutation,
@@ -403,10 +402,6 @@ let referenceTestRequestCount = 0;
 function nextReferenceTestIp(): string {
   referenceTestRequestCount = (referenceTestRequestCount % 250) + 1;
   return `127.0.0.${referenceTestRequestCount}`;
-}
-
-export function referenceAuthToken(request: ReferenceRequest, definition: { key: string }): string {
-  return csrfToken(request, referenceAuthCsrf, { mutation: definition });
 }
 
 function readCookie(headers: Headers, name: string): string | undefined {

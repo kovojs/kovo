@@ -458,6 +458,10 @@ type InternalVersionedClientModuleResponse =
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalRenderMutationCsrfField =
   typeof import('@kovojs/server/internal/csrf').renderMutationCsrfField;
+// eslint-disable-next-line no-unused-vars -- compile-time internal test/bootstrap boundary.
+type InternalCsrfToken = typeof import('@kovojs/server/internal/csrf').csrfToken;
+// eslint-disable-next-line no-unused-vars -- compile-time internal test/bootstrap boundary.
+type InternalCsrfField = typeof import('@kovojs/server/internal/csrf').csrfField;
 // eslint-disable-next-line no-unused-vars -- compile-time compiler-only boundary assertion.
 type InternalRenderGeneratedMutationFormFields =
   typeof import('@kovojs/server/internal/csrf').renderGeneratedMutationFormFields;
@@ -654,6 +658,19 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootValues).not.toHaveProperty('MutationResponseHeaderValue');
     expect(publicValues).not.toHaveProperty('MutationResponseHeaders');
     expect(packageRootValues).not.toHaveProperty('MutationResponseHeaders');
+    // SPEC §6.3/§6.6: typed mutation forms are the only public mutation-form authoring path.
+    // Internal token helpers cannot create the canonical CSRF + Kovo-Idem bundle by themselves.
+    expect(publicValues).not.toHaveProperty('csrfField');
+    expect(packageRootValues).not.toHaveProperty('csrfField');
+    expect(publicValues).not.toHaveProperty('csrfToken');
+    expect(packageRootValues).not.toHaveProperty('csrfToken');
+    expect(() =>
+      (publicApi.mintCsrfToken as (...args: unknown[]) => unknown)(
+        {},
+        { secret: 'public-raw-csrf-test-secret-0123456789', sessionId: () => 'session' },
+        { mutation: { key: 'account/update' } },
+      ),
+    ).toThrow('Mutation forms must use typed <form mutation={definition}>');
     expect(publicValues).not.toHaveProperty('DeferredQueryChunk');
     expect(packageRootValues).not.toHaveProperty('DeferredQueryChunk');
     expect(publicValues).not.toHaveProperty('DeferredFragmentChunk');
@@ -998,6 +1015,8 @@ describe('server app-shell public API barrels', () => {
     // A2: the per-submit Kovo-Idem hidden field is minted/rendered through the internal csrf subpath.
     expect(moduleValueKeys(packageInternalCsrfApi)).toEqual([
       'KOVO_IDEM_FIELD_NAME',
+      'csrfField',
+      'csrfToken',
       'frameworkCsrfRequestSnapshot',
       'mintIdemToken',
       'renderGeneratedMutationFormFields',

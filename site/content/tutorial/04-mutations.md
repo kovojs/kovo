@@ -12,7 +12,7 @@ fragment response. Step state: `site/tutorial/steps/04-mutations/`.
 
 ## Declare the input
 
-{{snippet:04-mutations/src/app.ts#add-to-cart-input}}
+{{snippet:04-mutations/src/mutations.ts#add-to-cart-input}}
 
 This is the form contract. `quantity` arrives as a string, and the schema says how it becomes a
 number.
@@ -22,7 +22,7 @@ number.
 Before the form can submit, the request shell needs a token source. Mutations are browser-reachable
 POSTs, so Kovo stamps a `kovo-csrf` hidden field into the form and verifies it before input parsing:
 
-{{snippet:04-mutations/src/app.ts#csrf}}
+{{snippet:04-mutations/src/mutations.ts#csrf}}
 
 {{snippet:04-mutations/src/app.test.ts#csrf-test}}
 
@@ -33,7 +33,7 @@ handler in one place. This step also lists the query definitions the request she
 commit; the next chapters show how the invalidation graph derives that set from domains and writes
 instead of making you maintain it by hand.
 
-{{snippet:04-mutations/src/app.ts#add-to-cart}}
+{{snippet:04-mutations/src/mutations.ts#add-to-cart}}
 
 `errors` gives the form a typed `OUT_OF_STOCK` state. `transaction` gives `fail()` a rollback
 boundary.

@@ -198,28 +198,22 @@ export interface MintedCsrfField extends MintedCsrfToken {
  * definition (any object carrying its `key`) or the bare mutation key string. Both resolve to the
  * same `definition.key` value that mutation dispatch validates the token against
  * (`runMutation`/`renderMutationResponse`/the no-JS path all check `{ audience: definition.key }`).
- * Naming the target is how `csrfField`/`csrfToken` bind the correct audience instead of the
- * generic `field:<name>` default — so a hand-rolled login/signup/logout/reset form cannot mint a
- * token the targeted mutation then rejects with a bare 422.
+ * Naming the target is how internal dispatcher and form-rendering tests bind the exact mutation
+ * audience instead of the generic `field:<name>` default. Public mutation forms do not expose this
+ * partial construction; typed form rendering owns the complete CSRF + idempotency bundle.
  *
- * @internal Kept private to `csrf.ts`; the public `csrfToken`/`csrfField` signatures inline this
- * shape so they do not require a separately-exported helper type (rules/api-surface.md). The same
- * structural shape is what callers pass.
+ * @internal Kept private to `csrf.ts`; mutation-form rendering owns this targeting context.
  */
 type CsrfMutationTarget = string | { readonly key: string };
 
 /**
- * Audience-binding context for the standalone `csrfToken`/`csrfField` helpers (SPEC §6.5/§6.6/§9.1).
+ * Audience-binding context for internal CSRF helpers (SPEC §6.5/§6.6/§9.1).
  *
- * Pass `mutation` (the targeted mutation definition or its key) so the minted token's signing
- * audience is `definition.key` — exactly what mutation dispatch validates against. This closes the
- * audit trap where a hand-authored auth form minted a `field:<name>`-audience token that the
- * mutation sink silently rejected (HTTP 422). `audience` remains for advanced, non-mutation sinks
- * that bind a custom audience; when both are supplied they MUST agree (a contradictory pair is a
- * configuration error and throws rather than minting a token for the wrong sink).
+ * Internal callers may name a mutation definition/key so the token's signing audience is
+ * `definition.key`, exactly what dispatch validates. `audience` remains for raw endpoint sinks.
+ * When both are supplied they MUST agree.
  *
- * @internal Inlined into the public signatures for the same api-surface reason as
- * `CsrfMutationTarget`.
+ * @internal Mutation-form rendering and framework tests only.
  */
 interface CsrfAudienceContext {
   audience?: string;
@@ -227,26 +221,14 @@ interface CsrfAudienceContext {
 }
 
 /**
- * Mint a CSRF synchronizer token for a request, bound to the targeted mutation (SPEC §6.5/§6.6/§9.1).
- *
- * For a hand-authored form, pass the targeted `mutation` so the token's audience is bound to the
- * mutation's `key` — the value mutation dispatch validates against. Without it the token defaults to
- * the generic `field:<name>` audience, which a mutation sink rejects with a bare 422; binding the
- * mutation closes that audit trap by construction.
+ * Mint a CSRF synchronizer token for an internal framework request (SPEC §6.5/§6.6/§9.1).
  *
  * @param request - The request to derive the session (or anonymous binding) from.
  * @param options - The CSRF `secret` and `sessionId` extractor.
  * @param context - Audience binding: the targeted `mutation` (preferred) or a raw `audience`.
  * @returns The CSRF token string.
- * @example
- * import { csrfToken } from '@kovojs/server';
- *
- * interface Req { session: { id: string } }
- * // Bind the token to the mutation the form targets (closes the audience-mismatch trap):
- * const token: string = csrfToken({ session: { id: 's1' } } as Req, {
- *   secret: 'shop-secret',
- *   sessionId: (request: Req) => request.session.id,
- * }, { mutation: signInMutation });
+ * @internal Public mutation forms use typed `<form mutation={definition}>`; raw endpoint protocols
+ * use the narrowed public `mintCsrfToken` wrapper.
  */
 export function csrfToken<Request>(
   request: Request,
@@ -291,19 +273,17 @@ export function mintCsrfToken<Request>(
 }
 
 /**
- * Render a hidden `<input>` carrying a CSRF token, ready to drop inside a form.
- * Forms emitted by the framework include this automatically; use it for
- * hand-written forms (SPEC §6.5/§6.6/§9.1).
+ * Render an internal hidden `<input>` carrying a CSRF token (SPEC §6.5/§6.6/§9.1).
  *
- * Pass the targeted `mutation` (its definition or key) so the token's audience binds to the
- * mutation's `key` — exactly what dispatch validates against. The framework-emitted
- * `<form mutation={…}>` path binds this automatically via `renderMutationCsrfField`; hand-rolled
- * forms must name the mutation here or the submit silently 422s on an audience mismatch.
+ * The framework-emitted `<form mutation={…}>` path binds the mutation audience automatically via
+ * `renderMutationCsrfField` and emits the canonical idempotency field in the same bundle.
  *
  * @param request - The request to derive the session (or anonymous binding) from.
  * @param options - CSRF options plus the targeted `mutation`/`audience` and an optional `field`
  *   name (defaults to `kovo-csrf`).
  * @returns The hidden-input HTML string.
+ * @internal Public mutation forms use typed `<form mutation={definition}>`; raw endpoint protocols
+ * use the narrowed public `mintCsrfField` wrapper.
  */
 export function csrfField<Request>(
   request: Request,
@@ -327,8 +307,8 @@ export function csrfField<Request>(
 /**
  * Render a CSRF hidden field for a response that can set the anonymous binding cookie.
  *
- * This is the supported helper for a first anonymous hand-written form. Include `html` in the form;
- * a verified raw endpoint dispatched by `createRequestHandler()` captures and delivers `setCookie`
+ * This low-level helper backs verified raw endpoint bootstraps. Include `html` in the raw endpoint
+ * protocol; a verified endpoint dispatched by `createRequestHandler()` captures and delivers `setCookie`
  * during final response reconstruction. Manually attaching it is app-authored browser state and
  * requires the same endpoint proof. A detached/direct first mint fails closed. The endpoint POST
  * can then keep default CSRF enabled instead of using `csrf: false`.
