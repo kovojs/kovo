@@ -20,8 +20,8 @@
     }
   ],
   "currentSnapshot": {
-    "measuredCodeSha": "497f6eee65919910d7c832660224e4aa29c74571",
-    "reason": "Post-M35 and bounded-diamond structural refresh; the immutable comparable audit remains the e5 historical row.",
+    "measuredCodeSha": "969e6fc22492c80e4f99f2528837455fc7e8317c",
+    "reason": "Post-M35, bounded-diamond, and Phase 1 authorization-matrix canary refresh; the immutable comparable audit remains the e5 historical row.",
     "snapshot": {
       "schema": "kovo-security-convergence-baseline/v1",
       "charter": {
@@ -30,8 +30,13 @@
         "version": 1
       },
       "m": {
-        "mutantCount": 37,
+        "mutantCount": 42,
         "mutantNames": [
+          "authorization-matrix/allow-cross-owner-builder-read",
+          "authorization-matrix/allow-cross-owner-raw-write",
+          "authorization-matrix/allow-cross-schema-definer-function",
+          "authorization-matrix/allow-provision-role-assumption",
+          "authorization-matrix/deny-durable-task-owner-read",
           "check-sink-policy-gate/drop-managed-db-throw-invariant",
           "check-sink-policy-gate/drop-response-fragment-trustedhtml-route-count",
           "check-sink-policy-gate/drop-sql-guard-env-detector",
