@@ -38,7 +38,7 @@ import {
   type DeferredRegionCollector,
   type JsxAnonymousCsrfBinding,
 } from './jsx-context.js';
-import type { CsrfOptions } from './csrf.js';
+import { sealAnonymousCsrfResponseRequestAndSnapshotSetCookies, type CsrfOptions } from './csrf.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import {
   accessDecisionFor,
@@ -71,6 +71,10 @@ import {
   type RouteResponseOutcome,
 } from './response.js';
 import { resolveKovoLifecycleRequest } from './response-posture.js';
+import {
+  retainCurrentResponseLifecycleRequest,
+  runWithResponseLifecycleRequest,
+} from './response-lifecycle-context.js';
 import { requestSerializeUrlSearchParamsEntries } from './request-body-intrinsics.js';
 import { isSchemaValidationError, type Schema, type ValidationFailurePayload } from './schema.js';
 import {
@@ -873,6 +877,7 @@ async function runRoutePageInternal<
   const authorization = await resolveRouteAuthorization(definition, input, request, options);
   if (!authorization.ok) return authorization.failure;
   const lifecycleRequest = authorization.request;
+  retainCurrentResponseLifecycleRequest(lifecycleRequest as object);
   const routeRequest = authorization.routeRequest;
   const layouts = authorization.layouts;
 
@@ -1576,7 +1581,45 @@ export async function renderRoutePageResponse<
   render: (value: Page) => string | Promise<string> = renderHtmlValue,
   options: GuardFailureResponseOptions<Request> & RouteJsxContextOptions<Request> = {},
 ): Promise<RoutePageResponse> {
-  let result: RoutePageInternalResult<Page>;
+  const response = await renderRoutePageResponseForAppDocument(
+    definition,
+    input,
+    request,
+    render,
+    options,
+  );
+  const pendingSetCookies = sealAnonymousCsrfResponseRequestAndSnapshotSetCookies(
+    response.lifecycleRequest,
+  );
+  if (pendingSetCookies.length > 0) {
+    throw new Error(
+      'Direct renderRoutePageResponse() execution cannot deliver a first-anonymous CSRF binding cookie; render through createRequestHandler().',
+    );
+  }
+  return response;
+}
+
+/**
+ * Render a route while leaving its successful response lifecycle open for app-document's atomic
+ * cookie/document finalizer. This source-internal bridge is not re-exported by
+ * `@kovojs/server/internal/route`.
+ *
+ * @internal App-document-only route renderer.
+ */
+export async function renderRoutePageResponseForAppDocument<
+  const Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>>,
+  Request,
+  Page extends RoutePageResult,
+  GuardedRequest extends Request = Request,
+>(
+  definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
+  input: RouteRequestInput,
+  request: Request,
+  render: (value: Page) => string | Promise<string> = renderHtmlValue,
+  options: GuardFailureResponseOptions<Request> & RouteJsxContextOptions<Request> = {},
+): Promise<RoutePageResponse> {
   let lifecycleRequest: Request = request;
   const deferredRegions = createDeferredRegionChunkCollector();
   try {
@@ -1592,12 +1635,6 @@ export async function renderRoutePageResponse<
         : { sessionProvider: options.sessionProvider }),
       surface: 'document',
     });
-    result = await runRoutePageInternal(
-      definition,
-      input,
-      lifecycleRequest,
-      routeJsxContextOptions(options, deferredRegions),
-    );
   } catch (error) {
     reportServerError(options.onError, error, {
       operation: 'route-page',
@@ -1607,98 +1644,124 @@ export async function renderRoutePageResponse<
     return htmlServerErrorResponse();
   }
 
-  if (!result.ok) {
-    if (result.error?.code === 'VALIDATION') {
-      return {
-        body: 'Validation Failed',
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        status: 422,
-      };
-    }
-
-    if (result.boundary && (result.status === 404 || result.status === 500)) {
-      if (result.status === 500) {
-        reportServerError(options.onError, result.thrown, {
+  return attachLifecycleRequest(
+    await runWithResponseLifecycleRequest(lifecycleRequest, lifecycleRequest, async () => {
+      let result: RoutePageInternalResult<Page>;
+      try {
+        result = await runRoutePageInternal(
+          definition,
+          input,
+          lifecycleRequest,
+          routeJsxContextOptions(options, deferredRegions),
+        );
+      } catch (error) {
+        reportServerError(options.onError, error, {
           operation: 'route-page',
           request: lifecycleRequest,
           routePath: definition.path,
         });
+        return htmlServerErrorResponse();
       }
-      return attachLifecycleRequest(
-        await renderRouteBoundaryResponse(
-          result.boundary,
-          result.status,
+
+      if (!result.ok) {
+        if (result.error?.code === 'VALIDATION') {
+          return {
+            body: 'Validation Failed',
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            status: 422,
+          };
+        }
+
+        if (result.boundary && (result.status === 404 || result.status === 500)) {
+          if (result.status === 500) {
+            reportServerError(options.onError, result.thrown, {
+              operation: 'route-page',
+              request: lifecycleRequest,
+              routePath: definition.path,
+            });
+          }
+          return attachLifecycleRequest(
+            await renderRouteBoundaryResponse(
+              result.boundary,
+              result.status,
+              lifecycleRequest,
+              render,
+              result.thrown === undefined ? {} : { error: result.thrown },
+            ),
+            lifecycleRequest,
+          );
+        }
+
+        const onUnauthenticated = definition.onUnauthenticated ?? options.onUnauthenticated;
+        const unauthorizedBoundary = result.boundary;
+        const renderForbidden = unauthorizedBoundary
+          ? async () =>
+              renderRouteBoundaryBody(unauthorizedBoundary, 403, lifecycleRequest, render, {})
+          : options.renderForbidden;
+        const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
+          ...options,
+          currentUrl: options.currentUrl ?? routeCurrentUrl(definition, input),
+          ...(onUnauthenticated === undefined ? {} : { onUnauthenticated }),
+          ...(renderForbidden === undefined ? {} : { renderForbidden }),
+        });
+        if (authResponse) return authResponse;
+
+        return stampGuardFailureDocumentSecurityFloor({
+          body:
+            result.status === 404
+              ? 'Not Found'
+              : result.status === 429
+                ? 'Too Many Requests'
+                : 'Unauthorized',
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            ...retryAfterHeaders(result),
+          },
+          status: result.status,
+        });
+      }
+
+      if ('outcome' in result) {
+        return attachLifecycleRequest(
+          routeOutcomeResponse(result.outcome, request),
           lifecycleRequest,
-          render,
-          result.thrown === undefined ? {} : { error: result.thrown },
-        ),
-        lifecycleRequest,
-      );
-    }
+        );
+      }
+      // SPEC §6.4: page redirect() → 303 + sanitized Location header.
+      if ('redirect' in result) {
+        return attachLifecycleRequest(
+          blessRedirectResponse({
+            body: '',
+            headers: { Location: redirectLocationHeader(sanitizeNext(result.redirect.location)) },
+            status: 303,
+          }),
+          lifecycleRequest,
+        );
+      }
 
-    const onUnauthenticated = definition.onUnauthenticated ?? options.onUnauthenticated;
-    const unauthorizedBoundary = result.boundary;
-    const renderForbidden = unauthorizedBoundary
-      ? async () => renderRouteBoundaryBody(unauthorizedBoundary, 403, lifecycleRequest, render, {})
-      : options.renderForbidden;
-    const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
-      ...options,
-      currentUrl: options.currentUrl ?? routeCurrentUrl(definition, input),
-      ...(onUnauthenticated === undefined ? {} : { onUnauthenticated }),
-      ...(renderForbidden === undefined ? {} : { renderForbidden }),
-    });
-    if (authResponse) return authResponse;
-
-    return stampGuardFailureDocumentSecurityFloor({
-      body:
-        result.status === 404
-          ? 'Not Found'
-          : result.status === 429
-            ? 'Too Many Requests'
-            : 'Unauthorized',
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        ...retryAfterHeaders(result),
-      },
-      status: result.status,
-    });
-  }
-
-  if ('outcome' in result) {
-    return attachLifecycleRequest(routeOutcomeResponse(result.outcome, request), lifecycleRequest);
-  }
-  // SPEC §6.4: page redirect() → 303 + sanitized Location header.
-  if ('redirect' in result) {
-    return attachLifecycleRequest(
-      blessRedirectResponse({
-        body: '',
-        headers: { Location: redirectLocationHeader(sanitizeNext(result.redirect.location)) },
-        status: 303,
-      }),
-      lifecycleRequest,
-    );
-  }
-
-  try {
-    const body = await render(result.value);
-    const deferredChunks = deferredRegions.pendingChunks();
-    return attachLifecycleRequest(
-      {
-        body,
-        ...(deferredChunks.length === 0 ? {} : { deferredChunks }),
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        status: 200,
-      },
-      lifecycleRequest,
-    );
-  } catch (error) {
-    reportServerError(options.onError, error, {
-      operation: 'route-render',
-      request: lifecycleRequest,
-      routePath: definition.path,
-    });
-    return htmlServerErrorResponse();
-  }
+      try {
+        const body = await render(result.value);
+        const deferredChunks = deferredRegions.pendingChunks();
+        return attachLifecycleRequest(
+          {
+            body,
+            ...(deferredChunks.length === 0 ? {} : { deferredChunks }),
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            status: 200,
+          },
+          lifecycleRequest,
+        );
+      } catch (error) {
+        reportServerError(options.onError, error, {
+          operation: 'route-render',
+          request: lifecycleRequest,
+          routePath: definition.path,
+        });
+        return htmlServerErrorResponse();
+      }
+    }),
+    lifecycleRequest,
+  );
 }
 
 function attachLifecycleRequest<Request>(

@@ -1568,6 +1568,11 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus csrf-principal-binding',
     testFiles: [
       'packages/server/src/csrf.test.ts',
+      'packages/server/src/standalone-csrf-mint-security.test.ts',
+      'packages/server/src/anonymous-csrf-cache-security.test.tsx',
+      'packages/server/src/app-dispatch.test.ts',
+      'packages/server/src/endpoint.test.ts',
+      'packages/server/src/route.test.ts',
       'packages/server/src/app-mutation-request.test.ts',
       'packages/server/src/replay.test.ts',
       'packages/server/src/mutation/replay-policy.test.ts',
@@ -1575,6 +1580,85 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/better-auth/src/environment.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'standalone-response-lifecycle-receipt-and-sharing',
+        file: 'packages/server/src/standalone-csrf-mint-security.test.ts',
+        snippets: [
+          'requires a response lifecycle receipt before a first anonymous mint',
+          'reuses one standalone binding across a response request and its ordinary clone',
+          'keeps exact nested response lifecycles isolated from the ambient outer frame',
+          'lets an exact unsealed inner lifecycle outrank a sealed ambient outer lifecycle',
+          'without a framework response lifecycle',
+        ],
+      },
+      {
+        id: 'standalone-pending-cookie-delivery-and-conflict',
+        file: 'packages/server/src/anonymous-csrf-cache-security.test.tsx',
+        snippets: [
+          'captures a first-anonymous cookie minted by an immediate route stream pull',
+          'auto-delivers a first-anonymous cookie from a verified safe endpoint stream pull',
+          'keeps a nested route dispatch isolated from its ambient outer endpoint lifecycle',
+          'keeps nested endpoint early returns from sealing their ambient outer lifecycle',
+          'rejects an authored plain-name alias of a captured prefixed CSRF cookie',
+          'delivers two distinct standalone CSRF cookie namespaces without collapsing either',
+        ],
+      },
+      {
+        id: 'standalone-late-and-detached-rejection',
+        file: 'packages/server/src/anonymous-csrf-cache-security.test.tsx',
+        snippets: [
+          'fails closed when a route stream first mints anonymous authority after headers commit',
+          'rejects a detached reconstructed request in an external event after header commit',
+          'after response headers were committed',
+        ],
+      },
+      {
+        id: 'standalone-raw-browser-state-proof-gates',
+        file: 'packages/server/src/anonymous-csrf-cache-security.test.tsx',
+        snippets: [
+          'rejects a captured CSRF cookie from an unverified safe endpoint',
+          'rejects a captured CSRF cookie from an unverified csrf:false unsafe endpoint',
+          'allows a captured CSRF cookie on a privately self-verifying csrf:false endpoint',
+        ],
+      },
+      {
+        id: 'direct-endpoint-response-lifecycle-closes',
+        file: 'packages/server/src/endpoint.test.ts',
+        snippets: [
+          'seals the retained handler request when direct runEndpoint execution resolves',
+          'rejects a direct first-anonymous mint because runEndpoint has no cookie sink',
+          'cannot deliver a first-anonymous CSRF binding cookie',
+        ],
+      },
+      {
+        id: 'direct-route-has-no-cookie-delivery-receipt',
+        file: 'packages/server/src/route.test.ts',
+        snippets: [
+          'does not leave a cookie-delivery receipt after direct runRoutePage execution',
+          'rejects a first-anonymous mint during direct runRoutePage execution',
+          'seals the retained request returned by direct renderRoutePageResponse execution',
+          'rejects pending first-anonymous authority from direct renderRoutePageResponse',
+          'without a framework response lifecycle',
+        ],
+      },
+      {
+        id: 'framework-form-requires-cookie-sink',
+        file: 'packages/server/src/csrf.test.ts',
+        snippets: [
+          'requires a cookie sink before a framework form can mint its first anonymous binding',
+          'without a Set-Cookie sink',
+          'onCsrfSetCookie',
+        ],
+      },
+      {
+        id: 'raw-response-posture-header-snapshot',
+        file: 'packages/server/src/app-dispatch.test.ts',
+        snippets: [
+          'snapshots raw headers before a nested microtask can add browser state',
+          "retainedResponse?.headers.set('Clear-Site-Data'",
+          "retainedResponse?.headers.set('Set-Cookie'",
+        ],
+      },
       {
         id: 'bounded-generic-session-id-and-framework-posture',
         file: 'packages/server/src/csrf.test.ts',

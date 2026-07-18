@@ -10,11 +10,13 @@ import {
   renderRouteDocumentResponse,
   stampCredentialBearingResponseCacheFloor,
 } from './document-core.js';
-import { forwardSetCookie } from './cookies.js';
+import { forwardSetCookie, frameworkSetCookieNeedsAppend } from './cookies.js';
 import {
   anonymousCsrfResponsePersonalizationWitness,
   mutationCsrfOptions,
   primeAnonymousCsrfBindingForDeferredResponse,
+  sealAnonymousCsrfResponseRequest,
+  sealAnonymousCsrfResponseRequestAndSnapshotSetCookies,
   type CsrfOptions,
 } from './csrf.js';
 import { signSessionFingerprintWithSecret, type SigningSecret } from './keyring.js';
@@ -46,7 +48,7 @@ import {
 import type { TransportResponseHeaderEntry } from './response-transport-headers.js';
 import type { ForbiddenRenderer } from './guards.js';
 import {
-  renderRoutePageResponse,
+  renderRoutePageResponseForAppDocument,
   parseRouteRequest,
   routeHasEnforcedAuthorization,
   routeHasBoundary,
@@ -173,7 +175,7 @@ export async function renderAppRouteDocumentResponse({
   let acceptsCsrfSetCookie = true;
   const routeSessionProvider =
     sessionProvider === false ? undefined : (sessionProvider ?? app.sessionProvider);
-  const routeResponse = await renderRoutePageResponse(
+  const routeResponse = await renderRoutePageResponseForAppDocument(
     route,
     routeInput,
     request,
@@ -226,7 +228,35 @@ export async function renderAppRouteDocumentResponse({
     metaContext = undefined;
   }
 
+  let routeResponseLifecycleCaptured = false;
+  const captureRouteResponseLifecycleCookies = () => {
+    if (routeResponseLifecycleCaptured) return;
+    acceptsCsrfSetCookie = false;
+    const pendingSetCookies = sealAnonymousCsrfResponseRequestAndSnapshotSetCookies(
+      routeResponse.lifecycleRequest,
+    );
+    // The original ingress Request is available to custom renderRoute callbacks. It normally
+    // resolves through the active lifecycle frame rather than retaining a second frame, but seal it
+    // as well so a callback cannot mint from that identity after document headers commit.
+    sealAnonymousCsrfResponseRequest(request);
+    for (let index = 0; index < pendingSetCookies.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(pendingSetCookies, index);
+      if (
+        descriptor === undefined ||
+        !('value' in descriptor) ||
+        typeof descriptor.value !== 'string'
+      ) {
+        throw new TypeError(
+          'Framework-owned CSRF cookies must remain a dense exact response snapshot.',
+        );
+      }
+      appendRefreshSetCookie(refreshSetCookies, descriptor.value, 'csrf');
+    }
+    routeResponseLifecycleCaptured = true;
+  };
+
   const withRefreshCookies = (response: RoutePageResponse): RoutePageResponse => {
+    captureRouteResponseLifecycleCookies();
     // Forwarded session/CSRF Set-Cookie strings are routed through the cookie floor
     // (cookies.ts) so a forwarded credential cookie can never land below the
     // HttpOnly/Secure(prod)/SameSite floor (SPEC §6.6/§9.1).
@@ -251,146 +281,155 @@ export async function renderAppRouteDocumentResponse({
       : response;
   };
 
-  if (routeResponse.status === 404 && !routeHasBoundary(route, 'notFound')) {
-    return withRefreshCookies(await renderAppErrorDocumentResponse(app, request, 404));
+  try {
+    if (routeResponse.status === 404 && !routeHasBoundary(route, 'notFound')) {
+      captureRouteResponseLifecycleCookies();
+      return withRefreshCookies(await renderAppErrorDocumentResponse(app, request, 404));
+    }
+
+    if (routeResponse.status === 500 && !routeHasBoundary(route, 'error')) {
+      captureRouteResponseLifecycleCookies();
+      return withRefreshCookies(await renderAppErrorDocumentResponse(app, request, 500));
+    }
+
+    // K3 / SPEC §9.3: derive the broadcast fingerprint from the session identity already resolved on
+    // the request (not the whole cookie header), so non-session cookie churn (CSRF rotation, theme)
+    // does not produce different fingerprints for the same user across tabs. We do NOT re-resolve via
+    // sessionProvider here (it already ran once for the guarded route).
+    const sessionRequest = isNativeRequest(routeResponse.lifecycleRequest)
+      ? routeResponse.lifecycleRequest
+      : request;
+    const hasLateExecutableBody = routeResponseHasLiveBody(routeResponse);
+    const mayDeferCsrfPersonalization = routeResponseHasDeferredChunks(routeResponse);
+    if (mayDeferCsrfPersonalization) {
+      primeDeferredCsrfBindings(app, sessionRequest, anonymousCsrfBindings, refreshSetCookies);
+    }
+    // Deferred response bindings above are now fixed and will be attached by withRefreshCookies().
+    // Any later first-anonymous standalone mint in a live body cannot deliver its cookie and must
+    // fail closed; seal both request identities authored route code can retain (SPEC §6.6/§9.1).
+    captureRouteResponseLifecycleCookies();
+    const principalPosture = principalPostureFromRequest(sessionRequest);
+    const sessionFingerprint =
+      principalPosture.kind === 'proven'
+        ? hmacSessionFingerprint(principalPosture.principal, app.csrf?.secret)
+        : undefined;
+
+    // SPEC §9.1: an anonymous synchronizer token or live-target attestation is derived from the
+    // exact anonymous-cookie binding. The CSRF module records that dependency in a boot-captured,
+    // module-private WeakSet instead of trusting app-visible properties. Check both request
+    // identities that authored rendering can legitimately receive: the original app render context
+    // and the lifecycle carrier used by route/page JSX.
+    const csrfPersonalized =
+      anonymousCsrfResponsePersonalizationWitness(request) ||
+      anonymousCsrfResponsePersonalizationWitness(routeResponse.lifecycleRequest);
+    // Deferred region callbacks can first touch local mutation CSRF after response headers have
+    // already crossed the streaming boundary. The shell cannot know which callback paths will run,
+    // so every pending deferred document selects the safe posture up front; waiting for a late exact
+    // witness would make cache safety timing-dependent.
+    const anonymousCsrfSensitive = csrfPersonalized || mayDeferCsrfPersonalization;
+
+    // part-4 G1 + bugz-3 L2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a document
+    // that varies by identity MUST never be stored by a shared CDN/proxy cache nor restored from
+    // bfcache across the guard; otherwise the cached page replays one principal's private content
+    // (and any per-principal `Set-Cookie`) to other visitors (cross-principal leak / takeover). Three
+    // independent signals make a document session-dependent:
+    //   1. `routeHasEnforcedAuthorization(route)` — the exact route + parent-layout access graph
+    //      contains an effective guard. Declarations cannot author both mechanisms; `access` arrays
+    //      and a legacy `guard` authored alone are the two executable cases (§9.4/§9.5/§10.2).
+    //   2. `refreshSetCookies.length > 0` — a rolling/refresh session token forwarded by the
+    //      sessionProvider via `onSessionSetCookie`/`onCsrfSetCookie` (part-3 I2) rides the response.
+    //   3. `sessionFingerprint !== undefined` — the route lifecycle resolved a per-principal session
+    //      identity and this document stamps the `kovo-session` fingerprint. bugz-3 L2: a NON-ROLLING
+    //      provider (long-lived cookie / JWT, Better Auth without `updateAge`/`cookieCache`, the
+    //      opaque-session manager that never rolls on GET) emits no refresh `Set-Cookie`, so signals
+    //      1–2 miss an authenticated UNGUARDED route even though it serves per-principal state. Gate
+    //      on the RESOLVED session identity, not on whether a refresh cookie happened to be emitted.
+    // (We do NOT change the cookie forwarding itself.)
+    const noStore =
+      routeHasEnforcedAuthorization(route) ||
+      refreshSetCookies.length > 0 ||
+      anonymousCsrfSensitive ||
+      hasLateExecutableBody ||
+      sessionFingerprint !== undefined ||
+      principalPosture.kind === 'unresolved';
+    const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
+      request.headers.get('accept'),
+    );
+
+    // SPEC §6.6: HSTS is attached only when the adapter-proven request scheme is HTTPS.
+    // Do not reread spoofable forwarding headers here; trusted proxy configuration is
+    // already reflected in Request.url by the adapter.
+    const secure = isTrustedSecureRequest(request);
+
+    let documentResponse = renderRouteDocumentResponse(
+      routeResponseToDocumentResponse(routeResponse),
+      {
+        // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
+        // always non-empty so the carve-out is no longer needed (DEPLOY-3).
+        buildToken,
+        ...(secure ? { secure: true } : {}),
+        // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): thread the app's third-party
+        // CSP allowlist + Trusted Types opt-in (`createApp({ document: { csp } })`) into the
+        // auto-attached strict document CSP so declared analytics/Stripe/embed origins are
+        // APPENDED to the overridable per-fetch directives. Hardening directives stay locked
+        // (the allowlist can never reach them — see csp.ts `renderDefaultDocumentCsp`).
+        ...(app.document.csp === undefined ? {} : { csp: app.document.csp }),
+        ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
+        hints: mergeAppRouteHints(app, route),
+        ...(metaContext === undefined ? {} : { metaContext }),
+        ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
+        loaderRuntimeHref,
+        reportingOrigin: requestUrlSnapshot(
+          requestCreateUrl(requestUrl(requestForAuthorityNeutralMetadata(request))),
+        ).origin,
+        // bugs-1 F34: a guarded route renders session-dependent content; mark its
+        // document no-store so a Back/bfcache restore can't show it after logout.
+        // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
+        // response on an unguarded route (cross-principal shared-cache leak).
+        // bugz-3 L2 (SPEC §9.5:780): also no-store when a per-principal session identity
+        // resolved (a stamped `kovo-session` fingerprint) even under a non-rolling provider.
+        // `renderRouteDocumentResponse` carries this floor onto file/stream outcomes too (M2).
+        ...(noStore ? { noStore: true } : {}),
+        // SPEC §8: no-store is the server-side signal that this route document depends on session
+        // posture. Mirror it into a non-secret DOM marker so unresolved principals receive the same
+        // persisted-pageshow revalidation as fingerprinted principals.
+        ...(noStore ? { sessionDependent: true } : {}),
+        ...((routeResponse.status === 404 && routeHasBoundary(route, 'notFound')) ||
+        (routeResponse.status === 500 && routeHasBoundary(route, 'error'))
+          ? { wrapNonOk: true }
+          : {}),
+        // SPEC §4.4 / plans/better-js-loader.md: enhanced navigation has already
+        // installed the inline loader, so its negotiated document variant omits the
+        // stable bootstrap bytes while retaining a complete parseable document.
+        ...(enhancedNavigationDocument ? { loader: 'omit' } : {}),
+        // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
+        // cross-principal BroadcastChannel discard (SPEC §9.3).
+        ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),
+      },
+    );
+
+    if (anonymousCsrfSensitive || hasLateExecutableBody) {
+      // This response is not merely non-restorable: its body bytes vary by Cookie. Force the stronger
+      // private cache floor after document assembly so authored Cache-Control cannot relax it. A live
+      // route stream is conservative for the same reason as a deferred document: app code can first
+      // consume request authority or mint a token from pull() after headers have crossed the wire.
+      documentResponse = stampCredentialBearingResponseCacheFloor(documentResponse);
+    }
+
+    if (enhancedNavigationDocument && documentResponse.status === 200) {
+      documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');
+    }
+    const queryWarningHeader = queryRuntimeWarningHeaderValue(
+      queryRuntimeWarningsFromRequest(routeResponse.lifecycleRequest),
+    );
+    if (queryWarningHeader !== undefined) {
+      appendResponseHeader(documentResponse.headers, 'Kovo-Warn', queryWarningHeader);
+    }
+
+    return withRefreshCookies(documentResponse);
+  } finally {
+    captureRouteResponseLifecycleCookies();
   }
-
-  if (routeResponse.status === 500 && !routeHasBoundary(route, 'error')) {
-    return withRefreshCookies(await renderAppErrorDocumentResponse(app, request, 500));
-  }
-
-  // K3 / SPEC §9.3: derive the broadcast fingerprint from the session identity already resolved on
-  // the request (not the whole cookie header), so non-session cookie churn (CSRF rotation, theme)
-  // does not produce different fingerprints for the same user across tabs. We do NOT re-resolve via
-  // sessionProvider here (it already ran once for the guarded route).
-  const sessionRequest = isNativeRequest(routeResponse.lifecycleRequest)
-    ? routeResponse.lifecycleRequest
-    : request;
-  const hasLateExecutableBody = routeResponseHasLiveBody(routeResponse);
-  const mayDeferCsrfPersonalization = routeResponseHasDeferredChunks(routeResponse);
-  if (mayDeferCsrfPersonalization) {
-    primeDeferredCsrfBindings(app, sessionRequest, anonymousCsrfBindings, refreshSetCookies);
-  }
-  acceptsCsrfSetCookie = false;
-  const principalPosture = principalPostureFromRequest(sessionRequest);
-  const sessionFingerprint =
-    principalPosture.kind === 'proven'
-      ? hmacSessionFingerprint(principalPosture.principal, app.csrf?.secret)
-      : undefined;
-
-  // SPEC §9.1: an anonymous synchronizer token or live-target attestation is derived from the
-  // exact anonymous-cookie binding. The CSRF module records that dependency in a boot-captured,
-  // module-private WeakSet instead of trusting app-visible properties. Check both request
-  // identities that authored rendering can legitimately receive: the original app render context
-  // and the lifecycle carrier used by route/page JSX.
-  const csrfPersonalized =
-    anonymousCsrfResponsePersonalizationWitness(request) ||
-    anonymousCsrfResponsePersonalizationWitness(routeResponse.lifecycleRequest);
-  // Deferred region callbacks can first touch local mutation CSRF after response headers have
-  // already crossed the streaming boundary. The shell cannot know which callback paths will run,
-  // so every pending deferred document selects the safe posture up front; waiting for a late exact
-  // witness would make cache safety timing-dependent.
-  const anonymousCsrfSensitive = csrfPersonalized || mayDeferCsrfPersonalization;
-
-  // part-4 G1 + bugz-3 L2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a document
-  // that varies by identity MUST never be stored by a shared CDN/proxy cache nor restored from
-  // bfcache across the guard; otherwise the cached page replays one principal's private content
-  // (and any per-principal `Set-Cookie`) to other visitors (cross-principal leak / takeover). Three
-  // independent signals make a document session-dependent:
-  //   1. `routeHasEnforcedAuthorization(route)` — the exact route + parent-layout access graph
-  //      contains an effective guard. Declarations cannot author both mechanisms; `access` arrays
-  //      and a legacy `guard` authored alone are the two executable cases (§9.4/§9.5/§10.2).
-  //   2. `refreshSetCookies.length > 0` — a rolling/refresh session token forwarded by the
-  //      sessionProvider via `onSessionSetCookie`/`onCsrfSetCookie` (part-3 I2) rides the response.
-  //   3. `sessionFingerprint !== undefined` — the route lifecycle resolved a per-principal session
-  //      identity and this document stamps the `kovo-session` fingerprint. bugz-3 L2: a NON-ROLLING
-  //      provider (long-lived cookie / JWT, Better Auth without `updateAge`/`cookieCache`, the
-  //      opaque-session manager that never rolls on GET) emits no refresh `Set-Cookie`, so signals
-  //      1–2 miss an authenticated UNGUARDED route even though it serves per-principal state. Gate
-  //      on the RESOLVED session identity, not on whether a refresh cookie happened to be emitted.
-  // (We do NOT change the cookie forwarding itself.)
-  const noStore =
-    routeHasEnforcedAuthorization(route) ||
-    refreshSetCookies.length > 0 ||
-    anonymousCsrfSensitive ||
-    hasLateExecutableBody ||
-    sessionFingerprint !== undefined ||
-    principalPosture.kind === 'unresolved';
-  const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
-    request.headers.get('accept'),
-  );
-
-  // SPEC §6.6: HSTS is attached only when the adapter-proven request scheme is HTTPS.
-  // Do not reread spoofable forwarding headers here; trusted proxy configuration is
-  // already reflected in Request.url by the adapter.
-  const secure = isTrustedSecureRequest(request);
-
-  let documentResponse = renderRouteDocumentResponse(
-    routeResponseToDocumentResponse(routeResponse),
-    {
-      // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
-      // always non-empty so the carve-out is no longer needed (DEPLOY-3).
-      buildToken,
-      ...(secure ? { secure: true } : {}),
-      // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): thread the app's third-party
-      // CSP allowlist + Trusted Types opt-in (`createApp({ document: { csp } })`) into the
-      // auto-attached strict document CSP so declared analytics/Stripe/embed origins are
-      // APPENDED to the overridable per-fetch directives. Hardening directives stay locked
-      // (the allowlist can never reach them — see csp.ts `renderDefaultDocumentCsp`).
-      ...(app.document.csp === undefined ? {} : { csp: app.document.csp }),
-      ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
-      hints: mergeAppRouteHints(app, route),
-      ...(metaContext === undefined ? {} : { metaContext }),
-      ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
-      loaderRuntimeHref,
-      reportingOrigin: requestUrlSnapshot(
-        requestCreateUrl(requestUrl(requestForAuthorityNeutralMetadata(request))),
-      ).origin,
-      // bugs-1 F34: a guarded route renders session-dependent content; mark its
-      // document no-store so a Back/bfcache restore can't show it after logout.
-      // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
-      // response on an unguarded route (cross-principal shared-cache leak).
-      // bugz-3 L2 (SPEC §9.5:780): also no-store when a per-principal session identity
-      // resolved (a stamped `kovo-session` fingerprint) even under a non-rolling provider.
-      // `renderRouteDocumentResponse` carries this floor onto file/stream outcomes too (M2).
-      ...(noStore ? { noStore: true } : {}),
-      // SPEC §8: no-store is the server-side signal that this route document depends on session
-      // posture. Mirror it into a non-secret DOM marker so unresolved principals receive the same
-      // persisted-pageshow revalidation as fingerprinted principals.
-      ...(noStore ? { sessionDependent: true } : {}),
-      ...((routeResponse.status === 404 && routeHasBoundary(route, 'notFound')) ||
-      (routeResponse.status === 500 && routeHasBoundary(route, 'error'))
-        ? { wrapNonOk: true }
-        : {}),
-      // SPEC §4.4 / plans/better-js-loader.md: enhanced navigation has already
-      // installed the inline loader, so its negotiated document variant omits the
-      // stable bootstrap bytes while retaining a complete parseable document.
-      ...(enhancedNavigationDocument ? { loader: 'omit' } : {}),
-      // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
-      // cross-principal BroadcastChannel discard (SPEC §9.3).
-      ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),
-    },
-  );
-
-  if (anonymousCsrfSensitive || hasLateExecutableBody) {
-    // This response is not merely non-restorable: its body bytes vary by Cookie. Force the stronger
-    // private cache floor after document assembly so authored Cache-Control cannot relax it. A live
-    // route stream is conservative for the same reason as a deferred document: app code can first
-    // consume request authority or mint a token from pull() after headers have crossed the wire.
-    documentResponse = stampCredentialBearingResponseCacheFloor(documentResponse);
-  }
-
-  if (enhancedNavigationDocument && documentResponse.status === 200) {
-    documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');
-  }
-  const queryWarningHeader = queryRuntimeWarningHeaderValue(
-    queryRuntimeWarningsFromRequest(routeResponse.lifecycleRequest),
-  );
-  if (queryWarningHeader !== undefined) {
-    appendResponseHeader(documentResponse.headers, 'Kovo-Warn', queryWarningHeader);
-  }
-
-  return withRefreshCookies(documentResponse);
 }
 
 interface RefreshSetCookie {
@@ -464,6 +503,34 @@ function appendRefreshSetCookie(
   raw: string,
   source: RefreshSetCookie['source'],
 ): void {
+  const existing: string[] = [];
+  for (let index = 0; index < cookies.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(cookies, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'object' ||
+      descriptor.value === null
+    ) {
+      throw new TypeError('Kovo refresh cookies must remain a dense exact snapshot.');
+    }
+    const rawDescriptor = witnessGetOwnPropertyDescriptor(descriptor.value, 'raw');
+    if (
+      rawDescriptor === undefined ||
+      !('value' in rawDescriptor) ||
+      typeof rawDescriptor.value !== 'string'
+    ) {
+      throw new TypeError('Kovo refresh cookie values must remain stable own strings.');
+    }
+    witnessDefineProperty(existing, existing.length, {
+      configurable: true,
+      enumerable: true,
+      value: rawDescriptor.value,
+      writable: true,
+    });
+  }
+  if (!frameworkSetCookieNeedsAppend(existing, raw)) return;
+
   const cookie = witnessCreateNullRecord<unknown>();
   witnessDefineProperty(cookie, 'raw', {
     enumerable: true,

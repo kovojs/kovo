@@ -4,13 +4,20 @@ import {
   csrfField,
   csrfToken,
   mintIdemToken,
-  mintCsrfField,
-  mintCsrfToken,
+  mintCsrfField as mintCsrfFieldWithoutLifecycle,
+  mintCsrfToken as mintCsrfTokenWithoutLifecycle,
   renderMutationCsrfField,
   validateCsrfToken,
   verifyCsrfRequestOriginFloor,
 } from './csrf.js';
-import { runWithJsxRequestContext } from './jsx-context.js';
+import {
+  runWithJsxRequestContext as runWithBaseJsxRequestContext,
+  type JsxFrameworkContext,
+} from './jsx-context.js';
+import {
+  hasResponseLifecycleReceipt,
+  runWithResponseLifecycleRequest,
+} from './response-lifecycle-context.js';
 import { createFrameworkCsrfSigningSecret, createSigningKeyRing } from './keyring.js';
 import {
   mutation as defineMutation,
@@ -24,6 +31,39 @@ import { s } from './schema.js';
 
 const TEST_CSRF_SECRET = 'test-csrf-secret-0123456789abcdef012345';
 const ANONYMOUS_CSRF_SECRET = 'anonymous-csrf-secret-0123456789abcdef';
+
+function ensureResponseLifecycleReceipt(request: unknown): void {
+  if (!hasResponseLifecycleReceipt(request)) {
+    runWithResponseLifecycleRequest(request, request, () => undefined);
+  }
+}
+
+function mintCsrfToken<Request>(
+  request: Request,
+  csrf: Parameters<typeof mintCsrfTokenWithoutLifecycle<Request>>[1],
+  context: Parameters<typeof mintCsrfTokenWithoutLifecycle<Request>>[2] = {},
+) {
+  ensureResponseLifecycleReceipt(request);
+  return mintCsrfTokenWithoutLifecycle(request, csrf, context);
+}
+
+function mintCsrfField<Request>(
+  request: Request,
+  csrf: Parameters<typeof mintCsrfFieldWithoutLifecycle<Request>>[1],
+) {
+  ensureResponseLifecycleReceipt(request);
+  return mintCsrfFieldWithoutLifecycle(request, csrf);
+}
+
+function runWithJsxRequestContext<Value>(
+  request: object,
+  options: Omit<JsxFrameworkContext, 'mutationFormHelpers' | 'request'>,
+  render: () => Value,
+): Value {
+  return runWithResponseLifecycleRequest(request, request, () =>
+    runWithBaseJsxRequestContext(request, options, render),
+  ) as Value;
+}
 
 describe('csrf helpers', () => {
   // @kovo-security-classifier-corpus csrf-principal-binding
@@ -528,6 +568,32 @@ describe('csrf helpers', () => {
         audience: 'endpoint:/files',
       }),
     ).toBe(true);
+  });
+
+  it('requires a cookie sink before a framework form can mint its first anonymous binding', () => {
+    const anonymousCsrf = {
+      field: 'csrf',
+      secret: ANONYMOUS_CSRF_SECRET,
+      sessionId() {
+        return undefined;
+      },
+    };
+    const missingSinkRequest = new Request('https://shop.example.test/missing-form-sink');
+    expect(() =>
+      runWithJsxRequestContext(missingSinkRequest, {}, () =>
+        renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
+      ),
+    ).toThrow(/framework mutation form cannot mint.*without a Set-Cookie sink/u);
+
+    const setCookies: string[] = [];
+    const controlledRequest = new Request('https://shop.example.test/controlled-form-sink');
+    const html = runWithJsxRequestContext(
+      controlledRequest,
+      { onCsrfSetCookie: (cookie) => setCookies.push(cookie) },
+      () => renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
+    );
+    expect(html).toContain('name="csrf"');
+    expect(setCookies).toHaveLength(1);
   });
 
   it('mintCsrfToken does not emit Set-Cookie for an existing session binding', () => {

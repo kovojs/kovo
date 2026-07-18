@@ -1,11 +1,20 @@
 import { renderVersionedClientModuleResponse } from './client-modules.js';
+import { runWithResponseLifecycleRequest } from './response-lifecycle-context.js';
 import {
   anonymousCsrfResponsePersonalizationWitness,
+  sealAnonymousCsrfResponseRequestAndSnapshotSetCookies,
   validateCsrfToken,
   type CsrfOptions,
 } from './csrf.js';
-import { runEndpoint, runEndpointAccessDecision, runEndpointAuth } from './endpoint.js';
-import { endpointBrowserCredentialDelegationPinned } from './endpoint-auth-proof.js';
+import {
+  runEndpointAccessDecision,
+  runEndpointAuth,
+  runEndpointForAppDispatch,
+} from './endpoint.js';
+import {
+  endpointBrowserCredentialDelegationPinned,
+  endpointBrowserStateAuthExecuted,
+} from './endpoint-auth-proof.js';
 import {
   renderQueryRegistryEndpointResponse,
   type QueryEndpointRegistry,
@@ -27,7 +36,7 @@ import {
 import { handleAppMutationRequest } from './app-mutation-request.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
 import {
-  assertEndpointResponsePosture,
+  assertEndpointResponsePostureAndSnapshot,
   finalizeRawWebResponse,
   resolveKovoLifecycleRequest,
 } from './response-posture.js';
@@ -138,40 +147,44 @@ export async function dispatchMatchedAppRequest({
       return finalizeMatchedEndpointResponse(csrfFailure, request, endpointRequest, match.endpoint);
     }
     if (isWebhookEndpoint(match.endpoint)) {
-      const accessFailure = await runEndpointAccessDecision(match.endpoint, endpointRequest);
+      const webhook = match.endpoint;
+      const accessFailure = await runEndpointAccessDecision(webhook, endpointRequest);
       if (accessFailure) {
-        return finalizeMatchedEndpointResponse(
-          accessFailure,
-          request,
-          endpointRequest,
-          match.endpoint,
-        );
+        return finalizeMatchedEndpointResponse(accessFailure, request, endpointRequest, webhook);
       }
       const taskScheduler = appTaskScheduler(app);
       const mutationOptions = {
         clientIp: (req: Request) => resolveRequestClientIp(app, req),
-        ...(match.endpoint.webhookDefinition.transaction === undefined && app.db !== undefined
+        ...(webhook.webhookDefinition.transaction === undefined && app.db !== undefined
           ? { db: app.db }
           : {}),
         ...(app.onError === undefined ? {} : { onError: app.onError }),
         ...(taskScheduler === undefined ? {} : { taskScheduler }),
       };
-      const response = (
-        await runWebhook(match.endpoint, endpointRequest, {
-          mutationOptions,
-        })
-      ).response;
-      assertEndpointResponsePosture(match.endpoint, response, { request: endpointRequest });
+      const response = await runWithResponseLifecycleRequest(
+        endpointRequest,
+        endpointRequest,
+        async () => {
+          const response = (
+            await runWebhook(webhook, endpointRequest, {
+              mutationOptions,
+            })
+          ).response;
+          return assertEndpointResponsePostureAndSnapshot(webhook, response, {
+            request: endpointRequest,
+          });
+        },
+      );
       return finalizeMatchedEndpointResponse(
         response,
         request,
         endpointRequest,
-        match.endpoint,
-        match.endpoint.response,
+        webhook,
+        webhook.response,
       );
     }
     return finalizeMatchedEndpointResponse(
-      await runEndpoint(
+      await runEndpointForAppDispatch(
         match.endpoint,
         endpointRequest,
         app.db === undefined ? {} : { db: app.db },
@@ -218,15 +231,27 @@ function finalizeMatchedEndpointResponse(
   // other browser authority back onto ingress. A credential-delegating adapter is conservatively
   // personalized even before that witness exists: a raw Response can hide lazy body execution, so
   // its handler may first consume Cookie or mint anonymous CSRF authority after headers finalize.
-  return finalizeRawWebResponse(
-    response,
-    ingressRequest,
-    options,
-    endpointBrowserCredentialDelegationPinned(endpoint) ||
-      anonymousCsrfResponsePersonalizationWitness(endpointRequest)
-      ? { cookiePersonalized: true }
-      : {},
-  );
+  // Immediate stream/microtask work may already have minted a standalone anonymous binding. Seal
+  // and snapshot its private cookie receipt now, before any later lazy-body work can mint authority;
+  // final raw reconstruction injects the snapshot without mutating the app Response.
+  const frameworkSetCookies =
+    sealAnonymousCsrfResponseRequestAndSnapshotSetCookies(endpointRequest);
+  if (
+    frameworkSetCookies.length > 0 &&
+    (isSafeEndpointMethod(endpoint.method) || endpoint.csrf?.exempt === true) &&
+    !endpointBrowserStateAuthExecuted(endpoint, endpointRequest)
+  ) {
+    throw new Error(
+      'A safe-method or CSRF-exempt endpoint cannot emit framework-owned browser state without an executed endpoint authentication proof.',
+    );
+  }
+  return finalizeRawWebResponse(response, ingressRequest, options, {
+    ...(endpointBrowserCredentialDelegationPinned(endpoint) ||
+    anonymousCsrfResponsePersonalizationWitness(endpointRequest)
+      ? { cookiePersonalized: true as const }
+      : {}),
+    setCookies: frameworkSetCookies,
+  });
 }
 
 function isWebhookEndpoint(

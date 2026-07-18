@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { customVerifier, hmacSignature, type HmacSignatureVerifier } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
+import { mintCsrfToken } from './csrf.js';
 import {
   endpoint,
   endpointMatches,
@@ -37,6 +38,51 @@ function signEndpointBody(body: string): string {
 }
 
 describe('server endpoints', () => {
+  const directCsrf = {
+    secret: 'direct-endpoint-lifecycle-secret-0123456789abcdef',
+    sessionId: () => undefined,
+  };
+
+  it('seals the retained handler request when direct runEndpoint execution resolves', async () => {
+    let retainedRequest: Request | undefined;
+    const direct = endpoint('/direct/retained-request', {
+      auth: { kind: 'none', justification: 'direct execution lifecycle fixture' },
+      handler(request) {
+        retainedRequest = request;
+        return new Response('ok');
+      },
+      method: 'GET',
+      reason: 'direct endpoint response lifecycle fixture',
+      response: { appOwnedSafety: true, body: 'text', cache: 'custom' },
+    });
+
+    await expect(
+      runEndpoint(direct, new Request('https://example.test/direct/retained-request')),
+    ).resolves.toMatchObject({ status: 200 });
+    expect(retainedRequest).toBeDefined();
+    expect(() =>
+      mintCsrfToken(retainedRequest!, directCsrf, { audience: 'direct-retained-submit' }),
+    ).toThrow(/after response headers were committed/u);
+  });
+
+  it('rejects a direct first-anonymous mint because runEndpoint has no cookie sink', async () => {
+    const direct = endpoint('/direct/eager-token', {
+      auth: { kind: 'none', justification: 'direct execution lifecycle fixture' },
+      handler(request) {
+        return new Response(
+          mintCsrfToken(request, directCsrf, { audience: 'direct-eager-submit' }).token,
+        );
+      },
+      method: 'GET',
+      reason: 'direct endpoint cookie delivery fixture',
+      response: { appOwnedSafety: true, body: 'text', cache: 'custom' },
+    });
+
+    await expect(
+      runEndpoint(direct, new Request('https://example.test/direct/eager-token')),
+    ).rejects.toThrow(/cannot deliver a first-anonymous CSRF binding cookie/u);
+  });
+
   it('declares raw endpoints with named CSRF exemptions and auth metadata', () => {
     const callback = endpoint('/auth/callback', {
       auth: { justification: 'oauth provider callback', kind: 'none' },

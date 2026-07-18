@@ -695,6 +695,63 @@ function parseSetCookieHeader(raw: string): ParsedSetCookie | undefined {
 }
 
 /**
+ * Resolve the browser-logical name used when framework CSRF code accepts a plain, `__Host-`, or
+ * `__Secure-` cookie alias. Exact prefixes are stripped so a response cannot deliver two competing
+ * values that the next CSRF read would consume in precedence order.
+ *
+ * @internal Framework-owned Set-Cookie merge control; not exported from a package entrypoint.
+ */
+export function logicalSetCookieName(raw: string): string {
+  assertNoHeaderControlCharacters(raw, 'Set-Cookie');
+  const parsed = parseSetCookieHeader(raw);
+  if (parsed === undefined) throw new Error('Set-Cookie merge requires a name=value header');
+  assertCookieName(parsed.name);
+  if (securityStringStartsWith(parsed.name, '__Host-')) {
+    return securityStringSlice(parsed.name, '__Host-'.length);
+  }
+  if (securityStringStartsWith(parsed.name, '__Secure-')) {
+    return securityStringSlice(parsed.name, '__Secure-'.length);
+  }
+  return parsed.name;
+}
+
+/**
+ * Decide whether a trusted framework-owned Set-Cookie must be appended to an existing response.
+ * An exact authored copy is already delivered and is deduplicated. Any non-identical cookie under
+ * the same logical plain/prefixed name is ambiguous and fails closed.
+ *
+ * @internal Framework response-finalization bridge.
+ */
+export function frameworkSetCookieNeedsAppend(
+  existing: readonly string[],
+  candidate: string,
+): boolean {
+  const candidateName = logicalSetCookieName(candidate);
+  let exactDuplicate = false;
+  for (let index = 0; index < existing.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(existing, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new TypeError('Existing Set-Cookie values must remain a dense exact string snapshot.');
+    }
+    const raw = descriptor.value;
+    if (raw === candidate) {
+      exactDuplicate = true;
+      continue;
+    }
+    if (logicalSetCookieName(raw) === candidateName) {
+      throw new Error(
+        `Framework-owned Set-Cookie conflicts with another cookie under logical name ${candidateName}.`,
+      );
+    }
+  }
+  return !exactDuplicate;
+}
+
+/**
  * @internal Normalize a raw upstream `Set-Cookie` header through Kovo's cookie floor.
  * Preserves the upstream name/value and attributes while adding the credential floor
  * required by SPEC.md §6.6/§9.1.1. This is the only raw forwarding sink framework-owned

@@ -29,6 +29,16 @@ import {
 } from './request-carrier.js';
 import { isSafeEndpointMethod } from './request-method.js';
 import {
+  hasResponseLifecycleReceipt,
+  recordResponseLifecycleSetCookie,
+  responseLifecycleCanonicalRequest,
+  responseLifecycleExactStateRoot,
+  responseLifecycleHeadersCommitted,
+  responseLifecycleStateRoot,
+  sealResponseLifecycleRequest,
+  sealResponseLifecycleRequestAndSnapshotSetCookies,
+} from './response-lifecycle-context.js';
+import {
   createWitnessWeakMap,
   createWitnessWeakSet,
   witnessCreateNullRecord,
@@ -73,6 +83,7 @@ const nativeUrlOrigin = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'or
 const nativeNumberIsSafeInteger = Number.isSafeInteger;
 const pinnedAnonymousLiveTargetBindings = createWitnessWeakMap<object, string>();
 const anonymousCsrfResponsePersonalizations = createWitnessWeakSet<object>();
+const sealedAnonymousCsrfResponseRequests = createWitnessWeakSet<object>();
 if (
   typeof nativeRequestMethod !== 'function' ||
   typeof nativeRequestUrl !== 'function' ||
@@ -167,7 +178,10 @@ export function frameworkCsrfRequestSnapshot(
 export interface MintedCsrfToken {
   /** The synchronizer token to send back in the configured CSRF field. */
   token: string;
-  /** Set this header on the rendering response when present. */
+  /**
+   * Exact first-anonymous binding cookie for non-Kovo response integrations. A managed, authorized
+   * `createRequestHandler()` endpoint captures and delivers it during final response reconstruction.
+   */
   setCookie?: string;
 }
 
@@ -242,7 +256,7 @@ export function csrfToken<Request>(
   context: { audience?: string; mutation?: string | { readonly key: string } } = {},
 ): string {
   assertCsrfFieldName(options.field ?? 'kovo-csrf', 'CSRF options.field');
-  const binding = resolveCsrfBinding(request, options);
+  const binding = resolveCsrfBinding(request, options, { responseAuthority: true });
   if (!binding) throw new Error('csrfToken requires a session id or anonymous CSRF cookie');
 
   return createCsrfToken(binding, options.secret, resolveCsrfAudience(options, context));
@@ -251,10 +265,13 @@ export function csrfToken<Request>(
 /**
  * Mint a CSRF token for a response that can also set the anonymous binding cookie (SPEC §6.6/§9.1).
  *
- * Use this for first anonymous raw endpoint forms or JSON bootstraps. Session-bound requests return
- * only a token. Anonymous requests mint the framework-owned anonymous CSRF cookie and return it in
- * `setCookie`; the response that exposes the token MUST attach that `Set-Cookie` header or the
- * first unsafe endpoint request will fail closed.
+ * Use this for first anonymous route responses or verified raw endpoint bootstraps. Session-bound
+ * requests return only a token. Anonymous requests mint the framework-owned anonymous CSRF cookie
+ * and return its exact bytes in `setCookie`; `createRequestHandler()` also captures those bytes and
+ * attaches them while reconstructing an authorized response. An explicit raw `Set-Cookie` remains
+ * app-authored browser state and requires the endpoint's executable/private auth proof. A first mint
+ * must run during framework-managed response construction; detached and direct `runEndpoint()`
+ * calls have no managed delivery sink and fail closed.
  */
 export function mintCsrfToken<Request>(
   request: Request,
@@ -262,7 +279,10 @@ export function mintCsrfToken<Request>(
   context: { audience?: string; mutation?: string | { readonly key: string } } = {},
 ): MintedCsrfToken {
   assertCsrfFieldName(options.field ?? 'kovo-csrf', 'CSRF options.field');
-  const binding = resolveCsrfBinding(request, options, { mintAnonymous: true });
+  const binding = resolveCsrfBinding(request, options, {
+    mintAnonymous: true,
+    responseAuthority: true,
+  });
   if (!binding) throw new Error('mintCsrfToken requires a session id or anonymous CSRF cookie');
   return {
     token: createCsrfToken(binding, options.secret, resolveCsrfAudience(options, context)),
@@ -307,9 +327,11 @@ export function csrfField<Request>(
 /**
  * Render a CSRF hidden field for a response that can set the anonymous binding cookie.
  *
- * This is the supported public path for a first anonymous raw endpoint form. Attach `setCookie` to
- * the response when it is present, and include `html` in the form. The endpoint POST can then keep
- * default CSRF enabled instead of using `csrf: false`.
+ * This is the supported helper for a first anonymous hand-written form. Include `html` in the form;
+ * a verified raw endpoint dispatched by `createRequestHandler()` captures and delivers `setCookie`
+ * during final response reconstruction. Manually attaching it is app-authored browser state and
+ * requires the same endpoint proof. A detached/direct first mint fails closed. The endpoint POST
+ * can then keep default CSRF enabled instead of using `csrf: false`.
  */
 export function mintCsrfField<Request>(
   request: Request,
@@ -352,9 +374,17 @@ export function renderMutationCsrfField<Request>(definition: {
   const binding = resolveCsrfBinding(context.request as Request, csrf, {
     anonymousCache: context.anonymousCsrfBindings,
     mintAnonymous: true,
+    responseAuthority: true,
   });
   if (!binding) return '';
-  if (binding.setCookie) context.onCsrfSetCookie?.(binding.setCookie);
+  if (binding.setCookie !== undefined) {
+    if (context.onCsrfSetCookie === undefined) {
+      throw new Error(
+        'A framework mutation form cannot mint an anonymous CSRF binding without a Set-Cookie sink.',
+      );
+    }
+    context.onCsrfSetCookie(binding.setCookie);
+  }
   return csrfFieldForBinding(binding, csrf, csrfAudience(csrf, key));
 }
 
@@ -811,14 +841,14 @@ function standaloneAnonymousCsrfMintState<Request>(
       'mintCsrfToken() requires an exact request object before it can mint anonymous browser authority.',
     );
   }
-  const exactRequest = request as object;
-  let state = witnessWeakMapGet(standaloneAnonymousCsrfMintStates, exactRequest);
+  const responseStateKey = responseLifecycleStateRoot(request as object);
+  let state = witnessWeakMapGet(standaloneAnonymousCsrfMintStates, responseStateKey);
   if (state === undefined) {
     state = witnessFreeze({
       bindings: createSecurityMap<string, CsrfBinding>(),
       postures: createSecurityMap<string, AnonymousCsrfCookiePosture>(),
     });
-    witnessWeakMapSet(standaloneAnonymousCsrfMintStates, exactRequest, state);
+    witnessWeakMapSet(standaloneAnonymousCsrfMintStates, responseStateKey, state);
   }
   assertCompatibleAnonymousCsrfCookiePosture(
     state.postures,
@@ -908,17 +938,26 @@ function buildAnonymousCsrfCookieOptions(
 function resolveCsrfBinding<Request>(
   request: Request,
   options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
-  mintOptions: { anonymousCache?: Map<string, CsrfBinding>; mintAnonymous?: boolean } = {},
+  mintOptions: {
+    anonymousCache?: Map<string, CsrfBinding>;
+    mintAnonymous?: boolean;
+    responseAuthority?: boolean;
+  } = {},
 ): CsrfBinding | undefined {
-  const session = resolveCsrfSessionBinding(request, options);
+  const bindingRequest =
+    mintOptions.responseAuthority === true ? responseLifecycleCanonicalRequest(request) : request;
+  const session = resolveCsrfSessionBinding(bindingRequest, options);
   if (session.kind === 'binding') return session.value;
   if (session.kind === 'invalid') return undefined;
-  return resolveAnonymousCsrfBinding(request, options, mintOptions);
+  return resolveAnonymousCsrfBinding(bindingRequest, options, mintOptions);
 }
 
 function markAnonymousCsrfResponsePersonalization(request: unknown): void {
   if ((typeof request === 'object' || typeof request === 'function') && request !== null) {
-    witnessWeakSetAdd(anonymousCsrfResponsePersonalizations, request as object);
+    witnessWeakSetAdd(
+      anonymousCsrfResponsePersonalizations,
+      responseLifecycleStateRoot(request as object),
+    );
   }
 }
 
@@ -935,8 +974,46 @@ export function anonymousCsrfResponsePersonalizationWitness(request: unknown): b
   return (
     (typeof request === 'object' || typeof request === 'function') &&
     request !== null &&
-    witnessWeakSetHas(anonymousCsrfResponsePersonalizations, request as object)
+    witnessWeakSetHas(
+      anonymousCsrfResponsePersonalizations,
+      responseLifecycleExactStateRoot(request as object),
+    )
   );
+}
+
+/**
+ * Seal the exact request once its response can no longer deliver a newly minted anonymous binding
+ * cookie. Existing-cookie, session, and response-preflight bindings remain usable after this point;
+ * only a first anonymous mint would produce authority the browser cannot return (SPEC §6.6/§9.1).
+ *
+ * @internal Response-finalization bridge; not exported from the public server entrypoint.
+ */
+export function sealAnonymousCsrfResponseRequest(request: unknown): void {
+  if ((typeof request === 'object' || typeof request === 'function') && request !== null) {
+    sealResponseLifecycleRequest(request as object);
+    witnessWeakSetAdd(
+      sealedAnonymousCsrfResponseRequests,
+      responseLifecycleExactStateRoot(request as object),
+    );
+  }
+}
+
+/**
+ * Seal one response lifecycle and return the exact standalone anonymous-CSRF cookies minted before
+ * that atomic boundary. The raw endpoint/document sinks own the only permitted delivery paths.
+ *
+ * @internal Response-finalization bridge; not exported from the public server entrypoint.
+ */
+export function sealAnonymousCsrfResponseRequestAndSnapshotSetCookies(
+  request: unknown,
+): readonly string[] {
+  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
+    return witnessFreeze([] as string[]);
+  }
+  const root = responseLifecycleExactStateRoot(request as object);
+  const setCookies = sealResponseLifecycleRequestAndSnapshotSetCookies(request as object);
+  witnessWeakSetAdd(sealedAnonymousCsrfResponseRequests, root);
+  return setCookies;
 }
 
 /**
@@ -1068,10 +1145,34 @@ function resolveAnonymousCsrfBinding<Request>(
     return cached;
   }
 
+  if (!hasResponseLifecycleReceipt(request)) {
+    throw new Error(
+      'Anonymous CSRF authority cannot be minted without a framework response lifecycle that can deliver its binding cookie.',
+    );
+  }
+
+  if ((typeof request === 'object' || typeof request === 'function') && request !== null) {
+    const root = responseLifecycleStateRoot(request as object);
+    if (
+      witnessWeakSetHas(sealedAnonymousCsrfResponseRequests, root) ||
+      responseLifecycleHeadersCommitted(request as object)
+    ) {
+      throw new Error(
+        'Anonymous CSRF authority cannot be minted after response headers were committed because its binding cookie can no longer reach the browser.',
+      );
+    }
+  }
+
   const anonymousSecret = securityBufferToString(securityRandomBytes(32), 'base64url');
   const binding = createCsrfBinding('anonymous', anonymousSecret);
   const setCookie = serializeCookie(name, anonymousSecret, cookie);
   const responseBinding = { ...binding, setCookie };
+  if (standaloneState !== undefined) {
+    // SPEC §6.6/§9.1: standalone response helpers may mint inside immediate stream/microtask work.
+    // Capture their binding cookie in the private response frame before exposing the token. The
+    // final wire sink seals and snapshots this Set-Cookie atomically; a genuinely late mint fails.
+    recordResponseLifecycleSetCookie(request as object, setCookie);
+  }
   if (anonymousCache !== undefined) {
     securityMapSet(
       anonymousCache,
@@ -1195,15 +1296,24 @@ function resolveCsrfLiveTargetBindingInternal<Request>(
   options: Pick<CsrfOptions<Request>, 'anonymousCookie' | 'sessionId'>,
   mintAnonymousForResponse: boolean,
 ): CsrfLiveTargetBinding | undefined {
-  if ((typeof request === 'object' || typeof request === 'function') && request !== null) {
-    const pinnedAnonymous = witnessWeakMapGet(pinnedAnonymousLiveTargetBindings, request as object);
+  const authorityRequest = mintAnonymousForResponse
+    ? responseLifecycleCanonicalRequest(request)
+    : request;
+  if (
+    (typeof authorityRequest === 'object' || typeof authorityRequest === 'function') &&
+    authorityRequest !== null
+  ) {
+    const pinnedAnonymous = witnessWeakMapGet(
+      pinnedAnonymousLiveTargetBindings,
+      authorityRequest as object,
+    );
     if (pinnedAnonymous !== undefined) {
       const binding = createCsrfBinding('anonymous', pinnedAnonymous);
       return { framed: binding.framed, kind: binding.kind };
     }
   }
 
-  const session = resolveCsrfSessionBinding(request, options);
+  const session = resolveCsrfSessionBinding(authorityRequest, options);
   if (session.kind === 'binding') {
     return {
       framed: session.value.framed,
@@ -1216,14 +1326,17 @@ function resolveCsrfLiveTargetBindingInternal<Request>(
     );
   }
 
-  const existing = resolveAnonymousCsrfBinding(request, options);
+  const existing = resolveAnonymousCsrfBinding(authorityRequest, options);
   if (existing !== undefined) {
     return { framed: existing.framed, kind: existing.kind };
   }
   if (!mintAnonymousForResponse || options.anonymousCookie === false) return undefined;
 
   const context = currentJsxFrameworkContext();
-  if (context === undefined || !witnessObjectIs(context.request, request)) {
+  if (
+    context === undefined ||
+    !witnessObjectIs(responseLifecycleCanonicalRequest(context.request), authorityRequest)
+  ) {
     throw new Error(
       'live-target attestation cannot mint an anonymous CSRF binding outside its response context.',
     );
@@ -1235,7 +1348,7 @@ function resolveCsrfLiveTargetBindingInternal<Request>(
   }
 
   context.anonymousCsrfBindings ??= createSecurityMap();
-  const binding = resolveAnonymousCsrfBinding(request, options, {
+  const binding = resolveAnonymousCsrfBinding(authorityRequest, options, {
     anonymousCache: context.anonymousCsrfBindings,
     mintAnonymous: true,
   });

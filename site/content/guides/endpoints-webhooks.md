@@ -136,7 +136,16 @@ as CR, LF, and NUL also fail closed.
 
 Default-CSRF unsafe endpoints accept the same token carriers Kovo can parse before the handler runs:
 form fields and JSON bodies. For the first anonymous page, use `mintCsrfField` or `mintCsrfToken` so
-the response can also set Kovo's anonymous CSRF cookie.
+the response can also set Kovo's anonymous CSRF cookie. The ordinary browser path is a route plus a
+`mutation()` form, where Kovo owns this lifecycle automatically. A raw bootstrap is an advanced
+integration: its endpoint must execute a verifier (or be a framework-owned self-verifying adapter)
+before it can emit browser state.
+
+Call the helper inside that verified endpoint while it constructs its `Response`. When the endpoint
+runs through `createRequestHandler()`, Kovo privately captures a first-anonymous binding cookie and
+attaches it during final response reconstruction. Do not copy it into app-owned headers yourself:
+an explicit `Set-Cookie` is still app-authored browser state and is rejected without the endpoint's
+browser-state authorization proof.
 
 ```ts
 import { mintCsrfField } from '@kovojs/server';
@@ -146,15 +155,22 @@ export async function renderUploadForm(request: Request) {
 
   return new Response(
     `<form method="post" action="/files">${csrf.html}<button>Upload</button></form>`,
-    {
-      headers: csrf.setCookie === undefined ? {} : { 'Set-Cookie': csrf.setCookie },
-    },
   );
 }
 ```
 
-For JSON bootstraps, send `mintCsrfToken(request, appCsrf).token` as `kovo-csrf` and set the returned
-cookie when present. If your protocol needs `text/plain`, `bytes`, or a signed raw body, use
+Call `renderUploadForm(request)` only from the verified raw endpoint handler. Route mutation forms
+use Kovo's framework-rendered CSRF field instead. The returned `setCookie` remains available for
+non-Kovo response integrations; explicitly attaching its exact bytes to a managed raw response is
+deduplicated, but it still requires the same endpoint browser-state proof and reserved-header
+posture as any app-authored `Set-Cookie`.
+
+For verified JSON bootstraps, send `mintCsrfToken(request, appCsrf).token` as `kovo-csrf`; the
+managed finalizer delivers a first binding cookie. A detached call can still use a session or an
+anonymous cookie already on the request. It cannot create the first anonymous binding: Kovo rejects
+that call because there is no active response lifecycle proving the new cookie can reach the
+browser. Direct `runEndpoint()` execution has no managed cookie sink and likewise rejects a first
+anonymous mint. If your protocol needs `text/plain`, `bytes`, or a signed raw body, use
 `csrf: false` with a verifier, OAuth state, or another non-browser auth scheme and name the
 justification. Browser credential forms should stay as `mutation()` forms so Kovo owns the CSRF
 field, no-JS response, replay, and typed failure UI.

@@ -11,6 +11,7 @@ import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { matchShellDispatch, type ShellDispatchMatch } from './shell.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
+import { runWithResponseLifecycleRequest } from './response-lifecycle-context.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 
@@ -525,6 +526,54 @@ describe('server app matched dispatch boundary', () => {
     await expect(response.text()).resolves.toBe('ok');
   });
 
+  it('snapshots raw headers before a nested microtask can add browser state', async () => {
+    let retainedResponse: Response | undefined;
+    const machine = endpoint('/machine/queued-response-mutation', {
+      csrf: false,
+      csrfJustification: 'non-browser machine status request',
+      handler() {
+        retainedResponse = new Response('queued body', {
+          headers: {
+            'Cache-Control': 'no-store',
+            'Content-Type': 'text/plain; charset=utf-8',
+            'X-Stable': 'before',
+          },
+          status: 202,
+          statusText: 'Queued',
+        });
+        queueMicrotask(() => {
+          queueMicrotask(() => {
+            retainedResponse?.headers.set('Clear-Site-Data', '"cookies"');
+            retainedResponse?.headers.set('Set-Cookie', 'sid=attacker; Path=/');
+            retainedResponse?.headers.set('X-Stable', 'after');
+          });
+        });
+        return retainedResponse;
+      },
+      method: 'POST',
+      reason: 'queued raw response header mutation regression',
+      response: rawTextResponse,
+    });
+    const app = createApp({ endpoints: [machine] });
+
+    const response = await dispatchMatchedAppRequest(
+      matchedAppRequest(
+        app,
+        new Request('https://shop.example.test/machine/queued-response-mutation', {
+          method: 'POST',
+        }),
+      ),
+    );
+
+    expect(response).not.toBe(retainedResponse);
+    expect(response.status).toBe(202);
+    expect(response.statusText).toBe('Queued');
+    expect(response.headers.get('x-stable')).toBe('before');
+    expect(response.headers.get('clear-site-data')).toBeNull();
+    expect(response.headers.get('set-cookie')).toBeNull();
+    await expect(response.text()).resolves.toBe('queued body');
+  });
+
   it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'MKCOL', 'PURGE'])(
     'enforces default endpoint CSRF before %s handler dispatch',
     async (method) => {
@@ -751,7 +800,9 @@ describe('server app matched dispatch boundary', () => {
     const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => undefined };
     const app = createApp({ csrf, endpoints: [upload] });
     const getRequest = new Request('https://shop.example.test/files');
-    const minted = mintCsrfField(getRequest, csrf);
+    const minted = runWithResponseLifecycleRequest(getRequest, getRequest, () =>
+      mintCsrfField(getRequest, csrf),
+    );
     const cookiePair = minted.setCookie?.split(';')[0];
     if (cookiePair === undefined) throw new Error('expected anonymous CSRF Set-Cookie');
 
@@ -783,7 +834,10 @@ describe('server app matched dispatch boundary', () => {
     });
     const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => undefined };
     const app = createApp({ csrf, endpoints: [upload] });
-    const minted = mintCsrfToken(new Request('https://shop.example.test/files.json'), csrf);
+    const getRequest = new Request('https://shop.example.test/files.json');
+    const minted = runWithResponseLifecycleRequest(getRequest, getRequest, () =>
+      mintCsrfToken(getRequest, csrf),
+    );
     const cookiePair = minted.setCookie?.split(';')[0];
     if (cookiePair === undefined) throw new Error('expected anonymous CSRF Set-Cookie');
     const body = JSON.stringify({ name: 'first-upload', 'kovo-csrf': minted.token });

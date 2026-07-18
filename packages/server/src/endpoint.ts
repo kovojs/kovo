@@ -28,9 +28,13 @@ import { pinRequestIngressSurface, requestVerifierInput } from './app-load-shed.
 import { requestClone } from './request-body-intrinsics.js';
 import { canonicalRequestMethod, isSafeEndpointMethod } from './request-method.js';
 import { securityNumberIsInteger } from './response-security-intrinsics.js';
+import {
+  runWithResponseLifecycleRequest,
+  sealResponseLifecycleRequestAndSnapshotSetCookies,
+} from './response-lifecycle-context.js';
 import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
-  assertEndpointResponsePosture,
+  assertEndpointResponsePostureAndSnapshot,
   endpointRequestWithoutSession,
   finalizeServerResponse,
 } from './response-posture.js';
@@ -863,6 +867,28 @@ export async function runEndpoint(
   request: Request,
   options: EndpointRunOptions = {},
 ): Promise<Response> {
+  const response = await runEndpointForAppDispatch(definition, request, options);
+  const pendingSetCookies = sealResponseLifecycleRequestAndSnapshotSetCookies(request);
+  if (pendingSetCookies.length > 0) {
+    throw new Error(
+      'Direct runEndpoint() execution cannot deliver a first-anonymous CSRF binding cookie; dispatch the endpoint through createRequestHandler().',
+    );
+  }
+  return response;
+}
+
+/**
+ * Run an endpoint while leaving its successful response lifecycle open for the app dispatcher's
+ * atomic cookie/header finalizer. This bridge is intentionally absent from public entrypoints;
+ * direct callers use {@link runEndpoint}, which seals itself and rejects undeliverable authority.
+ *
+ * @internal App-dispatch-only endpoint runner.
+ */
+export async function runEndpointForAppDispatch(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  request: Request,
+  options: EndpointRunOptions = {},
+): Promise<Response> {
   const endpointRequest = endpointRequestWithoutSession(request, {
     declaration: definition,
     stripAuthorization: definition.csrf?.exempt === true,
@@ -870,15 +896,16 @@ export async function runEndpoint(
   const accessFailure = await runEndpointAccessDecision(definition, endpointRequest);
   if (accessFailure) return accessFailure;
 
-  const response =
-    definition.db === true
-      ? await (definition.handler as EndpointDbHandler)(
-          endpointRequest,
-          createEndpointDbContext(endpointRequest, definition, options),
-        )
-      : await (definition.handler as EndpointHandler)(endpointRequest);
-  assertEndpointResponsePosture(definition, response, { request });
-  return response;
+  return runWithResponseLifecycleRequest(request, endpointRequest, async () => {
+    const response =
+      definition.db === true
+        ? await (definition.handler as EndpointDbHandler)(
+            endpointRequest,
+            createEndpointDbContext(endpointRequest, definition, options),
+          )
+        : await (definition.handler as EndpointHandler)(endpointRequest);
+    return assertEndpointResponsePostureAndSnapshot(definition, response, { request });
+  });
 }
 
 /**

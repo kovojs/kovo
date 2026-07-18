@@ -11,6 +11,7 @@ import * as style from '@kovojs/style';
 import { renderGeneratedMutationFormFields, validateCsrfToken } from './csrf.js';
 import { escapeText, kovoSafeJsxSpread, renderHtmlValue } from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
+import { runWithResponseLifecycleRequest } from './response-lifecycle-context.js';
 import { createElement, Fragment, jsx, jsxDEV, jsxs, type JsxChild } from './jsx-runtime.js';
 import { mutation, mutationFormAttributes } from './mutation.js';
 import { s } from './schema.js';
@@ -785,11 +786,13 @@ describe('server jsx runtime', () => {
 
     expect(
       html(
-        runWithJsxRequestContext(request, () =>
-          jsx('form', {
-            ...attributes,
-            children: '',
-          }),
+        runWithResponseLifecycleRequest(request, request, () =>
+          runWithJsxRequestContext(request, { onCsrfSetCookie: () => undefined }, () =>
+            jsx('form', {
+              ...attributes,
+              children: '',
+            }),
+          ),
         ),
       ),
     ).toContain('name="csrf"');

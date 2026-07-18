@@ -292,12 +292,29 @@ const tokenRoute = route('/packed-csrf', {
     return mintCsrfToken(request, csrf, { audience: 'packed-csrf-response' }).token;
   },
 });
+const immediateStreamRoute = route('/packed-csrf-stream-immediate', {
+  page(_context, request) {
+    return respond.stream(new ReadableStream({
+      pull(controller) {
+        const token = mintCsrfToken(request, csrf, {
+          audience: 'packed-csrf-stream-immediate-response',
+        }).token;
+        controller.enqueue(new TextEncoder().encode(token));
+        controller.close();
+      },
+    }), {
+      contentType: 'text/plain',
+      headers: { 'Cache-Control': 'public, max-age=60' },
+    });
+  },
+});
 const lateStreamRoute = route('/packed-csrf-stream', {
   page(_context, request) {
+    const lazyRequest = new Request(request.url, { headers: request.headers });
     return respond.stream(new ReadableStream({
       async pull(controller) {
         await new Promise((resolve) => setTimeout(resolve, 25));
-        const token = mintCsrfToken(request, csrf, { audience: 'packed-csrf-stream-response' }).token;
+        const token = mintCsrfToken(lazyRequest, csrf, { audience: 'packed-csrf-stream-response' }).token;
         controller.enqueue(new TextEncoder().encode(token));
         controller.close();
       },
@@ -311,10 +328,11 @@ const lateRawStreamEndpoint = pinEndpointBrowserCredentialDelegation(
   endpoint('/packed-csrf-raw-stream', {
     auth: { kind: 'custom', name: 'packed-csrf-raw-stream' },
     handler(request) {
+      const lazyRequest = new Request(request.url, { headers: request.headers });
       return new Response(new ReadableStream({
         async pull(controller) {
           await new Promise((resolve) => setTimeout(resolve, 25));
-          const token = mintCsrfToken(request, csrf, {
+          const token = mintCsrfToken(lazyRequest, csrf, {
             audience: 'packed-csrf-raw-stream-response',
           }).token;
           controller.enqueue(new TextEncoder().encode(token));
@@ -332,11 +350,35 @@ const lateRawStreamEndpoint = pinEndpointBrowserCredentialDelegation(
     response: { appOwnedSafety: true, body: 'stream', cache: 'public' },
   }),
 );
+const immediateRawStreamEndpoint = pinEndpointBrowserCredentialDelegation(
+  endpoint('/packed-csrf-raw-stream-immediate', {
+    auth: { kind: 'custom', name: 'packed-csrf-raw-stream-immediate' },
+    handler(request) {
+      return new Response(new ReadableStream({
+        pull(controller) {
+          const token = mintCsrfToken(request, csrf, {
+            audience: 'packed-csrf-raw-stream-immediate-response',
+          }).token;
+          controller.enqueue(new TextEncoder().encode(token));
+          controller.close();
+        },
+      }), {
+        headers: {
+          'Cache-Control': 'public, max-age=60',
+          'Content-Type': 'text/plain',
+        },
+      });
+    },
+    method: 'GET',
+    reason: 'framework-owned immediate packed raw browser CSRF bootstrap',
+    response: { appOwnedSafety: true, body: 'stream', cache: 'public' },
+  }),
+);
 const app = createApp({
   csrf,
   egress: { enabled: false, justification: 'packed cache fixture performs no outbound I/O' },
-  endpoints: [lateRawStreamEndpoint],
-  routes: [tokenRoute, lateStreamRoute],
+  endpoints: [lateRawStreamEndpoint, immediateRawStreamEndpoint],
+  routes: [tokenRoute, lateStreamRoute, immediateStreamRoute],
 });
 export default createRequestHandler(app);
 `,
@@ -367,7 +409,13 @@ export default createRequestHandler(app);
         join(vercelOut, 'functions/kovo.func/index.cjs'),
       );
       for (const server of [nodeServer, vercelServer]) {
-        for (const path of ['/packed-csrf', '/packed-csrf-stream', '/packed-csrf-raw-stream']) {
+        for (const path of [
+          '/packed-csrf',
+          '/packed-csrf-stream',
+          '/packed-csrf-raw-stream',
+          '/packed-csrf-stream-immediate',
+          '/packed-csrf-raw-stream-immediate',
+        ]) {
           const response = await fetch(`${server.baseUrl}${path}`, {
             headers: { Cookie: `__Host-kovo_csrf=${'A'.repeat(43)}` },
           });
@@ -376,6 +424,22 @@ export default createRequestHandler(app);
           expect(response.headers.get('vary')).toContain('Cookie');
           expect(response.headers.get('set-cookie')).toBeNull();
           await expect(response.text()).resolves.not.toBe('');
+        }
+        for (const path of ['/packed-csrf-stream-immediate', '/packed-csrf-raw-stream-immediate']) {
+          const response = await fetch(`${server.baseUrl}${path}`);
+          expect(response.status, server.stderr()).toBe(200);
+          expect(response.headers.get('set-cookie')).toContain('kovo_csrf=');
+          expect(response.headers.get('cache-control')).toBe('private, no-store');
+          expect(response.headers.get('vary')).toContain('Cookie');
+          await expect(response.text()).resolves.not.toBe('');
+        }
+        for (const path of ['/packed-csrf-stream', '/packed-csrf-raw-stream']) {
+          await expect(
+            fetch(`${server.baseUrl}${path}`).then(async (response) => {
+              expect(response.headers.get('set-cookie')).toBeNull();
+              return response.text();
+            }),
+          ).rejects.toThrow();
         }
       }
     } finally {

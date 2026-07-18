@@ -238,10 +238,27 @@ logical anonymous-cookie name MUST have exactly one Path, Max-Age, SameSite, and
 App construction rejects conflicting or prefixed aliases because Cookie request headers omit those
 attributes: multiple same-name secrets would otherwise collapse to a browser last-wins value or
 arrive as indistinguishable duplicate-name pairs and make another emitted form unverifiable.
-Standalone `mintCsrfToken`/`mintCsrfField` calls made for the same exact request MUST likewise reuse
-one anonymous binding and one identical `Set-Cookie` value per logical cookie posture. A conflicting
-same-name posture or authored browser-prefix alias fails before a second token can be emitted, so a
-raw response containing multiple forms cannot silently invalidate an earlier form.
+Standalone `mintCsrfToken`/`mintCsrfField` calls made during one framework-managed response lifecycle
+MUST likewise reuse one anonymous binding and one identical `Set-Cookie` value per logical cookie
+posture. A conflicting same-name posture or authored browser-prefix alias fails before a second token
+can be emitted, so a raw response containing multiple forms cannot silently invalidate an earlier
+form. While that lifecycle is active, token-generation calls through cloned, reconstructed, or other
+derived `Request` values resolve browser/session authority from the canonical lifecycle request and
+share its binding/posture state and response-header commit boundary. An exact framework-retained
+request can identify that lifecycle after async context is lost. That exact retained context takes
+precedence over any ambient outer lifecycle: nested dispatches cannot cross-bind canonical
+authority, personalization witnesses, pending cookies, or seal state. An arbitrary detached derivative
+cannot. A first-anonymous mint therefore requires an active lifecycle or an exact retained lifecycle
+receipt. The lifecycle privately records the exact standalone `Set-Cookie`; finalization atomically
+seals and snapshots that record before delivering it through the route/document sink or an
+endpoint response authorized to emit browser state. An exact authored duplicate is emitted once;
+a non-identical plain/`__Host-`/`__Secure-` alias under the same logical name fails closed. Direct
+`runEndpoint()` and direct internal `renderRoutePageResponse()` have no managed cookie sink and
+reject a first-anonymous mint, while a truly late
+post-seal mint cannot enter the snapshot. Detached session-bound generation and generation from an
+already-present anonymous cookie do not mint a cookie and remain valid. CSRF validation and replay
+resolution always use the exact supplied ingress request and never inherit response-generation
+authority.
 
 Every independently resolved authorization principal entering a CSRF or replay identity, and every
 source-derived mutation identity, MUST likewise be a non-empty string of at most 1,024 JavaScript

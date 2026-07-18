@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { redirect } from '@kovojs/core';
 
 import { renderedHtml, renderHtmlValue, type RenderedHtml } from './html.js';
+import { mintCsrfToken } from './csrf.js';
 import { accessDecisionFor, publicAccess } from './access.js';
 import { renderPageHints } from './hints.js';
 import { guards } from './guards.js';
@@ -18,6 +19,88 @@ import {
 import { s } from './schema.js';
 
 describe('route primitives', () => {
+  const directRouteCsrf = {
+    secret: 'direct-route-lifecycle-secret-0123456789abcdef',
+    sessionId: () => undefined,
+  };
+
+  it('does not leave a cookie-delivery receipt after direct runRoutePage execution', async () => {
+    let retainedRequest: Request | undefined;
+    const direct = route('/direct-retained-route', {
+      page(_context, request: Request) {
+        retainedRequest = request;
+        return renderedHtml('<main>direct</main>');
+      },
+    });
+
+    await expect(
+      runRoutePage(
+        direct,
+        { params: {} },
+        new Request('https://example.test/direct-retained-route'),
+      ),
+    ).resolves.toBeDefined();
+    expect(retainedRequest).toBeDefined();
+    expect(() =>
+      mintCsrfToken(retainedRequest!, directRouteCsrf, { audience: 'direct-retained-route' }),
+    ).toThrow(/without a framework response lifecycle/u);
+  });
+
+  it('rejects a first-anonymous mint during direct runRoutePage execution', async () => {
+    const direct = route('/direct-eager-route', {
+      page(_context, request: Request) {
+        return mintCsrfToken(request, directRouteCsrf, { audience: 'direct-eager-route' }).token;
+      },
+    });
+
+    await expect(
+      runRoutePage(direct, { params: {} }, new Request('https://example.test/direct-eager-route')),
+    ).rejects.toThrow(/without a framework response lifecycle/u);
+  });
+
+  it('seals the retained request returned by direct renderRoutePageResponse execution', async () => {
+    let retainedRequest: Request | undefined;
+    const direct = route('/direct-render-retained-route', {
+      page(_context, request: Request) {
+        retainedRequest = request;
+        return renderedHtml('<main>direct render</main>');
+      },
+    });
+
+    await expect(
+      renderRoutePageResponse(
+        direct,
+        { params: {} },
+        new Request('https://example.test/direct-render-retained-route'),
+      ),
+    ).resolves.toMatchObject({ status: 200 });
+    expect(retainedRequest).toBeDefined();
+    expect(() =>
+      mintCsrfToken(retainedRequest!, directRouteCsrf, {
+        audience: 'direct-render-retained-route',
+      }),
+    ).toThrow(/after response headers were committed/u);
+  });
+
+  it('rejects pending first-anonymous authority from direct renderRoutePageResponse', async () => {
+    const direct = route('/direct-render-eager-route', {
+      page(_context, request: Request) {
+        const token = mintCsrfToken(request, directRouteCsrf, {
+          audience: 'direct-render-eager-route',
+        }).token;
+        return renderedHtml(`<main>${token}</main>`);
+      },
+    });
+
+    await expect(
+      renderRoutePageResponse(
+        direct,
+        { params: {} },
+        new Request('https://example.test/direct-render-eager-route'),
+      ),
+    ).rejects.toThrow(/cannot deliver a first-anonymous CSRF binding cookie/u);
+  });
+
   it('ignores inherited route/layout access and refuses accessors without invoking them', () => {
     const inheritedRoute = Object.create({
       access: publicAccess('prototype-provided public route'),

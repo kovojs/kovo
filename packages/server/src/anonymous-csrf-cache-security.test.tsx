@@ -1,10 +1,12 @@
 /** @jsxImportSource @kovojs/server */
+import { EventEmitter } from 'node:events';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { customVerifier } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
-import { mintCsrfField, mintCsrfToken } from './csrf.js';
+import { csrfToken, mintCsrfField, mintCsrfToken, validateCsrfToken } from './csrf.js';
 import { Defer } from './deferred-region.js';
 import {
   endpoint,
@@ -12,9 +14,11 @@ import {
   type EndpointResponsePosture,
 } from './endpoint.js';
 import { mutation } from './mutation.js';
+import { guard } from './guards.js';
+import { resolveLifecycleRequest } from './guards.js';
 import { toNodeHandler } from './node.js';
 import { respond } from './response.js';
-import { route } from './route.js';
+import { notFound, route } from './route.js';
 import { s } from './schema.js';
 
 const csrf = {
@@ -415,6 +419,86 @@ describe('anonymous mutation-form document cache posture', () => {
     }
   });
 
+  it('captures a first-anonymous cookie minted by an immediate route stream pull', async () => {
+    const audience = 'endpoint:/immediate-route-token-submit';
+    const download = route('/immediate-route-token', {
+      page(_context, request) {
+        return respond.stream(
+          new ReadableStream<Uint8Array>({
+            pull(controller) {
+              const token = mintCsrfToken(request, csrf, { audience }).token;
+              controller.enqueue(new TextEncoder().encode(token));
+              controller.close();
+            },
+          }),
+          {
+            contentType: 'text/plain',
+            headers: { 'Cache-Control': 'public, max-age=60' },
+          },
+        );
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [download],
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/immediate-route-token'));
+    const token = await response.text();
+    const setCookies = response.headers.getSetCookie();
+    expect(setCookies).toHaveLength(1);
+    const cookie = setCookies[0]!.split(';', 1)[0]!;
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': token },
+        new Request('https://shop.example.test/_m/immediate-route-token-submit', {
+          headers: { cookie, origin: 'https://shop.example.test' },
+          method: 'POST',
+        }),
+        csrf,
+        { audience },
+      ),
+    ).toBe(true);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+  });
+
+  it('fails closed when a route mints competing framework and standalone cookie bindings', async () => {
+    const submit = mutation('route-cookie-conflict', {
+      input: s.object({ value: s.string() }),
+      handler: (input) => input,
+    });
+    const conflicting = route('/route-cookie-conflict', {
+      page(_context, request) {
+        const token = mintCsrfToken(request, csrf, { mutation: submit }).token;
+        return (
+          <main>
+            <p>{token}</p>
+            <form mutation={submit}>
+              <input name="value" />
+            </form>
+          </main>
+        );
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        mutations: [submit],
+        onError: () => undefined,
+        routes: [conflicting],
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/route-cookie-conflict'));
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
   it('selects the private posture before a live route stream can mint from pull()', async () => {
     let releaseStream!: () => void;
     const streamGate = new Promise<void>((resolve) => {
@@ -422,14 +506,20 @@ describe('anonymous mutation-form document cache posture', () => {
     });
     const download = route('/late-route-token', {
       page(_context, request) {
+        const lazyRequest = new Request(request.url);
         return respond.stream(
           new ReadableStream<Uint8Array>({
             async pull(controller) {
               await streamGate;
-              const token = mintCsrfToken(request, csrf, {
+              const minted = mintCsrfToken(lazyRequest, csrf, {
                 audience: 'endpoint:/late-route-token-submit',
-              }).token;
-              controller.enqueue(new TextEncoder().encode(token));
+              });
+              if (minted.setCookie !== undefined) {
+                throw new Error(
+                  'derived late request did not reuse the canonical anonymous cookie',
+                );
+              }
+              controller.enqueue(new TextEncoder().encode(minted.token));
               controller.close();
             },
           }),
@@ -455,6 +545,329 @@ describe('anonymous mutation-form document cache posture', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('vary')).toContain('Cookie');
     releaseStream();
+    await expect(response.text()).resolves.not.toBe('');
+  });
+
+  it('fails closed when a route stream first mints anonymous authority after headers commit', async () => {
+    let releaseStream!: () => void;
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    const download = route('/late-first-anonymous-route-token/:id', {
+      params: s.object({ id: s.string() }),
+      page(_context, request) {
+        const lazyRequest = new Request(request.url, { headers: request.headers });
+        return respond.stream(
+          new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              await streamGate;
+              const token = mintCsrfToken(lazyRequest, csrf, {
+                audience: 'endpoint:/late-first-anonymous-route-token-submit',
+              }).token;
+              controller.enqueue(new TextEncoder().encode(token));
+              controller.close();
+            },
+          }),
+          { contentType: 'text/plain' },
+        );
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [download],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/late-first-anonymous-route-token/report-1'),
+    );
+    releaseStream();
+
+    await expect(response.text()).rejects.toThrow(/after response headers were committed/u);
+  });
+
+  it('retains a parameterized handler request across an external event after header commit', async () => {
+    const events = new EventEmitter();
+    const download = route('/event-token/:id', {
+      params: s.object({ id: s.string() }),
+      page(_context, request) {
+        return respond.stream(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              events.once('ready', () => {
+                try {
+                  const token = mintCsrfToken(request, csrf, {
+                    audience: 'endpoint:/event-token-submit',
+                  }).token;
+                  controller.enqueue(new TextEncoder().encode(token));
+                  controller.close();
+                } catch (error) {
+                  controller.error(error);
+                }
+              });
+            },
+          }),
+          { contentType: 'text/plain' },
+        );
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [download],
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/event-token/report-1'));
+    events.emit('ready');
+
+    await expect(response.text()).rejects.toThrow(/after response headers were committed/u);
+  });
+
+  it('rejects a detached reconstructed request in an external event after header commit', async () => {
+    const events = new EventEmitter();
+    const download = route('/event-derived-token/:id', {
+      params: s.object({ id: s.string() }),
+      page(_context, request) {
+        const reconstructed = new Request(request.url, { headers: request.headers });
+        return respond.stream(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              events.once('ready', () => {
+                try {
+                  const token = mintCsrfToken(reconstructed, csrf, {
+                    audience: 'endpoint:/event-derived-token-submit',
+                  }).token;
+                  controller.enqueue(new TextEncoder().encode(token));
+                  controller.close();
+                } catch (error) {
+                  controller.error(error);
+                }
+              });
+            },
+          }),
+          { contentType: 'text/plain' },
+        );
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [download],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/event-derived-token/report-1'),
+    );
+    events.emit('ready');
+
+    await expect(response.text()).rejects.toThrow(/without a framework response lifecycle/u);
+  });
+
+  it('seals a no-boundary notFound route before returning the replacement error document', async () => {
+    const events = new EventEmitter();
+    let listenerError: unknown;
+    const missingRoute = route('/event-missing/:id', {
+      params: s.object({ id: s.string() }),
+      page(_context, request) {
+        events.once('ready', () => {
+          try {
+            mintCsrfToken(request, csrf, {
+              audience: 'endpoint:/event-missing-submit',
+            });
+          } catch (error) {
+            listenerError = error;
+          }
+        });
+        return notFound();
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [missingRoute],
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/event-missing/report-1'));
+    expect(response.status).toBe(404);
+    events.emit('ready');
+
+    expect(listenerError).toBeInstanceOf(Error);
+    expect((listenerError as Error).message).toMatch(/after response headers were committed/u);
+  });
+
+  it('seals the route lifecycle when a notFound boundary throws', async () => {
+    const events = new EventEmitter();
+    let listenerError: unknown;
+    const missingRoute = route('/throwing-boundary-token', {
+      boundaries: {
+        notFound({ request }) {
+          events.once('ready', () => {
+            try {
+              mintCsrfToken(request, csrf, {
+                audience: 'endpoint:/throwing-boundary-token-submit',
+              });
+            } catch (error) {
+              listenerError = error;
+            }
+          });
+          throw new Error('boundary render failed');
+        },
+      },
+      page: () => notFound(),
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        onError: () => undefined,
+        routes: [missingRoute],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/throwing-boundary-token'),
+    );
+    expect(response.status).toBe(500);
+    events.emit('ready');
+
+    expect(listenerError).toBeInstanceOf(Error);
+    expect((listenerError as Error).message).toMatch(/after response headers were committed/u);
+  });
+
+  it('keeps eager existing-cookie authority private on a parameterized route', async () => {
+    const tokenRoute = route('/parameterized-token/:id', {
+      params: s.object({ id: s.string() }),
+      page(_context, request) {
+        const derived = new Request(request.url);
+        return mintCsrfToken(derived, csrf, {
+          audience: 'endpoint:/parameterized-token-submit',
+        }).token;
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [tokenRoute],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/parameterized-token/report-1', {
+        headers: { Cookie: cookieHeader('A'.repeat(43)) },
+      }),
+    );
+
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+    await expect(response.text()).resolves.not.toBe('');
+  });
+
+  it('keeps csrfToken on a recursive route clone bound to the canonical proven session', async () => {
+    const sessionCsrf = {
+      secret: 'route-clone-session-csrf-secret-0123456789abcdef',
+      sessionId(request: { session?: { user?: { id?: string } | null } | null }) {
+        return request.session?.user?.id;
+      },
+    };
+    const download = route('/session-clone-token', {
+      page(_context, request) {
+        const token = csrfToken(request.clone().clone(), sessionCsrf, {
+          audience: 'endpoint:/session-clone-token-submit',
+        });
+        return respond.stream(token, { contentType: 'text/plain' });
+      },
+    });
+    const sessionProvider = () => ({ user: { id: 'u1' } });
+    const handler = createRequestHandler(
+      createApp({
+        csrf: sessionCsrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [download],
+        sessionProvider,
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/session-clone-token'));
+    const token = await response.text();
+    const submission = await resolveLifecycleRequest(
+      new Request('https://shop.example.test/_m/session-clone-token-submit', {
+        headers: { origin: 'https://shop.example.test' },
+        method: 'POST',
+      }),
+      { sessionProvider },
+    );
+    expect(
+      validateCsrfToken({ 'kovo-csrf': token }, submission, sessionCsrf, {
+        audience: 'endpoint:/session-clone-token-submit',
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps custom renderRoute clone authority private inside the complete route frame', async () => {
+    const tokenRoute = route('/custom-render-token', {
+      page: () => 'render this token',
+    });
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        renderRoute(_value, context) {
+          return csrfToken(context.request.clone().clone(), csrf, {
+            audience: 'endpoint:/custom-render-token-submit',
+          });
+        },
+        routes: [tokenRoute],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/custom-render-token', {
+        headers: { Cookie: cookieHeader('A'.repeat(43)) },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+    expect(response.headers.get('set-cookie')).toBeNull();
+    await expect(response.text()).resolves.not.toBe('');
+  });
+
+  it('keeps a reconstructed notFound boundary token private inside the complete route frame', async () => {
+    const missingRoute = route('/missing-boundary-token', {
+      boundaries: {
+        notFound({ request }) {
+          const reconstructed = new Request((request as Request).url, {
+            headers: (request as Request).headers,
+          });
+          return csrfToken(reconstructed, csrf, {
+            audience: 'endpoint:/missing-boundary-token-submit',
+          });
+        },
+      },
+      page: () => notFound(),
+    });
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [missingRoute],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/missing-boundary-token', {
+        headers: { Cookie: cookieHeader('A'.repeat(43)) },
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+    expect(response.headers.get('set-cookie')).toBeNull();
     await expect(response.text()).resolves.not.toBe('');
   });
 
@@ -696,6 +1109,47 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     cache: 'public',
   } satisfies EndpointResponsePosture;
 
+  it('seals an endpoint lifecycle when its handler throws before returning a response', async () => {
+    const events = new EventEmitter();
+    let listenerError: unknown;
+    const failing = pinEndpointBrowserCredentialDelegation(
+      endpoint('/throwing-endpoint-token', {
+        auth: { kind: 'custom', name: 'framework-throwing-endpoint-token' },
+        handler(request) {
+          events.once('ready', () => {
+            try {
+              mintCsrfToken(request, csrf, {
+                audience: 'endpoint:/throwing-endpoint-token-submit',
+              });
+            } catch (error) {
+              listenerError = error;
+            }
+          });
+          throw new Error('endpoint handler failed');
+        },
+        method: 'GET',
+        reason: 'framework-owned throwing endpoint lifecycle fixture',
+        response: publicJsonResponse,
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [failing],
+        onError: () => undefined,
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/throwing-endpoint-token'),
+    );
+    expect(response.status).toBe(500);
+    events.emit('ready');
+
+    expect(listenerError).toBeInstanceOf(Error);
+    expect((listenerError as Error).message).toMatch(/after response headers were committed/u);
+  });
+
   it('overrides a public raw response after a helper emits authority for its existing cookie', async () => {
     let sawCookie: string | null = null;
     const bootstrap = pinEndpointBrowserCredentialDelegation(
@@ -798,6 +1252,715 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     expect(attacker.headers.get('vary')).toContain('Cookie');
   });
 
+  it('allows an async raw handler to mint before returning and attach the binding cookie', async () => {
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/async-csrf-token-bootstrap', {
+        auth: { kind: 'custom', name: 'framework-async-csrf-token-bootstrap' },
+        async handler(request) {
+          await Promise.resolve();
+          const minted = mintCsrfToken(request, csrf, {
+            audience: 'endpoint:/async-csrf-token-bootstrap-submit',
+          });
+          if (minted.setCookie === undefined) {
+            throw new Error('first anonymous async mint did not return its binding cookie');
+          }
+          return Response.json(
+            { token: minted.token },
+            {
+              headers: {
+                'Cache-Control': 'public, max-age=60',
+                'Set-Cookie': minted.setCookie,
+              },
+            },
+          );
+        },
+        method: 'GET',
+        reason: 'framework-owned async browser CSRF bootstrap adapter',
+        response: publicJsonResponse,
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [bootstrap],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/async-csrf-token-bootstrap'),
+    );
+
+    expect(response.headers.get('set-cookie')).toContain('kovo_csrf=');
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+    await expect(response.json()).resolves.toHaveProperty('token');
+  });
+
+  it('allows ReadableStream.start() to mint while the handler can attach its cookie', async () => {
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/start-csrf-token-bootstrap', {
+        auth: { kind: 'custom', name: 'framework-start-csrf-token-bootstrap' },
+        handler(request) {
+          let setCookie: string | undefined;
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              const minted = mintCsrfToken(request, csrf, {
+                audience: 'endpoint:/start-csrf-token-bootstrap-submit',
+              });
+              setCookie = minted.setCookie;
+              controller.enqueue(new TextEncoder().encode(minted.token));
+              controller.close();
+            },
+          });
+          if (setCookie === undefined) {
+            throw new Error('first anonymous stream start did not return its binding cookie');
+          }
+          return new Response(body, {
+            headers: {
+              'Cache-Control': 'public, max-age=60',
+              'Content-Type': 'text/plain',
+              'Set-Cookie': setCookie,
+            },
+          });
+        },
+        method: 'GET',
+        reason: 'framework-owned synchronous stream browser CSRF bootstrap adapter',
+        response: {
+          appOwnedSafety: true,
+          body: 'stream',
+          cache: 'public',
+        },
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [bootstrap],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/start-csrf-token-bootstrap'),
+    );
+
+    expect(response.headers.get('set-cookie')).toContain('kovo_csrf=');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+    await expect(response.text()).resolves.not.toBe('');
+  });
+
+  it('auto-delivers a first-anonymous cookie from a verified safe endpoint stream pull', async () => {
+    const audience = 'endpoint:/immediate-raw-token-bootstrap-submit';
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/immediate-raw-token-bootstrap', {
+        auth: { kind: 'custom', name: 'framework-immediate-raw-token-bootstrap' },
+        handler(request) {
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              pull(controller) {
+                const token = mintCsrfToken(request, csrf, { audience }).token;
+                controller.enqueue(new TextEncoder().encode(token));
+                controller.close();
+              },
+            }),
+            {
+              headers: {
+                'Cache-Control': 'public, max-age=60',
+                'Content-Type': 'text/plain',
+              },
+              status: 201,
+              statusText: 'CSRF Ready',
+            },
+          );
+        },
+        method: 'GET',
+        reason: 'verified framework-owned CSRF bootstrap stream',
+        response: {
+          appOwnedSafety: true,
+          body: 'stream',
+          cache: 'public',
+        },
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [bootstrap],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/immediate-raw-token-bootstrap'),
+    );
+    const token = await response.text();
+    const setCookies = response.headers.getSetCookie();
+    expect(response.status).toBe(201);
+    expect(response.statusText).toBe('CSRF Ready');
+    expect(setCookies).toHaveLength(1);
+    const cookie = setCookies[0]!.split(';', 1)[0]!;
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': token },
+        new Request('https://shop.example.test/_m/immediate-raw-token-bootstrap-submit', {
+          headers: { cookie, origin: 'https://shop.example.test' },
+          method: 'POST',
+        }),
+        csrf,
+        { audience },
+      ),
+    ).toBe(true);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+  });
+
+  it('captures a queued raw token header and delivers its matching cookie', async () => {
+    const audience = 'endpoint:/microtask-raw-token-bootstrap-submit';
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/microtask-raw-token-bootstrap', {
+        auth: { kind: 'custom', name: 'framework-microtask-raw-token-bootstrap' },
+        handler(request) {
+          const response = new Response('ready', {
+            headers: {
+              'Cache-Control': 'public, max-age=60',
+              'Content-Type': 'text/plain',
+            },
+          });
+          queueMicrotask(() => {
+            const token = mintCsrfToken(request, csrf, { audience }).token;
+            response.headers.set('X-CSRF-Token', token);
+          });
+          return response;
+        },
+        method: 'GET',
+        reason: 'verified framework-owned queued CSRF bootstrap',
+        response: {
+          appOwnedSafety: true,
+          body: 'text',
+          cache: 'public',
+        },
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [bootstrap],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/microtask-raw-token-bootstrap'),
+    );
+    const token = response.headers.get('x-csrf-token');
+    const setCookies = response.headers.getSetCookie();
+    expect(token).not.toBeNull();
+    expect(setCookies).toHaveLength(1);
+    const cookie = setCookies[0]!.split(';', 1)[0]!;
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': token! },
+        new Request('https://shop.example.test/_m/microtask-raw-token-bootstrap-submit', {
+          headers: { cookie, origin: 'https://shop.example.test' },
+          method: 'POST',
+        }),
+        csrf,
+        { audience },
+      ),
+    ).toBe(true);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+  });
+
+  it('keeps app-authored browser state forbidden on an unverified safe endpoint', async () => {
+    const bootstrap = endpoint('/authored-safe-cookie', {
+      auth: { kind: 'none', justification: 'public endpoint has no browser-state verifier' },
+      handler: () =>
+        new Response('unsafe', {
+          headers: { 'Set-Cookie': 'kovo_csrf=authored; Path=/' },
+        }),
+      method: 'GET',
+      reason: 'negative safe endpoint browser-state fixture',
+      response: {
+        appOwnedSafety: true,
+        body: 'text',
+        cache: 'custom',
+        reservedHeaders: ['Set-Cookie'],
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({ endpoints: [bootstrap], onError: () => undefined }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/authored-safe-cookie'));
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('rejects a captured CSRF cookie from an unverified safe endpoint', async () => {
+    const bootstrap = endpoint('/unverified-safe-csrf-bootstrap', {
+      auth: { kind: 'none', justification: 'negative public endpoint fixture' },
+      handler(request) {
+        return new Response(
+          mintCsrfToken(request, csrf, {
+            audience: 'endpoint:/unverified-safe-csrf-bootstrap-submit',
+          }).token,
+        );
+      },
+      method: 'GET',
+      reason: 'negative safe-method browser-state fixture',
+      response: {
+        appOwnedSafety: true,
+        body: 'text',
+        cache: 'custom',
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({ endpoints: [bootstrap], onError: () => undefined }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/unverified-safe-csrf-bootstrap'),
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('rejects a captured CSRF cookie from an unverified csrf:false unsafe endpoint', async () => {
+    const bootstrap = endpoint('/unsafe-exempt-csrf-bootstrap', {
+      auth: { kind: 'none', justification: 'negative machine endpoint fixture' },
+      csrf: false,
+      csrfJustification: 'negative fixture exercises the browser-state proof gate',
+      handler(request) {
+        return new Response(
+          mintCsrfToken(request, csrf, {
+            audience: 'endpoint:/unsafe-exempt-csrf-bootstrap-submit',
+          }).token,
+        );
+      },
+      method: 'POST',
+      reason: 'negative csrf-exempt browser-state fixture',
+      response: {
+        appOwnedSafety: true,
+        body: 'text',
+        cache: 'custom',
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({ endpoints: [bootstrap], onError: () => undefined }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/unsafe-exempt-csrf-bootstrap', { method: 'POST' }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('allows a captured CSRF cookie on a privately self-verifying csrf:false endpoint', async () => {
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/verified-unsafe-exempt-csrf-bootstrap', {
+        auth: { kind: 'custom', name: 'framework-verified-csrf-bootstrap' },
+        csrf: false,
+        csrfJustification: 'framework adapter performs its private verification',
+        handler(request) {
+          return new Response(
+            mintCsrfToken(request, csrf, {
+              audience: 'endpoint:/verified-unsafe-exempt-csrf-bootstrap-submit',
+            }).token,
+            { headers: { 'Cache-Control': 'public, max-age=60' } },
+          );
+        },
+        method: 'POST',
+        reason: 'framework-owned verified CSRF bootstrap adapter',
+        response: {
+          appOwnedSafety: true,
+          body: 'text',
+          cache: 'public',
+        },
+      }),
+    );
+    const handler = createRequestHandler(createApp({ endpoints: [bootstrap] }));
+
+    const response = await handler(
+      new Request('https://shop.example.test/verified-unsafe-exempt-csrf-bootstrap', {
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+  });
+
+  it('keeps a nested route dispatch isolated from its ambient outer endpoint lifecycle', async () => {
+    const innerAudience = 'endpoint:/nested-inner-submit';
+    const innerRoute = route('/nested-inner', {
+      page(_context, request) {
+        return respond.stream(mintCsrfToken(request, csrf, { audience: innerAudience }).token, {
+          contentType: 'text/plain',
+        });
+      },
+    });
+    const innerHandler = createRequestHandler(
+      createApp({
+        egress: {
+          enabled: false,
+          justification: 'nested dispatch fixture performs no outbound I/O',
+        },
+        routes: [innerRoute],
+      }),
+    );
+    const outerAudience = 'endpoint:/nested-outer-submit';
+    const outerEndpoint = pinEndpointBrowserCredentialDelegation(
+      endpoint('/nested-outer', {
+        auth: { kind: 'custom', name: 'framework-nested-outer' },
+        async handler(request) {
+          const innerResponse = await innerHandler(
+            new Request('https://shop.example.test/nested-inner', {
+              headers: { Cookie: cookieHeader('B'.repeat(43)) },
+            }),
+          );
+          const innerToken = await innerResponse.text();
+          const outerToken = mintCsrfToken(request, csrf, { audience: outerAudience }).token;
+          return Response.json(
+            {
+              innerCacheControl: innerResponse.headers.get('cache-control'),
+              innerSetCookie: innerResponse.headers.get('set-cookie'),
+              innerToken,
+              innerVary: innerResponse.headers.get('vary'),
+              outerToken,
+            },
+            { headers: { 'Cache-Control': 'public, max-age=60' } },
+          );
+        },
+        method: 'GET',
+        reason: 'framework-owned nested response lifecycle fixture',
+        response: publicJsonResponse,
+      }),
+    );
+    const outerHandler = createRequestHandler(
+      createApp({
+        egress: {
+          enabled: false,
+          justification: 'nested dispatch fixture performs no outbound I/O',
+        },
+        endpoints: [outerEndpoint],
+      }),
+    );
+
+    const response = await outerHandler(new Request('https://shop.example.test/nested-outer'));
+    const body = (await response.json()) as {
+      innerCacheControl: string | null;
+      innerSetCookie: string | null;
+      innerToken: string;
+      innerVary: string | null;
+      outerToken: string;
+    };
+    expect(body.innerCacheControl).toBe('private, no-store');
+    expect(body.innerVary).toContain('Cookie');
+    expect(body.innerSetCookie).toBeNull();
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': body.innerToken },
+        new Request('https://shop.example.test/_m/nested-inner-submit', {
+          headers: {
+            Cookie: cookieHeader('B'.repeat(43)),
+            Origin: 'https://shop.example.test',
+          },
+          method: 'POST',
+        }),
+        csrf,
+        { audience: innerAudience },
+      ),
+    ).toBe(true);
+    const outerSetCookies = response.headers.getSetCookie();
+    expect(outerSetCookies).toHaveLength(1);
+    const outerCookie = outerSetCookies[0]!.split(';', 1)[0]!;
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': body.outerToken },
+        new Request('https://shop.example.test/_m/nested-outer-submit', {
+          headers: { Cookie: outerCookie, Origin: 'https://shop.example.test' },
+          method: 'POST',
+        }),
+        csrf,
+        { audience: outerAudience },
+      ),
+    ).toBe(true);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+  });
+
+  it('keeps nested endpoint early returns from sealing their ambient outer lifecycle', async () => {
+    const authDenied = endpoint('/nested-early-auth', {
+      auth: {
+        kind: 'custom',
+        name: 'nested-early-auth-deny',
+        verify: customVerifier('nested-early-auth-deny', () => false),
+      },
+      handler: () => new Response('unreachable'),
+      method: 'GET',
+      reason: 'nested early-auth lifecycle isolation fixture',
+      response: publicHtmlResponse,
+    });
+    const csrfDenied = endpoint('/nested-early-csrf', {
+      handler: () => new Response('unreachable'),
+      method: 'POST',
+      reason: 'nested early-CSRF lifecycle isolation fixture',
+      response: publicHtmlResponse,
+    });
+    const accessDenied = endpoint('/nested-early-access', {
+      access: [guard('nested-early-access-deny', () => ({ kind: 'forbidden' as const }))],
+      handler: () => new Response('unreachable'),
+      method: 'GET',
+      reason: 'nested early-access lifecycle isolation fixture',
+      response: publicHtmlResponse,
+    });
+    const methodControl = endpoint('/nested-early-method', {
+      handler: () => new Response('unreachable'),
+      method: 'GET',
+      reason: 'nested method-rejection lifecycle isolation control',
+      response: publicHtmlResponse,
+    });
+    let nestedHandler!: ReturnType<typeof createRequestHandler>;
+    const outerAudience = 'endpoint:/nested-early-outer-submit';
+    const outer = pinEndpointBrowserCredentialDelegation(
+      endpoint('/nested-early-outer', {
+        auth: { kind: 'custom', name: 'framework-nested-early-outer' },
+        async handler(request) {
+          const statuses = await Promise.all([
+            nestedHandler(new Request('https://shop.example.test/nested-early-auth')),
+            nestedHandler(
+              new Request('https://shop.example.test/nested-early-csrf', { method: 'POST' }),
+            ),
+            nestedHandler(new Request('https://shop.example.test/nested-early-access')),
+            nestedHandler(
+              new Request('https://shop.example.test/nested-early-method', { method: 'POST' }),
+            ),
+          ]).then((responses) => responses.map((response) => response.status));
+          const token = mintCsrfToken(request, csrf, { audience: outerAudience }).token;
+          return Response.json({ statuses, token });
+        },
+        method: 'GET',
+        reason: 'framework-owned nested early-return lifecycle fixture',
+        response: publicJsonResponse,
+      }),
+    );
+    nestedHandler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: {
+          enabled: false,
+          justification: 'nested early-return fixture performs no outbound I/O',
+        },
+        endpoints: [authDenied, csrfDenied, accessDenied, methodControl, outer],
+      }),
+    );
+
+    const response = await nestedHandler(
+      new Request('https://shop.example.test/nested-early-outer'),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { statuses: number[]; token: string };
+    expect(body.statuses).toEqual([401, 422, 403, 405]);
+    const setCookies = response.headers.getSetCookie();
+    expect(setCookies).toHaveLength(1);
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': body.token },
+        new Request('https://shop.example.test/_m/nested-early-outer-submit', {
+          headers: {
+            Cookie: setCookies[0]!.split(';', 1)[0]!,
+            Origin: 'https://shop.example.test',
+          },
+          method: 'POST',
+        }),
+        csrf,
+        { audience: outerAudience },
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects an authored plain-name alias of a captured prefixed CSRF cookie', async () => {
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/conflicting-csrf-cookie-alias', {
+        auth: { kind: 'custom', name: 'framework-conflicting-csrf-cookie-alias' },
+        handler(request) {
+          const token = mintCsrfToken(request, csrf, {
+            audience: 'endpoint:/conflicting-csrf-cookie-alias-submit',
+          }).token;
+          return new Response(token, {
+            headers: { 'Set-Cookie': `kovo_csrf=${'A'.repeat(43)}; Path=/` },
+          });
+        },
+        method: 'GET',
+        reason: 'negative CSRF cookie alias collision fixture',
+        response: {
+          appOwnedSafety: true,
+          body: 'text',
+          cache: 'custom',
+          reservedHeaders: ['Set-Cookie'],
+        },
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({ endpoints: [bootstrap], onError: () => undefined }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/conflicting-csrf-cookie-alias'),
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('delivers two distinct standalone CSRF cookie namespaces without collapsing either', async () => {
+    const firstAudience = 'endpoint:/two-csrf-cookie-names-first';
+    const secondAudience = 'endpoint:/two-csrf-cookie-names-second';
+    const firstCsrf = { ...csrf, anonymousCookie: { name: 'first_csrf' } };
+    const secondCsrf = { ...csrf, anonymousCookie: { name: 'second_csrf' } };
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/two-csrf-cookie-names', {
+        auth: { kind: 'custom', name: 'framework-two-csrf-cookie-names' },
+        handler(request) {
+          return Response.json(
+            {
+              first: mintCsrfToken(request, firstCsrf, { audience: firstAudience }).token,
+              second: mintCsrfToken(request, secondCsrf, { audience: secondAudience }).token,
+            },
+            { headers: { 'Cache-Control': 'public, max-age=60' } },
+          );
+        },
+        method: 'GET',
+        reason: 'framework-owned multiple CSRF namespace fixture',
+        response: publicJsonResponse,
+      }),
+    );
+    const handler = createRequestHandler(createApp({ endpoints: [bootstrap] }));
+
+    const response = await handler(new Request('https://shop.example.test/two-csrf-cookie-names'));
+    const body = (await response.json()) as { first: string; second: string };
+    const setCookies = response.headers.getSetCookie();
+    expect(setCookies).toHaveLength(2);
+    const cookies = setCookies.map((setCookie) => setCookie.split(';', 1)[0]!).join('; ');
+    const submit = new Request('https://shop.example.test/_m/two-csrf-cookie-names', {
+      headers: { cookie: cookies, origin: 'https://shop.example.test' },
+      method: 'POST',
+    });
+    expect(
+      validateCsrfToken({ 'kovo-csrf': body.first }, submit, firstCsrf, {
+        audience: firstAudience,
+      }),
+    ).toBe(true);
+    expect(
+      validateCsrfToken({ 'kovo-csrf': body.second }, submit, secondCsrf, {
+        audience: secondAudience,
+      }),
+    ).toBe(true);
+  });
+
+  it('injects captured CSRF cookies by reconstructing an immutable raw Response', async () => {
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/immutable-csrf-response', {
+        auth: { kind: 'custom', name: 'framework-immutable-csrf-response' },
+        handler(request) {
+          mintCsrfToken(request, csrf, { audience: 'endpoint:/immutable-csrf-response-submit' });
+          return Response.redirect('https://shop.example.test/next', 302);
+        },
+        method: 'GET',
+        reason: 'framework-owned immutable response CSRF fixture',
+        response: {
+          appOwnedSafety: true,
+          body: 'redirect',
+          cache: 'custom',
+          reservedHeaders: ['Location'],
+        },
+      }),
+    );
+    const handler = createRequestHandler(createApp({ endpoints: [bootstrap] }));
+
+    const response = await handler(
+      new Request('https://shop.example.test/immutable-csrf-response'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+  });
+
+  it('shares standalone binding and posture state with the native endpoint clone', async () => {
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/cloned-csrf-token-bootstrap', {
+        auth: { kind: 'custom', name: 'framework-cloned-csrf-token-bootstrap' },
+        handler(request) {
+          const clone = request.clone().clone();
+          const first = mintCsrfToken(request, csrf, {
+            audience: 'endpoint:/cloned-csrf-token-bootstrap-first',
+          });
+          const second = mintCsrfToken(clone, csrf, {
+            audience: 'endpoint:/cloned-csrf-token-bootstrap-second',
+          });
+          let conflictRejected = false;
+          try {
+            mintCsrfToken(
+              clone,
+              { ...csrf, anonymousCookie: { path: '/auth' } },
+              { audience: 'endpoint:/cloned-csrf-token-bootstrap-conflict' },
+            );
+          } catch (error) {
+            if (
+              error instanceof TypeError &&
+              /conflicting browser attribute postures/u.test(error.message)
+            ) {
+              conflictRejected = true;
+            } else {
+              throw error;
+            }
+          }
+          if (first.setCookie === undefined) {
+            throw new Error('first cloned endpoint mint did not return its binding cookie');
+          }
+          return Response.json(
+            { conflictRejected, sameCookie: first.setCookie === second.setCookie },
+            { headers: { 'Set-Cookie': first.setCookie } },
+          );
+        },
+        method: 'GET',
+        reason: 'framework-owned cloned browser CSRF bootstrap adapter',
+        response: {
+          appOwnedSafety: true,
+          body: 'json',
+          cache: 'private',
+        },
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [bootstrap],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/cloned-csrf-token-bootstrap'),
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      conflictRejected: true,
+      sameCookie: true,
+    });
+    expect(response.headers.get('set-cookie')).toContain('kovo_csrf=');
+  });
+
   it('selects the private posture before a delegated raw stream can mint from pull()', async () => {
     let releaseStream!: () => void;
     const streamGate = new Promise<void>((resolve) => {
@@ -852,6 +2015,55 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     expect(response.headers.get('vary')).toContain('Cookie');
     releaseStream();
     await expect(response.text()).resolves.not.toBe('');
+  });
+
+  it('fails closed when a raw stream reconstructed request first mints after headers commit', async () => {
+    let releaseStream!: () => void;
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/late-first-anonymous-csrf-token-bootstrap', {
+        auth: { kind: 'custom', name: 'framework-late-first-anonymous-csrf-token-bootstrap' },
+        handler(request) {
+          const lazyRequest = new Request(request.url, { headers: request.headers });
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              async pull(controller) {
+                await streamGate;
+                const token = mintCsrfToken(lazyRequest, csrf, {
+                  audience: 'endpoint:/late-first-anonymous-csrf-token-bootstrap-submit',
+                }).token;
+                controller.enqueue(new TextEncoder().encode(token));
+                controller.close();
+              },
+            }),
+            { headers: { 'Content-Type': 'text/plain' } },
+          );
+        },
+        method: 'GET',
+        reason: 'framework-owned lazy first-anonymous CSRF bootstrap adapter',
+        response: {
+          appOwnedSafety: true,
+          body: 'stream',
+          cache: 'private',
+        },
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [bootstrap],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/late-first-anonymous-csrf-token-bootstrap'),
+    );
+    releaseStream();
+
+    await expect(response.text()).rejects.toThrow(/after response headers were committed/u);
   });
 
   it('keeps an unrelated delegated raw response private because it can still vary by Cookie', async () => {

@@ -19,7 +19,7 @@ import {
   type ServerResponseBase,
   type WebResponseBody,
 } from './response.js';
-import { forwardSetCookie } from './cookies.js';
+import { forwardSetCookie, frameworkSetCookieNeedsAppend } from './cookies.js';
 import {
   authorityNeutralAbortSignal,
   cloneRequestForAuthorityNeutralization,
@@ -94,6 +94,7 @@ export type WireOutputChannel = 'framework-response' | 'raw-endpoint-response';
 export interface WireOutputProvenance {
   blessedRedirect?: boolean;
   cookiePersonalized?: true;
+  frameworkSetCookies?: readonly string[];
   method: string;
   redirectAllowlist?: readonly RedirectLocationAllowlistEntry[];
   secure?: true;
@@ -289,6 +290,50 @@ export function finalizeServerResponse(
 }
 
 /**
+ * Snapshot an app-owned raw Response immediately after its declared posture passes. App code may
+ * retain and mutate the original Headers object from a later microtask; final wire reconstruction
+ * must consume this fresh carrier instead while preserving the original body stream and status.
+ *
+ * @internal Endpoint/webhook posture bridge; not exported from a package entrypoint.
+ */
+function snapshotRawWebResponseAfterPosture(response: Response): Response {
+  if (!isNativeResponse(response)) {
+    throw new TypeError('Raw endpoint posture snapshot requires a Web Response.');
+  }
+  const sourceHeaders = readNativeResponseHeaders(response);
+  const snapshotHeaders = createNativeHeaders();
+  witnessReflectApply(nativeHeadersForEach as Function, sourceHeaders, [
+    (value: string, name: string): void => {
+      if (lowerCase(name) !== 'set-cookie') nativeHeaderSet(snapshotHeaders, name, value);
+    },
+  ]);
+  const setCookies = rawSetCookieHeaders(sourceHeaders);
+  for (let index = 0; index < setCookies.length; index += 1) {
+    nativeHeaderAppend(snapshotHeaders, 'Set-Cookie', setCookies[index]!);
+  }
+  return new NativeResponse(readNativeResponseBody(response), {
+    headers: snapshotHeaders,
+    status: readNativeResponseStatus(response),
+    statusText: readNativeResponseStatusText(response),
+  });
+}
+
+/**
+ * Single synchronous endpoint posture choke: verify the app-owned Response and immediately detach
+ * its headers before app-scheduled microtasks can mutate the classified carrier.
+ *
+ * @internal Endpoint/webhook dispatch bridge; not exported from a package entrypoint.
+ */
+export function assertEndpointResponsePostureAndSnapshot(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  response: Response,
+  options: { request?: Request } = {},
+): Response {
+  assertEndpointResponsePosture(definition, response, options);
+  return snapshotRawWebResponseAfterPosture(response);
+}
+
+/**
  * Finalize an already-raw Web Response returned by an app-owned endpoint. The body is not copied
  * except for HEAD/304, preserving streaming protocols while enforcing HTTP body suppression.
  */
@@ -296,7 +341,10 @@ export function finalizeRawWebResponse(
   response: Response,
   request: Pick<Request, 'method'> | Request,
   options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[] } = {},
-  frameworkPosture: { cookiePersonalized?: true } = {},
+  frameworkPosture: {
+    cookiePersonalized?: true;
+    setCookies?: readonly string[];
+  } = {},
 ): Response {
   const status = readNativeResponseStatus(response);
   return emitToWire(response, 'raw-endpoint-response', {
@@ -306,6 +354,9 @@ export function finalizeRawWebResponse(
       ? {}
       : { redirectAllowlist: options.redirectAllowlist }),
     ...(frameworkPosture.cookiePersonalized === true ? { cookiePersonalized: true } : {}),
+    ...(frameworkPosture.setCookies === undefined
+      ? {}
+      : { frameworkSetCookies: frameworkPosture.setCookies }),
     status,
   });
 }
@@ -329,6 +380,9 @@ export const emitToWire = wireEmitter(
       const status = readNativeResponseStatus(value);
       const finalizedHeaders = finalizeRawResponseHeaders(value, {
         ...(provenance.cookiePersonalized === true ? { cookiePersonalized: true as const } : {}),
+        ...(provenance.frameworkSetCookies === undefined
+          ? {}
+          : { frameworkSetCookies: provenance.frameworkSetCookies }),
         ...(provenance.redirectAllowlist === undefined
           ? {}
           : { redirectAllowlist: provenance.redirectAllowlist }),
@@ -737,6 +791,7 @@ function finalizeRawResponseHeaders(
   response: Response,
   options: {
     cookiePersonalized?: true;
+    frameworkSetCookies?: readonly string[];
     redirectAllowlist?: readonly RedirectLocationAllowlistEntry[];
     secure?: true;
   },
@@ -748,7 +803,30 @@ function finalizeRawResponseHeaders(
   );
   const hasRedirectLocation =
     isRedirectStatus(readNativeResponseStatus(response)) && nativeHeaderHas(headers, 'location');
-  const setCookies = rawSetCookieHeaders(headers);
+  const authoredSetCookies = rawSetCookieHeaders(headers);
+  const frameworkSetCookies: string[] = [];
+  const mergedSetCookies: string[] = [];
+  for (let index = 0; index < authoredSetCookies.length; index += 1) {
+    appendResponsePostureValue(mergedSetCookies, authoredSetCookies[index]!);
+  }
+  if (options.frameworkSetCookies !== undefined) {
+    for (let index = 0; index < options.frameworkSetCookies.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(options.frameworkSetCookies, index);
+      if (
+        descriptor === undefined ||
+        !('value' in descriptor) ||
+        typeof descriptor.value !== 'string'
+      ) {
+        throw new TypeError(
+          'Framework-owned Set-Cookie values must remain a dense exact string snapshot.',
+        );
+      }
+      if (frameworkSetCookieNeedsAppend(mergedSetCookies, descriptor.value)) {
+        appendResponsePostureValue(mergedSetCookies, descriptor.value);
+        appendResponsePostureValue(frameworkSetCookies, descriptor.value);
+      }
+    }
+  }
 
   // SPEC §6.2 rule 5: response posture is decided over caller-owned headers before this
   // wire sink runs. Always reconstruct them so a retained raw Response cannot mutate the
@@ -770,8 +848,8 @@ function finalizeRawResponseHeaders(
     },
   ]);
 
-  for (let index = 0; index < setCookies.length; index += 1) {
-    const cookie = setCookies[index]!;
+  for (let index = 0; index < authoredSetCookies.length; index += 1) {
+    const cookie = authoredSetCookies[index]!;
     nativeHeaderAppend(
       webHeaders,
       'Set-Cookie',
@@ -779,6 +857,19 @@ function finalizeRawResponseHeaders(
         class: 'session',
         ...(options.secure === true ? { secure: true } : {}),
         source: 'legacy-normalize',
+      }),
+    );
+  }
+
+  for (let index = 0; index < frameworkSetCookies.length; index += 1) {
+    const cookie = frameworkSetCookies[index]!;
+    nativeHeaderAppend(
+      webHeaders,
+      'Set-Cookie',
+      forwardSetCookie(cookie, {
+        class: 'session',
+        ...(options.secure === true ? { secure: true } : {}),
+        source: 'csrf',
       }),
     );
   }
