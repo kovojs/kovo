@@ -26014,6 +26014,8 @@ type RequestExactGlobalProvenance = 'cycle' | 'exhausted' | 'match' | 'miss';
 
 interface RequestExactGlobalValueSession {
   readonly active: Set<string>;
+  /** Query-local depth-specific exhausted verdicts; never shared between independent proofs. */
+  readonly boundedMemo: Set<string>;
   readonly bindingContextKeys: string[];
   readonly bindingFrames: Map<string, RequestExactGlobalBoundInput | null>[];
   readonly callIndex: RequestExactGlobalCallIndex;
@@ -26119,6 +26121,7 @@ function requestExactGlobalValueSession(
     }
     session = {
       active: new Set(),
+      boundedMemo: new Set(),
       bindingContextKeys: [],
       bindingFrames: [],
       callIndex,
@@ -26768,8 +26771,11 @@ function requestExpressionResolvesToExactGlobalValue(
   const key = `value:${requestNodeIdentity(node)}${requestExactGlobalBindingContextKey(session)}`;
   const cached = session.memo.get(key);
   if (cached) return cached;
-  if (session.active.has(key)) return 'cycle';
   const topLevel = session.evaluationDepth === 0;
+  if (topLevel) session.boundedMemo.clear();
+  const boundedKey = `${key}:depth:${depth}`;
+  if (session.boundedMemo.has(boundedKey)) return 'exhausted';
+  if (session.active.has(key)) return 'cycle';
   session.evaluationDepth += 1;
   session.active.add(key);
   let verdict = requestExpressionResolvesToExactGlobalValueUncached(node, session, depth);
@@ -26778,8 +26784,13 @@ function requestExpressionResolvesToExactGlobalValue(
   if (topLevel && verdict === 'cycle') verdict = 'miss';
   // An exhausted result depends on the remaining depth at the call site. Positive and complete
   // negative reachability do not. A cycle result remains provisional until the outermost query
-  // reaches a fixed point, so only stable match/miss verdicts enter the shared project memo.
+  // reaches a fixed point, so only stable match/miss verdicts enter the depth-independent memo.
+  // Retaining exhaustion under the exact depth prevents repeated diamond branches from
+  // re-evaluating the same bounded subgraph without reusing that verdict from a shallower or
+  // independent proof. Within one query, conservative exhaustion can never weaken a closed result.
   if (verdict === 'match' || verdict === 'miss') session.memo.set(key, verdict);
+  if (verdict === 'exhausted') session.boundedMemo.add(boundedKey);
+  if (topLevel) session.boundedMemo.clear();
   return verdict;
 }
 
@@ -27040,8 +27051,11 @@ function requestProjectedExpressionResolvesToExactGlobalValue(
   const key = `projection:${requestNodeIdentity(node)}:${pathKey}${requestExactGlobalBindingContextKey(session)}`;
   const cached = session.projectionMemo.get(key);
   if (cached) return cached;
-  if (session.projectionActive.has(key)) return 'cycle';
   const topLevel = session.evaluationDepth === 0;
+  if (topLevel) session.boundedMemo.clear();
+  const boundedKey = `${key}:depth:${depth}`;
+  if (session.boundedMemo.has(boundedKey)) return 'exhausted';
+  if (session.projectionActive.has(key)) return 'cycle';
   session.evaluationDepth += 1;
   session.projectionActive.add(key);
   let verdict = requestProjectedExpressionResolvesToExactGlobalValueUncached(
@@ -27054,6 +27068,8 @@ function requestProjectedExpressionResolvesToExactGlobalValue(
   session.evaluationDepth -= 1;
   if (topLevel && verdict === 'cycle') verdict = 'miss';
   if (verdict === 'match' || verdict === 'miss') session.projectionMemo.set(key, verdict);
+  if (verdict === 'exhausted') session.boundedMemo.add(boundedKey);
+  if (topLevel) session.boundedMemo.clear();
   return verdict;
 }
 
