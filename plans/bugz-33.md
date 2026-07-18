@@ -14,7 +14,7 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    1 |     20 |
+| High     |    2 |     20 |
 | Medium   |    1 |     23 |
 | Low      |    0 |      5 |
 
@@ -289,6 +289,18 @@ rendering, Better Auth, and managed SQL.
   - **Open:** remove arbitrary raw auth objects from the public API, admit only fixed
     SQLite/Postgres bindings through a private identity registry, and verify every supported
     session/credential/mount path rejects origin or cookie skew before handler/API/database effects.
+
+- [ ] **H22 - The Better Auth callback mount exposed the live session bearer through a GET JSON
+      endpoint.**
+  - The opaque mount delegated every GET below its prefix. Real Better Auth's `/get-session`
+    response includes `session.token`, so same-origin script could bypass both HttpOnly and Kovo's
+    sanitized session provider and exfiltrate the reusable cookie bearer. The endpoint's declared
+    `body: 'redirect'` posture was audit metadata, not a runtime response-shape gate.
+  - **Evidence:** an authenticated real SQLite binding returns status 200 with a JSON token exactly
+    equal to the live session cookie's unsigned value through `mount('/api/auth', mountAdapter)`.
+  - **Open:** make the mount a runtime redirect-only sink: require an allowed 30x status and a
+    nonempty same-origin `Location`, emit no provider body, preserve only the reviewed callback
+    cookie/redirect posture, and reject JSON/HTML responses opaquely.
 
 ## Medium
 
