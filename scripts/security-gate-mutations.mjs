@@ -724,6 +724,30 @@ const semanticRestArgumentClosureBranch =
   '      } else if (restParameterIndex !== undefined && index >= restParameterIndex) {';
 const removedSemanticRestArgumentClosureBranch =
   '      } else if (false && restParameterIndex !== undefined && index >= restParameterIndex) {';
+const semanticTableNamespaceClosureBranch = [
+  "    return member === 'all' || member === 'count' || member === 'get' || member === 'values'",
+  "      ? serverOperationProvenance('server.database.read')",
+  "      : 'unknown-authority';",
+].join('\n');
+const weakenedSemanticTableNamespaceClosureBranch = [
+  '    const kind = databaseOperationKind(member);',
+  "    return kind ? serverOperationProvenance(kind) : 'unknown-authority';",
+].join('\n');
+
+const exactContextFetchInvocationBranch = [
+  '    !Node.isPropertyAccessExpression(callee) ||',
+  '    callee.getQuestionDotTokenNode() ||',
+  '    call.getQuestionDotTokenNode() ||',
+  "    callee.getName() !== 'fetch' ||",
+  '    !requestExpressionIsExactFrameworkContext(callee.getExpression(), callable, session)',
+].join('\n');
+const weakenedExactContextFetchInvocationBranch = [
+  '    false ||',
+  '    false ||',
+  '    false ||',
+  "    callee.getName() !== 'fetch' ||",
+  '    !requestExpressionIsExactFrameworkContext(callee.getExpression(), callable, session)',
+].join('\n');
 
 const analyzerSummaryStructuralProofBranch =
   '    const proven = exactLocalPrivateScopeHelperProvenance(helper, sourceFile);';
@@ -1039,6 +1063,26 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: compilerSecuritySemanticGraphPath,
     sourceOnly: true,
     test: assertSemanticRestArgumentClosureIsPinned,
+  },
+  {
+    description: 'Treats arbitrary raw-driver-shaped DB namespaces as managed operations.',
+    expectedKiller: 'generic DB table namespaces must stay limited to finite read terminals',
+    name: 'compiler-semantic-graph/allow-raw-database-namespace-chain',
+    replacement: weakenedSemanticTableNamespaceClosureBranch,
+    search: semanticTableNamespaceClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticTableNamespaceClosureIsPinned,
+  },
+  {
+    description: 'Allows computed or optional framework-context fetch invocation shapes.',
+    expectedKiller: 'framework egress calls must retain exact direct context.fetch provenance',
+    name: 'drizzle-egress/allow-inexact-context-fetch-call',
+    replacement: weakenedExactContextFetchInvocationBranch,
+    search: exactContextFetchInvocationBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    sourceOnly: true,
+    test: assertExactContextFetchInvocationIsPinned,
   },
   {
     description: 'Weakens the session-owner builder cell to allow cross-owner reads.',
@@ -1821,6 +1865,18 @@ async function assertSemanticOpaqueContainerClosureIsPinned(_moduleUnderTest, { 
 async function assertSemanticRestArgumentClosureIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(semanticRestArgumentClosureBranch)) {
     throw new Error('normalized semantic graph no longer rejects authority-bearing rest mappings');
+  }
+}
+
+async function assertSemanticTableNamespaceClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticTableNamespaceClosureBranch)) {
+    throw new Error('generic DB table namespaces no longer reject raw-driver-shaped terminals');
+  }
+}
+
+async function assertExactContextFetchInvocationIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(exactContextFetchInvocationBranch)) {
+    throw new Error('framework egress no longer requires exact direct context.fetch provenance');
   }
 }
 
