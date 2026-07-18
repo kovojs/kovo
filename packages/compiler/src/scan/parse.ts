@@ -2319,6 +2319,8 @@ function mutationHandlerModels(
           'mutation',
           parameters,
           `mutation:${owner.value}`,
+          handler,
+          call,
         ),
         ...(handlerReadsAmbientCookie(body, parameters)
           ? { readsAmbientCookie: true as const }
@@ -3280,6 +3282,8 @@ function endpointHandlerModels(
           'endpoint',
           entry.parameters,
           `endpoint:${owner.value}`,
+          entry.handler,
+          call,
         ),
       },
       'Endpoint handler models',
@@ -3501,7 +3505,15 @@ function queryLoadHandlerModels(
       result,
       {
         ...entry.model,
-        ...serverSecurityOperationModel(sourceFile, entry.body, 'query', entry.parameters, root),
+        ...serverSecurityOperationModel(
+          sourceFile,
+          entry.body,
+          'query',
+          entry.parameters,
+          root,
+          entry.handler,
+          call,
+        ),
       },
       'Query load handler models',
     );
@@ -3575,6 +3587,8 @@ function webhookHandlerModels(
           'webhook',
           entry.parameters,
           `webhook:${owner.value}`,
+          entry.handler,
+          call,
         ),
       },
       'Webhook handler models',
@@ -3654,6 +3668,8 @@ function taskRunHandlerModels(
           'task',
           handler.parameters,
           `task:${key}`,
+          handler.handler,
+          call,
         ),
       },
       'Task run handler models',
@@ -4228,11 +4244,19 @@ function serverSecurityOperationModel(
   surface: SecurityOperationSurface,
   parameters: readonly ts.ParameterDeclaration[],
   root: string,
+  handler: HandlerPropertyEntry['handler'],
+  factoryCall: ts.CallExpression,
 ): Pick<
   MutationHandlerModel,
   'securityOperations' | 'securityOperationViolations' | 'securitySemanticRoot'
 > {
-  const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters, root);
+  const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters, root, {
+    callback: surface === 'query' ? 'load' : surface === 'task' ? 'run' : 'handler',
+    callableSpan: { end: handler.getEnd(), start: handler.getStart(sourceFile) },
+    factory: surface,
+    factoryCallSpan: { end: factoryCall.getEnd(), start: factoryCall.getStart(sourceFile) },
+    root,
+  });
   const securityOperations: ServerSecurityOperationModel[] = [
     {
       door: 'handler-root',

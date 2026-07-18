@@ -2079,7 +2079,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
           'discharges multi-hop helper edges through bottom-up normalized summaries',
-          'kovo-security-semantic-graph/v1',
+          'kovo-security-semantic-graph/v2',
           'local:consume[arg0=context]',
           'local:dial[arg0=operation:server.egress.request]',
           'shows root, transfers, sink, and closed reason for helper alias mutation',

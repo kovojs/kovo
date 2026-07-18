@@ -917,7 +917,7 @@ describe('diagnostic registry', () => {
         },
         "KV449": {
           "code": "KV449",
-          "help": "Would lower to: a compiler-owned kovo-security-operation-ir/v1 operation with an exact reviewed door plus a kovo-security-semantic-graph/v1 root-to-transfer-to-sink trace.
+          "help": "Would lower to: a compiler-owned kovo-security-operation-ir/v1 operation with an exact reviewed door plus a kovo-security-semantic-graph/v2 root-binding-to-invocation-to-sink trace.
       Blocked reason: the handler uses an unknown/computed raw DOM or capability operation, an unreviewed executable call, an unjustified exceptional door, an unsupported/recursive/budget-exhausted helper transfer, or a hand-written mutation form that cannot carry the complete server-stamped CSRF plus Kovo-Idem field set.
       Fixes: use typed <form mutation={definition}> (or the exact mutationFormAttributes(definition) JSX spread); use component state, delegated event reads, reviewed focus/dialog/form operations, managed DB/egress/response APIs, or a named trustedSql/trustedHtml/raw-response door with its required justification.
       SPEC §4.3, §5.2, §6.6, and §9.1 make the finite compiler-owned operation set and its bounded helper summaries fail closed. Server diagnostics name root, ordered transfers, sink, and the exact closed reason. There is no general raw-DOM/capability or hand-authored lowered-IR escape; only the named exceptional doors documented by their owning sink are accepted.

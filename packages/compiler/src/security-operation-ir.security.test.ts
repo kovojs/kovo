@@ -533,11 +533,47 @@ export const report = endpoint('/report', {
     const semanticGraph = result.componentGraphFacts[0]?.securitySemanticGraph;
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
-    expect(serverSource).toContain('kovo-security-semantic-graph/v1');
+    expect(serverSource).toContain('kovo-security-semantic-graph/v2');
     expect(serverSource).toContain('local:consume[arg0=context]');
     expect(serverSource).toContain('local:dial[arg0=operation:server.egress.request]');
     expect(semanticGraph?.roots).toContainEqual(
       expect.objectContaining({
+        binding: expect.objectContaining({
+          callback: 'handler',
+          callableSpan: expect.objectContaining({
+            end: expect.any(Number),
+            start: expect.any(Number),
+          }),
+          factory: 'endpoint',
+          factoryCallSpan: expect.objectContaining({
+            end: expect.any(Number),
+            start: expect.any(Number),
+          }),
+          root: 'endpoint:/report',
+        }),
+        helperInvocations: expect.arrayContaining([
+          expect.objectContaining({
+            authorityInputs: ['arg0=context'],
+            callable: 'local:consume',
+            callSpan: expect.objectContaining({
+              end: expect.any(Number),
+              start: expect.any(Number),
+            }),
+            operationKinds: ['server.egress.request'],
+            transfers: ['local:consume[arg0=context]'],
+            verdict: 'proved',
+          }),
+          expect.objectContaining({
+            authorityInputs: ['arg0=operation:server.egress.request'],
+            callable: 'local:dial',
+            operationKinds: ['server.egress.request'],
+            transfers: [
+              'local:consume[arg0=context]',
+              'local:dial[arg0=operation:server.egress.request]',
+            ],
+            verdict: 'proved',
+          }),
+        ]),
         root: 'endpoint:/report',
         summaries: expect.arrayContaining([
           expect.objectContaining({

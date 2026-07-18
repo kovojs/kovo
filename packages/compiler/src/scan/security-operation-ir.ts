@@ -13,7 +13,9 @@ import type {
   BrowserSecurityOperationKind,
   SecuritySemanticBudgets,
   SecuritySemanticClosedReason,
+  SecuritySemanticHelperInvocationFact,
   SecuritySemanticRoot,
+  SecuritySemanticRootBinding,
   SecuritySemanticSummary,
   SecuritySemanticTrace,
   ServerSecurityOperationKind,
@@ -1400,6 +1402,7 @@ interface SecuritySemanticState {
 
 interface SecuritySemanticInvocationResult {
   readonly closed: boolean;
+  readonly helperInvocations: readonly SecuritySemanticHelperInvocationFact[];
   readonly operations: readonly ServerSecurityOperationModel[];
   readonly summaries: readonly SecuritySemanticSummary[];
   readonly traces: readonly SecuritySemanticTrace[];
@@ -1427,8 +1430,9 @@ export function scanServerSecurityOperations(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
   surface: SecurityOperationSurface,
-  parameters: readonly ts.ParameterDeclaration[] = [],
-  root = `${surface}:<anonymous>`,
+  parameters: readonly ts.ParameterDeclaration[],
+  root: string,
+  binding: SecuritySemanticRootBinding,
 ): SecurityOperationScanResult<ServerSecurityOperationModel> {
   const state: SecuritySemanticState = {
     active: compilerCreateSet<string>(),
@@ -1453,6 +1457,8 @@ export function scanServerSecurityOperations(
   return {
     operations: dedupeServerOperations(result.operations),
     semanticRoot: {
+      binding,
+      helperInvocations: dedupeSemanticHelperInvocations(result.helperInvocations),
       root,
       summaries: dedupeSemanticSummaries(result.summaries),
       traces: dedupeSemanticTraces(result.traces),
@@ -1487,6 +1493,7 @@ function analyzeServerSecurityCallable(options: {
     surface,
     transfers,
   } = options;
+  const helperInvocations: SecuritySemanticHelperInvocationFact[] = [];
   const operations: ServerSecurityOperationModel[] = [];
   const summaries: SecuritySemanticSummary[] = [];
   const traces: SecuritySemanticTrace[] = [];
@@ -1523,7 +1530,7 @@ function analyzeServerSecurityCallable(options: {
       },
       'Closed semantic helper summaries',
     );
-    return { closed: true, operations, summaries, traces, violations };
+    return { closed: true, helperInvocations, operations, summaries, traces, violations };
   }
 
   if (callable !== undefined) {
@@ -1561,7 +1568,7 @@ function analyzeServerSecurityCallable(options: {
           },
           'Budget-closed semantic helper summaries',
         );
-        return { closed: true, operations, summaries, traces, violations };
+        return { closed: true, helperInvocations, operations, summaries, traces, violations };
       }
     }
     compilerSetAdd(state.active, signature);
@@ -1735,6 +1742,11 @@ function analyzeServerSecurityCallable(options: {
               },
               'Unsupported semantic helper summaries',
             );
+            compilerArrayAppend(
+              helperInvocations,
+              semanticHelperInvocationFact(sourceFile, helper, nextTransfers, [], 'closed'),
+              'Unsupported semantic helper invocations',
+            );
             closed = true;
             continue;
           }
@@ -1764,6 +1776,11 @@ function analyzeServerSecurityCallable(options: {
               },
               'Depth-closed semantic helper summaries',
             );
+            compilerArrayAppend(
+              helperInvocations,
+              semanticHelperInvocationFact(sourceFile, helper, nextTransfers, [], 'closed'),
+              'Depth-closed semantic helper invocations',
+            );
             closed = true;
             continue;
           }
@@ -1781,6 +1798,18 @@ function analyzeServerSecurityCallable(options: {
             surface,
             transfers: nextTransfers,
           });
+          compilerArrayAppend(
+            helperInvocations,
+            semanticHelperInvocationFact(
+              sourceFile,
+              helper,
+              nextTransfers,
+              semanticOperationKinds(child.operations),
+              child.closed ? 'closed' : 'proved',
+            ),
+            'Normalized semantic helper invocations',
+          );
+          appendSemanticHelperInvocations(helperInvocations, child.helperInvocations);
           appendServerOperations(operations, child.operations);
           appendSemanticSummaries(summaries, child.summaries);
           appendSemanticTraces(traces, child.traces);
@@ -1807,7 +1836,7 @@ function analyzeServerSecurityCallable(options: {
         'Bottom-up semantic helper summaries',
       );
     }
-    return { closed, operations, summaries, traces, violations };
+    return { closed, helperInvocations, operations, summaries, traces, violations };
   } finally {
     if (signature !== undefined) compilerSetDelete(state.active, signature);
   }
@@ -1957,6 +1986,52 @@ function semanticHelperInvocation(
   };
 }
 
+function semanticHelperInvocationFact(
+  sourceFile: ts.SourceFile,
+  helper: SecuritySemanticHelperInvocation,
+  transfers: readonly string[],
+  operationKinds: readonly ServerSecurityOperationKind[],
+  verdict: SecuritySemanticHelperInvocationFact['verdict'],
+): SecuritySemanticHelperInvocationFact {
+  const argumentSpans: Array<{ readonly end: number; readonly start: number }> = [];
+  const argumentsSnapshot = compilerSnapshotDenseArray(
+    helper.call.arguments,
+    'Semantic helper invocation arguments',
+  );
+  for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+    compilerArrayAppend(
+      argumentSpans,
+      {
+        end: argumentsSnapshot[index]!.getEnd(),
+        start: argumentsSnapshot[index]!.getStart(sourceFile),
+      },
+      'Semantic helper invocation argument spans',
+    );
+  }
+  return {
+    argumentSpans,
+    authorityInputs: compilerSnapshotDenseArray(
+      helper.authorityInputs,
+      'Semantic helper invocation authority inputs',
+    ),
+    callable: `local:${helper.callable.name}`,
+    callableSpan: {
+      end: helper.callable.declaration.getEnd(),
+      start: helper.callable.declaration.getStart(sourceFile),
+    },
+    callSpan: {
+      end: helper.call.getEnd(),
+      start: helper.call.getStart(sourceFile),
+    },
+    operationKinds: compilerSnapshotDenseArray(
+      operationKinds,
+      'Semantic helper invocation operation kinds',
+    ),
+    transfers: compilerSnapshotDenseArray(transfers, 'Semantic helper invocation transfers'),
+    verdict,
+  };
+}
+
 function semanticBodyUsesArguments(body: ts.ConciseBody): boolean {
   let found = false;
   const visit = (node: ts.Node): void => {
@@ -2103,6 +2178,16 @@ function appendSemanticSummaries(
   }
 }
 
+function appendSemanticHelperInvocations(
+  target: SecuritySemanticHelperInvocationFact[],
+  values: readonly SecuritySemanticHelperInvocationFact[],
+): void {
+  const snapshot = compilerSnapshotDenseArray(values, 'Semantic helper invocation facts');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerArrayAppend(target, snapshot[index]!, 'Semantic helper invocation facts');
+  }
+}
+
 function appendSemanticTraces(
   target: SecuritySemanticTrace[],
   values: readonly SecuritySemanticTrace[],
@@ -2131,6 +2216,28 @@ function dedupeSemanticSummaries(
     (value) =>
       `${value.callable}\0${value.callableSpan.start}\0${value.callableSpan.end}\0${compilerArrayJoin(value.authorityInputs, ',')}\0${compilerArrayJoin(value.operationKinds, ',')}\0${value.verdict}`,
   );
+}
+
+function dedupeSemanticHelperInvocations(
+  values: readonly SecuritySemanticHelperInvocationFact[],
+): SecuritySemanticHelperInvocationFact[] {
+  return dedupeByKey(
+    values,
+    (value) =>
+      `${value.callable}\0${value.callableSpan.start}\0${value.callableSpan.end}\0${value.callSpan.start}\0${value.callSpan.end}\0${semanticArgumentSpansKey(value.argumentSpans)}\0${compilerArrayJoin(value.authorityInputs, ',')}\0${compilerArrayJoin(value.operationKinds, ',')}\0${compilerArrayJoin(value.transfers, '\0')}\0${value.verdict}`,
+  );
+}
+
+function semanticArgumentSpansKey(
+  spans: readonly { readonly end: number; readonly start: number }[],
+): string {
+  const parts: string[] = [];
+  const snapshot = compilerSnapshotDenseArray(spans, 'Semantic helper argument spans');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const span = snapshot[index]!;
+    compilerArrayAppend(parts, `${span.start}:${span.end}`, 'Semantic helper argument span key');
+  }
+  return compilerArrayJoin(parts, ',');
 }
 
 function dedupeSemanticTraces(values: readonly SecuritySemanticTrace[]): SecuritySemanticTrace[] {

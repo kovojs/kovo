@@ -365,7 +365,7 @@ interpreter defined next; the edge preserves that obligation rather than guessin
 verdict.
 
 **Normalized helper provenance (normative, narrow abstract interpreter).** The compiler MUST
-discharge every `server.helper.call` over `kovo-security-semantic-graph/v1`, a normalized graph whose
+discharge every `server.helper.call` over `kovo-security-semantic-graph/v2`, a normalized graph whose
 nodes are enrolled handler roots, exact same-file callables, finite operations, and explicit closed
 verdicts. This is not a JavaScript evaluator, SSA optimizer, or type-inference engine. Its complete
 value lattice is: plain local data; request/context authority; managed database, structured-header,
@@ -373,6 +373,25 @@ storage, response-constructor, response-outcome, and principal-scope authority; 
 `operation:<securityOperationKind>` terminal; and absorbing unknown authority. The scanner is the
 only raw-syntax boundary; validation, emission, graph, and explain consumers decide from these
 typed facts (SPEC §5.2 rule 10).
+
+Version 2 is unconditional; consumers MUST reject version 1 rather than enter a compatibility
+posture. Every semantic root carries an exact binding to its full root identity, factory family,
+callback name, factory-call `[start,end)` span, and callback-callable `[start,end)` span in the same
+byte-exact source snapshot. Every helper transfer carries its exact invocation and ordered argument
+spans, callable name and declaration span, complete ordered root-to-helper transfer prefix, authority-input vector,
+terminal-operation inventory, and verdict. A consumer may admit a helper summary only when an exact
+invocation fact has the same callable identity and span, authority-input vector, terminal inventory,
+and verdict; the invocation span and root binding must also match the authored call and root being
+classified. The terminal inventory MUST equal the unique finite sink kinds reached by proved traces
+under that complete transfer prefix. A downstream consumer MUST independently reconstruct the exact
+root, argument authority, and every terminal-operation family on which its own admission decision
+depends; self-consistent carrier fields are not authentication. A consumer-specific gate MAY project
+the complete graph onto only the terminal families it owns, but unverified families confer no
+authority in that gate. A missing or contradictory relevant fact, a root/trace identity mismatch, an
+omitted or extra relevant terminal kind, a closed trace, or a closed sibling summary/invocation for
+the same callable span closes that consumer proof. Source bytes, callable identity, and all-path
+closure remain mandatory; these carrier checks do not turn semantic facts into app-authored
+authority.
 
 Transfer semantics are finite. An exact immutable alias preserves its lattice value. Static object
 destructuring applies the reviewed member transition one property at a time. Results of finite

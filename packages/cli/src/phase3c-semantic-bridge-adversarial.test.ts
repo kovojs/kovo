@@ -114,6 +114,31 @@ describe('Phase 3C semantic carrier integrity', () => {
     expect(hasRequestHandlerClosure(files, relabelled)).toBe(true);
   });
 
+  it('rejects a synchronized root relabel across binding and trace facts', () => {
+    const files = semanticBridgeFixture();
+    const semanticSources = compilerSemanticSources(files);
+    assertExactCarrierDischargesOnlyTheKnownLegacyNoise(files, semanticSources);
+
+    const relabelled = semanticSources.map((semanticSource) => ({
+      ...semanticSource,
+      graphs: semanticSource.graphs.map((graph) => ({
+        ...graph,
+        roots: graph.roots.map((root) => {
+          if (!root.root.startsWith('mutation:')) return root;
+          const nextRoot = 'mutation:sibling';
+          return {
+            ...root,
+            binding: { ...root.binding, root: nextRoot },
+            root: nextRoot,
+            traces: root.traces.map((trace) => ({ ...trace, root: nextRoot })),
+          };
+        }),
+      })),
+    }));
+
+    expect(hasRequestHandlerClosure(files, relabelled)).toBe(true);
+  });
+
   // SPEC §5.2/§6.6: the authority category is part of the proof key. `headers` cannot certify
   // the helper invocation that actually receives a database capability merely because both are
   // privileged categories.
@@ -146,6 +171,48 @@ describe('Phase 3C semantic carrier integrity', () => {
     expect(hasRequestHandlerClosure(files, relabelled)).toBe(true);
   });
 
+  it('rejects a synchronized authority relabel across summary, invocation, and trace paths', () => {
+    const files = semanticBridgeFixture();
+    const semanticSources = compilerSemanticSources(files);
+    assertExactCarrierDischargesOnlyTheKnownLegacyNoise(files, semanticSources);
+    const previousTransfer = 'local:nestedWrite[arg0=database]';
+    const nextTransfer = 'local:nestedWrite[arg0=headers]';
+
+    const relabelled = semanticSources.map((semanticSource) => ({
+      ...semanticSource,
+      graphs: semanticSource.graphs.map((graph) => ({
+        ...graph,
+        roots: graph.roots.map((root) => ({
+          ...root,
+          helperInvocations: root.helperInvocations.map((invocation) =>
+            invocation.callable === 'local:nestedWrite'
+              ? {
+                  ...invocation,
+                  authorityInputs: ['arg0=headers'],
+                  transfers: invocation.transfers.map((transfer) =>
+                    transfer === previousTransfer ? nextTransfer : transfer,
+                  ),
+                }
+              : invocation,
+          ),
+          summaries: root.summaries.map((summary) =>
+            summary.callable === 'local:nestedWrite'
+              ? { ...summary, authorityInputs: ['arg0=headers'] }
+              : summary,
+          ),
+          traces: root.traces.map((trace) => ({
+            ...trace,
+            transfers: trace.transfers.map((transfer) =>
+              transfer === previousTransfer ? nextTransfer : transfer,
+            ),
+          })),
+        })),
+      })),
+    }));
+
+    expect(hasRequestHandlerClosure(files, relabelled)).toBe(true);
+  });
+
   // SPEC §5.2/§6.6: terminal operationKinds are a closed semantic snapshot, not an optional
   // allowlist. Deleting the helper's database-write operation must invalidate the carrier.
   it('rejects a compiler carrier with an omitted terminal operation kind', () => {
@@ -174,5 +241,51 @@ describe('Phase 3C semantic carrier integrity', () => {
     expect(omittedWrite).toBe(true);
 
     expect(hasRequestHandlerClosure(files, omitted)).toBe(true);
+  });
+
+  it('rejects a synchronized terminal-operation relabel across summaries, invocations, and traces', () => {
+    const files = semanticBridgeFixture();
+    const semanticSources = compilerSemanticSources(files);
+    assertExactCarrierDischargesOnlyTheKnownLegacyNoise(files, semanticSources);
+
+    const relabelled = semanticSources.map((semanticSource) => ({
+      ...semanticSource,
+      graphs: semanticSource.graphs.map((graph) => ({
+        ...graph,
+        roots: graph.roots.map((root) => ({
+          ...root,
+          helperInvocations: root.helperInvocations.map((invocation) =>
+            invocation.callable === 'local:nestedWrite'
+              ? {
+                  ...invocation,
+                  operationKinds: invocation.operationKinds.map((kind) =>
+                    kind === 'server.database.write' ? 'server.database.read' : kind,
+                  ),
+                }
+              : invocation,
+          ),
+          summaries: root.summaries.map((summary) =>
+            summary.callable === 'local:nestedWrite'
+              ? {
+                  ...summary,
+                  operationKinds: summary.operationKinds.map((kind) =>
+                    kind === 'server.database.write' ? 'server.database.read' : kind,
+                  ),
+                }
+              : summary,
+          ),
+          traces: root.traces.map((trace) =>
+            trace.verdict === 'proved' && trace.sink.kind === 'server.database.write'
+              ? {
+                  ...trace,
+                  sink: { ...trace.sink, kind: 'server.database.read' as const },
+                }
+              : trace,
+          ),
+        })),
+      })),
+    }));
+
+    expect(hasRequestHandlerClosure(files, relabelled)).toBe(true);
   });
 });

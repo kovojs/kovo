@@ -13942,25 +13942,68 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       true,
       ts.ScriptKind.TS,
     );
+    let handler: import('typescript').MethodDeclaration | undefined;
+    let mutationCall: import('typescript').CallExpression | undefined;
     let nestedWrite: import('typescript').FunctionDeclaration | undefined;
+    let nestedWriteCall: import('typescript').CallExpression | undefined;
     const visit = (node: import('typescript').Node): void => {
       if (ts.isFunctionDeclaration(node) && node.name?.text === 'nestedWrite') {
         nestedWrite = node;
-        return;
+      } else if (ts.isMethodDeclaration(node) && node.name.getText(parsed) === 'handler') {
+        handler = node;
+      } else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        if (node.expression.text === 'mutation') mutationCall = node;
+        if (node.expression.text === 'nestedWrite') nestedWriteCall = node;
       }
       ts.forEachChild(node, visit);
     };
     visit(parsed);
+    expect(handler).toBeDefined();
+    expect(mutationCall).toBeDefined();
     expect(nestedWrite).toBeDefined();
+    expect(nestedWriteCall).toBeDefined();
     const callableSpan = {
       end: nestedWrite!.getEnd(),
       start: nestedWrite!.getStart(parsed),
     };
+    const root = 'mutation:summary-carrier/update';
+    const transfer = 'local:nestedWrite[arg0=database]';
     const graph: SecuritySemanticGraph = {
       budgets: { callDepth: 16, nodes: 50_000, operations: 4_096, summaries: 256 },
       roots: [
         {
-          root: 'mutation:update',
+          binding: {
+            callback: 'handler',
+            callableSpan: {
+              end: handler!.getEnd(),
+              start: handler!.getStart(parsed),
+            },
+            factory: 'mutation',
+            factoryCallSpan: {
+              end: mutationCall!.getEnd(),
+              start: mutationCall!.getStart(parsed),
+            },
+            root,
+          },
+          helperInvocations: [
+            {
+              argumentSpans: [...nestedWriteCall!.arguments].map((argument) => ({
+                end: argument.getEnd(),
+                start: argument.getStart(parsed),
+              })),
+              authorityInputs: ['arg0=database'],
+              callable: 'local:nestedWrite',
+              callableSpan,
+              callSpan: {
+                end: nestedWriteCall!.getEnd(),
+                start: nestedWriteCall!.getStart(parsed),
+              },
+              operationKinds: ['server.database.write'],
+              transfers: [transfer],
+              verdict: 'proved',
+            },
+          ],
+          root,
           summaries: [
             {
               authorityInputs: ['arg0=database'],
@@ -13970,10 +14013,21 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
               verdict: 'proved' as const,
             },
           ],
-          traces: [],
+          traces: [
+            {
+              root,
+              sink: {
+                door: 'managed-db',
+                kind: 'server.database.write',
+                target: 'db.update',
+              },
+              transfers: [transfer],
+              verdict: 'proved',
+            },
+          ],
         },
       ],
-      schema: 'kovo-security-semantic-graph/v1' as const,
+      schema: 'kovo-security-semantic-graph/v2' as const,
     };
     const schemaSource = `
       import { pgTable, text } from 'drizzle-orm/pg-core';
@@ -14113,7 +14167,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
                 {
                   detail: 'closed sibling path',
                   reason: 'opaque-transfer' as const,
-                  root: 'mutation:update',
+                  root,
                   sink: 'closed sibling path',
                   transfers: [],
                   verdict: 'closed' as const,

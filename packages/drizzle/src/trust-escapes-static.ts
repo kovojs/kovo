@@ -23,8 +23,10 @@ import type {
   UnregisteredSinkFact,
 } from '@kovojs/core/internal/graph';
 import {
+  securityOperationDoorForKind,
   serverSecurityOperationKinds,
   type SecuritySemanticGraph,
+  type SecuritySemanticRootBinding,
   type ServerSecurityOperationKind,
 } from '@kovojs/core/internal/security-operation-ir';
 import {
@@ -1556,10 +1558,20 @@ interface RequestProcessScanContext {
 }
 
 interface RequestCompilerSemanticHelperProof {
+  readonly argumentSpans: readonly { readonly end: number; readonly start: number }[];
   readonly authorityInputs: readonly string[];
+  readonly callSpan: { readonly end: number; readonly start: number };
   readonly callable: string;
   readonly operationKinds: readonly ServerSecurityOperationKind[];
   readonly root: string;
+  readonly rootBinding: SecuritySemanticRootBinding;
+  readonly transfers: readonly string[];
+}
+
+interface RequestCompilerSemanticInventoryNode {
+  readonly children: Map<string, RequestCompilerSemanticInventoryNode>;
+  hasInvocation: boolean;
+  readonly operationKinds: Set<ServerSecurityOperationKind>;
 }
 
 const REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS = runtimeSet<ServerSecurityOperationKind>();
@@ -1603,6 +1615,10 @@ interface RequestProvenanceSession {
   readonly compilerSemanticHelperProofs: ReadonlyMap<
     string,
     readonly RequestCompilerSemanticHelperProof[]
+  >;
+  readonly compilerSemanticDatabaseOperationsMemo: Map<
+    string,
+    ReadonlySet<ServerSecurityOperationKind> | null
   >;
   readonly declaredRootHelperActive: Set<string>;
   readonly declaredRootHelperMemo: Map<string, readonly RequestCallable[] | null>;
@@ -1662,6 +1678,7 @@ function createRequestProvenanceSession(
     callableSymbolMemo: new Map(),
     carrierActive: new Set(),
     carrierMemo: new Map(),
+    compilerSemanticDatabaseOperationsMemo: new Map(),
     compilerSemanticHelperProofs,
     declaredRootHelperActive: new Set(),
     declaredRootHelperMemo: new Map(),
@@ -1826,39 +1843,52 @@ function requestCompilerSemanticHelperProofs(
     const sourceFile = sourceFiles[index];
     const semanticSource = sourcesByName.get(file.fileName);
     if (!sourceFile || !semanticSource || semanticSource.source !== file.source) return new Map();
+    const callsBySpan = new Map<string, import('ts-morph').CallExpression>();
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const key = `${call.getStart()}:${call.getEnd()}`;
+      if (callsBySpan.has(key)) return new Map();
+      callsBySpan.set(key, call);
+    }
     for (const graph of semanticSource.graphs) {
-      if (graph.schema !== 'kovo-security-semantic-graph/v1') return new Map();
+      if (graph.schema !== 'kovo-security-semantic-graph/v2') return new Map();
       for (const root of graph.roots) {
+        if (
+          !requestCompilerSemanticRootFactsAreExact(
+            root,
+            file.source.length,
+            file.fileName,
+            callsBySpan,
+          )
+        ) {
+          return new Map();
+        }
         const rootClosed = root.traces.some((trace) => trace.verdict === 'closed');
         for (const summary of root.summaries) {
           const { end, start } = summary.callableSpan;
-          if (
-            !Number.isSafeInteger(start) ||
-            !Number.isSafeInteger(end) ||
-            start < 0 ||
-            end <= start ||
-            end > file.source.length
-          ) {
-            continue;
-          }
           const key = `${sourceFile.getFilePath()}:${start}:${end}`;
-          if (
-            summary.verdict !== 'proved' ||
-            rootClosed ||
-            !summary.callable.startsWith('local:') ||
-            summary.operationKinds.some(
-              (kind) => !runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, kind),
-            )
-          ) {
+          if (summary.verdict !== 'proved' || rootClosed) invalidProofKeys.add(key);
+        }
+        for (const invocation of root.helperInvocations) {
+          const { end, start } = invocation.callableSpan;
+          const key = `${sourceFile.getFilePath()}:${start}:${end}`;
+          if (invocation.verdict !== 'proved' || rootClosed) {
             invalidProofKeys.add(key);
             continue;
           }
           const values = proofs.get(key) ?? [];
           values.push({
-            authorityInputs: [...summary.authorityInputs],
-            callable: summary.callable,
-            operationKinds: [...summary.operationKinds],
+            argumentSpans: invocation.argumentSpans.map((span) => ({ ...span })),
+            authorityInputs: [...invocation.authorityInputs],
+            callSpan: { ...invocation.callSpan },
+            callable: invocation.callable,
+            operationKinds: [...invocation.operationKinds],
             root: root.root,
+            rootBinding: {
+              ...root.binding,
+              callableSpan: { ...root.binding.callableSpan },
+              factoryCallSpan: { ...root.binding.factoryCallSpan },
+            },
+            transfers: [...invocation.transfers],
           });
           proofs.set(key, values);
         }
@@ -1867,6 +1897,327 @@ function requestCompilerSemanticHelperProofs(
   }
   for (const key of invalidProofKeys) proofs.delete(key);
   return proofs;
+}
+
+function requestCompilerSemanticRootFactsAreExact(
+  root: SecuritySemanticGraph['roots'][number],
+  sourceLength: number,
+  fileName: string,
+  callsBySpan: ReadonlyMap<string, import('ts-morph').CallExpression>,
+): boolean {
+  const binding = root.binding;
+  const factoryCall = callsBySpan.get(
+    `${binding.factoryCallSpan.start}:${binding.factoryCallSpan.end}`,
+  );
+  if (
+    !factoryCall ||
+    binding.root !== root.root ||
+    requestCompilerSemanticRootForFactoryCall(binding.factory, factoryCall, fileName) !==
+      root.root ||
+    !root.root.startsWith(`${binding.factory}:`) ||
+    root.root.length === binding.factory.length + 1 ||
+    binding.callback !== requestCompilerSemanticCallbackForFactory(binding.factory) ||
+    !requestCompilerSemanticSpanIsValid(binding.callableSpan, sourceLength) ||
+    !requestCompilerSemanticSpanIsValid(binding.factoryCallSpan, sourceLength)
+  ) {
+    return false;
+  }
+
+  const invocationTree: RequestCompilerSemanticInventoryNode = {
+    children: new Map(),
+    hasInvocation: false,
+    operationKinds: new Set(),
+  };
+  const summarySignatures = new Set<string>();
+  const invocationSignatures = new Set<string>();
+  for (const summary of root.summaries) {
+    if (
+      !summary.callable.startsWith('local:') ||
+      summary.callable.length === 'local:'.length ||
+      !requestCompilerSemanticSpanIsValid(summary.callableSpan, sourceLength) ||
+      !requestCompilerSemanticAuthorityInputsAreExact(summary.authorityInputs) ||
+      !requestCompilerSemanticOperationInventoryIsExact(summary.operationKinds)
+    ) {
+      return false;
+    }
+    summarySignatures.add(requestCompilerSemanticFactSignature(summary));
+  }
+
+  for (const invocation of root.helperInvocations) {
+    const invocationCall = callsBySpan.get(
+      `${invocation.callSpan.start}:${invocation.callSpan.end}`,
+    );
+    if (
+      !invocationCall ||
+      !invocation.callable.startsWith('local:') ||
+      invocation.callable.length === 'local:'.length ||
+      !requestCompilerSemanticSpanIsValid(invocation.callableSpan, sourceLength) ||
+      !requestCompilerSemanticSpanIsValid(invocation.callSpan, sourceLength) ||
+      !requestCompilerSemanticAuthorityInputsAreExact(invocation.authorityInputs) ||
+      !requestCompilerSemanticOperationInventoryIsExact(invocation.operationKinds) ||
+      invocation.argumentSpans.length !== invocationCall.getArguments().length ||
+      invocation.argumentSpans.some(
+        (span, index) =>
+          !requestCompilerSemanticSpanIsValid(span, sourceLength) ||
+          span.start !== invocationCall.getArguments()[index]?.getStart() ||
+          span.end !== invocationCall.getArguments()[index]?.getEnd(),
+      ) ||
+      invocation.transfers.length === 0
+    ) {
+      return false;
+    }
+    const exactTransfer = `${invocation.callable}[${invocation.authorityInputs.join(',')}]`;
+    if (invocation.transfers[invocation.transfers.length - 1] !== exactTransfer) return false;
+    invocationSignatures.add(requestCompilerSemanticFactSignature(invocation));
+    let node = invocationTree;
+    for (const transfer of invocation.transfers) {
+      if (transfer.length === 0) return false;
+      let child = node.children.get(transfer);
+      if (!child) {
+        child = { children: new Map(), hasInvocation: false, operationKinds: new Set() };
+        node.children.set(transfer, child);
+      }
+      node = child;
+    }
+    node.hasInvocation = true;
+  }
+
+  for (const trace of root.traces) {
+    if (trace.root !== root.root) return false;
+    let node = invocationTree;
+    for (const transfer of trace.transfers) {
+      const child = node.children.get(transfer);
+      if (!child) return false;
+      node = child;
+      if (
+        trace.verdict === 'proved' &&
+        runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, trace.sink.kind)
+      ) {
+        node.operationKinds.add(trace.sink.kind);
+      }
+    }
+    if (
+      trace.verdict === 'proved' &&
+      (!runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, trace.sink.kind) ||
+        trace.sink.door !== securityOperationDoorForKind(trace.sink.kind))
+    ) {
+      return false;
+    }
+  }
+
+  for (const summary of root.summaries) {
+    if (!invocationSignatures.has(requestCompilerSemanticFactSignature(summary))) return false;
+  }
+  for (const invocation of root.helperInvocations) {
+    if (!summarySignatures.has(requestCompilerSemanticFactSignature(invocation))) return false;
+    let node = invocationTree;
+    for (const transfer of invocation.transfers) {
+      const child = node.children.get(transfer);
+      if (!child) return false;
+      node = child;
+    }
+    if (
+      !node.hasInvocation ||
+      node.operationKinds.size !== invocation.operationKinds.length ||
+      invocation.operationKinds.some((kind) => !node.operationKinds.has(kind))
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function requestCompilerSemanticRootForFactoryCall(
+  factory: SecuritySemanticRootBinding['factory'],
+  call: import('ts-morph').CallExpression,
+  fileName: string,
+): string {
+  const args = call.getArguments();
+  const first = args[0];
+  const literal = requestCompilerSemanticStaticString(first);
+  if (literal !== undefined) return `${factory}:${literal}`;
+
+  const exported = requestCompilerSemanticExportedConstName(call);
+  switch (factory) {
+    case 'endpoint':
+      return 'endpoint:UNRESOLVED';
+    case 'mutation': {
+      const firstValue = first ? unwrapStaticExpression(first) : undefined;
+      const mutationLiteral = requestCompilerSemanticStaticString(firstValue);
+      if (mutationLiteral !== undefined) return `mutation:${mutationLiteral}`;
+      if (firstValue && !Node.isObjectLiteralExpression(firstValue)) {
+        return 'mutation:UNRESOLVED';
+      }
+      return `mutation:${exported ? requestCompilerSemanticRegistryKey(fileName, exported) : 'UNRESOLVED'}`;
+    }
+    case 'query':
+    case 'task':
+      return `${factory}:${exported ? requestCompilerSemanticRegistryKey(fileName, exported) : fileName}`;
+    case 'webhook': {
+      const definitionSource = args.length >= 2 ? args[1] : first;
+      const definition =
+        definitionSource && Node.isObjectLiteralExpression(definitionSource)
+          ? definitionSource
+          : undefined;
+      const path = definition
+        ? requestCompilerSemanticStaticObjectString(definition, 'path')
+        : undefined;
+      return `webhook:${path ?? exported ?? 'UNRESOLVED'}`;
+    }
+  }
+}
+
+function requestCompilerSemanticStaticString(expression: Node | undefined): string | undefined {
+  return expression &&
+    (Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression))
+    ? expression.getLiteralText()
+    : undefined;
+}
+
+function requestCompilerSemanticStaticObjectString(
+  object: import('ts-morph').ObjectLiteralExpression,
+  propertyName: string,
+): string | undefined {
+  const matches = object
+    .getProperties()
+    .filter(
+      (property) =>
+        Node.isPropertyAssignment(property) &&
+        staticMemberName(property.getNameNode()) === propertyName,
+    );
+  if (matches.length !== 1) return undefined;
+  const match = matches[0];
+  return match && Node.isPropertyAssignment(match)
+    ? requestCompilerSemanticStaticString(match.getInitializer())
+    : undefined;
+}
+
+function requestCompilerSemanticExportedConstName(
+  call: import('ts-morph').CallExpression,
+): string | undefined {
+  const declaration = call.getParentIfKind(SyntaxKind.VariableDeclaration);
+  const statement = declaration?.getVariableStatement();
+  const name = declaration?.getNameNode();
+  return declaration &&
+    statement?.isExported() &&
+    statement.getDeclarationKind() === VariableDeclarationKind.Const &&
+    declaration.getInitializer() === call &&
+    name &&
+    Node.isIdentifier(name)
+    ? name.getText()
+    : undefined;
+}
+
+function requestCompilerSemanticRegistryKey(fileName: string, exported: string): string {
+  const normalized = fileName.replaceAll('\\', '/').replace(/\.[^./]+$/u, '');
+  const parts = normalized.split('/').filter((part) => part.length > 0);
+  let root: number | undefined;
+  for (let index = 0; index <= parts.length - 3; index += 1) {
+    if (
+      parts[index] === 'tests' &&
+      parts[index + 1] === 'integration' &&
+      parts[index + 2] === 'fixtures'
+    ) {
+      root = index + 2;
+      break;
+    }
+  }
+  if (root === undefined) {
+    for (let index = parts.length - 1; index >= 0; index -= 1) {
+      if (parts[index] === 'src') {
+        root = index;
+        break;
+      }
+    }
+  }
+  const names = parts
+    .slice(root === undefined ? 0 : root + 1)
+    .map(requestCompilerSemanticKebabCase);
+  names.push(requestCompilerSemanticKebabCase(exported));
+  return names.join('/');
+}
+
+function requestCompilerSemanticKebabCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/gu, '$1-$2')
+    .replace(/_/gu, '-')
+    .toLowerCase();
+}
+
+function requestCompilerSemanticCallbackForFactory(
+  factory: SecuritySemanticRootBinding['factory'],
+): SecuritySemanticRootBinding['callback'] {
+  switch (factory) {
+    case 'query':
+      return 'load';
+    case 'task':
+      return 'run';
+    case 'endpoint':
+    case 'mutation':
+    case 'webhook':
+      return 'handler';
+  }
+}
+
+function requestCompilerSemanticSpanIsValid(
+  span: { readonly end: number; readonly start: number },
+  sourceLength: number,
+): boolean {
+  return (
+    Number.isSafeInteger(span.start) &&
+    Number.isSafeInteger(span.end) &&
+    span.start >= 0 &&
+    span.end > span.start &&
+    span.end <= sourceLength
+  );
+}
+
+function requestCompilerSemanticAuthorityInputsAreExact(values: readonly string[]): boolean {
+  const indexes = new Set<number>();
+  let previous = -1;
+  for (const value of values) {
+    const match = /^arg(\d+)=(.+)$/u.exec(value);
+    if (!match) return false;
+    const index = Number(match[1]);
+    if (!Number.isSafeInteger(index) || index <= previous || indexes.has(index)) return false;
+    indexes.add(index);
+    previous = index;
+  }
+  return true;
+}
+
+function requestCompilerSemanticOperationInventoryIsExact(
+  values: readonly ServerSecurityOperationKind[],
+): boolean {
+  const unique = new Set<ServerSecurityOperationKind>();
+  for (const value of values) {
+    if (!runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, value) || unique.has(value)) {
+      return false;
+    }
+    unique.add(value);
+  }
+  return true;
+}
+
+function requestCompilerSemanticFactSignature(fact: {
+  readonly authorityInputs: readonly string[];
+  readonly callable: string;
+  readonly callableSpan: { readonly end: number; readonly start: number };
+  readonly operationKinds: readonly ServerSecurityOperationKind[];
+  readonly verdict: 'closed' | 'proved';
+}): string {
+  return [
+    fact.callable,
+    fact.callableSpan.start,
+    fact.callableSpan.end,
+    fact.authorityInputs.length,
+    ...fact.authorityInputs,
+    fact.operationKinds.length,
+    ...fact.operationKinds,
+    fact.verdict,
+  ]
+    .map((value) => `${String(value).length}:${String(value)}`)
+    .join('|');
 }
 
 function scanRequestModuleInitializers(
@@ -32173,7 +32524,14 @@ function requestExactClosedDeclaredRootHelperContexts(
       expectedRoles = roleKey;
       contexts.push({
         ...direct,
-        ...(requestCompilerSemanticProofMatchesContext(compilerProofs, roles, declaration, root)
+        ...(requestCompilerSemanticProofMatchesContext(
+          compilerProofs,
+          roles,
+          declaration,
+          root,
+          call,
+          session,
+        )
           ? { compilerSemanticHelper: true }
           : {}),
         declaredRootHelper: true,
@@ -32206,12 +32564,28 @@ function requestCompilerSemanticProofMatchesContext(
   roles: readonly RequestRootParameterRole[],
   declaration: Node,
   root: RequestCallable,
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
 ): boolean {
+  // SPEC §6.6 normalized-helper provenance: this Drizzle consumer uses semantic facts only to
+  // admit the exact DB/plain-data helper grammar. Reconstruct the root, authority arguments, and
+  // complete DB terminal projection from the authored AST; non-DB terminal claims remain audit
+  // evidence and grant no authority here.
   const callableName = requestCompilerSemanticCallableName(declaration);
   const rootFactory = root.rootFactory;
   if (!callableName || !rootFactory || !requestCompilerSemanticRootCallbackMatches(root)) {
     return false;
   }
+  const rootFactoryCall = requestExactDirectRootFactoryCall(root, session);
+  if (!rootFactoryCall) return false;
+  const expectedAuthorityInputs = requestCompilerSemanticAuthorityInputsForCall(call, root, roles);
+  if (!expectedAuthorityInputs) return false;
+  const expectedDatabaseOperations = requestCompilerSemanticDatabaseOperationsForDeclaration(
+    declaration,
+    roles,
+    session,
+  );
+  if (!expectedDatabaseOperations) return false;
   const exactRoot = proofs[0]?.root;
   if (
     !exactRoot ||
@@ -32222,36 +32596,165 @@ function requestCompilerSemanticProofMatchesContext(
     return false;
   }
   return proofs.some((proof) => {
+    const binding = proof.rootBinding;
     if (
       proof.callable !== `local:${callableName}` ||
       proof.root !== exactRoot ||
+      proof.callSpan.start !== call.getStart() ||
+      proof.callSpan.end !== call.getEnd() ||
+      binding.root !== exactRoot ||
+      binding.factory !== rootFactory ||
+      binding.callback !== root.rootCallback ||
+      binding.callableSpan.start !== root.declaration.getStart() ||
+      binding.callableSpan.end !== root.declaration.getEnd() ||
+      binding.factoryCallSpan.start !== rootFactoryCall.getStart() ||
+      binding.factoryCallSpan.end !== rootFactoryCall.getEnd() ||
+      proof.authorityInputs.length !== expectedAuthorityInputs.length ||
+      proof.authorityInputs.some(
+        (authority, index) => authority !== expectedAuthorityInputs[index],
+      ) ||
+      !requestCompilerSemanticDatabaseOperationInventoryMatches(
+        proof.operationKinds,
+        expectedDatabaseOperations,
+      ) ||
       proof.operationKinds.some(
         (kind) => !runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, kind),
       )
     ) {
       return false;
     }
-    const actualAuthority = new Map<number, string>();
-    for (const authorityInput of proof.authorityInputs) {
-      const match = /^arg(\d+)=(.+)$/u.exec(authorityInput);
-      if (!match) return false;
-      const index = Number(match[1]);
-      const provenance = match[2];
-      if (
-        !Number.isSafeInteger(index) ||
-        index < 0 ||
-        provenance === undefined ||
-        actualAuthority.has(index)
-      ) {
-        return false;
-      }
-      actualAuthority.set(index, provenance);
-    }
-    if (actualAuthority.size > roles.length) return false;
-    return roles.every((role, index) =>
-      requestCompilerSemanticAuthorityMatchesRole(actualAuthority.get(index), role, rootFactory),
-    );
+    return true;
   });
+}
+
+function requestCompilerSemanticDatabaseOperationsForDeclaration(
+  declaration: Node,
+  roles: readonly RequestRootParameterRole[],
+  session: RequestProvenanceSession,
+): ReadonlySet<ServerSecurityOperationKind> | undefined {
+  const key = `${requestNodeIdentity(declaration)}:${roles.join(',')}`;
+  const cached = session.compilerSemanticDatabaseOperationsMemo.get(key);
+  if (cached !== undefined) return cached ?? undefined;
+  const direct = requestCallableForFunctionNode(declaration);
+  if (!direct) {
+    session.compilerSemanticDatabaseOperationsMemo.set(key, null);
+    return undefined;
+  }
+  const callable: RequestCallable = {
+    ...direct,
+    declaredRootHelper: true,
+    rootParameterRoles: roles,
+  };
+  const operations = new Set<ServerSecurityOperationKind>();
+  for (const call of direct.body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!nodeBelongsToRequestCallable(call, callable)) continue;
+    if (requestCallIsExactKovoTrustedSql(call)) {
+      operations.add('server.database.trusted-sql');
+      continue;
+    }
+    const callee = unwrapStaticExpression(call.getExpression());
+    const member = requestStaticCallMember(callee);
+    if (!member || !requestCallIsReviewedDrizzleDbDataCall(call, callable)) continue;
+    if (REQUEST_REVIEWED_DRIZZLE_DB_READ_ROOT_METHODS.has(member)) {
+      operations.add('server.database.read');
+    } else if (member === 'delete' || member === 'insert' || member === 'update') {
+      operations.add('server.database.write');
+    }
+  }
+  session.compilerSemanticDatabaseOperationsMemo.set(key, operations);
+  return operations;
+}
+
+function requestCompilerSemanticDatabaseOperationInventoryMatches(
+  claimed: readonly ServerSecurityOperationKind[],
+  expected: ReadonlySet<ServerSecurityOperationKind>,
+): boolean {
+  const actual = new Set(
+    claimed.filter(
+      (kind) =>
+        kind === 'server.database.read' ||
+        kind === 'server.database.trusted-sql' ||
+        kind === 'server.database.write',
+    ),
+  );
+  return actual.size === expected.size && [...actual].every((kind) => expected.has(kind));
+}
+
+function requestCompilerSemanticAuthorityInputsForCall(
+  call: import('ts-morph').CallExpression,
+  root: RequestCallable,
+  roles: readonly RequestRootParameterRole[],
+): string[] | undefined {
+  const result: string[] = [];
+  const args = call.getArguments();
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (!argument || Node.isSpreadElement(argument)) return undefined;
+    const provenance = requestCompilerSemanticExactArgumentProvenance(argument, root);
+    const role = roles[index];
+    if (provenance === undefined) {
+      if (role === 'capability' || (role === 'request' && root.rootFactory === 'mutation')) {
+        return undefined;
+      }
+      continue;
+    }
+    result.push(`arg${index}=${provenance}`);
+  }
+  return result;
+}
+
+function requestCompilerSemanticExactArgumentProvenance(
+  expression: Node,
+  root: RequestCallable,
+): string | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (requestExpressionResolvesToExactRequestDbCapability(node, root, new Set())) {
+    return 'database';
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    const receiver = node.getExpression();
+    if (
+      member &&
+      (member === 'db' || member === 'readonlyAppDb' || member === 'tx') &&
+      requestExpressionIsDirectRootParameterWithRole(receiver, root, 'capability')
+    ) {
+      return 'database';
+    }
+    if (
+      member &&
+      requestExpressionIsDirectRootParameterWithRole(receiver, root, 'capability') &&
+      (member === 'headers' || member === 'request' || member === 'respond' || member === 'storage')
+    ) {
+      return member;
+    }
+  }
+  if (requestExpressionIsDirectRootParameterWithRole(node, root, 'capability')) return 'context';
+  return root.rootFactory === 'mutation' &&
+    requestExpressionIsDirectRootParameterWithRole(node, root, 'request')
+    ? 'request'
+    : undefined;
+}
+
+function requestExactDirectRootFactoryCall(
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): import('ts-morph').CallExpression | undefined {
+  const definition = requestExactDirectRootDefinition(callable, session);
+  if (!definition) return undefined;
+  let current: Node = definition;
+  while (
+    Node.isParenthesizedExpression(current.getParent()) ||
+    Node.isAsExpression(current.getParent()) ||
+    Node.isSatisfiesExpression(current.getParent()) ||
+    Node.isTypeAssertion(current.getParent()) ||
+    Node.isNonNullExpression(current.getParent())
+  ) {
+    current = current.getParent()!;
+  }
+  return current.getParentIfKind(SyntaxKind.CallExpression);
 }
 
 function requestCompilerSemanticCallableName(declaration: Node): string | undefined {
@@ -32282,33 +32785,6 @@ function requestCompilerSemanticRootCallbackMatches(root: RequestCallable): bool
       return root.rootCallback === 'load';
     case 'task':
       return root.rootCallback === 'run';
-    default:
-      return false;
-  }
-}
-
-function requestCompilerSemanticAuthorityMatchesRole(
-  provenance: string | undefined,
-  role: RequestRootParameterRole,
-  rootFactory: RequestHandlerFactoryName,
-): boolean {
-  if (role === 'input' || role === 'stream-controller') return provenance === undefined;
-  if (role === 'request') {
-    return rootFactory === 'mutation' ? provenance === 'request' : provenance === undefined;
-  }
-  if (provenance === undefined) return false;
-  switch (provenance) {
-    case 'context':
-    case 'database':
-    case 'database-read-namespace':
-    case 'database-relational-query-namespace':
-    case 'database-relational-table-namespace':
-    case 'database-table-namespace':
-    case 'database-write-namespace':
-    case 'headers':
-    case 'respond':
-    case 'storage':
-      return true;
     default:
       return false;
   }
