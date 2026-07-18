@@ -898,6 +898,225 @@ export const report = endpoint('/report', {
   }, 60_000);
 
   it.each([
+    ['direct assignment', 'helper = replacement;'],
+    ['array destructuring assignment', '[helper] = [replacement];'],
+    ['array rest assignment', '[...helper] = [replacement];'],
+    ['object shorthand assignment', '({ helper } = { helper: replacement });'],
+    ['object property assignment', '({ next: helper } = { next: replacement });'],
+    ['object rest assignment', '({ ...helper } = { next: replacement });'],
+    ['prefix update', '++helper;'],
+    ['postfix update', 'helper++;'],
+  ])('keeps %s closed through the conservative source index', (_label, assignment) => {
+    // SPEC §6.6 / C13: indexing is a performance repair, not a narrower reassignment classifier.
+    // Preserve the old spelling-based closure across every assignment-target shape it recognized.
+    const diagnostics = kv449(`
+import { endpoint } from '@kovojs/server';
+function helper(database) { return database.select(); }
+function replacement(_database) { return null; }
+${assignment}
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+  });
+
+  it('preserves indexed declaration multiplicity, order, hoisting, and lexical shadowing', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+const helper = (database) => database.select();
+const helper = (database) => database.select();
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+`),
+    ).not.toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+const helper = (database) => database.select();
+`),
+    ).not.toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+function helper(database) { return database.select(); }
+export const report = endpoint('/report', {
+  handler(_input, ctx) {
+    {
+      let helper = (_database) => null;
+      helper(ctx.db);
+    }
+    return Response.json({ ok: true });
+  },
+});
+`),
+    ).not.toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+function helper(database) { return database.select(); }
+`),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'function declarations',
+      `function helper(database) { return database.select(); }
+function helper(database) { return database.select(); }`,
+    ],
+    [
+      'const declarations',
+      `const helper = (database) => database.select();
+const helper = (database) => database.select();`,
+    ],
+    [
+      'import declarations',
+      `import { helper } from 'first-foreign-package';
+import { other as helper } from 'second-foreign-package';`,
+    ],
+  ])('fails closed for duplicate indexed %s', (_label, declarations) => {
+    // SPEC §6.6: an indexed lookup must retain the old exact-one-declaration requirement.
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+${declarations}
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('distinguishes hoisted function callables from ordered const callables', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+function helper(database) { return database.select(); }
+`),
+    ).toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+const helper = (database) => database.select();
+`),
+    ).not.toEqual([]);
+  });
+
+  it('indexes exported const and function helper declarations with their original ordering', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const helper = (database) => database.select();
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+`),
+    ).toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+export function helper(database) { return database.select(); }
+`),
+    ).toEqual([]);
+  });
+
+  it('keeps same-spelling shadow assignments conservatively closing module aliases', () => {
+    // The pre-index classifier was deliberately name-wide: even a lexically shadowed assignment
+    // closed an authority-bearing module alias. The source index must remain a C13 superset.
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+const RawResponse = Response;
+function unrelated() {
+  let RawResponse = 'plain';
+  RawResponse = 'still plain';
+  return RawResponse;
+}
+export const report = endpoint('/report', {
+  handler() { return RawResponse.json({ ok: true }); },
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('keeps cached module facts immutable across parent, sibling, and root overlays', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+const RawResponse = Response;
+function nestedResponse() {
+  return RawResponse.json({ nested: true });
+}
+function first(database) {
+  const RawResponse = database;
+  nestedResponse();
+  return database.select();
+}
+function second(database) {
+  return database.select();
+}
+export const report = endpoint('/report', {
+  handler(_input, ctx) {
+    first(ctx.db);
+    second(ctx.db);
+    return RawResponse.json({ ok: true });
+  },
+});
+export const clean = endpoint('/clean', {
+  handler() { return RawResponse.json({ clean: true }); },
+});
+`);
+    const roots = result.componentGraphFacts[0]?.securitySemanticGraph?.roots ?? [];
+    const report = roots.find((root) => root.root === 'endpoint:/report');
+    const clean = roots.find((root) => root.root === 'endpoint:/clean');
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).not.toEqual([]);
+    expect(report?.summaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ callable: 'local:first', verdict: 'closed' }),
+        expect.objectContaining({ callable: 'local:second', verdict: 'proved' }),
+      ]),
+    );
+    expect(report?.helperInvocations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ callable: 'local:nestedResponse', verdict: 'closed' }),
+      ]),
+    );
+    expect(clean?.traces.every((trace) => trace.verdict === 'proved')).toBe(true);
+    expect(clean?.traces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: expect.objectContaining({ kind: 'server.response.raw' }),
+          verdict: 'proved',
+        }),
+      ]),
+    );
+  });
+
+  it.each([
     [
       'operation-function member laundering',
       `const outbound = ctx.fetch.bind(null); await outbound('https://api.example.test')`,

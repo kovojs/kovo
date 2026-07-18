@@ -35,6 +35,7 @@ import {
   compilerOwnDataValue,
   compilerSetAdd,
   compilerSetDelete,
+  compilerSetForEach,
   compilerSetHas,
   compilerSnapshotDenseArray,
   compilerStringSlice,
@@ -204,6 +205,253 @@ const serverReviewedDatabaseBuilderMethods = finiteStringSet([
   'where',
 ]);
 const serverReviewedDatabaseSchemaValueCache = compilerCreateWeakMap<ts.Expression, boolean>();
+
+interface SecurityIrIndexedDeclarationFact {
+  callable?: ResolvedSecurityIrCallable;
+  callableStart?: number;
+  immutableInitializer?: ts.Expression;
+  immutableStart?: number;
+  matches: number;
+}
+
+interface SecurityIrSourceIndex {
+  readonly assignedNames: ReadonlySet<string>;
+  readonly declarationsByContainer: WeakMap<
+    ts.Block | ts.SourceFile,
+    ReadonlyMap<string, SecurityIrIndexedDeclarationFact>
+  >;
+  readonly foreignImportNames: ReadonlySet<string>;
+  readonly moduleConstDeclarations: readonly ts.VariableDeclaration[];
+}
+
+const securityIrSourceIndexCache = compilerCreateWeakMap<ts.SourceFile, SecurityIrSourceIndex>();
+
+/**
+ * SPEC §5.2/§6.6 source boundary index. The AST is immutable after parsing, so one conservative
+ * spelling-based pass can retain the exact old assignment and declaration answers without
+ * rescanning the entire source for every helper edge.
+ */
+function securityIrSourceIndex(sourceFile: ts.SourceFile): SecurityIrSourceIndex {
+  const cached = compilerWeakMapGet(securityIrSourceIndexCache, sourceFile);
+  if (cached) return cached;
+
+  const assignedNames = compilerCreateSet<string>();
+  const declarationsByContainer = compilerCreateWeakMap<
+    ts.Block | ts.SourceFile,
+    ReadonlyMap<string, SecurityIrIndexedDeclarationFact>
+  >();
+  const foreignImportNames = compilerCreateSet<string>();
+  const moduleConstDeclarations: ts.VariableDeclaration[] = [];
+
+  const indexContainer = (container: ts.Block | ts.SourceFile): void => {
+    const declarations = compilerCreateMap<string, SecurityIrIndexedDeclarationFact>();
+    const statements = compilerSnapshotDenseArray(
+      container.statements,
+      'Finite security-IR indexed statements',
+    );
+    for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+      const statement = statements[statementIndex]!;
+      if (ts.isFunctionDeclaration(statement) && statement.name) {
+        securityIrIndexDeclaration(declarations, statement.name.text, {
+          ...(statement.body
+            ? {
+                callable: {
+                  body: statement.body,
+                  declaration: statement,
+                  name: statement.name.text,
+                  parameters: statement.parameters,
+                },
+              }
+            : {}),
+        });
+        continue;
+      }
+      if ((ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) && statement.name) {
+        securityIrIndexDeclaration(declarations, statement.name.text);
+        continue;
+      }
+      if (ts.isImportDeclaration(statement)) {
+        const importNames = securityIrImportBindingNames(statement);
+        compilerSetForEach(importNames, (name) => {
+          securityIrIndexDeclaration(declarations, name);
+          if (ts.isSourceFile(container)) compilerSetAdd(foreignImportNames, name);
+        });
+        continue;
+      }
+      if (!ts.isVariableStatement(statement)) continue;
+      const isConst = (statement.declarationList.flags & ts.NodeFlags.Const) !== 0;
+      const variableDeclarations = compilerSnapshotDenseArray(
+        statement.declarationList.declarations,
+        'Finite security-IR indexed declarations',
+      );
+      for (
+        let declarationIndex = 0;
+        declarationIndex < variableDeclarations.length;
+        declarationIndex += 1
+      ) {
+        const declaration = variableDeclarations[declarationIndex]!;
+        if (ts.isSourceFile(container) && isConst) {
+          compilerArrayAppend(
+            moduleConstDeclarations,
+            declaration,
+            'Finite security-IR module const declarations',
+          );
+        }
+        const names = compilerCreateSet<string>();
+        collectBindingNames(declaration.name, names);
+        compilerSetForEach(names, (name) => {
+          const initializer = declaration.initializer && unwrapExpression(declaration.initializer);
+          const exactIdentifier =
+            ts.isIdentifier(declaration.name) && declaration.name.text === name;
+          const declarationStart = declaration.getStart(sourceFile);
+          securityIrIndexDeclaration(declarations, name, {
+            ...(exactIdentifier && isConst && declaration.initializer
+              ? {
+                  immutableInitializer: declaration.initializer,
+                  immutableStart: declarationStart,
+                }
+              : {}),
+            ...(exactIdentifier &&
+            isConst &&
+            initializer &&
+            (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+              ? {
+                  callable: {
+                    body: initializer.body,
+                    declaration: initializer,
+                    name,
+                    parameters: initializer.parameters,
+                  },
+                  callableStart: declarationStart,
+                }
+              : {}),
+          });
+        });
+      }
+    }
+    compilerWeakMapSet(declarationsByContainer, container, declarations);
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isSourceFile(node) || ts.isBlock(node)) indexContainer(node);
+    if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
+      collectSecurityIrAssignmentTargetNames(node.left, assignedNames);
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      ts.isIdentifier(node.operand)
+    ) {
+      compilerSetAdd(assignedNames, node.operand.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  const index: SecurityIrSourceIndex = {
+    assignedNames,
+    declarationsByContainer,
+    foreignImportNames,
+    moduleConstDeclarations,
+  };
+  compilerWeakMapSet(securityIrSourceIndexCache, sourceFile, index);
+  return index;
+}
+
+function securityIrIndexDeclaration(
+  declarations: Map<string, SecurityIrIndexedDeclarationFact>,
+  name: string,
+  candidate: Omit<SecurityIrIndexedDeclarationFact, 'matches'> = {},
+): void {
+  const fact = compilerMapGet(declarations, name) ?? { matches: 0 };
+  fact.matches += 1;
+  if (candidate.callable) fact.callable = candidate.callable;
+  if (candidate.callableStart !== undefined) fact.callableStart = candidate.callableStart;
+  if (candidate.immutableInitializer) {
+    fact.immutableInitializer = candidate.immutableInitializer;
+  }
+  if (candidate.immutableStart !== undefined) fact.immutableStart = candidate.immutableStart;
+  compilerMapSet(declarations, name, fact);
+}
+
+function securityIrImportBindingNames(statement: ts.ImportDeclaration): Set<string> {
+  const names = compilerCreateSet<string>();
+  const clause = statement.importClause;
+  if (!clause) return names;
+  if (clause.name) compilerSetAdd(names, clause.name.text);
+  const bindings = clause.namedBindings;
+  if (!bindings) return names;
+  if (ts.isNamespaceImport(bindings)) {
+    compilerSetAdd(names, bindings.name.text);
+    return names;
+  }
+  const elements = compilerSnapshotDenseArray(bindings.elements, 'Finite security-IR imports');
+  for (let index = 0; index < elements.length; index += 1) {
+    compilerSetAdd(names, elements[index]!.name.text);
+  }
+  return names;
+}
+
+function securityIrDeclarationFact(
+  sourceFile: ts.SourceFile,
+  container: ts.Block | ts.SourceFile,
+  name: string,
+): SecurityIrIndexedDeclarationFact | undefined {
+  const declarations = compilerWeakMapGet(
+    securityIrSourceIndex(sourceFile).declarationsByContainer,
+    container,
+  );
+  if (!declarations) {
+    compilerFailClosed('Security-IR declaration index omitted a lexical statement container.');
+  }
+  return compilerMapGet(declarations, name);
+}
+
+function collectSecurityIrAssignmentTargetNames(node: ts.Node, names: Set<string>): void {
+  const current =
+    ts.isExpression(node) &&
+    (ts.isParenthesizedExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isTypeAssertionExpression(node) ||
+      ts.isNonNullExpression(node) ||
+      ts.isSatisfiesExpression(node))
+      ? unwrapExpression(node)
+      : node;
+  if (ts.isIdentifier(current)) {
+    compilerSetAdd(names, current.text);
+    return;
+  }
+  if (ts.isArrayLiteralExpression(current)) {
+    const elements = compilerSnapshotDenseArray(
+      current.elements,
+      'Finite security-IR assignment targets',
+    );
+    for (let index = 0; index < elements.length; index += 1) {
+      collectSecurityIrAssignmentTargetNames(elements[index]!, names);
+    }
+    return;
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    const properties = compilerSnapshotDenseArray(
+      current.properties,
+      'Finite security-IR assignment targets',
+    );
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      if (ts.isShorthandPropertyAssignment(property)) {
+        compilerSetAdd(names, property.name.text);
+      } else if (ts.isPropertyAssignment(property)) {
+        collectSecurityIrAssignmentTargetNames(property.initializer, names);
+      } else if (ts.isSpreadAssignment(property)) {
+        collectSecurityIrAssignmentTargetNames(property.expression, names);
+      }
+    }
+  }
+  if (ts.isSpreadElement(current)) {
+    collectSecurityIrAssignmentTargetNames(current.expression, names);
+  }
+}
 const browserPureGlobalMemberCalls = finiteStringSet([
   'Array.from',
   'Array.isArray',
@@ -391,11 +639,7 @@ export function resolveSameFileSecurityIrCallable(
   let cursor: ts.Node | undefined = current.parent;
   while (cursor) {
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
-      const resolved = securityIrCallableDeclaredInStatements(
-        sourceFile,
-        current,
-        cursor.statements,
-      );
+      const resolved = securityIrCallableDeclaredInStatements(sourceFile, current, cursor);
       if (resolved.matched) return resolved.callable;
       if (ts.isSourceFile(cursor)) return undefined;
     }
@@ -555,11 +799,7 @@ function securityIrImmutableBindingInitializer(
   let cursor: ts.Node | undefined = use.parent;
   while (cursor) {
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
-      const resolved = securityIrImmutableBindingDeclaredInStatements(
-        sourceFile,
-        use,
-        cursor.statements,
-      );
+      const resolved = securityIrImmutableBindingDeclaredInStatements(sourceFile, use, cursor);
       if (resolved.matched) return resolved.initializer;
       if (ts.isSourceFile(cursor)) return undefined;
     }
@@ -589,185 +829,38 @@ function securityIrImmutableBindingInitializer(
 function securityIrImmutableBindingDeclaredInStatements(
   sourceFile: ts.SourceFile,
   use: ts.Identifier,
-  statementList: readonly ts.Statement[],
+  container: ts.Block | ts.SourceFile,
 ): { initializer?: ts.Expression; matched: boolean } {
-  let initializer: ts.Expression | undefined;
-  let matches = 0;
-  const statements = compilerSnapshotDenseArray(
-    statementList,
-    'Finite security-IR lexical statements',
-  );
-  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
-    const statement = statements[statementIndex]!;
-    if (
-      ((ts.isFunctionDeclaration(statement) ||
-        ts.isClassDeclaration(statement) ||
-        ts.isEnumDeclaration(statement)) &&
-        statement.name?.text === use.text) ||
-      (ts.isImportDeclaration(statement) && securityIrImportDeclaresName(statement, use.text))
-    ) {
-      matches += 1;
-      continue;
-    }
-    if (!ts.isVariableStatement(statement)) continue;
-    const declarations = compilerSnapshotDenseArray(
-      statement.declarationList.declarations,
-      'Finite security-IR lexical declarations',
-    );
-    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
-      const declaration = declarations[declarationIndex]!;
-      const names = compilerCreateSet<string>();
-      collectBindingNames(declaration.name, names);
-      if (!compilerSetHas(names, use.text)) continue;
-      matches += 1;
-      if (
-        ts.isIdentifier(declaration.name) &&
-        declaration.initializer &&
-        declaration.getStart(sourceFile) < use.getStart(sourceFile) &&
-        (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
-      ) {
-        initializer = declaration.initializer;
-      }
-    }
-  }
-  return { ...(matches === 1 && initializer ? { initializer } : {}), matched: matches > 0 };
+  const fact = securityIrDeclarationFact(sourceFile, container, use.text);
+  if (!fact) return { matched: false };
+  const initializer =
+    fact.matches === 1 &&
+    fact.immutableInitializer &&
+    fact.immutableStart !== undefined &&
+    fact.immutableStart < use.getStart(sourceFile)
+      ? fact.immutableInitializer
+      : undefined;
+  return { ...(initializer ? { initializer } : {}), matched: true };
 }
 
 function securityIrCallableDeclaredInStatements(
   sourceFile: ts.SourceFile,
   use: ts.Identifier,
-  statementList: readonly ts.Statement[],
+  container: ts.Block | ts.SourceFile,
 ): { callable?: ResolvedSecurityIrCallable; matched: boolean } {
-  let callable: ResolvedSecurityIrCallable | undefined;
-  let matches = 0;
-  const statements = compilerSnapshotDenseArray(
-    statementList,
-    'Finite security-IR lexical statements',
-  );
-  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
-    const statement = statements[statementIndex]!;
-    if (ts.isFunctionDeclaration(statement) && statement.name?.text === use.text) {
-      matches += 1;
-      if (statement.body) {
-        callable = {
-          body: statement.body,
-          declaration: statement,
-          name: use.text,
-          parameters: statement.parameters,
-        };
-      }
-      continue;
-    }
-    if (
-      ((ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) &&
-        statement.name?.text === use.text) ||
-      (ts.isImportDeclaration(statement) && securityIrImportDeclaresName(statement, use.text))
-    ) {
-      matches += 1;
-      continue;
-    }
-    if (!ts.isVariableStatement(statement)) continue;
-    const declarations = compilerSnapshotDenseArray(
-      statement.declarationList.declarations,
-      'Finite security-IR lexical declarations',
-    );
-    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
-      const declaration = declarations[declarationIndex]!;
-      const names = compilerCreateSet<string>();
-      collectBindingNames(declaration.name, names);
-      if (!compilerSetHas(names, use.text)) continue;
-      matches += 1;
-      if (!ts.isIdentifier(declaration.name)) continue;
-      const initializer = declaration.initializer && unwrapExpression(declaration.initializer);
-      if (
-        declaration.getStart(sourceFile) < use.getStart(sourceFile) &&
-        (statement.declarationList.flags & ts.NodeFlags.Const) !== 0 &&
-        initializer &&
-        (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
-      ) {
-        callable = {
-          body: initializer.body,
-          declaration: initializer,
-          name: use.text,
-          parameters: initializer.parameters,
-        };
-      }
-    }
-  }
-  return { ...(matches === 1 && callable ? { callable } : {}), matched: matches > 0 };
+  const fact = securityIrDeclarationFact(sourceFile, container, use.text);
+  if (!fact) return { matched: false };
+  const callable =
+    fact.matches === 1 &&
+    fact.callable &&
+    (fact.callableStart === undefined || fact.callableStart < use.getStart(sourceFile))
+      ? fact.callable
+      : undefined;
+  return { ...(callable ? { callable } : {}), matched: true };
 }
 
 function moduleBindingIsAssigned(sourceFile: ts.SourceFile, name: string): boolean {
-  let assigned = false;
-  const visit = (node: ts.Node): void => {
-    if (assigned) return;
-    if (
-      ts.isBinaryExpression(node) &&
-      isAssignmentOperator(node.operatorToken.kind) &&
-      securityIrAssignmentTargetContainsName(node.left, name)
-    ) {
-      assigned = true;
-      return;
-    }
-    if (
-      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
-      (node.operator === ts.SyntaxKind.PlusPlusToken ||
-        node.operator === ts.SyntaxKind.MinusMinusToken) &&
-      ts.isIdentifier(node.operand) &&
-      node.operand.text === name
-    ) {
-      assigned = true;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return assigned;
-}
-
-function securityIrAssignmentTargetContainsName(node: ts.Node, name: string): boolean {
-  const current =
-    ts.isExpression(node) &&
-    (ts.isParenthesizedExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isTypeAssertionExpression(node) ||
-      ts.isNonNullExpression(node) ||
-      ts.isSatisfiesExpression(node))
-      ? unwrapExpression(node)
-      : node;
-  if (ts.isIdentifier(current)) return current.text === name;
-  if (ts.isArrayLiteralExpression(current)) {
-    const elements = compilerSnapshotDenseArray(
-      current.elements,
-      'Finite security-IR assignment targets',
-    );
-    for (let index = 0; index < elements.length; index += 1) {
-      if (securityIrAssignmentTargetContainsName(elements[index]!, name)) return true;
-    }
-    return false;
-  }
-  if (ts.isObjectLiteralExpression(current)) {
-    const properties = compilerSnapshotDenseArray(
-      current.properties,
-      'Finite security-IR assignment targets',
-    );
-    for (let index = 0; index < properties.length; index += 1) {
-      const property = properties[index]!;
-      if (
-        (ts.isShorthandPropertyAssignment(property) && property.name.text === name) ||
-        (ts.isPropertyAssignment(property) &&
-          securityIrAssignmentTargetContainsName(property.initializer, name)) ||
-        (ts.isSpreadAssignment(property) &&
-          securityIrAssignmentTargetContainsName(property.expression, name))
-      ) {
-        return true;
-      }
-    }
-  }
-  if (ts.isSpreadElement(current)) {
-    return securityIrAssignmentTargetContainsName(current.expression, name);
-  }
-  return false;
+  return compilerSetHas(securityIrSourceIndex(sourceFile).assignedNames, name);
 }
 
 function securityIrControlScopeDeclaresName(node: ts.Node, name: string): boolean {
@@ -826,7 +919,7 @@ function securityIrIdentifierBindingScope(
   let cursor: ts.Node | undefined = use.parent;
   while (cursor) {
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
-      if (securityIrStatementsDeclareName(cursor.statements, use.text)) {
+      if (securityIrDeclarationFact(sourceFile, cursor, use.text)) {
         return ts.isSourceFile(cursor) ? 'module' : 'local';
       }
       if (ts.isSourceFile(cursor)) return 'unresolved';
@@ -852,39 +945,6 @@ function securityIrIdentifierBindingScope(
     cursor = cursor.parent;
   }
   return sourceFile === use.getSourceFile() ? 'unresolved' : 'module';
-}
-
-function securityIrStatementsDeclareName(
-  statementList: readonly ts.Statement[],
-  name: string,
-): boolean {
-  const statements = compilerSnapshotDenseArray(
-    statementList,
-    'Finite security-IR lexical statements',
-  );
-  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
-    const statement = statements[statementIndex]!;
-    if (
-      ((ts.isFunctionDeclaration(statement) ||
-        ts.isClassDeclaration(statement) ||
-        ts.isEnumDeclaration(statement)) &&
-        statement.name?.text === name) ||
-      (ts.isImportDeclaration(statement) && securityIrImportDeclaresName(statement, name))
-    ) {
-      return true;
-    }
-    if (!ts.isVariableStatement(statement)) continue;
-    const declarations = compilerSnapshotDenseArray(
-      statement.declarationList.declarations,
-      'Finite security-IR lexical declarations',
-    );
-    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
-      const names = compilerCreateSet<string>();
-      collectBindingNames(declarations[declarationIndex]!.name, names);
-      if (compilerSetHas(names, name)) return true;
-    }
-  }
-  return false;
 }
 
 function securityIrMemberCallableIsStable(
@@ -1409,11 +1469,31 @@ interface SecuritySemanticInvocationResult {
   readonly violations: readonly SecurityOperationViolationModel[];
 }
 
+interface ServerModuleAliasEnvironment {
+  readonly sourceFile: ts.SourceFile;
+  readonly values: ReadonlyMap<string, ServerValueProvenance>;
+}
+
+interface ServerAliasEnvironment {
+  readonly module: ServerModuleAliasEnvironment;
+  readonly sourceFile: ts.SourceFile;
+  readonly values: ReadonlyMap<string, ServerValueProvenance>;
+}
+
+const serverRootModuleAliasEnvironmentCache = compilerCreateWeakMap<
+  ts.SourceFile,
+  ServerModuleAliasEnvironment
+>();
+const serverInheritedModuleAliasEnvironmentCache = compilerCreateWeakMap<
+  ServerAliasEnvironment,
+  ServerModuleAliasEnvironment
+>();
+
 interface SecuritySemanticHelperInvocation {
   readonly authorityInputs: readonly string[];
   readonly call: ts.CallExpression;
   readonly callable: ResolvedSecurityIrCallable;
-  readonly inheritedAliases: ReadonlyMap<string, ServerValueProvenance>;
+  readonly inheritedEnvironment: ServerAliasEnvironment;
   readonly parameterProvenances: readonly ServerValueProvenance[];
   readonly transfer: string;
   readonly unsupportedDetail?: string;
@@ -1445,7 +1525,7 @@ export function scanServerSecurityOperations(
     body,
     callable: undefined,
     depth: 0,
-    inheritedAliases: undefined,
+    inheritedEnvironment: undefined,
     parameterProvenances: undefined,
     parameters,
     root,
@@ -1471,7 +1551,7 @@ function analyzeServerSecurityCallable(options: {
   body: ts.ConciseBody;
   callable: ResolvedSecurityIrCallable | undefined;
   depth: number;
-  inheritedAliases: ReadonlyMap<string, ServerValueProvenance> | undefined;
+  inheritedEnvironment: ServerAliasEnvironment | undefined;
   parameterProvenances: readonly ServerValueProvenance[] | undefined;
   parameters: readonly ts.ParameterDeclaration[];
   root: string;
@@ -1484,7 +1564,7 @@ function analyzeServerSecurityCallable(options: {
     body,
     callable,
     depth,
-    inheritedAliases,
+    inheritedEnvironment,
     parameterProvenances,
     parameters,
     root,
@@ -1597,14 +1677,29 @@ function analyzeServerSecurityCallable(options: {
     } else {
       const directOperations: ServerSecurityOperationModel[] = [];
       const directViolations: SecurityOperationViolationModel[] = [];
+      const regionEnvironments: ServerAliasEnvironment[] = [];
       for (let index = 0; index < regionSnapshot.length; index += 1) {
+        const environment = serverAliasProvenance(
+          sourceFile,
+          regionSnapshot[index]!,
+          parameters,
+          surface,
+          parameterProvenances,
+          inheritedEnvironment,
+        );
+        compilerArrayAppend(
+          regionEnvironments,
+          environment,
+          'Semantic callable-region environments',
+        );
         const region = scanServerSecurityOperationsDirect(
           sourceFile,
           regionSnapshot[index]!,
           surface,
           parameters,
           parameterProvenances,
-          inheritedAliases,
+          inheritedEnvironment,
+          environment,
         );
         appendServerOperations(directOperations, region.operations);
         appendSemanticViolations(directViolations, region.violations);
@@ -1681,21 +1776,17 @@ function analyzeServerSecurityCallable(options: {
 
       if (!closed || state.operations <= SECURITY_SEMANTIC_OPERATION_BUDGET) {
         const helpers: SecuritySemanticHelperInvocation[] = [];
+        const regionEnvironmentSnapshot = compilerSnapshotDenseArray(
+          regionEnvironments,
+          'Semantic callable-region environments',
+        );
         for (let index = 0; index < regionSnapshot.length; index += 1) {
           const region = regionSnapshot[index]!;
-          const aliases = serverAliasProvenance(
-            sourceFile,
-            region,
-            parameters,
-            surface,
-            parameterProvenances,
-            inheritedAliases,
-          );
           const regionHelpers = semanticHelperInvocations(
             sourceFile,
             region,
             direct.operations,
-            aliases,
+            regionEnvironmentSnapshot[index]!,
           );
           const helperRegionSnapshot = compilerSnapshotDenseArray(
             regionHelpers,
@@ -1789,7 +1880,7 @@ function analyzeServerSecurityCallable(options: {
             body: helper.callable.body,
             callable: helper.callable,
             depth: depth + 1,
-            inheritedAliases: helper.inheritedAliases,
+            inheritedEnvironment: helper.inheritedEnvironment,
             parameterProvenances: helper.parameterProvenances,
             parameters: helper.callable.parameters,
             root,
@@ -1877,7 +1968,7 @@ function semanticHelperInvocations(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
   operations: readonly ServerSecurityOperationModel[],
-  aliases: ReadonlyMap<string, ServerValueProvenance>,
+  environment: ServerAliasEnvironment,
 ): SecuritySemanticHelperInvocation[] {
   const helperEdges = compilerCreateSet<string>();
   const operationSnapshot = compilerSnapshotDenseArray(
@@ -1904,7 +1995,7 @@ function semanticHelperInvocations(
       if (callable && edgeKey && compilerSetHas(helperEdges, edgeKey)) {
         compilerArrayAppend(
           helpers,
-          semanticHelperInvocation(sourceFile, node, callable, aliases),
+          semanticHelperInvocation(sourceFile, node, callable, environment),
           'Normalized semantic helper invocations',
         );
       }
@@ -1919,8 +2010,9 @@ function semanticHelperInvocation(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
   callable: ResolvedSecurityIrCallable,
-  aliases: ReadonlyMap<string, ServerValueProvenance>,
+  environment: ServerAliasEnvironment,
 ): SecuritySemanticHelperInvocation {
+  const aliases = environment.values;
   const argumentSnapshot = compilerSnapshotDenseArray(call.arguments, 'Semantic helper arguments');
   const parameterSnapshot = compilerSnapshotDenseArray(
     callable.parameters,
@@ -1979,7 +2071,7 @@ function semanticHelperInvocation(
     authorityInputs,
     call,
     callable,
-    inheritedAliases: aliases,
+    inheritedEnvironment: environment,
     parameterProvenances,
     transfer,
     ...(unsupportedDetail === undefined ? {} : { unsupportedDetail }),
@@ -2265,18 +2357,25 @@ function scanServerSecurityOperationsDirect(
   surface: SecurityOperationSurface,
   parameters: readonly ts.ParameterDeclaration[] = [],
   parameterProvenances?: readonly ServerValueProvenance[],
-  inheritedAliases?: ReadonlyMap<string, ServerValueProvenance>,
+  inheritedEnvironment?: ServerAliasEnvironment,
+  precomputedEnvironment?: ServerAliasEnvironment,
 ): SecurityOperationScanResult<ServerSecurityOperationModel> {
   const operations: ServerSecurityOperationModel[] = [];
   const violations: SecurityOperationViolationModel[] = [];
-  const aliases = serverAliasProvenance(
-    sourceFile,
-    body,
-    parameters,
-    surface,
-    parameterProvenances,
-    inheritedAliases,
-  );
+  const environment =
+    precomputedEnvironment ??
+    serverAliasProvenance(
+      sourceFile,
+      body,
+      parameters,
+      surface,
+      parameterProvenances,
+      inheritedEnvironment,
+    );
+  if (environment.sourceFile !== sourceFile) {
+    compilerFailClosed('Security-IR callable environment crossed an immutable source boundary.');
+  }
+  const aliases = environment.values;
   const appendOperation = (
     kind: ServerSecurityOperationKind,
     node: ts.Node,
@@ -2349,7 +2448,7 @@ function scanServerSecurityOperationsDirect(
             surface,
             node.parameters,
             undefined,
-            aliases,
+            environment,
           );
           appendServerOperations(operations, callback.operations);
           appendSemanticViolations(violations, callback.violations);
@@ -3361,74 +3460,11 @@ function serverAliasProvenance(
   parameters: readonly ts.ParameterDeclaration[],
   surface: SecurityOperationSurface,
   parameterProvenances?: readonly ServerValueProvenance[],
-  inheritedAliases?: ReadonlyMap<string, ServerValueProvenance>,
-): ReadonlyMap<string, ServerValueProvenance> {
+  inheritedEnvironment?: ServerAliasEnvironment,
+): ServerAliasEnvironment {
+  const module = serverModuleAliasEnvironment(sourceFile, inheritedEnvironment);
   const aliases = compilerCreateMap<string, ServerValueProvenance>();
-  compilerMapSet(aliases, 'Response', 'response-constructor');
-  compilerMapSet(aliases, 'globalThis', 'global-object');
-  compilerMapSet(aliases, 'Object', 'intrinsic-object');
-  // Direct crypto.randomUUID() has one exact reviewed branch. Treat every other movement of the
-  // ambient executable object like foreign code so aliases and opaque containers stay KV449.
-  compilerMapSet(aliases, 'crypto', 'foreign-executable');
-  seedServerForeignImports(sourceFile, aliases);
-  if (inheritedAliases) {
-    compilerMapForEach(inheritedAliases, (value, name) => compilerMapSet(aliases, name, value));
-  }
-
-  // SPEC §5.2/§6.6: immutable module const aliases participate in the same provenance lattice as
-  // handler-local aliases. This closes Response aliases/containers without trusting spelling or
-  // re-reading a second source carrier.
-  let moduleChanged = true;
-  while (moduleChanged) {
-    moduleChanged = false;
-    const statements = compilerSnapshotDenseArray(
-      sourceFile.statements,
-      'Security-IR module alias statements',
-    );
-    for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
-      const statement = statements[statementIndex]!;
-      if (
-        !ts.isVariableStatement(statement) ||
-        (statement.declarationList.flags & ts.NodeFlags.Const) === 0
-      ) {
-        continue;
-      }
-      const declarations = compilerSnapshotDenseArray(
-        statement.declarationList.declarations,
-        'Security-IR module aliases',
-      );
-      for (
-        let declarationIndex = 0;
-        declarationIndex < declarations.length;
-        declarationIndex += 1
-      ) {
-        const declaration = declarations[declarationIndex]!;
-        const initializer = declaration.initializer;
-        if (!initializer) continue;
-        let provenance = serverExpressionProvenance(initializer, aliases);
-        if (
-          !serverProvenanceCarriesAuthority(provenance) &&
-          serverModuleInitializerReturnsAuthority(
-            sourceFile,
-            initializer,
-            aliases,
-            compilerCreateSet<string>(),
-            0,
-          )
-        ) {
-          provenance = 'unknown-authority';
-        }
-        if (
-          ts.isIdentifier(declaration.name) &&
-          moduleBindingIsAssigned(sourceFile, declaration.name.text) &&
-          serverProvenanceCarriesAuthority(provenance)
-        ) {
-          provenance = 'unknown-authority';
-        }
-        if (bindServerAliasPattern(declaration.name, provenance, aliases)) moduleChanged = true;
-      }
-    }
-  }
+  compilerMapForEach(module.values, (value, name) => compilerMapSet(aliases, name, value));
 
   const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Security-IR parameters');
   for (let index = 0; index < parameterSnapshot.length; index += 1) {
@@ -3469,37 +3505,96 @@ function serverAliasProvenance(
     };
     visit(body);
   }
-  return aliases;
+  return { module, sourceFile, values: aliases };
 }
 
-function seedServerForeignImports(
+function serverModuleAliasEnvironment(
   sourceFile: ts.SourceFile,
-  aliases: Map<string, ServerValueProvenance>,
-): void {
-  const statements = compilerSnapshotDenseArray(
-    sourceFile.statements,
-    'Security-IR imported executable bindings',
-  );
-  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
-    const statement = statements[statementIndex]!;
-    if (!ts.isImportDeclaration(statement)) continue;
-    const clause = statement.importClause;
-    if (!clause) continue;
-    if (clause.name) compilerMapSet(aliases, clause.name.text, 'foreign-executable');
-    const bindings = clause.namedBindings;
-    if (!bindings) continue;
-    if (ts.isNamespaceImport(bindings)) {
-      compilerMapSet(aliases, bindings.name.text, 'foreign-executable');
-      continue;
+  inheritedEnvironment?: ServerAliasEnvironment,
+): ServerModuleAliasEnvironment {
+  if (inheritedEnvironment) {
+    if (
+      inheritedEnvironment.sourceFile !== sourceFile ||
+      inheritedEnvironment.module.sourceFile !== sourceFile
+    ) {
+      compilerFailClosed('Security-IR inherited aliases crossed an immutable source boundary.');
     }
-    const elements = compilerSnapshotDenseArray(
-      bindings.elements,
-      'Security-IR imported executable names',
+    const inherited = compilerWeakMapGet(
+      serverInheritedModuleAliasEnvironmentCache,
+      inheritedEnvironment,
     );
-    for (let index = 0; index < elements.length; index += 1) {
-      compilerMapSet(aliases, elements[index]!.name.text, 'foreign-executable');
+    if (inherited) return inherited;
+  } else {
+    const root = compilerWeakMapGet(serverRootModuleAliasEnvironmentCache, sourceFile);
+    if (root) return root;
+  }
+
+  const aliases = compilerCreateMap<string, ServerValueProvenance>();
+  if (inheritedEnvironment) {
+    compilerMapForEach(inheritedEnvironment.values, (value, name) =>
+      compilerMapSet(aliases, name, value),
+    );
+  } else {
+    compilerMapSet(aliases, 'Response', 'response-constructor');
+    compilerMapSet(aliases, 'globalThis', 'global-object');
+    compilerMapSet(aliases, 'Object', 'intrinsic-object');
+    // Direct crypto.randomUUID() has one exact reviewed branch. Treat every other movement of the
+    // ambient executable object like foreign code so aliases and opaque containers stay KV449.
+    compilerMapSet(aliases, 'crypto', 'foreign-executable');
+    compilerSetForEach(securityIrSourceIndex(sourceFile).foreignImportNames, (name) =>
+      compilerMapSet(aliases, name, 'foreign-executable'),
+    );
+  }
+
+  // SPEC §5.2/§6.6: solve the exact old module-alias fixed point once for this immutable lexical
+  // parent. Caching by parent-environment identity preserves conservative name collisions while
+  // avoiding an O(helper-count * module-size) rewalk of emitted semantic graphs.
+  let moduleChanged = true;
+  while (moduleChanged) {
+    moduleChanged = false;
+    const declarations = compilerSnapshotDenseArray(
+      securityIrSourceIndex(sourceFile).moduleConstDeclarations,
+      'Security-IR module aliases',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
+      const declaration = declarations[declarationIndex]!;
+      const initializer = declaration.initializer;
+      if (!initializer) continue;
+      let provenance = serverExpressionProvenance(initializer, aliases);
+      if (
+        !serverProvenanceCarriesAuthority(provenance) &&
+        serverModuleInitializerReturnsAuthority(
+          sourceFile,
+          initializer,
+          aliases,
+          compilerCreateSet<string>(),
+          0,
+        )
+      ) {
+        provenance = 'unknown-authority';
+      }
+      if (
+        ts.isIdentifier(declaration.name) &&
+        moduleBindingIsAssigned(sourceFile, declaration.name.text) &&
+        serverProvenanceCarriesAuthority(provenance)
+      ) {
+        provenance = 'unknown-authority';
+      }
+      if (bindServerAliasPattern(declaration.name, provenance, aliases)) moduleChanged = true;
     }
   }
+
+  const environment: ServerModuleAliasEnvironment = { sourceFile, values: aliases };
+  if (inheritedEnvironment) {
+    compilerWeakMapSet(
+      serverInheritedModuleAliasEnvironmentCache,
+      inheritedEnvironment,
+      environment,
+    );
+  } else {
+    compilerWeakMapSet(serverRootModuleAliasEnvironmentCache, sourceFile, environment);
+  }
+  return environment;
 }
 
 function serverModuleInitializerReturnsAuthority(
