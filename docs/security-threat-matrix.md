@@ -6,6 +6,12 @@ an **audited escape hatch**, or an **explicit out-of-scope note (whose responsib
 **OPEN**. v1 does not freeze with an OPEN cell or an unresolved blocking external-audit finding (`rules/v1-acceptance.md`
 16.9). Threat categories: **C** confidentiality, **I** integrity, **A** availability, **Au** authenticity.
 
+`security/threat-matrix-coverage.json` is the machine-readable liveness projection of this table. The non-skippable
+`pnpm run check:threat-matrix` gate derives its denominators from the C9 source/sink registry, the audited trust and
+capability-kind registries, and the public capability-surface census. A new sink, named C9 escape hatch, audited escape
+kind, or public security capability fails the gate until it is explicitly assigned to one row and one or more C/I/A/Au
+cells with a live control, audit, or owned out-of-scope proof; removed items leave stale rows and fail too.
+
 ## The matrix
 
 | Surface                         | C (confidentiality)                                                                                                                       | I (integrity)                                                                                     | A (availability)                                                         | Au (authenticity)                                                                                            |
