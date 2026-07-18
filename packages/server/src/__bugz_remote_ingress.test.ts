@@ -1,0 +1,91 @@
+import { connect as connectHttp2, createServer as createHttp2Server } from 'node:http2';
+import type { AddressInfo } from 'node:net';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { createApp, createRequestHandler } from './app.js';
+import { mutation } from './mutation.js';
+import { toNodeHandler } from './node.js';
+import { s } from './schema.js';
+
+describe('remote ingress adversarial proofs', () => {
+  const cleanups: Array<() => Promise<void>> = [];
+
+  afterEach(async () => {
+    while (cleanups.length > 0) await cleanups.pop()!();
+  });
+
+  it('turns a distinct lowercase HTTP/2 method into canonical POST before dispatch', async () => {
+    let rawMethod = '';
+    let observedMethod = '';
+    let writes = 0;
+    const appHandler = createRequestHandler(
+      createApp({
+        mutations: [
+          mutation('audit/lowercase-h2-write', {
+            csrf: false,
+            csrfJustification: 'machine-call method differential proof',
+            handler: () => {
+              writes += 1;
+              return { ok: true };
+            },
+            input: s.object({}),
+          }),
+        ],
+      }),
+    );
+    const adapted = toNodeHandler(async (request) => {
+      observedMethod = request.method;
+      return appHandler(request);
+    });
+    const server = createHttp2Server(((request, response) => {
+      rawMethod = request.method;
+      return adapted(request as never, response as never);
+    }) as never);
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        }),
+    );
+
+    const address = server.address() as AddressInfo;
+    const client = connectHttp2(`http://127.0.0.1:${address.port}`);
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve) => {
+          client.once('close', resolve);
+          client.close();
+        }),
+    );
+
+    const result = await new Promise<{ body: string; status: number }>((resolve, reject) => {
+      const stream = client.request({
+        ':authority': 'app.example',
+        ':method': 'post',
+        ':path': '/_m/audit/lowercase-h2-write',
+        'content-type': 'application/x-www-form-urlencoded',
+      });
+      let body = '';
+      let status = 0;
+      stream.setEncoding('utf8');
+      stream.on('response', (headers) => {
+        status = Number(headers[':status']);
+      });
+      stream.on('data', (chunk) => {
+        body += chunk;
+      });
+      stream.once('error', reject);
+      stream.once('end', () => resolve({ body, status }));
+      stream.end();
+    });
+
+    expect(result).toEqual({ body: '', status: 303 });
+    expect(rawMethod).toBe('post');
+    expect(observedMethod).toBe('POST');
+    expect(writes).toBe(1);
+  });
+});
