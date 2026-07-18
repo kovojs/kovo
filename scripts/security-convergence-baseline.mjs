@@ -368,13 +368,30 @@ export async function main(options = {}) {
   const baselinePath = path.join(root, options.baselineFile ?? DEFAULT_BASELINE_FILE);
   const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
   const actual = collectSecurityConvergenceSnapshot({ repoRoot: root });
-  const findings = compareSnapshot(baseline.snapshot, actual);
-  if (baseline.schema !== 'kovo-security-convergence-record/v1') {
+  const findings = compareSnapshot(baseline.currentSnapshot?.snapshot, actual);
+  if (baseline.schema !== 'kovo-security-convergence-record/v2') {
     findings.push('committed convergence record schema is unsupported');
   }
-  const auditRoundSource = readFileSync(path.join(root, baseline.auditRound.file), 'utf8');
-  if (sha256(auditRoundSource) !== baseline.auditRound.sha256) {
-    findings.push('executed audit-round record drifted');
+  if (!/^[0-9a-f]{40}$/u.test(baseline.currentSnapshot?.measuredCodeSha ?? '')) {
+    findings.push('current structural snapshot is missing its exact measured code SHA');
+  }
+  if (!Array.isArray(baseline.historicalRows) || baseline.historicalRows.length === 0) {
+    findings.push('convergence record must preserve at least one immutable historical row');
+  }
+  for (const [index, row] of (baseline.historicalRows ?? []).entries()) {
+    const auditRound = row?.auditRound;
+    if (
+      typeof auditRound?.file !== 'string' ||
+      typeof auditRound?.sha256 !== 'string' ||
+      !/^[0-9a-f]{64}$/u.test(row?.snapshotSha256 ?? '')
+    ) {
+      findings.push(`historical convergence row ${index} is incomplete`);
+      continue;
+    }
+    const auditRoundSource = readFileSync(path.join(root, auditRound.file), 'utf8');
+    if (sha256(auditRoundSource) !== auditRound.sha256) {
+      findings.push(`executed audit-round record ${index} drifted`);
+    }
   }
   if (findings.length > 0) {
     process.stderr.write(
@@ -395,7 +412,7 @@ export async function main(options = {}) {
     );
   } else {
     process.stdout.write(
-      `security-convergence-baseline/v1 OK sha=${baseline.auditedCodeSha} mutants=${actual.m.mutantCount} P=${actual.p.total} greenRows=${actual.g.acceptedFixtureRows} c13=${actual.c13.corpusCount}/${actual.c13.anchorCount}\n`,
+      `security-convergence-baseline/v2 OK sha=${baseline.currentSnapshot.measuredCodeSha} mutants=${actual.m.mutantCount} P=${actual.p.total} greenRows=${actual.g.acceptedFixtureRows} c13=${actual.c13.corpusCount}/${actual.c13.anchorCount}\n`,
     );
   }
   return true;

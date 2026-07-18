@@ -19,7 +19,17 @@ describe('security convergence baseline', () => {
     const baseline = JSON.parse(
       readFileSync(path.join(repoRoot(), 'security/security-convergence-baseline.json'), 'utf8'),
     );
-    expect(compareSnapshot(baseline.snapshot, collectSecurityConvergenceSnapshot())).toEqual([]);
+    expect(
+      compareSnapshot(baseline.currentSnapshot.snapshot, collectSecurityConvergenceSnapshot()),
+    ).toEqual([]);
+    expect(baseline.historicalRows[0]).toMatchObject({
+      auditedCodeSha: 'e5f613be9f1bb1f1cfc568a53e88ee741b3a4ded',
+      measurements: { c13: '17 corpora / 143 anchors', p: 5956 },
+    });
+    expect(baseline.currentSnapshot).toMatchObject({
+      measuredCodeSha: 'f7a82a75c84da95d675c4c713340f3984328d8ca',
+      snapshot: { c13: { anchorCount: 144, corpusCount: 17 } },
+    });
   });
 
   it('counts complete-file syntax and name obligations rather than LOC', () => {
