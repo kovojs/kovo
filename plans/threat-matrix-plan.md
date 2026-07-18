@@ -158,9 +158,12 @@ scripts/check-tcb-boundary.test.mjs` 19 pass; `node scripts/supply-chain-gates.m
       internals) is legitimate only if the boundary is real and documented for the app author. **Decision:** every
       out-of-scope note names WHOSE responsibility the threat is and what the framework does to avoid being a FOOTGUN for
       it; a reviewer (or the auditor) signs off that the exclusion is reasonable.
-- [ ] **TO3 — Keeping the matrix live.** A coverage matrix rots as the framework grows. **Decision:** a new public
+- [x] **TO3 — Keeping the matrix live.** A coverage matrix rots as the framework grows. **Decision:** a new public
       surface or sink requires a matrix row/cell update (a `check:*` gate that fails if a new sink in the DEC-F registry, or
       a new escape hatch, has no matrix cell) — so the matrix stays a checked invariant, not a one-time doc.
+  - Evidence: `pnpm run check:threat-matrix` passes 7/7 and derives its exact denominators from
+    all C9 sinks/named escapes, audited trust/capability kinds, and capability-census public
+    security surfaces; drift, deletion, duplicate, stale-evidence, and root-enrollment mutants fail.
 
 ## 5. Acceptance (v1 security signoff)
 
