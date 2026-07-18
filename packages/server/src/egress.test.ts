@@ -217,6 +217,7 @@ describe('IPv6 classifier corpus (SPEC §6.6 decision rule)', () => {
       '192.175.48.1',
       '2620:4f:8000::1',
       '::ffff:192.31.196.1',
+      '64:ff9b::192.31.196.1',
     ];
     const adjacentPublic = [
       '192.31.195.255',
@@ -1143,6 +1144,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
         '192.175.48.1',
         '2620:4f:8000::1',
         '::ffff:192.31.196.1',
+        '64:ff9b::192.31.196.1',
       ]) {
         const socket = new net.Socket();
         expect(() => socket.connect({ host, port: 443 }), host).toThrow(EgressBlockedError);
