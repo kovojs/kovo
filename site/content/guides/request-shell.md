@@ -145,20 +145,34 @@ mutation render failures use the typed render-error fragment path.
 ## Adapters
 
 The handler currency is Web-standard `Request -> Response`. Adapters convert host-specific request
-objects at the edge:
+objects at the edge. Define the host-independent handler first:
 
 ```ts
+// handler.ts
+import { createRequestHandler } from '@kovojs/server';
+import app from './app.js';
+
+export const handler = createRequestHandler(app);
+```
+
+Keep raw host authority in a separate adapter entry:
+
+```ts
+// server.ts
 import '@kovojs/server/runtime-bootstrap';
 
 import { createServer } from 'node:http';
-import { createRequestHandler, toNodeHandler } from '@kovojs/server';
-import app from './app.js';
+import { toNodeHandler } from '@kovojs/server';
+import { handler } from './handler.js';
 
-createServer(toNodeHandler(createRequestHandler(app))).listen(3000);
+createServer(toNodeHandler(handler)).listen(3000);
 ```
 
 For a custom adapter entry, keep `@kovojs/server/runtime-bootstrap` as the literal first import so
 request-reachable package code cannot replace classifier-reviewed globals before dispatch starts.
+Keep `createRequestHandler(app)` in the separate handler module; this leaves the adapter's raw
+`node:http` listener outside the request-reachable module graph while the handler and app graphs
+remain capability-closed.
 Generated Kovo runners apply this bootstrap for you. The dispatch refusal detects omission, not the
 history of a mutable JavaScript realm: a bootstrap imported after app/package evaluation cannot
 repair that ordering and is outside the supported custom-runner contract.

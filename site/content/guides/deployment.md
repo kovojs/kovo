@@ -140,18 +140,27 @@ artifact. The detailed static-export constraints and diagnostic ownership live i
 
 The server is the `createApp()` aggregate: your routes, mutations, queries, the `db` provider, and
 the `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request -> Response` handler to a
-`node:http` listener. Start with the adapter shape:
+`node:http` listener. Define the host-independent handler first:
 
 ```ts
+// handler.ts
+import { createRequestHandler } from '@kovojs/server';
+import app from './app.js';
+
+export const handler = createRequestHandler(app);
+```
+
+Then keep the host listener in a separated adapter entry:
+
+```ts
+// server.ts
 import '@kovojs/server/runtime-bootstrap';
 
 import { createServer } from 'node:http';
-import { createRequestHandler, toNodeHandler } from '@kovojs/server';
+import { toNodeHandler } from '@kovojs/server';
+import { handler } from './handler.js';
 
-import app from './app.js';
-
-const handler = toNodeHandler(createRequestHandler(app));
-createServer(handler).listen(Number(process.env.PORT ?? 3000));
+createServer(toNodeHandler(handler)).listen(Number(process.env.PORT ?? 3000));
 ```
 
 That side-effect import must be the literal first import in a custom entry module. It locks Kovo's
@@ -160,6 +169,9 @@ Kovo-generated deployment entries install the same bootstrap automatically. The 
 boot check detects an omitted bootstrap; it cannot authenticate earlier evaluation in the same
 JavaScript realm. Importing app or package code first and bootstrapping later is unsupported
 privileged-host misuse, not a repair path—restart the process with the documented order.
+The separate handler module is required: it keeps `node:http` host authority out of the
+request-reachable closure while `createApp()` lifecycle callbacks and the handler graph remain
+compiler roots.
 
 The generated `app` already carries its database provider, session provider, CSRF configuration,
 routes, queries, and mutations. Keep signing secrets and system database handles inside the

@@ -719,6 +719,7 @@ export interface CapabilityClosureExplainFact {
   reason?: string;
   rootKind?:
     | 'agent-tool-callback'
+    | 'application'
     | 'durable-task'
     | 'endpoint'
     | 'layout'

@@ -8,11 +8,19 @@ import {
   AUDITED_TRUST_ESCAPE_KINDS,
 } from '../packages/core/src/graph.js';
 import { frameworkSourceSinkInventory } from '../packages/core/src/internal/source-sink-registry.js';
+import {
+  computeFrameworkRuntimeSurface,
+  expandFrameworkExportPostureLedger,
+  readFrameworkExportPostureLedger,
+  validateFrameworkExportPosture,
+} from './framework-export-posture-gate.mjs';
 import { validateThreatMatrixCoverage } from './threat-matrix-gate.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const manifest = readJson('../security/threat-matrix-coverage.json');
 const capabilityCensus = readJson('./capability-surface-census.manifest.json');
+const frameworkExportPostureLedger = readFrameworkExportPostureLedger();
+const frameworkExportPostures = expandFrameworkExportPostureLedger(frameworkExportPostureLedger);
 const rootPackage = readJson('../package.json');
 const matrixDocument = readFileSync(
   new URL('../docs/security-threat-matrix.md', import.meta.url),
@@ -50,6 +58,7 @@ function validationOptions(overrides: Record<string, unknown> = {}) {
     documentedSurfaceLabels: documentedSurfaceLabels(),
     manifest,
     publicSecuritySurfaceIds: publicSecuritySurfaceIds(),
+    publicRuntimeExportPostures: frameworkExportPostures,
     repoRoot,
     rootScripts:
       typeof rootPackage.scripts === 'object' && rootPackage.scripts !== null
@@ -67,6 +76,13 @@ describe('threat-matrix liveness gate', () => {
     expect(AUDITED_TRUST_ESCAPE_KINDS).toHaveLength(7);
     expect(AUDITED_CAPABILITY_KINDS).toHaveLength(18);
     expect(publicSecuritySurfaceIds()).toHaveLength(11);
+    expect(frameworkExportPostures).toHaveLength(4_153);
+    expect(
+      validateFrameworkExportPosture({
+        actual: computeFrameworkRuntimeSurface(),
+        ledger: frameworkExportPostureLedger,
+      }),
+    ).toEqual([]);
   });
 
   it('is enrolled as a direct, non-skippable root check gate', () => {
@@ -183,5 +199,24 @@ describe('threat-matrix liveness gate', () => {
     ).toMatch(
       /Retired \/ stale surface[\s\S]*Runtime \/ infra|Runtime \/ infra[\s\S]*Retired \/ stale surface/u,
     );
+  });
+
+  it('rejects missing or duplicate matrix posture on an exact public runtime export', () => {
+    const missingMatrix = frameworkExportPostures.map((posture, index) =>
+      index === 0 ? { ...posture, matrix: undefined } : posture,
+    );
+    expect(
+      validateThreatMatrixCoverage(
+        validationOptions({ publicRuntimeExportPostures: missingMatrix }),
+      ).join('\n'),
+    ).toContain('publicRuntimeExportPostures[0].matrix must be an object');
+
+    expect(
+      validateThreatMatrixCoverage(
+        validationOptions({
+          publicRuntimeExportPostures: [...frameworkExportPostures, frameworkExportPostures[0]],
+        }),
+      ).join('\n'),
+    ).toContain(`duplicate public runtime export posture: ${frameworkExportPostures[0]!.id}`);
   });
 });

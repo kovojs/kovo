@@ -158,17 +158,15 @@ scripts/check-tcb-boundary.test.mjs` 19 pass; `node scripts/supply-chain-gates.m
       internals) is legitimate only if the boundary is real and documented for the app author. **Decision:** every
       out-of-scope note names WHOSE responsibility the threat is and what the framework does to avoid being a FOOTGUN for
       it; a reviewer (or the auditor) signs off that the exclusion is reasonable.
-- [ ] **TO3 — Keeping the matrix live.** A coverage matrix rots as the framework grows. **Decision:** a new public
+- [x] **TO3 — Keeping the matrix live.** A coverage matrix rots as the framework grows. **Decision:** a new public
       surface or sink requires a matrix row/cell update (a `check:*` gate that fails if a new sink in the DEC-F registry, or
       a new escape hatch, has no matrix cell) — so the matrix stays a checked invariant, not a one-time doc.
-  - Partial evidence: `pnpm run check:threat-matrix` passes 7/7 and derives exact denominators
-    for all C9 sinks/named escapes, audited trust/capability kinds, and the 11 current capability-
-    census rows; drift, deletion, duplicate, stale-evidence, and root-enrollment mutants fail.
-  - Blocking gap: the capability census hard-codes those same 11 IDs instead of deriving a
-    security-posture decision from the real public runtime-export surface. A new documented public
-    capability on an existing subpath can therefore pass the API, census, and matrix gates until a
-    reviewer remembers to add it. Add a public-export security-posture denominator before closing
-    the “new public surface” half of this item.
+  - Evidence: `pnpm run check:framework-export-posture` and `pnpm run check:threat-matrix` derive
+    the public denominator from every manifest-public first-party runtime export and module
+    initializer (4,153 exact rows), alongside all C9 sinks/named escapes, audited trust/capability
+    kinds, and the 11 capability-census rows. Package/subpath/export/condition/target/source drift,
+    duplicates, omissions, root deletion, role omission, stale evidence, and missing matrix cells
+    fail closed.
 
 ## 5. Acceptance (v1 security signoff)
 

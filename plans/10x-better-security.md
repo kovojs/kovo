@@ -154,26 +154,26 @@ Measurements are versioned and reproducible:
 
 ### 2A. Capability-closed module graph
 
-- [x] Define the complete untrusted-data-reachable root census: routes, layouts, mutations,
-      queries, endpoints, webhooks, durable/scheduled tasks, serialized browser handlers, and
-      supported agent/tool callbacks.
-  - Evidence: `159f1a141`; `capability-closure.security.test.ts` proves all ten root kinds, and the
-    integrated six-file suite passes 134 tests with one intentional skip.
+- [x] Define the complete untrusted-data-reachable root census: `createApp()` application lifecycle,
+      routes, layouts, mutations, queries, endpoints and low-level request adapters, webhooks,
+      durable/scheduled tasks, and serialized browser handlers. Keep future agent/tool callbacks as
+      reserved vocabulary without inventing a shipping factory.
+  - Evidence: `capability-closure.security.test.ts` proves all 10 shipping kinds, including lifecycle
+    callback closure and separated custom adapters; the reviewed ledger contains 13 exact shipping
+    factories and zero fabricated agent/tool factories.
 - [x] Build transitive capability closure across imports, re-exports, local wrappers, dynamic
       `import()`/`require()`, conditional package exports, globals, and callback/container
       transfers. Raw network, filesystem, process, VM, worker, and database-driver capabilities
       are unavailable unless a reviewed framework door explicitly supplies one.
   - Evidence: the same suite closes wrappers, re-exports, dynamic loading, globals, callback and
-    container transfers across all seven raw capability kinds; C13 passes with 18 corpora.
-- [ ] Define versioned, least-authority package summaries. An absent, stale, contradictory, or
+    container transfers across all seven raw capability kinds; C13 passes with 21 corpora.
+- [x] Define versioned, least-authority package summaries. An absent, stale, contradictory, or
       unresolved summary fails closed; package upgrades cannot silently retain an old verdict.
-  - Partial evidence: `capability-closure-packages.test.ts` pins schema/version, package version,
-    canonical manifest fingerprint, conditional export arms, and fail-closed stale/absent verdicts
-    for third-party packages.
-  - Blocking gap: `frameworkPackageVerdict` currently treats a first-party Kovo export absent from
-    `frameworkDoorExports` as a valid authority-free summary. Add an exhaustive, versioned public
-    runtime-export posture ledger whose missing entries fail closed; use its security-surface rows
-    as the TO3 threat-matrix denominator and enroll deletion/omission mutants in C13.
+  - Evidence: `pnpm run check:framework-export-posture` exact-matches 2,315 runtime exports plus
+    1,838 module initializers against package versions, source-tree digests, manifest targets,
+    conditional arms, authority/root/security roles, and matrix posture; omission, duplication,
+    same-version implementation drift, root deletion, and security-role omission mutants fail.
+    `capability-closure-packages.test.ts` retains the corresponding third-party summary proofs.
 - [x] Prove closure with adversarial wrapper/re-export/conditional/dynamic-loading fixtures and
       with positive fixtures for each supported framework capability. Emit a provenance path in
       diagnostics and `kovo explain`.

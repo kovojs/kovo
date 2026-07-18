@@ -19,6 +19,12 @@ import {
   classifyRawCapabilityModuleSpecifier,
   packageCapabilitySummarySchema,
 } from './capability-closure-model.js';
+import {
+  frameworkExportPosturePackages,
+  frameworkExportPostureGroups,
+  frameworkExportPostureSummaryVersion,
+  type FrameworkExportPostureDisposition,
+} from './framework-public-runtime-export-posture.generated.js';
 
 export type {
   CapabilityClosureSourceFile,
@@ -47,6 +53,7 @@ export interface AnalyzeCapabilityClosureResult {
 }
 
 interface CapabilityRoot {
+  readonly adapterEntryModule?: string;
   readonly kind: CapabilityRootKind;
   readonly module: string;
   readonly name: string;
@@ -67,6 +74,7 @@ type BindingOrigin =
   | { readonly kind: 'unknown'; readonly reason: string };
 
 interface ReachablePackageUse {
+  readonly separatedCustomAdapterEntry: boolean;
   readonly importedNames: readonly string[];
   readonly importFact: ScannedImportFact;
   readonly module: string;
@@ -85,56 +93,168 @@ interface PackageVerdict {
 
 const sourceExtensions = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'] as const;
 
-const frameworkPackageVersions = new Map<string, string>([
-  ['@kovojs/better-auth', '0.2.0'],
-  ['@kovojs/browser', '0.2.0'],
-  ['@kovojs/core', '0.2.0'],
-  ['@kovojs/drizzle', '0.2.0'],
-  ['@kovojs/headless-ui', '0.2.0'],
-  ['@kovojs/icons', '0.2.0'],
-  ['@kovojs/server', '0.2.0'],
-  ['@kovojs/style', '0.2.0'],
-  ['@kovojs/ui', '0.2.0'],
-]);
-
-const frameworkSummaryVersion = 'kovo-framework-capabilities/2026-07-18.1';
 const drizzleSummaryVersion = 'kovo-reviewed-drizzle/1.0.0-rc.4.1';
 
-const rootFactories = new Map<string, CapabilityRootKind>([
-  ['@kovojs/browser\0handler', 'serialized-browser-handler'],
-  ['@kovojs/server\0agentTool', 'agent-tool-callback'],
-  ['@kovojs/server\0endpoint', 'endpoint'],
-  ['@kovojs/server\0layout', 'layout'],
-  ['@kovojs/server\0mutation', 'mutation'],
-  ['@kovojs/server\0query', 'query'],
-  ['@kovojs/server\0route', 'route'],
-  ['@kovojs/server\0task', 'durable-task'],
-  ['@kovojs/server\0toolCallback', 'agent-tool-callback'],
-  ['@kovojs/server\0webhook', 'webhook'],
+interface FrameworkPackagePosture {
+  readonly variantsByFingerprint: ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>;
+  readonly packageVersion: string;
+}
+
+interface FrameworkPermission {
+  readonly capabilities: readonly RawCapabilityKind[];
+  readonly disposition: FrameworkExportPostureDisposition;
+  readonly reason?: string;
+}
+
+interface FrameworkPostureRegistry {
+  readonly invalidReasons: readonly string[];
+  readonly packages: ReadonlyMap<string, FrameworkPackagePosture>;
+  readonly permissions: ReadonlyMap<string, FrameworkPermission>;
+  readonly rootFactories: ReadonlyMap<string, CapabilityRootKind>;
+}
+
+const frameworkDispositions = new Set<FrameworkExportPostureDisposition>([
+  'authority-free',
+  'framework-door',
+  'request-closed',
+]);
+const frameworkRawCapabilities = new Set<RawCapabilityKind>([
+  'database-driver',
+  'dynamic-loader',
+  'filesystem',
+  'network',
+  'process',
+  'vm',
+  'worker',
+]);
+const frameworkRootKinds = new Set<CapabilityRootKind | 'none'>([
+  'agent-tool-callback',
+  'application',
+  'durable-task',
+  'endpoint',
+  'layout',
+  'mutation',
+  'none',
+  'query',
+  'route',
+  'serialized-browser-handler',
+  'webhook',
 ]);
 
-const frameworkDoorExports = new Map<string, readonly RawCapabilityKind[]>([
-  ['@kovojs/better-auth\0*\0createBetterAuthPostgresBindings', ['database-driver']],
-  ['@kovojs/better-auth\0*\0createBetterAuthPostgresBindingsFromEnvironment', ['database-driver']],
-  ['@kovojs/better-auth\0*\0createBetterAuthSqliteBindings', ['database-driver']],
-  ['@kovojs/better-auth\0*\0createBetterAuthSqliteBindingsFromEnvironment', ['database-driver']],
-  ['@kovojs/core\0*\0createFileSystemStorage', ['filesystem']],
-  ['@kovojs/core\0*\0createS3CompatibleStorage', ['network']],
-  ['@kovojs/server\0*\0checkPostgresAppDbPosture', ['database-driver']],
-  ['@kovojs/server\0*\0createFileSystemStorage', ['filesystem']],
-  ['@kovojs/server\0*\0createPostgresAppRuntimeDb', ['database-driver']],
-  ['@kovojs/server\0*\0createS3CompatibleStorage', ['network']],
-  ['@kovojs/server\0*\0exportStaticApp', ['filesystem']],
-  ['@kovojs/server\0*\0migratePostgresAppDb', ['database-driver']],
-  ['@kovojs/server\0*\0planPostgresAppDbMigration', ['database-driver']],
-  ['@kovojs/server\0*\0provisionPostgresAppDb', ['database-driver']],
-  ['@kovojs/server\0*\0rootedFiles', ['filesystem']],
-  ['@kovojs/server\0*\0runCommand', ['process']],
-  ['@kovojs/server\0./build\0*', ['filesystem', 'process', 'worker']],
-  ['@kovojs/server\0./sqlite\0*', ['database-driver']],
-  ['@kovojs/server\0./testing\0*', ['database-driver', 'filesystem']],
-  ['@kovojs/server\0./vite\0*', ['dynamic-loader', 'filesystem']],
-]);
+const frameworkPostureRegistry = createFrameworkPostureRegistry();
+
+function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
+  const invalidReasons: string[] = [];
+  const packages = new Map<string, FrameworkPackagePosture>();
+  const permissions = new Map<string, FrameworkPermission>();
+  const rootFactories = new Map<string, CapabilityRootKind>();
+
+  for (const [packageName, packageVersion, variants] of frameworkExportPosturePackages) {
+    if (packages.has(packageName)) {
+      invalidReasons.push(`duplicate package ${packageName}`);
+      continue;
+    }
+    const variantsByFingerprint = new Map<string, ReadonlyMap<string, readonly string[]>>();
+    for (const [fingerprint, subpaths] of variants) {
+      if (variantsByFingerprint.has(fingerprint)) {
+        invalidReasons.push(`${packageName} has duplicate manifest fingerprint ${fingerprint}`);
+        continue;
+      }
+      const conditionsBySubpath = new Map<string, readonly string[]>();
+      for (const [subpath, conditions] of subpaths) {
+        if (conditionsBySubpath.has(subpath)) {
+          invalidReasons.push(`${packageName}/${fingerprint} has duplicate subpath ${subpath}`);
+          continue;
+        }
+        if (new Set(conditions).size !== conditions.length || conditions.length === 0) {
+          invalidReasons.push(`${packageName}${subpath} has duplicate or empty conditions`);
+        }
+        conditionsBySubpath.set(subpath, conditions);
+      }
+      variantsByFingerprint.set(fingerprint, conditionsBySubpath);
+    }
+    if (variantsByFingerprint.size === 0)
+      invalidReasons.push(`${packageName} has no manifest variant`);
+    packages.set(packageName, {
+      packageVersion,
+      variantsByFingerprint,
+    });
+  }
+
+  for (const [
+    packageName,
+    disposition,
+    capabilities,
+    rootKind,
+    reason,
+    members,
+  ] of frameworkExportPostureGroups) {
+    const pkg = packages.get(packageName);
+    for (const [subpath, names] of members) {
+      if (
+        pkg === undefined ||
+        ![...pkg.variantsByFingerprint.values()].some((variant) => variant.has(subpath))
+      ) {
+        invalidReasons.push(
+          `permission group references unknown package/subpath ${packageName}${subpath}`,
+        );
+      }
+      for (const name of names) {
+        const id = frameworkMemberId(packageName, subpath, name);
+        if (permissions.has(id)) {
+          invalidReasons.push(`duplicate permission ${id}`);
+          continue;
+        }
+        if (new Set(capabilities).size !== capabilities.length) {
+          invalidReasons.push(`permission has duplicate capabilities ${id}`);
+        }
+        if (!frameworkDispositions.has(disposition)) {
+          invalidReasons.push(`permission has unknown disposition ${id}`);
+        }
+        for (const capability of capabilities) {
+          if (!frameworkRawCapabilities.has(capability)) {
+            invalidReasons.push(`permission has unknown raw capability ${id}`);
+          }
+        }
+        if (!frameworkRootKinds.has(rootKind)) {
+          invalidReasons.push(`permission has unknown root kind ${id}`);
+        }
+        if (disposition === 'authority-free' && capabilities.length > 0) {
+          invalidReasons.push(`authority-free permission carries capabilities ${id}`);
+        }
+        if (disposition === 'framework-door' && capabilities.length === 0) {
+          invalidReasons.push(`framework door has no capability ${id}`);
+        }
+        if (disposition === 'request-closed' && (reason === null || reason.trim() === '')) {
+          invalidReasons.push(`request-closed permission has no reason ${id}`);
+        }
+        permissions.set(id, {
+          capabilities,
+          disposition,
+          ...(reason === null ? {} : { reason }),
+        });
+        if (rootKind !== 'none') {
+          if (name === '<module>')
+            invalidReasons.push(`module init cannot be a root factory ${id}`);
+          if (rootFactories.has(id)) invalidReasons.push(`duplicate root factory ${id}`);
+          rootFactories.set(id, rootKind);
+        }
+      }
+    }
+  }
+
+  for (const [packageName, pkg] of packages) {
+    const subpaths = new Set(
+      [...pkg.variantsByFingerprint.values()].flatMap((variant) => [...variant.keys()]),
+    );
+    for (const subpath of subpaths) {
+      if (!permissions.has(frameworkMemberId(packageName, subpath, '<module>'))) {
+        invalidReasons.push(`${packageName}${subpath} has no explicit <module> permission`);
+      }
+    }
+  }
+  return { invalidReasons, packages, permissions, rootFactories };
+}
 
 /**
  * Derive the complete capability closure for all declared untrusted-data roots.
@@ -162,7 +282,7 @@ export function analyzeCapabilityClosure(
   const roots = discoverRoots(normalizedModules, resolver);
   const edges = deriveModuleEdges(normalizedModules, modulesByName, resolver);
   const edgesByModule = groupEdges(edges);
-  const packageUsesByModule = packageUses(normalizedModules);
+  const packageUsesByModule = packageUses(normalizedModules, resolver);
   const packageRequests = collectCapabilityPackageRequestsFromModules(normalizedModules);
   const packageMetadata = indexPackageMetadata(options.packages ?? []);
   const packageSummaries = indexPackageSummaries(options.packageSummaries ?? []);
@@ -175,6 +295,49 @@ export function analyzeCapabilityClosure(
 
   for (const root of roots) {
     const rootPath = [`root:${root.kind}:${root.name}@${root.module}`];
+    if (root.adapterEntryModule !== undefined) {
+      const adapterEntry = modulesByName.get(root.adapterEntryModule);
+      const bootstrap = adapterEntry?.imports.filter(
+        (imported) => imported.specifier === '@kovojs/server/runtime-bootstrap',
+      );
+      const validBootstrap =
+        bootstrap?.length === 1 &&
+        bootstrap[0]!.kind === 'import' &&
+        bootstrap[0]!.firstImport === true &&
+        sameStrings(bootstrap[0]!.importedNames, ['<module>']);
+      if (!validBootstrap) {
+        appendClosed(
+          root,
+          bootstrap?.[0]?.site ?? root.site,
+          'process',
+          'a separated custom Node adapter must import @kovojs/server/runtime-bootstrap as its exact literal first side-effect import before loading its handler module',
+          [
+            ...rootPath,
+            `adapter-entry:${root.adapterEntryModule}`,
+            'bootstrap-order:<missing-or-reordered>',
+          ],
+          facts,
+          factKeys,
+          diagnostics,
+        );
+      } else {
+        appendFact(facts, factKeys, {
+          capability: 'process',
+          kind: 'door',
+          module: root.adapterEntryModule,
+          name: root.name,
+          path: [
+            ...rootPath,
+            `adapter-entry:${root.adapterEntryModule}`,
+            `import:@kovojs/server/runtime-bootstrap@${root.adapterEntryModule}`,
+          ],
+          reason:
+            'the exact literal-first runtime bootstrap locks classifier-reviewed globals before the separated handler graph evaluates',
+          rootKind: root.kind,
+          site: bootstrap[0]!.site,
+        });
+      }
+    }
     const queue: TraversalNode[] = [{ module: root.module, path: rootPath }];
     const visited = new Set<string>();
     for (let index = 0; index < queue.length; index += 1) {
@@ -337,12 +500,24 @@ function discoverRoots(
       const origin = resolver.resolveBinding(module.fileName, call.callee);
       if (origin.kind !== 'package') continue;
       const packageName = packageNameForSpecifier(origin.specifier);
-      let kind = rootFactories.get(`${packageName}\0${origin.exportName}`);
+      const subpath = packageSubpath(origin.specifier);
+      let kind = frameworkPostureRegistry.rootFactories.get(
+        frameworkMemberId(packageName, subpath, origin.exportName),
+      );
       if (kind === undefined) continue;
       if (kind === 'durable-task' && call.hasCron) kind = 'scheduled-task';
+      const factoryId = frameworkMemberId(packageName, subpath, origin.exportName);
+      const callbackOrigin =
+        factoryId === frameworkMemberId('@kovojs/server', '.', 'toNodeHandler') &&
+        call.firstArgumentBinding !== undefined
+          ? resolver.resolveBinding(module.fileName, call.firstArgumentBinding)
+          : undefined;
+      const separatedAdapter =
+        callbackOrigin?.kind === 'local' && callbackOrigin.module !== module.fileName;
       appendRoot(roots, keys, {
+        ...(separatedAdapter ? { adapterEntryModule: module.fileName } : {}),
         kind,
-        module: module.fileName,
+        module: separatedAdapter ? callbackOrigin.module : module.fileName,
         name: call.firstLiteral ?? call.assignedName ?? origin.exportName,
         site: call.site,
       });
@@ -421,9 +596,23 @@ function groupEdges(edges: readonly ModuleEdge[]): Map<string, ModuleEdge[]> {
 
 function packageUses(
   modules: readonly ScannedCapabilityModule[],
+  resolver: BindingResolver,
 ): Map<string, ReachablePackageUse[]> {
   const uses = new Map<string, ReachablePackageUse[]>();
   for (const module of modules) {
+    const separatedCustomAdapterEntry = module.calls.some((call) => {
+      const origin = resolver.resolveBinding(module.fileName, call.callee);
+      if (
+        origin.kind !== 'package' ||
+        origin.specifier !== '@kovojs/server' ||
+        origin.exportName !== 'toNodeHandler' ||
+        call.firstArgumentBinding === undefined
+      ) {
+        return false;
+      }
+      const handlerOrigin = resolver.resolveBinding(module.fileName, call.firstArgumentBinding);
+      return handlerOrigin.kind === 'local' && handlerOrigin.module !== module.fileName;
+    });
     for (const imported of module.imports) {
       const specifier = imported.specifier;
       if (
@@ -435,6 +624,7 @@ function packageUses(
       }
       const moduleUses = uses.get(module.fileName) ?? [];
       moduleUses.push({
+        separatedCustomAdapterEntry,
         importedNames: imported.importedNames,
         importFact: imported,
         module: module.fileName,
@@ -481,14 +671,56 @@ function packageVerdict(
     );
   }
 
-  const frameworkVersion = frameworkPackageVersions.get(packageName);
-  if (frameworkVersion !== undefined) {
-    if (metadata.packageVersion !== frameworkVersion) {
+  const frameworkPosture = frameworkPostureRegistry.packages.get(packageName);
+  if (frameworkPosture !== undefined) {
+    if (frameworkPostureRegistry.invalidReasons.length > 0) {
+      return closedPackageVerdict(
+        use,
+        'contradictory',
+        `compiler-owned framework posture registry is invalid: ${frameworkPostureRegistry.invalidReasons.join('; ')}`,
+        metadata,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
+    if (metadata.packageVersion !== frameworkPosture.packageVersion) {
       return closedPackageVerdict(
         use,
         'stale',
-        `compiler-owned ${packageName} summary covers ${frameworkVersion}, installed ${metadata.packageVersion}; review the upgraded package before retaining authority`,
+        `compiler-owned ${packageName} posture covers ${frameworkPosture.packageVersion}, installed ${metadata.packageVersion}; review the upgraded package before retaining authority`,
         metadata,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
+    const installedVariant = frameworkPosture.variantsByFingerprint.get(
+      metadata.manifestFingerprint,
+    );
+    if (installedVariant === undefined) {
+      return closedPackageVerdict(
+        use,
+        'stale',
+        `compiler-owned ${packageName} posture does not cover installed manifest fingerprint ${metadata.manifestFingerprint}`,
+        metadata,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
+    const subpath = packageSubpath(specifier);
+    const conditions = installedVariant.get(subpath);
+    if (conditions === undefined) {
+      return closedPackageVerdict(
+        use,
+        'absent',
+        `compiler-owned ${packageName} posture does not classify public subpath ${subpath}`,
+        metadata,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
+    if (!sameStrings(conditions, metadata.conditions)) {
+      return closedPackageVerdict(
+        use,
+        'stale',
+        `compiler-owned ${packageName} posture does not cover installed conditional exports ${formatList(metadata.conditions)} for ${subpath}`,
+        metadata,
+        frameworkExportPostureSummaryVersion,
       );
     }
     return frameworkPackageVerdict(use, metadata);
@@ -518,37 +750,81 @@ function frameworkPackageVerdict(
 ): PackageVerdict {
   const packageName = metadata.packageName;
   const subpath = packageSubpath(use.importFact.specifier!);
+  const permissions = new Map<string, FrameworkPermission>();
+  const closed: { capability?: RawCapabilityKind; reason: string }[] = [];
   const doors = new Map<RawCapabilityKind, string>();
+
+  const appendPermission = (name: string): void => {
+    const id = frameworkMemberId(packageName, subpath, name);
+    const permission = frameworkPostureRegistry.permissions.get(id);
+    if (permission === undefined) {
+      closed.push({
+        reason: `compiler-owned ${packageName} posture ${frameworkExportPostureSummaryVersion} does not classify runtime export ${name} on ${subpath}`,
+      });
+      return;
+    }
+    permissions.set(id, permission);
+  };
+
+  // Every import evaluates the exact package subpath before exposing a member (SPEC §6.6).
+  appendPermission('<module>');
   for (const importedName of use.importedNames) {
-    const exact = [
-      ...(frameworkDoorExports.get(`${packageName}\0${subpath}\0${importedName}`) ?? []),
-      ...(frameworkDoorExports.get(`${packageName}\0*\0${importedName}`) ?? []),
-    ];
-    const wildcard = [
-      ...(frameworkDoorExports.get(`${packageName}\0${subpath}\0*`) ?? []),
-      ...(frameworkDoorExports.get(`${packageName}\0*\0*`) ?? []),
-    ];
-    const namespace = importedName === '*';
-    const packageWide = namespace
-      ? [...frameworkDoorExports.entries()]
-          .filter(
-            ([key]) =>
-              key.startsWith(`${packageName}\0${subpath}\0`) ||
-              key.startsWith(`${packageName}\0*\0`),
-          )
-          .flatMap(([, values]) => values)
-      : [];
-    for (const capability of [...exact, ...wildcard, ...packageWide]) {
+    if (importedName === '<module>') continue;
+    if (importedName === '*') {
+      const prefix = `${packageName}\0${subpath}\0`;
+      const namespaceMembers = [...frameworkPostureRegistry.permissions.entries()].filter(
+        ([id]) => id.startsWith(prefix) && id !== `${prefix}<module>`,
+      );
+      if (namespaceMembers.length === 0) {
+        // A reviewed value-empty module still has an explicit <module> posture.
+        continue;
+      }
+      for (const [id, permission] of namespaceMembers) permissions.set(id, permission);
+      continue;
+    }
+    appendPermission(importedName);
+  }
+
+  for (const [id, permission] of permissions) {
+    const name = id.slice(id.lastIndexOf('\0') + 1);
+    if (permission.disposition === 'request-closed') {
+      const reason =
+        permission.reason ?? `${packageName} export ${name} is not available to request roots`;
+      if (permission.capabilities.length === 0) closed.push({ reason });
+      for (const capability of permission.capabilities) closed.push({ capability, reason });
+      continue;
+    }
+    if (permission.disposition !== 'framework-door') continue;
+    if (
+      id === frameworkMemberId('@kovojs/server', './runtime-bootstrap', '<module>') &&
+      (!use.separatedCustomAdapterEntry ||
+        use.importFact.kind !== 'import' ||
+        use.importFact.firstImport !== true ||
+        !sameStrings(use.importedNames, ['<module>']))
+    ) {
+      closed.push({
+        capability: 'process',
+        reason:
+          '@kovojs/server/runtime-bootstrap is a reviewed door only as the exact literal first side-effect import in a separated custom adapter entry',
+      });
+      continue;
+    }
+    for (const capability of permission.capabilities) {
       doors.set(
         capability,
-        `${packageName}${subpath === '.' ? '' : subpath.slice(1)} supplies reviewed ${capability} operations through ${importedName}`,
+        `${packageName}${subpath === '.' ? '' : subpath.slice(1)} supplies reviewed ${capability} operations through ${name}`,
       );
     }
   }
   return {
-    closed: [],
+    closed,
     doors: [...doors.entries()].map(([capability, reason]) => ({ capability, reason })),
-    summaryFact: summaryFact(metadata, frameworkSummaryVersion, 'valid', use.importFact.site),
+    summaryFact: summaryFact(
+      metadata,
+      frameworkExportPostureSummaryVersion,
+      closed.length === 0 ? 'valid' : 'contradictory',
+      use.importFact.site,
+    ),
   };
 }
 
@@ -1032,6 +1308,10 @@ function packageNameForSpecifier(specifier: string): string {
 function packageSubpath(specifier: string): string {
   const packageName = packageNameForSpecifier(specifier);
   return specifier === packageName ? '.' : `.${specifier.slice(packageName.length)}`;
+}
+
+function frameworkMemberId(packageName: string, subpath: string, name: string): string {
+  return `${packageName}\0${subpath}\0${name}`;
 }
 
 function parseSite(site: string): { column: number; fileName: string; line: number } {

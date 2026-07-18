@@ -295,20 +295,35 @@ fails closed and is never replaced by an anonymous fallback within that request.
 
 **Capability-closed untrusted roots (normative, supported-subset static gate).** Before evaluating
 authored app modules, `kovo build` MUST scan the immutable app-source snapshot and census every
-route, layout, query, mutation, endpoint, webhook, durable or scheduled task, serialized browser
-handler, and supported agent/tool callback as an untrusted-data root. For each root, Kovo computes a
-transitive module/callback graph across eager imports, re-exports, local aliases and wrappers,
-literal `import()`/`require()` edges, conditional local targets, and callbacks or callback-bearing
-containers transferred through a local wrapper. A non-literal loader, unresolved local target, or
-reachable raw filesystem, network, process, worker, VM/dynamic-loader, or database-driver capability
-fails the pre-evaluation build gate with **KV448** and a root-to-terminal provenance path. Reviewed
+application aggregate created by `createApp()` (including its lifecycle callbacks), route, layout,
+query, mutation, endpoint or low-level request adapter, webhook, durable or scheduled task,
+serialized browser handler, and supported agent/tool callback as an untrusted-data root. For each
+root, Kovo computes a transitive module/callback graph across eager imports, re-exports, local aliases
+and wrappers, literal `import()`/`require()` edges, conditional local targets, and callbacks or
+callback-bearing containers transferred through a local wrapper. A non-literal loader, unresolved
+local target, or reachable raw filesystem, network, process, worker, VM/dynamic-loader, or
+database-driver capability fails the pre-evaluation build gate with **KV448** and a root-to-terminal
+provenance path. Reviewed
 framework APIs are the only nodes that may terminate such a path as a capability door; app or
 package metadata cannot mint a framework door.
 
+A custom Node adapter is privileged host wiring, not request-handler code. Its entry module MUST
+import `@kovojs/server/runtime-bootstrap` as its exact literal first side-effect import and MUST pass
+one directly imported handler from a separate local module to `toNodeHandler()`. Capability closure
+starts at that handler module, while the adapter entry retains only the host listener boundary.
+Inlining `createRequestHandler(app)`, importing the handler before the bootstrap, or importing the
+bootstrap from the handler graph is unsupported and fails closed with KV448. Generated runners own
+the equivalent compiler-created separation and bootstrap order.
+
 Reachable package code requires a least-authority verdict for the exact installed package name,
 version, security-relevant manifest fingerprint, requested subpath, imported export, and complete
-conditional-export arm set. Kovo packages and explicitly reviewed framework companions use a
-compiler-owned, version-pinned verdict. Other packages use the committed
+conditional-export arm set. Every manifest-public Kovo runtime export and every public subpath's
+`<module>` initializer MUST appear exactly once in the compiler-owned, versioned framework export
+posture ledger with an explicit raw-authority disposition, root kind or `none`, security role,
+implementation digest, manifest-target/condition fingerprint, and threat-matrix posture. A new,
+missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
+door list is never an authority-free verdict. Explicitly reviewed framework companions use the same
+compiler-owned, version-pinned verdict model. Other packages use the committed
 `kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
 independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
 `<module>` entry and MUST classify package initialization explicitly rather than relying on an empty

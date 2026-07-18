@@ -131,6 +131,7 @@ function collectStaticImportsAndExports(
   bindings: ScannedImportBindingFact[],
   exports: ScannedExportBindingFact[],
 ): void {
+  const firstImport = sourceFile.statements.find((statement) => ts.isImportDeclaration(statement));
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
       const clause = statement.importClause;
@@ -162,6 +163,7 @@ function collectStaticImportsAndExports(
       }
       if (clause !== undefined && importedNames.length === 0) continue;
       imports.push({
+        ...(statement === firstImport ? { firstImport: true } : {}),
         importedNames: uniqueSorted(importedNames),
         kind: 'import',
         site: sourceSite(sourceFile, statement.moduleSpecifier.getStart(sourceFile)),
@@ -352,6 +354,7 @@ function collectCall(
   const callee = expressionBindingKey(node.expression);
   if (callee === undefined) return;
   const first = node.arguments[0];
+  const firstArgumentBinding = first === undefined ? undefined : expressionBindingKey(first);
   const assignedName = assignedCallName(node);
   calls.push({
     ...(assignedName === undefined ? {} : { assignedName }),
@@ -359,6 +362,7 @@ function collectCall(
     carriesCallback: node.arguments.some((argument) =>
       expressionCarriesCallback(argument, callbackCarriers),
     ),
+    ...(firstArgumentBinding === undefined ? {} : { firstArgumentBinding }),
     ...(first && ts.isStringLiteralLike(first) ? { firstLiteral: first.text } : {}),
     hasCron: node.arguments.some(argumentHasCron),
     site: sourceSite(sourceFile, node.getStart(sourceFile)),

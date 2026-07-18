@@ -97,6 +97,10 @@ const PACKED_RUNTIME_BOOTSTRAP_IMPORT = "import '../dist/server/src/runtime-boot
 // executes every other test in each file, so isolation cannot narrow the corpus.
 const LOAD_ISOLATED_TEST_CONFIGS = [
   {
+    file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+    freshTestNames: ['closes the normalized semantic summary budget with its exact reason'],
+  },
+  {
     file: 'packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts',
     freshTestNames: ['keeps 120 distinct iterable and parameter-pattern safe misses bounded'],
   },
@@ -1845,16 +1849,29 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: [
       'packages/compiler/src/capability-closure.security.test.ts',
       'packages/cli/src/capability-closure-packages.test.ts',
+      'scripts/framework-export-posture-gate.test.mjs',
     ],
     verdictAnchors: [
       {
         id: 'complete-root-census',
         file: 'packages/compiler/src/capability-closure.security.test.ts',
         snippets: [
-          'censuses every supported untrusted-data root kind',
+          'censuses every shipping untrusted-data root kind',
+          "'application'",
           "'scheduled-task'",
           "'serialized-browser-handler'",
           "'webhook'",
+        ],
+      },
+      {
+        id: 'application-and-custom-adapter-roots',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'roots createApp lifecycle modules and closes their raw authority',
+          'accepts the documented bootstrap-first separated custom Node adapter',
+          'rejects a custom adapter that loads its handler before runtime bootstrap',
+          'rejects runtime bootstrap in an inline toNodeHandler module',
+          'rejects runtime bootstrap imported by the request handler instead of its adapter entry',
         ],
       },
       {
@@ -1885,8 +1902,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/compiler/src/capability-closure.security.test.ts',
         snippets: [
           'keeps supported framework network, filesystem, process, and database doors open',
-          'classifies public testing and Vite subpaths as reviewed capability doors',
+          'request-closes public testing and Vite tooling subpaths',
           'preserves raw driver closure while allowing reviewed Drizzle schema/query construction',
+        ],
+      },
+      {
+        id: 'first-party-runtime-export-posture',
+        file: 'scripts/framework-export-posture-gate.test.mjs',
+        snippets: [
+          'binds every manifest-public runtime value and module initializer to reviewed posture',
+          'kills omission, duplicate, and newly exported-member mutants',
+          'digests fixture-named and generated production sources while excluding only tests and itself',
+          'kills security-role omission across auth, secret, SQL, authorization, CSRF, and replay exports',
+          "rootKind: 'application'",
         ],
       },
       {
@@ -3270,20 +3298,40 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
       continue;
     }
     const codeBlocks = source.matchAll(/```(?:ts|tsx)\n([\s\S]*?)```/gu);
-    let covered = 0;
+    let adapterBlocks = 0;
+    let handlerBlocks = 0;
     for (const block of codeBlocks) {
       const code = block[1] ?? '';
-      if (!code.includes('createRequestHandler')) continue;
-      covered += 1;
+      if (code.includes('createRequestHandler')) {
+        handlerBlocks += 1;
+        if (
+          !code.includes('export const handler = createRequestHandler(app);') ||
+          code.includes('runtime-bootstrap') ||
+          /from\s+['"]node:/u.test(code)
+        ) {
+          findings.push(
+            `request-safe-runtime: ${file} handler block ${handlerBlocks} must export a host-independent createRequestHandler(app) module`,
+          );
+        }
+      }
+      if (!code.includes('toNodeHandler')) continue;
+      adapterBlocks += 1;
       const firstImport = code.split('\n').find((line) => line.trimStart().startsWith('import '));
-      if (firstImport?.trim() !== RUNTIME_BOOTSTRAP_IMPORT) {
+      if (
+        firstImport?.trim() !== RUNTIME_BOOTSTRAP_IMPORT ||
+        !code.includes("from './handler.js'") ||
+        !code.includes('toNodeHandler(handler)') ||
+        code.includes('createRequestHandler')
+      ) {
         findings.push(
-          `request-safe-runtime: ${file} createRequestHandler block ${covered} must start imports with ${RUNTIME_BOOTSTRAP_IMPORT}`,
+          `request-safe-runtime: ${file} adapter block ${adapterBlocks} must be bootstrap-first and import one separated handler`,
         );
       }
     }
-    if (covered === 0) {
-      findings.push(`request-safe-runtime: ${file} has no createRequestHandler bootstrap example`);
+    if (handlerBlocks === 0 || adapterBlocks === 0) {
+      findings.push(
+        `request-safe-runtime: ${file} must document both a host-independent handler and bootstrap-first separated adapter`,
+      );
     }
   }
   return findings;

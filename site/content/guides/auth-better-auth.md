@@ -159,16 +159,27 @@ arbitrary headers, ambiguous locations, and external redirects fail inside the a
 ### Start custom runners lock-first
 
 Kovo-generated server entries install the runtime lock automatically. A custom Node entry must make
-the bootstrap its literal first import:
+the bootstrap its literal first import. First define a host-independent handler:
 
 ```ts
+// handler.ts
+import { createRequestHandler } from '@kovojs/server';
+import app from './app.js';
+
+export const handler = createRequestHandler(app);
+```
+
+Then import that handler from the separated adapter entry:
+
+```ts
+// server.ts
 import '@kovojs/server/runtime-bootstrap';
 
 import { createServer } from 'node:http';
-import { createRequestHandler, toNodeHandler } from '@kovojs/server';
-import app from './app.js';
+import { toNodeHandler } from '@kovojs/server';
+import { handler } from './handler.js';
 
-createServer(toNodeHandler(createRequestHandler(app))).listen(3000);
+createServer(toNodeHandler(handler)).listen(3000);
 ```
 
 The Better Auth Postgres and SQLite constructors refuse to read options or secrets before this lock

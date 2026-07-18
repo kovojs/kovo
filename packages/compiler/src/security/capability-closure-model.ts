@@ -87,6 +87,7 @@ function capabilityPackageNameForSpecifier(specifier: string): string {
 /** @internal */
 export type CapabilityRootKind =
   | 'agent-tool-callback'
+  | 'application'
   | 'durable-task'
   | 'endpoint'
   | 'layout'
@@ -105,6 +106,7 @@ export interface CapabilityClosureSourceFile {
 
 /** @internal */
 export interface ScannedImportFact {
+  readonly firstImport?: boolean;
   readonly importedNames: readonly string[];
   readonly kind: 'dynamic-import' | 'import' | 'require' | 're-export';
   readonly site: string;
@@ -141,6 +143,7 @@ export interface ScannedCallFact {
   readonly assignedName?: string;
   readonly callee: string;
   readonly carriesCallback: boolean;
+  readonly firstArgumentBinding?: string;
   readonly firstLiteral?: string;
   readonly hasCron: boolean;
   readonly site: string;

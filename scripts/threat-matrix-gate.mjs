@@ -25,6 +25,7 @@ export function validateThreatMatrixCoverage(options) {
     documentedSurfaceLabels,
     manifest,
     publicSecuritySurfaceIds,
+    publicRuntimeExportPostures,
     repoRoot,
     rootScripts,
     sourceSinkInventory,
@@ -62,6 +63,13 @@ export function validateThreatMatrixCoverage(options) {
     surfaceIds,
     usedProofs,
   });
+  validatePublicRuntimeExportPostures({
+    findings,
+    postures: publicRuntimeExportPostures,
+    proofs,
+    surfaceIds,
+    usedProofs,
+  });
 
   for (const collection of mappingCollections) {
     if (!Array.isArray(manifest[collection])) {
@@ -74,6 +82,43 @@ export function validateThreatMatrixCoverage(options) {
   }
 
   return findings.sort((left, right) => left.localeCompare(right));
+}
+
+function validatePublicRuntimeExportPostures(options) {
+  const { findings, postures, proofs, surfaceIds, usedProofs } = options;
+  const seen = new Set();
+  if (!Array.isArray(postures) || postures.length === 0) {
+    findings.push('public runtime export postures must be a non-empty array');
+    return;
+  }
+  for (const [index, posture] of postures.entries()) {
+    const label = `publicRuntimeExportPostures[${index}]`;
+    if (!isRecord(posture) || !isNonBlank(posture.id)) {
+      findings.push(`${label}.id must be non-blank`);
+      continue;
+    }
+    if (seen.has(posture.id))
+      findings.push(`duplicate public runtime export posture: ${posture.id}`);
+    seen.add(posture.id);
+    if (!isNonBlank(posture.securityRole)) {
+      findings.push(`${label}.securityRole must be non-blank`);
+    }
+    if (!isNonBlank(posture.disposition)) {
+      findings.push(`${label}.disposition must be non-blank`);
+    }
+    if (!isRecord(posture.matrix)) {
+      findings.push(`${label}.matrix must be an object`);
+      continue;
+    }
+    validateMappingCellRefs(
+      posture.matrix,
+      `${label}.matrix`,
+      surfaceIds,
+      proofs,
+      usedProofs,
+      findings,
+    );
+  }
 }
 
 function validateSurfaces(value, documentedSurfaceLabels, findings) {

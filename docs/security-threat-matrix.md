@@ -8,9 +8,11 @@ an **audited escape hatch**, or an **explicit out-of-scope note (whose responsib
 
 `security/threat-matrix-coverage.json` is the machine-readable liveness projection of this table. The non-skippable
 `pnpm run check:threat-matrix` gate derives its denominators from the C9 source/sink registry, the audited trust and
-capability-kind registries, and the public capability-surface census. A new sink, named C9 escape hatch, audited escape
-kind, or public security capability fails the gate until it is explicitly assigned to one row and one or more C/I/A/Au
-cells with a live control, audit, or owned out-of-scope proof; removed items leave stale rows and fail too.
+capability-kind registries, the public capability-surface census, and the exhaustive versioned posture ledger for every
+manifest-public first-party runtime export plus module initializer. A new sink, named C9 escape hatch, audited escape
+kind, public security capability, package subpath, runtime export, conditional arm, or implementation revision fails the
+gate until it is explicitly assigned authority, root, security-role, and one or more C/I/A/Au cells with a live control,
+audit, or owned out-of-scope proof; removed items leave stale rows and fail too.
 
 ## The matrix
 

@@ -39,6 +39,11 @@
       "disposition": "control",
       "control": "The capability-surface census records the authority, mint, public posture, exact consumers, diagnostic, and test evidence.",
       "evidence": ["pnpm run check:capability-surface-census"]
+    },
+    "public-runtime-export-posture-control": {
+      "disposition": "control",
+      "control": "Every manifest-public first-party runtime export and module initializer has exact authority, root, security-role, implementation-digest, and matrix posture before compiler use.",
+      "evidence": ["pnpm run check:framework-export-posture"]
     }
   },
   "sinkMappings": [

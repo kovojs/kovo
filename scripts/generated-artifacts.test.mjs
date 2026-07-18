@@ -32,6 +32,10 @@ describe('generated-artifacts policy manifest', () => {
         categories: [C.appLocalGeneratedOutput, C.mustNotCommit],
       },
       {
+        path: 'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
+        categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
+      },
+      {
         path: 'packages/icons/src/arrow-right.tsx',
         categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
       },
@@ -92,6 +96,15 @@ describe('generated-artifacts policy manifest', () => {
   });
 
   it('routes committed generated framework artifacts to their generator checks', () => {
+    expect(
+      generatedArtifactPoliciesForGenerator(
+        GENERATED_ARTIFACT_GENERATORS.frameworkExportPosture,
+      ).map((entry) => entry.id),
+    ).toEqual(['framework-public-runtime-export-posture']);
+    expect(
+      generatedArtifactGeneratorCheckCommand(GENERATED_ARTIFACT_GENERATORS.frameworkExportPosture),
+    ).toEqual(['node', 'scripts/framework-export-posture-gate.mjs']);
+
     expect(
       generatedArtifactPoliciesForGenerator(GENERATED_ARTIFACT_GENERATORS.icons).map(
         (entry) => entry.id,
