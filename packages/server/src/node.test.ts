@@ -47,6 +47,41 @@ function nodeRequest(url: string): IncomingMessage {
 }
 
 describe('server node adapter', () => {
+  it('preserves exact case-sensitive HTTP methods across the Fetch boundary', () => {
+    for (const method of [
+      'get',
+      'Get',
+      'post',
+      'PoSt',
+      'CONNECT',
+      'trace',
+      'TRACE',
+      'TRACK',
+      'bad method',
+      '',
+    ]) {
+      const request = nodeRequest('/method-identity');
+      request.method = method;
+      expect(() => nodeRequestToWebRequest(request)).toThrow(
+        'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.',
+      );
+    }
+
+    for (const method of ['GET', 'POST', 'PURGE', 'custom']) {
+      const request =
+        method === 'GET'
+          ? nodeRequest('/method-identity')
+          : (Object.assign(Readable.from([]), {
+              headers: { host: 'internal.example' },
+              method,
+              socket: new EventEmitter() as Socket,
+              url: '/method-identity',
+            }) as IncomingMessage);
+      request.method = method;
+      expect(nodeRequestToWebRequest(request).method).toBe(method);
+    }
+  });
+
   it('rejects raw request-target limits before Request construction or origin callbacks', () => {
     const origin = vi.fn(() => 'https://app.example');
     const tooManyEntries = `/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`;

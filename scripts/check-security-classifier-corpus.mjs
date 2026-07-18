@@ -1499,6 +1499,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'node-fetch-method-identity-closed',
+        file: 'packages/server/src/__bugz_remote_ingress.test.ts',
+        snippets: [
+          'node-fetch-method-identity-closed',
+          "request('post')",
+          "request('PoSt')",
+          "request('POST')",
+          "observedMethods).toEqual(['POST'])",
+        ],
+      },
+      {
         id: 'alias-wrapper-and-host-spread-closed',
         file: 'packages/compiler/src/client-handler-import-policy.test.ts',
         snippets: [

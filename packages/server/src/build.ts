@@ -1032,6 +1032,7 @@ const nativeResponseBodyGetter = nativeObjectGetOwnPropertyDescriptor(NativeResp
 const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'headers').get;
 const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
 const nativeResponseStatusTextGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'statusText').get;
+const nativeRequestMethodGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'method').get;
 const nativeReadableFromWeb = Readable.fromWeb;
 const nativeReadableToWeb = Readable.toWeb;
 const nativeAbortControllerAbort = stablePrototypeFunction(NativeAbortController.prototype, 'abort');
@@ -1123,6 +1124,9 @@ function nodeRequestToWebRequestFromSnapshot(
   if (requestUrlLimitFailure(pinnedNodeRequest.rawTarget) !== undefined) {
     throw new RangeError('Kovo Node request target exceeds the SPEC §9.5 resource ceiling.');
   }
+  if (!nodeRequestMethodIsFetchStable(pinnedNodeRequest.method)) {
+    throw new TypeError('Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.');
+  }
   if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
@@ -1169,6 +1173,9 @@ function nodeRequestToWebRequestFromSnapshot(
   };
 
   const request = constructNativeRequest(nodeRequestUrl(pinnedNodeRequest, pinnedOptions), init);
+  if (apply(nativeRequestMethodGetter, request, []) !== method) {
+    throw new TypeError('Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.');
+  }
   if (clientIp) {
     apply(nativeObjectDefineProperty, Object, [request, '__kovoPeerAddress', {
       configurable: false,
@@ -1391,6 +1398,20 @@ export function rejectNodeRequestTargetLimit(nodeRequest, nodeResponse) {
     'x-content-type-options': 'nosniff',
   });
   nodeResponse.end(pinnedNodeRequest.method === 'HEAD' ? undefined : 'URI Too Long');
+  return true;
+}
+
+export function rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse) {
+  pinNodeResponseTransport(nodeResponse);
+  const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
+  if (nodeRequestMethodIsFetchStable(pinnedNodeRequest.method)) return false;
+  armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+  nodeResponse.writeHead(400, {
+    'cache-control': 'no-store',
+    'content-type': 'text/plain; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+  });
+  nodeResponse.end(pinnedNodeRequest.method === 'HEAD' ? undefined : 'Bad Request');
   return true;
 }
 
@@ -1803,6 +1824,38 @@ function validNodeRequestAuthority(nodeRequest) {
   }
 }
 
+function nodeRequestMethodIsFetchStable(method) {
+  if (!isHttpMethodToken(method)) return false;
+  const lower = apply(nativeStringToLowerCase, method, []);
+  switch (lower) {
+    case 'delete': return method === 'DELETE';
+    case 'get': return method === 'GET';
+    case 'head': return method === 'HEAD';
+    case 'options': return method === 'OPTIONS';
+    case 'post': return method === 'POST';
+    case 'put': return method === 'PUT';
+    case 'connect':
+    case 'trace':
+    case 'track': return false;
+    default: return true;
+  }
+}
+
+function isHttpMethodToken(method) {
+  if (method.length === 0) return false;
+  for (let index = 0; index < method.length; index += 1) {
+    const code = apply(nativeStringCharCodeAt, method, [index]);
+    if ((code >= 0x30 && code <= 0x39) ||
+      (code >= 0x41 && code <= 0x5a) ||
+      (code >= 0x61 && code <= 0x7a) ||
+      code === 0x21 || (code >= 0x23 && code <= 0x27) || code === 0x2a ||
+      code === 0x2b || code === 0x2d || code === 0x2e || code === 0x5e ||
+      code === 0x5f || code === 0x60 || code === 0x7c || code === 0x7e) continue;
+    return false;
+  }
+  return true;
+}
+
 function defaultOrigin(nodeRequest, options) {
   // SPEC §9.5 / RFC 9113 §8.3.1: HTTP/2 \`:authority\` is request-target authority. A peer can
   // still send a divergent regular \`Host\`, but recipients must not use it to determine the
@@ -2016,6 +2069,7 @@ module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
       armIncompleteNodeRequestClose,
       nodeRequestTransportMetadata,
       rejectInvalidNodeRequestAuthority,
+      rejectInvalidNodeRequestMethod,
       rejectNodeRequestTargetLimit,
       rejectUnsafeNodeMutationTarget,
       vercelRequestToWebRequest,
@@ -2023,6 +2077,7 @@ module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
     } = await loadNodeAdapter();
     closeIncompleteRequest = armIncompleteNodeRequestClose;
     if (rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)) return;
+    if (rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse)) return;
     if (rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)) return;
     if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
     const transport = nodeRequestTransportMetadata(nodeRequest);
@@ -3403,6 +3458,7 @@ const {
   assertSafeTransportResponseHeaderEntries,
   nodeRequestToWebRequest,
   rejectInvalidNodeRequestAuthority,
+  rejectInvalidNodeRequestMethod,
   rejectNodeRequestTargetLimit,
   rejectUnsafeNodeMutationTarget,
   writeWebResponseToNode,
@@ -3613,6 +3669,7 @@ export function createKovoNodeServer(options = {}) {
     let diagnosticRequestUrl;
     try {
       if (rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)) return;
+      if (rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse)) return;
       if (rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)) return;
       if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
       const method = ownStringOr(nodeRequest, 'method', 'GET');

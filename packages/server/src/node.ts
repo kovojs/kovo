@@ -598,6 +598,7 @@ export function toNodeHandler(
       // boot-captured controls before any authored handler or option callback can run.
       const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
       if (rejectPinnedNodeRequestTargetLimit(pinnedNodeRequest, nodeResponse)) return;
+      if (rejectInvalidPinnedNodeRequestMethod(pinnedNodeRequest, nodeResponse)) return;
       if (rejectInvalidPinnedNodeRequestAuthority(pinnedNodeRequest, nodeResponse)) return;
       if (rejectUnsafePinnedNodeMutationTarget(pinnedNodeRequest, nodeResponse)) return;
       const request = nodeRequestToWebRequestFromSnapshot(
@@ -674,6 +675,11 @@ function nodeRequestToWebRequestFromSnapshot(
   if (requestUrlLimitFailure(pinnedNodeRequest.rawTarget) !== undefined) {
     throw new RangeError('Kovo Node request target exceeds the SPEC §9.5 resource ceiling.');
   }
+  if (!nodeRequestMethodIsFetchStable(pinnedNodeRequest.method)) {
+    throw new TypeError(
+      'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.',
+    );
+  }
   if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
@@ -746,6 +752,11 @@ function nodeRequestToWebRequestFromSnapshot(
   };
 
   const request = constructNativeRequest(nodeRequestUrl(pinnedNodeRequest, options), init);
+  if (witnessReflectApply<string>(nativeRequestMethodGetter, request, []) !== method) {
+    throw new TypeError(
+      'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.',
+    );
+  }
   if (pinnedNodeRequest.peerAddress !== undefined) {
     witnessDefineProperty(request, requestPeerAddressProperty, {
       configurable: true,
@@ -968,6 +979,87 @@ function nodeResponseShouldKeepAlive(nodeResponse: ServerResponse): boolean | un
     throw new TypeError('Kovo Node adapter requires an own boolean keep-alive state property.');
   }
   return descriptor.value;
+}
+
+/**
+ * SPEC §9.5 / RFC 9110 §9.1: HTTP method tokens are case-sensitive, while Fetch canonicalizes
+ * its six standard methods and rejects CONNECT/TRACE/TRACK. Refuse the raw carrier before Web
+ * Request construction whenever that bridge could change one method identity into another.
+ */
+function rejectInvalidPinnedNodeRequestMethod(
+  pinnedNodeRequest: PinnedNodeRequest,
+  nodeResponse: ServerResponse,
+): boolean {
+  if (nodeRequestMethodIsFetchStable(pinnedNodeRequest.method)) return false;
+
+  const responseTransport = pinNodeResponseTransport(nodeResponse);
+  armIncompleteNodeRequestClose(pinnedNodeRequest.carrier, nodeResponse);
+  witnessReflectApply(responseTransport.writeHead, nodeResponse, [
+    400,
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  ]);
+  witnessReflectApply(
+    responseTransport.end,
+    nodeResponse,
+    pinnedNodeRequest.method === 'HEAD' ? [] : ['Bad Request'],
+  );
+  return true;
+}
+
+function nodeRequestMethodIsFetchStable(method: string): boolean {
+  if (!isHttpMethodToken(method)) return false;
+  const lower = witnessReflectApply<string>(nativeStringToLowerCase, method, []);
+  switch (lower) {
+    case 'delete':
+      return method === 'DELETE';
+    case 'get':
+      return method === 'GET';
+    case 'head':
+      return method === 'HEAD';
+    case 'options':
+      return method === 'OPTIONS';
+    case 'post':
+      return method === 'POST';
+    case 'put':
+      return method === 'PUT';
+    case 'connect':
+    case 'trace':
+    case 'track':
+      return false;
+    default:
+      return true;
+  }
+}
+
+function isHttpMethodToken(method: string): boolean {
+  if (method.length === 0) return false;
+  for (let index = 0; index < method.length; index += 1) {
+    const code = witnessReflectApply<number>(nativeStringCharCodeAt, method, [index]);
+    if (
+      (code >= 0x30 && code <= 0x39) ||
+      (code >= 0x41 && code <= 0x5a) ||
+      (code >= 0x61 && code <= 0x7a) ||
+      code === 0x21 ||
+      (code >= 0x23 && code <= 0x27) ||
+      code === 0x2a ||
+      code === 0x2b ||
+      code === 0x2d ||
+      code === 0x2e ||
+      code === 0x5e ||
+      code === 0x5f ||
+      code === 0x60 ||
+      code === 0x7c ||
+      code === 0x7e
+    ) {
+      continue;
+    }
+    return false;
+  }
+  return true;
 }
 
 /**

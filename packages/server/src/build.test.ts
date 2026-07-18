@@ -72,6 +72,7 @@ interface NodeAdapterModule {
     response?: ServerResponse,
   ): Request;
   rejectInvalidNodeRequestAuthority(request: IncomingMessage, response: ServerResponse): boolean;
+  rejectInvalidNodeRequestMethod(request: IncomingMessage, response: ServerResponse): boolean;
   rejectNodeRequestTargetLimit(request: IncomingMessage, response: ServerResponse): boolean;
   vercelRequestToWebRequest(request: IncomingMessage, response?: ServerResponse): Request;
   writeWebResponseToNode(
@@ -1815,6 +1816,7 @@ export default async function handler(request) {
       const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
       expect(nodeAdapter).toContain('export function rejectInvalidNodeRequestAuthority');
+      expect(nodeAdapter).toContain('export function rejectInvalidNodeRequestMethod');
       expect(nodeAdapter).toContain('export function rejectNodeRequestTargetLimit');
       expect(nodeAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
@@ -1844,6 +1846,9 @@ export default async function handler(request) {
       ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
       expect(
         nodeServer.indexOf('rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)'),
+      ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
+      expect(
+        nodeServer.indexOf('rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse)'),
       ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
       expect(
         nodeServer.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
@@ -3376,6 +3381,7 @@ export default async function handler(request) {
       );
       expect(vercelAdapter).toContain('export function nodeRequestToWebRequest');
       expect(vercelAdapter).toContain('export function rejectInvalidNodeRequestAuthority');
+      expect(vercelAdapter).toContain('export function rejectInvalidNodeRequestMethod');
       expect(vercelAdapter).toContain('export function rejectNodeRequestTargetLimit');
       expect(vercelAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
@@ -3396,6 +3402,7 @@ export default async function handler(request) {
       expect(vercelFunction).toContain(
         'rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)',
       );
+      expect(vercelFunction).toContain('rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse)');
       expect(vercelFunction).toContain('rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)');
       expect(
         vercelFunction.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
@@ -4883,6 +4890,51 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   // adapter may treat `https` on cleartext HTTP/2 as proof without trusted-proxy posture.
   expect(untrustedLiveRequest.url).toBe('http://h2.example.test/from-url?x=1');
   expect(untrustedEmittedRequest.url).toBe(untrustedLiveRequest.url);
+
+  for (const method of ['get', 'Get', 'post', 'PoSt', 'TRACE', 'bad method']) {
+    const liveInvalidMethod = adapterParityRequest();
+    liveInvalidMethod.method = method;
+    expect(() => liveNodeRequestToWebRequest(liveInvalidMethod)).toThrow(
+      'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.',
+    );
+
+    const emittedInvalidMethod = adapterParityRequest();
+    emittedInvalidMethod.method = method;
+    expect(() => adapter.nodeRequestToWebRequest(emittedInvalidMethod)).toThrow(
+      'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.',
+    );
+  }
+
+  for (const method of ['GET', 'POST', 'PURGE', 'custom']) {
+    const liveMethod = method === 'GET' ? adapterParityRequest() : adapterParityBodyRequest();
+    liveMethod.method = method;
+    const emittedMethod = method === 'GET' ? adapterParityRequest() : adapterParityBodyRequest();
+    emittedMethod.method = method;
+    expect(adapter.nodeRequestToWebRequest(emittedMethod).method).toBe(
+      liveNodeRequestToWebRequest(liveMethod).method,
+    );
+  }
+
+  const rejectedMethod = adapterParityRequest();
+  rejectedMethod.method = 'post';
+  let methodBody = '';
+  let methodStatus = 0;
+  const methodResponse = Object.assign(new EventEmitter(), {
+    end(value?: string) {
+      methodBody = value ?? '';
+      return this;
+    },
+    headersSent: false,
+    writeHead(value: number) {
+      methodStatus = value;
+      return this;
+    },
+  }) as unknown as ServerResponse;
+  expect(adapter.rejectInvalidNodeRequestMethod(rejectedMethod, methodResponse)).toBe(true);
+  expect({ body: methodBody, status: methodStatus }).toEqual({
+    body: 'Bad Request',
+    status: 400,
+  });
 
   const appendedForwardingChain = adapterParityRequest();
   appendedForwardingChain.headers['x-forwarded-proto'] = 'http, https';

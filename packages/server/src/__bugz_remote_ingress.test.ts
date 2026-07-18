@@ -14,9 +14,10 @@ describe('remote ingress adversarial proofs', () => {
     while (cleanups.length > 0) await cleanups.pop()!();
   });
 
-  it('turns a distinct lowercase HTTP/2 method into canonical POST before dispatch', async () => {
-    let rawMethod = '';
-    let observedMethod = '';
+  // @kovo-security-classifier-corpus node-fetch-method-identity-closed
+  it('rejects HTTP/2 method identities that Fetch would canonicalize before dispatch', async () => {
+    const rawMethods: string[] = [];
+    const observedMethods: string[] = [];
     let writes = 0;
     const appHandler = createRequestHandler(
       createApp({
@@ -34,11 +35,11 @@ describe('remote ingress adversarial proofs', () => {
       }),
     );
     const adapted = toNodeHandler(async (request) => {
-      observedMethod = request.method;
+      observedMethods.push(request.method);
       return appHandler(request);
     });
     const server = createHttp2Server(((request, response) => {
-      rawMethod = request.method;
+      rawMethods.push(request.method);
       return adapted(request as never, response as never);
     }) as never);
     await new Promise<void>((resolve, reject) => {
@@ -62,30 +63,33 @@ describe('remote ingress adversarial proofs', () => {
         }),
     );
 
-    const result = await new Promise<{ body: string; status: number }>((resolve, reject) => {
-      const stream = client.request({
-        ':authority': 'app.example',
-        ':method': 'post',
-        ':path': '/_m/audit/lowercase-h2-write',
-        'content-type': 'application/x-www-form-urlencoded',
+    const request = (method: string) =>
+      new Promise<{ body: string; status: number }>((resolve, reject) => {
+        const stream = client.request({
+          ':authority': 'app.example',
+          ':method': method,
+          ':path': '/_m/audit/lowercase-h2-write',
+          'content-type': 'application/x-www-form-urlencoded',
+        });
+        let body = '';
+        let status = 0;
+        stream.setEncoding('utf8');
+        stream.on('response', (headers) => {
+          status = Number(headers[':status']);
+        });
+        stream.on('data', (chunk) => {
+          body += chunk;
+        });
+        stream.once('error', reject);
+        stream.once('end', () => resolve({ body, status }));
+        stream.end();
       });
-      let body = '';
-      let status = 0;
-      stream.setEncoding('utf8');
-      stream.on('response', (headers) => {
-        status = Number(headers[':status']);
-      });
-      stream.on('data', (chunk) => {
-        body += chunk;
-      });
-      stream.once('error', reject);
-      stream.once('end', () => resolve({ body, status }));
-      stream.end();
-    });
 
-    expect(result).toEqual({ body: '', status: 303 });
-    expect(rawMethod).toBe('post');
-    expect(observedMethod).toBe('POST');
+    await expect(request('post')).resolves.toEqual({ body: 'Bad Request', status: 400 });
+    await expect(request('PoSt')).resolves.toEqual({ body: 'Bad Request', status: 400 });
+    await expect(request('POST')).resolves.toEqual({ body: '', status: 303 });
+    expect(rawMethods).toEqual(['post', 'PoSt', 'POST']);
+    expect(observedMethods).toEqual(['POST']);
     expect(writes).toBe(1);
   });
 });
