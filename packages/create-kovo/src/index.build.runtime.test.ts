@@ -17,7 +17,11 @@ import {
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
-import { buildReusableProductionArtifact, waitForTcpPort } from './index.build.test-support.js';
+import {
+  buildReusableProductionArtifact,
+  fieldValue,
+  waitForTcpPort,
+} from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: runtime and dev server)', () => {
   it('keeps generated credentials out of artifacts and refuses insecure production SQLite boot', async () => {
@@ -132,7 +136,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         )?.[1] ?? '';
       expect(demoPassword).toBeTruthy();
 
-      const idem = `anonymous-sign-in-${Date.now()}`;
+      const idem = fieldValue(loginHtml, 'Kovo-Idem');
       const body = new URLSearchParams({
         csrf: csrf ?? '',
         email: 'demo@example.com',
