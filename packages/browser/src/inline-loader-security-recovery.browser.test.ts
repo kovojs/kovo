@@ -587,10 +587,17 @@ it('recovers an ambiguous mutation failure with one POST and one fresh replay ke
   (harness.window as unknown as Record<string, unknown>).fetch = fetch;
 
   await installGeneratedInlineLoader(harness.window);
+  const recoveryLoad = new Promise<void>((resolve) => {
+    harness.frame.addEventListener('load', () => resolve(), { once: true });
+  });
   form.dispatchEvent(new harness.window.SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-  await vi.waitFor(() => expect(harness.loadCount()).toBeGreaterThan(1));
+  // Firefox can commit an iframe navigation after Vitest's short polling window under the full
+  // three-engine suite. Observe the authoritative frame load directly; the enclosing test timeout
+  // still fails closed if hard recovery never happens.
+  await recoveryLoad;
+  expect(harness.loadCount()).toBeGreaterThan(1);
   expect(attempts).toHaveLength(1);
   expect(attempts[0]?.bodyIdem).toBe(attempts[0]?.headerIdem);
   expect(attempts[0]?.bodyIdem).not.toBe(renderedIdem);

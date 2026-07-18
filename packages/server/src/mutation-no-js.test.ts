@@ -13,6 +13,7 @@ import {
 import { renderedHtml } from './html.js';
 import { renderMutationEndpointResponse, renderNoJsMutationResponse } from './mutation.js';
 import { createMemoryMutationReplayStore } from './replay.js';
+import { runWithResponseLifecycleRequest } from './response-lifecycle-context.js';
 import { isBlessedRedirectResponse, serverResponseToWebResponse } from './response.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
@@ -29,10 +30,13 @@ function anonymousNoJsCsrfRequest(mutationKey: string): {
     sessionId: () => undefined,
   };
   const origin = 'https://nojs-replay.test';
-  const minted = mintCsrfField(new Request(`${origin}/form`), {
-    ...csrf,
-    mutation: mutationKey,
-  });
+  const formRequest = new Request(`${origin}/form`);
+  const minted = runWithResponseLifecycleRequest(formRequest, formRequest, () =>
+    mintCsrfField(formRequest, {
+      ...csrf,
+      mutation: mutationKey,
+    }),
+  );
   if (!minted.setCookie) throw new Error('anonymous no-JS fixture did not mint a CSRF cookie');
   const cookie = minted.setCookie.split(';', 1)[0];
   if (!cookie) throw new Error('anonymous no-JS fixture emitted an empty CSRF cookie');
