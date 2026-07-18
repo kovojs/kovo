@@ -126,14 +126,22 @@ Measurements are versioned and reproducible:
   - Evidence: `4ce67820f`; the dedicated runtime-gate suite passes 3/3, a deliberately stripped
     PostgreSQL toolchain exits nonzero under `KOVO_PARANOID=1`, and all three required served-
     artifact cases must report completion before the suite can pass.
-- [ ] Define and execute a deterministic, replayable authorization matrix across principal,
+- [x] Define and execute a deterministic, replayable authorization matrix across principal,
       ownership, operation, query family, `readonlyAppDb`, endpoint, durable-task, webhook,
       view/function, and raw-SQL surfaces. Persist failing seeds and minimized repros.
-- [ ] Prove the engine-closure and least-privilege invariants in the same served-artifact run:
+  - Evidence: `9ad7927de`; `pnpm run check:authorization-matrix` proves 28 cases, 34 required
+    dimension values, five canaries, deterministic replay, and persisted minimized repros; the
+    real-Postgres paranoid run executed all 28 cells with 7/7 tests and zero skips.
+- [x] Prove the engine-closure and least-privilege invariants in the same served-artifact run:
       every app-role-reachable object is safe or boot refuses, and runtime authority is neither
       superuser nor `BYPASSRLS` nor able to assume the provision role.
-- [ ] Add seeded security mutations/canaries for the major class guarantees and make the gate fail
+  - Evidence: the same 7/7 served-artifact run exercises safe closure plus boot refusal for unsafe
+    tables/views/functions and proves the runtime role is non-superuser, non-`BYPASSRLS`, and
+    unable to assume the provision role.
+- [x] Add seeded security mutations/canaries for the major class guarantees and make the gate fail
       when a canary survives. Record recall and mutation-kill results as M.
+  - Evidence: `pnpm run check:security-gate-mutations` kills 42/42 mutants, including all five
+    authorization canaries; the rebased focused forcing-gate suites pass 12/12.
 - [x] Reconcile `rules/v1-acceptance.md`, `docs/v1-acceptance-ledger.md`, and the historical
       B1–B4 finding ledgers with current executed evidence.
   - Evidence: `e5f613be9`; gate 16.9, the acceptance ledger, `plans/claude-bugz-32.md`, and the
