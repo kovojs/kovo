@@ -643,9 +643,8 @@ function runPackedSqliteBoundaryChild(distRoot: string, betterAuthEntry: string)
       requireFromServerTest.resolve('drizzle-orm/sqlite-core'),
     ).href,
     '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
-    '@kovojs/server/internal/better-auth': pathToFileURL(
-      join(distRoot, 'internal/better-auth.mjs'),
-    ).href,
+    '@kovojs/server/internal/better-auth': pathToFileURL(join(distRoot, 'internal/better-auth.mjs'))
+      .href,
     '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
     '@kovojs/server/internal/execution': pathToFileURL(join(distRoot, 'internal/execution.mjs'))
       .href,
@@ -774,9 +773,8 @@ function runPackedBetterAuthPreloadChild(
   const secret = 'SUBPATH-WITNESS-SECRET-0123456789abcdef-RAW';
   const entries = {
     '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
-    '@kovojs/server/internal/better-auth': pathToFileURL(
-      join(distRoot, 'internal/better-auth.mjs'),
-    ).href,
+    '@kovojs/server/internal/better-auth': pathToFileURL(join(distRoot, 'internal/better-auth.mjs'))
+      .href,
     '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
     '@kovojs/server/internal/execution': pathToFileURL(join(distRoot, 'internal/execution.mjs'))
       .href,
@@ -875,9 +873,8 @@ function runPackedPostgresBoundaryChild(distRoot: string, betterAuthEntry: strin
   const entries = {
     'drizzle-orm/pg-core': pathToFileURL(requireFromServerTest.resolve('drizzle-orm/pg-core')).href,
     '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
-    '@kovojs/server/internal/better-auth': pathToFileURL(
-      join(distRoot, 'internal/better-auth.mjs'),
-    ).href,
+    '@kovojs/server/internal/better-auth': pathToFileURL(join(distRoot, 'internal/better-auth.mjs'))
+      .href,
     '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
     '@kovojs/server/internal/keyring': pathToFileURL(join(distRoot, 'internal/keyring.mjs')).href,
     '@kovojs/server/internal/postgres-capability': pathToFileURL(
