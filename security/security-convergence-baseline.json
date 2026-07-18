@@ -20,8 +20,8 @@
     }
   ],
   "currentSnapshot": {
-    "measuredCodeSha": "969e6fc22492c80e4f99f2528837455fc7e8317c",
-    "reason": "Post-M35, bounded-diamond, and Phase 1 authorization-matrix canary refresh; the immutable comparable audit remains the e5 historical row.",
+    "measuredCodeSha": "dbbfe94d436f2ad772670d2df56e18ee747e8329",
+    "reason": "Post-authorization-matrix, restored-main, request-ingress-corpus, and CSRF-matrix structural refresh; the immutable comparable audit remains the e5 historical row.",
     "snapshot": {
       "schema": "kovo-security-convergence-baseline/v1",
       "charter": {
@@ -30,13 +30,14 @@
         "version": 1
       },
       "m": {
-        "mutantCount": 42,
+        "mutantCount": 43,
         "mutantNames": [
           "authorization-matrix/allow-cross-owner-builder-read",
           "authorization-matrix/allow-cross-owner-raw-write",
           "authorization-matrix/allow-cross-schema-definer-function",
           "authorization-matrix/allow-provision-role-assumption",
           "authorization-matrix/deny-durable-task-owner-read",
+          "better-auth-credential-gate/drop-result-consumer-identity",
           "check-sink-policy-gate/drop-managed-db-throw-invariant",
           "check-sink-policy-gate/drop-response-fragment-trustedhtml-route-count",
           "check-sink-policy-gate/drop-sql-guard-env-detector",
@@ -124,19 +125,19 @@
             "writeln"
           ]
         },
-        "total": 5958,
+        "total": 5971,
         "trustStatic": {
-          "directNamePredicates": 1318,
-          "inlineMembershipEntries": 558,
-          "nameBranches": 2566,
+          "directNamePredicates": 1325,
+          "inlineMembershipEntries": 562,
+          "nameBranches": 2577,
           "namedInventoryEntries": 674,
           "namedInventorySha256": "a17407a73922b8152013190c0c715c3ae7d483b2c5926ca89a091fba1c0d4aad",
           "namedInventoryTableCount": 62,
           "switchLiteralCases": 16,
-          "syntaxBranches": 3335,
-          "syntaxGuardSites": 2508,
+          "syntaxBranches": 3337,
+          "syntaxGuardSites": 2510,
           "syntaxKindSites": 827,
-          "total": 5901
+          "total": 5914
         }
       },
       "g": {
@@ -145,13 +146,13 @@
         "unexpectedClosedVerdicts": 0
       },
       "c13": {
-        "anchorCount": 144,
-        "corpusCount": 17,
-        "testFileCount": 56
+        "anchorCount": 156,
+        "corpusCount": 19,
+        "testFileCount": 62
       },
       "informational": {
         "egressLoc": 2299,
-        "trustStaticLoc": 38496
+        "trustStaticLoc": 38591
       }
     }
   }

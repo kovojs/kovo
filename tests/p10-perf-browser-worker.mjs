@@ -24,12 +24,16 @@ try {
     return {
       buttonStateBeforeClick: button?.getAttribute('kovo-state') ?? null,
       clientModuleLoadsBeforeInteraction: globalThis.__clientModuleLoads ?? 0,
+      contentfulPaintObservedAtEnrollmentCheckpoint:
+        globalThis.__kovoPerf.contentfulPaintObservedAtEnrollmentCheckpoint,
+      enrollmentCheckpoint: globalThis.__kovoPerf.enrollmentCheckpoint,
       fcp: paint?.startTime ?? Number.NaN,
       firstDelegatedListenerMark: globalThis.__kovoPerf.firstDelegatedListenerMark,
       handlerImportsBeforeInteraction: globalThis.__handlerImports ?? 0,
       hasSpeculationRules: document.querySelector('script[type="speculationrules"]') !== null,
       lastDelegatedListenerMark: globalThis.__kovoPerf.lastDelegatedListenerMark,
-      ttiMinusFcpMs: globalThis.__kovoPerf.firstDelegatedListenerMark - (paint?.startTime ?? 0),
+      listenerEnrollmentCompletedBeforeContent:
+        globalThis.__kovoPerf.listenerEnrollmentCompletedBeforeContent,
     };
   });
 
@@ -40,13 +44,15 @@ try {
     'initial delegated listener registration is recorded',
   );
   assert.equal(firstLoad.hasSpeculationRules, true);
-  assert.ok(
-    firstLoad.firstDelegatedListenerMark - firstLoad.fcp <= acceptance.paintTimingJitterBudgetMs,
-    `initial delegated listeners are installed no later than first contentful paint (fcp=${firstLoad.fcp}, firstListener=${firstLoad.firstDelegatedListenerMark}, lastListener=${firstLoad.lastDelegatedListenerMark}, delta=${firstLoad.firstDelegatedListenerMark - firstLoad.fcp})`,
+  assert.equal(
+    firstLoad.listenerEnrollmentCompletedBeforeContent,
+    true,
+    `initial delegated listeners are installed while the parser is still in head (fcp=${firstLoad.fcp}, firstListener=${firstLoad.firstDelegatedListenerMark}, lastListener=${firstLoad.lastDelegatedListenerMark}, checkpoint=${JSON.stringify(firstLoad.enrollmentCheckpoint)})`,
   );
-  assert.ok(
-    firstLoad.ttiMinusFcpMs <= acceptance.paintTimingJitterBudgetMs,
-    `TTI is equivalent to FCP for the loader spine (fcp=${firstLoad.fcp}, firstListener=${firstLoad.firstDelegatedListenerMark}, delta=${firstLoad.ttiMinusFcpMs})`,
+  assert.equal(
+    firstLoad.contentfulPaintObservedAtEnrollmentCheckpoint,
+    false,
+    'no first-contentful-paint entry exists at the parser-blocking enrollment checkpoint',
   );
   assert.equal(firstLoad.clientModuleLoadsBeforeInteraction, 0);
   assert.equal(firstLoad.handlerImportsBeforeInteraction, 0);
