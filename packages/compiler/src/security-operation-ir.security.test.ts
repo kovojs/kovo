@@ -338,6 +338,64 @@ export const items = pgTable('items', {
     expect(diagnostics).toEqual([]);
   });
 
+  // @kovo-security-classifier-corpus C13 finite-ir-declared-secret-read-execution
+  it('classifies one exactly declared secret-read execute call as a managed query read', () => {
+    expect(
+      kv449(`
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability, query } from '@kovojs/server';
+export const report = query({
+  async load(_input, context) {
+    const statement = trustedSql(sql.raw('select id, classified from accounts'), {
+      justification: 'reviewed static secret read',
+    });
+    declareSecretReadCapability(statement, {
+      columns: ['classified'],
+      justification: 'review the classified fixture value on the server',
+      source: 'accounts.classified',
+      table: 'accounts',
+    });
+    const result = await context.db.execute(statement);
+    return { items: result.rows ?? [] };
+  },
+});
+`),
+    ).toEqual([]);
+
+    for (const source of [
+      `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { query } from '@kovojs/server';
+export const report = query({ async load(_input, context) {
+  const statement = trustedSql(sql.raw('select id from accounts'), { justification: 'undeclared' });
+  return context.db.execute(statement);
+} });
+`,
+      `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability, query } from '@kovojs/server';
+export const report = query({ async load(_input, context) {
+  const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
+  const escaped = statement;
+  declareSecretReadCapability(statement, { columns: ['classified'], justification: 'reviewed', source: 'accounts.classified', table: 'accounts' });
+  return context.db.execute(escaped);
+} });
+`,
+      `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability, query } from '@kovojs/server';
+export const report = query({ async load(_input, context) {
+  const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
+  const result = await context.db.execute(statement);
+  declareSecretReadCapability(statement, { columns: ['classified'], justification: 'late', source: 'accounts.classified', table: 'accounts' });
+  return result;
+} });
+`,
+    ]) {
+      expect(kv449(source)).not.toEqual([]);
+    }
+  });
+
   it.each([
     [
       'request-derived sql.raw text',
