@@ -2535,6 +2535,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'a reflectively mutated local value',
           'an aliased local value escape',
           'an opaque local value escape',
+          'a private-value conditional condition contains %s',
+          'an inline assignment',
         ],
       },
       {

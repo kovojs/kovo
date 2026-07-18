@@ -862,6 +862,15 @@ const analyzerSummaryValueAliasEscapeClosureBranch = [
   '    .some((statement) => statementContainsAliasIdentifier(statement, name));',
 ].join('\n');
 const weakenedAnalyzerSummaryValueAliasEscapeClosureBranch = '  return true;';
+const analyzerSummaryConditionalEffectClosureBranch = [
+  'function privateScopeConditionIsEffectFree(condition: Node): boolean {',
+  '  for (const node of [condition, ...condition.getDescendants()]) {',
+].join('\n');
+const weakenedAnalyzerSummaryConditionalEffectClosureBranch = [
+  'function privateScopeConditionIsEffectFree(condition: Node): boolean {',
+  '  return true;',
+  '  for (const node of [condition, ...condition.getDescendants()]) {',
+].join('\n');
 const serverValueMissingInputClosureBranch = [
   '      if (!inner) {',
   "        return { ok: false, provenance: 'unknown', detail: expression.getText() };",
@@ -1026,6 +1035,16 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
     test: assertAnalyzerSummaryValueAliasEscapeClosureIsPinned,
+  },
+  {
+    description: 'Lets side effects in a conditional rewrite private authority before capture.',
+    expectedKiller: 'private-value conditional conditions must remain effect-free',
+    name: 'drizzle-analyzer-summary/allow-conditional-authority-mutation',
+    replacement: weakenedAnalyzerSummaryConditionalEffectClosureBranch,
+    search: analyzerSummaryConditionalEffectClosureBranch,
+    sourceFile: drizzleSummariesPath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryConditionalEffectClosureIsPinned,
   },
   {
     description: 'Lets serverValue treat a missing value as proven non-input.',
@@ -2093,6 +2112,15 @@ async function assertAnalyzerSummaryValueAliasEscapeClosureIsPinned(
 ) {
   if (!sourceText.includes(analyzerSummaryValueAliasEscapeClosureBranch)) {
     throw new Error('private value provenance no longer closes after local alias escape');
+  }
+}
+
+async function assertAnalyzerSummaryConditionalEffectClosureIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryConditionalEffectClosureBranch)) {
+    throw new Error('private-value conditionals no longer reject authority-changing conditions');
   }
 }
 

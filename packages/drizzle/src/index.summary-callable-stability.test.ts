@@ -120,6 +120,42 @@ function valueAliasSource(declaration: string, mutation: string): string {
   ].join('\n');
 }
 
+function destructuredGuardDefaultSource(binding: string, predicateValue: string): string {
+  return [
+    'import { eq } from "drizzle-orm";',
+    'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+    'import { query } from "@kovojs/server";',
+    'type Context = { request: { guard: { userId: string } }, db: PgAsyncDatabase<any, any> };',
+    'export const docs = pgTable("docs", { userId: text("user_id").notNull(), id: text("id").notNull() }, kovo({ domain: "doc", key: "userId,id", owner: "userId" }));',
+    'export const list = query("list", {',
+    '  async load(input: { userId: string }, context: Context) {',
+    `    ${binding}`,
+    `    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, ${predicateValue})) };`,
+    '  },',
+    '});',
+  ].join('\n');
+}
+
+function sideEffectingConditionSource(condition: string): string {
+  return [
+    'import { eq } from "drizzle-orm";',
+    'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+    'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+    'import { query } from "@kovojs/server";',
+    'type Context = { request: { guard: { userId: string } }, db: PgAsyncDatabase<any, any> };',
+    'export const docs = pgTable("docs", { userId: text("user_id").notNull(), id: text("id").notNull() }, kovo({ domain: "doc", key: "userId,id", owner: "userId" }));',
+    'function current(context: Context) { return context.request.guard.userId; }',
+    'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+    'function poison(context: Context, replacement: string) { context.request.guard.userId = replacement; return true; }',
+    'export const list = query("list", {',
+    '  async load(input: { userId: string }, context: Context) {',
+    `    const userId = ${condition} ? current(context) : current(context);`,
+    '    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+    '  },',
+    '});',
+  ].join('\n');
+}
+
 describe('analyzer-summary callable stability', () => {
   it.each([
     ['Object.assign', { mutation: 'Object.assign(helpers, { current: unsafe });' }],
@@ -266,6 +302,32 @@ describe('analyzer-summary callable stability', () => {
     ],
   ])('fails closed after %s', (_label, declaration, mutation) => {
     const result = verdictForSource(valueAliasSource(declaration, mutation));
+    expect(result.scope).toBe('unknown');
+    expect(result.check.exitCode).toBe(1);
+  });
+
+  it.each([
+    [
+      'a same-name destructuring default',
+      'const { userId = input.userId } = context.request.guard;',
+      'userId',
+    ],
+    [
+      'a renamed destructuring default',
+      'const { userId: ownerId = input.userId } = context.request.guard;',
+      'ownerId',
+    ],
+  ])('fails closed for %s sourced from client input', (_label, binding, predicateValue) => {
+    const result = verdictForSource(destructuredGuardDefaultSource(binding, predicateValue));
+    expect(result.scope).toBe('unknown');
+    expect(result.check.exitCode).toBe(1);
+  });
+
+  it.each([
+    ['an opaque call', 'poison(context, input.userId)'],
+    ['an inline assignment', '(context.request.guard.userId = input.userId)'],
+  ])('fails closed when a private-value conditional condition contains %s', (_label, condition) => {
+    const result = verdictForSource(sideEffectingConditionSource(condition));
     expect(result.scope).toBe('unknown');
     expect(result.check.exitCode).toBe(1);
   });

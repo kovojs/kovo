@@ -1577,6 +1577,7 @@ function finitePrivateScopeValue(
     return finitePrivateScopeValue(node.getExpression(), sessionContext, depth + 1);
   }
   if (Node.isConditionalExpression(node)) {
+    if (!privateScopeConditionIsEffectFree(node.getCondition())) return undefined;
     return matchingFinitePrivateScopeBranches(
       node.getWhenTrue(),
       node.getWhenFalse(),
@@ -1969,12 +1970,48 @@ function conditionalExpressionPrivateScope(
   if (depth > 4) return undefined;
   const node = unwrappedStaticExpressionNode(expression);
   if (!Node.isConditionalExpression(node)) return undefined;
+  if (!privateScopeConditionIsEffectFree(node.getCondition())) return undefined;
 
   const whenTrue = staticWrapperValuePrivateScope(node.getWhenTrue(), sessionContext, depth + 1);
   const whenFalse = staticWrapperValuePrivateScope(node.getWhenFalse(), sessionContext, depth + 1);
   if (!whenTrue || !whenFalse) return undefined;
   if (privateScopeKey(whenTrue) !== privateScopeKey(whenFalse)) return undefined;
   return whenTrue;
+}
+
+function privateScopeConditionIsEffectFree(condition: Node): boolean {
+  for (const node of [condition, ...condition.getDescendants()]) {
+    if (
+      Node.isCallExpression(node) ||
+      Node.isNewExpression(node) ||
+      Node.isDeleteExpression(node) ||
+      Node.isAwaitExpression(node) ||
+      Node.isYieldExpression(node) ||
+      Node.isTaggedTemplateExpression(node) ||
+      Node.isSpreadElement(node) ||
+      Node.isSpreadAssignment(node)
+    ) {
+      return false;
+    }
+
+    if (Node.isBinaryExpression(node)) {
+      const operator = node.getOperatorToken().getKind();
+      if (
+        operator === SyntaxKind.CommaToken ||
+        (operator >= SyntaxKind.FirstAssignment && operator <= SyntaxKind.LastAssignment)
+      ) {
+        return false;
+      }
+    }
+
+    if (Node.isPrefixUnaryExpression(node) || Node.isPostfixUnaryExpression(node)) {
+      const operator = node.getOperatorToken();
+      if (operator === SyntaxKind.PlusPlusToken || operator === SyntaxKind.MinusMinusToken) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 function binaryExpressionPrivateScope(
