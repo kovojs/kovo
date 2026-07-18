@@ -539,10 +539,23 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'credential-runtime-gate-complete-consumer-denominator',
         file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
         snippets: [
-          'keeps the raw Better Auth credential-consumer denominator equal to the reviewed census',
-          'scanBetterAuthRawCredentialConsumers()',
-          "{ consumer: 'betterAuth', file: 'postgres.ts' }",
-          "{ consumer: 'betterAuth', file: 'sqlite.ts' }",
+          'keeps the symbol-flow Better Auth credential denominator equal to the reviewed census',
+          'censusBetterAuthCredentialSources(',
+          'fails red on aliased, destructured, computed, call/apply, and imported raw consumers',
+          'Reflect.apply(importedHandler',
+          'accepts gate/token aliases only when symbol flow still resolves the exact owner',
+        ],
+      },
+      {
+        id: 'credential-runtime-gate-source-ownership',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'keeps raw Better Auth callables inside the exact runtime door',
+          'runBetterAuthCredentialSourceCallableAsync<Response>',
+          'cannot invoke raw source better-auth.callable',
+          'cannot execute an owner callback',
+          'received an invalid callable',
+          'M2_CALLABLE_ERROR_MUST_NOT_EGRESS',
         ],
       },
       {

@@ -35,8 +35,8 @@ import {
 import {
   betterAuthCredentialConsumers,
   consumeBetterAuthCredentialResult,
-  runBetterAuthCredentialConsumer,
-  runBetterAuthCredentialConsumerAsync,
+  runBetterAuthCredentialSourceCallable,
+  runBetterAuthCredentialSourceCallableAsync,
   type BetterAuthCredentialConsumer,
   type BetterAuthCredentialConsumerId,
 } from './credential-runtime-gate.js';
@@ -93,6 +93,11 @@ export interface PinnedBetterAuthCredentialHandler {
   readonly configuration: Promise<BetterAuthCredentialHandlerConfiguration>;
   readonly handler: Function;
   readonly operation: BetterAuthCredentialOperation;
+  readonly receiver: object;
+}
+
+interface PinnedBetterAuthApiCallable {
+  readonly method: Function;
   readonly receiver: object;
 }
 
@@ -315,42 +320,29 @@ function validateCredentialBaseURL(value: string, label: string): void {
 /** @internal Pin the exact Better Auth sign-in sink and its API receiver at declaration time. */
 export function pinBetterAuthSignInEmail(
   auth: BetterAuthSignInEmailLike,
-): Pick<BetterAuthSignInEmailLike, 'api'> {
+): PinnedBetterAuthApiCallable {
   const { method, receiver } = betterAuthCaptureOwnApiMethod(
     auth,
     'signInEmail',
     'Better Auth sign-in',
   );
-  return {
-    api: {
-      signInEmail(options) {
-        return betterAuthApply(method, receiver, [options]);
-      },
-    },
-  };
+  return betterAuthFreezeOwn({ method, receiver }, 'Better Auth sign-in callable');
 }
 
 /** @internal Pin the exact Better Auth sign-up sink and its API receiver at declaration time. */
 export function pinBetterAuthSignUpEmail(
   auth: BetterAuthSignUpEmailLike,
-): Pick<BetterAuthSignUpEmailLike, 'api'> {
+): PinnedBetterAuthApiCallable {
   const { method, receiver } = betterAuthCaptureOwnApiMethod(
     auth,
     'signUpEmail',
     'Better Auth sign-up',
   );
-  return {
-    api: {
-      signUpEmail(options) {
-        return betterAuthApply(method, receiver, [options]);
-      },
-    },
-  };
+  return betterAuthFreezeOwn({ method, receiver }, 'Better Auth sign-up callable');
 }
 
 /** @internal Pin the exact Better Auth sign-out sink and its API receiver at declaration time. */
-export interface PinnedBetterAuthSignOut {
-  readonly api: BetterAuthSignOutLike['api'];
+export interface PinnedBetterAuthSignOut extends PinnedBetterAuthApiCallable {
   readonly canonicalOrigin: PinnedBetterAuthCanonicalOrigin;
 }
 
@@ -361,39 +353,38 @@ export function pinBetterAuthSignOut(auth: BetterAuthSignOutLike): PinnedBetterA
     'signOut',
     'Better Auth sign-out',
   );
-  return {
-    canonicalOrigin,
-    api: {
-      signOut(options) {
-        return betterAuthApply(method, receiver, [options]);
-      },
+  return betterAuthFreezeOwn(
+    {
+      canonicalOrigin,
+      method,
+      receiver,
     },
-  };
+    'Better Auth sign-out callable',
+  );
 }
 
 /** @internal Pin the exact Better Auth session sink and its API receiver at declaration time. */
-export interface PinnedBetterAuthGetSession<AuthSession, AuthUser> {
-  readonly api: BetterAuthLike<AuthSession, AuthUser>['api'];
+export interface PinnedBetterAuthGetSession extends PinnedBetterAuthApiCallable {
   readonly canonicalOrigin: PinnedBetterAuthCanonicalOrigin;
 }
 
 export function pinBetterAuthGetSession<AuthSession, AuthUser>(
   auth: BetterAuthLike<AuthSession, AuthUser>,
-): PinnedBetterAuthGetSession<AuthSession, AuthUser> {
+): PinnedBetterAuthGetSession {
   const canonicalOrigin = pinBetterAuthCanonicalOrigin(auth, 'Better Auth session');
   const { method, receiver } = betterAuthCaptureOwnApiMethod(
     auth,
     'getSession',
     'Better Auth session',
   );
-  return {
-    canonicalOrigin,
-    api: {
-      getSession(options) {
-        return betterAuthApply(method, receiver, [options]);
-      },
+  return betterAuthFreezeOwn(
+    {
+      canonicalOrigin,
+      method,
+      receiver,
     },
-  };
+    'Better Auth session callable',
+  );
 }
 
 /**
@@ -434,8 +425,12 @@ export async function callBetterAuthCredentialHandler(
     auth.operation === 'signInEmail'
       ? betterAuthCredentialConsumers.credentialHandlerSignInEmail
       : betterAuthCredentialConsumers.credentialHandlerSignUpEmail;
-  const result = await runBetterAuthCredentialConsumerAsync(consumer, () =>
-    betterAuthApply<Promise<Response> | Response>(auth.handler, auth.receiver, [routedRequest]),
+  const result = await runBetterAuthCredentialSourceCallableAsync<BetterAuthResponseLike>(
+    consumer,
+    'better-auth.callable',
+    auth.handler,
+    auth.receiver,
+    [routedRequest],
   );
   return consumeBetterAuthCredentialResult(consumer, result);
 }
@@ -553,18 +548,18 @@ function credentialHandlerUrl(
 /** @internal Pass an email/password sign-in secret only to Better Auth's comparison sink. */
 /** @internal Pass an email/password sign-up secret only to Better Auth's write/comparison sink. */
 export async function callBetterAuthSignUpEmail(
-  auth: Pick<BetterAuthSignUpEmailLike, 'api'>,
+  auth: PinnedBetterAuthApiCallable,
   body: BetterAuthSignUpEmailBody,
   headers: Headers,
 ): Promise<void> {
   const consumer = betterAuthCredentialConsumers.seedSignUpEmail;
-  const result = await runBetterAuthCredentialConsumerAsync(consumer, async () => {
-    await auth.api.signUpEmail({
-      asResponse: true,
-      body,
-      headers,
-    });
-  });
+  const result = await runBetterAuthCredentialSourceCallableAsync<undefined>(
+    consumer,
+    'better-auth.callable',
+    auth.method,
+    auth.receiver,
+    [{ asResponse: true, body, headers }],
+  );
   consumeBetterAuthCredentialResult(consumer, result);
 }
 
@@ -579,18 +574,19 @@ export async function callBetterAuthSignOut(
     'Better Auth sign-out',
   );
   const consumer = betterAuthCredentialConsumers.signOut;
-  const result = await runBetterAuthCredentialConsumerAsync(consumer, () =>
-    auth.api.signOut({
-      asResponse: true,
-      headers: request.headers,
-    }),
+  const result = await runBetterAuthCredentialSourceCallableAsync<BetterAuthResponseLike>(
+    consumer,
+    'better-auth.callable',
+    auth.method,
+    auth.receiver,
+    [{ asResponse: true, headers: request.headers }],
   );
   return consumeBetterAuthCredentialResult(consumer, result);
 }
 
 /** @internal Pass request cookies only to Better Auth's session lookup sink. */
 export async function callBetterAuthGetSession<AuthSession, AuthUser>(
-  auth: PinnedBetterAuthGetSession<AuthSession, AuthUser>,
+  auth: PinnedBetterAuthGetSession,
   request: BetterAuthBindingRequest,
 ): Promise<
   | BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>
@@ -604,12 +600,14 @@ export async function callBetterAuthGetSession<AuthSession, AuthUser>(
     'Better Auth session',
   );
   const consumer = betterAuthCredentialConsumers.getSession;
-  const result = await runBetterAuthCredentialConsumerAsync(consumer, () =>
-    auth.api.getSession({
-      headers: request.headers,
-      returnHeaders: true,
-    }),
-  );
+  const result = await runBetterAuthCredentialSourceCallableAsync<
+    | BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>
+    | BetterAuthBareSessionPayload<AuthSession, AuthUser>
+    | null
+    | undefined
+  >(consumer, 'better-auth.callable', auth.method, auth.receiver, [
+    { headers: request.headers, returnHeaders: true },
+  ]);
   return consumeBetterAuthCredentialResult(consumer, result);
 }
 
@@ -641,8 +639,12 @@ function getBetterAuthSetCookieForConsumer<Id extends BetterAuthCredentialConsum
   consumer: BetterAuthCredentialConsumer<Id>,
   headers: Headers | null | undefined,
 ): string[] {
-  const result = runBetterAuthCredentialConsumer(consumer, () =>
-    snapshotBetterAuthSetCookie(headers),
+  const result = runBetterAuthCredentialSourceCallable<string[]>(
+    consumer,
+    'cookie.snapshot',
+    snapshotBetterAuthSetCookie,
+    undefined,
+    [headers],
   );
   return consumeBetterAuthCredentialResult(consumer, result);
 }

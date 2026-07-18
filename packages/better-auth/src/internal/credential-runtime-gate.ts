@@ -1,4 +1,5 @@
 import {
+  betterAuthApply,
   betterAuthCreateMap,
   betterAuthCreateNullRecord,
   betterAuthCreateSet,
@@ -34,6 +35,15 @@ export type BetterAuthCredentialRuntimeResultPolicy =
   | 'session-result'
   | 'set-cookie-list';
 
+export type BetterAuthCredentialRawSourceId =
+  | 'better-auth.callable'
+  | 'better-auth.constructor'
+  | 'cookie.snapshot'
+  | 'password.hash'
+  | 'password.verify'
+  | 'rate-limit.constructor'
+  | 'session.reconstruction';
+
 export interface BetterAuthCredentialConsumerContract {
   /** Stable review id for this adapter credential/secret consumer. */
   id: string;
@@ -43,6 +53,10 @@ export interface BetterAuthCredentialConsumerContract {
   paths: readonly BetterAuthRequestSecretPathId[];
   /** Runtime shape permitted to leave the consumer and reach its reviewed next sink. */
   result: BetterAuthCredentialRuntimeResultPolicy;
+  /** Raw dependency or secret-transform source that this exact consumer owns. */
+  source: BetterAuthCredentialRawSourceId;
+  /** Stable property name of the exact module-private runtime consumer token. */
+  token: string;
   /** Whether a 400/401/403 provider error may become the opaque invalid-credential verdict. */
   credentialFailure: boolean;
 }
@@ -65,6 +79,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
         'better-auth.adapter.sign-in.account-password',
       ],
       result: 'opaque-response',
+      source: 'better-auth.callable',
+      token: 'credentialHandlerSignInEmail',
     },
     {
       credentialFailure: true,
@@ -72,6 +88,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'internal/trusted-plaintext.ts',
       paths: ['better-auth.sign-up.submitted-password'],
       result: 'opaque-response',
+      source: 'better-auth.callable',
+      token: 'credentialHandlerSignUpEmail',
     },
     {
       credentialFailure: false,
@@ -79,6 +97,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'internal/trusted-plaintext.ts',
       paths: ['better-auth.sign-up.submitted-password'],
       result: 'discarded',
+      source: 'better-auth.callable',
+      token: 'seedSignUpEmail',
     },
     {
       credentialFailure: false,
@@ -86,6 +106,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'internal/trusted-plaintext.ts',
       paths: ['better-auth.sign-out.request-cookie'],
       result: 'opaque-response',
+      source: 'better-auth.callable',
+      token: 'signOut',
     },
     {
       credentialFailure: false,
@@ -93,6 +115,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'internal/trusted-plaintext.ts',
       paths: ['better-auth.get-session.request-cookie', 'better-auth.adapter.session-token-lookup'],
       result: 'session-result',
+      source: 'better-auth.callable',
+      token: 'getSession',
     },
     {
       credentialFailure: false,
@@ -100,6 +124,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'session.ts',
       paths: ['better-auth.get-session.response-secret-projection'],
       result: 'session-result',
+      source: 'session.reconstruction',
+      token: 'sessionProjection',
     },
     {
       credentialFailure: false,
@@ -107,6 +133,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'internal/trusted-plaintext.ts',
       paths: ['better-auth.set-cookie.forwarding'],
       result: 'set-cookie-list',
+      source: 'cookie.snapshot',
+      token: 'credentialCookieForwarding',
     },
     {
       credentialFailure: false,
@@ -114,6 +142,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'internal/trusted-plaintext.ts',
       paths: ['better-auth.session-refresh.set-cookie'],
       result: 'set-cookie-list',
+      source: 'cookie.snapshot',
+      token: 'sessionCookieForwarding',
     },
     {
       credentialFailure: false,
@@ -121,6 +151,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'mount-adapter.ts',
       paths: ['better-auth.mount.handler-delegation'],
       result: 'opaque-response',
+      source: 'better-auth.callable',
+      token: 'mountHandler',
     },
     {
       credentialFailure: false,
@@ -128,6 +160,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'internal/trusted-plaintext.ts',
       paths: ['better-auth.mount.set-cookie-forwarding'],
       result: 'set-cookie-list',
+      source: 'cookie.snapshot',
+      token: 'mountCookieForwarding',
     },
     {
       credentialFailure: false,
@@ -135,6 +169,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'internal/password.ts',
       paths: ['better-auth.sign-up.submitted-password'],
       result: 'argon2id-hash',
+      source: 'password.hash',
+      token: 'passwordHash',
     },
     {
       credentialFailure: false,
@@ -145,6 +181,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
         'better-auth.adapter.sign-in.account-password',
       ],
       result: 'boolean-verdict',
+      source: 'password.verify',
+      token: 'passwordVerify',
     },
     {
       credentialFailure: false,
@@ -152,6 +190,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'postgres.ts',
       paths: ['better-auth.binding.signing-secret'],
       result: 'adapter-instance',
+      source: 'better-auth.constructor',
+      token: 'postgresAdapter',
     },
     {
       credentialFailure: false,
@@ -159,6 +199,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'sqlite.ts',
       paths: ['better-auth.binding.signing-secret'],
       result: 'adapter-instance',
+      source: 'better-auth.constructor',
+      token: 'sqliteAdapter',
     },
     {
       credentialFailure: false,
@@ -166,6 +208,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'postgres.ts',
       paths: ['better-auth.rate-limit.signing-secret'],
       result: 'rate-limit-options',
+      source: 'rate-limit.constructor',
+      token: 'postgresRateLimit',
     },
     {
       credentialFailure: false,
@@ -173,6 +217,8 @@ export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
       owner: 'sqlite.ts',
       paths: ['better-auth.rate-limit.signing-secret'],
       result: 'rate-limit-options',
+      source: 'rate-limit.constructor',
+      token: 'sqliteRateLimit',
     },
   ] as const satisfies readonly BetterAuthCredentialConsumerContract[],
   'Better Auth credential consumer contracts',
@@ -228,6 +274,9 @@ function validateConsumerContract(contract: BetterAuthCredentialConsumerContract
   if (typeof contract.owner !== 'string' || contract.owner === '') {
     throw new NativeTypeError(`Better Auth credential consumer ${contract.id} needs an owner.`);
   }
+  if (typeof contract.token !== 'string' || contract.token === '') {
+    throw new NativeTypeError(`Better Auth credential consumer ${contract.id} needs a token name.`);
+  }
   if (typeof contract.credentialFailure !== 'boolean') {
     throw new NativeTypeError(
       `Better Auth credential consumer ${contract.id} needs a credential-failure verdict.`,
@@ -248,6 +297,20 @@ function validateConsumerContract(contract: BetterAuthCredentialConsumerContract
         `Better Auth credential consumer ${contract.id} has an unknown result policy.`,
       );
   }
+  switch (contract.source) {
+    case 'better-auth.callable':
+    case 'better-auth.constructor':
+    case 'cookie.snapshot':
+    case 'password.hash':
+    case 'password.verify':
+    case 'rate-limit.constructor':
+    case 'session.reconstruction':
+      break;
+    default:
+      throw new NativeTypeError(
+        `Better Auth credential consumer ${contract.id} has an unknown raw source.`,
+      );
+  }
   const paths = betterAuthSnapshotDenseArray(
     contract.paths,
     `Better Auth credential consumer ${contract.id} paths`,
@@ -266,6 +329,7 @@ function validateCredentialConsumerCensus(): void {
     'Better Auth credential consumer contracts',
   );
   const ids = betterAuthCreateSet<string>();
+  const tokens = betterAuthCreateSet<string>();
   const coveredPaths = betterAuthCreateSet<string>();
   for (let contractIndex = 0; contractIndex < contracts.length; contractIndex += 1) {
     const contract = contracts[contractIndex]!;
@@ -274,6 +338,12 @@ function validateCredentialConsumerCensus(): void {
       throw new NativeTypeError(`KV439: duplicate Better Auth credential consumer ${contract.id}`);
     }
     betterAuthSetAdd(ids, contract.id);
+    if (betterAuthSetHas(tokens, contract.token)) {
+      throw new NativeTypeError(
+        `KV439: duplicate Better Auth credential consumer token ${contract.token}`,
+      );
+    }
+    betterAuthSetAdd(tokens, contract.token);
     const paths = betterAuthSnapshotDenseArray(
       contract.paths,
       `Better Auth credential consumer ${contract.id} paths`,
@@ -350,12 +420,13 @@ export const betterAuthCredentialConsumers = betterAuthFreezeOwn(
   'Better Auth credential consumers',
 );
 
-/** Execute one synchronous adapter credential consumer and seal its result behind the gate. */
+/** Execute the package-owned synchronous session reconstruction and seal its result. */
 export function runBetterAuthCredentialConsumer<Id extends BetterAuthCredentialConsumerId, Value>(
   consumer: BetterAuthCredentialConsumer<Id>,
   invoke: () => Value,
 ): BetterAuthCredentialResult<Id, Value> {
   const contract = requireConsumer(consumer);
+  requirePackageOwnedTransform(contract);
   let value: Value;
   try {
     value = invoke();
@@ -366,23 +437,130 @@ export function runBetterAuthCredentialConsumer<Id extends BetterAuthCredentialC
   return registerResult(consumer, value, contract.id);
 }
 
-/** Execute one asynchronous adapter credential consumer and seal its result behind the gate. */
-export async function runBetterAuthCredentialConsumerAsync<
-  Id extends BetterAuthCredentialConsumerId,
+/**
+ * Invoke one captured credential source inside the runtime door itself.
+ *
+ * Unlike the generic transform callback, raw dependency call authority never executes in an
+ * owner-supplied closure: the exact registered callable consumer, pinned method/receiver, error
+ * redaction, result validator, and one-shot seal all meet in this module (SPEC §6.6/§10.3 C9-C10).
+ */
+export function runBetterAuthCredentialSourceCallable<
   Value,
+  Id extends BetterAuthCredentialConsumerId = BetterAuthCredentialConsumerId,
 >(
   consumer: BetterAuthCredentialConsumer<Id>,
-  invoke: () => PromiseLike<Value> | Value,
-): Promise<BetterAuthCredentialResult<Id, Value>> {
-  const contract = requireConsumer(consumer);
+  source: BetterAuthCredentialRawSourceId,
+  method: Function,
+  receiver: unknown,
+  args: readonly unknown[],
+): BetterAuthCredentialResult<Id, Value> {
+  const prepared = prepareCredentialSourceCallable(consumer, source, method, receiver, args);
   let value: Value;
   try {
-    value = await invoke();
+    const invoked = betterAuthApply<unknown>(method, receiver, prepared.args);
+    value = normalizeCredentialSourceResult<Value>(prepared.contract, invoked);
   } catch (error) {
-    throw sanitizedConsumerFailure(contract, error);
+    throw sanitizedConsumerFailure(prepared.contract, error);
   }
-  validateConsumerResult(contract, value);
-  return registerResult(consumer, value, contract.id);
+  validateConsumerResult(prepared.contract, value);
+  return registerResult(consumer, value, prepared.contract.id);
+}
+
+/** Asynchronous form of the exact-source runtime door. */
+export async function runBetterAuthCredentialSourceCallableAsync<
+  Value,
+  Id extends BetterAuthCredentialConsumerId = BetterAuthCredentialConsumerId,
+>(
+  consumer: BetterAuthCredentialConsumer<Id>,
+  source: BetterAuthCredentialRawSourceId,
+  method: Function,
+  receiver: unknown,
+  args: readonly unknown[],
+): Promise<BetterAuthCredentialResult<Id, Value>> {
+  const prepared = prepareCredentialSourceCallable(consumer, source, method, receiver, args);
+  let value: Value;
+  try {
+    const invoked = await betterAuthApply<unknown>(method, receiver, prepared.args);
+    value = normalizeCredentialSourceResult<Value>(prepared.contract, invoked);
+  } catch (error) {
+    throw sanitizedConsumerFailure(prepared.contract, error);
+  }
+  validateConsumerResult(prepared.contract, value);
+  return registerResult(consumer, value, prepared.contract.id);
+}
+
+function prepareCredentialSourceCallable<Id extends BetterAuthCredentialConsumerId>(
+  consumer: BetterAuthCredentialConsumer<Id>,
+  source: BetterAuthCredentialRawSourceId,
+  method: Function,
+  receiver: unknown,
+  args: readonly unknown[],
+): { args: readonly unknown[]; contract: BetterAuthCredentialConsumerContract } {
+  const contract = requireConsumer(consumer);
+  if (contract.source !== source) {
+    throw new NativeTypeError(
+      `KV439: Better Auth credential consumer ${contract.id} cannot invoke raw source ${source}.`,
+    );
+  }
+  if (typeof method !== 'function' || betterAuthIsProxy(method)) {
+    throw new NativeTypeError(
+      `KV439: Better Auth credential consumer ${contract.id} received an invalid callable.`,
+    );
+  }
+  if (source === 'better-auth.callable' && !isValidCredentialCallableReceiver(receiver)) {
+    throw new NativeTypeError(
+      `KV439: Better Auth credential consumer ${contract.id} received an invalid receiver.`,
+    );
+  }
+  if (
+    source !== 'better-auth.callable' &&
+    receiver !== undefined &&
+    !isValidCredentialCallableReceiver(receiver)
+  ) {
+    throw new NativeTypeError(
+      `KV439: Better Auth credential consumer ${contract.id} received an invalid optional receiver.`,
+    );
+  }
+  return {
+    args: betterAuthSnapshotDenseArray(
+      args,
+      `Better Auth credential consumer ${contract.id} arguments`,
+    ),
+    contract,
+  };
+}
+
+function isValidCredentialCallableReceiver(receiver: unknown): boolean {
+  return (
+    ((typeof receiver === 'object' && receiver !== null) || typeof receiver === 'function') &&
+    !betterAuthIsProxy(receiver)
+  );
+}
+
+function requirePackageOwnedTransform(contract: BetterAuthCredentialConsumerContract): void {
+  if (contract.source !== 'session.reconstruction') {
+    throw new NativeTypeError(
+      `KV439: Better Auth credential consumer ${contract.id} cannot execute an owner callback.`,
+    );
+  }
+}
+
+function normalizeCredentialSourceResult<Value>(
+  contract: BetterAuthCredentialConsumerContract,
+  invoked: unknown,
+): Value {
+  if (contract.result === 'discarded') return undefined as Value;
+  if (contract.source !== 'password.verify') return invoked as Value;
+  if ((typeof invoked !== 'object' && typeof invoked !== 'function') || invoked === null) {
+    return false as Value;
+  }
+  if (betterAuthIsProxy(invoked)) {
+    throw new NativeTypeError(
+      `KV439: Better Auth credential consumer ${contract.id} returned a Proxy.`,
+    );
+  }
+  const descriptor = betterAuthGetOwnPropertyDescriptor(invoked, 'ok');
+  return (descriptor !== undefined && 'value' in descriptor && descriptor.value === true) as Value;
 }
 
 /**

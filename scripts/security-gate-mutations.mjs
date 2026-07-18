@@ -421,6 +421,10 @@ const betterAuthCredentialResultIdentityBranch =
 const removedBetterAuthCredentialResultIdentityBranch =
   '  if (registered === undefined || false) {';
 
+const betterAuthCredentialSourceIdentityBranch = '  if (contract.source !== source) {';
+
+const removedBetterAuthCredentialSourceIdentityBranch = '  if (false) {';
+
 const m5ForbiddenStatusBranch = [
   '  } else if (FORBIDDEN_STATUS_PATTERN.test(row.status)) {',
   '    violations.push(`${label}: M5 forbids status ${JSON.stringify(row.status)}`);',
@@ -944,6 +948,17 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: betterAuthCredentialRuntimeGatePath,
     sourceOnly: true,
     test: assertBetterAuthCredentialResultIdentityIsPinned,
+  },
+  {
+    description: 'Lets any Better Auth consumer token invoke a different raw credential source.',
+    expectedKiller:
+      'M2 Better Auth raw callables must require a contract whose exact source matches the invocation',
+    name: 'better-auth-credential-gate/drop-source-identity',
+    replacement: removedBetterAuthCredentialSourceIdentityBranch,
+    search: betterAuthCredentialSourceIdentityBranch,
+    sourceFile: betterAuthCredentialRuntimeGatePath,
+    sourceOnly: true,
+    test: assertBetterAuthCredentialSourceIsPinned,
   },
   {
     baseModule: requestIngressPolicy,
@@ -1913,6 +1928,14 @@ async function assertBetterAuthCredentialResultIdentityIsPinned(
   if (!sourceText?.includes(betterAuthCredentialResultIdentityBranch)) {
     throw new Error(
       'Better Auth credential results no longer require exact same-consumer registry identity',
+    );
+  }
+}
+
+async function assertBetterAuthCredentialSourceIsPinned(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(betterAuthCredentialSourceIdentityBranch)) {
+    throw new Error(
+      'Better Auth raw callables no longer require the exact consumer/source contract',
     );
   }
 }

@@ -415,6 +415,15 @@ brand is author-time ergonomics only: the runtime registry, complete path/consum
 censuses, and hostile-value/sink tests own enforcement. The static census proves coverage but is
 not itself runtime authority (SPEC §10.3 C9-C10).
 
+Every captured external Better Auth credential source—including handler/API callables, constructors,
+password functions, rate-limit construction, and cookie extraction—MUST be invoked inside that
+runtime gate after exact consumer/source validation. Passing an owner-supplied callback through a
+generic gate while the callback itself retains raw dependency call authority is not the sole-door
+construction; generic callbacks are limited to package-owned transforms such as sanitized session
+reconstruction. The package source-use census MUST resolve aliases, destructuring, literal computed
+access, `.call`/`.apply`, and local imports/re-exports by symbol/value flow; printed callee spelling
+or a fixed method-name regex is not coverage evidence.
+
 **Better Auth redirect mount response boundary (normative).** The opaque Better Auth mount is a
 redirect-protocol adapter, not a public proxy for the dependency router. After the exact request
 origin check, Kovo MUST admit only status `301`, `302`, `303`, `307`, or `308` with exactly one
