@@ -122,20 +122,6 @@ infrastructure-level (L3/L4) DDoS.
 | **M3** Escape-hatch visibility       | GREEN | Closed by followup-16: static capability producers surface every escape in `kovo explain --capabilities`/`--cookies`                                            |
 | **M6** Deps / supply chain           | GREEN | Closed by followup-16 M6: exact pins + `--frozen-lockfile` + `trustedDependencySurfaces` (`check:tcb-boundary`) + `rules/dependency-policy.md`                  |
 
-### M3 — escape-hatch visibility gap (detail)
-
-The `kovo explain --capabilities` renderer supports 12 capability kinds but the pipeline populates only **2**
-(`publishToClient` + `trustedReveal`); the 7 static trust escapes are surfaced via `graph.trustEscapes`. Every
-**runtime-audited** escape has a `drain*Facts()` collector that is defined/exported but **never invoked** into
-`graph.capabilities`: `crossOwnerRead` (`managed-db.ts:616`), `trustedAssign`/`serverValue` (`write-governance.ts:95`),
-`unsafeCookie` (`cookies.ts:130`), `publicRelation` (`postgres-runtime.ts:391`), `systemDb`/`authAdapterDb`
-(`postgres-runtime.ts:439`), `acceptUnverified`, `egressAllowInternal` (`egress.ts:254`), `unsafeRegex` (`redos.ts:506`,
-standing marker `SF-WIRE(graph-output)` `redos.ts:502`), `rawRead`. `actAs`/`declareSystem*` have no capability kind at
-all. The format test's green is manufactured (`index.kovo-explain.test.ts:1109` hand-injects capabilities). **Impact:**
-a reviewer auditing a real app sees ~2 of ~12 intentional holes — the "review every escape from one place" guarantee is
-broken. **Not a fail-open** (escapes still carry their runtime guards), but an audit-completeness gap. **Fix:** wire the
-orphaned drains + static producers into `graph.capabilities`/`graph.cookieDowngrades`; resolve `SF-WIRE(graph-output)`.
-
 ## Status
 
 - M1 authored (this document). M2–M8 all GREEN.

@@ -142,16 +142,19 @@ scripts/check-tcb-boundary.test.mjs` 19 pass; `node scripts/supply-chain-gates.m
       harness as the threat model. The matrix makes the audit efficient (directed, not exploratory).
   - Acceptance: an external audit report exists; every blocking finding is closed (a new `bugz`/`followup` as needed);
     the matrix is updated with the auditor-verified controls. Record in `docs/v1-acceptance-ledger.md`.
-- [ ] **A2 — The matrix + audit become the standing v1 security gate in `rules/v1-acceptance.md` 16.9:** v1 does not
+- [x] **A2 — The matrix + audit become the standing v1 security gate in `rules/v1-acceptance.md` 16.9:** v1 does not
       freeze with an OPEN matrix cell or an unresolved blocking audit finding.
+  - Evidence: `rules/v1-acceptance.md` 16.9 and its freeze checklist require the matrix,
+    independent architecture review, third-party implementation audit, blocking-finding closure,
+    and exact-candidate retest.
 
 ## 4. Open design issues (for this plan)
 
-- [ ] **TO1 — Matrix granularity: per-cell vs per-mechanism.** A single {surface × category} cell can hide multiple
+- [x] **TO1 — Matrix granularity: per-cell vs per-mechanism.** A single {surface × category} cell can hide multiple
       distinct controls. **Decision:** allow a cell to list MULTIPLE controls, but each must name a test/gate; a cell is
       green only when every listed control is enforced and no known sub-surface is unlisted. Keep the matrix coarse enough
       to be readable, fine enough that "green" means something.
-- [ ] **TO2 — Out-of-scope must be HONEST, not an escape valve.** Marking a cell out-of-scope (DoS, supply-chain
+- [x] **TO2 — Out-of-scope must be HONEST, not an escape valve.** Marking a cell out-of-scope (DoS, supply-chain
       internals) is legitimate only if the boundary is real and documented for the app author. **Decision:** every
       out-of-scope note names WHOSE responsibility the threat is and what the framework does to avoid being a FOOTGUN for
       it; a reviewer (or the auditor) signs off that the exclusion is reasonable.
@@ -161,9 +164,14 @@ scripts/check-tcb-boundary.test.mjs` 19 pass; `node scripts/supply-chain-gates.m
 
 ## 5. Acceptance (v1 security signoff)
 
-- [ ] The matrix has no OPEN cell (every cell: control+test / audited escape / signed-off out-of-scope).
-- [ ] M2–M8's first-fill cells are green (auth TCB proof, escape-hatch visibility, constant-time compare, scoped
+- [x] The matrix has no OPEN cell (every cell: control+test / audited escape / signed-off out-of-scope).
+  - Evidence: `docs/security-threat-matrix.md` maps all 28 cells and its Open-cells section records
+    none; M34 adds the latest raw method-identity control without reopening a cell.
+- [x] M2–M8's first-fill cells are green (auth TCB proof, escape-hatch visibility, constant-time compare, scoped
       DoS/supply-chain/build/infra).
+  - Evidence: the M2–M8 items above cite their current gates; `docs/security-threat-matrix.md`
+    carries the compact control map.
 - [ ] A third-party audit is complete with all blocking findings closed.
-- [ ] `rules/v1-acceptance.md` 16.9 references the matrix + audit as freeze gates; `docs/v1-acceptance-ledger.md`
+- [x] `rules/v1-acceptance.md` 16.9 references the matrix + audit as freeze gates; `docs/v1-acceptance-ledger.md`
       records the dated evidence.
+  - Evidence: A2 above and the 2026-07-18 reconciliation row in the acceptance ledger.

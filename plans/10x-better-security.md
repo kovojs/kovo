@@ -85,13 +85,17 @@ Measurements are versioned and reproducible:
 
 ## Phase 0 — Exact-state reconciliation and stable starting point
 
-- [ ] Record the exact implementation baseline SHA and reconcile code, SPEC/rules,
+- [x] Record the exact implementation baseline SHA and reconcile code, SPEC/rules,
       `docs/v1-acceptance-ledger.md`, `plans/claude-bugz-32.md`,
       `plans/bugz-33.md`, and the threat matrix. Classify each apparent open item as fixed with
       current proof, still open, superseded, or honestly out of scope.
-- [ ] Run `pnpm run test:authz-paranoid` against a real external Postgres toolchain and record
+  - Evidence: baseline `a6dae7223`; the reconciled ledgers close stale B1–B4/M1–M34 claims, retain
+    external audit/retest and matrix-liveness work as open, and align gate 16.9 with current code.
+- [x] Run `pnpm run test:authz-paranoid` against a real external Postgres toolchain and record
       which cases executed or skipped. A green run containing skipped required Postgres cases is
       not acceptance evidence.
+  - Evidence: clean `a6dae7223`, local PostgreSQL toolchain, 2 files and 7/7 tests passed in 653.48s;
+    all three real-Postgres served-artifact cases executed and zero tests skipped.
 - [x] Reproduce or close every unintegrated ordinary-threat finding at the baseline, including the
       HTTP/2 method-case differential currently carried by test-only commit `6abd0f36b`, and
       route confirmed findings through the threat matrix before architectural work proceeds.
