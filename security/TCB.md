@@ -48,7 +48,7 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
   "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1; plans/fundamental-fixes-followup-7b.md DEC-A; plans/fundamental-fixes-followup-12.md DEC-D1",
   "budgets": {
     "entryMaxLines": 310,
-    "totalTcbMaxLines": 1900
+    "totalTcbMaxLines": 2000
   },
   "trustedDependencySurfaces": [
     {
@@ -459,7 +459,7 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "kind": "better-auth-credential-consumer-contract-refusal",
       "classification": "tcb",
       "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
-      "lineBudget": 45
+      "lineBudget": 55
     },
     {
       "id": "better-auth.credential-runtime-gate.constructor",

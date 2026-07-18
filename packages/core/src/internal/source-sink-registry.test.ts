@@ -269,7 +269,8 @@ describe('boundary crossing sink inventory', () => {
       (entry) => entry.sink === 'Better Auth credential/non-egress',
     );
     expect(credentialDoor?.censusFamilies).toEqual(['auth.credential.non-egress']);
-    expect(credentialDoor?.soleDoor).toContain('runBetterAuthCredentialConsumer{Async}');
+    expect(credentialDoor?.soleDoor).toContain('runBetterAuthCredentialConsumer');
+    expect(credentialDoor?.soleDoor).toContain('runBetterAuthCredentialSourceCallable{Async}');
     expect(credentialDoor?.soleDoor).toContain('consumeBetterAuthCredentialResult');
     expect(credentialDoor?.hostileValueEvidence).toContain(
       'packages/better-auth/src/internal.trusted-plaintext.test.ts',
