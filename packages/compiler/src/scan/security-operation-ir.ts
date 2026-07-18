@@ -109,6 +109,11 @@ const TRUSTED_HTML_IDENTITIES = [
   frameworkExport('@kovojs/browser', 'trustedHtml'),
   frameworkExport('@kovojs/server', 'trustedHtml'),
 ] as const;
+const RUN_COMMAND_IDENTITY = frameworkExport('@kovojs/server', 'runCommand');
+const SERVER_STORAGE_FACTORY_IDENTITIES = [
+  frameworkExport('@kovojs/core', 'createFileSystemStorage'),
+  frameworkExport('@kovojs/core', 'createS3CompatibleStorage'),
+] as const;
 const SERVER_OPERATION_LEGACY_IDENTITIES = [
   REDIRECT_IDENTITY,
   TRUSTED_SQL_IDENTITY,
@@ -897,6 +902,53 @@ function securityIrImportDeclaresName(statement: ts.ImportDeclaration, name: str
   const elements = compilerSnapshotDenseArray(bindings.elements, 'Finite security-IR imports');
   for (let index = 0; index < elements.length; index += 1) {
     if (elements[index]!.name.text === name) return true;
+  }
+  return false;
+}
+
+function securityIrExpressionUsesDirectImportBinding(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  const member = staticMember(current);
+  const directName = ts.isIdentifier(current) ? current.text : undefined;
+  const namespaceName =
+    member && ts.isIdentifier(unwrapExpression(member.receiver))
+      ? (unwrapExpression(member.receiver) as ts.Identifier).text
+      : undefined;
+  if (directName === undefined && namespaceName === undefined) return false;
+
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Finite security-IR direct import bindings',
+  );
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (!ts.isImportDeclaration(statement)) continue;
+    const clause = statement.importClause;
+    if (!clause) continue;
+    if (directName !== undefined) {
+      if (clause.name?.text === directName) return true;
+      const bindings = clause.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        const elements = compilerSnapshotDenseArray(
+          bindings.elements,
+          'Finite security-IR direct named imports',
+        );
+        for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+          if (elements[elementIndex]!.name.text === directName) return true;
+        }
+      }
+    }
+    if (
+      namespaceName !== undefined &&
+      clause.namedBindings &&
+      ts.isNamespaceImport(clause.namedBindings) &&
+      clause.namedBindings.name.text === namespaceName
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -2941,6 +2993,25 @@ function classifyServerCall(
     }
     return;
   }
+  if (frameworkExportEquals(frameworkIdentity, RUN_COMMAND_IDENTITY)) {
+    // SPEC §6.6: command execution terminates at the exact framework capability door. KV424 owns
+    // the Command/allowlist provenance proof and runCommand revalidates its private runtime
+    // sentinel; finite IR admits only the direct immutable framework import, never an alias or a
+    // same-spelled foreign callable.
+    if (
+      !securityIrExpressionUsesDirectImportBinding(sourceFile, callee) ||
+      !securityIrMemberCallableIsStable(sourceFile, callee, call) ||
+      serverArgumentsContainAuthority(call.arguments, aliases) ||
+      serverArgumentsContainForeignExecutable(call.arguments, aliases)
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `mutable, escaped, aliased, or authority-bearing command door ${nodeName(callee)} is outside the finite server IR`,
+      );
+    }
+    return;
+  }
   const unsupportedCallback = serverUnreviewedCallbackArgument(sourceFile, call);
   if (unsupportedCallback) {
     appendViolation(
@@ -3560,7 +3631,9 @@ function serverModuleAliasEnvironment(
       const declaration = declarations[declarationIndex]!;
       const initializer = declaration.initializer;
       if (!initializer) continue;
-      let provenance = serverExpressionProvenance(initializer, aliases);
+      let provenance =
+        serverModuleFrameworkCapabilityFactoryProvenance(sourceFile, initializer, aliases) ??
+        serverExpressionProvenance(initializer, aliases);
       if (
         !serverProvenanceCarriesAuthority(provenance) &&
         serverModuleInitializerReturnsAuthority(
@@ -3595,6 +3668,34 @@ function serverModuleAliasEnvironment(
     compilerWeakMapSet(serverRootModuleAliasEnvironmentCache, sourceFile, environment);
   }
   return environment;
+}
+
+function serverModuleFrameworkCapabilityFactoryProvenance(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerValueProvenance | undefined {
+  const current = unwrapExpression(expression);
+  if (!ts.isCallExpression(current)) return undefined;
+  const callee = unwrapExpression(current.expression);
+  const identity = canonicalFrameworkExportForExpression(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    callee,
+  );
+  if (!frameworkIdentityIn(identity, SERVER_STORAGE_FACTORY_IDENTITIES)) return undefined;
+  if (
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, callee) ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, current) ||
+    serverArgumentsContainAuthority(current.arguments, aliases) ||
+    serverArgumentsContainForeignExecutable(current.arguments, aliases)
+  ) {
+    return 'unknown-authority';
+  }
+  // SPEC §6.6: a module-scope immutable result of the exact reviewed storage factory is a finite
+  // storage capability. Request-time factories and mutable/aliased/lookalike callables never reach
+  // this module-constant fixed point.
+  return 'storage';
 }
 
 function serverModuleInitializerReturnsAuthority(
@@ -4006,7 +4107,7 @@ function serverMemberProvenance(
     return 'unknown-authority';
   }
   if (receiver === 'storage') {
-    if (member === 'get' || member === 'list' || member === 'signUrl') {
+    if (member === 'get' || member === 'list' || member === 'signUrl' || member === 'stat') {
       return serverOperationProvenance('server.storage.read');
     }
     if (member === 'delete' || member === 'put') {

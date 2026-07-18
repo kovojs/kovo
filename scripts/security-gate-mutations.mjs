@@ -78,7 +78,7 @@ const requestIngressPolicyPath = path.join(
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 
 const browserRtcNetworkCapabilityBranch = [
-  "const globalCapabilities = new Map<string, RawCapabilityKind>([",
+  'const globalCapabilities = new Map<string, RawCapabilityKind>([',
   "  ['Bun', 'process'],",
   "  ['Deno', 'process'],",
   "  ['EventSource', 'network'],",
@@ -86,7 +86,7 @@ const browserRtcNetworkCapabilityBranch = [
   "  ['RTCPeerConnection', 'network'],",
 ].join('\n');
 const weakenedBrowserRtcNetworkCapabilityBranch = [
-  "const globalCapabilities = new Map<string, RawCapabilityKind>([",
+  'const globalCapabilities = new Map<string, RawCapabilityKind>([',
   "  ['Bun', 'process'],",
   "  ['Deno', 'process'],",
   "  ['EventSource', 'network'],",
@@ -1140,6 +1140,27 @@ const bypassedStaticBuildAuthoritativeProjectBranch = [
   '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
 ].join('\n');
 
+const reviewedCommandCapabilityDoorBranch =
+  '  if (frameworkExportEquals(frameworkIdentity, RUN_COMMAND_IDENTITY)) {';
+const removedReviewedCommandCapabilityDoorBranch =
+  '  if (false && frameworkExportEquals(frameworkIdentity, RUN_COMMAND_IDENTITY)) {';
+const reviewedModuleStorageFactoryBranch = [
+  '  // SPEC §6.6: a module-scope immutable result of the exact reviewed storage factory is a finite',
+  '  // storage capability. Request-time factories and mutable/aliased/lookalike callables never reach',
+  '  // this module-constant fixed point.',
+  "  return 'storage';",
+].join('\n');
+const removedReviewedModuleStorageFactoryBranch = [
+  '  // SPEC §6.6: a module-scope immutable result of the exact reviewed storage factory is a finite',
+  '  // storage capability. Request-time factories and mutable/aliased/lookalike callables never reach',
+  '  // this module-constant fixed point.',
+  "  return 'unknown-authority';",
+].join('\n');
+const reviewedStorageStatBranch =
+  "    if (member === 'get' || member === 'list' || member === 'signUrl' || member === 'stat') {";
+const removedReviewedStorageStatBranch =
+  "    if (member === 'get' || member === 'list' || member === 'signUrl') {";
+
 const threatMatrixMissingSinkDenominatorBranch = [
   '  const missing = [...expectedSinks.keys()].filter((sink) => !seen.has(sink));',
   "  if (missing.length > 0) findings.push(`C9 sink mappings missing: ${missing.sort().join(', ')}`);",
@@ -1515,6 +1536,37 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleTrustEscapesPath,
     sourceOnly: true,
     test: assertStaticBuildAuthoritativeProjectIsPinned,
+  },
+  {
+    description: 'Deletes the exact reviewed runCommand capability-door admission.',
+    expectedKiller: 'finite IR must retain the exact runtime-validated command capability door',
+    name: 'compiler-finite-ir/drop-reviewed-command-door',
+    replacement: removedReviewedCommandCapabilityDoorBranch,
+    search: reviewedCommandCapabilityDoorBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedCommandCapabilityDoorIsPinned,
+  },
+  {
+    description:
+      'Stops exact immutable module-scope storage factories from minting storage provenance.',
+    expectedKiller: 'finite IR must retain exact module-scope storage factory provenance',
+    name: 'compiler-finite-ir/drop-module-storage-factory-provenance',
+    replacement: removedReviewedModuleStorageFactoryBranch,
+    search: reviewedModuleStorageFactoryBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedModuleStorageFactoryIsPinned,
+  },
+  {
+    description: 'Deletes storage.stat from the finite storage-read vocabulary.',
+    expectedKiller: 'finite IR must retain storage.stat as a reviewed storage read',
+    name: 'compiler-finite-ir/drop-storage-stat-read',
+    replacement: removedReviewedStorageStatBranch,
+    search: reviewedStorageStatBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedStorageStatIsPinned,
   },
   {
     description: 'Deletes normalized helper-cycle absorption.',
@@ -2910,6 +2962,24 @@ async function assertTrustedAssignNestedReviewIsPinned(_moduleUnderTest, { sourc
 async function assertStaticBuildAuthoritativeProjectIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(staticBuildAuthoritativeProjectBranch)) {
     throw new Error('static build trust facts no longer enter the authoritative TASK B project');
+  }
+}
+
+async function assertReviewedCommandCapabilityDoorIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedCommandCapabilityDoorBranch)) {
+    throw new Error('finite IR no longer admits the exact runtime-validated command door');
+  }
+}
+
+async function assertReviewedModuleStorageFactoryIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedModuleStorageFactoryBranch)) {
+    throw new Error('finite IR no longer derives exact module-scope storage provenance');
+  }
+}
+
+async function assertReviewedStorageStatIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedStorageStatBranch)) {
+    throw new Error('finite IR no longer classifies storage.stat as a reviewed read');
   }
 }
 

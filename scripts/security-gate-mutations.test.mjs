@@ -17,6 +17,18 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'compiler-finite-ir/drop-reviewed-command-door',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-finite-ir/drop-module-storage-factory-provenance',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-finite-ir/drop-storage-stat-read',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'compiler-finite-ir/allow-spelled-trusted-assign',
           status: 'killed',
         }),
