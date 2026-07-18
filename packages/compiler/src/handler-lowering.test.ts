@@ -665,11 +665,11 @@ export const CartActions = component({
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
     expect(serverSource).toContain('kovo-param-types="quantity:number"');
     expect(clientSource).toContain(
-      'export const CartActions$button_click = handler((_event, ctx) => {',
+      'export const CartActions$button_click = securityHandler([{"door":"compiler-state","kind":"browser.state.write","target":"state.count"}], (_event, ctx) => {',
     );
     expect(clientSource).toContain('return ctx.state.count += ctx.params.quantity;');
     expect(clientSource).toContain(
-      'export const CartActions$button_click_2 = handler((_event, ctx) => {',
+      'export const CartActions$button_click_2 = securityHandler([{"door":"compiler-state","kind":"browser.state.write","target":"state.count"}], (_event, ctx) => {',
     );
     expect(clientSource).toContain(
       'return ctx.state.count = ctx.state.count - ctx.params.quantity;',
@@ -760,7 +760,7 @@ export const CartActions = component({
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
     expect(serverSource).toContain('kovo-param-types="quantity:number"');
     expect(clientSource).toContain(
-      'export const CartActions$button_click = handler((_event, ctx) => {',
+      'export const CartActions$button_click = securityHandler([{"door":"compiler-state","kind":"browser.state.write","target":"state.count"}], (_event, ctx) => {',
     );
     expect(clientSource).toContain('return ctx.state.count += ctx.params.quantity;');
   });
@@ -802,7 +802,7 @@ export const CartActions = component({
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
     expect(serverSource).toContain('kovo-param-types="quantity:number"');
     expect(clientSource).toContain(
-      'export const CartActions$button_click = handler((_event, ctx) => {',
+      'export const CartActions$button_click = securityHandler([{"door":"compiler-state","kind":"browser.state.write","target":"state.count"}], (_event, ctx) => {',
     );
     expect(clientSource).toContain('return ctx.state.count += ctx.params.quantity;');
   });

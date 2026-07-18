@@ -1,4 +1,5 @@
 import { formatKovoModuleRef, parseKovoModuleRef } from '@kovojs/core/internal/module-ref';
+import { securityOperationIrSchema } from '@kovojs/core/internal/security-operation-ir';
 
 import { compilerIrHeader } from '../ir.js';
 import {
@@ -29,6 +30,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
+import { serverSecurityOperationFacts } from '../security-operation-facts.js';
 import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
 import {
   emitElementParamTypes,
@@ -84,11 +86,35 @@ export interface ServerRenderComponentStampTarget {
   registryComponentName: string;
 }
 
-export function emitServerModule(renderedSource: string): EmittedServerModule {
+export function emitServerModule(
+  renderedSource: string,
+  model?: ComponentModuleModel,
+): EmittedServerModule {
+  const sourceWithManifest =
+    model === undefined
+      ? renderedSource
+      : appendServerSecurityOperationManifest(renderedSource, model);
   return {
-    executableSource: renderSourceModule(renderedSource, ''),
-    source: renderSourceModule(renderedSource, 'export '),
+    executableSource: renderSourceModule(sourceWithManifest, ''),
+    source: renderSourceModule(sourceWithManifest, 'export '),
   };
+}
+
+const GENERATED_SERVER_SECURITY_MANIFEST = '__kovoSecurityOperationManifest_v1';
+
+function appendServerSecurityOperationManifest(
+  renderedSource: string,
+  model: ComponentModuleModel,
+): string {
+  const operations = serverSecurityOperationFacts(model);
+  if (operations.length === 0) return renderedSource;
+  const operationsSource = serverJsonSource(operations, 'Server security-operation manifest');
+  const schemaSource = serverJsonSource(
+    securityOperationIrSchema,
+    'Server security-operation schema',
+  );
+  return `${renderedSource}\n/** @generated SPEC §5.2 compiler-owned finite server security IR. */
+export const ${GENERATED_SERVER_SECURITY_MANIFEST} = Object.freeze({ operations: Object.freeze(${operationsSource}), schema: ${schemaSource} });\n`;
 }
 
 export function serverRenderLowering(

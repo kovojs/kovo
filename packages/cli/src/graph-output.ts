@@ -394,6 +394,17 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
       );
     }
 
+    for (const operation of component.securityOperations ?? []) {
+      lines.push(
+        [
+          `OPERATION ${operation.kind}`,
+          `door=${operation.door}`,
+          `target=${operation.target ?? '-'}`,
+          `justification=${operation.justification ?? '-'}`,
+        ].join(' '),
+      );
+    }
+
     for (const substitution of component.platformSubstitutions ?? []) {
       lines.push(
         [

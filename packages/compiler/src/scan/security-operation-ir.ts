@@ -24,6 +24,8 @@ import {
   compilerSetAdd,
   compilerSetHas,
   compilerSnapshotDenseArray,
+  compilerStringSlice,
+  compilerStringStartsWith,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import type {
@@ -39,6 +41,18 @@ interface SecurityOperationScanResult<Operation> {
 }
 
 type BrowserValueProvenance = 'dom' | 'event' | 'form' | 'local' | 'state' | 'unknown';
+type ServerValueProvenance =
+  | 'context'
+  | 'database'
+  | 'headers'
+  | 'local'
+  | 'respond'
+  | 'response-constructor'
+  | 'safe-call'
+  | 'scope-call'
+  | 'storage'
+  | 'unknown-authority'
+  | `operation:${ServerSecurityOperationKind}`;
 
 const REDIRECT_IDENTITY = frameworkExport('@kovojs/server', 'redirect');
 const TRUSTED_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'trustedSql');
@@ -344,7 +358,7 @@ function classifyBrowserCall(
   }
 
   const root = rootIdentifier(member.receiver);
-  if (root && compilerSetHas(rawBrowserGlobalNames, root)) {
+  if (root && !compilerSetHas(locals, root) && compilerSetHas(rawBrowserGlobalNames, root)) {
     // A literal document lookup is only a carrier. Its eventual dialog/focus/form operation is
     // classified at the outer call; all other document/global methods close here.
     if (root === 'document' && member.name === 'getElementById') {
@@ -364,9 +378,11 @@ export function scanServerSecurityOperations(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
   surface: HandlerWriteSinkSurface,
+  parameters: readonly ts.ParameterDeclaration[] = [],
 ): SecurityOperationScanResult<ServerSecurityOperationModel> {
   const operations: ServerSecurityOperationModel[] = [];
   const violations: SecurityOperationViolationModel[] = [];
+  const aliases = serverAliasProvenance(body, parameters);
   const appendOperation = (
     kind: ServerSecurityOperationKind,
     node: ts.Node,
@@ -404,10 +420,11 @@ export function scanServerSecurityOperations(
 
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
-      classifyServerCall(sourceFile, node, surface, appendOperation, appendViolation);
+      classifyServerCall(sourceFile, node, surface, aliases, appendOperation, appendViolation);
     } else if (ts.isNewExpression(node)) {
       const callee = unwrapExpression(node.expression);
-      if (ts.isIdentifier(callee) && callee.text === 'Response') {
+      const provenance = serverExpressionProvenance(callee, aliases);
+      if (provenance === 'response-constructor') {
         if (surface === 'endpoint' || surface === 'webhook') {
           appendOperation(
             'server.response.raw',
@@ -422,6 +439,24 @@ export function scanServerSecurityOperations(
             `raw Response is not a supported ${surface} outcome`,
           );
         }
+      } else if (provenance === 'unknown-authority') {
+        appendViolation(
+          node,
+          'computed-security-operation',
+          'computed server capability constructor is outside the finite server IR',
+        );
+      }
+    } else if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
+      const left = unwrapExpression(node.left);
+      if (
+        ts.isIdentifier(left) &&
+        serverProvenanceCarriesAuthority(compilerMapGet(aliases, left.text))
+      ) {
+        appendViolation(
+          left,
+          'raw-capability-operation',
+          `server capability alias ${left.text} cannot be reassigned`,
+        );
       }
     }
     ts.forEachChild(node, visit);
@@ -438,6 +473,7 @@ function classifyServerCall(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
   surface: HandlerWriteSinkSurface,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
   appendOperation: (
     kind: ServerSecurityOperationKind,
     node: ts.Node,
@@ -474,14 +510,24 @@ function classifyServerCall(
         'trustedHtml',
         justificationFromCall(call) ?? 'missing',
       );
+    } else {
+      classifyServerProvenanceCall(
+        serverExpressionProvenance(callee, aliases),
+        call,
+        callee.text,
+        surface,
+        appendOperation,
+        appendViolation,
+      );
     }
     return;
   }
 
   const member = staticMember(callee);
   if (!member) {
+    const provenance = serverExpressionProvenance(callee, aliases);
     const root = rootIdentifier(callee);
-    if (root && isStructuredServerReceiver(root)) {
+    if (provenance === 'unknown-authority' || (root && isStructuredServerReceiver(root))) {
       appendViolation(
         callee,
         'computed-security-operation',
@@ -490,83 +536,276 @@ function classifyServerCall(
     }
     return;
   }
+  const provenance = serverExpressionProvenance(callee, aliases);
   const path = expressionPath(member.receiver);
-  const root = rootIdentifier(member.receiver);
   const target = path ? `${path}.${member.name}` : member.name;
-  if (member.name === 'fetch' && (root === 'ctx' || root === 'context')) {
-    appendOperation('server.egress.request', call, target);
+  if (
+    classifyServerProvenanceCall(
+      provenance,
+      call,
+      target,
+      surface,
+      appendOperation,
+      appendViolation,
+    )
+  ) {
     return;
   }
-  if (isDatabaseReceiver(path, root)) {
-    const databaseKind = databaseOperationKind(member.name);
-    if (databaseKind) {
-      appendOperation(databaseKind, call, target);
+}
+
+function classifyServerProvenanceCall(
+  provenance: ServerValueProvenance,
+  call: ts.CallExpression,
+  target: string,
+  surface: HandlerWriteSinkSurface,
+  appendOperation: (
+    kind: ServerSecurityOperationKind,
+    node: ts.Node,
+    target?: string,
+    justification?: string,
+  ) => void,
+  appendViolation: (
+    node: ts.Node,
+    kind: SecurityOperationViolationModel['kind'],
+    detail: string,
+  ) => void,
+): boolean {
+  if (provenance === 'unknown-authority') {
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `computed server capability call ${target} is outside the finite server IR`,
+    );
+    return true;
+  }
+  if (!compilerStringStartsWith(provenance, 'operation:')) return false;
+  const kind = compilerStringSlice(provenance, 'operation:'.length) as ServerSecurityOperationKind;
+  if (kind === 'server.response.raw') {
+    if (surface === 'endpoint' || surface === 'webhook') {
+      appendOperation(kind, call, target, `${surface} access/CSRF posture`);
     } else {
       appendViolation(
         call,
-        'unknown-security-operation',
-        `managed database method ${member.name} is outside the finite server IR`,
+        'raw-capability-operation',
+        `raw Response is not a supported ${surface} outcome`,
       );
     }
-    return;
+    return true;
   }
-  if (root === 'respond') {
-    if (member.name === 'file' || member.name === 'stream') {
-      appendOperation('server.response.outcome', call, target);
-    } else {
-      appendViolation(
-        call,
-        'unknown-security-operation',
-        `respond.${member.name} is outside the finite response IR`,
-      );
+  appendOperation(kind, call, target);
+  return true;
+}
+
+function serverAliasProvenance(
+  body: ts.ConciseBody,
+  parameters: readonly ts.ParameterDeclaration[],
+): ReadonlyMap<string, ServerValueProvenance> {
+  const aliases = compilerCreateMap<string, ServerValueProvenance>();
+  compilerMapSet(aliases, 'Response', 'response-constructor');
+  compilerMapSet(aliases, 'context', 'context');
+  compilerMapSet(aliases, 'ctx', 'context');
+  compilerMapSet(aliases, 'db', 'database');
+  compilerMapSet(aliases, 'headers', 'headers');
+  compilerMapSet(aliases, 'readonlyAppDb', 'database');
+  compilerMapSet(aliases, 'respond', 'respond');
+  compilerMapSet(aliases, 'storage', 'storage');
+  compilerMapSet(aliases, 'tx', 'database');
+
+  const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Security-IR parameters');
+  for (let index = 0; index < parameterSnapshot.length; index += 1) {
+    bindServerAliasPattern(parameterSnapshot[index]!.name, 'local', aliases);
+  }
+  const contextParameter = parameterSnapshot[1];
+  if (contextParameter) bindServerAliasPattern(contextParameter.name, 'context', aliases);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visit = (node: ts.Node): void => {
+      if (ts.isVariableDeclaration(node)) {
+        const initializer = node.initializer;
+        let provenance: ServerValueProvenance = 'local';
+        if (initializer) {
+          const derived = serverExpressionProvenance(initializer, aliases);
+          const authority = serverProvenanceCarriesAuthority(derived)
+            ? derived
+            : expressionContainsServerAuthority(initializer, aliases)
+              ? 'unknown-authority'
+              : 'local';
+          provenance = isConstVariableDeclaration(node)
+            ? authority
+            : serverProvenanceCarriesAuthority(authority)
+              ? 'unknown-authority'
+              : 'local';
+        }
+        if (bindServerAliasPattern(node.name, provenance, aliases)) changed = true;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(body);
+  }
+  return aliases;
+}
+
+function bindServerAliasPattern(
+  name: ts.BindingName,
+  provenance: ServerValueProvenance,
+  aliases: Map<string, ServerValueProvenance>,
+): boolean {
+  if (ts.isIdentifier(name)) {
+    if (compilerMapGet(aliases, name.text) === provenance) return false;
+    compilerMapSet(aliases, name.text, provenance);
+    return true;
+  }
+  let changed = false;
+  const elements = compilerSnapshotDenseArray(name.elements, 'Security-IR server bindings');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (ts.isOmittedExpression(element)) continue;
+    const property =
+      staticPropertyName(
+        element.propertyName ?? (ts.isIdentifier(element.name) ? element.name : undefined),
+      ) ?? 'computed';
+    const elementProvenance = element.dotDotDotToken
+      ? serverProvenanceCarriesAuthority(provenance)
+        ? 'unknown-authority'
+        : 'local'
+      : serverMemberProvenance(provenance, property);
+    if (bindServerAliasPattern(element.name, elementProvenance, aliases)) changed = true;
+  }
+  return changed;
+}
+
+function serverExpressionProvenance(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerValueProvenance {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) return compilerMapGet(aliases, current.text) ?? 'local';
+  if (ts.isCallExpression(current)) {
+    const callee = serverExpressionProvenance(current.expression, aliases);
+    return callee === 'scope-call' ? 'context' : 'local';
+  }
+  const member = staticMember(current);
+  if (member) {
+    return serverMemberProvenance(
+      serverExpressionProvenance(member.receiver, aliases),
+      member.name,
+    );
+  }
+  return expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local';
+}
+
+function serverMemberProvenance(
+  receiver: ServerValueProvenance,
+  member: string,
+): ServerValueProvenance {
+  if (receiver === 'unknown-authority') return receiver;
+  if (receiver === 'context') {
+    if (member === 'db' || member === 'readonlyAppDb' || member === 'tx') return 'database';
+    if (member === 'headers') return 'headers';
+    if (member === 'respond') return 'respond';
+    if (member === 'storage') return 'storage';
+    if (member === 'fetch') return serverOperationProvenance('server.egress.request');
+    if (
+      member === 'forwardSetCookie' ||
+      member === 'setCookie' ||
+      member === 'setSessionRevocationClearSiteData'
+    ) {
+      return serverOperationProvenance('server.response.cookie');
     }
-    return;
+    if (member === 'fail') return serverOperationProvenance('server.response.outcome');
+    if (
+      member === 'invalidate' ||
+      member === 'recordChange' ||
+      member === 'runMutation' ||
+      member === 'runQuery' ||
+      member === 'schedule'
+    ) {
+      return serverOperationProvenance('server.task.compose');
+    }
+    if (member === 'actAs' || member === 'declareSystemRead' || member === 'declareSystemWrite') {
+      return 'scope-call';
+    }
+    if (member === 'header') return 'safe-call';
+    return 'unknown-authority';
   }
-  if (root === 'Response') {
-    if (member.name === 'json' || member.name === 'redirect' || member.name === 'error') {
-      if (surface === 'endpoint' || surface === 'webhook') {
-        appendOperation('server.response.raw', call, target, `${surface} access/CSRF posture`);
-      } else {
-        appendViolation(
-          call,
-          'raw-capability-operation',
-          `Response.${member.name} is not a supported ${surface} outcome`,
-        );
+  if (receiver === 'database') {
+    const kind = databaseOperationKind(member);
+    return kind ? serverOperationProvenance(kind) : 'unknown-authority';
+  }
+  if (receiver === 'headers') {
+    if (member === 'append' || member === 'delete' || member === 'set') {
+      return serverOperationProvenance('server.response.header');
+    }
+    if (member === 'entries' || member === 'get' || member === 'has' || member === 'keys') {
+      return 'safe-call';
+    }
+    return 'unknown-authority';
+  }
+  if (receiver === 'storage') {
+    if (member === 'get' || member === 'list' || member === 'signUrl') {
+      return serverOperationProvenance('server.storage.read');
+    }
+    if (member === 'delete' || member === 'put') {
+      return serverOperationProvenance('server.storage.write');
+    }
+    return 'unknown-authority';
+  }
+  if (receiver === 'respond') {
+    if (member === 'file' || member === 'stream') {
+      return serverOperationProvenance('server.response.outcome');
+    }
+    return 'unknown-authority';
+  }
+  if (receiver === 'response-constructor') {
+    if (member === 'error' || member === 'json' || member === 'redirect') {
+      return serverOperationProvenance('server.response.raw');
+    }
+    return 'unknown-authority';
+  }
+  return 'local';
+}
+
+function serverOperationProvenance(
+  kind: ServerSecurityOperationKind,
+): `operation:${ServerSecurityOperationKind}` {
+  return `operation:${kind}`;
+}
+
+function serverProvenanceCarriesAuthority(provenance: ServerValueProvenance | undefined): boolean {
+  return provenance !== undefined && provenance !== 'local' && provenance !== 'safe-call';
+}
+
+function expressionContainsServerAuthority(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (ts.isIdentifier(node)) {
+      const parent = node.parent;
+      if (
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        (ts.isPropertyAssignment(parent) && parent.name === node)
+      ) {
+        return;
+      }
+      if (serverProvenanceCarriesAuthority(compilerMapGet(aliases, node.text))) {
+        found = true;
+        return;
       }
     }
-    return;
-  }
-  if (
-    member.name === 'setCookie' ||
-    member.name === 'forwardSetCookie' ||
-    member.name === 'setSessionRevocationClearSiteData'
-  ) {
-    appendOperation('server.response.cookie', call, target);
-    return;
-  }
-  if (member.name === 'set' || member.name === 'append' || member.name === 'delete') {
-    if (path?.endsWith('headers') || root === 'headers') {
-      appendOperation('server.response.header', call, target);
-      return;
-    }
-  }
-  if (member.name === 'runMutation' || member.name === 'runQuery' || member.name === 'schedule') {
-    appendOperation('server.task.compose', call, target);
-    return;
-  }
-  if (isStorageReceiver(path, root)) {
-    if (member.name === 'get' || member.name === 'list' || member.name === 'signUrl') {
-      appendOperation('server.storage.read', call, target);
-    } else if (member.name === 'put' || member.name === 'delete') {
-      appendOperation('server.storage.write', call, target);
-    } else {
-      appendViolation(
-        call,
-        'unknown-security-operation',
-        `storage method ${member.name} is outside the finite server IR`,
-      );
-    }
-  }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
+}
+
+function isConstVariableDeclaration(declaration: ts.VariableDeclaration): boolean {
+  const list = declaration.parent;
+  return ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
 }
 
 function databaseOperationKind(method: string): ServerSecurityOperationKind | undefined {
@@ -592,20 +831,6 @@ function databaseOperationKind(method: string): ServerSecurityOperationKind | un
     return 'server.database.write';
   }
   return undefined;
-}
-
-function isDatabaseReceiver(path: string | undefined, root: string | undefined): boolean {
-  return (
-    root === 'db' ||
-    root === 'tx' ||
-    root === 'readonlyAppDb' ||
-    path?.endsWith('.db') === true ||
-    path?.endsWith('.tx') === true
-  );
-}
-
-function isStorageReceiver(path: string | undefined, root: string | undefined): boolean {
-  return root === 'storage' || path?.endsWith('.storage') === true;
 }
 
 function isStructuredServerReceiver(root: string): boolean {
@@ -706,6 +931,9 @@ function browserExpressionProvenance(
   }
   if (ts.isCallExpression(current)) {
     const callee = unwrapExpression(current.expression);
+    if (ts.isIdentifier(callee) && compilerMapGet(aliases, callee.text) === 'local') {
+      return 'local';
+    }
     if (ts.isIdentifier(callee) && callee.text === 'Object') {
       const first = current.arguments[0];
       return first ? browserExpressionProvenance(first, aliases) : 'unknown';
@@ -713,6 +941,7 @@ function browserExpressionProvenance(
     const member = staticMember(callee);
     if (member) {
       const receiver = browserExpressionProvenance(member.receiver, aliases);
+      if (receiver === 'local') return 'local';
       if (member.name === 'closest' || member.name === 'querySelector') {
         return isDomProvenance(receiver) || receiver === 'event' ? 'dom' : 'unknown';
       }
@@ -823,7 +1052,8 @@ function nodeName(node: ts.Node): string {
   return member?.name ?? 'computed';
 }
 
-function staticPropertyName(name: ts.PropertyName): string | undefined {
+function staticPropertyName(name: ts.PropertyName | undefined): string | undefined {
+  if (name === undefined) return undefined;
   if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
     return name.text;
   }

@@ -106,6 +106,7 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
+import { componentSecurityOperationFacts } from './security-operation-facts.js';
 import { compilerEmittedSourceProvenanceToken } from './source-provenance.js';
 import { ensureTypescriptRuntime } from './ts-api.js';
 import type {
@@ -641,6 +642,7 @@ function emitRegistryCssPhase(
         index === 0 ? mutationForms : [],
         fact.component,
         parsed.options.fileName,
+        index === 0 ? componentSecurityOperationFacts(lowered.model, client.versionedHandlers) : [],
       ),
   );
   const cssAssets = cssSource
@@ -781,7 +783,7 @@ function emitServerPhase(
   );
 
   return {
-    serverModule: emitServerModule(serverRenderedSource),
+    serverModule: emitServerModule(serverRenderedSource, lowered.model),
     serverRender,
     serverRenderedSource,
   };

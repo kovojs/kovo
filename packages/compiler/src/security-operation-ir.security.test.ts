@@ -15,6 +15,57 @@ function kv449(source: string) {
 }
 
 describe('SPEC §4.3/§5.2 finite compiler-owned security IR', () => {
+  it('carries exact compiler-derived operations in emitted browser and server artifacts', () => {
+    const result = compile(`
+import { component } from '@kovojs/core';
+import { endpoint } from '@kovojs/server';
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => { event.preventDefault(); state.count += 1; }}>Run</button>,
+});
+export const api = endpoint('/api', {
+  async handler(_input, ctx) {
+    await ctx.fetch('https://api.example.test/report');
+    ctx.headers.set('Cache-Control', 'no-store');
+    return Response.json({ ok: true });
+  },
+});
+`);
+    const browserSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(browserSource).toContain(
+      'securityHandler([{"door":"delegated-event","kind":"browser.event.control","target":"preventDefault"},{"door":"compiler-state","kind":"browser.state.write","target":"state.count"}],',
+    );
+    expect(serverSource).toContain('__kovoSecurityOperationManifest_v1');
+    expect(serverSource).toContain('kovo-security-operation-ir/v1');
+    expect(serverSource).toContain(
+      '{"door":"ctx.fetch","kind":"server.egress.request","target":"ctx.fetch"}',
+    );
+    expect(serverSource).toContain(
+      '{"door":"structured-headers","kind":"server.response.header","target":"ctx.headers.set"}',
+    );
+    expect(serverSource).toContain(
+      '{"door":"Response","kind":"server.response.raw","target":"Response.json","justification":"endpoint access/CSRF posture"}',
+    );
+    expect(serverSource).not.toContain('"span"');
+    expect(result.componentGraphFacts[0]?.securityOperations).toEqual(
+      expect.arrayContaining([
+        {
+          door: 'Response',
+          justification: 'endpoint access/CSRF posture',
+          kind: 'server.response.raw',
+          target: 'Response.json',
+        },
+        {
+          door: 'compiler-state',
+          kind: 'browser.state.write',
+          target: 'state.count',
+        },
+      ]),
+    );
+  });
+
   it('accepts realistic state, delegated-event, reviewed primitive, focus, form, and timer effects', () => {
     const result = compile(`
 import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
@@ -73,6 +124,85 @@ export const report = endpoint('/report', {
 `);
 
     expect(diagnostics).toEqual([]);
+  });
+
+  it('closes structured server authority across receiver, scope, and destructured-call aliases', () => {
+    const diagnostics = kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(_input, request) {
+    const contextAlias = request;
+    const database = contextAlias.db;
+    const scoped = contextAlias.actAs('owner-1');
+    const { fetch: requestOut, headers: responseHeaders } = contextAlias;
+    await requestOut('https://api.example.test/report');
+    await database.execute('parameterized');
+    await scoped.runQuery({ key: 'report/read' }, undefined);
+    responseHeaders.set('Cache-Control', 'no-store');
+    const RawResponse = Response;
+    return RawResponse.json({ ok: true });
+  },
+});
+`);
+
+    expect(diagnostics).toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(_input, { fetch: requestOut, db: database, headers }) {
+    await requestOut('https://api.example.test/report');
+    await database.select();
+    headers.append('Vary', 'Accept');
+    return Response.json({ ok: true });
+  },
+});
+`),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ['mutable receiver alias', 'let database = ctx.db; await database.execute(query)'],
+    [
+      'conditional receiver alias',
+      'const database = input.useManaged ? ctx.db : input.other; await database.execute(query)',
+    ],
+    ['computed method alias', 'const execute = ctx.db[input.operation]; await execute(query)'],
+    [
+      'computed method on a known alias',
+      'const database = ctx.db; await database[input.operation]()',
+    ],
+    [
+      'reassigned context alias',
+      'let request = ctx; request = input.other; await request.fetch(input.url)',
+    ],
+  ])('fails closed for %s', (_label, handlerBody) => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(input, ctx) { ${handlerBody}; return Response.json({ ok: true }); },
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('does not confuse input and local lookalikes with the second-parameter context capability', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(ctx, request) {
+    const context = { db: { dropEverything() {} } };
+    ctx.db.dropEverything();
+    context.db.dropEverything();
+    await request.db.select();
+    return Response.json({ ok: true });
+  },
+});
+`),
+    ).toEqual([]);
   });
 
   it.each([

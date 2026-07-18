@@ -605,6 +605,13 @@ export const ProductGrid = component({
         fragments: ['components/cart/cart-badge/cart-badge'],
         name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
+        securityOperations: [
+          {
+            door: 'reviewed-client-export',
+            kind: 'browser.framework.call',
+            target: 'removeItem',
+          },
+        ],
       },
     ]);
 
@@ -627,6 +634,13 @@ export const ProductGrid = component({
         fragments: ['components/cart/cart-badge/cart-badge'],
         name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
+        securityOperations: [
+          {
+            door: 'reviewed-client-export',
+            kind: 'browser.framework.call',
+            target: 'removeItem',
+          },
+        ],
       },
       {
         domName: 'product-grid',

@@ -1,5 +1,9 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import type {
+  BrowserSecurityOperationKind,
+  SecurityOperationDoor,
+} from '@kovojs/core/internal/security-operation-ir';
 
 import type { ComponentCssAsset } from './css.js';
 import {
@@ -79,6 +83,7 @@ export type ComponentGraphFact = Pick<
   | 'name'
   | 'mutationForms'
   | 'queries'
+  | 'securityOperations'
   | 'styleRules'
 >;
 
@@ -519,8 +524,16 @@ export interface HandlerLowering {
   // the raw `expression` snippet.
   isBareNamedHandler: boolean;
   params: ElementParam[];
+  /** Compiler-derived finite effect manifest carried by the generated-only browser ABI. */
+  securityOperations: readonly BrowserSecurityOperationFact[];
   diagnostic?: CompilerDiagnostic;
   diagnostics?: readonly CompilerDiagnostic[];
+}
+
+export interface BrowserSecurityOperationFact {
+  door: SecurityOperationDoor;
+  kind: BrowserSecurityOperationKind;
+  target?: string;
 }
 
 export interface ClientImportDependency {

@@ -1,4 +1,9 @@
 import { assertKovoModuleRef, type KovoModuleRef } from '@kovojs/core/internal/module-ref';
+import {
+  isBrowserSecurityOperationKind,
+  securityOperationDoorForKind,
+  type SecurityOperationIr,
+} from '@kovojs/core/internal/security-operation-ir';
 
 import type { DelegatedEvent, EventElementLike } from './events.js';
 import {
@@ -18,8 +23,12 @@ import {
 } from './runtime-dom-security.js';
 import {
   applySecurityIntrinsic,
+  freezeSecurityValue,
   securityArrayAppend,
+  securityArrayIsArray,
   securityGetOwnPropertyDescriptor,
+  securityObjectKeys,
+  securityOwnArrayEntry,
   securityRegExpTest,
   securityStringSlice,
   securityWeakMap,
@@ -62,6 +71,82 @@ export function handler<State = unknown, Params = Record<string, ElementParamVal
   fn: ClientHandler<State, Params>,
 ): ClientHandler<State, Params> {
   return fn;
+}
+
+const compilerSecurityOperations = securityWeakMap<ClientHandler, readonly SecurityOperationIr[]>();
+
+/**
+ * Bind a compiler-derived finite effect manifest to one generated handler.
+ *
+ * @generated App source must not import this ABI; SPEC §5.2 reserves it for compiler output.
+ */
+export function securityHandler<State = unknown, Params = Record<string, ElementParamValue>>(
+  operations: readonly SecurityOperationIr[],
+  fn: ClientHandler<State, Params>,
+): ClientHandler<State, Params> {
+  if (!securityArrayIsArray(operations) || operations.length > 256 || typeof fn !== 'function') {
+    throw new TypeError('KV449: invalid generated browser security-operation manifest.');
+  }
+  const snapshot: SecurityOperationIr[] = [];
+  for (let index = 0; index < operations.length; index += 1) {
+    const entry = securityOwnArrayEntry(operations, index);
+    if (!entry.ok || entry.value === null || typeof entry.value !== 'object') {
+      throw new TypeError(`KV449: generated browser security operation ${index} is not own data.`);
+    }
+    const operation = snapshotCompilerSecurityOperation(entry.value, index);
+    securityArrayAppend(snapshot, operation, 'Generated browser security operations');
+  }
+  freezeSecurityValue(snapshot);
+  securityWeakMapSet(compilerSecurityOperations, fn as ClientHandler, snapshot);
+  return fn;
+}
+
+function snapshotCompilerSecurityOperation(value: object, index: number): SecurityOperationIr {
+  const keys = securityObjectKeys(value);
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+    const keyEntry = securityOwnArrayEntry(keys, keyIndex);
+    if (!keyEntry.ok || !isSecurityOperationKey(keyEntry.value)) {
+      throw new TypeError(`KV449: generated browser security operation ${index} has extra data.`);
+    }
+  }
+  const kind = ownSecurityOperationValue(value, 'kind');
+  const door = ownSecurityOperationValue(value, 'door');
+  const target = ownSecurityOperationValue(value, 'target', true);
+  const operationKind = isBrowserSecurityOperationKind(kind) ? kind : undefined;
+  const expectedDoor = operationKind ? securityOperationDoorForKind(operationKind) : undefined;
+  if (
+    operationKind === undefined ||
+    expectedDoor === undefined ||
+    door !== expectedDoor ||
+    (target !== undefined && typeof target !== 'string')
+  ) {
+    throw new TypeError(`KV449: generated browser security operation ${index} is invalid.`);
+  }
+  return freezeSecurityValue({
+    door: expectedDoor,
+    kind: operationKind,
+    ...(target === undefined ? {} : { target }),
+  });
+}
+
+function ownSecurityOperationValue(
+  value: object,
+  key: 'door' | 'kind' | 'target',
+  optional = false,
+): unknown {
+  const descriptor = securityGetOwnPropertyDescriptor(value, key);
+  if (descriptor === undefined) {
+    if (optional) return undefined;
+    throw new TypeError(`KV449: generated browser security operation lacks ${key}.`);
+  }
+  if (!('value' in descriptor)) {
+    throw new TypeError(`KV449: generated browser security operation ${key} must be own data.`);
+  }
+  return descriptor.value;
+}
+
+function isSecurityOperationKey(value: unknown): value is 'door' | 'kind' | 'target' {
+  return value === 'door' || value === 'kind' || value === 'target';
 }
 
 const delegatedStateQueues = securityWeakMap<EventElementLike, Promise<void>>();

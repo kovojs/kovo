@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { securityOperationDoorForKind } from '@kovojs/core/internal/security-operation-ir';
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
 import {
   clientModuleContentVersion,
@@ -37,9 +38,11 @@ import {
   type PropertyAccessPathModel,
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
+import type { BrowserSecurityOperationModel } from '../scan/model.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { analyzeClientCaptures, type ClientCaptureAnalysis } from '../validate/client-capture.js';
 import type {
+  BrowserSecurityOperationFact,
   ClientImportDependency,
   ClientImportDependencyProvenance,
   ClientConstantDependency,
@@ -166,12 +169,54 @@ export function lowerEventHandlers(
         exportName,
         isBareNamedHandler: namedHandler,
         params,
+        securityOperations: loweredBrowserSecurityOperations(
+          eventAttribute.zeroArgArrow,
+          namedHandler ? expression : undefined,
+        ),
       },
       'Lowered event handlers',
     );
   }
 
   return handlers;
+}
+
+function loweredBrowserSecurityOperations(
+  arrow: ZeroArgArrowModel | undefined,
+  namedHandler: string | undefined,
+): BrowserSecurityOperationFact[] {
+  if (namedHandler !== undefined) {
+    const kind = 'browser.framework.call' as const;
+    return [
+      {
+        door: securityOperationDoorForKind(kind),
+        kind,
+        target: namedHandler,
+      },
+    ];
+  }
+  const source = arrow?.securityOperations;
+  if (source === undefined) return [];
+  const result: BrowserSecurityOperationFact[] = [];
+  const length = compilerArrayLength(source, 'Lowered browser security operations');
+  for (let index = 0; index < length; index += 1) {
+    const operation = compilerOwnDataValue(source, index, 'Lowered browser security operations') as
+      | BrowserSecurityOperationModel
+      | undefined;
+    if (!operation) {
+      compilerFailClosed(`Lowered browser security operations[${index}] must be dense own data.`);
+    }
+    appendHandlerFact(
+      result,
+      {
+        door: operation.door,
+        kind: operation.kind,
+        ...(operation.target === undefined ? {} : { target: operation.target }),
+      },
+      'Lowered browser security operations',
+    );
+  }
+  return result;
 }
 
 function loweredArrowPropertyAccesses(

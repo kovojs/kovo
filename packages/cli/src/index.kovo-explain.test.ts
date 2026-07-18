@@ -64,6 +64,14 @@ describe('kovo explain', () => {
                 },
               ],
               queries: ['cart'],
+              securityOperations: [
+                {
+                  door: 'trustedHtml',
+                  justification: 'reviewed static empty state',
+                  kind: 'server.output.trusted-html',
+                  target: 'trustedHtml',
+                },
+              ],
               styleRules: [
                 {
                   className: 'kv-button-bg-a1b2c3',
@@ -98,6 +106,7 @@ describe('kovo explain', () => {
         "CLOCK ago cadence=every='1s'",
         'CLOCK pub cadence=renderOnce',
         'HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
+        'OPERATION server.output.trusted-html door=trustedHtml target=trustedHtml justification=reviewed static empty state',
         'SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal',
         'DERIVE CartBadge$isEmpty inputs=cart ref=/c/cart-badge.client.js#CartBadge$isEmpty target=button[data-bind:disabled]',
         'TRIGGER visible export=CartBadge$mountChart ref=/c/cart-badge.client.js#CartBadge$mountChart deps=cart justification=chart boots when visible',

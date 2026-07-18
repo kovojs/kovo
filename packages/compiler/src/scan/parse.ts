@@ -2293,7 +2293,7 @@ function mutationHandlerModels(
           surface: 'mutation',
         }),
         mutationOwner: owner,
-        ...serverSecurityOperationModel(sourceFile, body, 'mutation'),
+        ...serverSecurityOperationModel(sourceFile, body, 'mutation', parameters),
         ...(handlerReadsAmbientCookie(body, parameters)
           ? { readsAmbientCookie: true as const }
           : {}),
@@ -3239,7 +3239,7 @@ function endpointHandlerModels(
           owner,
           surface: 'endpoint',
         }),
-        ...serverSecurityOperationModel(sourceFile, entry.body, 'endpoint'),
+        ...serverSecurityOperationModel(sourceFile, entry.body, 'endpoint', entry.parameters),
       },
       'Endpoint handler models',
     );
@@ -3377,7 +3377,7 @@ function webhookHandlerModels(
           contextParamName,
           'runMutation',
         ),
-        ...serverSecurityOperationModel(sourceFile, entry.body, 'webhook'),
+        ...serverSecurityOperationModel(sourceFile, entry.body, 'webhook', entry.parameters),
       },
       'Webhook handler models',
     );
@@ -3426,7 +3426,7 @@ function taskRunHandlerModels(
         ),
         runQueryEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'runQuery'),
         scheduleEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'schedule'),
-        ...serverSecurityOperationModel(sourceFile, handler.body, 'task'),
+        ...serverSecurityOperationModel(sourceFile, handler.body, 'task', handler.parameters),
       },
       'Task run handler models',
     );
@@ -3930,12 +3930,17 @@ function runHandlerModel(
   sourceFile: ts.SourceFile,
   source: string,
   property: ts.ObjectLiteralElementLike,
-): { body: ts.ConciseBody; model: MutationHandlerModel } | null {
+): {
+  body: ts.ConciseBody;
+  model: MutationHandlerModel;
+  parameters: ts.NodeArray<ts.ParameterDeclaration>;
+} | null {
   if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === 'run') {
     if (!property.body) return null;
     return {
       body: property.body,
       model: functionBodyModel(sourceFile, source, property.body, property.parameters),
+      parameters: property.parameters,
     };
   }
 
@@ -3947,6 +3952,7 @@ function runHandlerModel(
   return {
     body: initializer.body,
     model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
+    parameters: initializer.parameters,
   };
 }
 
@@ -3992,8 +3998,9 @@ function serverSecurityOperationModel(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
   surface: HandlerWriteSinkSurface,
+  parameters: readonly ts.ParameterDeclaration[],
 ): Pick<MutationHandlerModel, 'securityOperations' | 'securityOperationViolations'> {
-  const facts = scanServerSecurityOperations(sourceFile, body, surface);
+  const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters);
   return {
     ...(facts.operations.length === 0 ? {} : { securityOperations: facts.operations }),
     ...(facts.violations.length === 0 ? {} : { securityOperationViolations: facts.violations }),

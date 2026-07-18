@@ -212,7 +212,7 @@ export const generatedProdEmitContract = Object.freeze({
       sourceAssertions: Object.freeze([
         {
           label: 'stable source-derived handler export',
-          pattern: /export const ProductCard\$button_click = handler/,
+          pattern: /export const ProductCard\$button_click = securityHandler/,
         },
       ]),
     },

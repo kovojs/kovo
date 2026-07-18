@@ -35,7 +35,7 @@ describe('prod-emit-check gate', () => {
               {
                 fileName: 'routes/products/product-card.client.js',
                 kind: 'client',
-                source: 'export const ProductCard$button_click = handler;',
+                source: 'export const ProductCard$button_click = securityHandler;',
               },
               {
                 fileName: 'generated/registries.d.ts',
@@ -89,7 +89,7 @@ function validProdEmitFiles() {
     {
       fileName: 'routes/products/product-card.client.js',
       kind: 'client',
-      source: 'export const ProductCard$button_click = handler;',
+      source: 'export const ProductCard$button_click = securityHandler;',
     },
     {
       fileName: 'generated/registries.d.ts',
