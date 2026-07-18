@@ -769,6 +769,9 @@ const analyzerSummaryDirectCarrierIntegrityBranch =
   '  if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;';
 const weakenedAnalyzerSummaryDirectCarrierIntegrityBranch =
   '  if (false && !privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;';
+const analyzerSummaryDestructuredCarrierProofBranch =
+  '  return segments !== undefined && privateScopeCarrierBindingIsProven(segments.root, node);';
+const weakenedAnalyzerSummaryDestructuredCarrierProofBranch = '  return segments !== undefined;';
 const analyzerSummaryOpaqueCarrierEscapeBranch = [
   '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
   '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
@@ -986,6 +989,16 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
     test: assertAnalyzerSummaryDirectCarrierIntegrityIsPinned,
+  },
+  {
+    description: 'Lets a request-like validated-input name mint provenance through destructuring.',
+    expectedKiller: 'destructured private aliases must retain exact carrier-role proof',
+    name: 'drizzle-analyzer-summary/trust-destructured-input-carrier',
+    replacement: weakenedAnalyzerSummaryDestructuredCarrierProofBranch,
+    search: analyzerSummaryDestructuredCarrierProofBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryDestructuredCarrierProofIsPinned,
   },
   {
     description: 'Lets a framework carrier escape through an opaque call before private use.',
@@ -2116,6 +2129,15 @@ async function assertAnalyzerSummaryDirectCarrierIntegrityIsPinned(
 ) {
   if (!sourceText.includes(analyzerSummaryDirectCarrierIntegrityBranch)) {
     throw new Error('direct private reads no longer share the carrier-integrity proof');
+  }
+}
+
+async function assertAnalyzerSummaryDestructuredCarrierProofIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryDestructuredCarrierProofBranch)) {
+    throw new Error('destructured private aliases no longer require exact carrier-role proof');
   }
 }
 

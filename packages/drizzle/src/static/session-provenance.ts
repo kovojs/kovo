@@ -350,7 +350,7 @@ function addSessionAliasesForVariableDeclaration(
 
 function isPrivateScopeCarrierExpression(node: Node): boolean {
   const segments = staticAccessSegments(node);
-  return segments !== undefined && isPrivateScopeCarrierRoot(segments.root);
+  return segments !== undefined && privateScopeCarrierBindingIsProven(segments.root, node);
 }
 
 function addPrivateScopeAliasesForObjectBindingPattern(
@@ -546,11 +546,7 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
  */
 export function privateScopeHelperCallCarrierIsProven(call: CallExpression): boolean {
   const carrier = call.getArguments()[0];
-  return (
-    carrier !== undefined &&
-    isPrivateScopeCarrierRoot(carrier) &&
-    privateScopeCarrierBindingIsProven(carrier, call)
-  );
+  return carrier !== undefined && privateScopeCarrierBindingIsProven(carrier, call);
 }
 
 function privateScopeCarrierBindingIsProven(carrier: Node, auditedUse: Node): boolean {
@@ -966,45 +962,13 @@ function unsummarizedHelperReasonForExpression(node: Node): string | undefined {
   return Node.isCallExpression(expression) ? unsummarizedHelperReason(expression) : undefined;
 }
 
-/**
- * SPEC §6.5/§10.3 (KV414 IDOR + KV438 mass-assignment): the request-context carrier
- * roots the framework exposes `session`/`guard`/`tenant` on. A `session`/`guard`/`tenant`
- * member is trusted *server* private scope ONLY when it hangs off one of these — the
- * value SPEC §6.5 surfaces as `req.session.*`. Mirrors the compiler's request-accessor
- * recognition (`validate/trusted-html-provenance.ts` `{req,request}` and
- * `validate/component-contracts.ts` `{ctx,context}`), unified here.
- */
-const PRIVATE_SCOPE_CARRIER_ROOT_NAMES: ReadonlySet<string> = new Set([
-  'req',
-  'request',
-  'ctx',
-  'context',
-]);
-
-/**
- * True when the access root has a request/session/context carrier spelling. The call-site proof
- * above must additionally establish its structural framework role; `this` is never authority.
- * Fail-closed: any other root — notably a validated-input binding like `input`/`args`,
- * whose static type and shape are byte-identical to a request carrier — is NOT a
- * carrier, so a `session`/`guard`/`tenant`-named *input field* (e.g.
- * `input.session.userId`, `input.tenant`) falls through to the symbol-provenance
- * input/args reject instead of laundering client data into server private scope (H3/H5).
- * Over-rejecting an unconventionally-named carrier is the safe SPEC §6.6 direction.
- */
-function isPrivateScopeCarrierRoot(root: Node): boolean {
-  const expression = unwrappedStaticExpressionNode(root);
-  if (Node.isThisExpression(expression)) return false;
-  if (!Node.isIdentifier(expression)) return false;
-  return PRIVATE_SCOPE_CARRIER_ROOT_NAMES.has(expression.getText());
-}
-
 function directPrivateScopeForExpression(node: Node): PrivateScopeProvenance | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   const segments = staticAccessSegments(node);
   if (!segments) return undefined;
-  // Anchor the session/guard/tenant name match to a proven carrier root (SPEC §6.5):
-  // an input-rooted `.session.`/`.guard.`/`.tenant.` access is client data, not server scope.
-  if (!isPrivateScopeCarrierRoot(segments.root)) return undefined;
+  // Anchor the session/guard/tenant match to the exact framework callback role and stable binding
+  // (SPEC §6.5/§6.6). Parameter spelling is neither proof nor a restriction: validated input named
+  // `context` stays input, while an exact framework carrier may use any local identifier.
   if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;
   for (const kind of ['guard', 'session', 'tenant'] as const) {
     const index = segments.path.indexOf(kind);

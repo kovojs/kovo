@@ -121,6 +121,45 @@ describe('Phase 2C exact-tip adversarial review', () => {
     expect(result.check.output).toContain('KV414');
   });
 
+  it('does not let destructuring mint a private principal from validated input named context', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({ guard: s.object({ userId: s.string() }) }),',
+        '  async load(context: { guard: { userId: string } }, actual: Context) {',
+        '    const { guard: { userId } } = context;',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it.each([
+    ['nested destructuring', 'const { request: { guard: { userId } } } = actual;'],
+    ['a summarized projection', 'const userId = current(actual);'],
+  ])(
+    'proves an exact framework carrier independent of its local name through %s',
+    (_label, read) => {
+      const result = ownerVerdict(
+        ownerSource([
+          'export const list = query("list", {',
+          '  args: s.object({}),',
+          '  async load(_input: unknown, actual: Context) {',
+          `    ${read}`,
+          '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+          '  },',
+          '});',
+        ]),
+      );
+      expect(result.scope).toBe('session');
+      expect(result.check.exitCode).toBe(0);
+    },
+  );
+
   it.each([
     ['direct request replacement', 'context.request = input.request;'],
     ['Object.assign root replacement', 'Object.assign(context, { request: input.request });'],
@@ -205,6 +244,28 @@ describe('Phase 2C exact-tip adversarial review', () => {
     const result = massVerdict(
       [
         'await actual.db.update(accounts).set({ ownerId: serverValue(request.guard.userId, "private owner") }).where(eq(accounts.id, request.id));',
+      ],
+      {
+        handler: 'request, actual: DbRequest',
+        input: 's.object({ id: s.string(), guard: s.object({ userId: s.string() }) })',
+      },
+    );
+    expect(result.analysis.massAssignmentFacts).toMatchObject([
+      {
+        column: 'ownerId',
+        provenance: 'input',
+        via: 'set',
+      },
+    ]);
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV438');
+  });
+
+  it('emits KV438 when validated input named request is destructured before serverValue', () => {
+    const result = massVerdict(
+      [
+        'const { guard: { userId } } = request;',
+        'await actual.db.update(accounts).set({ ownerId: serverValue(userId, "private owner") }).where(eq(accounts.id, request.id));',
       ],
       {
         handler: 'request, actual: DbRequest',
