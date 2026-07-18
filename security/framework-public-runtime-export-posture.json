@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "2206d30bd958690375afcf63488d574494a452db4e58e009597759c926860d69",
+      "sourceTreeSha256": "a1015dc4d224de702473908110101434a3c6cb68742bc21f0f1591aefe776b24",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "b7987384a5cf9e2fc410973ea43ec516d7be7f9e65a3e94ce009eca566fc5d40",
+      "sourceTreeSha256": "1e3b538bfae69cb50e56fbc04fc27dca00bc5c91a0bebb4c51c5fec3f16c360c",
       "manifestVariants": [
         {
           "fingerprint": "sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368"
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "460a6fcd34037cedefe29dd7fa765d5cb711b42871b8fec3f433c8c8997a1f9b"
+      "sourceTreeSha256": "4a0132cc2805d6d5e1ae5a857753929dacbb4e7de359bba43c5aa9b96d27eeca"
     },
     {
       "manifestVariants": [
@@ -1673,7 +1673,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "c3b1e8617aee246b8b02ee137a11aa5261493feefdf06f659207003823cde876"
+      "sourceTreeSha256": "fec798bd67b217e56a3ee367f5dc7ded52e2756b6d5c676dbe8c8fb51145c35f"
     },
     {
       "manifestVariants": [
@@ -1941,7 +1941,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "fd72e28b3044ae2288f948f980fcc46b7eb31629882962303dd80e73bb3e1ad8"
+      "sourceTreeSha256": "b9e06b95c6c1c6b653c4c41882120351d66be5712271895eb987cdd57a7b3fef"
     },
     {
       "manifestVariants": [
