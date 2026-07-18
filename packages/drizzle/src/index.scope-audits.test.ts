@@ -2638,6 +2638,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'export const forgedTenantOrders = query("forgedTenantOrders", { output: s.object({ id: s.string() }), async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, forgedTenant(input))); } });',
               'export const carrierOrders = query("carrierOrders", { output: s.object({ id: s.string() }), async load(input: { guard: { userId: string } }, db: PgAsyncDatabase<any, any>) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, exactGuard(input))); } });',
               'export const renamedCarrierOrders = query("renamedCarrierOrders", { output: s.object({ id: s.string() }), async load(request: { guard: { userId: string } }, db: PgAsyncDatabase<any, any>) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, exactGuard(request))); } });',
+              'export const thisCarrierOrders = query("thisCarrierOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, exactGuard(this))); } });',
               'export const mismatchedOrders = query("mismatchedOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, mismatched(ctx))); } });',
               'export const generalOrders = query("generalOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, general(ctx))); } });',
               'export const defaultedOrders = query("defaultedOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, defaulted(ctx))); } });',
@@ -2666,6 +2667,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       { name: 'mismatchedOrders', scope: 'unknown' },
       { name: 'renamedCarrierOrders', scope: 'unknown' },
       { name: 'restOrders', scope: 'unknown' },
+      { name: 'thisCarrierOrders', scope: 'unknown' },
     ]);
   });
 

@@ -508,7 +508,9 @@ export function privateScopeHelperCallCarrierIsProven(call: CallExpression): boo
 
 function privateScopeHelperCarrierBindingIsProven(carrier: Node): boolean {
   const root = unwrappedStaticExpressionNode(carrier);
-  if (Node.isThisExpression(root)) return true;
+  // SPEC §6.6/§10.3 admits only a structurally enrolled request/context parameter. `this` is the
+  // caller-controlled receiver/definition object and cannot mint private principal provenance.
+  if (Node.isThisExpression(root)) return false;
   if (!Node.isIdentifier(root)) return false;
 
   const symbol = symbolForIdentifierReference(root) ?? root.getSymbol();
@@ -787,7 +789,8 @@ const PRIVATE_SCOPE_CARRIER_ROOT_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * True when the access root is a proven request/session/context carrier (or `this`).
+ * True when the access root has a request/session/context carrier spelling. The call-site proof
+ * above must additionally establish its structural framework role; `this` is never authority.
  * Fail-closed: any other root — notably a validated-input binding like `input`/`args`,
  * whose static type and shape are byte-identical to a request carrier — is NOT a
  * carrier, so a `session`/`guard`/`tenant`-named *input field* (e.g.
@@ -797,7 +800,7 @@ const PRIVATE_SCOPE_CARRIER_ROOT_NAMES: ReadonlySet<string> = new Set([
  */
 function isPrivateScopeCarrierRoot(root: Node): boolean {
   const expression = unwrappedStaticExpressionNode(root);
-  if (Node.isThisExpression(expression)) return true;
+  if (Node.isThisExpression(expression)) return false;
   if (!Node.isIdentifier(expression)) return false;
   return PRIVATE_SCOPE_CARRIER_ROOT_NAMES.has(expression.getText());
 }

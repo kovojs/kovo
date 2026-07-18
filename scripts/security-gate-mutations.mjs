@@ -738,6 +738,18 @@ const weakenedAnalyzerSummaryCallCarrierBranch =
 const analyzerSummaryDbReceiverOrderingBranch =
   '  if (receiverIndex >= 0) return index > receiverIndex;';
 const weakenedAnalyzerSummaryDbReceiverOrderingBranch = '  if (receiverIndex >= 0) return true;';
+const analyzerSummaryThisCarrierClosureBranch = [
+  '  const root = unwrappedStaticExpressionNode(carrier);',
+  '  // SPEC §6.6/§10.3 admits only a structurally enrolled request/context parameter. `this` is the',
+  '  // caller-controlled receiver/definition object and cannot mint private principal provenance.',
+  '  if (Node.isThisExpression(root)) return false;',
+].join('\n');
+const weakenedAnalyzerSummaryThisCarrierClosureBranch = [
+  '  const root = unwrappedStaticExpressionNode(carrier);',
+  '  // SPEC §6.6/§10.3 admits only a structurally enrolled request/context parameter. `this` is the',
+  '  // caller-controlled receiver/definition object and cannot mint private principal provenance.',
+  '  if (Node.isThisExpression(root)) return true;',
+].join('\n');
 const analyzerSummaryStaticCallCarrierBranch =
   '  if (!privateScopeHelperCallCarrierIsProven(node)) return undefined;';
 const weakenedAnalyzerSummaryStaticCallCarrierBranch =
@@ -806,6 +818,16 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
     test: assertAnalyzerSummaryDbReceiverOrderingIsPinned,
+  },
+  {
+    description: 'Lets a caller-controlled `this` receiver mint private context provenance.',
+    expectedKiller: 'private helper calls must reject `this` as a request/context carrier',
+    name: 'drizzle-analyzer-summary/trust-this-carrier',
+    replacement: weakenedAnalyzerSummaryThisCarrierClosureBranch,
+    search: analyzerSummaryThisCarrierClosureBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryThisCarrierClosureIsPinned,
   },
   {
     description: 'Drops the call-carrier proof from the static summary consumer.',
@@ -1776,6 +1798,12 @@ async function assertAnalyzerSummaryCallCarrierIsPinned(_moduleUnderTest, { sour
 async function assertAnalyzerSummaryDbReceiverOrderingIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(analyzerSummaryDbReceiverOrderingBranch)) {
     throw new Error('private helper calls no longer prove the carrier role relative to the DB');
+  }
+}
+
+async function assertAnalyzerSummaryThisCarrierClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryThisCarrierClosureBranch)) {
+    throw new Error('private helper calls no longer reject `this` as a context carrier');
   }
 }
 
