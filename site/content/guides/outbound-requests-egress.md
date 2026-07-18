@@ -26,8 +26,9 @@ export const sendReceipt = task('email/send-receipt', {
 });
 ```
 
-This is the public runtime egress surface today. It is stricter than plain process-global public
-egress because it requires an exact destination allowlist entry.
+Verified webhook handlers receive the same `ctx.fetch` capability. It is stricter than plain
+process-global public egress because it requires an exact destination allowlist entry. A custom
+task runner cannot replace it with another fetch implementation.
 
 ## Run it
 
@@ -58,9 +59,17 @@ createApp({
 `allowDestinations` is for framework-owned HTTP surfaces. `allowInternal` is the narrow
 `host:port` escape hatch for private addresses such as a local sidecar.
 
+Kovo normalizes each declared origin at boot. Hostname case, Unicode, IPv6 spelling, DNS trailing
+dots, and default ports all produce one comparison value. A malformed entry stops boot with
+`EgressConfigError`; Kovo does not ignore it.
+
 The two lists do different jobs. Naming an origin does not reopen private IP ranges. If a
 destination resolves to loopback, RFC1918, link-local, unique-local, or metadata space, the
 private-network floor still applies.
+
+Kovo checks the initial origin and every redirect before DNS. It then checks every DNS answer and
+pins the answer set used by each new dial. A declared hostname can rotate between safe addresses
+without widening the origin allowlist. One private or metadata answer closes the whole request.
 
 ## Declare a NAT64 prefix
 
@@ -94,6 +103,9 @@ Keep the posture tight:
   `EgressConfigError`.
 - Remember that omitted `allowDestinations` means framework-owned HTTP stays blocked, even for
   public internet hosts.
+- Keep HTTP proxies outside app config. `egress.proxy`, `egress.dispatcher`, and per-call custom
+  dispatchers are not supported positive egress doors. Put a transparent proxy in deployment
+  infrastructure when you need one.
 
 ## Handle failure
 
@@ -114,10 +126,11 @@ Treat both as posture problems, not retry problems. Fix the allowlist, then reru
 <summary>Spec & diagnostics</summary>
 
 Public egress API: `packages/server/src/index.ts`. Error and config types, allowlist semantics, and
-the remediation strings: `packages/server/src/egress.ts`. Task `ctx.fetch` public surface:
-`packages/server/src/task.ts` and `packages/server/src/task-runner.ts`. App-facing egress config
-docs in code: `packages/server/src/app-types.ts`. The floor is runtime defense-in-depth, not a
-by-construction proof; the authoritative contract is SPEC section 6.6.
+the remediation strings: `packages/server/src/egress.ts`. Task and webhook `ctx.fetch` surfaces:
+`packages/server/src/task.ts`, `packages/server/src/task-runner.ts`, and
+`packages/server/src/webhook.ts`. App-facing egress config docs in code:
+`packages/server/src/app-types.ts`. The positive origin capability and the ambient private-network
+defense-in-depth floor are distinct; the authoritative contract is SPEC section 6.6.
 
 API reference: [@kovojs/server](/api/server/).
 

@@ -102,8 +102,8 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "dependency": "undici",
       "packageJson": "packages/server/package.json",
       "pinnedVersion": "7.28.0",
-      "guarantee": "While Kovo's egress floor is installed, framework-owned and ambient Undici fetch traffic is routed through its dispatcher, whose custom connector resolves and validates destination IPs before dialing the pinned address; the bootstrap integrity check detects a later global-dispatcher replacement according to the configured hardening posture.",
-      "reviewTrigger": "Any bump of undici must re-confirm Agent custom-connect and global-dispatcher semantics, redirect dispatch through the installed policy, DNS/IP validation before socket creation, abort/error propagation, and the egress bootstrap/runtime adversarial suites."
+      "guarantee": "While Kovo's egress floor is installed, framework-owned and ambient Undici fetch traffic is routed through Kovo's per-request dispatcher. The dispatcher validates every request and pooled redirect hop; the net layer validates and pins every address Node may select for a new dial. The bootstrap integrity check detects a later global-dispatcher replacement according to the configured hardening posture.",
+      "reviewTrigger": "Any bump of undici must re-confirm Agent dispatch and global-dispatcher semantics, redirect and pooled-request dispatch through the installed policy, the net-layer DNS/IP pin before socket selection, abort/error propagation, and the egress bootstrap/runtime adversarial suites."
     },
     {
       "id": "dep.better-auth.password-hashing",

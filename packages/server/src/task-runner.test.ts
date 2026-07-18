@@ -1,3 +1,4 @@
+// @kovo-security-classifier-corpus egress-ip
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
@@ -5,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import './sql-parser-authority-bootstrap.js';
 
-import { installNetConnectFloor, resolveEgressPolicy } from './egress.js';
+import { frameworkEgressFetch, installNetConnectFloor, resolveEgressPolicy } from './egress.js';
 import { installUndiciFloor } from './egress-undici.js';
 import { mutation, runMutation } from './mutation.js';
 import { query, runQuery } from './query.js';
@@ -43,7 +44,6 @@ describe('durable task runner (SPEC §9.6)', () => {
       leaseMs: 10_000,
       owner: 'runner-1',
       hooks: {
-        fetch: vi.fn() as unknown as typeof fetch,
         runMutation: vi.fn(async () => ({ ok: true })),
         runQuery: vi.fn(async () => ({ ok: true })),
       },
@@ -673,36 +673,50 @@ describe('durable task runner (SPEC §9.6)', () => {
     }
   });
 
-  it('pins the queue and egress hook identities when the runner is constructed', async () => {
+  it('pins the queue identity and never accepts a replaceable egress hook', async () => {
     const originalStore = new MemoryDurableTaskQueue();
     const attackerStore = new MemoryDurableTaskQueue();
     const observed: string[] = [];
-    const originalFetch = vi.fn(async () => new Response('original-egress-hook'));
-    const attackerFetch = vi.fn(async () => new Response('attacker-egress-hook'));
-    const hooks = { fetch: originalFetch as typeof fetch };
+    let observedFetch: typeof fetch | undefined;
+    let observedContext: { readonly fetch: typeof fetch } | undefined;
     const authorityProbe = task('authority.probe', {
       input: s.object({ source: s.string() }),
-      async run(args, context) {
-        observed.push(
-          `${args.source}:${await (await context.fetch('https://example.test')).text()}`,
-        );
+      run(args, context) {
+        observed.push(args.source);
+        observedFetch = context.fetch;
+        observedContext = context;
       },
     });
     await originalStore.enqueue({ task: authorityProbe.key, args: { source: 'original-store' } });
     await attackerStore.enqueue({ task: authorityProbe.key, args: { source: 'attacker-store' } });
-    const options = { hooks, store: originalStore, tasks: [authorityProbe] };
+    const options = { store: originalStore, tasks: [authorityProbe] };
     const runner = createDurableTaskRunner(options);
 
     (options as { store: MemoryDurableTaskQueue }).store = attackerStore;
-    hooks.fetch = attackerFetch as typeof fetch;
-
     await runner.runOnce(new Date());
 
-    expect(observed).toEqual(['original-store:original-egress-hook']);
-    expect(originalFetch).toHaveBeenCalledOnce();
-    expect(attackerFetch).not.toHaveBeenCalled();
+    expect(observed).toEqual(['original-store']);
+    expect(observedFetch).toBe(frameworkEgressFetch);
+    expect(Object.getOwnPropertyDescriptor(observedContext!, 'fetch')).toEqual({
+      configurable: false,
+      enumerable: true,
+      value: frameworkEgressFetch,
+      writable: false,
+    });
+    expect(() => {
+      (observedContext as { fetch: typeof fetch }).fetch = vi.fn() as typeof fetch;
+    }).toThrow(TypeError);
+    expect(observedContext!.fetch).toBe(frameworkEgressFetch);
     expect(originalStore.snapshot()[0]).toMatchObject({ status: 'succeeded' });
     expect(attackerStore.snapshot()[0]).toMatchObject({ status: 'ready' });
+
+    expect(() =>
+      createDurableTaskRunner({
+        hooks: { fetch: vi.fn() } as never,
+        store: new MemoryDurableTaskQueue(),
+        tasks: [],
+      }),
+    ).toThrow(/egress capability is framework-owned/);
   });
 
   it('rejects claimed-job accessors without invoking them as registry authority', async () => {

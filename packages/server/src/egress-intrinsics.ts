@@ -441,6 +441,14 @@ export function egressRequest(input: RequestInfo | URL, init?: RequestInit): Req
   return new NativeRequest(input, init);
 }
 
+export function egressRequestWithDispatcher(value: Request, dispatcher: unknown): Request {
+  assertEgressIntrinsics();
+  // Undici retains a non-standard dispatcher in Request private state, including on clones.
+  // An explicit second clone replaces that authority while preserving native replayable-body,
+  // redirect, credential-stripping, abort, and header semantics (SPEC §6.6).
+  return new NativeRequest(value, { dispatcher } as RequestInit);
+}
+
 export function egressRequestUrl(value: Request): string {
   assertEgressIntrinsics();
   return apply(requestUrlGetter!, value, []);

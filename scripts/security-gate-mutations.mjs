@@ -43,6 +43,9 @@ const trustedHtmlProvenancePath = path.join(
 );
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
+const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
+const taskRunnerPath = path.join(repoRoot, 'packages/server/src/task-runner.ts');
+const webhookPath = path.join(repoRoot, 'packages/server/src/webhook.ts');
 const betterAuthCredentialRuntimeGatePath = path.join(
   repoRoot,
   'packages/better-auth/src/internal/credential-runtime-gate.ts',
@@ -577,6 +580,25 @@ const weakenedViteJsToTsSiblingCandidatesBranch = [
   '        return [basePath];',
 ].join('\n');
 
+const frameworkEgressOriginCheck =
+  '  const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });';
+const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
+const frameworkEgressDispatcherPin =
+  '  request = egressRequestWithDispatcher(request, dispatcher);';
+const removedFrameworkEgressDispatcherPin = '  request = request;';
+const taskEgressCapabilitySeal =
+  "    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);";
+const removedTaskEgressCapabilitySeal = '    return context;';
+const webhookEgressCapabilitySeal = [
+  "  witnessDefineProperty(context, 'fetch', {",
+  '    configurable: false,',
+  '    enumerable: true,',
+  '    value: frameworkEgressFetch,',
+  '    writable: false,',
+  '  });',
+].join('\n');
+const removedWebhookEgressCapabilitySeal = '';
+
 export const SECURITY_GATE_MUTANTS = [
   {
     description: 'Weakens the session-owner builder cell to allow cross-owner reads.',
@@ -1074,6 +1096,46 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: compilerVitePath,
     sourceOnly: true,
     test: assertViteSourceKeepsJsToTsSiblingCandidates,
+  },
+  {
+    description: 'Deletes the positive origin decision before framework-owned DNS resolution.',
+    expectedKiller: 'framework egress must reject an undeclared origin before DNS',
+    name: 'server-egress/drop-origin-before-dns',
+    replacement: removedFrameworkEgressOriginCheck,
+    search: frameworkEgressOriginCheck,
+    sourceFile: serverEgressPath,
+    sourceOnly: true,
+    test: assertFrameworkEgressSourceKeepsPositiveCapability,
+  },
+  {
+    description: "Deletes rebinding of Request private state to Kovo's installed dispatcher.",
+    expectedKiller: 'framework egress must replace application dispatcher authority',
+    name: 'server-egress/drop-dispatcher-pin',
+    replacement: removedFrameworkEgressDispatcherPin,
+    search: frameworkEgressDispatcherPin,
+    sourceFile: serverEgressPath,
+    sourceOnly: true,
+    test: assertFrameworkEgressSourceKeepsPositiveCapability,
+  },
+  {
+    description: 'Makes the durable-task contextual fetch capability replaceable after delivery.',
+    expectedKiller: 'task ctx.fetch must be an exact non-replaceable own capability',
+    name: 'server-egress/drop-task-context-fetch-seal',
+    replacement: removedTaskEgressCapabilitySeal,
+    search: taskEgressCapabilitySeal,
+    sourceFile: taskRunnerPath,
+    sourceOnly: true,
+    test: assertTaskEgressContextKeepsCapabilitySeal,
+  },
+  {
+    description: 'Makes the webhook contextual fetch capability replaceable after verification.',
+    expectedKiller: 'webhook ctx.fetch must be an exact non-replaceable own capability',
+    name: 'server-egress/drop-webhook-context-fetch-seal',
+    replacement: removedWebhookEgressCapabilitySeal,
+    search: webhookEgressCapabilitySeal,
+    sourceFile: webhookPath,
+    sourceOnly: true,
+    test: assertWebhookEgressContextKeepsCapabilitySeal,
   },
 ];
 
@@ -1981,6 +2043,41 @@ async function assertCompilerSourceKeepsSiblingRegistration(_moduleUnderTest, { 
 async function assertViteSourceKeepsJsToTsSiblingCandidates(_moduleUnderTest, { sourceText } = {}) {
   if (!sourceText?.includes(viteJsToTsSiblingCandidatesBranch)) {
     throw new Error('Vite sibling discovery no longer maps .js specifiers to .ts/.tsx candidates');
+  }
+}
+
+async function assertFrameworkEgressSourceKeepsPositiveCapability(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  const fetchStart = sourceText?.indexOf('export const frameworkEgressFetch') ?? -1;
+  const dispatcherPin = sourceText?.indexOf(frameworkEgressDispatcherPin, fetchStart) ?? -1;
+  const originCheck = sourceText?.indexOf(frameworkEgressOriginCheck, fetchStart) ?? -1;
+  const dnsLookup = sourceText?.indexOf('lookupAllAddresses(host)', fetchStart) ?? -1;
+  if (
+    fetchStart < 0 ||
+    dispatcherPin < fetchStart ||
+    originCheck < dispatcherPin ||
+    dnsLookup < originCheck
+  ) {
+    throw new Error(
+      'framework egress no longer pins its dispatcher and rejects undeclared origins before DNS',
+    );
+  }
+}
+
+async function assertTaskEgressContextKeepsCapabilitySeal(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(taskEgressCapabilitySeal)) {
+    throw new Error('durable-task ctx.fetch is no longer an exact non-replaceable own property');
+  }
+}
+
+async function assertWebhookEgressContextKeepsCapabilitySeal(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (!sourceText?.includes(webhookEgressCapabilitySeal)) {
+    throw new Error('webhook ctx.fetch is no longer an exact non-replaceable own property');
   }
 }
 

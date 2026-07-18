@@ -99,6 +99,44 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       'webhook',
     ]);
     expect(result.diagnostics).toEqual([]);
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'door' && fact.capability === 'network')
+        .map((fact) => fact.rootKind)
+        .sort(),
+    ).toEqual(['durable-task', 'scheduled-task', 'webhook']);
+  });
+
+  it('keeps raw agent-tool networking closed while exposing only the contextual egress door', () => {
+    const result = analyze([
+      {
+        fileName: 'agent-tool.ts',
+        source: `
+          import { agentTool } from '@kovojs/server';
+          export const lookup = agentTool('lookup', {
+            run(input, ctx) { return [fetch(input.url), ctx.fetch(input.url)]; }
+          });
+        `,
+      },
+    ]);
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.code).toBe('KV448');
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        capability: 'network',
+        kind: 'door',
+        name: 'lookup',
+        rootKind: 'agent-tool-callback',
+      }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        capability: 'network',
+        kind: 'closed',
+        rootKind: 'agent-tool-callback',
+      }),
+    );
   });
 
   it('closes raw authority through wrappers, re-exports, literal dynamic import, and require', () => {

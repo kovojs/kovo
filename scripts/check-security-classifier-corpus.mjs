@@ -177,12 +177,105 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: [
       'packages/cli/src/commands/security-disposition.test.ts',
       'packages/cli/src/index.kovo-db.test.ts',
+      'packages/server/src/egress-bootstrap.test.ts',
       'packages/server/src/egress-nat64-nsp.test.ts',
+      'packages/server/src/egress-property-oracle.test.ts',
+      'packages/server/src/egress-undici.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
       'packages/server/src/runtime-environment-authority.test.ts',
+      'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'destination-origin-boot-canonicalization',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'canonicalizes framework-owned destination origins and refuses malformed boot input',
+          "'https://API.EXAMPLE.COM.'",
+          "'http://[2001:db8::1]:80'",
+          'toThrow(EgressConfigError)',
+        ],
+      },
+      {
+        id: 'undeclared-origin-before-dns-dial',
+        file: 'packages/server/src/egress-property-oracle.test.ts',
+        snippets: [
+          'rejects generated undeclared origin spellings before DNS',
+          'undeclared-origin-before-dns-dial',
+          'expect(lookup).not.toHaveBeenCalled()',
+        ],
+      },
+      {
+        id: 'redirect-hop-before-dns-dial',
+        file: 'packages/server/src/egress-undici.test.ts',
+        snippets: [
+          'rejects an undeclared redirect origin before DNS or dial',
+          'undeclared-hop.invalid',
+          'expect(dnsLookupMock).not.toHaveBeenCalled()',
+        ],
+      },
+      {
+        id: 'declared-origin-dns-rotation',
+        file: 'packages/server/src/egress-undici.test.ts',
+        snippets: [
+          're-resolves a declared framework origin on every request while keeping the origin closed',
+          "{ address: '::1', family: 6 }",
+          'expect(initialLookup).toBe(4)',
+          "reason: 'destination-allowlist'",
+        ],
+      },
+      {
+        id: 'database-endpoint-dns-rotation',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'keeps an exact framework database endpoint usable across pinned DNS rotation',
+          'db-rotation.test',
+          'createDatabaseEgressSocket(databaseUrl)',
+          'unrelatedError',
+        ],
+      },
+      {
+        id: 'application-proxy-dispatcher-closed',
+        file: 'packages/server/src/egress-property-oracle.test.ts',
+        snippets: [
+          'strips an application-supplied dispatcher from the sole supported fetch door',
+          'application dispatcher gained egress authority',
+          'expect(attackerDispatches).toBe(0)',
+        ],
+      },
+      {
+        id: 'proxy-config-refuses-boot',
+        file: 'packages/server/src/egress-bootstrap.test.ts',
+        snippets: [
+          'refuses application proxy/dispatcher configuration instead of bypassing the capability',
+          "proxy: 'http://proxy.internal:8080'",
+          'unsupported property dispatcher',
+        ],
+      },
+      {
+        id: 'task-context-fetch-nonreplaceable',
+        file: 'packages/server/src/task-runner.test.ts',
+        snippets: [
+          'pins the queue identity and never accepts a replaceable egress hook',
+          "Object.getOwnPropertyDescriptor(observedContext!, 'fetch')",
+          'configurable: false',
+          'writable: false',
+          'toThrow(TypeError)',
+        ],
+      },
+      {
+        id: 'webhook-context-fetch-nonreplaceable',
+        file: 'packages/server/src/webhook.test.ts',
+        snippets: [
+          'exposes exactly the framework-owned egress capability to verified handlers',
+          "Object.getOwnPropertyDescriptor(observedContext!, 'fetch')",
+          'configurable: false',
+          'writable: false',
+          'toThrow(TypeError)',
+        ],
+      },
       {
         id: 'octal-ip-regression',
         file: 'packages/server/src/egress.test.ts',
