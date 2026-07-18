@@ -184,6 +184,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/egress.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
       'packages/server/src/runtime-environment-authority.test.ts',
+      'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
     ],
     verdictAnchors: [
       {
@@ -250,6 +252,28 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'refuses application proxy/dispatcher configuration instead of bypassing the capability',
           "proxy: 'http://proxy.internal:8080'",
           'unsupported property dispatcher',
+        ],
+      },
+      {
+        id: 'task-context-fetch-nonreplaceable',
+        file: 'packages/server/src/task-runner.test.ts',
+        snippets: [
+          'pins the queue identity and never accepts a replaceable egress hook',
+          "Object.getOwnPropertyDescriptor(observedContext!, 'fetch')",
+          'configurable: false',
+          'writable: false',
+          'toThrow(TypeError)',
+        ],
+      },
+      {
+        id: 'webhook-context-fetch-nonreplaceable',
+        file: 'packages/server/src/webhook.test.ts',
+        snippets: [
+          'exposes exactly the framework-owned egress capability to verified handlers',
+          "Object.getOwnPropertyDescriptor(observedContext!, 'fetch')",
+          'configurable: false',
+          'writable: false',
+          'toThrow(TypeError)',
         ],
       },
       {

@@ -69,10 +69,10 @@ interface PinnedResolution {
  */
 export class EgressGatingDispatcher extends Agent {
   #policy: EgressPolicy;
-  // Short-lived resolved-IP pin per origin so the dispatch-time check and the connect-time
-  // dial classify the SAME IP within a request window (DNS-rebind resistance at this layer too).
-  // The write epoch bounds retained hostnames even when an attacker never revisits them after
-  // expiry; clearing wholesale is safer and cheaper than trusting mutable iterator/LRU controls.
+  // Short-lived ambient verdict cache for pooled requests that do not dial again. Framework-owned
+  // capability calls bypass it and resolve every hop; every new dial is independently classified
+  // and pinned by the net layer. The write epoch bounds retained hostnames even when an attacker
+  // never revisits them after expiry.
   #resolutionCache = egressCreateMap<string, PinnedResolution>();
   #resolutionCacheWrites = 0;
 
@@ -158,7 +158,7 @@ export class EgressGatingDispatcher extends Agent {
       return false;
     }
 
-    // Hostname: resolve (with a short pin) and classify the resolved IP before dispatching.
+    // Hostname: resolve (with a short ambient verdict cache) and classify every IP before dispatch.
     // `dispatch` is synchronous-returning; we resolve asynchronously and then either reject the
     // handler or forward to the real dispatch. undici accepts an async gate as long as we drive
     // the handler ourselves on the deny path.

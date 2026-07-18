@@ -86,7 +86,11 @@ export function checkEgressBoundary(options = {}) {
   }
   if (exists('packages/server/src/task-runner.ts')) {
     const text = readText('packages/server/src/task-runner.ts');
-    if (!text.includes('fetch: frameworkEgressFetch') || text.includes('hooks.fetch')) {
+    if (
+      !text.includes('fetch: frameworkEgressFetch') ||
+      !text.includes("taskDefineDataProperty(context, 'fetch', frameworkEgressFetch)") ||
+      text.includes('hooks.fetch')
+    ) {
       findings.push(
         'packages/server/src/task-runner.ts: task ctx.fetch must be the non-replaceable framework capability',
       );
@@ -94,9 +98,16 @@ export function checkEgressBoundary(options = {}) {
   }
   if (exists('packages/server/src/webhook.ts')) {
     const text = readText('packages/server/src/webhook.ts');
-    if (!text.includes('fetch: frameworkEgressFetch')) {
+    const sealStart = text.indexOf("witnessDefineProperty(context, 'fetch', {");
+    const seal = sealStart < 0 ? '' : text.slice(sealStart, sealStart + 240);
+    if (
+      !text.includes('fetch: frameworkEgressFetch') ||
+      !seal.includes('configurable: false') ||
+      !seal.includes('value: frameworkEgressFetch') ||
+      !seal.includes('writable: false')
+    ) {
       findings.push(
-        'packages/server/src/webhook.ts: webhook ctx.fetch must be the framework capability',
+        'packages/server/src/webhook.ts: webhook ctx.fetch must be the non-replaceable framework capability',
       );
     }
   }

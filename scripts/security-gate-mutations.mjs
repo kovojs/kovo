@@ -44,6 +44,8 @@ const trustedHtmlProvenancePath = path.join(
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
 const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
+const taskRunnerPath = path.join(repoRoot, 'packages/server/src/task-runner.ts');
+const webhookPath = path.join(repoRoot, 'packages/server/src/webhook.ts');
 const betterAuthCredentialRuntimeGatePath = path.join(
   repoRoot,
   'packages/better-auth/src/internal/credential-runtime-gate.ts',
@@ -584,6 +586,18 @@ const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
+const taskEgressCapabilitySeal =
+  "    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);";
+const removedTaskEgressCapabilitySeal = '    return context;';
+const webhookEgressCapabilitySeal = [
+  "  witnessDefineProperty(context, 'fetch', {",
+  '    configurable: false,',
+  '    enumerable: true,',
+  '    value: frameworkEgressFetch,',
+  '    writable: false,',
+  '  });',
+].join('\n');
+const removedWebhookEgressCapabilitySeal = '';
 
 export const SECURITY_GATE_MUTANTS = [
   {
@@ -1102,6 +1116,26 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: serverEgressPath,
     sourceOnly: true,
     test: assertFrameworkEgressSourceKeepsPositiveCapability,
+  },
+  {
+    description: 'Makes the durable-task contextual fetch capability replaceable after delivery.',
+    expectedKiller: 'task ctx.fetch must be an exact non-replaceable own capability',
+    name: 'server-egress/drop-task-context-fetch-seal',
+    replacement: removedTaskEgressCapabilitySeal,
+    search: taskEgressCapabilitySeal,
+    sourceFile: taskRunnerPath,
+    sourceOnly: true,
+    test: assertTaskEgressContextKeepsCapabilitySeal,
+  },
+  {
+    description: 'Makes the webhook contextual fetch capability replaceable after verification.',
+    expectedKiller: 'webhook ctx.fetch must be an exact non-replaceable own capability',
+    name: 'server-egress/drop-webhook-context-fetch-seal',
+    replacement: removedWebhookEgressCapabilitySeal,
+    search: webhookEgressCapabilitySeal,
+    sourceFile: webhookPath,
+    sourceOnly: true,
+    test: assertWebhookEgressContextKeepsCapabilitySeal,
   },
 ];
 
@@ -2029,6 +2063,21 @@ async function assertFrameworkEgressSourceKeepsPositiveCapability(
     throw new Error(
       'framework egress no longer pins its dispatcher and rejects undeclared origins before DNS',
     );
+  }
+}
+
+async function assertTaskEgressContextKeepsCapabilitySeal(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(taskEgressCapabilitySeal)) {
+    throw new Error('durable-task ctx.fetch is no longer an exact non-replaceable own property');
+  }
+}
+
+async function assertWebhookEgressContextKeepsCapabilitySeal(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (!sourceText?.includes(webhookEgressCapabilitySeal)) {
+    throw new Error('webhook ctx.fetch is no longer an exact non-replaceable own property');
   }
 }
 

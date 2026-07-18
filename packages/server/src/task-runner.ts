@@ -31,6 +31,7 @@ import {
   taskDateGetTime,
   taskDateIsDate,
   taskDateNow,
+  taskDefineDataProperty,
   taskFloor,
   taskInstanceOf,
   taskIsArray,
@@ -368,7 +369,7 @@ export class DurableTaskRunner {
   private createContext(job: DurableTaskJob): TaskRunContext {
     const runMutation = this.hooks.runMutation;
     const runQuery = this.hooks.runQuery;
-    return {
+    const context: TaskRunContext = {
       jobId: job.id,
       idempotencyKey: job.id,
       // SPEC §6.6: task code receives exactly the framework-owned positive egress capability.
@@ -420,6 +421,10 @@ export class DurableTaskRunner {
         );
       },
     };
+    // The type is readonly for authors, but the runtime invariant must survive JavaScript and
+    // casts too. Close the delivered capability property itself after constructing the context;
+    // task code cannot swap in ambient fetch or a proxy dispatcher (SPEC §6.6).
+    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);
   }
 
   private createPrincipalScope(

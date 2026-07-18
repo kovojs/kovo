@@ -1868,7 +1868,7 @@ function webhookHandlerContext<Input, Tx>(
       runMutationFromWebhook(definition, mutationInput, posture),
     tx: managedTx as WebhookTxDb<Tx>,
   });
-  return {
+  const context: WebhookHandlerContext<Input, Tx, WebhookDeclaredWrites> = {
     actAs(principalId: string) {
       return writeScope(
         actAsNonRequestPrincipal(principalId, webhookPrincipalAudit(name, 'write')),
@@ -1914,6 +1914,16 @@ function webhookHandlerContext<Input, Tx>(
     },
     tx: deniedWebhookTx(name) as WebhookTxDb<Tx>,
   };
+  // Enforce the contextual network door at runtime as well as in its readonly TypeScript shape.
+  // Verified handler code cannot replace this exact own property through JavaScript or a cast
+  // (SPEC §6.6).
+  witnessDefineProperty(context, 'fetch', {
+    configurable: false,
+    enumerable: true,
+    value: frameworkEgressFetch,
+    writable: false,
+  });
+  return context;
 }
 
 function webhookPrincipalAudit(

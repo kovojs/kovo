@@ -19,9 +19,17 @@ return dnsLookup(host, { all: true });
   'packages/server/src/egress-bootstrap.ts': '',
   'packages/server/src/egress-credentials.ts': '',
   'packages/server/src/task-runner.ts': `import { frameworkEgressFetch } from './egress.js';
-export const ctx = { fetch: frameworkEgressFetch };`,
+const context = { fetch: frameworkEgressFetch };
+export const ctx = taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);`,
   'packages/server/src/webhook.ts': `import { frameworkEgressFetch } from './egress.js';
-export const ctx = { fetch: frameworkEgressFetch };`,
+const context = { fetch: frameworkEgressFetch };
+witnessDefineProperty(context, 'fetch', {
+  configurable: false,
+  enumerable: true,
+  value: frameworkEgressFetch,
+  writable: false,
+});
+export const ctx = context;`,
 };
 
 function run(files) {
@@ -73,8 +81,14 @@ const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol,
       }).findings.join('\n'),
     ).toContain('non-replaceable framework capability');
     expect(run({ 'packages/server/src/webhook.ts': '' }).findings.join('\n')).toContain(
-      'webhook ctx.fetch must be the framework capability',
+      'webhook ctx.fetch must be the non-replaceable framework capability',
     );
+    expect(
+      run({
+        'packages/server/src/webhook.ts':
+          'const context = { fetch: frameworkEgressFetch }; export const ctx = context;',
+      }).findings.join('\n'),
+    ).toContain('webhook ctx.fetch must be the non-replaceable framework capability');
   });
 
   it('ignores comments, quoted strings, and generated client template fetches', () => {

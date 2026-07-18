@@ -1,3 +1,4 @@
+// @kovo-security-classifier-corpus egress-ip
 import { createHmac } from 'node:crypto';
 import { customVerifier, hmacSignature } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
@@ -52,9 +53,11 @@ function sign(body: string): string {
 describe('server webhook primitive', () => {
   it('exposes exactly the framework-owned egress capability to verified handlers', async () => {
     let observedFetch: typeof fetch | undefined;
+    let observedContext: { readonly fetch: typeof fetch } | undefined;
     const declaration = webhook('/webhooks/egress-capability', {
       handler(_input, context) {
         observedFetch = context.fetch;
+        observedContext = context;
       },
       input: s.object({ id: s.string() }),
       verify: customVerifier('egress-capability-test', () => true),
@@ -71,6 +74,16 @@ describe('server webhook primitive', () => {
 
     expect(result.response.status).toBe(200);
     expect(observedFetch).toBe(frameworkEgressFetch);
+    expect(Object.getOwnPropertyDescriptor(observedContext!, 'fetch')).toEqual({
+      configurable: false,
+      enumerable: true,
+      value: frameworkEgressFetch,
+      writable: false,
+    });
+    expect(() => {
+      (observedContext as { fetch: typeof fetch }).fetch = vi.fn() as typeof fetch;
+    }).toThrow(TypeError);
+    expect(observedContext!.fetch).toBe(frameworkEgressFetch);
   });
 
   it('strips ambient authorization before direct webhook verification and handling', async () => {

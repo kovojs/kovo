@@ -1799,8 +1799,8 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
   const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });
   if (originBlocked) throw originBlocked;
   // Classify the initial request before native fetch can observe an abort or other caller state.
-  // The dispatcher repeats this all-address decision for every request/redirect hop and pins its
-  // selected connector lookup; the net layer independently rechecks the exact dial result.
+  // The dispatcher repeats this all-address decision for every request/redirect hop; the net
+  // layer independently rechecks and pins the exact resolver result used by each new dial.
   const literalIp = normalizeFastPathIpLiteral(host);
   if (literalIp !== null) {
     const blocked = evaluateEgress({

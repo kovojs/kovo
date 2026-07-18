@@ -1,3 +1,4 @@
+// @kovo-security-classifier-corpus egress-ip
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
@@ -677,11 +678,13 @@ describe('durable task runner (SPEC §9.6)', () => {
     const attackerStore = new MemoryDurableTaskQueue();
     const observed: string[] = [];
     let observedFetch: typeof fetch | undefined;
+    let observedContext: { readonly fetch: typeof fetch } | undefined;
     const authorityProbe = task('authority.probe', {
       input: s.object({ source: s.string() }),
       run(args, context) {
         observed.push(args.source);
         observedFetch = context.fetch;
+        observedContext = context;
       },
     });
     await originalStore.enqueue({ task: authorityProbe.key, args: { source: 'original-store' } });
@@ -694,6 +697,16 @@ describe('durable task runner (SPEC §9.6)', () => {
 
     expect(observed).toEqual(['original-store']);
     expect(observedFetch).toBe(frameworkEgressFetch);
+    expect(Object.getOwnPropertyDescriptor(observedContext!, 'fetch')).toEqual({
+      configurable: false,
+      enumerable: true,
+      value: frameworkEgressFetch,
+      writable: false,
+    });
+    expect(() => {
+      (observedContext as { fetch: typeof fetch }).fetch = vi.fn() as typeof fetch;
+    }).toThrow(TypeError);
+    expect(observedContext!.fetch).toBe(frameworkEgressFetch);
     expect(originalStore.snapshot()[0]).toMatchObject({ status: 'succeeded' });
     expect(attackerStore.snapshot()[0]).toMatchObject({ status: 'ready' });
 
