@@ -277,6 +277,34 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     ).toEqual(['network', 'vm', 'worker']);
   });
 
+  it('closes platform loaders, Web execution, service workers, and Cloudflare sockets', () => {
+    const files = [
+      {
+        fileName: 'platform.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import { connect } from 'cloudflare:sockets';
+          import { WASI } from 'node:wasi';
+          const load = require;
+          const wasm = WebAssembly;
+          const realm = new ShadowRealm();
+          const transport = new WebTransport('https://transport.example');
+          const serviceWorker = navigator.serviceWorker;
+          export const page = route('/platform', { render() {
+            return [connect, WASI, load, wasm, realm, transport, serviceWorker];
+          } });
+        `,
+      },
+    ];
+    const result = analyze(files);
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'closed')
+        .map((fact) => fact.capability)
+        .sort(),
+    ).toEqual(['dynamic-loader', 'network', 'network', 'vm', 'vm', 'vm', 'worker']);
+  });
+
   it('closes builtin subpaths but ignores type-only authority imports', () => {
     const closed = analyze([
       {

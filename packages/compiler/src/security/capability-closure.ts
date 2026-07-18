@@ -15,7 +15,10 @@ import type {
   ScannedExportBindingFact,
   ScannedImportFact,
 } from './capability-closure-model.js';
-import { packageCapabilitySummarySchema } from './capability-closure-model.js';
+import {
+  classifyRawCapabilityModuleSpecifier,
+  packageCapabilitySummarySchema,
+} from './capability-closure-model.js';
 
 export type {
   CapabilityClosureSourceFile,
@@ -295,7 +298,7 @@ function collectCapabilityPackageRequestsFromModules(
       if (
         specifier === undefined ||
         isRelativeSpecifier(specifier) ||
-        rawCapabilityForModuleSpecifier(specifier) !== undefined
+        classifyRawCapabilityModuleSpecifier(specifier) !== undefined
       ) {
         continue;
       }
@@ -423,7 +426,7 @@ function packageUses(
       if (
         specifier === undefined ||
         isRelativeSpecifier(specifier) ||
-        rawCapabilityForModuleSpecifier(specifier) !== undefined
+        classifyRawCapabilityModuleSpecifier(specifier) !== undefined
       ) {
         continue;
       }
@@ -810,59 +813,6 @@ function indexPackageSummaries(
     indexed.set(summary.packageName, values);
   }
   return indexed;
-}
-
-function rawCapabilityForModuleSpecifier(specifier: string): RawCapabilityKind | undefined {
-  const normalized = specifier.startsWith('node:') ? specifier.slice(5) : specifier;
-  if (normalized === 'fs' || normalized.startsWith('fs/')) return 'filesystem';
-  if (
-    normalized === 'http' ||
-    normalized === 'https' ||
-    normalized === 'http2' ||
-    normalized === 'net' ||
-    normalized === 'tls' ||
-    normalized === 'dgram' ||
-    normalized === 'dns' ||
-    normalized.startsWith('dns/')
-  ) {
-    return 'network';
-  }
-  if (
-    normalized === 'process' ||
-    normalized === 'child_process' ||
-    normalized === 'cluster' ||
-    normalized === 'inspector' ||
-    normalized === 'os' ||
-    normalized === 'repl'
-  ) {
-    return 'process';
-  }
-  if (normalized === 'vm' || normalized === 'v8') return 'vm';
-  if (normalized === 'worker_threads') return 'worker';
-  if (normalized === 'module') return 'dynamic-loader';
-  const packageName = packageNameForSpecifier(specifier);
-  if (
-    packageName === '@electric-sql/pglite' ||
-    packageName === 'better-sqlite3' ||
-    packageName === 'mysql' ||
-    packageName === 'mysql2' ||
-    packageName === 'pg' ||
-    packageName === 'postgres' ||
-    packageName === 'sqlite3' ||
-    specifier === 'node:sqlite' ||
-    specifier === 'bun:sqlite'
-  ) {
-    return 'database-driver';
-  }
-  if (
-    packageName === 'drizzle-orm' &&
-    /\/(?:better-sqlite3|bun-sqlite|d1|durable-sqlite|expo-sqlite|libsql|mysql2|neon|node-postgres|op-sqlite|pglite|postgres-js|sql-js|sqlite-proxy|tidb-serverless|vercel-postgres)(?:\/|$)/u.test(
-      specifier,
-    )
-  ) {
-    return 'database-driver';
-  }
-  return undefined;
 }
 
 class BindingResolver {

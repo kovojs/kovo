@@ -12,39 +12,7 @@ import type {
   ScannedImportBindingFact,
   ScannedImportFact,
 } from '../security/capability-closure-model.js';
-
-const rawBuiltinCapabilities = new Map<string, RawCapabilityKind>([
-  ['child_process', 'process'],
-  ['cluster', 'process'],
-  ['dgram', 'network'],
-  ['dns', 'network'],
-  ['fs', 'filesystem'],
-  ['http', 'network'],
-  ['http2', 'network'],
-  ['https', 'network'],
-  ['inspector', 'process'],
-  ['module', 'dynamic-loader'],
-  ['net', 'network'],
-  ['os', 'process'],
-  ['process', 'process'],
-  ['repl', 'process'],
-  ['tls', 'network'],
-  ['v8', 'vm'],
-  ['vm', 'vm'],
-  ['worker_threads', 'worker'],
-]);
-
-const rawDatabasePackages = new Set([
-  '@electric-sql/pglite',
-  'better-sqlite3',
-  'bun:sqlite',
-  'mysql',
-  'mysql2',
-  'node:sqlite',
-  'pg',
-  'postgres',
-  'sqlite3',
-]);
+import { classifyRawCapabilityModuleSpecifier } from '../security/capability-closure-model.js';
 
 const globalCapabilities = new Map<string, RawCapabilityKind>([
   ['Bun', 'process'],
@@ -52,12 +20,19 @@ const globalCapabilities = new Map<string, RawCapabilityKind>([
   ['EventSource', 'network'],
   ['Function', 'vm'],
   ['SharedWorker', 'worker'],
+  ['ShadowRealm', 'vm'],
+  ['WebAssembly', 'vm'],
   ['WebSocket', 'network'],
+  ['WebSocketStream', 'network'],
+  ['WebTransport', 'network'],
   ['Worker', 'worker'],
   ['XMLHttpRequest', 'network'],
   ['eval', 'vm'],
   ['fetch', 'network'],
+  ['importScripts', 'dynamic-loader'],
+  ['module', 'dynamic-loader'],
   ['process', 'process'],
+  ['require', 'dynamic-loader'],
 ]);
 
 const globalNamespaceMembers = new Map<string, RawCapabilityKind>([
@@ -66,12 +41,19 @@ const globalNamespaceMembers = new Map<string, RawCapabilityKind>([
   ['EventSource', 'network'],
   ['Function', 'vm'],
   ['SharedWorker', 'worker'],
+  ['ShadowRealm', 'vm'],
+  ['WebAssembly', 'vm'],
   ['WebSocket', 'network'],
+  ['WebSocketStream', 'network'],
+  ['WebTransport', 'network'],
   ['Worker', 'worker'],
   ['XMLHttpRequest', 'network'],
   ['eval', 'vm'],
   ['fetch', 'network'],
+  ['importScripts', 'dynamic-loader'],
+  ['module', 'dynamic-loader'],
   ['process', 'process'],
+  ['require', 'dynamic-loader'],
 ]);
 
 /** Scanner/source-text boundary for the capability-closed module graph (SPEC §5.2 rule 10). */
@@ -120,7 +102,7 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
 
   for (const imported of imports) {
     if (imported.specifier === undefined) continue;
-    const capability = rawCapabilityForSpecifier(imported.specifier);
+    const capability = classifyRawCapabilityModuleSpecifier(imported.specifier);
     if (capability === undefined) continue;
     globals.push({
       capability,
@@ -434,10 +416,32 @@ function collectGlobalCapability(
     return;
   }
 
+  if (
+    ts.isPropertyAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'navigator' &&
+    node.name.text === 'serviceWorker' &&
+    !scopeBinds(scopes, 'navigator')
+  ) {
+    globals.push({
+      capability: 'worker',
+      evidence: 'navigator.serviceWorker',
+      site: sourceSite(sourceFile, node.getStart(sourceFile)),
+    });
+    return;
+  }
+
   if (!ts.isIdentifier(node) || !identifierIsValueReference(node)) return;
   if (scopeBinds(scopes, node.text)) return;
   const capability = globalCapabilities.get(node.text);
   if (capability === undefined) return;
+  if (
+    node.text === 'require' &&
+    ts.isCallExpression(node.parent) &&
+    node.parent.expression === node
+  ) {
+    return;
+  }
   if (node.text === 'eval' && ts.isCallExpression(node.parent) && node.parent.expression !== node) {
     return;
   }
@@ -624,23 +628,6 @@ function jsxAttributeIsHandler(attribute: ts.JsxAttribute): boolean {
   return name.startsWith('on') || name.startsWith('on:');
 }
 
-function rawCapabilityForSpecifier(specifier: string): RawCapabilityKind | undefined {
-  const withoutNode = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier;
-  const builtin = rawBuiltinCapabilities.get(withoutNode.split('/')[0]!);
-  if (builtin !== undefined) return builtin;
-  const packageName = packageNameForSpecifier(specifier);
-  if (rawDatabasePackages.has(packageName)) return 'database-driver';
-  if (
-    packageName === 'drizzle-orm' &&
-    /\/(?:better-sqlite3|bun-sqlite|d1|durable-sqlite|expo-sqlite|libsql|mysql2|neon|node-postgres|op-sqlite|pglite|postgres-js|sql-js|sqlite-proxy|tidb-serverless|vercel-postgres)(?:\/|$)/u.test(
-      specifier,
-    )
-  ) {
-    return 'database-driver';
-  }
-  return undefined;
-}
-
 function globalNamespaceAliases(aliases: readonly ScannedBindingAliasFact[]): ReadonlySet<string> {
   const canonical = new Set(['globalThis', 'global', 'window', 'self']);
   const namespaces = new Set(canonical);
@@ -702,12 +689,6 @@ function expressionStartsAtUnshadowedGlobalNamespace(
       current.text === 'self') &&
     !scopeBinds(scopes, current.text)
   );
-}
-
-function packageNameForSpecifier(specifier: string): string {
-  if (!specifier.startsWith('@')) return specifier.split('/')[0] ?? specifier;
-  const parts = specifier.split('/');
-  return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : specifier;
 }
 
 function expressionBindingKey(expression: ts.Expression): string | undefined {

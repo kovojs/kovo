@@ -19,6 +19,71 @@ export type RawCapabilityKind =
   | 'vm'
   | 'worker';
 
+const rawModuleCapabilities = new Map<string, RawCapabilityKind>([
+  ['child_process', 'process'],
+  ['cloudflare:sockets', 'network'],
+  ['cluster', 'process'],
+  ['dgram', 'network'],
+  ['dns', 'network'],
+  ['fs', 'filesystem'],
+  ['http', 'network'],
+  ['http2', 'network'],
+  ['https', 'network'],
+  ['inspector', 'process'],
+  ['module', 'dynamic-loader'],
+  ['net', 'network'],
+  ['os', 'process'],
+  ['process', 'process'],
+  ['readline', 'process'],
+  ['repl', 'process'],
+  ['sea', 'process'],
+  ['tls', 'network'],
+  ['trace_events', 'process'],
+  ['tty', 'process'],
+  ['v8', 'vm'],
+  ['vm', 'vm'],
+  ['wasi', 'vm'],
+  ['worker_threads', 'worker'],
+]);
+
+const rawDatabasePackages = new Set([
+  '@electric-sql/pglite',
+  'better-sqlite3',
+  'bun:sqlite',
+  'mysql',
+  'mysql2',
+  'node:sqlite',
+  'pg',
+  'postgres',
+  'sqlite3',
+]);
+
+/** @internal One C13-enrolled raw-module classifier shared by scanner and graph analysis. */
+export function classifyRawCapabilityModuleSpecifier(
+  specifier: string,
+): RawCapabilityKind | undefined {
+  const withoutNode = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier;
+  const builtin = rawModuleCapabilities.get(withoutNode.split('/')[0]!);
+  if (builtin !== undefined) return builtin;
+  const packageName = capabilityPackageNameForSpecifier(specifier);
+  if (rawDatabasePackages.has(packageName)) return 'database-driver';
+  if (
+    packageName === 'drizzle-orm' &&
+    /\/(?:better-sqlite3|bun-sqlite|d1|durable-sqlite|expo-sqlite|libsql|mysql2|neon|node-postgres|op-sqlite|pglite|postgres-js|sql-js|sqlite-proxy|tidb-serverless|vercel-postgres)(?:\/|$)/u.test(
+      specifier,
+    )
+  ) {
+    return 'database-driver';
+  }
+  return undefined;
+}
+
+function capabilityPackageNameForSpecifier(specifier: string): string {
+  if (!specifier.startsWith('@')) return specifier.split('/')[0] ?? specifier;
+  const parts = specifier.split('/');
+  return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : specifier;
+}
+
 /** @internal */
 export type CapabilityRootKind =
   | 'agent-tool-callback'

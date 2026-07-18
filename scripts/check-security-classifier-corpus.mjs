@@ -1633,6 +1633,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/compiler/src/capability-closure.security.test.ts',
         snippets: [
           'keeps shadowed globals and require open while closing global aliases',
+          'closes platform loaders, Web execution, service workers, and Cloudflare sockets',
           'has no reviewed exact-version capability summary',
           'summary covers 1.2.2, installed package is 1.2.3',
           '2 contradictory summaries',
