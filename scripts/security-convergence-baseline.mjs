@@ -176,10 +176,7 @@ export function measureStaticPredicateObligations(source, fileName = 'security-p
     ) {
       syntaxGuardSites += 1;
     }
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      isSyntaxKindNamespace(node.expression)
-    ) {
+    if (ts.isPropertyAccessExpression(node) && isSyntaxKindNamespace(node.expression)) {
       syntaxKindSites += 1;
     }
     if (
@@ -450,9 +447,7 @@ export async function main(options = {}) {
   if (options.live === true) {
     const live = await measureLiveSecurityConvergence({ repoRoot: root });
     if (live.m.survivors.length > 0) {
-      process.stderr.write(
-        `${BASELINE_SCHEMA} FAIL survivors=${live.m.survivors.length}\n`,
-      );
+      process.stderr.write(`${BASELINE_SCHEMA} FAIL survivors=${live.m.survivors.length}\n`);
       return false;
     }
     process.stdout.write(
@@ -551,8 +546,7 @@ function isStaticNameLiteral(node) {
 
 function isSyntaxGuardNamespace(node) {
   return (
-    (ts.isIdentifier(node) && node.text === 'Node') ||
-    (ts.isIdentifier(node) && node.text === 'ts')
+    (ts.isIdentifier(node) && node.text === 'Node') || (ts.isIdentifier(node) && node.text === 'ts')
   );
 }
 
