@@ -1941,6 +1941,27 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'request-ingress',
+    marker: '@kovo-security-classifier-corpus request-ingress',
+    testFiles: ['packages/server/src/request-ingress-c13.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'method-authority-scheme-superset',
+        file: 'packages/server/src/request-ingress-c13.test.ts',
+        snippets: [
+          'preserves the complete closed method-identity verdict before Fetch construction',
+          "'PoSt'",
+          "'CONNECT'",
+          'preserves the complete closed authority-identity verdict and reconstructs one Host',
+          "'%65xample.com'",
+          "'example.com:443'",
+          'selects only the explicitly trusted transport scheme before applying strict grammar',
+          "'https, ftp'",
+        ],
+      },
+    ],
+  },
+  {
     id: 'mutation-idem',
     marker: '@kovo-security-classifier-corpus mutation-idem',
     testFiles: [
