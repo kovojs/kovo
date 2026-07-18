@@ -66,6 +66,13 @@ async function createOpaqueFrame(body: string): Promise<FrameHarness> {
   };
 }
 
+async function expectHardReload(harness: FrameHarness): Promise<void> {
+  // Firefox can report an iframe reload after Vitest's one-second waitFor default when the full
+  // three-engine suite is CPU-bound. Keep the oracle exact, but give the real navigation event a
+  // bounded window that matches the browser CI workload.
+  await vi.waitFor(() => expect(harness.loadCount()).toBeGreaterThan(1), { timeout: 5_000 });
+}
+
 async function installGeneratedInlineLoader(
   frameWindow: Window & typeof globalThis,
   importModule: (url: string) => Promise<Record<string, unknown>> = async () => ({}),
@@ -887,7 +894,7 @@ it.each([
     await vi.waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
     expect(body.locked).toBe(false);
     expect(oldTarget?.textContent).toBe('OLD BUILD TRUTH');
-    await vi.waitFor(() => expect(harness.loadCount()).toBeGreaterThan(1));
+    await expectHardReload(harness);
   },
 );
 
@@ -941,7 +948,7 @@ it.each([
     );
 
     await vi.waitFor(() => expect(oldTarget?.textContent).toContain('UNCONFIRMED'));
-    await vi.waitFor(() => expect(harness.loadCount()).toBeGreaterThan(1));
+    await expectHardReload(harness);
     expect(nativeSubmitCalls).toBe(0);
   },
 );
@@ -981,7 +988,7 @@ it('never consults deferred-runtime native submit after an ambiguous POST failur
       new harness.window.SubmitEvent('submit', { bubbles: true, cancelable: true }),
     );
 
-    await vi.waitFor(() => expect(harness.loadCount()).toBeGreaterThan(1));
+    await expectHardReload(harness);
     expect(poisonedRequestSubmit).not.toHaveBeenCalled();
   } finally {
     Object.defineProperty(prototype, 'requestSubmit', descriptor);
