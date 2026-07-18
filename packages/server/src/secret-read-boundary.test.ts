@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import { defineRelations, sql as drizzleSql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/pglite';
-import { alias, pgTable, text as pgText } from 'drizzle-orm/pg-core';
+import { alias, pgSchema, pgTable, text as pgText } from 'drizzle-orm/pg-core';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import {
   createSecretBoxingReadDb,
@@ -14,7 +14,11 @@ import {
   type SecretReadMetadata,
   type SecretReadSqliteColumnOrigin,
 } from './secret-read-boundary.js';
-import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
+import {
+  frameworkCanonicalNativeSqlColumnIdentity,
+  managedSqlExecutionPolicy,
+  wrapManagedDbForSqlSafety,
+} from './sql-safe-handle.js';
 
 // @kovo-security-classifier-corpus runtime-secret-provenance
 
@@ -26,9 +30,24 @@ function metadata(): SecretReadMetadata {
   return {
     allColumnKeys: new Set(['id', 'classified', 'label', 'amount']),
     columnSources: new Map([
-      [secretColumn, { column: 'classified', key: 'classified', secret: true, table: 'secrets' }],
-      [publicColumn, { column: 'label', key: 'label', secret: false, table: 'secrets' }],
-      [metricColumn, { column: 'amount', key: 'amount', secret: false, table: 'metrics' }],
+      [
+        secretColumn,
+        {
+          column: 'classified',
+          key: 'classified',
+          schema: undefined,
+          secret: true,
+          table: 'secrets',
+        },
+      ],
+      [
+        publicColumn,
+        { column: 'label', key: 'label', schema: undefined, secret: false, table: 'secrets' },
+      ],
+      [
+        metricColumn,
+        { column: 'amount', key: 'amount', schema: undefined, secret: false, table: 'metrics' },
+      ],
     ]),
     secretColumnKeys: new Set(['classified']),
     secretColumnNames: new Set(['classified']),
@@ -141,6 +160,16 @@ describe('secret read boundary', () => {
         },
       ),
     ).toThrow('secretColumnKeys must contain only strings');
+  });
+
+  it('does not accept a structural imitation of the canonical relation witness', () => {
+    const fakeTable = {
+      [Symbol.for('drizzle:BaseName')]: 'registered_secrets',
+      [Symbol.for('drizzle:Schema')]: undefined,
+    };
+    const fakeColumn = { name: 'classified', table: fakeTable };
+
+    expect(frameworkCanonicalNativeSqlColumnIdentity(fakeColumn)).toBeUndefined();
   });
 
   it('pins the secret-boxing membrane against late global Proxy replacement', () => {
@@ -592,21 +621,27 @@ describe('secret read boundary', () => {
         ].join(';'),
       );
       const parents = sqliteTable('parents', { id: text('id').primaryKey() });
-      const secrets = sqliteTable('secrets', {
-        classified: text('classified').notNull(),
-        id: text('id').primaryKey(),
-        label: text('label').notNull(),
-        parentId: text('parent_id').references(() => parents.id),
-      });
+      const secrets = sqliteTable(
+        'secrets',
+        {
+          classified: text('classified').notNull(),
+          id: text('id').primaryKey(),
+          label: text('label').notNull(),
+          parentId: text('parent_id').references(() => parents.id),
+        },
+        kovo({ domain: 'relational-secret', key: 'id', secret: ['classified'] }),
+      );
       const relations = defineRelations({ parents, secrets }, (r) => ({
         parents: { secrets: r.many.secrets() },
         secrets: {
           parent: r.one.parents({ from: r.secrets.parentId, to: r.parents.id }),
         },
       }));
-      const db = createSecretBoxingReadDb(drizzle({ client, relations }), metadata(), {
-        sqliteColumnOrigins: client,
-      });
+      const db = createSecretBoxingReadDb(
+        drizzle({ client, relations }),
+        extractKovoRuntimeDbMetadata([parents, secrets]),
+        { sqliteColumnOrigins: client },
+      );
 
       const [relational] = await db.query.secrets.findMany();
       expect(isSecret(relational.classified)).toBe(true);
@@ -692,13 +727,20 @@ describe('secret read boundary', () => {
           "insert into secrets values ('s1', 'victim-secret', 'public-label')",
         ].join(';'),
       );
-      const secrets = pgTable('secrets', {
-        classified: pgText('classified').notNull(),
-        id: pgText('id').primaryKey(),
-        label: pgText('label').notNull(),
-      });
+      const secrets = pgTable(
+        'secrets',
+        {
+          classified: pgText('classified').notNull(),
+          id: pgText('id').primaryKey(),
+          label: pgText('label').notNull(),
+        },
+        kovo({ domain: 'pglite-relational-secret', key: 'id', secret: ['classified'] }),
+      );
       const relations = defineRelations({ secrets }, () => ({}));
-      const db = createSecretBoxingReadDb(drizzlePostgres({ client, relations }), metadata());
+      const db = createSecretBoxingReadDb(
+        drizzlePostgres({ client, relations }),
+        extractKovoRuntimeDbMetadata([secrets]),
+      );
 
       const first = await db.query.secrets.findFirst();
       expect(Array.isArray(first)).toBe(false);
@@ -764,7 +806,7 @@ describe('secret read boundary', () => {
       );
       const db = createSecretBoxingReadDb(
         safe,
-        extractKovoRuntimeDbMetadata([publicRecords, wholeSecretRecords]),
+        extractKovoRuntimeDbMetadata([publicRecords, publicRecordView, wholeSecretRecords]),
         {
           executeSql: async (statement) =>
             (await client.query(statement.text, [...statement.params])).rows,
@@ -784,6 +826,13 @@ describe('secret read boundary', () => {
       const viewRows = await db
         .select({ id: publicRecordView.id, label: publicRecordView.label })
         .from(publicRecordView);
+      const publicRecordViewAlias = alias(publicRecordView, 'public_record_view_alias');
+      const aliasedViewRows = await db
+        .select({ id: publicRecordViewAlias.id, label: publicRecordViewAlias.label })
+        .from(publicRecordViewAlias);
+      const computedViewRows = await db
+        .select({ label: drizzleSql<string>`upper(${publicRecordView.label})` })
+        .from(publicRecordView);
       const secretRows = await db.query.wholeSecretRecords.findMany({
         columns: { id: true },
       });
@@ -791,12 +840,162 @@ describe('secret read boundary', () => {
       expect(publicRows).toEqual([{ id: 'p1', label: 'public-label' }]);
       expect(aliasRows).toEqual([{ id: 'p1', label: 'public-label' }]);
       expect(viewRows).toEqual([{ id: 'p1', label: 'public-label' }]);
+      expect(aliasedViewRows).toEqual([{ id: 'p1', label: 'public-label' }]);
+      expect(computedViewRows).toEqual([{ label: 'PUBLIC-LABEL' }]);
       expect(isSecret(publicRows[0]?.id)).toBe(false);
       expect(isSecret(aliasRows[0]?.id)).toBe(false);
       expect(isSecret(aliasSecretRows[0]?.classified)).toBe(true);
       expect(isSecret(viewRows[0]?.id)).toBe(false);
-      expect(() => JSON.stringify({ aliasRows, publicRows, viewRows })).not.toThrow();
+      expect(() =>
+        JSON.stringify({ aliasRows, aliasedViewRows, computedViewRows, publicRows, viewRows }),
+      ).not.toThrow();
       expect(isSecret(secretRows[0]?.id)).toBe(true);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('boxes direct and computed projections from an unregistered Postgres view', async () => {
+    const client = new PGlite();
+    try {
+      await client.exec(
+        [
+          'create table registered_secrets (id text primary key, classified text not null)',
+          "insert into registered_secrets values ('s1', 'victim-secret')",
+          'create view unregistered_secret_view as select id, classified as leaked from registered_secrets',
+        ].join(';'),
+      );
+      const registeredSecrets = pgTable(
+        'registered_secrets',
+        {
+          classified: pgText('classified').notNull(),
+          id: pgText('id').primaryKey(),
+        },
+        kovo({ domain: 'registered-secret', key: 'id', secret: ['classified'] }),
+      );
+      const unregisteredSecretView = pgTable('unregistered_secret_view', {
+        id: pgText('id').notNull(),
+        leaked: pgText('leaked').notNull(),
+      });
+      const relations = defineRelations({ registeredSecrets, unregisteredSecretView }, (r) => ({
+        registeredSecrets: {
+          leakedRows: r.many.unregisteredSecretView({
+            from: r.registeredSecrets.id,
+            to: r.unregisteredSecretView.id,
+          }),
+        },
+        unregisteredSecretView: {},
+      }));
+      const raw = drizzlePostgres({ client, relations });
+      const safe = wrapManagedDbForSqlSafety(
+        raw,
+        'enforce',
+        managedSqlExecutionPolicy({ capability: 'read' }),
+      );
+      const db = createSecretBoxingReadDb(safe, extractKovoRuntimeDbMetadata([registeredSecrets]), {
+        executeSql: async (statement) =>
+          (await client.query(statement.text, [...statement.params])).rows,
+      });
+
+      const direct = await db
+        .select({ leaked: unregisteredSecretView.leaked })
+        .from(unregisteredSecretView);
+      const computed = await db
+        .select({ leaked: drizzleSql<string>`upper(${unregisteredSecretView.leaked})` })
+        .from(unregisteredSecretView);
+      const unregisteredAlias = alias(unregisteredSecretView, 'unregistered_secret_view_alias');
+      const aliased = await db.select({ leaked: unregisteredAlias.leaked }).from(unregisteredAlias);
+      const relational = await db.query.unregisteredSecretView.findMany({
+        columns: { id: false, leaked: true },
+      });
+      const nested = await db.query.registeredSecrets.findMany({
+        columns: { classified: false, id: true },
+        with: { leakedRows: { columns: { id: false, leaked: true } } },
+      });
+
+      expect(isSecret(direct[0]?.leaked)).toBe(true);
+      expect(isSecret(computed[0]?.leaked)).toBe(true);
+      expect(isSecret(aliased[0]?.leaked)).toBe(true);
+      expect(isSecret(relational[0]?.leaked)).toBe(true);
+      expect(isSecret(nested[0]?.id)).toBe(false);
+      expect(isSecret(nested[0]?.leakedRows)).toBe(true);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('keeps same-named secret tables in separate Postgres schemas independently boxed', async () => {
+    const client = new PGlite();
+    try {
+      await client.exec(
+        [
+          'create schema whole_scope',
+          'create schema partial_scope',
+          'create table whole_scope.records (id text primary key, classified text not null)',
+          'create table partial_scope.records (id text primary key, classified text not null)',
+          "insert into whole_scope.records values ('whole-id', 'whole-secret')",
+          "insert into partial_scope.records values ('partial-id', 'partial-secret')",
+        ].join(';'),
+      );
+      const wholeScope = pgSchema('whole_scope');
+      const partialScope = pgSchema('partial_scope');
+      const wholeSecretRecords = wholeScope.table(
+        'records',
+        {
+          classified: pgText('classified').notNull(),
+          id: pgText('id').primaryKey(),
+        },
+        kovo({ domain: 'whole-scope-record', key: 'id', secret: true }),
+      );
+      const partialSecretRecords = partialScope.table(
+        'records',
+        {
+          classified: pgText('classified').notNull(),
+          id: pgText('id').primaryKey(),
+        },
+        kovo({ domain: 'partial-scope-record', key: 'id', secret: ['classified'] }),
+      );
+      const relations = defineRelations({ partialSecretRecords, wholeSecretRecords }, () => ({}));
+      const raw = drizzlePostgres({ client, relations });
+      const safe = wrapManagedDbForSqlSafety(
+        raw,
+        'enforce',
+        managedSqlExecutionPolicy({ capability: 'read' }),
+      );
+      const db = createSecretBoxingReadDb(
+        safe,
+        extractKovoRuntimeDbMetadata([wholeSecretRecords, partialSecretRecords]),
+        {
+          executeSql: async (statement) =>
+            (await client.query(statement.text, [...statement.params])).rows,
+        },
+      );
+
+      const wholeRows = await db.query.wholeSecretRecords.findMany({ columns: { id: true } });
+      const partialRows = await db.query.partialSecretRecords.findMany({ columns: { id: true } });
+      const wholeAlias = alias(wholeSecretRecords, 'whole_scope_records_alias');
+      const partialAlias = alias(partialSecretRecords, 'partial_scope_records_alias');
+      const wholeDirect = await db.select({ id: wholeSecretRecords.id }).from(wholeSecretRecords);
+      const partialDirect = await db
+        .select({ id: partialSecretRecords.id })
+        .from(partialSecretRecords);
+      const wholeAliased = await db.select({ id: wholeAlias.id }).from(wholeAlias);
+      const partialAliased = await db.select({ id: partialAlias.id }).from(partialAlias);
+      const wholeComputed = await db
+        .select({ id: drizzleSql<string>`upper(${wholeSecretRecords.id})` })
+        .from(wholeSecretRecords);
+      const partialComputed = await db
+        .select({ id: drizzleSql<string>`upper(${partialSecretRecords.id})` })
+        .from(partialSecretRecords);
+
+      expect(isSecret(wholeRows[0]?.id)).toBe(true);
+      expect(isSecret(partialRows[0]?.id)).toBe(false);
+      expect(isSecret(wholeDirect[0]?.id)).toBe(true);
+      expect(isSecret(partialDirect[0]?.id)).toBe(false);
+      expect(isSecret(wholeAliased[0]?.id)).toBe(true);
+      expect(isSecret(partialAliased[0]?.id)).toBe(false);
+      expect(isSecret(wholeComputed[0]?.id)).toBe(true);
+      expect(isSecret(partialComputed[0]?.id)).toBe(false);
     } finally {
       await client.close();
     }
@@ -861,6 +1060,15 @@ describe('secret read boundary', () => {
     );
 
     expect(() => db.all('select classified from secrets')).toThrow(/KV435/);
+  });
+
+  it('boxes raw reads from an unknown relation without an exact origin or engine door', () => {
+    const db = createSecretBoxingReadDb(readDb([{ leaked: 'victim-secret' }]), metadata());
+
+    const [row] = db.all('select leaked from unregistered_secret_view');
+
+    expect(isSecret(row)).toBe(true);
+    expect(revealSecret(row, 'test')).toEqual({ leaked: 'victim-secret' });
   });
 
   it('does not let late RegExp replacement hide a direct secret-table read', () => {

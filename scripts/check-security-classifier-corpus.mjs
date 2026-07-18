@@ -507,9 +507,32 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/server/src/secret-read-boundary.test.ts',
         snippets: [
           'scopes same-named secret columns to pinned tables across Postgres read shapes',
-          'expect(() => JSON.stringify({ aliasRows, publicRows, viewRows })).not.toThrow()',
+          "expect(aliasedViewRows).toEqual([{ id: 'p1', label: 'public-label' }])",
+          'expect(isSecret(viewRows[0]?.id)).toBe(false)',
           'expect(isSecret(aliasSecretRows[0]?.classified)).toBe(true)',
           'expect(isSecret(secretRows[0]?.id)).toBe(true)',
+        ],
+      },
+      {
+        id: 'unknown-relation-closed',
+        file: 'packages/server/src/secret-read-boundary.test.ts',
+        snippets: [
+          'boxes direct and computed projections from an unregistered Postgres view',
+          'does not accept a structural imitation of the canonical relation witness',
+          'expect(isSecret(direct[0]?.leaked)).toBe(true)',
+          'expect(isSecret(computed[0]?.leaked)).toBe(true)',
+          'expect(isSecret(aliased[0]?.leaked)).toBe(true)',
+        ],
+      },
+      {
+        id: 'qualified-relation-scope',
+        file: 'packages/server/src/secret-read-boundary.test.ts',
+        snippets: [
+          'keeps same-named secret tables in separate Postgres schemas independently boxed',
+          'expect(isSecret(wholeRows[0]?.id)).toBe(true)',
+          'expect(isSecret(partialRows[0]?.id)).toBe(false)',
+          'expect(isSecret(wholeAliased[0]?.id)).toBe(true)',
+          'expect(isSecret(partialComputed[0]?.id)).toBe(false)',
         ],
       },
       {

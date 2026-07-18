@@ -35,6 +35,8 @@ export interface KovoSqliteRuntimeColumnSource {
   key: string;
   /** Whether the column is declared secret in Kovo metadata. */
   secret: boolean;
+  /** Physical database schema, or `undefined` for SQLite's default namespace. */
+  schema: string | undefined;
   /** Physical database table name. */
   table: string;
 }
@@ -318,17 +320,19 @@ function snapshotSqliteColumnSource(
   }
   const column = requiredSqliteRuntimeValue(value, 'column');
   const selectionKey = requiredSqliteRuntimeValue(value, 'key');
+  const schema = requiredSqliteRuntimeValue(value, 'schema');
   const secret = requiredSqliteRuntimeValue(value, 'secret');
   const table = requiredSqliteRuntimeValue(value, 'table');
   if (
     typeof column !== 'string' ||
     typeof selectionKey !== 'string' ||
+    (schema !== undefined && typeof schema !== 'string') ||
     typeof secret !== 'boolean' ||
     typeof table !== 'string'
   ) {
     throw new TypeError('SQLite runtime column-source metadata is invalid.');
   }
-  return witnessFreeze({ column, key: selectionKey, secret, table });
+  return witnessFreeze({ column, key: selectionKey, schema, secret, table });
 }
 
 function optionalSqliteRuntimeValue(source: object, property: PropertyKey): unknown {

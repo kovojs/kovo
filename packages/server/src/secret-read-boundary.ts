@@ -28,8 +28,7 @@ import {
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import {
-  frameworkCanonicalNativeSqlColumnTableName,
-  frameworkCanonicalNativeSqlImmediateSource,
+  frameworkCanonicalNativeSqlColumnIdentity,
   frameworkCanonicalNativeSqlSource,
   frameworkManagedDbRawTarget,
 } from './sql-safe-handle.js';
@@ -51,6 +50,8 @@ export interface SecretReadColumnSource {
   key: string;
   /** Whether the column is declared secret in Kovo metadata. */
   secret: boolean;
+  /** Physical database schema, or `undefined` for the adapter's default schema. */
+  schema: string | undefined;
   /** Physical database table name. */
   table: string;
 }
@@ -155,12 +156,28 @@ interface PinnedRelationalReadQuery {
   readonly nestedResultKeys: ReadonlySet<string>;
   readonly opaqueResultKeys: ReadonlySet<string>;
   readonly preparedTerminals: ReadonlySet<string>;
-  readonly rootTableName: string | undefined;
+  readonly rootRelation: SecretReadRelationIdentity | undefined;
   execute(property: PropertyKey, args: readonly unknown[]): unknown;
 }
 
+interface SecretReadRelationIdentity {
+  readonly schema: string | undefined;
+  readonly table: string;
+}
+
+interface SecretReadRelationFacts {
+  readonly secretColumnKeys: ReadonlySet<string>;
+  readonly secretColumnNames: ReadonlySet<string>;
+}
+
+type SecretReadRelationIndex = ReadonlyMap<
+  string | undefined,
+  ReadonlyMap<string, SecretReadRelationFacts>
+>;
+
 const declaredSecretReadCapabilities = createWitnessWeakMap<object, DeclaredSecretReadCapability>();
 const pinnedSecretReadMetadata = createWitnessWeakSet<object>();
+const pinnedSecretReadRelationIndexes = createWitnessWeakMap<object, SecretReadRelationIndex>();
 const pinnedSecretReadBoundaries = createWitnessWeakSet<object>();
 
 /**
@@ -430,6 +447,10 @@ function snapshotSecretReadMetadata(metadata: SecretReadMetadata): SecretReadMet
       'secretTableNames',
     );
     const columnSources = createWitnessMap<object, SecretReadColumnSource>();
+    const relationIndex = createWitnessMap<
+      string | undefined,
+      Map<string, SecretReadRelationFacts>
+    >();
     forEachReadonlyMapEntry(
       ownDataValue(metadata, 'columnSources'),
       'columnSources',
@@ -437,13 +458,19 @@ function snapshotSecretReadMetadata(metadata: SecretReadMetadata): SecretReadMet
         if ((typeof column !== 'object' && typeof column !== 'function') || column === null) {
           throw new TypeError('columnSources keys must be object identities.');
         }
+        const schema = ownDataValue(source, 'schema');
+        if (schema !== undefined && typeof schema !== 'string') {
+          throw new TypeError('columnSources schema must be a string when present.');
+        }
         const snapshot = witnessFreeze({
           column: ownStringDataValue(source, 'column'),
           key: ownStringDataValue(source, 'key'),
+          schema,
           secret: ownBooleanDataValue(source, 'secret'),
           table: ownStringDataValue(source, 'table'),
         });
         witnessMapSet(columnSources, column, snapshot);
+        recordSecretReadRelationColumn(relationIndex, snapshot);
       },
     );
 
@@ -464,6 +491,7 @@ function snapshotSecretReadMetadata(metadata: SecretReadMetadata): SecretReadMet
       secretColumnNamesByTable,
       secretTableNames,
     });
+    witnessWeakMapSet(pinnedSecretReadRelationIndexes, snapshot, relationIndex);
     witnessWeakSetAdd(pinnedSecretReadMetadata, snapshot);
     return snapshot;
   } catch (error) {
@@ -471,6 +499,52 @@ function snapshotSecretReadMetadata(metadata: SecretReadMetadata): SecretReadMet
       `Secret read metadata must be an exact collection-backed snapshot: ${error instanceof Error ? error.message : 'invalid metadata'}`,
     );
   }
+}
+
+function recordSecretReadRelationColumn(
+  relationIndex: Map<string | undefined, Map<string, SecretReadRelationFacts>>,
+  source: SecretReadColumnSource,
+): void {
+  let tables = witnessMapGet(relationIndex, source.schema);
+  if (tables === undefined) {
+    tables = createWitnessMap<string, SecretReadRelationFacts>();
+    witnessMapSet(relationIndex, source.schema, tables);
+  }
+  let facts = witnessMapGet(tables, source.table);
+  if (facts === undefined) {
+    facts = witnessFreeze({
+      secretColumnKeys: createWitnessSet<string>(),
+      secretColumnNames: createWitnessSet<string>(),
+    });
+    witnessMapSet(tables, source.table, facts);
+  }
+  if (!source.secret) return;
+  witnessSetAdd(facts.secretColumnKeys as Set<string>, source.key);
+  witnessSetAdd(facts.secretColumnNames as Set<string>, source.column);
+}
+
+function secretReadRelationFacts(
+  metadata: SecretReadMetadata,
+  identity: SecretReadRelationIdentity,
+): SecretReadRelationFacts | undefined {
+  const relationIndex = witnessWeakMapGet(pinnedSecretReadRelationIndexes, metadata as object);
+  if (relationIndex === undefined) {
+    throw new TypeError('Secret read relation metadata was not pinned by the framework.');
+  }
+  const tables = witnessMapGet(
+    relationIndex as Map<string | undefined, ReadonlyMap<string, SecretReadRelationFacts>>,
+    identity.schema,
+  );
+  return tables === undefined
+    ? undefined
+    : witnessMapGet(tables as Map<string, SecretReadRelationFacts>, identity.table);
+}
+
+function sameSecretReadRelation(
+  left: SecretReadRelationIdentity,
+  right: SecretReadRelationIdentity,
+): boolean {
+  return left.schema === right.schema && left.table === right.table;
 }
 
 function snapshotSecretReadBoundary(boundary: SecretReadBoundary): SecretReadBoundary {
@@ -896,7 +970,7 @@ function readBoundaryForQuery(
   }
   return options.sqliteColumnOrigins === undefined
     ? relationalQuery === undefined
-      ? (selectedProjectionReadBoundary(value, carrier.text, metadata) ??
+      ? (selectedProjectionReadBoundary(value, metadata) ??
         fallbackReadBoundaryForSql(carrier.text, metadata))
       : { ...emptyReadBoundary(), secretColumnScopeKnown: true }
     : sqliteSecretReadBoundaryForStatement(
@@ -911,14 +985,12 @@ function readBoundaryForQuery(
 
 function selectedProjectionReadBoundary(
   statement: unknown,
-  sql: string,
   metadata: SecretReadMetadata,
 ): SecretReadBoundary | undefined {
   const fields = selectedFieldsFromValue(statement);
   if (fields === undefined) return undefined;
   const secretResultKeys = createWitnessSet<string>();
   const opaqueResultKeys = createWitnessSet<string>();
-  const referencesSecretTable = sqlReferencesSecretTable(sql, metadata.secretTableNames);
   const keys = witnessObjectKeys(fields);
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
@@ -939,35 +1011,37 @@ function selectedProjectionReadBoundary(
             sourceIdentity,
           );
     if (source !== undefined) {
-      if (source.secret) witnessSetAdd(secretResultKeys, key);
+      const relationFacts = secretReadRelationFacts(metadata, source);
+      if (
+        relationFacts === undefined ||
+        source.secret ||
+        witnessSetHas(relationFacts.secretColumnKeys as Set<string>, source.key) ||
+        witnessSetHas(relationFacts.secretColumnNames as Set<string>, source.column)
+      ) {
+        witnessSetAdd(secretResultKeys, key);
+      }
       continue;
     }
     if (isColumnLike(field)) {
-      const canonicalTableName = frameworkCanonicalNativeSqlColumnTableName(field);
-      if (canonicalTableName !== undefined) {
-        const columnName = optionalOwnDataValue(field, 'name');
-        const tableSecretColumnNames = witnessMapGet(
-          metadata.secretColumnNamesByTable as Map<string, ReadonlySet<string>>,
-          canonicalTableName,
-        );
-        if (typeof columnName !== 'string') {
+      const canonicalIdentity = frameworkCanonicalNativeSqlColumnIdentity(field);
+      if (canonicalIdentity !== undefined) {
+        const relationFacts = secretReadRelationFacts(metadata, canonicalIdentity);
+        if (relationFacts === undefined) {
+          // A reconstructed Drizzle carrier is not sufficient authority by itself: the exact
+          // schema+base-table relation must also be enrolled in the pinned runtime metadata.
           witnessSetAdd(opaqueResultKeys, key);
         } else if (
-          tableSecretColumnNames !== undefined &&
-          witnessSetHas(tableSecretColumnNames as Set<string>, columnName)
+          witnessSetHas(relationFacts.secretColumnNames as Set<string>, canonicalIdentity.column)
         ) {
           witnessSetAdd(secretResultKeys, key);
-        } else if (
-          tableSecretColumnNames === undefined &&
-          witnessSetHas(metadata.secretTableNames as Set<string>, canonicalTableName)
-        ) {
-          witnessSetAdd(opaqueResultKeys, key);
         }
         continue;
       }
       const canonicalSecret = canonicalColumnSecretVerdict(field, metadata);
       if (canonicalSecret === true) witnessSetAdd(secretResultKeys, key);
-      else if (canonicalSecret === undefined && referencesSecretTable) {
+      else if (canonicalSecret === undefined) {
+        // Unknown and ambiguous Drizzle column carriers stay closed even if their rendered SQL
+        // happens not to spell a currently enrolled secret table (SPEC §6.6 C9/§10.3, KV435).
         witnessSetAdd(opaqueResultKeys, key);
       }
       continue;
@@ -990,6 +1064,7 @@ function pinRelationalReadQuery(
 ): PinnedRelationalReadQuery | undefined {
   const queryTarget = frameworkManagedDbRawTarget(value) ?? value;
   const configValue = optionalOwnDataValue(queryTarget, 'config');
+  const schemaValue = optionalOwnDataValue(queryTarget, 'schema');
   const tableConfig = optionalOwnDataValue(queryTarget, 'tableConfig');
   if ((configValue !== true && !isPlainRecord(configValue)) || !isPlainRecord(tableConfig)) {
     return undefined;
@@ -1019,13 +1094,18 @@ function pinRelationalReadQuery(
   if (carrier === undefined || !witnessSetHas(preparedTerminals, 'execute')) {
     throw new TypeError('Relational query preparation did not expose stable SQL execution.');
   }
-  const posture = relationalResultPosture(config);
+  const posture = relationalResultPosture(
+    config,
+    tableConfig,
+    isPlainRecord(schemaValue) ? schemaValue : undefined,
+    metadata,
+  );
   return witnessFreeze({
     carrier,
     nestedResultKeys: posture.nestedResultKeys,
     opaqueResultKeys: posture.opaqueResultKeys,
     preparedTerminals,
-    rootTableName: relationalRootTableName(tableConfig, metadata),
+    rootRelation: relationalRootRelation(tableConfig, metadata),
     execute(property: PropertyKey, args: readonly unknown[]) {
       if (args.length > 1) {
         throw new TypeError('Relational query terminals accept at most one placeholder bag.');
@@ -1056,14 +1136,21 @@ function pinRelationalReadQuery(
   });
 }
 
-function relationalRootTableName(
+function relationalRootRelation(
   tableConfig: Record<string, unknown>,
   metadata: SecretReadMetadata,
-): string | undefined {
+): SecretReadRelationIdentity | undefined {
   const table = optionalOwnDataValue(tableConfig, 'table');
+  return relationalTableRelation(table, metadata);
+}
+
+function relationalTableRelation(
+  table: unknown,
+  metadata: SecretReadMetadata,
+): SecretReadRelationIdentity | undefined {
   if (!isObjectLike(table)) return undefined;
   const keys = witnessObjectKeys(table);
-  let tableName: string | undefined;
+  let relation: SecretReadRelationIdentity | undefined;
   for (let index = 0; index < keys.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(table, keys[index]!);
     if (descriptor === undefined || !('value' in descriptor)) return undefined;
@@ -1077,10 +1164,11 @@ function relationalRootTableName(
       if (isColumnLike(descriptor.value)) return undefined;
       continue;
     }
-    if (tableName !== undefined && tableName !== source.table) return undefined;
-    tableName = source.table;
+    const candidate = witnessFreeze({ schema: source.schema, table: source.table });
+    if (relation !== undefined && !sameSecretReadRelation(relation, candidate)) return undefined;
+    relation = candidate;
   }
-  return tableName;
+  return relation;
 }
 
 function createPinnedRelationalPreparedFacade(
@@ -1100,14 +1188,23 @@ function createPinnedRelationalPreparedFacade(
   return facade;
 }
 
-function relationalResultPosture(config: Record<string, unknown>): {
+function relationalResultPosture(
+  config: Record<string, unknown>,
+  tableConfig: Record<string, unknown>,
+  schema: Record<string, unknown> | undefined,
+  metadata: SecretReadMetadata,
+): {
   nestedResultKeys: ReadonlySet<string>;
   opaqueResultKeys: ReadonlySet<string>;
 } {
   const nestedResultKeys = createWitnessSet<string>();
   const opaqueResultKeys = createWitnessSet<string>();
   const seen = createWitnessWeakSet<object>();
-  const visit = (current: Record<string, unknown>, depth: number): void => {
+  const visit = (
+    current: Record<string, unknown>,
+    currentTableConfig: Record<string, unknown> | undefined,
+    depth: number,
+  ): void => {
     if (depth > 32 || witnessWeakSetHas(seen, current)) {
       throw new TypeError('Relational query config must be finite.');
     }
@@ -1123,6 +1220,13 @@ function relationalResultPosture(config: Record<string, unknown>): {
     const relations = stableRelationalConfigValue(current, 'with');
     if (relations === undefined) return;
     if (!isPlainRecord(relations)) throw new TypeError('Relational with must be a record.');
+    const relationConfigs =
+      currentTableConfig === undefined
+        ? undefined
+        : optionalOwnDataValue(currentTableConfig, 'relations');
+    if (relationConfigs !== undefined && !isPlainRecord(relationConfigs)) {
+      throw new TypeError('Relational table relations must be a record.');
+    }
     const relationKeys = witnessObjectKeys(relations);
     for (let index = 0; index < relationKeys.length; index += 1) {
       const key = relationKeys[index]!;
@@ -1132,13 +1236,54 @@ function relationalResultPosture(config: Record<string, unknown>): {
       }
       if (descriptor.value === false || descriptor.value === undefined) continue;
       witnessSetAdd(nestedResultKeys, key);
-      if (isPlainRecord(descriptor.value)) visit(descriptor.value, depth + 1);
-      else if (descriptor.value !== true) {
+      const relationDescriptor =
+        relationConfigs === undefined
+          ? undefined
+          : witnessGetOwnPropertyDescriptor(relationConfigs, key);
+      const relation =
+        relationDescriptor !== undefined && 'value' in relationDescriptor
+          ? relationDescriptor.value
+          : undefined;
+      const targetTable = optionalOwnDataValue(relation, 'targetTable');
+      const targetRelation = relationalTableRelation(targetTable, metadata);
+      const targetFacts =
+        targetRelation === undefined
+          ? undefined
+          : secretReadRelationFacts(metadata, targetRelation);
+      let targetTableConfig: Record<string, unknown> | undefined;
+      const targetTableName = optionalOwnDataValue(relation, 'targetTableName');
+      if (schema !== undefined && typeof targetTableName === 'string') {
+        const targetDescriptor = witnessGetOwnPropertyDescriptor(schema, targetTableName);
+        if (
+          targetDescriptor !== undefined &&
+          'value' in targetDescriptor &&
+          isPlainRecord(targetDescriptor.value)
+        ) {
+          const configuredTarget = relationalRootRelation(targetDescriptor.value, metadata);
+          if (
+            configuredTarget !== undefined &&
+            targetRelation !== undefined &&
+            sameSecretReadRelation(configuredTarget, targetRelation)
+          ) {
+            targetTableConfig = targetDescriptor.value;
+          }
+        }
+      }
+      if (targetFacts === undefined) {
+        // A nested relation is one result-bearing confidentiality door. If its exact target is
+        // outside the pinned runtime metadata, box the complete nested payload instead of letting
+        // unrelated global column-name fallbacks decide its leaves (SPEC §6.6 C9/§10.3, KV435).
+        witnessSetAdd(opaqueResultKeys, key);
+      }
+      if (isPlainRecord(descriptor.value)) {
+        if (targetTableConfig === undefined) witnessSetAdd(opaqueResultKeys, key);
+        else visit(descriptor.value, targetTableConfig, depth + 1);
+      } else if (descriptor.value !== true) {
         throw new TypeError('Relational selections must be true or a config record.');
       }
     }
   };
-  visit(config, 0);
+  visit(config, tableConfig, 0);
   return {
     nestedResultKeys: witnessFreeze(nestedResultKeys),
     opaqueResultKeys: witnessFreeze(opaqueResultKeys),
@@ -1163,35 +1308,27 @@ function relationalReadBoundary(
 ): SecretReadBoundary {
   if (query === undefined) return emptyReadBoundary();
   const empty = emptyReadBoundary();
-  const canScopeToRoot =
-    query.rootTableName !== undefined && witnessSetSize(query.nestedResultKeys) === 0;
-  const rootSecretColumnKeys =
-    query.rootTableName === undefined
+  const rootRelationFacts =
+    query.rootRelation === undefined
       ? undefined
-      : witnessMapGet(
-          metadata.secretColumnKeysByTable as Map<string, ReadonlySet<string>>,
-          query.rootTableName,
-        );
-  const rootSecretColumnNames =
-    query.rootTableName === undefined
-      ? undefined
-      : witnessMapGet(
-          metadata.secretColumnNamesByTable as Map<string, ReadonlySet<string>>,
-          query.rootTableName,
-        );
+      : secretReadRelationFacts(metadata, query.rootRelation);
+  const hasNestedResults = witnessSetSize(query.nestedResultKeys) !== 0;
   return {
     ...empty,
+    boxEveryResultValue: rootRelationFacts === undefined,
     opaqueResultKeys: query.opaqueResultKeys,
     // A flat relational result belongs to one pinned Drizzle table. Scope same-named columns to
     // that table so an unrelated whole-secret table (for example rateLimit.id) cannot taint a
     // public phase5_pg_orders.id. Nested relation payloads retain the conservative global union
     // until each nested result key carries its own table provenance (SPEC §6.6 C9, §10.3).
-    secretColumnKeys: canScopeToRoot
-      ? (rootSecretColumnKeys ?? empty.secretColumnKeys)
-      : metadata.secretColumnKeys,
-    secretColumnNames: canScopeToRoot
-      ? (rootSecretColumnNames ?? empty.secretColumnNames)
-      : metadata.secretColumnNames,
+    secretColumnKeys:
+      rootRelationFacts === undefined || hasNestedResults
+        ? metadata.secretColumnKeys
+        : rootRelationFacts.secretColumnKeys,
+    secretColumnNames:
+      rootRelationFacts === undefined || hasNestedResults
+        ? metadata.secretColumnNames
+        : rootRelationFacts.secretColumnNames,
     secretColumnScopeKnown: true,
   };
 }
@@ -1472,7 +1609,9 @@ function readBoundaryForArgs(
     if (sql === undefined) return { ...emptyReadBoundary(), rawWholeRowSecret: true };
     const boundary =
       options.sqliteColumnOrigins === undefined
-        ? fallbackReadBoundaryForSql(sql, metadata)
+        ? options.rawSecretTableRead === 'engine'
+          ? fallbackReadBoundaryForSql(sql, metadata)
+          : { ...emptyReadBoundary(), rawWholeRowSecret: true }
         : sqliteSecretReadBoundaryForStatement(arg, sql, metadata, options.sqliteColumnOrigins);
     if (sqlReferencesSecretTable(sql, metadata.secretTableNames)) {
       if (!hasDeclaredSecretReadCapability(arg, metadata)) {
@@ -1695,15 +1834,12 @@ function canonicalColumnSecretVerdict(
   value: object,
   metadata: SecretReadMetadata,
 ): boolean | undefined {
-  const immediate = frameworkCanonicalNativeSqlImmediateSource(value);
-  if (immediate === undefined) return undefined;
-  const candidate = isColumnLike(value) ? value : immediate;
-  const name = optionalOwnDataValue(candidate, 'name');
-  if (typeof name !== 'string') return undefined;
-  return (
-    witnessSetHas(metadata.secretColumnKeys as Set<string>, name) ||
-    witnessSetHas(metadata.secretColumnNames as Set<string>, name)
-  );
+  const identity = frameworkCanonicalNativeSqlColumnIdentity(value);
+  if (identity === undefined) return undefined;
+  const relationFacts = secretReadRelationFacts(metadata, identity);
+  return relationFacts === undefined
+    ? undefined
+    : witnessSetHas(relationFacts.secretColumnNames as Set<string>, identity.column);
 }
 
 const SAFE_SQL_WORDS = [

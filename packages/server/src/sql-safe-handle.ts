@@ -202,6 +202,10 @@ const frameworkManagedDbRawTargets = createWitnessWeakMap<object, object>();
 const managedSqlExecutionPolicies = createWitnessWeakSet<object>();
 const frameworkCanonicalNativeSqlValues = createWitnessWeakSet<object>();
 const frameworkCanonicalNativeSqlSources = createWitnessWeakMap<object, object>();
+const frameworkCanonicalNativeSqlColumnIdentities = createWitnessWeakMap<
+  object,
+  FrameworkCanonicalNativeSqlColumnIdentity
+>();
 const relationalManagedSqlTargets = createWitnessWeakSet<object>();
 const relationalManagedSqlNamespaces = createWitnessWeakSet<object>();
 const frameworkManagedSqlDispatchProxies = createWitnessWeakSet<object>();
@@ -362,30 +366,21 @@ export function frameworkCanonicalNativeSqlImmediateSource(value: unknown): obje
 }
 
 /** Resolve the pinned physical table name for a framework-reconstructed Drizzle column. @internal */
-export function frameworkCanonicalNativeSqlColumnTableName(value: unknown): string | undefined {
-  if (
-    !isRecord(value) ||
-    witnessWeakMapGet(frameworkCanonicalNativeSqlSources, value) === undefined
-  ) {
-    return undefined;
-  }
-  const tableDescriptor = witnessGetOwnPropertyDescriptor(value, 'table');
-  if (
-    tableDescriptor === undefined ||
-    !('value' in tableDescriptor) ||
-    !isRecord(tableDescriptor.value) ||
-    witnessWeakMapGet(frameworkCanonicalNativeSqlSources, tableDescriptor.value) === undefined
-  ) {
-    return undefined;
-  }
-  const baseNameDescriptor = witnessGetOwnPropertyDescriptor(
-    tableDescriptor.value,
-    DRIZZLE_TABLE_BASE_NAME,
-  );
-  return baseNameDescriptor !== undefined &&
-    'value' in baseNameDescriptor &&
-    typeof baseNameDescriptor.value === 'string'
-    ? baseNameDescriptor.value
+export interface FrameworkCanonicalNativeSqlColumnIdentity {
+  /** Physical database column name pinned during framework reconstruction. */
+  readonly column: string;
+  /** Physical database schema, or `undefined` for the adapter's default schema. */
+  readonly schema: string | undefined;
+  /** Physical base-table name (never a query alias). */
+  readonly table: string;
+}
+
+/** Resolve the pinned physical relation+column identity for framework-reconstructed SQL. @internal */
+export function frameworkCanonicalNativeSqlColumnIdentity(
+  value: unknown,
+): FrameworkCanonicalNativeSqlColumnIdentity | undefined {
+  return isRecord(value)
+    ? witnessWeakMapGet(frameworkCanonicalNativeSqlColumnIdentities, value)
     : undefined;
 }
 
@@ -1289,7 +1284,21 @@ function reconstructNativeDrizzleColumnEntity(
   witnessDefineProperty(column, 'table', { value: table });
   witnessDefineProperty(column, 'mapFromDriverValue', { value: snapshotColumnIdentity });
   witnessDefineProperty(column, 'mapToDriverValue', { value: snapshotColumnIdentity });
+  witnessWeakMapSet(
+    frameworkCanonicalNativeSqlColumnIdentities,
+    column,
+    snapshotNativeDrizzleColumnIdentity(requiredOwnString(column, 'name'), table),
+  );
   return witnessFreeze(column);
+}
+
+function snapshotNativeDrizzleColumnIdentity(
+  column: string,
+  table: object,
+): FrameworkCanonicalNativeSqlColumnIdentity {
+  const tableName = requiredOwnString(table, DRIZZLE_TABLE_BASE_NAME);
+  const schema = optionalOwnString(table, DRIZZLE_TABLE_SCHEMA);
+  return witnessFreeze({ column, schema, table: tableName });
 }
 
 function requiredOwnString(value: object, property: PropertyKey): string {
@@ -1588,9 +1597,11 @@ function reconstructNativeDrizzleColumn(value: object): object {
   ) {
     throw nativeDrizzleProvenanceError();
   }
+  const identity = snapshotNativeDrizzleColumnIdentity(name.value, table.value);
   if (isAlias.value) {
     const identifier = frozenIdentifierSql([name.value]);
     witnessWeakMapSet(frameworkCanonicalNativeSqlSources, identifier, value);
+    witnessWeakMapSet(frameworkCanonicalNativeSqlColumnIdentities, identifier, identity);
     return identifier;
   }
   const owner = nativeDrizzleTableIdentifierParts(table.value);
@@ -1603,6 +1614,7 @@ function reconstructNativeDrizzleColumn(value: object): object {
   appendSqlSafetyValue(parts, name.value);
   const identifier = frozenIdentifierSql(parts);
   witnessWeakMapSet(frameworkCanonicalNativeSqlSources, identifier, value);
+  witnessWeakMapSet(frameworkCanonicalNativeSqlColumnIdentities, identifier, identity);
   return identifier;
 }
 

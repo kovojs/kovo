@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sql, Table } from 'drizzle-orm';
-import { PgDialect, pgTable, text as pgText } from 'drizzle-orm/pg-core';
+import { PgDialect, pgSchema, pgTable, text as pgText } from 'drizzle-orm/pg-core';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { kovo } from './runtime.js';
 import {
@@ -36,12 +36,14 @@ describe('runtime metadata extraction', () => {
     expect(metadata.columnSources.get(users.passwordHash)).toEqual({
       column: 'password_hash',
       key: 'passwordHash',
+      schema: undefined,
       secret: true,
       table: 'users',
     });
     expect(metadata.columnSources.get(users.displayName)).toEqual({
       column: 'display_name',
       key: 'displayName',
+      schema: undefined,
       secret: false,
       table: 'users',
     });
@@ -321,14 +323,37 @@ describe('runtime metadata extraction', () => {
     expect(metadata.columnSources.get(account.accessToken)).toEqual({
       column: 'accessToken',
       key: 'accessToken',
+      schema: undefined,
       secret: true,
       table: 'account',
     });
     expect(metadata.columnSources.get(account.providerId)).toEqual({
       column: 'providerId',
       key: 'providerId',
+      schema: undefined,
       secret: false,
       table: 'account',
+    });
+  });
+
+  it('preserves the physical Postgres schema in column provenance', () => {
+    const vault = pgSchema('tenant_vault').table(
+      'records',
+      {
+        classified: pgText('classified').notNull(),
+        id: pgText('id').primaryKey(),
+      },
+      kovo({ domain: 'tenant-vault', key: 'id', secret: true }),
+    );
+
+    const metadata = extractKovoRuntimeDbMetadata([vault]);
+
+    expect(metadata.columnSources.get(vault.classified)).toEqual({
+      column: 'classified',
+      key: 'classified',
+      schema: 'tenant_vault',
+      secret: true,
+      table: 'records',
     });
   });
 

@@ -45,6 +45,7 @@ type KovoRuntimeDbColumn = {
 type KovoRuntimeDbTableConfig = {
   columns: readonly KovoRuntimeDbColumn[];
   name: string;
+  schema: string | undefined;
 };
 
 /** @internal Compiler-derived physical/selection column identity used to bind runtime schema facts. */
@@ -161,6 +162,8 @@ export interface KovoRuntimeDbColumnSource {
   key: string;
   /** Whether the column is declared secret in Kovo metadata. */
   secret: boolean;
+  /** Physical database schema, or `undefined` for the adapter's default schema. */
+  schema: string | undefined;
   /** Physical database table name. */
   table: string;
 }
@@ -419,6 +422,7 @@ function extractKovoRuntimeDbMetadataWithManifest(
         runtimeFreeze({
           column: dbName,
           key,
+          schema: config.schema,
           secret:
             runtimeSetHas(tableSecretColumnKeys, key) ||
             runtimeSetHas(tableSecretColumnNames, dbName),
@@ -831,9 +835,11 @@ function throwRuntimeTableSecurityMismatch(table: string): never {
 
 function getRuntimeTableConfig(table: unknown): KovoRuntimeDbTableConfig {
   try {
-    return getSqliteTableConfig(table as Parameters<typeof getSqliteTableConfig>[0]);
+    const config = getSqliteTableConfig(table as Parameters<typeof getSqliteTableConfig>[0]);
+    return { columns: config.columns, name: config.name, schema: undefined };
   } catch {
-    return getPgTableConfig(table as Parameters<typeof getPgTableConfig>[0]);
+    const config = getPgTableConfig(table as Parameters<typeof getPgTableConfig>[0]);
+    return { columns: config.columns, name: config.name, schema: config.schema };
   }
 }
 
@@ -842,11 +848,15 @@ function snapshotRuntimeTableFacts(table: KovoRuntimeDbTable): KovoRuntimeTableF
   if (typeof sourceConfig.name !== 'string') {
     throw new TypeError('Kovo Drizzle runtime table name must be a string.');
   }
+  const schema = sourceConfig.schema;
+  if (schema !== undefined && typeof schema !== 'string') {
+    throw new TypeError('Kovo Drizzle runtime table schema must be a string when present.');
+  }
   const columns = runtimeSnapshotArray(
     sourceConfig.columns,
     `Kovo Drizzle ${sourceConfig.name} runtime columns`,
   ) as readonly KovoRuntimeDbColumn[];
-  const config = runtimeFreeze({ columns, name: sourceConfig.name });
+  const config = runtimeFreeze({ columns, name: sourceConfig.name, schema });
   const columnKeys = columnKeysByDbName(table, columns);
   const columnObjectsByKey = runtimeMap<string, object>();
   runtimeMapForEach(columnKeys, (key) => {
