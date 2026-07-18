@@ -35,6 +35,7 @@ const deferredWithLateAuthority = `
   }
 `;
 
+// @kovo-security-classifier-corpus kv424-request-global-member-lockdown
 describe('temporal final adversarial review', () => {
   it.each([
     [

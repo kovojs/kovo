@@ -181,7 +181,10 @@ jobs:
           echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
       - name: Root Vitest shard
         run: |
-          xargs -a "${{ steps.shard.outputs.manifest }}" vp exec vitest --run --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/kovo-vitest-${{ matrix.shard }}.json"
+          # The four matrix runners own CI parallelism. Keep files serial inside each runner so
+          # process-spawning build/CLI proofs and fixed CPU budgets do not contend with sibling
+          # Vitest workers on the same hosted VM.
+          xargs -a "${{ steps.shard.outputs.manifest }}" vp exec vitest --run --no-file-parallelism --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/kovo-vitest-${{ matrix.shard }}.json"
       - name: Extract root timing history
         if: always()
         run: |

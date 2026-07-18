@@ -17,7 +17,9 @@ type AuthRequest = KovoFixtureRequest & { session?: AuthSession | null };
 const COOKIE = 'kovo_guarded_mutation_session';
 const csrf = {
   secret: 'guarded-mutation-secret-0123456789',
-  sessionId: () => 'guarded-mutation-session',
+  // SPEC §6.5: anonymous CSRF authority remains anonymous; an authenticated
+  // request binds freshly rendered mutation authority to its resolved principal.
+  sessionId: (request: AuthRequest) => request.session?.user.id,
 };
 
 function readSessionCookie(request: Request): AuthSession | null {

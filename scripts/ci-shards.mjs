@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { collectFilesAsync } from './lib/source-files.mjs';
+import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.mjs';
 
 const DEFAULT_ROOTS = {
   integration: ['tests/integration/specs'],
@@ -63,6 +64,9 @@ const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/test/src/sqlite-harness.test.ts',
   'packages/test/src/verifier-sql.test.ts',
 ]);
+const SECURITY_CLASSIFIER_CORPUS_FILES = new Set(
+  REQUIRED_CLASSIFIER_CORPORA.flatMap((corpus) => corpus.testFiles),
+);
 
 const STARTER_ENTRIES = [
   {
@@ -830,7 +834,11 @@ export function includeVitest(file) {
     !file.startsWith('conformance/') &&
     !file.endsWith('.browser.test.ts') &&
     !file.includes('/templates/') &&
-    !CONSOLIDATED_VITEST_FILES.has(file)
+    !CONSOLIDATED_VITEST_FILES.has(file) &&
+    // `static-core` runs the complete C13 corpus, including named CPU proofs in fresh processes.
+    // Keeping those exact files out of broad root shards prevents duplicate load from changing a
+    // performance verdict while the required security gate remains the single fail-closed owner.
+    !SECURITY_CLASSIFIER_CORPUS_FILES.has(file)
   );
 }
 
