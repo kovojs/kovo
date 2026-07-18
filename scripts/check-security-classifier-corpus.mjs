@@ -124,7 +124,11 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'redos',
     marker: '@kovo-security-classifier-corpus redos',
-    testFiles: ['packages/server/src/redos.test.ts', 'packages/compiler/src/redos-pattern.test.ts'],
+    testFiles: [
+      'packages/server/src/redos.test.ts',
+      'packages/server/src/redos-work-bound-oracle.test.ts',
+      'packages/compiler/src/redos-pattern.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'nested-quantifier-regression',
@@ -168,6 +172,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'compiler-nested-overlapping-alternatives-regression',
         file: 'packages/compiler/src/redos-pattern.test.ts',
         snippets: ['((a|a))+', "toContain('KV434')"],
+      },
+      {
+        id: 'versioned-deterministic-work-bound-oracle',
+        file: 'packages/server/src/redos-work-bound-oracle.test.ts',
+        snippets: [
+          'versioned deterministic ReDoS work-bound oracle',
+          'kovo.linear-regex-work/v1',
+          'covers every hostile regression family at the full runtime input ceiling with a fixed seed',
+        ],
       },
     ],
   },
@@ -803,6 +816,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/node.test.ts',
       'packages/server/src/build.test.ts',
       'packages/server/src/static-export-headers.test.ts',
+      'packages/server/src/http-header-roundtrip-property-oracle.test.ts',
     ],
     verdictAnchors: [
       {
@@ -855,6 +869,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'static-export-transport-policy',
         file: 'packages/server/src/static-export-headers.test.ts',
         snippets: ['rejects transport-owned framing and hop-by-hop static metadata with KV415'],
+      },
+      {
+        id: 'real-http-header-reconstruction-oracle',
+        file: 'packages/server/src/http-header-roundtrip-property-oracle.test.ts',
+        snippets: [
+          'real HTTP header reconstruction property oracle',
+          'keeps live and generated Node reconstruction identical for hostile header families',
+          'Web Headers owns raw control rejection before Kovo receives a Response',
+        ],
       },
     ],
   },
@@ -1927,6 +1950,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/mutation/replay-policy.test.ts',
       'packages/server/src/mutation.test.ts',
       'packages/server/src/build.test.ts',
+      'packages/server/src/csrf-lifecycle-property-oracle.test.tsx',
       'packages/better-auth/src/environment.test.ts',
       'scripts/check-csrf-mint-delivery.test.mjs',
     ],
@@ -1941,6 +1965,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'kills header-seal and cache-posture mutants',
           'kills rotation and replay-order mutants',
           'rejects denominator shrinkage, missing canaries, and stale proof anchors',
+        ],
+      },
+      {
+        id: 'csrf-lifecycle-state-model-oracle',
+        file: 'packages/server/src/csrf-lifecycle-property-oracle.test.tsx',
+        snippets: [
+          'CSRF lifecycle state-model property oracle',
+          'models anonymous mint, cookie delivery, validation, rotation, and exact replay',
+          'rejects a rotated authenticated session token before replay lookup and requires a new mint',
         ],
       },
       {
