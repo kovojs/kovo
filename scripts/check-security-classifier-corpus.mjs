@@ -1083,6 +1083,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'reviewed-context-fetch-response-provenance',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'permits governed fetch/Response body flow but rejects forwarding ambient credentials',
+          "const response = await context.fetch('https://api.example.test/data')",
+          'return { value: await cloned.json() }',
+          'keeps contextual fetch provenance exact across aliases, mutation, and computed calls',
+          "await context['fetch']('https://api.example.test/computed')",
+          'const alias = context;',
+          'const remote = context.fetch;',
+          'context.fetch = async () =>',
+          "response['clone']().json()",
+        ],
+      },
+      {
         id: 'framework-owned-file-storage-controls',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [

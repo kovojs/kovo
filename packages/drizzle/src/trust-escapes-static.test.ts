@@ -10355,8 +10355,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
   it('permits governed fetch/Response body flow but rejects forwarding ambient credentials', () => {
     const safe = sinksFor(`
       import { query } from '@kovojs/server';
-      export const remote = query({ async load() {
-        const response = await fetch('https://api.example.test/data');
+      export const remote = query({ async load(_input, context) {
+        const response = await context.fetch('https://api.example.test/data');
         const cloned = response.clone();
         return { value: await cloned.json() };
       } });
@@ -10365,9 +10365,10 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
     const unsafe = sinksFor(`
       import { query } from '@kovojs/server';
-      export const remote = query({ async load(input, { request }) {
-        await fetch(request.headers.get('authorization'));
-        await fetch('https://api.example.test/data', {
+      export const remote = query({ async load(input, context) {
+        const { request } = context;
+        await context.fetch(request.headers.get('authorization'));
+        await context.fetch('https://api.example.test/data', {
           body: request.headers.get('cookie'), method: 'POST',
         });
         await fetch.call(null, 'https://api.example.test/call', {
@@ -10401,6 +10402,48 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         'outbound-fetch.dynamic-arguments',
       ]),
     );
+  });
+
+  it('keeps contextual fetch provenance exact across aliases, mutation, and computed calls', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      export const computed = query({ async load(_input, context) {
+        await context['fetch']('https://api.example.test/computed');
+        return { ok: true };
+      } });
+      export const aliasedContext = query({ async load(_input, context) {
+        const alias = context;
+        await alias.fetch('https://api.example.test/alias');
+        return { ok: true };
+      } });
+      export const aliasedMethod = query({ async load(_input, context) {
+        const remote = context.fetch;
+        await remote('https://api.example.test/method');
+        return { ok: true };
+      } });
+      export const mutated = query({ async load(_input, context) {
+        context.fetch = async () => ({ clone() { return this; }, json() { return {}; } });
+        const response = await context.fetch('https://api.example.test/mutated');
+        return { value: await response.clone().json() };
+      } });
+      export const computedReader = query({ async load(_input, context) {
+        const response = await context.fetch('https://api.example.test/reader');
+        return { value: await response['clone']().json() };
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'request-handler.opaque-call' })]),
+    );
+    for (const source of [
+      "context['fetch']",
+      'alias.fetch',
+      'remote',
+      'context.fetch',
+      "response['clone']",
+    ]) {
+      expect(facts.some((fact) => fact.source?.includes(source))).toBe(true);
+    }
   });
 
   it('reviews pure Drizzle expression builders without opening opaque package calls', () => {

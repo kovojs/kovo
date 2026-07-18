@@ -5220,6 +5220,7 @@ function requestCallIsInImmediateRootExecution(
 function requestCallCrossesDeferredRootAuthorityBoundary(
   call: import('ts-morph').CallExpression,
   root: RequestCallable,
+  session: RequestProvenanceSession,
 ): boolean {
   // Request/capability projections are lifecycle authority, including generic framework
   // capabilities whose method names are intentionally open, exact request.db chains, exact
@@ -5228,7 +5229,9 @@ function requestCallCrossesDeferredRootAuthorityBoundary(
   // across the class boundary (SPEC §6.6 / §9.1 / §9.6).
   const receiver = requestCallReceiver(unwrapStaticExpression(call.getExpression()));
   const immediate = requestCallIsInImmediateRootExecution(call, root);
-  if (requestCallIsGovernedFetch(call)) return !root.moduleInitializer && !immediate;
+  if (requestCallIsReviewedFetch(call, root, session)) {
+    return !root.moduleInitializer && !immediate;
+  }
   if (!receiver || immediate) return false;
   const role = requestExpressionRootParameterRole(receiver, root, new Set(), 0);
   return (
@@ -5246,7 +5249,7 @@ function requestCallCrossesDeferredRootAuthorityBoundary(
       new Set(),
     ) ||
     requestExpressionResolvesToExactManagedAppRuntime(receiver, new Set()) ||
-    requestExpressionIsFetchResponse(receiver, new Set())
+    requestExpressionIsFetchResponse(receiver, root, session, new Set())
   );
 }
 
@@ -14003,7 +14006,7 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
       continue;
     }
 
-    const fetchInvocation = requestGovernedFetchInvocation(call);
+    const fetchInvocation = requestReviewedFetchInvocation(call, callable, context.provenance);
     if (
       fetchInvocation &&
       (callable.moduleInitializer || requestCallIsInImmediateRootExecution(call, callable))
@@ -19410,7 +19413,7 @@ function requestExpressionIsProtocolSafeUncached(
     );
   }
   if (Node.isCallExpression(node)) {
-    if (requestCallCrossesDeferredRootAuthorityBoundary(node, callable)) return false;
+    if (requestCallCrossesDeferredRootAuthorityBoundary(node, callable, session)) return false;
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
     if (
@@ -19498,17 +19501,21 @@ function requestExpressionIsProtocolSafeUncached(
     ) {
       return true;
     }
-    if (requestCallIsGovernedFetch(node)) return true;
+    if (requestCallIsReviewedFetch(node, callable, session)) return true;
     const receiver = requestCallReceiver(callee);
     const member = requestStaticCallMember(callee);
     if (
       receiver &&
       member &&
+      Node.isPropertyAccessExpression(callee) &&
+      !callee.getQuestionDotTokenNode() &&
+      !node.getQuestionDotTokenNode() &&
       REQUEST_SAFE_FETCH_RESPONSE_METHODS.has(member) &&
-      requestExpressionIsFetchResponse(receiver, new Set())
+      requestExpressionIsFetchResponse(receiver, callable, session, new Set())
     ) {
       return true;
     }
+    if (requestCallUsesFrameworkFetchCapabilityShape(node, callable)) return false;
     if (
       receiver &&
       member &&
@@ -21349,7 +21356,7 @@ function requestExpressionIsPlainWireValue(
         .getArguments()
         .every((argument) => requestExpressionIsPlainWireValue(argument, state, new Set(seen)));
     }
-    if (requestCallIsGovernedFetch(node)) return true;
+    if (requestCallIsReviewedFetch(node, state.rootCallable, state.session)) return true;
     if (
       receiver &&
       member &&
@@ -24103,7 +24110,9 @@ function requestCallIsKnownSafe(
   const member = requestStaticCallMember(callee);
   const receiver = requestCallReceiver(callee);
 
-  if (requestCallCrossesDeferredRootAuthorityBoundary(call, callable)) return false;
+  if (requestCallCrossesDeferredRootAuthorityBoundary(call, callable, context.provenance)) {
+    return false;
+  }
 
   const directReceiver = receiver ? unwrapStaticExpression(receiver) : undefined;
   if (
@@ -24486,8 +24495,11 @@ function requestCallIsKnownSafe(
     return false;
   }
   if (
+    Node.isPropertyAccessExpression(callee) &&
+    !callee.getQuestionDotTokenNode() &&
+    !call.getQuestionDotTokenNode() &&
     REQUEST_SAFE_FETCH_RESPONSE_METHODS.has(member) &&
-    requestExpressionIsFetchResponse(receiver, new Set())
+    requestExpressionIsFetchResponse(receiver, callable, context.provenance, new Set())
   ) {
     if (
       !requestLocalIntrinsicContainerIsPristine(
@@ -24515,6 +24527,12 @@ function requestCallIsKnownSafe(
   }
 
   const role = requestExpressionRootParameterRole(receiver, callable, new Set(), 0);
+  if (
+    requestRootRoleIncludesCapability(role) &&
+    requestCallUsesFrameworkFetchCapabilityShape(call, callable)
+  ) {
+    return false;
+  }
   if (
     role === 'stream-controller' &&
     ['close', 'enqueue', 'error'].includes(member) &&
@@ -29238,6 +29256,108 @@ function requestCallIsGovernedFetch(call: import('ts-morph').CallExpression): bo
   return requestGovernedFetchInvocation(call) !== undefined;
 }
 
+/**
+ * SPEC §6.6: the reviewed outbound-network door is the exact framework-owned context
+ * parameter's direct `fetch` method. A capability role alone is not enough: aliases, computed
+ * members, optional calls, and rebound invocation forms do not preserve the framework door's
+ * provenance.
+ */
+function requestExpressionIsExactFrameworkContext(
+  expression: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = node.getSymbol();
+  if (!symbol) return false;
+  const contextIndexes = new Set(
+    (callable.rootCarriers ?? [])
+      .filter((carrier) => carrier.carrier === 'context')
+      .map((carrier) => carrier.index),
+  );
+  // Durable task `run(input, ctx)` is the normative positive egress door (SPEC §6.6). Its
+  // context intentionally is not a request-wire carrier, so name that exact callback slot here
+  // instead of broadening every generic capability parameter into a fetch authority.
+  if (callable.rootFactory === 'task' && callable.rootCallback === 'run') {
+    contextIndexes.add(1);
+  }
+  for (const index of contextIndexes) {
+    const parameter = requestCallableParameters(callable.declaration)[index];
+    const name = parameter?.getNameNode();
+    if (
+      !parameter ||
+      parameter.getInitializer() ||
+      parameter.getDotDotDotToken() ||
+      !Node.isIdentifier(name) ||
+      name.getSymbol() !== symbol
+    ) {
+      continue;
+    }
+    return requestRootCapabilityMethodIsPristine(node, callable, session);
+  }
+  return false;
+}
+
+function requestExactFrameworkContextFetchInvocation(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): RequestNormalizedInvocation | undefined {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getQuestionDotTokenNode() ||
+    call.getQuestionDotTokenNode() ||
+    callee.getName() !== 'fetch' ||
+    !requestExpressionIsExactFrameworkContext(callee.getExpression(), callable, session)
+  ) {
+    return undefined;
+  }
+  return requestNormalizedCall(call);
+}
+
+function requestReviewedFetchInvocation(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): RequestNormalizedInvocation | undefined {
+  return (
+    requestGovernedFetchInvocation(call) ??
+    requestExactFrameworkContextFetchInvocation(call, callable, session)
+  );
+}
+
+function requestCallIsReviewedFetch(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  return requestReviewedFetchInvocation(call, callable, session) !== undefined;
+}
+
+/**
+ * Once a call resolves to a capability-role `.fetch` shape, it must satisfy the exact context
+ * door above. This guard prevents the generic open capability-method rule from re-admitting
+ * computed, aliased, optional, rebound, or mutated variants after exact provenance failed.
+ */
+function requestCallUsesFrameworkFetchCapabilityShape(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+): boolean {
+  const target = unwrapStaticExpression(requestNormalizedCall(call).target);
+  if (!Node.isPropertyAccessExpression(target) && !Node.isElementAccessExpression(target)) {
+    return false;
+  }
+  const member = Node.isPropertyAccessExpression(target)
+    ? target.getName()
+    : staticMemberName(target.getArgumentExpression());
+  if (member !== 'fetch') return false;
+  return requestRootRoleIncludesCapability(
+    requestExpressionRootParameterRole(target.getExpression(), callable, new Set(), 0),
+  );
+}
+
 function scanOutboundFetchConfidentiality(
   call: import('ts-morph').CallExpression,
   args: readonly Node[] | undefined,
@@ -29630,20 +29750,29 @@ function requestJsonSerializationOutputExpressions(
   );
 }
 
-function requestExpressionIsFetchResponse(expression: Node, seen: Set<string>): boolean {
+function requestExpressionIsFetchResponse(
+  expression: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+): boolean {
   const node = unwrapStaticExpression(expression);
   if (Node.isAwaitExpression(node)) {
-    return requestExpressionIsFetchResponse(node.getExpression(), seen);
+    return requestExpressionIsFetchResponse(node.getExpression(), callable, session, seen);
   }
   if (Node.isCallExpression(node)) {
-    if (requestCallIsGovernedFetch(node)) return true;
+    if (requestCallIsReviewedFetch(node, callable, session)) return true;
     const callee = unwrapStaticExpression(node.getExpression());
-    const receiver = requestCallReceiver(callee);
-    return !!(
-      receiver &&
-      requestStaticCallMember(callee) === 'clone' &&
-      requestExpressionIsFetchResponse(receiver, seen)
-    );
+    if (
+      !Node.isPropertyAccessExpression(callee) ||
+      callee.getQuestionDotTokenNode() ||
+      node.getQuestionDotTokenNode() ||
+      callee.getName() !== 'clone'
+    ) {
+      return false;
+    }
+    const receiver = callee.getExpression();
+    return !!(receiver && requestExpressionIsFetchResponse(receiver, callable, session, seen));
   }
   if (!Node.isIdentifier(node)) return false;
   const symbol = node.getSymbol();
@@ -29653,12 +29782,16 @@ function requestExpressionIsFetchResponse(expression: Node, seen: Set<string>): 
     seen.add(key);
     for (const declaration of symbol.getDeclarations()) {
       const initializer = valueDeclarationInitializer(declaration);
-      if (initializer && requestExpressionIsFetchResponse(initializer, seen)) return true;
+      if (initializer && requestExpressionIsFetchResponse(initializer, callable, session, seen)) {
+        return true;
+      }
     }
   }
   const declaration = localValueDeclaration(node);
   const initializer = declaration ? valueDeclarationInitializer(declaration) : undefined;
-  return initializer ? requestExpressionIsFetchResponse(initializer, seen) : false;
+  return initializer
+    ? requestExpressionIsFetchResponse(initializer, callable, session, seen)
+    : false;
 }
 
 function requestCallIsReviewedPureDrizzleExpression(
