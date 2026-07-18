@@ -229,6 +229,7 @@ export type RegistryGraphInput = Pick<
   | 'access'
   | 'authPosture'
   | 'capabilities'
+  | 'capabilityClosure'
   | 'components'
   | 'cookieDowngrades'
   | 'endpoints'

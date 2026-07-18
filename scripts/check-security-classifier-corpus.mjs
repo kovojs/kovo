@@ -1601,6 +1601,63 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'capability-closure',
+    marker: '@kovo-security-classifier-corpus capability-closure',
+    testFiles: [
+      'packages/compiler/src/capability-closure.security.test.ts',
+      'packages/cli/src/capability-closure-packages.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'complete-root-census',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'censuses every supported untrusted-data root kind',
+          "'scheduled-task'",
+          "'serialized-browser-handler'",
+          "'webhook'",
+        ],
+      },
+      {
+        id: 'transitive-module-and-callback-closure',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'wrappers, re-exports, literal dynamic import, and require',
+          'callback-transfer:definePage(caller.ts callback/container)@wrapper.ts',
+          'dynamic-import target is not a compile-visible string literal',
+        ],
+      },
+      {
+        id: 'global-and-package-authority-closed',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'keeps shadowed globals and require open while closing global aliases',
+          'has no reviewed exact-version capability summary',
+          'summary covers 1.2.2, installed package is 1.2.3',
+          '2 contradictory summaries',
+          'only the compiler-owned Kovo registry',
+        ],
+      },
+      {
+        id: 'reviewed-positive-controls',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'keeps supported framework network, filesystem, process, and database doors open',
+          'preserves raw driver closure while allowing reviewed Drizzle schema/query construction',
+        ],
+      },
+      {
+        id: 'exact-package-identity-and-export-arms',
+        file: 'packages/cli/src/capability-closure-packages.test.ts',
+        snippets: [
+          'pins package version, manifest fingerprint, and every conditional export arm',
+          'marks absent conditional subpaths unresolved instead of inheriting a root verdict',
+          'loads an exact summary ledger and fails closed on unknown or malformed authority fields',
+        ],
+      },
+    ],
+  },
+  {
     id: 'csrf-principal-binding',
     marker: '@kovo-security-classifier-corpus csrf-principal-binding',
     testFiles: [

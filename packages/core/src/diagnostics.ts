@@ -97,7 +97,8 @@ export type DiagnosticCode =
   | 'KV439'
   | 'KV445'
   | 'KV446'
-  | 'KV447';
+  | 'KV447'
+  | 'KV448';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -1170,6 +1171,17 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'warn',
     message: 'SQLite owner annotations are advisory only in the experimental SQLite runtime.',
+  },
+  KV448: {
+    code: 'KV448',
+    help: [
+      'Would lower to: an untrusted-data root whose complete module/callback closure contains only ordinary pure modules and reviewed Kovo capability doors.',
+      'Blocked reason: the provenance path reaches raw network, filesystem, process, VM, worker, database-driver, or unresolved loading authority; alternatively an external package summary is absent, stale, contradictory, or incomplete for the installed version and conditional exports.',
+      'Fixes: route the operation through the named Kovo capability, remove the raw authority from the reachable module graph, make a dynamic import/require target literal, or add/update an exact-version reviewed pure-package summary. The diagnostic path names the root and every transfer edge.',
+      'SPEC §6.6 capability-closed module graph: this is a static supported-subset gate, not a JavaScript process sandbox; deliberately hostile same-realm app/package code remains outside the app-level proof.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Untrusted-data-reachable module graph acquires raw or unresolved authority.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;
 

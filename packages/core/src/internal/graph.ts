@@ -5,6 +5,7 @@ export type {
   AuthPostureFact,
   AttributeMergeExplain,
   CapabilityExplain,
+  CapabilityClosureExplainFact,
   CaptureChannel,
   ClockExplain,
   ComponentExplain,

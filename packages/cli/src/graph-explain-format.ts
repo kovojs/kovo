@@ -813,6 +813,61 @@ export function capabilityLine(capability: CoreGraph.CapabilityExplain): string 
   ].join(' ');
 }
 
+/** Stable root-to-authority proof rows for `kovo explain --capabilities` (SPEC §6.6). */
+export function compareCapabilityClosureFact(
+  left: CoreGraph.CapabilityClosureExplainFact,
+  right: CoreGraph.CapabilityClosureExplainFact,
+): number {
+  return capabilityClosureSortKey(left).localeCompare(capabilityClosureSortKey(right));
+}
+
+export function capabilityClosureLine(fact: CoreGraph.CapabilityClosureExplainFact): string {
+  if (fact.kind === 'root') {
+    return [
+      'ROOT',
+      `kind=${fact.rootKind ?? '-'}`,
+      `name=${stableValue(fact.name)}`,
+      `module=${fact.module ?? '-'}`,
+      `site=${fact.site}`,
+    ].join(' ');
+  }
+  if (fact.kind === 'summary') {
+    return [
+      'PACKAGE-SUMMARY',
+      `package=${fact.packageName ?? '-'}@${fact.packageVersion ?? '-'}`,
+      `summary=${fact.summaryVersion ?? '-'}`,
+      `status=${fact.status ?? '-'}`,
+      `conditions=${list(fact.conditions)}`,
+      `fingerprint=${fact.manifestFingerprint ?? '-'}`,
+      `site=${fact.site}`,
+    ].join(' ');
+  }
+  return [
+    fact.kind === 'door' ? 'DOOR' : 'CLOSED',
+    `root=${fact.rootKind ?? '-'}:${stableValue(fact.name)}`,
+    `capability=${fact.capability ?? '-'}`,
+    `module=${fact.module ?? '-'}`,
+    `site=${fact.site}`,
+    `path=${stableValue(fact.path?.join(' -> '))}`,
+    `reason=${stableValue(fact.reason)}`,
+  ].join(' ');
+}
+
+function capabilityClosureSortKey(fact: CoreGraph.CapabilityClosureExplainFact): string {
+  return [
+    fact.kind,
+    fact.rootKind ?? '',
+    fact.name ?? '',
+    fact.module ?? '',
+    fact.packageName ?? '',
+    fact.packageVersion ?? '',
+    fact.summaryVersion ?? '',
+    fact.capability ?? '',
+    fact.site,
+    fact.path?.join('\0') ?? '',
+  ].join('\u0001');
+}
+
 export function compareCookieDowngrade(
   a: CoreGraph.CookieDowngradeExplain,
   b: CoreGraph.CookieDowngradeExplain,
