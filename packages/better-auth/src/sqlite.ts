@@ -14,6 +14,7 @@ import {
 import { betterAuthFixedCookieSecurity } from './internal/cookie-security.js';
 import { betterAuthFreezeOwn, betterAuthOwnDataOption } from './internal/intrinsics.js';
 import { betterAuthHashPassword, betterAuthVerifyPassword } from './internal/password.js';
+import { registerFixedBetterAuthCanonicalOrigin } from './internal/request-origin.js';
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
 import { createBetterAuthSqliteRateLimitStorage } from './internal/sqlite-rate-limit-storage.js';
 import {
@@ -217,7 +218,8 @@ export function createBetterAuthSqliteBindings<
     telemetry: { enabled: false },
     trustedOrigins: [],
   });
-  const mountAdapter = createBetterAuthMountAdapter(auth);
+  registerFixedBetterAuthCanonicalOrigin(auth, baseURL, 'Better Auth SQLite binding');
+  const mountAdapter = createBetterAuthMountAdapter(auth, baseURL);
   const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {
     access: signInAccess,

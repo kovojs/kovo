@@ -146,7 +146,7 @@ export function fakeRoutedCredentialAuth<
     signOut?: (...args: any[]) => any;
     signUpEmail?: (...args: any[]) => any;
   },
->(api: Api) {
+>(api: Api, baseURL = 'https://example.test/api/auth') {
   const signInEmail = api.signInEmail;
   const signUpEmail = api.signUpEmail;
   const handlerApi = {
@@ -159,7 +159,7 @@ export function fakeRoutedCredentialAuth<
   };
   return {
     $context: Promise.resolve({
-      baseURL: 'https://example.test/api/auth',
+      baseURL,
       options: {
         advanced: { ipAddress: { ipAddressHeaders: ['x-forwarded-for'] } },
         basePath: '/api/auth',

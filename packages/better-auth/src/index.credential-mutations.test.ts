@@ -60,6 +60,14 @@ async function runProtectedCredentialMutation<
       writable: false,
     });
   }
+  if (!('url' in request)) {
+    Object.defineProperty(request, 'url', {
+      configurable: true,
+      enumerable: true,
+      value: 'https://example.test/mutation',
+      writable: false,
+    });
+  }
   return runMutation(
     definition,
     {
@@ -601,6 +609,22 @@ describe('credential mutation helpers', () => {
     });
   });
 
+  it('rejects sign-out origin skew before provider revocation or clearing cookies', async () => {
+    const auth = new FakeCredentialAuth();
+    const signOut = betterAuthSignOutMutation(auth);
+    const request = new Request('https://other.example/logout', {
+      headers: {
+        cookie: 'kovo_session=session-1',
+        origin: 'https://other.example',
+      },
+    });
+
+    await expect(runProtectedCredentialMutation(signOut, {}, request)).rejects.toThrow(
+      'Better Auth credential provider failed inside the trusted plaintext boundary.',
+    );
+    expect(auth.lastSignOut).toBeUndefined();
+  });
+
   it('does not report or clear local state for a failed sign-out response', async () => {
     // SPEC §6.5/§9.1: logout success needs exact positive provider response evidence.
     // A resolved 5xx is not revocation and must not emit Clear-Site-Data or a signed-out outcome.
@@ -1051,6 +1075,96 @@ describe('credential mutation helpers', () => {
       },
       value: { redirectTo: '/', status: 'signed-in' },
     });
+  });
+
+  it('pins credentials to the normalized configured scheme, host, and effective port (C13)', async () => {
+    const accepted = [
+      {
+        baseURL: 'https://EXAMPLE.test:443/api/auth',
+        requestURL: 'https://example.test/login',
+      },
+      {
+        baseURL: 'https://BÜCHER.example:443/api/auth',
+        requestURL: 'https://xn--bcher-kva.example/login',
+      },
+      {
+        baseURL: 'https://[2001:DB8::1]:443/api/auth',
+        requestURL: 'https://[2001:db8::1]/login',
+      },
+      {
+        baseURL: 'http://LOCALHOST:80/api/auth',
+        requestURL: 'http://localhost/login',
+      },
+      {
+        baseURL: 'https://EXAMPLE.test:8443/api/auth',
+        requestURL: 'https://example.test:8443/login',
+      },
+    ] as const;
+    for (const sample of accepted) {
+      let handlerCalls = 0;
+      const auth = fakeRoutedCredentialAuth(
+        {
+          signInEmail: () => {
+            handlerCalls += 1;
+            return responseWithCookies([
+              'better-auth.session_token=accepted; Path=/; HttpOnly; SameSite=Lax',
+            ]);
+          },
+        },
+        sample.baseURL,
+      );
+      const signIn = betterAuthSignInEmailMutation(auth);
+      const origin = new URL(sample.requestURL).origin;
+      await expect(
+        runProtectedCredentialMutation(
+          signIn,
+          { email: 'ada@example.com', password: 'correct' },
+          new Request(sample.requestURL, { headers: { origin } }),
+        ),
+      ).resolves.toMatchObject({ ok: true, value: { status: 'signed-in' } });
+      expect(handlerCalls).toBe(1);
+    }
+
+    const rejected = [
+      {
+        baseURL: 'http://example.test/api/auth',
+        requestURL: 'https://example.test/login',
+      },
+      {
+        baseURL: 'https://auth.example.test/api/auth',
+        requestURL: 'https://app.example.test/login',
+      },
+      {
+        baseURL: 'https://example.test:8443/api/auth',
+        requestURL: 'https://example.test/login',
+      },
+    ] as const;
+    for (const sample of rejected) {
+      let handlerCalls = 0;
+      const auth = fakeRoutedCredentialAuth(
+        {
+          signInEmail: () => {
+            handlerCalls += 1;
+            return responseWithCookies([
+              'better-auth.session_token=must-not-mint; Path=/; HttpOnly; SameSite=Lax',
+            ]);
+          },
+        },
+        sample.baseURL,
+      );
+      const signIn = betterAuthSignInEmailMutation(auth);
+      const origin = new URL(sample.requestURL).origin;
+      await expect(
+        runProtectedCredentialMutation(
+          signIn,
+          { email: 'ada@example.com', password: 'correct' },
+          new Request(sample.requestURL, { headers: { origin } }),
+        ),
+      ).rejects.toThrow(
+        'Better Auth credential provider failed inside the trusted plaintext boundary',
+      );
+      expect(handlerCalls).toBe(0);
+    }
   });
 });
 

@@ -9,6 +9,11 @@ import {
   betterAuthMapSet,
 } from './internal/intrinsics.js';
 import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
+import {
+  assertBetterAuthCanonicalRequestOrigin,
+  pinFixedBetterAuthCanonicalOrigin,
+  type PinnedBetterAuthCanonicalOrigin,
+} from './internal/request-origin.js';
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
 
 const NativeError = globalThis.Error;
@@ -28,6 +33,7 @@ export interface BetterAuthMountAdapter {
 }
 
 interface CapturedBetterAuthMountAdapter {
+  readonly canonicalOrigin: PinnedBetterAuthCanonicalOrigin;
   readonly handler: Function;
   readonly receiver: object;
 }
@@ -42,7 +48,10 @@ const capturedBetterAuthMountAdapters = betterAuthCreateMap<
 >();
 
 /** Package-private mint called only after Kovo itself constructs the upstream Better Auth object. */
-export function createBetterAuthMountAdapter(auth: BetterAuthMountSource): BetterAuthMountAdapter {
+export function createBetterAuthMountAdapter(
+  auth: BetterAuthMountSource,
+  baseURL: string,
+): BetterAuthMountAdapter {
   assertBetterAuthRuntimeRealmLocked();
   if (typeof auth !== 'object' || auth === null) {
     throw new NativeTypeError('Kovo Better Auth mount adapter source must be an object.');
@@ -53,6 +62,7 @@ export function createBetterAuthMountAdapter(auth: BetterAuthMountSource): Bette
     'Kovo Better Auth mount adapter',
   );
   betterAuthMapSet(capturedBetterAuthMountAdapters, token, {
+    canonicalOrigin: pinFixedBetterAuthCanonicalOrigin(baseURL, 'Kovo Better Auth mount'),
     handler: captured.method,
     receiver: captured.receiver,
   });
@@ -88,8 +98,13 @@ export async function invokeBetterAuthMountAdapter(
   if (captured === undefined) {
     throw new NativeTypeError('Better Auth mount adapter authority is unavailable.');
   }
-  assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
   try {
+    await assertBetterAuthCanonicalRequestOrigin(
+      captured.canonicalOrigin,
+      request,
+      'Kovo Better Auth mount',
+    );
+    assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
     return await betterAuthApply<Promise<Response> | Response>(
       captured.handler,
       captured.receiver,

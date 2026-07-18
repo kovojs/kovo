@@ -261,10 +261,7 @@ export function betterAuthSignOutMutation<
       result.value.redirectTo,
     async handler(_input, request, context) {
       try {
-        const response: BetterAuthResponseLike = await callBetterAuthSignOut(
-          pinnedAuth,
-          request.headers,
-        );
+        const response: BetterAuthResponseLike = await callBetterAuthSignOut(pinnedAuth, request);
 
         // SPEC §6.5/§9.1: a resolved provider promise is not revocation evidence. Bind the
         // exact boot-pinned Response facts and require a successful status before clearing any

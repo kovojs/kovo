@@ -176,6 +176,129 @@ describe('Better Auth development seed session posture', () => {
     expect(value).toMatchObject({ user: { email: 'victim@example.com' } });
   });
 
+  it('rejects canonical-origin skew before minting or reading a bare session cookie', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
+    runtimes.push(runtime);
+    const systemDb = runtime.systemDb({
+      operation: 'write',
+      reason: 'Reproduce canonical-origin and request-scheme cookie skew',
+      surface: 'packages/better-auth/src/sqlite.seed-session.test.ts',
+    });
+    const csrf = {
+      field: 'csrf',
+      secret: 'Kovo-Origin-Skew-Csrf-0a1B2c3D4e5F6g7H8i9J',
+      sessionId: () => 'origin-skew-pre-auth-principal',
+    };
+    const createBindings = (email: string, name: string, password: string) =>
+      createBetterAuthSqliteBindings({
+        baseURL: 'http://localhost:5173',
+        csrf,
+        developmentSeed: { email, name, password },
+        mapSession: ({ session: authSession, user: authUser }) => ({
+          id: authSession.id,
+          user: { email: authUser.email, id: authUser.id, name: authUser.name },
+        }),
+        schema: authSchema,
+        secret: betterAuthSqliteSecret(authSecret),
+        signInAccess: { kind: 'public', reason: 'origin-skew repro sign-in' },
+        signOutAccess: { kind: 'public', reason: 'origin-skew repro sign-out' },
+        systemDb,
+      });
+    const victim = createBindings('victim-skew@example.com', 'Victim', 'Victim-password-123!');
+    const attacker = createBindings(
+      'attacker-skew@example.com',
+      'Attacker',
+      'Attacker-password-123!',
+    );
+    await victim.seedDemoUser();
+    await attacker.seedDemoUser();
+
+    const mismatchedRequest = new Request('https://app.example.test/_m/auth/sign-in', {
+      headers: { origin: 'https://app.example.test' },
+      method: 'POST',
+    });
+    const mismatchedToken = csrfToken(mismatchedRequest, csrf, { audience: 'auth/sign-in' });
+    await expect(
+      runMutation(
+        victim.signIn,
+        {
+          csrf: mismatchedToken,
+          email: 'victim-skew@example.com',
+          password: 'Victim-password-123!',
+        },
+        mismatchedRequest,
+        { clientIp: () => '127.0.0.1' },
+      ),
+    ).rejects.toThrow(
+      'Better Auth credential provider failed inside the trusted plaintext boundary',
+    );
+    expect(
+      useSqliteSystemDb(systemDb, (db) => db.select({ id: session.id }).from(session).all()),
+    ).toEqual([]);
+
+    const signInCookie = async (
+      bindings: typeof victim,
+      email: string,
+      password: string,
+    ): Promise<{ pair: string; setCookie: string }> => {
+      const request = new Request('http://localhost:5173/_m/auth/sign-in', {
+        headers: { origin: 'http://localhost:5173' },
+        method: 'POST',
+      });
+      const token = csrfToken(request, csrf, { audience: 'auth/sign-in' });
+      const result = await runMutation(bindings.signIn, { csrf: token, email, password }, request, {
+        clientIp: () => '127.0.0.1',
+      });
+      expect(result).toMatchObject({ ok: true, value: { status: 'signed-in' } });
+      const setCookies = result.ok ? result.responseHeaders?.['Set-Cookie'] : undefined;
+      const setCookie = setCookies?.find((cookie) => cookie.includes('session_token='));
+      if (setCookie === undefined) throw new Error('expected Better Auth session Set-Cookie');
+      const pair = setCookie.split(';', 1)[0];
+      if (pair === undefined) throw new Error('expected Better Auth session cookie pair');
+      return { pair, setCookie };
+    };
+
+    const victimCookie = await signInCookie(
+      victim,
+      'victim-skew@example.com',
+      'Victim-password-123!',
+    );
+    const attackerCookie = await signInCookie(
+      attacker,
+      'attacker-skew@example.com',
+      'Attacker-password-123!',
+    );
+    expect(victimCookie.pair).toMatch(/^better-auth\.session_token=/u);
+    expect(victimCookie.setCookie).toContain('; Path=/');
+    expect(victimCookie.setCookie).toContain('; HttpOnly');
+    expect(victimCookie.setCookie).toContain('; SameSite=Lax');
+    expect(victimCookie.setCookie).not.toContain('; Secure');
+    expect(victimCookie.setCookie).not.toContain('; Domain=');
+
+    // Better Auth selects the first duplicate cookie. Before the origin pin, an HTTPS adapter
+    // upgraded this bare cookie to Secure without changing its name, so an older sibling Domain
+    // cookie could occupy this first position and authenticate the sibling's account.
+    const localDuplicate = await victim.sessionProvider(
+      new Request('http://localhost:5173/', {
+        headers: { cookie: `${attackerCookie.pair}; ${victimCookie.pair}` },
+      }),
+    );
+    const localValue =
+      localDuplicate !== null && typeof localDuplicate === 'object' && 'value' in localDuplicate
+        ? localDuplicate.value
+        : localDuplicate;
+    expect(localValue).toMatchObject({ user: { email: 'attacker-skew@example.com' } });
+
+    await expect(
+      victim.sessionProvider(
+        new Request('https://app.example.test/', {
+          headers: { cookie: `${attackerCookie.pair}; ${victimCookie.pair}` },
+        }),
+      ),
+    ).rejects.toThrow('Better Auth session provider failed inside the trusted plaintext boundary');
+  });
+
   it('creates only the credential until the CSRF-protected sign-in mutation runs', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });

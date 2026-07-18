@@ -16,6 +16,7 @@ vi.mock('./internal/runtime-lock.js', () => ({
 import { betterAuthSession, mount, type BetterAuthLike } from './index.js';
 import * as packageInternalServerMountAdapterApi from '@kovojs/better-auth/internal/server-mount-adapter';
 import { betterAuthMountOperationContract } from './internal.js';
+import { registerFixedBetterAuthCanonicalOrigin } from './internal/request-origin.js';
 import { createBetterAuthMountAdapter } from './mount-adapter.js';
 import {
   type AppSession,
@@ -65,6 +66,29 @@ describe('betterAuthSession', () => {
     // SessionProvider consumers (and apps whose getSession ignores returnHeaders) unchanged.
     await expect(provider({ headers })).resolves.toEqual(mappedAppSession);
     expect(auth.lastHeaders).toBe(headers);
+  });
+
+  it('keeps a fixed binding origin-pinned even when the auth double has no context', async () => {
+    const auth = new FakeBetterAuth();
+    registerFixedBetterAuthCanonicalOrigin(auth, 'https://example.test', 'fixed binding test');
+    const provider = betterAuthSession(auth, mapSession);
+
+    await expect(
+      provider(
+        new Request('http://example.test/account', {
+          headers: { cookie: 'kovo_session=s1' },
+        }),
+      ),
+    ).rejects.toThrow('Better Auth session provider failed inside the trusted plaintext boundary');
+    expect(auth.lastHeaders).toBeUndefined();
+
+    await expect(
+      provider(
+        new Request('https://example.test/account', {
+          headers: { cookie: 'kovo_session=s1' },
+        }),
+      ),
+    ).resolves.toMatchObject({ user: { email: 'ada@example.com' } });
   });
 
   it('treats a missing Better Auth session as anonymous', async () => {
@@ -412,7 +436,7 @@ describe('browser redirect protocol mount', () => {
 
   it('declares a prefix endpoint for Better Auth-owned redirect protocols', async () => {
     const auth = new FakeMountedAuth();
-    const authEndpoint = mount('/auth', createBetterAuthMountAdapter(auth));
+    const authEndpoint = mount('/auth', createBetterAuthMountAdapter(auth, 'https://example.test'));
 
     expect(authEndpoint.path).toBe('/auth');
     expect(authEndpoint.mount).toBe('prefix');
@@ -470,7 +494,7 @@ describe('browser redirect protocol mount', () => {
       emailAndPassword: { enabled: true },
       secret: '0123456789abcdef0123456789abcdef',
     });
-    const endpoint = mount('/auth', createBetterAuthMountAdapter(auth));
+    const endpoint = mount('/auth', createBetterAuthMountAdapter(auth, 'https://example.test'));
 
     const response = await runEndpoint(
       endpoint,
@@ -510,24 +534,27 @@ describe('browser redirect protocol mount', () => {
     let received:
       | { authorization: string | null; cookie: string | null; session: boolean }
       | undefined;
-    const adapter = createBetterAuthMountAdapter({
-      handler(request: Request) {
-        received = {
-          authorization: request.headers.get('authorization'),
-          cookie: request.headers.get('cookie'),
-          session: 'session' in request,
-        };
-        return new Response(null, {
-          headers: {
-            'Cache-Control': 'no-store',
-            Location: '/signed-in',
-            'Set-Cookie':
-              'better-auth.session_token=rotated; Path=/; Secure; HttpOnly; SameSite=Lax',
-          },
-          status: 302,
-        });
+    const adapter = createBetterAuthMountAdapter(
+      {
+        handler(request: Request) {
+          received = {
+            authorization: request.headers.get('authorization'),
+            cookie: request.headers.get('cookie'),
+            session: 'session' in request,
+          };
+          return new Response(null, {
+            headers: {
+              'Cache-Control': 'no-store',
+              Location: '/signed-in',
+              'Set-Cookie':
+                'better-auth.session_token=rotated; Path=/; Secure; HttpOnly; SameSite=Lax',
+            },
+            status: 302,
+          });
+        },
       },
-    });
+      'https://example.test',
+    );
     const authEndpoint = mount('/auth', adapter);
     const request = new Request('https://example.test/auth/callback/provider', {
       headers: {
@@ -552,6 +579,38 @@ describe('browser redirect protocol mount', () => {
     expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=rotated');
   });
 
+  it('normalizes mount authority and rejects origin skew before the handler runs (C13)', async () => {
+    let handlerCalls = 0;
+    const source = {
+      handler() {
+        handlerCalls += 1;
+        return new Response(null, {
+          headers: { 'Cache-Control': 'no-store', Location: '/complete' },
+          status: 302,
+        });
+      },
+    };
+    const accepted = mount(
+      '/auth',
+      createBetterAuthMountAdapter(source, 'https://BÜCHER.example:443/api/auth'),
+    );
+    await expect(
+      runEndpoint(accepted, new Request('https://xn--bcher-kva.example/auth/callback/provider')),
+    ).resolves.toMatchObject({ status: 302 });
+    expect(handlerCalls).toBe(1);
+
+    for (const requestURL of [
+      'http://xn--bcher-kva.example/auth/callback/provider',
+      'https://other.example/auth/callback/provider',
+      'https://xn--bcher-kva.example:8443/auth/callback/provider',
+    ]) {
+      await expect(runEndpoint(accepted, new Request(requestURL))).rejects.toThrow(
+        'Better Auth mounted handler failed inside the trusted plaintext boundary.',
+      );
+    }
+    expect(handlerCalls).toBe(1);
+  });
+
   it('pins the Kovo-constructed handler with its receiver and rejects unstable sources', async () => {
     let poisonCalls = 0;
     const auth = {
@@ -561,7 +620,7 @@ describe('browser redirect protocol mount', () => {
         return new Response(new URL(request.url).pathname);
       },
     };
-    const adapter = createBetterAuthMountAdapter(auth);
+    const adapter = createBetterAuthMountAdapter(auth, 'https://example.test');
     const endpoint = mount('/auth', adapter);
     auth.handler = () => {
       poisonCalls += 1;
@@ -580,10 +639,10 @@ describe('browser redirect protocol mount', () => {
       get: () => () => new Response('attacker'),
     }) as FakeMountedAuth;
     const inherited = Object.create({ handler: () => new Response('attacker') }) as FakeMountedAuth;
-    expect(() => createBetterAuthMountAdapter(accessor)).toThrow(
+    expect(() => createBetterAuthMountAdapter(accessor, 'https://example.test')).toThrow(
       'Kovo Better Auth construction.handler must be a stable own-data method',
     );
-    expect(() => createBetterAuthMountAdapter(inherited)).toThrow(
+    expect(() => createBetterAuthMountAdapter(inherited, 'https://example.test')).toThrow(
       'Kovo Better Auth construction.handler must be a stable own-data method',
     );
   });
@@ -592,13 +651,16 @@ describe('browser redirect protocol mount', () => {
     const secret = 'MOUNT_COOKIE_SECRET_MUST_NOT_ESCAPE';
     const endpoint = mount(
       '/auth',
-      createBetterAuthMountAdapter({
-        async handler(request: Request) {
-          throw new Error(
-            `provider callback failed for ${secret}: ${request.headers.get('cookie')}`,
-          );
+      createBetterAuthMountAdapter(
+        {
+          async handler(request: Request) {
+            throw new Error(
+              `provider callback failed for ${secret}: ${request.headers.get('cookie')}`,
+            );
+          },
         },
-      }),
+        'https://example.test',
+      ),
     );
     let thrown: unknown;
     try {
@@ -620,7 +682,7 @@ describe('browser redirect protocol mount', () => {
   });
 
   it('does not inherit mount authority and cannot be widened to an unsafe method', () => {
-    const adapter = createBetterAuthMountAdapter(new FakeMountedAuth());
+    const adapter = createBetterAuthMountAdapter(new FakeMountedAuth(), 'https://example.test');
     Object.defineProperty(Object.prototype, 'auth', {
       configurable: true,
       value: { justification: 'attacker downgrade', kind: 'none' },
@@ -662,7 +724,10 @@ describe('browser redirect protocol mount', () => {
       });
       Reflect.set(contract, 'auth', { justification: 'attacker downgrade', kind: 'none' });
       Reflect.set(contract.csrf, 'justification', 'attacker downgrade');
-      const endpoint = mount('/auth', createBetterAuthMountAdapter(new FakeMountedAuth()));
+      const endpoint = mount(
+        '/auth',
+        createBetterAuthMountAdapter(new FakeMountedAuth(), 'https://example.test'),
+      );
 
       expect(endpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
       expect(endpoint.access).toEqual({

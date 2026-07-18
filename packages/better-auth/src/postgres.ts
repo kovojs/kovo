@@ -19,6 +19,7 @@ import { betterAuthFixedCookieSecurity } from './internal/cookie-security.js';
 import { betterAuthFreezeOwn, betterAuthOwnDataOption } from './internal/intrinsics.js';
 import { betterAuthHashPassword, betterAuthVerifyPassword } from './internal/password.js';
 import { createBetterAuthPostgresRateLimitStorage } from './internal/postgres-rate-limit-storage.js';
+import { registerFixedBetterAuthCanonicalOrigin } from './internal/request-origin.js';
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
 import {
   callBetterAuthSignUpEmail,
@@ -247,7 +248,8 @@ export function createBetterAuthPostgresBindings<
     telemetry: { enabled: false },
     trustedOrigins: [],
   });
-  const mountAdapter = createBetterAuthMountAdapter(auth);
+  registerFixedBetterAuthCanonicalOrigin(auth, baseURL, 'Better Auth Postgres binding');
+  const mountAdapter = createBetterAuthMountAdapter(auth, baseURL);
   const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {
     access: signInAccess,

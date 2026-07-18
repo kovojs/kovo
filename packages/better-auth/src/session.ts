@@ -208,7 +208,7 @@ export function betterAuthSession<
       | null
       | undefined;
     try {
-      result = await callBetterAuthGetSession(pinnedAuth, request.headers);
+      result = await callBetterAuthGetSession(pinnedAuth, request);
     } catch {
       throw new NativeError(betterAuthSessionBoundaryFailureMessage);
     }

@@ -3,6 +3,7 @@ import type {
   BetterAuthCredentialHandlerLike,
   BetterAuthGetSessionWithHeadersResult,
   BetterAuthLike,
+  BetterAuthRequestLike,
   BetterAuthResponseLike,
   BetterAuthSignInEmailBody,
   BetterAuthSignInEmailLike,
@@ -32,6 +33,11 @@ import {
   betterAuthUrlSnapshot,
 } from './intrinsics.js';
 import { assertBetterAuthRequestSecretPath } from './non-egress-proof.js';
+import {
+  assertBetterAuthCanonicalRequestOrigin,
+  pinBetterAuthCanonicalOrigin,
+  type PinnedBetterAuthCanonicalOrigin,
+} from './request-origin.js';
 import { betterAuthCredentialRoutingFailure } from './routing-failure.js';
 
 const NativeHeaders = globalThis.Headers;
@@ -76,6 +82,7 @@ interface BetterAuthCredentialHandlerConfiguration {
 
 /** @internal Captured Better Auth HTTP credential boundary and its snapshotted router posture. */
 export interface PinnedBetterAuthCredentialHandler {
+  readonly canonicalOrigin: PinnedBetterAuthCanonicalOrigin;
   readonly configuration: Promise<BetterAuthCredentialHandlerConfiguration>;
   readonly handler: Function;
   readonly operation: BetterAuthCredentialOperation;
@@ -106,6 +113,7 @@ export function pinBetterAuthCredentialHandler(
 
   return betterAuthFreezeOwn(
     {
+      canonicalOrigin: pinBetterAuthCanonicalOrigin(auth, label),
       configuration: snapshotBetterAuthCredentialHandlerConfiguration(
         context.value as PromiseLike<unknown>,
         label,
@@ -334,13 +342,19 @@ export function pinBetterAuthSignUpEmail(
 }
 
 /** @internal Pin the exact Better Auth sign-out sink and its API receiver at declaration time. */
-export function pinBetterAuthSignOut(auth: BetterAuthSignOutLike): BetterAuthSignOutLike {
+export interface PinnedBetterAuthSignOut extends BetterAuthSignOutLike {
+  readonly canonicalOrigin: PinnedBetterAuthCanonicalOrigin;
+}
+
+export function pinBetterAuthSignOut(auth: BetterAuthSignOutLike): PinnedBetterAuthSignOut {
+  const canonicalOrigin = pinBetterAuthCanonicalOrigin(auth, 'Better Auth sign-out');
   const { method, receiver } = betterAuthCaptureOwnApiMethod(
     auth,
     'signOut',
     'Better Auth sign-out',
   );
   return {
+    canonicalOrigin,
     api: {
       signOut(options) {
         return betterAuthApply(method, receiver, [options]);
@@ -350,15 +364,24 @@ export function pinBetterAuthSignOut(auth: BetterAuthSignOutLike): BetterAuthSig
 }
 
 /** @internal Pin the exact Better Auth session sink and its API receiver at declaration time. */
+export interface PinnedBetterAuthGetSession<AuthSession, AuthUser> extends BetterAuthLike<
+  AuthSession,
+  AuthUser
+> {
+  readonly canonicalOrigin: PinnedBetterAuthCanonicalOrigin;
+}
+
 export function pinBetterAuthGetSession<AuthSession, AuthUser>(
   auth: BetterAuthLike<AuthSession, AuthUser>,
-): BetterAuthLike<AuthSession, AuthUser> {
+): PinnedBetterAuthGetSession<AuthSession, AuthUser> {
+  const canonicalOrigin = pinBetterAuthCanonicalOrigin(auth, 'Better Auth session');
   const { method, receiver } = betterAuthCaptureOwnApiMethod(
     auth,
     'getSession',
     'Better Auth session',
   );
   return {
+    canonicalOrigin,
     api: {
       getSession(options) {
         return betterAuthApply(method, receiver, [options]);
@@ -383,7 +406,7 @@ export async function callBetterAuthCredentialHandler(
   auth: PinnedBetterAuthCredentialHandler,
   body: BetterAuthSignInEmailBody | BetterAuthSignUpEmailBody,
   headers: Headers,
-  request: { clientIp?: string; url?: string },
+  request: BetterAuthRequestLike,
 ): Promise<BetterAuthResponseLike> {
   if (auth.operation === 'signInEmail') {
     assertBetterAuthRequestSecretPath('better-auth.sign-in.submitted-password');
@@ -392,6 +415,11 @@ export async function callBetterAuthCredentialHandler(
     assertBetterAuthRequestSecretPath('better-auth.sign-up.submitted-password');
   }
 
+  await assertBetterAuthCanonicalRequestOrigin(
+    auth.canonicalOrigin,
+    request,
+    'Better Auth credential mutation',
+  );
   const configuration = await auth.configuration;
   const routedHeaders = credentialHandlerHeaders(headers, request, configuration.ipHeaders);
   const endpointPath = auth.operation === 'signInEmail' ? '/sign-in/email' : '/sign-up/email';
@@ -548,36 +576,41 @@ export function callBetterAuthSignUpEmail(
 }
 
 /** @internal Pass the request cookie material only to Better Auth's revocation sink. */
-export function callBetterAuthSignOut(
-  auth: BetterAuthSignOutLike,
-  headers: Headers,
-): Promise<BetterAuthResponseLike> | BetterAuthResponseLike {
+export async function callBetterAuthSignOut(
+  auth: PinnedBetterAuthSignOut,
+  request: BetterAuthRequestLike,
+): Promise<BetterAuthResponseLike> {
+  await assertBetterAuthCanonicalRequestOrigin(
+    auth.canonicalOrigin,
+    request,
+    'Better Auth sign-out',
+  );
   assertBetterAuthRequestSecretPath('better-auth.sign-out.request-cookie');
-  return auth.api.signOut({
+  return await auth.api.signOut({
     asResponse: true,
-    headers,
+    headers: request.headers,
   });
 }
 
 /** @internal Pass request cookies only to Better Auth's session lookup sink. */
-export function callBetterAuthGetSession<AuthSession, AuthUser>(
-  auth: BetterAuthLike<AuthSession, AuthUser>,
-  headers: Headers,
-):
-  | Promise<
-      | BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>
-      | BetterAuthBareSessionPayload<AuthSession, AuthUser>
-      | null
-      | undefined
-    >
+export async function callBetterAuthGetSession<AuthSession, AuthUser>(
+  auth: PinnedBetterAuthGetSession<AuthSession, AuthUser>,
+  request: BetterAuthRequestLike,
+): Promise<
   | BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>
   | BetterAuthBareSessionPayload<AuthSession, AuthUser>
   | null
-  | undefined {
+  | undefined
+> {
+  await assertBetterAuthCanonicalRequestOrigin(
+    auth.canonicalOrigin,
+    request,
+    'Better Auth session',
+  );
   assertBetterAuthRequestSecretPath('better-auth.get-session.request-cookie');
   assertBetterAuthRequestSecretPath('better-auth.adapter.session-token-lookup');
-  return auth.api.getSession({
-    headers,
+  return await auth.api.getSession({
+    headers: request.headers,
     returnHeaders: true,
   });
 }
