@@ -138,6 +138,7 @@ export const validateFiniteServerSecurityOperations = securityClassifier(
     const found: CompilerDiagnostic[] = [];
     validateHandlerCollection(found, diagnostics, model.mutationHandlers, 'mutation');
     validateHandlerCollection(found, diagnostics, model.endpointHandlers, 'endpoint');
+    validateHandlerCollection(found, diagnostics, model.queryHandlers, 'query');
     validateHandlerCollection(found, diagnostics, model.webhookHandlers, 'webhook');
     validateHandlerCollection(found, diagnostics, model.taskRunHandlers, 'task');
     return found;
@@ -238,6 +239,18 @@ function validateHandlerCollection(
           diagnostics,
           operation.span,
           `server operation ${operation.kind} has an invalid door.`,
+        );
+        continue;
+      }
+      if (
+        operation.kind === 'server.helper.call' &&
+        (operation.root === undefined || compilerStringTrim(operation.root).length === 0)
+      ) {
+        appendFiniteIrDiagnostic(
+          found,
+          diagnostics,
+          operation.span,
+          'server helper call edge is missing its enrolled handler root.',
         );
         continue;
       }

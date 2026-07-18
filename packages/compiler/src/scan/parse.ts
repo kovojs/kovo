@@ -54,6 +54,7 @@ import { deriveRegistryIdentity } from '../registry-identities.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
 import {
+  resolveSameFileSecurityIrCallable,
   scanBrowserSecurityOperations,
   scanServerSecurityOperations,
 } from './security-operation-ir.js';
@@ -92,6 +93,9 @@ import type {
   RenderHostModel,
   RenderInputModel,
   RenderSlotsModel,
+  SecurityOperationViolationModel,
+  SecurityOperationSurface,
+  ServerSecurityOperationModel,
   SourceSpan,
   StateReturnObjectModel,
   StaticJsxWireAttributeEntry,
@@ -122,6 +126,7 @@ const COMPONENT_FACTORY_IDENTITY = frameworkExport('@kovojs/core', 'component');
 const DOMAIN_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'domain');
 const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
+const QUERY_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
 const WEBHOOK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
 const CSRF_FIELD_IDENTITIES: readonly FrameworkExportIdentity[] = [
@@ -135,6 +140,7 @@ const CSRF_TOKEN_IDENTITIES: readonly FrameworkExportIdentity[] = [
 const SERVER_CALL_FACTORY_IDENTITIES: readonly FrameworkExportIdentity[] = [
   ENDPOINT_FACTORY_IDENTITY,
   MUTATION_FACTORY_IDENTITY,
+  QUERY_FACTORY_IDENTITY,
   TASK_FACTORY_IDENTITY,
   WEBHOOK_FACTORY_IDENTITY,
 ];
@@ -306,6 +312,7 @@ export function parseComponentModule(
   const moduleSpecifiers: ModuleSpecifierModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
   const namedImports: NamedImportModel[] = [];
+  const queryHandlers: MutationHandlerModel[] = [];
   const statementLength = compilerArrayLength(sourceFile.statements, 'Source file statements');
   for (let index = 0; index < statementLength; index += 1) {
     const statement = compilerOwnDataValue(
@@ -424,6 +431,13 @@ export function parseComponentModule(
           'Mutation handler models',
         );
       }
+      if (frameworkExportEquals(factoryIdentity, QUERY_FACTORY_IDENTITY)) {
+        appendDenseValues(
+          queryHandlers,
+          queryLoadHandlerModels(sourceFile, source, node),
+          'Query load handler models',
+        );
+      }
       if (frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)) {
         appendDenseValues(
           taskRunHandlers,
@@ -464,6 +478,7 @@ export function parseComponentModule(
     moduleSpecifiers,
     mutationHandlers,
     namedImports,
+    queryHandlers,
     renderSourceReturns,
     sourceFile,
     taskRunHandlers,
@@ -1241,6 +1256,10 @@ export function mutationHandlers(model: ComponentModuleModel): MutationHandlerMo
   return snapshotCompilerModelArray(model.mutationHandlers, 'Mutation handlers');
 }
 
+export function queryHandlers(model: ComponentModuleModel): MutationHandlerModel[] {
+  return snapshotCompilerModelArray(model.queryHandlers, 'Query handlers');
+}
+
 /**
  * @internal Producer-owned browser-authority provenance for SPEC §6.6 / KV418. Positive
  * facts override the ordinary guard/session-derived mutation posture in the build
@@ -1380,7 +1399,7 @@ export function mutationHandlerFingerprintFromRuntimeSource(source: string): str
 function mutationHandlerFingerprint(
   sourceFile: ts.SourceFile,
   source: string,
-  handler: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration,
+  handler: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression | ts.MethodDeclaration,
 ): string | undefined {
   return mutationHandlerSourceFingerprint(
     compilerStringSlice(source, handler.getStart(sourceFile), handler.getEnd()),
@@ -2275,7 +2294,8 @@ function mutationHandlerModels(
   call: ts.CallExpression,
 ): MutationHandlerModel[] {
   const owner = mutationOwner(sourceFile, call);
-  const entries = handlerPropertyEntries(sourceFile, source, call);
+  const inspection = inspectHandlerProperty(sourceFile, source, call, 'handler', 'mutation');
+  const entries = inspection.entries;
   const result: MutationHandlerModel[] = [];
   for (let index = 0; index < entries.length; index += 1) {
     const { body, handler, model, parameters } = entries[index]!;
@@ -2293,7 +2313,13 @@ function mutationHandlerModels(
           surface: 'mutation',
         }),
         mutationOwner: owner,
-        ...serverSecurityOperationModel(sourceFile, body, 'mutation', parameters),
+        ...serverSecurityOperationModel(
+          sourceFile,
+          body,
+          'mutation',
+          parameters,
+          `mutation:${owner.value}`,
+        ),
         ...(handlerReadsAmbientCookie(body, parameters)
           ? { readsAmbientCookie: true as const }
           : {}),
@@ -2301,6 +2327,14 @@ function mutationHandlerModels(
       'Compiler packages/compiler/src/scan/parse.ts collection',
     );
   }
+  appendOpaqueHandlerRootModel(
+    result,
+    sourceFile,
+    source,
+    call,
+    `mutation:${owner.value}`,
+    inspection.violations,
+  );
   return result;
 }
 
@@ -3223,7 +3257,8 @@ function endpointHandlerModels(
   call: ts.CallExpression,
 ): MutationHandlerModel[] {
   const owner = endpointOwner(call);
-  const entries = handlerPropertyEntries(sourceFile, source, call);
+  const inspection = inspectHandlerProperty(sourceFile, source, call, 'handler', 'endpoint');
+  const entries = inspection.entries;
   const result: MutationHandlerModel[] = [];
   const entryLength = compilerArrayLength(entries, 'Endpoint handler entries');
   for (let index = 0; index < entryLength; index += 1) {
@@ -3239,41 +3274,86 @@ function endpointHandlerModels(
           owner,
           surface: 'endpoint',
         }),
-        ...serverSecurityOperationModel(sourceFile, entry.body, 'endpoint', entry.parameters),
+        ...serverSecurityOperationModel(
+          sourceFile,
+          entry.body,
+          'endpoint',
+          entry.parameters,
+          `endpoint:${owner.value}`,
+        ),
       },
       'Endpoint handler models',
     );
   }
+  appendOpaqueHandlerRootModel(
+    result,
+    sourceFile,
+    source,
+    call,
+    `endpoint:${owner.value}`,
+    inspection.violations,
+  );
   return result;
 }
 
 interface HandlerPropertyEntry {
   body: ts.ConciseBody;
-  handler: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration;
+  handler: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression | ts.MethodDeclaration;
   model: MutationHandlerModel;
   parameters: ts.NodeArray<ts.ParameterDeclaration>;
 }
 
-function handlerPropertyEntries(
+interface HandlerPropertyInspection {
+  readonly entries: HandlerPropertyEntry[];
+  readonly violations: SecurityOperationViolationModel[];
+}
+
+function inspectHandlerProperty(
   sourceFile: ts.SourceFile,
   source: string,
   call: ts.CallExpression,
-): HandlerPropertyEntry[] {
-  let options: ts.ObjectLiteralExpression | undefined;
+  propertyName: string,
+  surface: SecurityOperationSurface,
+): HandlerPropertyInspection {
+  const violations: SecurityOperationViolationModel[] = [];
+  const appendViolation = (node: ts.Node, detail: string): void => {
+    compilerArrayAppend(
+      violations,
+      {
+        detail,
+        kind: 'computed-security-operation',
+        span: { end: node.getEnd(), start: node.getStart(sourceFile) },
+        surface,
+      },
+      'Handler-root security-operation violations',
+    );
+  };
+
+  let optionsArgument: ts.Expression | undefined;
   const argumentLength = compilerArrayLength(call.arguments, 'Handler factory arguments');
-  for (let index = 0; index < argumentLength; index += 1) {
-    const argument = compilerOwnDataValue(call.arguments, index, 'Handler factory arguments') as
-      | ts.Expression
-      | undefined;
-    if (!argument) throw new TypeError(`Handler factory arguments[${index}] must be own data.`);
-    if (ts.isObjectLiteralExpression(argument)) {
-      options = argument;
-      break;
-    }
+  const optionsIndex = argumentLength >= 2 ? 1 : 0;
+  if (optionsIndex < argumentLength) {
+    optionsArgument = compilerOwnDataValue(
+      call.arguments,
+      optionsIndex,
+      'Handler factory arguments',
+    ) as ts.Expression | undefined;
   }
-  if (!options || !ts.isObjectLiteralExpression(options)) return [];
+  if (!optionsArgument) {
+    appendViolation(call, `${surface} must declare one finite ${propertyName} root`);
+    return { entries: [], violations };
+  }
+  const options = unwrapExpression(optionsArgument);
+  if (!ts.isObjectLiteralExpression(options)) {
+    appendViolation(
+      optionsArgument,
+      `${surface} ${propertyName} root must be declared in an inline definition object`,
+    );
+    return { entries: [], violations };
+  }
 
   const result: HandlerPropertyEntry[] = [];
+  let matchingPropertyCount = 0;
   const propertyLength = compilerArrayLength(options.properties, 'Handler factory properties');
   for (let index = 0; index < propertyLength; index += 1) {
     const property = compilerOwnDataValue(
@@ -3282,7 +3362,25 @@ function handlerPropertyEntries(
       'Handler factory properties',
     ) as ts.ObjectLiteralElementLike | undefined;
     if (!property) throw new TypeError(`Handler factory properties[${index}] must be own data.`);
-    if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === 'handler') {
+    if (ts.isSpreadAssignment(property)) {
+      appendViolation(
+        property,
+        `${surface} definition spread can add or replace the ${propertyName} root`,
+      );
+      continue;
+    }
+    if (property.name && ts.isComputedPropertyName(property.name)) {
+      const computedName = propertyNameText(property.name);
+      if (computedName === null) {
+        appendViolation(
+          property.name,
+          `${surface} definition has a computed property that can replace the ${propertyName} root`,
+        );
+        continue;
+      }
+    }
+    if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === propertyName) {
+      matchingPropertyCount += 1;
       if (property.body) {
         compilerArrayAppend(
           result,
@@ -3294,28 +3392,121 @@ function handlerPropertyEntries(
           },
           'Compiler packages/compiler/src/scan/parse.ts collection',
         );
+      } else {
+        appendViolation(property, `${surface} ${propertyName} root has no analyzable body`);
       }
       continue;
     }
 
-    if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== 'handler') {
+    let initializer: ts.Expression | undefined;
+    if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === propertyName) {
+      matchingPropertyCount += 1;
+      initializer = unwrapExpression(property.initializer);
+    } else if (ts.isShorthandPropertyAssignment(property) && property.name.text === propertyName) {
+      matchingPropertyCount += 1;
+      initializer = property.name;
+    } else {
+      if (propertyNameText(property.name) === propertyName) {
+        matchingPropertyCount += 1;
+        appendViolation(
+          property,
+          `${surface} ${propertyName} root is not a callable data property`,
+        );
+      }
       continue;
     }
 
-    const initializer = unwrapExpression(property.initializer);
-    if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) continue;
+    const resolved =
+      initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+        ? {
+            body: initializer.body,
+            handler: initializer,
+            parameters: initializer.parameters,
+          }
+        : initializer
+          ? resolveSameFileSecurityIrCallable(sourceFile, initializer)
+          : undefined;
+    if (!resolved) {
+      appendViolation(
+        initializer ?? property,
+        `${surface} ${propertyName} root is imported, aliased, reassigned, or otherwise unresolved`,
+      );
+      continue;
+    }
 
     compilerArrayAppend(
       result,
       {
-        body: initializer.body,
-        handler: initializer,
-        model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
-        parameters: initializer.parameters,
+        body: resolved.body,
+        handler: 'handler' in resolved ? resolved.handler : resolved.declaration,
+        model: functionBodyModel(sourceFile, source, resolved.body, resolved.parameters),
+        parameters: resolved.parameters,
       },
       'Compiler packages/compiler/src/scan/parse.ts collection',
     );
   }
+  if (matchingPropertyCount === 0) {
+    appendViolation(options, `${surface} must declare one finite ${propertyName} root`);
+  } else if (matchingPropertyCount > 1) {
+    appendViolation(options, `${surface} declares multiple competing ${propertyName} roots`);
+  }
+  return { entries: result, violations };
+}
+
+function appendOpaqueHandlerRootModel(
+  target: MutationHandlerModel[],
+  sourceFile: ts.SourceFile,
+  source: string,
+  call: ts.CallExpression,
+  root: string,
+  violations: readonly SecurityOperationViolationModel[],
+): void {
+  if (violations.length === 0) return;
+  const span = { end: call.getEnd(), start: call.getStart(sourceFile) };
+  compilerArrayAppend(
+    target,
+    {
+      body: compilerStringSlice(source, span.start, span.end),
+      bodyEnd: span.end,
+      bodyPropertyAccesses: [],
+      bodyStart: span.start,
+      paramNames: [],
+      params: [],
+      paramSpans: [],
+      securityOperations: [
+        { door: 'handler-root', kind: 'server.handler.root', span, target: root },
+      ],
+      securityOperationViolations: violations,
+    },
+    'Opaque handler-root models',
+  );
+}
+
+function queryLoadHandlerModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  call: ts.CallExpression,
+): MutationHandlerModel[] {
+  const key = taskKey(sourceFile, call);
+  const root = `query:${key}`;
+  const inspection = inspectHandlerProperty(sourceFile, source, call, 'load', 'query');
+  const result: MutationHandlerModel[] = [];
+  const entryLength = compilerArrayLength(inspection.entries, 'Query load entries');
+  for (let index = 0; index < entryLength; index += 1) {
+    const entry = compilerOwnDataValue(inspection.entries, index, 'Query load entries') as
+      | HandlerPropertyEntry
+      | undefined;
+    if (!entry) throw new TypeError(`Query load entries[${index}] must be own data.`);
+    compilerArrayAppend(
+      result,
+      {
+        ...entry.model,
+        ...serverSecurityOperationModel(sourceFile, entry.body, 'query', entry.parameters, root),
+      },
+      'Query load handler models',
+    );
+  }
+  appendOpaqueHandlerRootModel(result, sourceFile, source, call, root, inspection.violations);
   return result;
 }
 
@@ -3330,7 +3521,8 @@ function webhookHandlerModels(
   const declaredWriteKeys = definition
     ? webhookDeclaredWriteKeys(sourceFile, definition, domainBindings)
     : [];
-  const entries = handlerPropertyEntries(sourceFile, source, call);
+  const inspection = inspectHandlerProperty(sourceFile, source, call, 'handler', 'webhook');
+  const entries = inspection.entries;
   const result: WebhookHandlerModel[] = [];
   const entryLength = compilerArrayLength(entries, 'Webhook handler entries');
   for (let index = 0; index < entryLength; index += 1) {
@@ -3377,10 +3569,45 @@ function webhookHandlerModels(
           contextParamName,
           'runMutation',
         ),
-        ...serverSecurityOperationModel(sourceFile, entry.body, 'webhook', entry.parameters),
+        ...serverSecurityOperationModel(
+          sourceFile,
+          entry.body,
+          'webhook',
+          entry.parameters,
+          `webhook:${owner.value}`,
+        ),
       },
       'Webhook handler models',
     );
+  }
+  if (inspection.violations.length > 0) {
+    const opaque: MutationHandlerModel[] = [];
+    appendOpaqueHandlerRootModel(
+      opaque,
+      sourceFile,
+      source,
+      call,
+      `webhook:${owner.value}`,
+      inspection.violations,
+    );
+    const opaqueLength = compilerArrayLength(opaque, 'Opaque webhook handler roots');
+    for (let index = 0; index < opaqueLength; index += 1) {
+      const model = compilerOwnDataValue(opaque, index, 'Opaque webhook handler roots') as
+        | MutationHandlerModel
+        | undefined;
+      if (!model) throw new TypeError(`Opaque webhook handler roots[${index}] must be own data.`);
+      compilerArrayAppend(
+        result,
+        {
+          ...model,
+          declaredWriteKeys,
+          owner,
+          runMutationEdges: [],
+          webhookRecordChanges: [],
+        },
+        'Opaque webhook handler models',
+      );
+    }
   }
   return result;
 }
@@ -3391,21 +3618,16 @@ function taskRunHandlerModels(
   call: ts.CallExpression,
 ): TaskRunHandlerModel[] {
   const definition = taskDefinitionObject(call);
-  if (!definition) return [];
-
   const key = taskKey(sourceFile, call);
-  const cron = staticStringObjectProperty(definition, 'cron');
+  const cron = definition ? staticStringObjectProperty(definition, 'cron') : undefined;
+  const inspection = inspectHandlerProperty(sourceFile, source, call, 'run', 'task');
   const result: TaskRunHandlerModel[] = [];
-  const propertyLength = compilerArrayLength(definition.properties, 'Task definition properties');
-  for (let index = 0; index < propertyLength; index += 1) {
-    const property = compilerOwnDataValue(
-      definition.properties,
-      index,
-      'Task definition properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
-    if (!property) throw new TypeError(`Task definition properties[${index}] must be own data.`);
-    const handler = runHandlerModel(sourceFile, source, property);
-    if (!handler) continue;
+  const entryLength = compilerArrayLength(inspection.entries, 'Task run entries');
+  for (let index = 0; index < entryLength; index += 1) {
+    const handler = compilerOwnDataValue(inspection.entries, index, 'Task run entries') as
+      | HandlerPropertyEntry
+      | undefined;
+    if (!handler) throw new TypeError(`Task run entries[${index}] must be own data.`);
     const ctxParam = ownOptionalString(handler.model.paramNames, 1, 'Task handler parameters');
     compilerArrayAppend(
       result,
@@ -3426,10 +3648,46 @@ function taskRunHandlerModels(
         ),
         runQueryEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'runQuery'),
         scheduleEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'schedule'),
-        ...serverSecurityOperationModel(sourceFile, handler.body, 'task', handler.parameters),
+        ...serverSecurityOperationModel(
+          sourceFile,
+          handler.body,
+          'task',
+          handler.parameters,
+          `task:${key}`,
+        ),
       },
       'Task run handler models',
     );
+  }
+  if (inspection.violations.length > 0) {
+    const opaque: MutationHandlerModel[] = [];
+    appendOpaqueHandlerRootModel(
+      opaque,
+      sourceFile,
+      source,
+      call,
+      `task:${key}`,
+      inspection.violations,
+    );
+    const opaqueLength = compilerArrayLength(opaque, 'Opaque task run roots');
+    for (let index = 0; index < opaqueLength; index += 1) {
+      const model = compilerOwnDataValue(opaque, index, 'Opaque task run roots') as
+        | MutationHandlerModel
+        | undefined;
+      if (!model) throw new TypeError(`Opaque task run roots[${index}] must be own data.`);
+      compilerArrayAppend(
+        result,
+        {
+          ...model,
+          ...(cron === undefined ? {} : { cron }),
+          key,
+          runMutationEdges: [],
+          runQueryEdges: [],
+          scheduleEdges: [],
+        },
+        'Opaque task run handler models',
+      );
+    }
   }
   return result;
 }
@@ -3926,36 +4184,6 @@ function domainKeyFromExpression(
   return key && ts.isStringLiteralLike(key) ? key.text : 'UNRESOLVED';
 }
 
-function runHandlerModel(
-  sourceFile: ts.SourceFile,
-  source: string,
-  property: ts.ObjectLiteralElementLike,
-): {
-  body: ts.ConciseBody;
-  model: MutationHandlerModel;
-  parameters: ts.NodeArray<ts.ParameterDeclaration>;
-} | null {
-  if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === 'run') {
-    if (!property.body) return null;
-    return {
-      body: property.body,
-      model: functionBodyModel(sourceFile, source, property.body, property.parameters),
-      parameters: property.parameters,
-    };
-  }
-
-  if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== 'run') return null;
-
-  const initializer = property.initializer;
-  if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) return null;
-
-  return {
-    body: initializer.body,
-    model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
-    parameters: initializer.parameters,
-  };
-}
-
 function functionBodyModel(
   sourceFile: ts.SourceFile,
   source: string,
@@ -3997,12 +4225,35 @@ function functionBodyModel(
 function serverSecurityOperationModel(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
-  surface: HandlerWriteSinkSurface,
+  surface: SecurityOperationSurface,
   parameters: readonly ts.ParameterDeclaration[],
+  root: string,
 ): Pick<MutationHandlerModel, 'securityOperations' | 'securityOperationViolations'> {
   const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters);
+  const securityOperations: ServerSecurityOperationModel[] = [
+    {
+      door: 'handler-root',
+      kind: 'server.handler.root',
+      span: { end: body.getEnd(), start: body.getStart(sourceFile) },
+      target: root,
+    },
+  ];
+  const operationLength = compilerArrayLength(facts.operations, 'Server security operations');
+  for (let index = 0; index < operationLength; index += 1) {
+    const operation = compilerOwnDataValue(
+      facts.operations,
+      index,
+      'Server security operations',
+    ) as ServerSecurityOperationModel | undefined;
+    if (!operation) throw new TypeError(`Server security operations[${index}] must be own data.`);
+    compilerArrayAppend(
+      securityOperations,
+      operation.kind === 'server.helper.call' ? { ...operation, root } : operation,
+      'Rooted server security operations',
+    );
+  }
   return {
-    ...(facts.operations.length === 0 ? {} : { securityOperations: facts.operations }),
+    securityOperations,
     ...(facts.violations.length === 0 ? {} : { securityOperationViolations: facts.violations }),
   };
 }

@@ -1089,6 +1089,84 @@ export const AddToCartForm = component({
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([]);
   });
 
+  it('accepts ordinary checkbox, radio-group, and mutually exclusive submitter semantics', () => {
+    const result = compileComponentModule({
+      fileName: 'preference-form.tsx',
+      source: `
+export const updatePreferences = mutation({
+  input: s.object({
+    emailOptIn: s.boolean(),
+    plan: s.enum(['team', 'enterprise']),
+    intent: s.string(),
+  }),
+  handler() {
+    return null;
+  },
+});
+
+export const PreferenceForm = component({
+  render: () => (
+    <form enhance mutation={updatePreferences}>
+      <input type="checkbox" name="emailOptIn" />
+      <input type="radio" name="plan" value="team" checked />
+      <input type="radio" name="plan" value="enterprise" />
+      <button name="intent" value="preview">Preview</button>
+      <button name="intent" value="save">Save</button>
+      <button type="button" name="intent" value="ignored">Open help</button>
+      <input type="reset" name="intent" value="ignored" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual([]);
+  });
+
+  it('rejects ambiguous checkbox groups, image submitters, and dynamic control types', () => {
+    const result = compileComponentModule({
+      fileName: 'ambiguous-preference-form.tsx',
+      source: `
+export const updatePreferences = mutation({
+  input: s.object({ features: s.string(), intent: s.string(), choice: s.string() }),
+  handler() {
+    return null;
+  },
+});
+
+export const PreferenceForm = component({
+  render: ({ inputType }) => (
+    <form enhance mutation={updatePreferences}>
+      <input type="checkbox" name="features" value="alerts" />
+      <input type="checkbox" name="features" value="digest" />
+      <input type="image" name="intent" src="/submit.png" />
+      <input type={inputType} name="choice" formAction="/elsewhere" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining('repeated field "features" is not supported'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining('image submitter field "intent" is not supported'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining('field "choice" has a non-static type'),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining(
+            'formAction cannot override a typed enhanced mutation transport',
+          ),
+        }),
+      ]),
+    );
+  });
+
   it('reports KV242 for dynamic and unsupported enhanced mutation controls', () => {
     const result = compileComponentModule({
       fileName: 'add-to-cart-form.tsx',
@@ -1132,12 +1210,6 @@ export const AddToCartForm = component({
         }),
         expect.objectContaining({
           message: expect.stringContaining('file input field "upload" is not supported'),
-        }),
-        expect.objectContaining({
-          message: expect.stringContaining('checkbox field "agree" is not supported'),
-        }),
-        expect.objectContaining({
-          message: expect.stringContaining('radio field "choice" is not supported'),
         }),
         expect.objectContaining({
           message: expect.stringContaining('multiple select field "tags" is not supported'),

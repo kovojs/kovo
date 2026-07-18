@@ -6,6 +6,7 @@ import {
 } from '#security-witness-intrinsics';
 
 import { SAFE_URL_SCHEMES, URL_ATTRIBUTE_NAMES } from './security-url.js';
+import type { SecurityOperationKind } from './security-operation-ir.js';
 
 /** @internal */
 export interface SourceSinkInventoryEntry {
@@ -79,6 +80,8 @@ export interface BoundaryCrossingSinkInventoryEntry {
   mechanismDetail: string;
   /** Stable team/module ownership for gaps and incident follow-up. */
   owner: string;
+  /** Finite compiler-owned effects whose real sink is discharged by this row. */
+  operationKinds: readonly SecurityOperationKind[];
   proofEvidence: readonly string[];
   /** Root command that fails when this row or its cited proof drifts. */
   proofGate: string;
@@ -866,6 +869,11 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'reconstruct',
     mechanismDetail:
       'The managed SQL boundary snapshots every accepted statement carrier into one immutable statement artifact before validation, classification, instrumentation, and driver execution.',
+    operationKinds: [
+      'server.database.read',
+      'server.database.trusted-sql',
+      'server.database.write',
+    ],
     owner: '@kovojs/server/managed-db',
     proofEvidence: [
       'packages/server/src/managed-db.test.ts',
@@ -885,6 +893,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'reconstruct',
     mechanismDetail:
       'Framework wire helpers reconstruct fragment/query/error bodies from normalized values and escaped text instead of forwarding caller-owned body strings through privileged response paths.',
+    operationKinds: ['server.response.outcome', 'server.response.raw'],
     owner: '@kovojs/server/wire-output',
     proofEvidence: [
       'packages/server/src/wire-html.test.ts',
@@ -911,6 +920,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'own',
     mechanismDetail:
       'Direct app inputs pass an exact metadata allowlist before framework fields are assembled; static export rejects durable browser-state instructions, while typed, raw, live-adapter, and generated-adapter finalization own the browser-state private/no-store floor and the transport-owned framing/hop-by-hop deny set before transport mutation.',
+    operationKinds: ['server.response.header'],
     owner: '@kovojs/server/response-finalization',
     proofEvidence: [
       'packages/server/src/response-app-headers.test.ts',
@@ -938,6 +948,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'reconstruct',
     mechanismDetail:
       'Redirect targets are normalized back into same-origin path-form values before Location is emitted.',
+    operationKinds: ['server.response.redirect'],
     owner: '@kovojs/server/response-posture',
     proofEvidence: [
       'packages/server/src/response-posture.test.ts',
@@ -957,6 +968,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'own',
     mechanismDetail:
       'Cookie values cross the boundary only through the typed cookie builder, which owns encoding and attribute serialization.',
+    operationKinds: ['server.response.cookie'],
     owner: '@kovojs/server/cookies',
     proofEvidence: [
       'packages/server/src/cookies.test.ts',
@@ -976,6 +988,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'own',
     mechanismDetail:
       'Storage keys, file paths, and static-export outputs cross through framework-owned containment and reserved-reference gates.',
+    operationKinds: ['server.storage.read', 'server.storage.write'],
     owner: '@kovojs/core/storage',
     proofEvidence: [
       'packages/core/src/storage.test.ts',
@@ -995,6 +1008,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'own',
     mechanismDetail:
       'Durable-task args and status payloads cross process/store boundaries through framework-owned queue envelopes and redaction-aware observability views.',
+    operationKinds: ['server.task.compose'],
     owner: '@kovojs/server/task-runner',
     proofEvidence: [
       'packages/server/src/task-observability.test.ts',
@@ -1015,6 +1029,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'own',
     mechanismDetail:
       'Webhook payload bytes remain framework-owned until verifier-before-parse and replay posture accept them.',
+    operationKinds: [],
     owner: '@kovojs/server/webhook',
     proofEvidence: [
       'packages/server/src/webhook.test.ts',
@@ -1034,6 +1049,18 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'reconstruct',
     mechanismDetail:
       'Renderer and browser output helpers reconstruct HTML/DOM output from contextual encoders or explicit trustedHtml/trustedUrl escapes.',
+    operationKinds: [
+      'browser.dialog.close',
+      'browser.dialog.open',
+      'browser.dom.focus',
+      'browser.event.control',
+      'browser.event.read',
+      'browser.form.reset',
+      'browser.form.submit',
+      'browser.state.read',
+      'browser.state.write',
+      'server.output.trusted-html',
+    ],
     owner: '@kovojs/compiler/output-context',
     proofEvidence: [
       'packages/browser/src/security-output.test.ts',
@@ -1054,6 +1081,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'box',
     mechanismDetail:
       'Secret and redacted runtime boxes refuse accidental coercion and are normalized to redacted or empty error payloads before logs, status views, or wire-visible error shells.',
+    operationKinds: [],
     owner: '@kovojs/core/secret',
     proofEvidence: [
       'packages/core/src/secret.test.ts',
@@ -1071,6 +1099,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'own',
     mechanismDetail:
       'Outbound network requests use the framework allowlist choke instead of arbitrary request-authored fetch targets on privileged task/runtime surfaces.',
+    operationKinds: ['server.egress.request'],
     owner: '@kovojs/server/egress',
     proofEvidence: ['packages/server/src/task-runner.test.ts'],
     proofGate: 'pnpm run check:egress-boundary',
@@ -1087,6 +1116,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     mechanism: 'own',
     mechanismDetail:
       'The served Postgres path derives one pinned principal and delegates row/column authority to the least-privilege runtime-role privilege graph, FORCE-RLS policies, and closure-audited reachable objects.',
+    operationKinds: ['server.authority.scope'],
     owner: '@kovojs/server/postgres-authz',
     proofEvidence: [
       'packages/server/src/postgres-authz.test.ts',
@@ -1103,15 +1133,24 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     hostileValueEvidence: [
       'packages/browser/src/handlers.test.ts',
       'packages/compiler/src/conformance-compat.test.ts',
+      'packages/compiler/src/security-operation-ir.security.test.ts',
       'packages/cli/src/index.kovo-build.test.ts',
     ],
     mechanism: 'own',
     mechanismDetail:
-      'Compiler-owned versioned handler modules and reviewed build/runtime capability doors own dynamic loading and process authority; app-authored request values cannot select an ambient execution sink.',
+      'Compiler-owned versioned handler modules and reviewed build/runtime capability doors own dynamic loading and process authority. Handler-root census records and exact same-file helper-call edges keep supported roots and unresolved semantic-summary obligations visible; they do not claim a downstream runtime effect.',
+    operationKinds: [
+      'browser.framework.call',
+      'browser.timer.cancel',
+      'browser.timer.schedule',
+      'server.handler.root',
+      'server.helper.call',
+    ],
     owner: '@kovojs/compiler/capability-closure',
     proofEvidence: [
       'packages/browser/src/handlers.test.ts',
       'packages/compiler/src/conformance-compat.test.ts',
+      'packages/compiler/src/security-operation-ir.security.test.ts',
       'packages/cli/src/index.kovo-build.test.ts',
     ],
     proofGate: 'pnpm run check:sink-policy',

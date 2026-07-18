@@ -319,6 +319,14 @@ require a stable owner and an existing root proof command, and verify that every
 citation names a live file. Adding a source/sink family without discharging it through this table
 therefore fails `pnpm run check`.
 
+The same executable inventory owns the finite compiler security-operation vocabulary from §4.3 and
+§6.6. Every member of `securityOperationKinds` MUST occur in the `operationKinds` of exactly one C9
+row. A missing operation, an operation unknown to the canonical union, or duplicate ownership is a
+gate failure. This assignment ties terminal-effect evidence to the real sink owner and ties
+`server.handler.root`/`server.helper.call` control records to capability closure. Those records keep
+the root census and unresolved local-call summary edge visible; they do not assert a runtime effect.
+The generated operation manifest is never itself the runtime door.
+
 | Sink                                | Owner                                  | Mechanism            | Sole door                                                                                    | Root proof gate                       | Hostile-value evidence                                                                      |
 | ----------------------------------- | -------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
 | DB driver statement                 | `@kovojs/server/managed-db`            | reconstruct          | Immutable managed-statement snapshot plus engine policy                                      | `pnpm run check:single-choke`         | `packages/server/src/managed-db.test.ts`                                                    |

@@ -44,6 +44,7 @@ export interface StaticJsxWireAttributeEntry {
 }
 
 export type HandlerWriteSinkSurface = 'endpoint' | 'mutation' | 'task' | 'webhook';
+export type SecurityOperationSurface = HandlerWriteSinkSurface | 'query';
 
 export type HandlerWriteSinkOperationKind =
   | 'batch'
@@ -119,6 +120,7 @@ export interface ServerSecurityOperationModel {
   door: SecurityOperationDoor;
   justification?: string;
   kind: ServerSecurityOperationKind;
+  root?: string;
   span: SourceSpan;
   target?: string;
 }
@@ -132,7 +134,7 @@ export interface SecurityOperationViolationModel {
     | 'raw-dom-operation'
     | 'unknown-security-operation';
   span: SourceSpan;
-  surface: HandlerWriteSinkSurface | 'browser';
+  surface: SecurityOperationSurface | 'browser';
 }
 
 export interface TaskRunHandlerModel extends MutationHandlerModel {
@@ -445,6 +447,7 @@ export interface ComponentModuleModel {
   moduleSpecifiers: readonly ModuleSpecifierModel[];
   mutationHandlers: readonly MutationHandlerModel[];
   namedImports: readonly NamedImportModel[];
+  queryHandlers: readonly MutationHandlerModel[];
   renderSourceReturns: readonly StringRenderModel[];
   taskRunHandlers: readonly TaskRunHandlerModel[];
   webhookHandlers: readonly WebhookHandlerModel[];

@@ -399,6 +399,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
         [
           `OPERATION ${operation.kind}`,
           `door=${operation.door}`,
+          `root=${operation.root ?? '-'}`,
           `target=${operation.target ?? '-'}`,
           `justification=${operation.justification ?? '-'}`,
         ].join(' '),

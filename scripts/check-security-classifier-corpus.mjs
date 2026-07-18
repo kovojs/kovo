@@ -1687,6 +1687,16 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: ['packages/compiler/src/security-operation-ir.security.test.ts'],
     verdictAnchors: [
       {
+        id: 'exact-emitted-browser-and-server-operation-manifests',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'carries exact compiler-derived operations in emitted browser and server artifacts',
+          'securityHandler([',
+          '__kovoSecurityOperationManifest_v1',
+          'kovo-security-operation-ir/v1',
+        ],
+      },
+      {
         id: 'realistic-reviewed-browser-operations',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
@@ -1708,6 +1718,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'browser-authority-alias-and-container-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'closes %s across browser authority aliases and containers',
+          'destructured DOM method alias',
+          'mutable DOM receiver transfer',
+          'container-carried DOM receiver',
+          'constructor-carried DOM receiver',
+          'local helper authority transfer',
+          'Reflect.set',
+        ],
+      },
+      {
         id: 'structured-server-and-exception-doors',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
@@ -1716,6 +1739,42 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'computed managed database method',
           'raw Response from mutation',
           'requires static justifications on the trustedSql and trustedHtml exceptional doors',
+        ],
+      },
+      {
+        id: 'server-authority-alias-helper-and-transfer-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'closes structured server authority across receiver, scope, and destructured-call aliases',
+          'fails closed when %s',
+          'authority passed to an imported helper',
+          'authority carried through an object container',
+          'enrolls exact same-file authority helpers as reviewed local call edges',
+          'server.helper.call',
+          'keeps reviewed operation results as plain helper data rather than capabilities',
+        ],
+      },
+      {
+        id: 'server-root-census-and-query-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'enrolls inline and same-file referenced server roots in emitted manifests',
+          'server.handler.root',
+          'query:catalog/read',
+          'fails closed instead of silently dropping an %s root',
+          'rejects managed database writes from an enrolled query root',
+        ],
+      },
+      {
+        id: 'server-framework-identity-and-principal-scope-operations',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'preserves exact framework identity through namespace exceptional-door imports',
+          'classifies managed mutation-request and explicit principal-scope database operations',
+          'server.authority.scope',
+          'server.database.read',
+          'server.database.write',
+          'server.task.compose',
         ],
       },
       {

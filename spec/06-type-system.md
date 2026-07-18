@@ -303,6 +303,49 @@ diagnostic. This is a conservative proof about accidental authority in Kovo's su
 authoring subset; consistent with the trusted application-code boundary above, it is not a
 same-realm JavaScript sandbox or a claim about deliberately hostile dependencies.
 
+**Finite operation closure (normative, supported-subset static gate).** Capability closure answers
+which code and reviewed doors are reachable; the finite security-operation IR answers which
+security-relevant effects a supported handler can perform. Its browser vocabulary is closed in
+§4.3. Its structured-server vocabulary is exactly: principal-scope acquisition; managed database
+read/write; justified trusted SQL; framework egress; justified trusted HTML; cookie/header/outcome,
+raw-response, and redirect response effects; storage read/write; task composition; plus the
+compiler-control records `server.handler.root` and `server.helper.call`. The root record enrolls each
+supported query, mutation, endpoint, webhook, and task body even when it has no terminal effects.
+The helper-call record names an exact immutable same-file callable that received authority and
+carries the source-derived handler root on the edge; it is an open semantic-summary edge, not
+evidence about effects inside that helper. The inventory in
+`securityOperationKinds` is the canonical union. C9 assigns terminal effects to one real boundary
+owner and the two control records to capability closure. Adding a kind without exactly one owner, or
+an inventory row that names an unknown/duplicate kind, fails `check:c9-sink-inventory`.
+
+Classification follows symbol identity and monotone receiver provenance, not variable spelling.
+Endpoint/query/task context is the declared context parameter; a mutation's request and context are
+the second and third parameters respectively. Context, principal scope, database, headers, storage,
+`Response`, and their destructured method aliases retain authority through direct immutable aliases.
+An ambiguous/mutable join, computed terminal method, raw database client member, authority-bearing
+container or constructor, or return of authority is unsupported and MUST fail closed with
+**KV449**. Authority may pass to an exact immutable same-file function only by emitting a
+`server.helper.call` edge with its local identity. Imported, foreign, computed, aliased, reassigned,
+or unresolved helpers remain KV449. This finite edge enrollment does not inspect or summarize the
+helper body: Phase 2C MUST discharge it with an explicit bottom-up semantic summary before Kovo can
+claim cross-helper effect closure. A helper may always consume plain data returned by a reviewed
+operation, or the capability-closed module graph may terminate at an exact reviewed framework door.
+Namespace and named imports of the three exceptional operations preserve exact
+framework identity: `trustedSql` and `trustedHtml` require a static justification, and raw
+`Response` use is admitted only where the declared endpoint posture supplies the compiler-owned
+justification. App spelling, a same-named local, a cast, or a generated manifest cannot mint a door.
+
+This layer deliberately does not claim general JavaScript interpretation or same-realm isolation.
+The emitted operation lists are immutable, inspectable audit evidence consumed by component graphs
+and `kovo explain`; they are not an opcode sandbox and do not replace the actual C9 sink checks.
+Every supported factory root MUST resolve from an inline definition object to either an inline
+function or one exact immutable same-file function. Definition spreads/computed root keys, missing
+roots, imported/aliased/reassigned roots, and dynamic definition carriers are KV449. This includes
+`query({ load })`: query roots appear in the emitted manifest even when the loader is effect-free,
+and a directly reached managed DB write from a query remains KV449. Value-flow beyond the closed
+alias/receiver and explicit local-call-edge rules above belongs to the normalized abstract
+interpreter; the edge preserves that obligation rather than guessing its downstream verdict.
+
 **Build-preset capability boundary (normative).** `KovoPreset` is an opaque, framework-owned
 selection token, not a public structural deployment descriptor. `node()`, `vercel()`, and
 `cloudflare()` mint exact frozen tokens registered by identity in a framework-private `WeakMap`;

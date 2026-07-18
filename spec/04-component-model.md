@@ -109,13 +109,19 @@ You author inline closures; the compiler lowers them (§5). The lowered form is 
 ```
 
 ```js
-// cart.client.js — GENERATED, but valid authorable Kovo source
-import { handler } from '@kovojs/browser';
+// cart.client.js — GENERATED compiler IR, never an app-authoring surface
+import { securityHandler } from '@kovojs/browser/generated';
 
 /** captures: item.id → element params */
-export const Cart$removeItem = handler<CartState, { itemId: string }>((e, ctx) => {
-  ctx.state.items = ctx.state.items.filter(i => i.id !== ctx.params.itemId);
-});
+export const Cart$removeItem = securityHandler(
+  [
+    { door: 'compiler-state', kind: 'browser.state.read', target: 'state.items' },
+    { door: 'compiler-state', kind: 'browser.state.write', target: 'state.items' },
+  ],
+  (event, ctx) => {
+    ctx.state.items = ctx.state.items.filter((i) => i.id !== ctx.params.itemId);
+  },
+);
 ```
 
 ```html
@@ -127,6 +133,19 @@ export const Cart$removeItem = handler<CartState, { itemId: string }>((e, ctx) =
 ```
 
 **Capture channels (exhaustive):** component/query state (via `ctx`), element params (`data-p-*`, typed — attribute values arrive as strings, so non-string params declare coercion once, schema-style, exactly like form fields §6.3), module scope (shared, not captured). Anything else is compile error `KV201`, whose message shows what the closure _would have_ compiled to and the three fixes.
+
+**Finite browser effects (normative).** Every serialized handler is classified before emission into
+the closed `kovo-security-operation-ir/v1` vocabulary: component state read/write; delegated-event
+scalar read/control; compiler-reviewed DOM focus; dialog open/close; form reset/submit; reviewed
+framework-client calls; and timer schedule/cancel. The generated `securityHandler(operations, fn)`
+wrapper carries that exact compiler-derived list into the immutable client module. It is a generated
+ABI and audit witness, not a public authoring helper and not an opcode interpreter. App source cannot
+construct, widen, or suppress the list. A raw browser global, unreviewed DOM property write/method,
+computed terminal operation, or authority-bearing receiver that escapes through an alias, mutable
+container, constructor, or unreviewed call is **KV449**. Scalar event/form reads and results returned
+from a reviewed operation remain ordinary data; they do not mint DOM authority. Named exceptional
+doors and the server half of this vocabulary are defined in §6.6, while §5.2 owns lowering and
+fixpoint behavior.
 
 ### 4.4 The loader
 

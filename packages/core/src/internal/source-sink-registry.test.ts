@@ -13,6 +13,7 @@ import {
   type BoundaryCrossingSinkInventoryEntry,
   type SourceSinkInventoryEntry,
 } from './source-sink-registry.js';
+import { securityOperationKinds } from './security-operation-ir.js';
 
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const rootScripts = (
@@ -56,6 +57,8 @@ function assertC9SinkInventoryComplete(
   const requiredSinks = new Set<string>(requiredC9SinkNames);
   const coveredFamilies = new Set<string>();
   const seenSinks = new Set<string>();
+  const requiredOperations = new Set(securityOperationKinds);
+  const seenOperations = new Set<string>();
 
   for (const entry of inventory) {
     assertNonBlank(entry.sink, 'C9 sink name');
@@ -79,6 +82,15 @@ function assertC9SinkInventoryComplete(
         throw new Error(`${entry.sink} cites unknown source/sink census family: ${family}.`);
       }
       coveredFamilies.add(family);
+    }
+    for (const operation of entry.operationKinds) {
+      if (!requiredOperations.has(operation)) {
+        throw new Error(`${entry.sink} cites unknown finite security operation: ${operation}.`);
+      }
+      if (seenOperations.has(operation)) {
+        throw new Error(`Duplicate C9 finite security-operation owner: ${operation}.`);
+      }
+      seenOperations.add(operation);
     }
 
     const proofGateMatch = /^pnpm run ([a-z0-9:-]+)$/u.exec(entry.proofGate);
@@ -118,6 +130,14 @@ function assertC9SinkInventoryComplete(
   if (missingFamilies.length > 0) {
     throw new Error(`C9 inventory is missing census families: ${missingFamilies.join(', ')}.`);
   }
+  const missingOperations = [...requiredOperations].filter(
+    (operation) => !seenOperations.has(operation),
+  );
+  if (missingOperations.length > 0) {
+    throw new Error(
+      `C9 inventory is missing finite security operations: ${missingOperations.join(', ')}.`,
+    );
+  }
 }
 
 function mutableBoundaryInventory(): BoundaryCrossingSinkInventoryEntry[] {
@@ -125,6 +145,7 @@ function mutableBoundaryInventory(): BoundaryCrossingSinkInventoryEntry[] {
     ...entry,
     censusFamilies: [...entry.censusFamilies],
     hostileValueEvidence: [...entry.hostileValueEvidence],
+    operationKinds: [...entry.operationKinds],
     proofEvidence: [...entry.proofEvidence],
   }));
 }
@@ -166,6 +187,7 @@ describe('boundary crossing sink inventory', () => {
       expect(entry.censusFamilies.length, entry.sink).toBeGreaterThan(0);
       expect(entry.mechanismDetail).not.toBe('');
       expect(entry.owner).not.toBe('');
+      expect(entry.operationKinds).toBeDefined();
       expect(entry.proofGate).toMatch(/^pnpm run [a-z0-9:-]+$/u);
       expect(entry.soleDoor).not.toBe('');
       expect(entry.hostileValueEvidence.length, entry.sink).toBeGreaterThan(0);
@@ -227,6 +249,12 @@ describe('boundary crossing sink inventory', () => {
     ).toEqual(['network.egress']);
   });
 
+  it('assigns every finite compiler-owned operation to exactly one C9 sink owner', () => {
+    const assigned = boundaryCrossingSinkInventory().flatMap((entry) => entry.operationKinds);
+    expect([...assigned].sort()).toEqual([...securityOperationKinds].sort());
+    expect(new Set(assigned).size).toBe(assigned.length);
+  });
+
   it('keeps every owner, proof gate, and hostile-value citation live', () => {
     expect(() =>
       assertC9SinkInventoryComplete(
@@ -271,6 +299,28 @@ describe('boundary crossing sink inventory', () => {
         ...inventory.slice(1),
       ],
       name: 'missing proof gate',
+    },
+    {
+      expected: /missing finite security operations: browser\.state\.write/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) =>
+        inventory.map((entry) => ({
+          ...entry,
+          operationKinds: entry.operationKinds.filter(
+            (operation) => operation !== 'browser.state.write',
+          ),
+        })),
+      name: 'missing finite operation owner',
+    },
+    {
+      expected: /Duplicate C9 finite security-operation owner/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => [
+        {
+          ...inventory[0]!,
+          operationKinds: [...inventory[0]!.operationKinds, 'browser.state.write' as const],
+        },
+        ...inventory.slice(1),
+      ],
+      name: 'duplicate finite operation owner',
     },
     {
       expected: /hostile-value evidence is not a test/u,

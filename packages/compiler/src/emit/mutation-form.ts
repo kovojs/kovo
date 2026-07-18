@@ -787,11 +787,18 @@ function successfulFormControls(
     registryFacts?: RegistryFacts;
     source: string;
   },
-): { diagnostics: readonly CompilerDiagnostic[]; length: number; name: string; start: number }[] {
+): {
+  diagnostics: readonly CompilerDiagnostic[];
+  exclusiveGroup: 'radio' | 'submitter' | undefined;
+  length: number;
+  name: string;
+  start: number;
+}[] {
   const formEnd = form.selfClosing ? form.end : form.closingStart;
   const formId = staticStringAttributeValue(mutationFormAttribute(form, 'id'));
   const controls: {
     diagnostics: readonly CompilerDiagnostic[];
+    exclusiveGroup: 'radio' | 'submitter' | undefined;
     length: number;
     name: string;
     start: number;
@@ -811,6 +818,8 @@ function successfulFormControls(
       continue;
     }
     if (mutationFormAttribute(element, 'disabled')) continue;
+    const successfulKind = mutationSuccessfulControlKind(element);
+    if (successfulKind === null) continue;
 
     const descendant = element.start >= form.openingEnd && element.end <= formEnd;
     const externalFormAttribute = mutationFormAttribute(element, 'form');
@@ -819,7 +828,10 @@ function successfulFormControls(
     compilerSetAdd(seenElements, `${options.fileName}:${element.start}:${element.end}`);
 
     const nameAttribute = mutationFormAttribute(element, 'name');
-    const diagnostics = mutationSubmitterTransportOverrideDiagnostics(element, options);
+    const diagnostics =
+      successfulKind === 'submitter' || mutationControlTypeIsUnsupported(element)
+        ? mutationSubmitterTransportOverrideDiagnostics(element, options)
+        : [];
     if (!descendant || externalFormAttribute) {
       compilerArrayAppend(
         diagnostics,
@@ -840,6 +852,7 @@ function successfulFormControls(
           controls,
           {
             diagnostics,
+            exclusiveGroup: successfulKind === 'ordinary' ? undefined : successfulKind,
             length: element.openingTagNameEnd - element.openingTagNameStart,
             name: '',
             start: element.openingTagNameStart,
@@ -864,6 +877,7 @@ function successfulFormControls(
         controls,
         {
           diagnostics,
+          exclusiveGroup: successfulKind === 'ordinary' ? undefined : successfulKind,
           length: nameAttribute.end - nameAttribute.start,
           name: '',
           start: nameAttribute.start,
@@ -883,6 +897,7 @@ function successfulFormControls(
       controls,
       {
         diagnostics,
+        exclusiveGroup: successfulKind === 'ordinary' ? undefined : successfulKind,
         length: nameAttribute.end - nameAttribute.start,
         name,
         start: nameAttribute.start,
@@ -901,9 +916,18 @@ function successfulFormControls(
     const identity = `${fact.fileName}:${element.start}:${element.end}`;
     if (!fact.componentRendered && compilerSetHas(seenElements, identity)) continue;
     if (mutationFormAttribute(element, 'disabled')) continue;
+    const successfulKind = mutationSuccessfulControlKind(element);
+    if (successfulKind === null) continue;
 
     const nameAttribute = mutationFormAttribute(element, 'name');
     const diagnostics: CompilerDiagnostic[] = [];
+    if (successfulKind === 'submitter' || mutationControlTypeIsUnsupported(element)) {
+      appendMutationValues(
+        diagnostics,
+        mutationSubmitterTransportOverrideDiagnostics(element, options),
+        'Document-reachable mutation submitter transport diagnostics',
+      );
+    }
     if (fact.explicitFormAssociation) {
       compilerArrayAppend(
         diagnostics,
@@ -923,6 +947,7 @@ function successfulFormControls(
           controls,
           {
             diagnostics,
+            exclusiveGroup: successfulKind === 'ordinary' ? undefined : successfulKind,
             length: fact.diagnosticSpan.end - fact.diagnosticSpan.start,
             name: '',
             start: fact.diagnosticSpan.start,
@@ -947,6 +972,7 @@ function successfulFormControls(
         controls,
         {
           diagnostics,
+          exclusiveGroup: successfulKind === 'ordinary' ? undefined : successfulKind,
           length: fact.diagnosticSpan.end - fact.diagnosticSpan.start,
           name: '',
           start: fact.diagnosticSpan.start,
@@ -964,6 +990,7 @@ function successfulFormControls(
       controls,
       {
         diagnostics,
+        exclusiveGroup: successfulKind === 'ordinary' ? undefined : successfulKind,
         length: fact.diagnosticSpan.end - fact.diagnosticSpan.start,
         name,
         start: fact.diagnosticSpan.start,
@@ -982,7 +1009,11 @@ function successfulFormControls(
   const result: typeof controls = [];
   for (let index = 0; index < controls.length; index += 1) {
     const control = controls[index]!;
-    if (!control.name || (compilerMapGet(counts, control.name) ?? 0) <= 1) {
+    if (
+      !control.name ||
+      (compilerMapGet(counts, control.name) ?? 0) <= 1 ||
+      repeatedSuccessfulControlNameIsExclusive(controls, control.name)
+    ) {
       compilerArrayAppend(
         result,
         control,
@@ -1014,6 +1045,52 @@ function successfulFormControls(
     );
   }
   return result;
+}
+
+function mutationSuccessfulControlKind(
+  element: JsxElementModel,
+): 'ordinary' | 'radio' | 'submitter' | null {
+  const rawType = staticStringAttributeValue(mutationFormAttribute(element, 'type'));
+  const type = rawType === null ? undefined : compilerStringToLowerCase(rawType);
+  if (isIntrinsicHtmlElement(element, 'button')) {
+    return type === 'button' || type === 'reset' ? null : 'submitter';
+  }
+  if (isIntrinsicHtmlElement(element, 'input')) {
+    if (type === 'button' || type === 'reset') return null;
+    if (type === 'submit' || type === 'image') return 'submitter';
+    if (type === 'radio') return 'radio';
+  }
+  return 'ordinary';
+}
+
+function mutationControlTypeIsUnsupported(element: JsxElementModel): boolean {
+  const attribute = mutationFormAttribute(element, 'type');
+  if (!attribute) return false;
+  if (attribute.value !== undefined || typeof attribute.expressionStaticValue === 'string') {
+    return false;
+  }
+  return attribute.expressionStaticValue !== false && attribute.expressionStaticValue !== null;
+}
+
+function repeatedSuccessfulControlNameIsExclusive(
+  controls: readonly {
+    readonly exclusiveGroup: 'radio' | 'submitter' | undefined;
+    readonly name: string;
+  }[],
+  name: string,
+): boolean {
+  let expected: 'radio' | 'submitter' | undefined;
+  let matches = 0;
+  const snapshot = compilerSnapshotDenseArray(controls, 'Repeated successful form controls');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const control = snapshot[index]!;
+    if (control.name !== name) continue;
+    matches += 1;
+    if (control.exclusiveGroup === undefined) return false;
+    expected ??= control.exclusiveGroup;
+    if (control.exclusiveGroup !== expected) return false;
+  }
+  return matches > 1;
 }
 
 function mutationSubmitterTransportOverrideDiagnostics(
@@ -1059,6 +1136,19 @@ function unsupportedControlDiagnostics(
   const diagnosticStart = diagnosticSpan.start;
   const diagnosticLength = diagnosticSpan.end - diagnosticSpan.start;
 
+  if (mutationControlTypeIsUnsupported(element)) {
+    compilerArrayAppend(
+      diagnostics,
+      formFieldDiagnostic(
+        options,
+        diagnosticStart,
+        diagnosticLength,
+        `field "${name}" has a non-static type; enhanced mutation successful-control semantics require a literal type or no type attribute`,
+      ),
+      'Compiler packages/compiler/src/emit/mutation-form.ts collection',
+    );
+  }
+
   if (compilerRegExpTest(/[.[\]]/, name)) {
     compilerArrayAppend(
       diagnostics,
@@ -1085,14 +1175,14 @@ function unsupportedControlDiagnostics(
     );
   }
 
-  if (isIntrinsicHtmlElement(element, 'input') && (type === 'checkbox' || type === 'radio')) {
+  if (isIntrinsicHtmlElement(element, 'input') && type === 'image') {
     compilerArrayAppend(
       diagnostics,
       formFieldDiagnostic(
         options,
         diagnosticStart,
         diagnosticLength,
-        `${type} field "${name}" is not supported for enhanced mutation field validation; use a single scalar input or a later multivalue form primitive`,
+        `image submitter field "${name}" is not supported because browsers submit coordinate-suffixed field names; use a button or input type="submit"`,
       ),
       'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );

@@ -42,6 +42,7 @@ export function serverSecurityOperationFacts(model: ComponentModuleModel): Secur
   const seen = compilerCreateSet<string>();
   appendHandlerSecurityOperations(operations, seen, model.mutationHandlers, 'Mutation security IR');
   appendHandlerSecurityOperations(operations, seen, model.endpointHandlers, 'Endpoint security IR');
+  appendHandlerSecurityOperations(operations, seen, model.queryHandlers, 'Query security IR');
   appendHandlerSecurityOperations(operations, seen, model.webhookHandlers, 'Webhook security IR');
   appendHandlerSecurityOperations(operations, seen, model.taskRunHandlers, 'Task security IR');
   return operations;
@@ -67,6 +68,7 @@ function appendHandlerSecurityOperations(
         {
           door: operation.door,
           kind: operation.kind,
+          ...(operation.root === undefined ? {} : { root: operation.root }),
           ...(operation.target === undefined ? {} : { target: operation.target }),
           ...(operation.justification === undefined
             ? {}
@@ -99,6 +101,7 @@ function appendSecurityOperationFact(
   const fact: SecurityOperationIr = {
     door: operation.door,
     kind: operation.kind,
+    ...('root' in operation && operation.root !== undefined ? { root: operation.root } : {}),
     ...(operation.target === undefined ? {} : { target: operation.target }),
     ...('justification' in operation && operation.justification !== undefined
       ? { justification: operation.justification }
