@@ -256,9 +256,12 @@ Measurements are versioned and reproducible:
       Share one implementation across direct HTTP/1, direct HTTP/2, generated Node, trusted-proxy,
       Vercel, Cloudflare/worker, and future adapters; reject raw-to-Fetch method case changes,
       ambiguous Host/`:authority`, and scheme/forwarding differentials under a C13 corpus.
-- [ ] **C9 completeness:** mechanically compare the boundary/sink census with the single reviewed
+- [x] **C9 completeness:** mechanically compare the boundary/sink census with the single reviewed
       inventory. Every sink has mechanism, sole door, proof gate, hostile-value test, and owner;
       an unowned or missing row fails `pnpm run check`.
+  - Evidence: `pnpm run check:c9-sink-inventory` (16/16) proves all 13 named sinks across the 12
+    census families have executable ownership/evidence rows and fail closed on inventory drift;
+    `pnpm run check:sink-policy` and `pnpm run check:imports` pass at merge `7bdd75a38`.
 
 ## Phase 5 — Independent oracles and external review
 
