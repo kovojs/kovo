@@ -288,6 +288,25 @@ describe('api-ref generator', () => {
     }
   });
 
+  it('documents analyzer summaries as inspected candidates rather than app assertions', () => {
+    const start = drizzlePage.indexOf('#### `kovoAnalyzerSummary`');
+    const next = drizzlePage.indexOf('\n#### `', start + 1);
+    const section = drizzlePage.slice(start, next < 0 ? undefined : next);
+    const normalized = section.replace(/\s+/g, ' ');
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(normalized).toContain('candidate for exact structural verification');
+    expect(normalized).toContain('bare identifier of a function declaration');
+    expect(normalized).toContain(
+      'Object properties, methods, imports, aliased marker targets, and mutable bindings',
+    );
+    expect(normalized).toContain('independently inspects the helper body');
+    expect(normalized).toContain(
+      '`const alias = provenHelper` may preserve its identity at an invocation',
+    );
+    expect(section).not.toContain('helper body is not inspected');
+  });
+
   it('emits a per-package sidebar manifest grouped by subpath, with anchors and source links', async () => {
     const manifest = JSON.parse(await readFile(path.join(outDir, 'core.sidebar.json'), 'utf8'));
     expect(manifest.package).toBe('@kovojs/core');

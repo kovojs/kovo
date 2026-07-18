@@ -35,15 +35,16 @@ export type KovoAnalyzerPrivateScopeKind = 'guard' | 'session' | 'tenant';
 /**
  * The return-provenance kinds a `kovoAnalyzerSummary` may mark for structural
  * verification. A declaration never grants provenance by itself: the analyzer must
- * prove an exact same-file helper projection whose body and path match the marker
- * (SPEC §6.6/§10.3).
+ * prove the body and path of one direct same-file function declaration or `const`
+ * arrow/function binding (SPEC §6.6/§10.3).
  */
 export type KovoAnalyzerReturnKind = KovoAnalyzerPrivateScopeKind;
 
 /**
  * A candidate marker for a private-scope helper. Security verdicts use only the
- * analyzer's exact structural proof; imported, multi-statement, mismatched, or
- * otherwise opaque helpers remain unknown regardless of this declaration.
+ * analyzer's exact structural proof. Object properties, methods, imports, aliased
+ * marker targets, mutable bindings, multi-statement bodies, and mismatched projections
+ * remain unknown regardless of this marker (SPEC §6.6).
  */
 export type KovoAnalyzerFunctionSummary = {
   returns: { kind: KovoAnalyzerPrivateScopeKind; path: string };
@@ -311,21 +312,37 @@ function assertKnownKovoAnnotationFields(
 }
 
 /**
- * Mark a same-file private-scope helper as a candidate for exact structural
- * verification. The marker is not an author assertion and cannot grant a security
- * verdict: the helper must be a one-parameter, one-return projection whose body
- * exactly matches `kind` and `path`. The runtime value is the original helper.
+ * Mark one direct same-file private-scope helper as a candidate for exact structural
+ * verification. The helper argument must be the bare identifier of a function
+ * declaration or a `const` initialized directly by an arrow or function expression.
+ * Object properties, methods, imports, aliased marker targets, and mutable bindings
+ * remain unknown.
  *
- * @param helper - The pure helper being summarized.
+ * The marker is not an author assertion and cannot grant a security verdict. The
+ * analyzer independently inspects the helper body and accepts only a one-parameter,
+ * one-return literal projection that exactly matches `kind` and `path` (SPEC §6.6).
+ * The one-parameter TypeScript shape is an author-time guardrail, not the proof. The
+ * runtime value is the original helper.
+ *
+ * After the marker is proven, one direct immutable same-file
+ * `const alias = provenHelper` may preserve its identity at an invocation. Property,
+ * element, destructured/container, chained, imported, opaque, and mutable aliases do
+ * not preserve provenance.
+ *
+ * @param helper - The direct one-parameter helper candidate.
  * @param summary - The private-scope projection the analyzer must independently verify.
  * @returns The original helper, unchanged at runtime.
  * @example
  * import { kovoAnalyzerSummary } from '@kovojs/drizzle';
  *
+ * function requireSessionId(context: { request: { session: { id: string } } }) {
+ *   return context.request.session.id;
+ * }
+ *
  * kovoAnalyzerSummary(requireSessionId, { returns: { kind: 'session', path: 'id' } });
  */
 export function kovoAnalyzerSummary<T extends (...args: never[]) => unknown>(
-  helper: T,
+  helper: Parameters<T> extends [unknown] ? T : never,
   summary: KovoAnalyzerFunctionSummary,
 ): T {
   void summary;

@@ -411,20 +411,30 @@ an explicit database-engine/runtime-policy and audit responsibility; unknown cor
 **Analyzer-summary proof boundary (normative).** `kovoAnalyzerSummary` is a candidate marker, not
 an app-authored provenance assertion. A private-scope marker contributes to any invalidation,
 owner-scope, accepted-guard, write, or diagnostic verdict only when the analyzer independently
-resolves the exact same-file helper symbol and proves a single identifier parameter plus a body
-containing exactly one return of a literal property chain rooted in that parameter. The first
-private-scope segment MUST be `guard`, `session`, or `tenant` (for example,
-`parameter.guard.userId` or `parameter.request.session.id`), and the declared kind and path MUST
-exactly equal that segment and the literal suffix after it. An invocation used as a value MUST pass
-the exact framework request/context parameter (`req`, `request`, `ctx`, or `context`), proven by its
-callback/receiver position rather than its spelling, as that argument. Imported
-helpers, multi-statement/general bodies, destructured or additional parameters, computed returns,
-mismatched principals, unresolved symbols, and calls with client input or opaque/container
-arguments remain unknown. Stable same-file `const` references may preserve an already-proven helper
-identity but do not widen its proof. No `server` summary kind exists: general server provenance and
-KV438 cannot be discharged by an app declaration. These restrictions apply uniformly to every
-consumer of session provenance; a looser invalidation or explain path MUST NOT become a security
-side door.
+resolves a bare helper identifier to exactly one declaration in the same source file. The only
+accepted declaration forms are a direct function declaration or a `const` binding initialized
+directly by an arrow or function expression. Object-literal properties and methods, class members,
+property-access targets, imports, alias bindings presented as the marker target, destructured
+bindings, `let`/`var` bindings, reassigned bindings, and otherwise opaque or multiply declared
+callables remain unknown. No alias or container may stand between the marker and the proven
+declaration.
+
+The direct helper MUST have one non-default, non-rest identifier parameter and no generator body.
+Its body MUST be either an expression-bodied arrow or a block containing exactly one return, and
+that expression MUST be a literal property chain rooted in the parameter. The first private-scope
+segment MUST be `guard`, `session`, or `tenant` (for example, `parameter.guard.userId` or
+`parameter.request.session.id`), and the declared kind and path MUST exactly equal that segment and
+the literal suffix after it. A provenance-bearing invocation MUST call that exact helper identifier
+or one direct same-file immutable `const alias = provenHelper` identifier and pass the exact
+framework request/context parameter (`req`, `request`, `ctx`, or `context`), proven by its
+callback/receiver position rather than its spelling, as the sole argument. That one-hop alias may
+preserve an already-proven identity but cannot be the marker target or widen the proof. Property or
+element access, destructured/container aliases, alias chains, and imported, opaque, or mutable
+aliases remain unknown. Multi-statement/general bodies, computed returns, mismatched principals,
+unresolved symbols, and calls with client input or opaque/container arguments also remain unknown.
+No `server` summary kind exists: general server provenance and KV438 cannot be discharged by an app
+declaration. These restrictions apply uniformly to every consumer of session provenance; a looser
+invalidation or explain path MUST NOT become a security side door.
 
 **Build-preset capability boundary (normative).** `KovoPreset` is an opaque, framework-owned
 selection token, not a public structural deployment descriptor. `node()`, `vercel()`, and

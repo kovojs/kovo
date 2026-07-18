@@ -8,7 +8,7 @@ import {
 } from '@kovojs/core/internal/sql-safety';
 import { sql as drizzleSql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
-import { sql, staticSql, trustedSql } from './runtime.js';
+import { kovoAnalyzerSummary, sql, staticSql, trustedSql } from './runtime.js';
 
 interface DrizzlePackageJson {
   dependencies?: Record<string, string>;
@@ -62,6 +62,35 @@ function strictTypeValidCarrierMutation(executableText: string) {
 }
 
 describe('@kovojs/drizzle runtime surface', () => {
+  it('keeps analyzer summaries as one-parameter candidates and preserves helper identity', () => {
+    function requireSessionId(context: { request: { session: { id: string } } }) {
+      return context.request.session.id;
+    }
+
+    const marked = kovoAnalyzerSummary(requireSessionId, {
+      returns: { kind: 'session', path: 'id' },
+    });
+    const sameHelper: typeof requireSessionId = marked;
+    expect(sameHelper).toBe(requireSessionId);
+
+    function noParameter() {
+      return 'session-id';
+    }
+    function extraParameter(context: { request: { session: { id: string } } }, suffix: string) {
+      return context.request.session.id + suffix;
+    }
+
+    if (false) {
+      // Type-level arity is defense-in-depth; SPEC §6.6's AST proof remains authoritative.
+      // @ts-expect-error analyzer-summary candidates require exactly one parameter
+      kovoAnalyzerSummary(noParameter, { returns: { kind: 'session', path: 'id' } });
+      // @ts-expect-error analyzer-summary candidates require exactly one parameter
+      kovoAnalyzerSummary(extraParameter, { returns: { kind: 'session', path: 'id' } });
+      // @ts-expect-error general server provenance cannot be declared by app code
+      kovoAnalyzerSummary(requireSessionId, { returns: { kind: 'server', path: '' } });
+    }
+  });
+
   it('types Kovo SQL constructors as Drizzle SQL values accepted by common sinks', () => {
     interface DrizzleSinks {
       execute(statement: SQL<unknown>): Promise<unknown>;

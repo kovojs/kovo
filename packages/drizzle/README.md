@@ -23,6 +23,33 @@ export const carts = pgTable(
 );
 ```
 
+## Analyzer summary candidates
+
+Use `kovoAnalyzerSummary` only for a direct local helper that projects a private
+principal from Kovo's request/context carrier:
+
+```ts
+import { kovoAnalyzerSummary } from '@kovojs/drizzle';
+
+function requireSessionId(context: { request: { session: { id: string } } }) {
+  return context.request.session.id;
+}
+
+kovoAnalyzerSummary(requireSessionId, {
+  returns: { kind: 'session', path: 'id' },
+});
+```
+
+The marker is a candidate, not a provenance assertion. Kovo inspects the exact
+same-file body and accepts only one direct function declaration or a `const`
+initialized directly by an arrow/function expression. The helper must have one
+identifier parameter and return only the matching literal `guard`, `session`, or
+`tenant` property chain. Object properties and methods, imports, aliased marker
+targets, mutable bindings, general bodies, and mismatched declarations fail closed as
+unknown. One direct immutable same-file `const alias = requireSessionId` may preserve
+the proven identity when invoked; property, destructured/container, chained, opaque,
+imported, or mutable aliases do not. There is no general `server` summary kind.
+
 ## Reference
 
 - API: `/api/drizzle/`
