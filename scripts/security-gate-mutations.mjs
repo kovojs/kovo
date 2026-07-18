@@ -42,6 +42,7 @@ const trustedHtmlProvenancePath = path.join(
 );
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
+const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
 const betterAuthCredentialRuntimeGatePath = path.join(
   repoRoot,
   'packages/better-auth/src/internal/credential-runtime-gate.ts',
@@ -564,6 +565,13 @@ const weakenedViteJsToTsSiblingCandidatesBranch = [
   '        return [basePath];',
 ].join('\n');
 
+const frameworkEgressOriginCheck =
+  '  const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });';
+const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
+const frameworkEgressDispatcherPin =
+  '  request = egressRequestWithDispatcher(request, dispatcher);';
+const removedFrameworkEgressDispatcherPin = '  request = request;';
+
 export const SECURITY_GATE_MUTANTS = [
   {
     description: 'Weakens the session-owner builder cell to allow cross-owner reads.',
@@ -1039,6 +1047,26 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: compilerVitePath,
     sourceOnly: true,
     test: assertViteSourceKeepsJsToTsSiblingCandidates,
+  },
+  {
+    description: 'Deletes the positive origin decision before framework-owned DNS resolution.',
+    expectedKiller: 'framework egress must reject an undeclared origin before DNS',
+    name: 'server-egress/drop-origin-before-dns',
+    replacement: removedFrameworkEgressOriginCheck,
+    search: frameworkEgressOriginCheck,
+    sourceFile: serverEgressPath,
+    sourceOnly: true,
+    test: assertFrameworkEgressSourceKeepsPositiveCapability,
+  },
+  {
+    description: "Deletes rebinding of Request private state to Kovo's installed dispatcher.",
+    expectedKiller: 'framework egress must replace application dispatcher authority',
+    name: 'server-egress/drop-dispatcher-pin',
+    replacement: removedFrameworkEgressDispatcherPin,
+    search: frameworkEgressDispatcherPin,
+    sourceFile: serverEgressPath,
+    sourceOnly: true,
+    test: assertFrameworkEgressSourceKeepsPositiveCapability,
   },
 ];
 
@@ -1901,6 +1929,26 @@ async function assertCompilerSourceKeepsSiblingRegistration(_moduleUnderTest, { 
 async function assertViteSourceKeepsJsToTsSiblingCandidates(_moduleUnderTest, { sourceText } = {}) {
   if (!sourceText?.includes(viteJsToTsSiblingCandidatesBranch)) {
     throw new Error('Vite sibling discovery no longer maps .js specifiers to .ts/.tsx candidates');
+  }
+}
+
+async function assertFrameworkEgressSourceKeepsPositiveCapability(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  const fetchStart = sourceText?.indexOf('export const frameworkEgressFetch') ?? -1;
+  const dispatcherPin = sourceText?.indexOf(frameworkEgressDispatcherPin, fetchStart) ?? -1;
+  const originCheck = sourceText?.indexOf(frameworkEgressOriginCheck, fetchStart) ?? -1;
+  const dnsLookup = sourceText?.indexOf('lookupAllAddresses(host)', fetchStart) ?? -1;
+  if (
+    fetchStart < 0 ||
+    dispatcherPin < fetchStart ||
+    originCheck < dispatcherPin ||
+    dnsLookup < originCheck
+  ) {
+    throw new Error(
+      'framework egress no longer pins its dispatcher and rejects undeclared origins before DNS',
+    );
   }
 }
 

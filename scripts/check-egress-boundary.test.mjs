@@ -3,13 +3,24 @@ import { describe, expect, it } from 'vitest';
 import { checkEgressBoundary } from './check-egress-boundary.mjs';
 
 const baseFiles = {
-  'packages/server/src/egress.ts': `export const frameworkEgressFetch = (input, init) => globalThis.fetch(input, init);`,
+  'packages/server/src/egress.ts': `export const frameworkEgressFetch = async (input, init) => {
+const dispatcher = activeUndiciFloorDispatcher();
+request = egressRequestWithDispatcher(request, dispatcher);
+const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });
+const resolved = await lookupAllAddresses(host);
+return globalThis.fetch(input, init);
+};`,
   'packages/server/src/egress-dgram.ts': '',
-  'packages/server/src/egress-undici.ts': '',
+  'packages/server/src/egress-undici.ts': `override dispatch() {
+const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });
+return dnsLookup(host, { all: true });
+}`,
   'packages/server/src/egress-undici-runtime.ts': '',
   'packages/server/src/egress-bootstrap.ts': '',
   'packages/server/src/egress-credentials.ts': '',
   'packages/server/src/task-runner.ts': `import { frameworkEgressFetch } from './egress.js';
+export const ctx = { fetch: frameworkEgressFetch };`,
+  'packages/server/src/webhook.ts': `import { frameworkEgressFetch } from './egress.js';
 export const ctx = { fetch: frameworkEgressFetch };`,
 };
 
@@ -45,6 +56,25 @@ describe('check-egress-boundary', () => {
 
     expect(result.ok).toBe(false);
     expect(result.findings).toHaveLength(4);
+  });
+
+  it('rejects removal or reordering of the positive-capability guards', () => {
+    expect(
+      run({
+        'packages/server/src/egress.ts': `export const frameworkEgressFetch = async () => {
+const resolved = await lookupAllAddresses(host);
+const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });
+}`,
+      }).findings.join('\n'),
+    ).toContain('origin allowlist must reject before DNS');
+    expect(
+      run({
+        'packages/server/src/task-runner.ts': 'export const ctx = { fetch: hooks.fetch };',
+      }).findings.join('\n'),
+    ).toContain('non-replaceable framework capability');
+    expect(run({ 'packages/server/src/webhook.ts': '' }).findings.join('\n')).toContain(
+      'webhook ctx.fetch must be the framework capability',
+    );
   });
 
   it('ignores comments, quoted strings, and generated client template fetches', () => {

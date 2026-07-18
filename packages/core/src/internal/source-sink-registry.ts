@@ -429,9 +429,12 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       'request-derived-url|task-payload-url|webhook-payload-url|agent-tool-argument|redirect-location|dns-answer|app-config-env-values',
     specAnchor: 'spec/06-type-system.md#6.6;spec/10-data-plane.md#10.3',
     testEvidence: [
+      'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/egress-redirect.test.ts',
+      'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
     ],
     trust: 'remote-and-configuration-derived-network-authority',
   },
@@ -666,8 +669,10 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'an undeclared origin is rejected before DNS or dial; every redirect and selected address is independently origin-checked, classified, and pinned before transport use',
     family: 'network.egress',
     negativeTestEvidence: [
+      'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/egress-redirect.test.ts',
+      'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
     ],
     payloads: [
@@ -683,9 +688,12 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'proxy-selected destination mismatch',
     ],
     positiveTestEvidence: [
+      'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/egress-redirect.test.ts',
+      'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
     ],
   },
 ] as const;
@@ -1097,15 +1105,28 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
   },
   {
     censusFamilies: ['network.egress'],
-    hostileValueEvidence: ['packages/server/src/task-runner.test.ts'],
+    hostileValueEvidence: [
+      'packages/compiler/src/capability-closure.security.test.ts',
+      'packages/server/src/egress-property-oracle.test.ts',
+      'packages/server/src/egress-undici.test.ts',
+      'packages/server/src/task-runner.test.ts',
+    ],
     mechanism: 'own',
     mechanismDetail:
-      'Outbound network requests use the framework allowlist choke instead of arbitrary request-authored fetch targets on privileged task/runtime surfaces.',
+      'Task and verified-webhook code receives the exact non-replaceable ctx.fetch capability. It canonicalizes a positive origin allowlist at boot, rejects every undeclared initial/redirect origin before DNS, classifies every DNS answer, and leaves selected-address pinning to the exact dial sink.',
     owner: '@kovojs/server/egress',
-    proofEvidence: ['packages/server/src/task-runner.test.ts'],
+    proofEvidence: [
+      'packages/compiler/src/capability-closure.security.test.ts',
+      'packages/server/src/egress-property-oracle.test.ts',
+      'packages/server/src/egress-undici.test.ts',
+      'packages/server/src/egress.test.ts',
+      'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
+    ],
     proofGate: 'pnpm run check:egress-boundary',
     sink: 'outbound egress request',
-    soleDoor: 'framework egress allowlist choke on ctx.fetch and equivalent owned egress surfaces',
+    soleDoor:
+      'exact framework-owned ctx.fetch on task/webhook/future agent-tool contexts; exact module-private database socket witness for managed Postgres',
     specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
   },
   {

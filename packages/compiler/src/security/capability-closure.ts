@@ -166,7 +166,10 @@ export function analyzeCapabilityClosure(
   const packageRequests = collectCapabilityPackageRequestsFromModules(normalizedModules);
   const packageMetadata = indexPackageMetadata(options.packages ?? []);
   const packageSummaries = indexPackageSummaries(options.packageSummaries ?? []);
-  const facts: CoreGraph.CapabilityClosureExplainFact[] = roots.map(rootFact);
+  const facts: CoreGraph.CapabilityClosureExplainFact[] = roots.flatMap((root) => [
+    rootFact(root),
+    ...rootFrameworkDoorFacts(root),
+  ]);
   const diagnostics: CompilerDiagnostic[] = [];
   const factKeys = new Set(facts.map(capabilityFactKey));
 
@@ -789,6 +792,31 @@ function rootFact(root: CapabilityRoot): CoreGraph.CapabilityClosureExplainFact 
     rootKind: root.kind,
     site: root.site,
   };
+}
+
+function rootFrameworkDoorFacts(root: CapabilityRoot): CoreGraph.CapabilityClosureExplainFact[] {
+  if (
+    root.kind !== 'durable-task' &&
+    root.kind !== 'scheduled-task' &&
+    root.kind !== 'webhook' &&
+    root.kind !== 'agent-tool-callback'
+  ) {
+    return [];
+  }
+  return [
+    {
+      capability: 'network',
+      kind: 'door',
+      module: root.module,
+      name: root.name,
+      path: [`root:${root.kind}:${root.name}@${root.module}`, 'framework-door:ctx.fetch'],
+      reason:
+        'ctx.fetch is the framework-owned positive egress capability: exact declared origin ' +
+        'before DNS, then resolved-IP classification and dial pinning on every hop',
+      rootKind: root.kind,
+      site: root.site,
+    },
+  ];
 }
 
 function indexPackageMetadata(

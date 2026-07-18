@@ -55,6 +55,50 @@ export function checkEgressBoundary(options = {}) {
     if (declarations.length < 1) {
       findings.push('packages/server/src/egress.ts: frameworkEgressFetch choke is missing');
     }
+    const fetchStart = text.indexOf('export const frameworkEgressFetch');
+    const originCheck = text.indexOf('evaluateFrameworkDestinationOrigin({', fetchStart);
+    const dnsLookup = text.indexOf('lookupAllAddresses(host)', fetchStart);
+    const dispatcherPin = text.indexOf(
+      'egressRequestWithDispatcher(request, dispatcher)',
+      fetchStart,
+    );
+    if (fetchStart < 0 || originCheck < fetchStart || dnsLookup < originCheck) {
+      findings.push(
+        'packages/server/src/egress.ts: framework origin allowlist must reject before DNS',
+      );
+    }
+    if (dispatcherPin < fetchStart || dispatcherPin > originCheck) {
+      findings.push(
+        'packages/server/src/egress.ts: framework Request must pin the installed dispatcher before egress',
+      );
+    }
+  }
+  if (exists('packages/server/src/egress-undici.ts')) {
+    const text = readText('packages/server/src/egress-undici.ts');
+    const dispatchStart = text.indexOf('override dispatch(');
+    const originCheck = text.indexOf('evaluateFrameworkDestinationOrigin({', dispatchStart);
+    const dnsLookup = text.indexOf('dnsLookup(host, { all: true })', dispatchStart);
+    if (dispatchStart < 0 || originCheck < dispatchStart || dnsLookup < originCheck) {
+      findings.push(
+        'packages/server/src/egress-undici.ts: redirect/pooled origin allowlist must reject before DNS',
+      );
+    }
+  }
+  if (exists('packages/server/src/task-runner.ts')) {
+    const text = readText('packages/server/src/task-runner.ts');
+    if (!text.includes('fetch: frameworkEgressFetch') || text.includes('hooks.fetch')) {
+      findings.push(
+        'packages/server/src/task-runner.ts: task ctx.fetch must be the non-replaceable framework capability',
+      );
+    }
+  }
+  if (exists('packages/server/src/webhook.ts')) {
+    const text = readText('packages/server/src/webhook.ts');
+    if (!text.includes('fetch: frameworkEgressFetch')) {
+      findings.push(
+        'packages/server/src/webhook.ts: webhook ctx.fetch must be the framework capability',
+      );
+    }
   }
 
   for (const filePath of sourceFiles) {
