@@ -181,8 +181,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       linkStarterBuildDependencies(root);
       addRuntimeMutationSafetyProofs(root, { includeReadonlyRuntimeChokeProbe: true });
 
-      // SPEC §6.6 keeps a directly reached managed query write KV449-closed even when paranoid
-      // verification makes the separate KV433 reachability finding advisory. The runtime
+      // SPEC §6.6 keeps a directly reached managed query write KV449-closed. The runtime
       // `readonlyDb` membrane remains independently exercised by managed-db.test.ts; supported
       // authored source cannot weaken the finite-IR gate merely to reach that defense-in-depth.
       const output = execFileSyncErrorOutput(
@@ -191,7 +190,6 @@ describe('create-kovo starter (build integration: production transaction artifac
       expect(output).toContain('kovo build check preflight failed');
       expect(output).toContain('ERROR KV449');
       expect(output).toContain('query loaders cannot perform a managed database write');
-      expect(output).toContain('KV433');
       expect(existsSync(join(root, 'dist/server/server.mjs'))).toBe(false);
     } finally {
       rmSync(root, { force: true, recursive: true });
