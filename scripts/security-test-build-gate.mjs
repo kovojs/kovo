@@ -14,6 +14,7 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
   'KV426',
   'KV433',
   'KV435',
+  'KV438',
   'KV449',
   'KV406',
   'KV311',
@@ -304,6 +305,23 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
 ];
 
 export const SECURITY_BUILD_PROOFS = [
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'analyzer-summary-carrier-laundering',
+    code: 'KV438',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      "join(root, 'src', 'summary-carrier-proof.ts')",
+      'kovoAnalyzerSummary(exactGuard',
+      'await nestedWrite(request.db, input)',
+      'buildProductionArtifact(root)',
+      'KV438',
+      'provenance=unknown',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'rejects summarized mutation input laundering through the real production build preflight',
+  },
   {
     buildInvocation: 'starter-build-production-artifact',
     claimId: 'internal-raw-html-import',

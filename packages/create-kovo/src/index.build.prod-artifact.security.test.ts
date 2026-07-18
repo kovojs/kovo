@@ -61,6 +61,63 @@ function captureBuildFailure(build: () => void): string {
 }
 
 describe('create-kovo starter (build integration: production security artifacts)', () => {
+  // @kovo-security-certifies KV438 analyzer-summary-carrier-laundering
+  it('rejects summarized mutation input laundering through the real production build preflight', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-summary-carrier-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Summary Carrier Proof' });
+      linkStarterBuildDependencies(root);
+      writeFileSync(
+        join(root, 'src', 'summary-carrier-proof.ts'),
+        [
+          "import { kovoAnalyzerSummary } from '@kovojs/drizzle';",
+          "import { mutation, s, serverValue } from '@kovojs/server';",
+          "import { eq } from 'drizzle-orm';",
+          "import { appAuthed, appCsrf, type AppRequest } from './auth.js';",
+          "import { account } from './schema.js';",
+          '',
+          'function exactGuard(context: { guard: { userId: string } }) {',
+          '  return context.guard.userId;',
+          '}',
+          'kovoAnalyzerSummary(exactGuard, { returns: { kind: "guard", path: "userId" } });',
+          '',
+          'export const summaryCarrierLaundering = mutation({',
+          '  access: [appAuthed],',
+          '  csrf: appCsrf,',
+          '  input: s.object({',
+          '    guard: s.object({ userId: s.string() }),',
+          '    id: s.string(),',
+          '  }),',
+          '  async handler(input, request: AppRequest) {',
+          '    async function nestedWrite(',
+          '      db: AppRequest["db"],',
+          '      request: { guard: { userId: string } },',
+          '    ) {',
+          '      await db',
+          '        .update(account)',
+          '        .set({',
+          '          userId: serverValue(exactGuard(request), "claimed private owner"),',
+          '        })',
+          '        .where(eq(account.id, input.id));',
+          '    }',
+          '    await nestedWrite(request.db, input);',
+          '    return { ok: true };',
+          '  },',
+          '});',
+        ].join('\n'),
+      );
+
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('KV438');
+      expect(output).toContain('nestedWrite');
+      expect(output).toContain('column=userId');
+      expect(output).toContain('provenance=unknown');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
   it('fails the production build for a request-reachable no-row side-effect mutation with no access guard', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-missing-access-'));
 
