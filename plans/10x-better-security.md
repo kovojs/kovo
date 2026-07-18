@@ -236,8 +236,12 @@ Measurements are versioned and reproducible:
       the runtime security mechanism.
   - Evidence: `pnpm run check:c9-sink-inventory` passes; C9 rejects `brand`, `sentinel`, `proxy`,
     and `static-diagnostic`, leaving only reconstruct/box/own mechanisms.
-- [ ] Obtain an independent architecture review of the 2A–2D design before deleting a production
+- [x] Obtain an independent architecture review of the 2A–2D design before deleting a production
       classifier family.
+  - Evidence: `plans/security-architecture-review-phase-2-2026-07-18.md` records an exact-tip
+    independent **REJECT** verdict after 102 focused tests, C13=20, M=68/68, G=18, and C9=23/23.
+    Its three provenance/summary blockers keep Phase 2C migration and every production-classifier
+    deletion open until repaired and independently re-reviewed.
 
 ## Phase 3 — Migrate the three enumerative treadmills
 
