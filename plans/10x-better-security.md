@@ -100,14 +100,23 @@ Measurements are versioned and reproducible:
       HTTP/2 method-case differential currently carried by test-only commit `6abd0f36b`, and
       route confirmed findings through the threat matrix before architectural work proceeds.
   - Evidence: `1a943de8d` closes M34 across real HTTP/2, live/generated Node, and Vercel; SPEC §9.5,
-    `plans/bugz-33.md`, and `docs/security-threat-matrix.md` record the rule and proof.
+    `plans/bugz-33.md`, and `docs/security-threat-matrix.md` record the rule and proof. The ensuing
+    fixed-charter audit found M35 (`R=1` at `e5f613be9`); `766aa8c57` closes its authority-identity
+    root cause across the same real-wire/live/generated surfaces and enrolls the verdict in C13.
 - [ ] Restore the exact baseline to green local gates and `origin/main` CI/Pages, integrating the
       already-verified fixture/runtime checkpoints without weakening production classifiers.
-- [ ] Consolidate completed security plans through an explicit security-ledger index. Update the
+- [x] Consolidate completed security plans through an explicit security-ledger index. Update the
       dogfood/find-bugz workflows to permit transient finding ledgers with an archive deadline;
       do not enforce “exactly two files” through filename guessing.
-- [ ] Add a reproducible baseline command/report for R, M, P, G, classifier-corpus anchors, and
+  - Evidence: `333d22909`; `pnpm run check:security-ledger-index` validates five explicit active
+    roadmaps, transient lifecycle/deadlines, and four deduplication series; its focused suite passes
+    9/9, and the three security workflow skills use the registry instead of filename counts.
+- [x] Add a reproducible baseline command/report for R, M, P, G, classifier-corpus anchors, and
       informational LOC. Record the first comparable row in the table below.
+  - Evidence: `f7a82a75c` adds the fixed charter, exact audit-round record, deterministic collector,
+    six-test gate, and report; `b3de9e512` preserves the immutable e5 row while refreshing the
+    post-M35 structural snapshot. `pnpm run check:security-convergence-baseline` passes with M=37,
+    P=5,956, G=18, and C13=17/144.
 
 ## Phase 1 — Make the forcing gates non-skippable
 
@@ -273,7 +282,7 @@ Measurements are versioned and reproducible:
 
 ## Convergence table
 
-| Week       | Baseline SHA                   | R (root causes / fixed charter) | M (canary recall / mutation kill) | P (enumerative obligations) | G (green corpus / cost) | C13 anchors (informational) | Notes                                       |
-| ---------- | ------------------------------ | ------------------------------- | --------------------------------- | --------------------------- | ----------------------- | --------------------------- | ------------------------------------------- |
-| 2026-07-17 | uncontrolled historical sample | 29 raw findings; not comparable | —                                 | —                           | —                       | —                           | Seed audit only; not a convergence baseline |
-| 2026-07-18 | pending Phase 0                | pending                         | pending                           | pending                     | pending                 | pending                     | First exact-SHA comparable baseline         |
+| Week       | Baseline SHA                   | R (root causes / fixed charter) | M (canary recall / mutation kill) | P (enumerative obligations) | G (green corpus / cost)  | C13 anchors (informational) | Notes                                       |
+| ---------- | ------------------------------ | ------------------------------- | --------------------------------- | --------------------------- | ------------------------ | --------------------------- | ------------------------------------------- |
+| 2026-07-17 | uncontrolled historical sample | 29 raw findings; not comparable | —                                 | —                           | —                        | —                           | Seed audit only; not a convergence baseline |
+| 2026-07-18 | `e5f613be9`                    | 1 / fixed remote-ingress round  | 2/2 / 37/37 killed                | 5,956                       | 18/18 / 2.350s / 447 MiB | 17 corpora / 143 anchors    | First exact-SHA comparable baseline         |

@@ -12,7 +12,7 @@ an **audited escape hatch**, or an **explicit out-of-scope note (whose responsib
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | **DB / data plane**             | GREEN¹ — RLS FORCE + non-superuser roles + column-REVOKE + closure/attached-code/identity audits                                                | GREEN¹ — narrowed writer grant, KV438 governed-column floor, WITH CHECK, declared-write choke     | scope: app/deploy (M5); GREEN-footgun — query-list cap 100, bounded pool | GREEN¹ — principal integrity: wrapped-client reconstruct + `set_config` confinement + identity allowlist     |
 | **Auth**                        | GREEN (M2) — adapter non-egress proof: fail-closed reachability proof over every request-reachable secret path, TCB-enrolled; timing GREEN (M4) | GREEN — governed-column floor on `user`/`session` (KV438)                                         | GREEN — pre-dispatch rate budgets on auth endpoints (M5)                 | GREEN — CSRF, HttpOnly+Secure+SameSite cookies, session lifecycle; session unforgeability = dep surface (M6) |
-| **Wire / HTTP**                 | GREEN — DEC-F sink inventory: secret box on every egress channel + log redaction                                                                | **OPEN (M35)** — non-canonical HTTP authority crosses Node-to-Fetch as split URL/Host identities  | scope: app/deploy (M5); GREEN — 1 MiB body cap (413), rate budgets (429) | GREEN — CSRF, webhook verify, request-input provenance                                                       |
+| **Wire / HTTP**                 | GREEN — DEC-F sink inventory: secret box on every egress channel + log redaction                                                                | GREEN — exact method and canonical authority identity before Node-to-Fetch construction (M34/M35) | scope: app/deploy (M5); GREEN — 1 MiB body cap (413), rate budgets (429) | GREEN — CSRF, webhook verify, request-input provenance                                                       |
 | **Render / browser**            | GREEN — escape-by-default; `trustedHtml` the only branded raw door                                                                              | GREEN — contextual escaping across text/attr/URL-scheme positions                                 | N/A — client render cost is app-authored                                 | GREEN — Trusted-Types policy + inline-loader import allowlist                                                |
 | **Build / compiler**            | GREEN — server-only-value capture (KV437); generated code carries no secret                                                                     | GREEN (M7) — codegen framework-constructed; KV235 provenance; sink-policy + import-boundary gates | N/A — build is dev-time                                                  | GREEN (M7) — `dynamic.import.process` sole door = `/c/` versioned-module allowlist                           |
 | **Dependencies / supply chain** | GREEN (M6) — `trustedDependencySurfaces` + exact pins + `--frozen-lockfile`, `check:tcb-boundary`                                               | GREEN (M6) — `rules/dependency-policy.md` update policy + review triggers                         | out-of-scope — dependency-internal DoS                                   | GREEN (M6) — Better Auth session/hash/reset/2FA/linking surfaces enrolled as review triggers                 |
@@ -67,10 +67,12 @@ GREEN (no longer pending).
   admits only exact `POST`. `packages/server/src/node.test.ts` and `build.test.ts` prove the same
   closed verdict and extension-method behavior in live, emitted Node, and Vercel adapters. The
   `node-fetch-method-identity-closed` C13 anchor prevents silent removal.
-- **Wire × I (M35) — OPEN.** At audited code SHA `e5f613be9`, real HTTP/2
-  `:authority: %65xample.com` reaches the handler as URL host `example.com` but app-visible Host
-  `%65xample.com`. `plans/bugz-34.md` owns canonical-authority rejection across live and emitted
-  Node/Vercel, real-wire and parity regressions, SPEC §9.5 text, and a C13 anchor.
+- **Wire × I (M35) — GREEN.** At audited code SHA `e5f613be9`, real HTTP/2
+  `:authority: %65xample.com` reached the handler as URL host `example.com` but app-visible Host
+  `%65xample.com`. `766aa8c57` now rejects every authority whose parsed serialization is not
+  byte-identical under both HTTP schemes before `Request` construction. Real-wire, live/generated
+  Node and Vercel parity tests, SPEC §9.5, and the `node-fetch-authority-identity-closed` C13 anchor
+  preserve the verdict; canonical lower-case DNS/non-default-port and bracketed IPv6 remain valid.
 - **Runtime × Au (A6) — GREEN.** Capability URLs bind the signed canonical object, method, scope, and expiry before any
   storage read. `packages/server/src/capability-url.test.ts` proves claim-mismatch, expiry, signature, audience, and
   replay rejection; `packages/server/src/capability-route.test.ts` proves the verify sink runs before dereference, so a
@@ -125,15 +127,15 @@ infrastructure-level (L3/L4) DDoS.
 | **M2** Auth × C — adapter non-egress  | GREEN | Closed: fail-closed non-egress proof TCB-enrolled (`better-auth.request-secret-surface.proof`), `internal.trusted-plaintext.test.ts` 22 pass; round-22 A5 clean |
 | **M3** Escape-hatch visibility        | GREEN | Closed by followup-16: static capability producers surface every escape in `kovo explain --capabilities`/`--cookies`                                            |
 | **M6** Deps / supply chain            | GREEN | Closed by followup-16 M6: exact pins + `--frozen-lockfile` + `trustedDependencySurfaces` (`check:tcb-boundary`) + `rules/dependency-policy.md`                  |
-| **M35** Wire × I — authority identity | OPEN  | Close `plans/bugz-34.md` across live and emitted Node/Vercel before Web `Request` construction                                                                  |
+| **M35** Wire × I — authority identity | GREEN | Closed by `766aa8c57`: canonical byte identity across real HTTP/2, live/generated Node and Vercel before Web `Request` construction                             |
 
 ## Status
 
-- M1 authored (this document). M2–M8 remain GREEN; M35 is OPEN.
+- M1 authored (this document). M2–M8 and M35 are GREEN.
 - **Green:** M2 (auth-adapter non-egress proof, closed 2026-07-07), M3 (escape visibility, followup-16), M4 (timing),
   M5 (DoS scope + no footgun), M6 (supply chain, followup-16), M7 (build/compiler), M8 (runtime/infra); DB/Wire/Render/
   Runtime cells green (followup-{6..17} landed).
-- **Open cells: M35.** The first comparable convergence audit found a remotely supplied authority
-  identity split at the Node-to-Fetch boundary; `plans/bugz-34.md` owns closure.
-- **Next:** close and retest M35, then commission the external audit
-  (`plans/threat-matrix-plan.md` §3 A1), the last v1 security-signoff step.
+- **Open cells: none.** The first comparable convergence audit's remotely supplied authority
+  identity split is closed by `766aa8c57` and retained as M35.
+- **Next:** commission the external audit (`plans/threat-matrix-plan.md` §3 A1), the remaining v1
+  security-signoff step.

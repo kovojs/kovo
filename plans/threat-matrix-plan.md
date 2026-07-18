@@ -164,9 +164,10 @@ scripts/check-tcb-boundary.test.mjs` 19 pass; `node scripts/supply-chain-gates.m
 
 ## 5. Acceptance (v1 security signoff)
 
-- [ ] The matrix has no OPEN cell (every cell: control+test / audited escape / signed-off out-of-scope).
-  - Current gap: M35 reopened Wire × I after real HTTP/2 proved a non-canonical authority reaches
-    Web `Request` as split URL/Host identities; `plans/bugz-34.md` owns closure.
+- [x] The matrix has no OPEN cell (every cell: control+test / audited escape / signed-off out-of-scope).
+  - Evidence: `766aa8c57` closes M35 with canonical authority identity before Web `Request`
+    construction across real HTTP/2, live/generated Node, and Vercel; the C13 anchor and SPEC §9.5
+    retain the verdict. `docs/security-threat-matrix.md` records no OPEN cell.
 - [x] M2–M8's first-fill cells are green (auth TCB proof, escape-hatch visibility, constant-time compare, scoped
       DoS/supply-chain/build/infra).
   - Evidence: the M2–M8 items above cite their current gates; `docs/security-threat-matrix.md`

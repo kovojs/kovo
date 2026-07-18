@@ -51,11 +51,12 @@
     {
       "path": "plans/bugz-34.md",
       "kind": "bugz",
-      "state": "open",
+      "state": "closed-pending-publication",
       "openedOn": "2026-07-18",
+      "closedOn": "2026-07-18",
       "archiveBy": "2026-07-25",
       "archivePath": "plans/history/bugz-34.md",
-      "summary": "Close the remote authority-normalization identity split across live and generated adapters."
+      "summary": "Remediation is complete; publish the exact verified tip, observe required CI, then archive."
     }
   ],
   "history": {

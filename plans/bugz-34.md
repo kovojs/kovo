@@ -3,9 +3,10 @@
 <!-- kovo-security-ledger: transient -->
 
 **Date:** 2026-07-18
-**Status:** OPEN — one remotely reachable authority-identity finding
+**Status:** CLOSED — remediation complete; publication and required CI pending
 **Baseline:** `e5f613be9f1bb1f1cfc568a53e88ee741b3a4ded`
-**Lifecycle:** `open`; archive by 2026-07-25 to `plans/history/bugz-34.md` after the
+**Lifecycle:** `closed-pending-publication`; archive by 2026-07-25 to
+`plans/history/bugz-34.md` after the
 verified closing tip is published and required CI is green.
 
 **Scope:** The first fixed-charter remote Node-ingress convergence audit. Deliberately hostile
@@ -16,12 +17,12 @@ same-process code remains outside the app-level proof under SPEC §6.6.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |      0 |
-| Medium   |    1 |      0 |
+| Medium   |    0 |      1 |
 | Low      |    0 |      0 |
 
 ## Medium
 
-- [ ] **M1 / threat-matrix M35 — A non-canonical HTTP authority crosses the Node-to-Fetch
+- [x] **M1 / threat-matrix M35 — A non-canonical HTTP authority crosses the Node-to-Fetch
       boundary as two app-visible identities.**
   - A real HTTP/2 peer can send `:authority: %65xample.com`. The live Node adapter accepts it,
     constructs `request.url === "http://example.com/"`, but preserves
@@ -35,8 +36,15 @@ same-process code remains outside the app-level proof under SPEC §6.6.
     Node/Vercel adapters. Preserve canonical lower-case DNS with non-default ports and bracketed
     IPv6 controls, add a real-HTTP/2 regression and live/generated parity proof, enroll the closed
     verdict in C13, and make the SPEC §9.5 carrier rule explicit.
+  - **Closure:** `766aa8c57` requires byte-identical URL serialization under both HTTP schemes
+    before `Request` construction, preserving canonical lower-case DNS/non-default-port and
+    bracketed-IPv6 controls while rejecting normalizing spellings. The live and generated
+    adapters share the verdict, and SPEC §9.5 now makes authority identity normative.
 
 ## Latest verification
 
-- Fixed audit charter: `security/security-convergence-audit-charter.json` (pending integration).
-- Reproduction: 1/1 real HTTP/2 request at audited code SHA `e5f613be9`; remediation pending.
+- Fixed audit charter and exact-SHA round: `security/security-convergence-audit-charter.json` and
+  `security/security-convergence-audit-round-2026-07-18.json`; seeded canaries 2/2, R=1.
+- Reproduction: `b92f2590f` failed on 1/1 real HTTP/2 request at audited SHA `e5f613be9`.
+- Closure: focused real-wire/live and emitted Node/Vercel suites pass 6/6 and 2/2 respectively at
+  `766aa8c57`; `node-fetch-authority-identity-closed` is enrolled in the 17-corpus C13 inventory.
