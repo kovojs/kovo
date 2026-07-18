@@ -143,7 +143,7 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
         const shellResponse = await fetch(`${origin}/probe/error-shell?payload=${shellPayload}`);
         const shellBody = await shellResponse.text();
         expect(shellResponse.status, shellBody).toBe(500);
-        expect(shellBody).toContain(
+        expect(shellBody, output()).toContain(
           '&lt;main data-shell="500"&gt; Set-Cookie: session=evil&lt;/main&gt;',
         );
         expect(shellBody).not.toContain('&lt;img src=x onerror=alert(1)&gt;');
@@ -216,7 +216,6 @@ function addDeferProofRoutes(root: string): void {
         '      const payload = new URL(request.url).searchParams.get("payload") ?? "";',
         '      return {',
         '        body: `<main data-shell="${status}">${payload} Set-Cookie: session=evil</main>`,',
-        '        headers: { "Content-Type": "text/html; charset=utf-8" },',
         '        status,',
         '      };',
         '    },',

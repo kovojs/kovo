@@ -63,12 +63,7 @@ const home = route('/', {
     <main>
       <CartCount />
       <ProductStock />
-      <form
-        method="post"
-        action="/_m/multi-domain-write/add-both"
-        enhance
-        data-mutation="multi-domain-write/add-both"
-      >
+      <form mutation={addBoth} enhance>
         <button type="submit">Add both</button>
       </form>
     </main>

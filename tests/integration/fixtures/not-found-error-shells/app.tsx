@@ -33,7 +33,6 @@ export default defineFixture({
               url.pathname,
             )}</p></main>`,
           ),
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
           status,
         };
       },
@@ -41,7 +40,6 @@ export default defineFixture({
         body: trustedHtml(
           `<main data-error-shell="500"><h1>Custom failure</h1><p>${status}:safe</p></main>`,
         ),
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
         status,
       }),
     },

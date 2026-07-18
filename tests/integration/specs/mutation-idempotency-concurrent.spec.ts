@@ -12,6 +12,9 @@ test('coalesces concurrent duplicate enhanced mutation submissions', async ({
   await page.goto('/');
   const origin = new URL(page.url()).origin;
   const token = await page.locator('input[name="kovo-csrf"]').inputValue();
+  // SPEC.md §10.3: replay authority is a canonical server-stamped token. Preserve
+  // the form's issued-at component while exercising two requests with the same token.
+  const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
   const target = page.locator('[kovo-fragment-target="idem-concurrent-status"]');
   const liveTarget = [
     await target.getAttribute('kovo-fragment-target'),
@@ -27,7 +30,7 @@ test('coalesces concurrent duplicate enhanced mutation submissions', async ({
       form: { note: 'race', 'kovo-csrf': token },
       headers: {
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem-concurrent-1',
+        'Kovo-Idem': idem,
         'Kovo-Current-Url': page.url(),
         'Kovo-Live-Targets': liveTarget,
         'Kovo-Targets': 'idem-concurrent-status=idem',
@@ -38,8 +41,8 @@ test('coalesces concurrent duplicate enhanced mutation submissions', async ({
   const [first, duplicate] = await Promise.all([post(), post()]);
   expect(first.status()).toBe(200);
   expect(duplicate.status()).toBe(200);
-  expect(first.headers()['kovo-idem']).toBe('idem-concurrent-1');
-  expect(duplicate.headers()['kovo-idem']).toBe('idem-concurrent-1');
+  expect(first.headers()['kovo-idem']).toBe(idem);
+  expect(duplicate.headers()['kovo-idem']).toBe(idem);
 
   const [firstBody, duplicateBody] = await Promise.all([first.text(), duplicate.text()]);
   expect(firstBody).toBe(duplicateBody);

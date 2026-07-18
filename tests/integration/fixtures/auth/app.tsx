@@ -1,8 +1,9 @@
+/** @jsxImportSource @kovojs/server */
 // I2 fixture: authenticated session via the login() helper. A sign-in mutation
 // validates credentials and sets a session cookie; a `guards.authed()` route reads
 // the cookie-derived session (via sessionProvider) and renders the signed-in user.
 // Exercises the public auth surface: sessionProvider, guards.authed, setCookie.
-import { createApp, csrfField, guards, mutation, route, s } from '@kovojs/server';
+import { createApp, guards, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {
@@ -14,7 +15,7 @@ const COOKIE = 'kovo_fixture_session';
 const DEMO = { email: 'ada@example.com', password: 'correct' };
 const csrf = {
   secret: 'auth-fixture-csrf-secret-at-least-32-bytes',
-  sessionId: () => 'auth-fixture-browser-session',
+  sessionId: (request: AuthRequest) => request.session?.user.id,
 };
 
 function readSessionCookie(request: Request): AuthSession | null {
@@ -55,23 +56,29 @@ export const signOut = mutation('auth/sign-out', {
 });
 
 const loginRoute = route('/login', {
-  page: (_context, request) =>
-    `<main><h1>Sign in</h1><form method="post" action="/_m/auth/sign-in" enhance data-mutation="auth/sign-in">
-      ${csrfField(request, { ...csrf, audience: signIn.key })}
-      <input name="email" type="email" />
-      <input name="password" type="password" />
-      <button type="submit">Sign in</button>
-    </form></main>`,
+  page: () => (
+    <main>
+      <h1>Sign in</h1>
+      <form mutation={signIn} enhance>
+        <input name="email" type="email" />
+        <input name="password" type="password" />
+        <button type="submit">Sign in</button>
+      </form>
+    </main>
+  ),
 });
 
 const accountRoute = route('/account', {
   guard: guards.authed<AuthRequest>(),
-  page: (_context, request: AuthRequest) =>
-    `<main><h1>Account</h1><p>Signed in as ${request.session?.user?.id ?? '(anonymous)'}</p>
-      <form method="post" action="/_m/auth/sign-out" enhance data-mutation="auth/sign-out">
-        ${csrfField(request, { ...csrf, audience: signOut.key })}
+  page: (_context, request: AuthRequest) => (
+    <main>
+      <h1>Account</h1>
+      <p>Signed in as {request.session?.user?.id ?? '(anonymous)'}</p>
+      <form mutation={signOut} enhance>
         <button type="submit">Sign out</button>
-      </form></main>`,
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp<AuthSession>({

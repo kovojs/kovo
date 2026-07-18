@@ -36,7 +36,6 @@ export default defineFixture({
         body: trustedHtml(
           `<main data-forbidden-shell><h1>Access denied</h1><p>status:${status}</p></main>`,
         ),
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
         status,
       }),
     },

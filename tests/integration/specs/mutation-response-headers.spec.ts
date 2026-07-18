@@ -64,7 +64,8 @@ test('merges handler transport headers on enhanced and no-JS mutation responses'
   expect(noJsCookie).toMatch(/;\s*SameSite=Strict/i);
   expect(noJsCookie).toMatch(/;\s*Secure/i);
   // Handler-owned Set-Cookie is additive here too: the framework keeps PRG headers.
-  expect(headerValues(noJsHeaders, 'cache-control')).toEqual(['no-store']);
+  // SPEC.md §9.1.1: Set-Cookie selects the browser-state cache floor.
+  expect(headerValues(noJsHeaders, 'cache-control')).toEqual(['private, no-store']);
   expect(headerValues(noJsHeaders, 'location')).toEqual(['/']);
 
   const rows = await kovoApp.db.query('select count(*)::int as count from header_events');

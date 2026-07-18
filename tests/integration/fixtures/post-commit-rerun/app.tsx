@@ -31,7 +31,7 @@ const homeRoute = route('/', {
   page: () => (
     <main>
       <BalanceBadge />
-      <form method="post" action="/_m/account/deposit" enhance data-mutation="account/deposit">
+      <form mutation={deposit} enhance>
         <input name="amount" type="number" value="5" />
         <button type="submit">Deposit</button>
       </form>

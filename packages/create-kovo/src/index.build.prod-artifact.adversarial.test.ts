@@ -1201,7 +1201,6 @@ function addM1DeferAndShellProof(root: string): void {
         '      const payload = new URL(request.url).searchParams.get("payload") ?? "";',
         '      return {',
         '        body: `<main data-shell="m1">${payload} Set-Cookie: m1=owned</main>`,',
-        '        headers: { "Content-Type": "text/html; charset=utf-8" },',
         '        status,',
         '      };',
         '    },',
