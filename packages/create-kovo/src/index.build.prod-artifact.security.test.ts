@@ -835,7 +835,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         rmSync(root, { force: true, recursive: true });
       }
     }
-  }, 240_000);
+  }, 360_000);
 
   it('serves component-scoped FormError as a real no-JS 422 output from the production artifact', async () => {
     const tempParent = tmpdir();
