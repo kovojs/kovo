@@ -217,12 +217,14 @@ Measurements are versioned and reproducible:
     and opaque containers.
 - [ ] Remove only predicates proven superseded by the normalized engine. Record P across all moved
       modules and G across real fixtures; do not claim success from moving LOC elsewhere.
-- [x] Apply the substrate to OPP-28 only where principal-to-predicate correspondence is structurally
+- [ ] Apply the substrate to OPP-28 only where principal-to-predicate correspondence is structurally
       provable. Re-scope the remainder to an explicit audit/engine responsibility instead of
       overclaiming full JavaScript predicate correctness.
-  - Evidence: SPEC §6.6 restricts the claim to exact private-principal/owner-column/equality
-    correspondence and leaves all general predicate semantics to engine/runtime policy and audit;
-    the focused OPP-28 suite passes 151/151.
+  - Blocking review finding: app-authored `kovoAnalyzerSummary` declarations currently promote an
+    unverified helper return to private-principal provenance. The focused OPP-28 suite passes
+    151/151, but does not yet prove the helper body/accepted-principal correspondence required by
+    SPEC §6.6; keep this item open until declaration laundering closes and the reject corpus kills
+    its reintroduction.
 
 ### 2D. Runtime floor integration
 
