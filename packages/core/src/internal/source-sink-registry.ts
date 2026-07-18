@@ -72,11 +72,16 @@ export type BoundaryCrossingMechanism = 'reconstruct' | 'box' | 'own';
 
 /** @internal Canonical proof-surface row for C9 boundary-crossing sinks. */
 export interface BoundaryCrossingSinkInventoryEntry {
+  /** Complete source/sink census families discharged by this reviewed boundary row. */
+  censusFamilies: readonly SourceSinkInventoryEntry['sink'][];
   hostileValueEvidence: readonly string[];
-  inventoryFamily: SourceSinkInventoryEntry['sink'];
   mechanism: BoundaryCrossingMechanism;
   mechanismDetail: string;
+  /** Stable team/module ownership for gaps and incident follow-up. */
+  owner: string;
   proofEvidence: readonly string[];
+  /** Root command that fails when this row or its cited proof drifts. */
+  proofGate: string;
   sink: string;
   soleDoor: string;
   specAnchor: string;
@@ -372,6 +377,34 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     testEvidence: ['packages/browser/src/handlers.test.ts'],
     trust: 'framework-owned-generated-code',
   },
+  {
+    consumers: [
+      'framework-egress-client',
+      'redirect-following-transport',
+      'durable-task-runtime',
+      'webhook-agent-tool-runtime',
+    ],
+    context: 'network.egress.dns.dial.redirect',
+    diagnostic: 'KV424',
+    escapeHatch: 'declared-egress-origin-with-reviewed-private-network-posture',
+    firstParser: 'declared-origin-parser+framework-egress-request-constructor',
+    guard:
+      'declared-origin-allowlist+per-hop-origin-check+dns-resolution+private-network-classification+selected-ip-pin',
+    runtimeGuard:
+      'framework-egress-choke-rejects-undeclared-origin-before-dns-and-classifies-every-selected-dial-address',
+    schema:
+      'ctx.fetch|framework-egress|declared-http-origin|redirect-hop|dns-answer|selected-dial-address|proxy-posture|private-network-posture|metadata-capability|database-endpoint|task-webhook-agent-tool-egress',
+    sink: 'network.egress',
+    source:
+      'request-derived-url|task-payload-url|webhook-payload-url|agent-tool-argument|redirect-location|dns-answer|app-config-env-values',
+    specAnchor: 'spec/06-type-system.md#6.6;spec/10-data-plane.md#10.3',
+    testEvidence: [
+      'packages/server/src/egress.test.ts',
+      'packages/server/src/egress-redirect.test.ts',
+      'packages/server/src/task-runner.test.ts',
+    ],
+    trust: 'remote-and-configuration-derived-network-authority',
+  },
 ] as const;
 
 const driftTokens: readonly DangerousSinkToken[] = [
@@ -598,6 +631,33 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'tests/integration/specs/client-module-versioning.spec.ts',
     ],
   },
+  {
+    expected:
+      'an undeclared origin is rejected before DNS or dial; every redirect and selected address is independently origin-checked, classified, and pinned before transport use',
+    family: 'network.egress',
+    negativeTestEvidence: [
+      'packages/server/src/egress.test.ts',
+      'packages/server/src/egress-redirect.test.ts',
+      'packages/server/src/task-runner.test.ts',
+    ],
+    payloads: [
+      'undeclared origin',
+      'mixed-case or trailing-dot host',
+      'alternate numeric IP spelling',
+      'loopback and private address',
+      'cloud metadata address',
+      'DNS answer rotation',
+      'DNS rebinding between validation and dial',
+      'redirect to undeclared origin',
+      'redirect to private selected address',
+      'proxy-selected destination mismatch',
+    ],
+    positiveTestEvidence: [
+      'packages/server/src/egress.test.ts',
+      'packages/server/src/egress-redirect.test.ts',
+      'packages/server/src/task-runner.test.ts',
+    ],
+  },
 ] as const;
 
 const runtimeEvidence: SourceSinkRuntimeEvidence = {
@@ -801,37 +861,42 @@ const runtimeEvidence: SourceSinkRuntimeEvidence = {
 
 const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] = [
   {
+    censusFamilies: ['sql.executable'],
     hostileValueEvidence: ['packages/server/src/managed-db.test.ts'],
-    inventoryFamily: 'sql.executable',
     mechanism: 'reconstruct',
     mechanismDetail:
       'The managed SQL boundary snapshots every accepted statement carrier into one immutable statement artifact before validation, classification, instrumentation, and driver execution.',
+    owner: '@kovojs/server/managed-db',
     proofEvidence: [
       'packages/server/src/managed-db.test.ts',
       'packages/core/src/internal/security-markers.test.ts',
     ],
+    proofGate: 'pnpm run check:single-choke',
     sink: 'db driver statement',
     soleDoor: 'managed SQL statement snapshot + enforceManagedSql/managedDb engine policy',
     specAnchor: 'spec/10-data-plane.md §10.3; spec/11-verification.md §11.2',
   },
   {
+    censusFamilies: ['transport.query.live.broadcast'],
     hostileValueEvidence: [
       'packages/server/src/wire-html.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     ],
-    inventoryFamily: 'transport.query.live.broadcast',
     mechanism: 'reconstruct',
     mechanismDetail:
       'Framework wire helpers reconstruct fragment/query/error bodies from normalized values and escaped text instead of forwarding caller-owned body strings through privileged response paths.',
+    owner: '@kovojs/server/wire-output',
     proofEvidence: [
       'packages/server/src/wire-html.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     ],
+    proofGate: 'pnpm run check:wire-output-boundary',
     sink: 'http response body',
     soleDoor: 'emit-to-wire render helpers and typed error/body envelopes',
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-verification.md §11.4',
   },
   {
+    censusFamilies: ['http.header.cookie'],
     hostileValueEvidence: [
       'packages/server/src/response-app-headers.test.ts',
       'packages/server/src/response.test.ts',
@@ -843,10 +908,10 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/static-export-response.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
     ],
-    inventoryFamily: 'http.header.cookie',
     mechanism: 'own',
     mechanismDetail:
       'Direct app inputs pass an exact metadata allowlist before framework fields are assembled; static export rejects durable browser-state instructions, while typed, raw, live-adapter, and generated-adapter finalization own the browser-state private/no-store floor and the transport-owned framing/hop-by-hop deny set before transport mutation.',
+    owner: '@kovojs/server/response-finalization',
     proofEvidence: [
       'packages/server/src/response-app-headers.test.ts',
       'packages/server/src/response.test.ts',
@@ -858,143 +923,202 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/static-export-response.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
     ],
+    proofGate: 'pnpm run check:wire-output-boundary',
     sink: 'http response headers',
     soleDoor:
       'respond/error-shell app-header classifiers, then finalizeResponseHeaders/finalizeRawResponseHeaders, static browser-state rejection, and live/generated adapter cache-floor plus transport-header sinks',
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
   },
   {
+    censusFamilies: ['url.navigation.selector'],
     hostileValueEvidence: [
       'packages/server/src/response-posture.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
     ],
-    inventoryFamily: 'url.navigation.selector',
     mechanism: 'reconstruct',
     mechanismDetail:
       'Redirect targets are normalized back into same-origin path-form values before Location is emitted.',
+    owner: '@kovojs/server/response-posture',
     proofEvidence: [
       'packages/server/src/response-posture.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
     ],
+    proofGate: 'pnpm run check:wire-output-boundary',
     sink: 'redirect URL',
     soleDoor: 'redirectLocationHeaderValue / sanitizeNext normalization before header finalization',
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/10-data-plane.md §10.3',
   },
   {
+    censusFamilies: ['http.header.cookie'],
     hostileValueEvidence: [
       'packages/server/src/cookies.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
     ],
-    inventoryFamily: 'http.header.cookie',
     mechanism: 'own',
     mechanismDetail:
       'Cookie values cross the boundary only through the typed cookie builder, which owns encoding and attribute serialization.',
+    owner: '@kovojs/server/cookies',
     proofEvidence: [
       'packages/server/src/cookies.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
     ],
+    proofGate: 'pnpm run check:wire-output-boundary',
     sink: 'Set-Cookie',
     soleDoor: 'typed cookie builder + serializer on the Set-Cookie channel',
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
   },
   {
+    censusFamilies: ['file.storage.static-export'],
     hostileValueEvidence: [
       'packages/core/src/storage.test.ts',
       'packages/server/src/static-export-output.test.ts',
     ],
-    inventoryFamily: 'file.storage.static-export',
     mechanism: 'own',
     mechanismDetail:
       'Storage keys, file paths, and static-export outputs cross through framework-owned containment and reserved-reference gates.',
+    owner: '@kovojs/core/storage',
     proofEvidence: [
       'packages/core/src/storage.test.ts',
       'packages/server/src/static-export-output.test.ts',
     ],
+    proofGate: 'pnpm run check:filesystem-boundary',
     sink: 'blob/file write',
     soleDoor: 'storage adapter key validation + static export writer containment checks',
     specAnchor: 'spec/11-verification.md §11.4; plans/sources-sinks.md Phase 2',
   },
   {
+    censusFamilies: ['transport.query.live.broadcast'],
     hostileValueEvidence: [
       'packages/server/src/task-observability.test.ts',
       'packages/server/src/task-runner.test.ts',
     ],
-    inventoryFamily: 'transport.query.live.broadcast',
     mechanism: 'own',
     mechanismDetail:
       'Durable-task args and status payloads cross process/store boundaries through framework-owned queue envelopes and redaction-aware observability views.',
+    owner: '@kovojs/server/task-runner',
     proofEvidence: [
       'packages/server/src/task-observability.test.ts',
       'packages/server/src/task-runner.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts',
     ],
+    proofGate: 'pnpm run check:security-test-builds',
     sink: 'durable-task payload',
     soleDoor: 'task queue envelope + observability redaction/export helpers',
     specAnchor: 'spec/09-wire-protocol.md §9.6; spec/11-verification.md §11.4',
   },
   {
+    censusFamilies: ['ingress.endpoint.webhook'],
     hostileValueEvidence: [
       'packages/server/src/webhook.test.ts',
       'tests/integration/specs/webhook-hmac.spec.ts',
     ],
-    inventoryFamily: 'ingress.endpoint.webhook',
     mechanism: 'own',
     mechanismDetail:
       'Webhook payload bytes remain framework-owned until verifier-before-parse and replay posture accept them.',
+    owner: '@kovojs/server/webhook',
     proofEvidence: [
       'packages/server/src/webhook.test.ts',
       'tests/integration/specs/webhook-hmac.spec.ts',
     ],
+    proofGate: 'pnpm run check:security-test-builds',
     sink: 'webhook payload',
     soleDoor: 'webhook verifier-before-parse + replay-scoped dispatch',
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-verification.md §11.4',
   },
   {
+    censusFamilies: ['html.dom.output', 'document.shell.output', 'css.style.output'],
     hostileValueEvidence: [
       'packages/browser/src/security-output.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     ],
-    inventoryFamily: 'html.dom.output',
     mechanism: 'reconstruct',
     mechanismDetail:
       'Renderer and browser output helpers reconstruct HTML/DOM output from contextual encoders or explicit trustedHtml/trustedUrl escapes.',
+    owner: '@kovojs/compiler/output-context',
     proofEvidence: [
       'packages/browser/src/security-output.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     ],
+    proofGate: 'pnpm run check:sink-policy',
     sink: 'HTML/render output',
     soleDoor: 'escaped render pipeline + explicit trusted output escape hatches',
     specAnchor: 'SPEC.md §4.8; spec/11-verification.md §11.4',
   },
   {
+    censusFamilies: ['transport.query.live.broadcast'],
     hostileValueEvidence: [
       'packages/core/src/secret.test.ts',
       'packages/server/src/task-observability.test.ts',
       'packages/server/src/query-endpoint.test.ts',
     ],
-    inventoryFamily: 'transport.query.live.broadcast',
     mechanism: 'box',
     mechanismDetail:
       'Secret and redacted runtime boxes refuse accidental coercion and are normalized to redacted or empty error payloads before logs, status views, or wire-visible error shells.',
+    owner: '@kovojs/core/secret',
     proofEvidence: [
       'packages/core/src/secret.test.ts',
       'packages/server/src/task-observability.test.ts',
       'packages/server/src/query-endpoint.test.ts',
     ],
+    proofGate: 'pnpm run check:tcb-boundary',
     sink: 'log/error output',
     soleDoor: 'Secret/redacted boxes plus normalized error shell emitters',
     specAnchor: 'spec/10-data-plane.md §10.3; spec/11-verification.md §11.2',
   },
   {
+    censusFamilies: ['network.egress'],
     hostileValueEvidence: ['packages/server/src/task-runner.test.ts'],
-    inventoryFamily: 'dynamic.import.process',
     mechanism: 'own',
     mechanismDetail:
       'Outbound network requests use the framework allowlist choke instead of arbitrary request-authored fetch targets on privileged task/runtime surfaces.',
+    owner: '@kovojs/server/egress',
     proofEvidence: ['packages/server/src/task-runner.test.ts'],
+    proofGate: 'pnpm run check:egress-boundary',
     sink: 'outbound egress request',
     soleDoor: 'framework egress allowlist choke on ctx.fetch and equivalent owned egress surfaces',
     specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
+  },
+  {
+    censusFamilies: ['auth.data-access'],
+    hostileValueEvidence: [
+      'packages/server/src/postgres-authz.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    ],
+    mechanism: 'own',
+    mechanismDetail:
+      'The served Postgres path derives one pinned principal and delegates row/column authority to the least-privilege runtime-role privilege graph, FORCE-RLS policies, and closure-audited reachable objects.',
+    owner: '@kovojs/server/postgres-authz',
+    proofEvidence: [
+      'packages/server/src/postgres-authz.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    ],
+    proofGate: 'pnpm run test:authz-paranoid',
+    sink: 'authorization principal/data access',
+    soleDoor:
+      'pinned request principal + least-privilege Postgres role/RLS/engine-closure boundary',
+    specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
+  },
+  {
+    censusFamilies: ['dynamic.import.process'],
+    hostileValueEvidence: [
+      'packages/browser/src/handlers.test.ts',
+      'packages/compiler/src/conformance-compat.test.ts',
+      'packages/cli/src/index.kovo-build.test.ts',
+    ],
+    mechanism: 'own',
+    mechanismDetail:
+      'Compiler-owned versioned handler modules and reviewed build/runtime capability doors own dynamic loading and process authority; app-authored request values cannot select an ambient execution sink.',
+    owner: '@kovojs/compiler/capability-closure',
+    proofEvidence: [
+      'packages/browser/src/handlers.test.ts',
+      'packages/compiler/src/conformance-compat.test.ts',
+      'packages/cli/src/index.kovo-build.test.ts',
+    ],
+    proofGate: 'pnpm run check:sink-policy',
+    sink: 'dynamic module/process execution',
+    soleDoor:
+      'compiler-owned immutable client-module registry plus reviewed build/runtime capability doors',
+    specAnchor: 'spec/04-component-model.md §4.4; spec/06-type-system.md §6.6',
   },
 ] as const;
 

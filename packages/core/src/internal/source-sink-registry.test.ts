@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,6 +10,8 @@ import {
   sourceSinkRedCorpus,
   sourceSinkRuntimeEvidence,
 } from './source-sink-registry.js';
+
+const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
 // @kovo-security-classifier-corpus sink-registry
 describe('boundary crossing sink inventory', () => {
@@ -51,10 +56,15 @@ describe('boundary crossing sink inventory', () => {
       'HTML/render output',
       'log/error output',
       'outbound egress request',
+      'authorization principal/data access',
+      'dynamic module/process execution',
     ]);
 
     for (const entry of inventory) {
+      expect(entry.censusFamilies.length, entry.sink).toBeGreaterThan(0);
       expect(entry.mechanismDetail).not.toBe('');
+      expect(entry.owner).not.toBe('');
+      expect(entry.proofGate).toMatch(/^pnpm run [a-z0-9:-]+$/u);
       expect(entry.soleDoor).not.toBe('');
       expect(entry.hostileValueEvidence.length, entry.sink).toBeGreaterThan(0);
       expect(entry.proofEvidence.length, entry.sink).toBeGreaterThan(0);
@@ -80,28 +90,56 @@ describe('boundary crossing sink inventory', () => {
         ['HTML/render output', 'reconstruct'],
         ['log/error output', 'box'],
         ['outbound egress request', 'own'],
+        ['authorization principal/data access', 'own'],
+        ['dynamic module/process execution', 'own'],
       ]),
     );
   });
 
-  it('anchors the sink-proof inventory in the broader source/sink families', () => {
-    const sinkFamilies = new Set(frameworkSourceSinkInventory().map((entry) => entry.sink));
+  it('mechanically covers the complete source/sink census with no unknown family', () => {
+    const sinkFamilies = [
+      ...new Set(frameworkSourceSinkInventory().map((entry) => entry.sink)),
+    ].sort();
     const inventory = boundaryCrossingSinkInventory();
+    const mappedFamilies = [
+      ...new Set(inventory.flatMap((entry) => [...entry.censusFamilies])),
+    ].sort();
 
-    expect(sinkFamilies.has('sql.executable')).toBe(true);
-    expect(sinkFamilies.has('http.header.cookie')).toBe(true);
-    expect(sinkFamilies.has('file.storage.static-export')).toBe(true);
-    expect(sinkFamilies.has('html.dom.output')).toBe(true);
-    expect(sinkFamilies.has('ingress.endpoint.webhook')).toBe(true);
-    expect(inventory.find((entry) => entry.sink === 'db driver statement')?.inventoryFamily).toBe(
-      'sql.executable',
+    expect(mappedFamilies).toEqual(sinkFamilies);
+    expect(inventory.find((entry) => entry.sink === 'db driver statement')?.censusFamilies).toEqual(
+      ['sql.executable'],
     );
-    expect(inventory.find((entry) => entry.sink === 'Set-Cookie')?.inventoryFamily).toBe(
+    expect(inventory.find((entry) => entry.sink === 'Set-Cookie')?.censusFamilies).toEqual([
       'http.header.cookie',
-    );
-    expect(inventory.find((entry) => entry.sink === 'webhook payload')?.inventoryFamily).toBe(
+    ]);
+    expect(inventory.find((entry) => entry.sink === 'webhook payload')?.censusFamilies).toEqual([
       'ingress.endpoint.webhook',
-    );
+    ]);
+    expect(inventory.find((entry) => entry.sink === 'HTML/render output')?.censusFamilies).toEqual([
+      'html.dom.output',
+      'document.shell.output',
+      'css.style.output',
+    ]);
+    expect(
+      inventory.find((entry) => entry.sink === 'outbound egress request')?.censusFamilies,
+    ).toEqual(['network.egress']);
+  });
+
+  it('keeps every owner, proof gate, and hostile-value citation live', () => {
+    const packageJson = JSON.parse(
+      readFileSync(new URL('../../../../package.json', import.meta.url), 'utf8'),
+    ) as { scripts?: Record<string, string> };
+    const seenSinks = new Set<string>();
+
+    for (const entry of boundaryCrossingSinkInventory()) {
+      expect(seenSinks.has(entry.sink), entry.sink).toBe(false);
+      seenSinks.add(entry.sink);
+      const scriptName = entry.proofGate.slice('pnpm run '.length);
+      expect(packageJson.scripts?.[scriptName], `${entry.sink}: ${entry.proofGate}`).toBeTruthy();
+      for (const evidence of [...entry.proofEvidence, ...entry.hostileValueEvidence]) {
+        expect(existsSync(`${repositoryRoot}${evidence}`), `${entry.sink}: ${evidence}`).toBe(true);
+      }
+    }
   });
 
   it('keeps browser-state cache poisoning in the C13 header/cookie superset corpus', () => {

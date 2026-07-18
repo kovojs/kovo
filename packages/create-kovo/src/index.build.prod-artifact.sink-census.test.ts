@@ -1,57 +1,29 @@
+import { boundaryCrossingSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 import { describe, expect, it } from 'vitest';
 
-import { assertRequiredSinkInventoryEvidence } from './index.build.prod-artifact.sink-census.js';
-
 describe('prod artifact sink census inventory evidence', () => {
-  it('requires hostile-value proof references for the DEC-F sink set', () => {
-    const entries = assertRequiredSinkInventoryEvidence([
-      {
-        hostileValueProof: 'packages/server/src/managed-db.test.ts',
-        sink: 'db driver statement',
-      },
-      {
-        hostileValueProof: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
-        sink: 'http response body',
-      },
-      {
-        hostileValueProof: 'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
-        sink: 'http response headers',
-      },
-      {
-        hostileValueProof:
-          'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
-        sink: 'redirect URL',
-      },
-      {
-        hostileValueProof: 'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
-        sink: 'Set-Cookie',
-      },
-      {
-        hostileValueProof: 'packages/server/src/static-export-output.test.ts',
-        sink: 'blob/file write',
-      },
-      {
-        hostileValueProof: 'packages/server/src/task-observability.test.ts',
-        sink: 'durable-task payload',
-      },
-      {
-        hostileValueProof: 'packages/server/src/webhook.test.ts',
-        sink: 'webhook payload',
-      },
-      {
-        hostileValueProof: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
-        sink: 'HTML/render output',
-      },
-      {
-        hostileValueProof: 'packages/core/src/secret.test.ts',
-        sink: 'log/error output',
-      },
-      {
-        hostileValueProof: 'packages/server/src/task-runner.test.ts',
-        sink: 'outbound egress request',
-      },
-    ]);
+  it('consumes the single C9 inventory and requires live hostile-value proof for every row', () => {
+    const entries = boundaryCrossingSinkInventory();
 
-    expect(entries).toHaveLength(11);
+    expect(entries.map((entry) => entry.sink)).toEqual([
+      'db driver statement',
+      'http response body',
+      'http response headers',
+      'redirect URL',
+      'Set-Cookie',
+      'blob/file write',
+      'durable-task payload',
+      'webhook payload',
+      'HTML/render output',
+      'log/error output',
+      'outbound egress request',
+      'authorization principal/data access',
+      'dynamic module/process execution',
+    ]);
+    for (const entry of entries) {
+      expect(entry.owner, entry.sink).not.toBe('');
+      expect(entry.proofGate, entry.sink).not.toBe('');
+      expect(entry.hostileValueEvidence.length, entry.sink).toBeGreaterThan(0);
+    }
   });
 });
