@@ -17,6 +17,7 @@ describe('loader visible-return refetch', () => {
     const store = createQueryStore();
     const refetchOnFocus = vi.fn();
     const formData = new FormData();
+    formData.set('Kovo-Idem', 'v1_1750000000000_000102030405060708090a0b0c0d0e0f');
     const form = new FakeFormElement(
       {
         enhance: '',

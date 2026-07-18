@@ -97,7 +97,8 @@ it('refreshes modular idempotency truth through the boot-pinned FormData setter'
   ) {
     throw new Error('native FormData controls unavailable');
   }
-  Reflect.apply(setDescriptor.value, formData, ['Kovo-Idem', 'idem_stale_render']);
+  const renderedIdem = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
+  Reflect.apply(setDescriptor.value, formData, ['Kovo-Idem', renderedIdem]);
   let poisonedSetCalls = 0;
   Object.defineProperty(FormData.prototype, 'set', {
     ...setDescriptor,
@@ -130,7 +131,8 @@ it('refreshes modular idempotency truth through the boot-pinned FormData setter'
       root: document.createElement('main'),
     });
 
-    expect(fetched.idem).not.toBe('idem_stale_render');
+    expect(fetched.idem).not.toBe(renderedIdem);
+    expect(fetched.idem).toMatch(/^v1_1750000000000_[0-9a-f]{32}$/u);
     expect(Reflect.apply(getDescriptor.value, formData, ['Kovo-Idem'])).toBe(fetched.idem);
     expect(poisonedSetCalls).toBe(0);
   } finally {

@@ -2207,6 +2207,7 @@ describe('browser inline loader enhanced navigation', () => {
             '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-live-token="tok_layout" kovo-deps="viewer">',
             '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
             '<form id="cart-form" enhance data-mutation="cart/add" action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
+            '<input type="hidden" name="Kovo-Idem" value="v1_1750000000000_000102030405060708090a0b0c0d0e0f">',
             '<button type="submit">Save</button>',
             '</form>',
             '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-live-token="tok_cart" kovo-deps="cart">Cart</section>',

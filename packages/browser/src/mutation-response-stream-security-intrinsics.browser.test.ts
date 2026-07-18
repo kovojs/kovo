@@ -143,7 +143,9 @@ it('pins the generated inline streaming mutation reader before a late getReader 
   const frame = await createSameOriginFrame(
     [
       '<!doctype html><html><head></head><body>',
-      '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post"><button>send</button></form>',
+      '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post">',
+      '<input type="hidden" name="Kovo-Idem" value="v1_1750000000000_000102030405060708090a0b0c0d0e0f">',
+      '<button>send</button></form>',
       '<section kovo-fragment-target="messages">INITIAL SERVER TRUTH</section>',
       '</body></html>',
     ].join(''),

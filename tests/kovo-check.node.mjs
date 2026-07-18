@@ -773,10 +773,7 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
     `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`,
   );
   const generatedIdem = fact.fetchCalls[0]?.headers['Kovo-Idem'];
-  assert.match(
-    generatedIdem ?? '',
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
-  );
+  assert.match(generatedIdem ?? '', /^v1_1750000000000_[0-9a-f]{32}$/u);
   assert.deepEqual(fact.listenerEvents, [
     ...delegatedLifecycleEvents,
     'popstate',
@@ -1604,7 +1601,17 @@ void test('P5 morph evidence preserves keyed identity and applies fragments', as
     await morphFragmentBehaviorFact({
       applyMutationResponseToDom({ body, root, store }) {
         return submitEnhancedMutation({
-          fetch: async () => new Response(body, { status: 200 }),
+          fetch: async () => ({
+            headers: {
+              get(name) {
+                return name.toLowerCase() === 'content-type' ? 'text/vnd.kovo.fragment+html' : null;
+              },
+            },
+            ok: true,
+            status: 200,
+            text: async () => body,
+            url: 'http://localhost/_m/kovo-check-morph',
+          }),
           form: { action: '/_m/kovo-check-morph', method: 'post' },
           formData: new FormData(),
           idem: 'kovo-check-morph-fixture',

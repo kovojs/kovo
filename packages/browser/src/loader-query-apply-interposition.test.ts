@@ -100,6 +100,8 @@ describe('loader query apply interposition', () => {
       { enhance: '', 'data-mutation': 'cart/add' },
       { action: '/_m/cart/add', method: 'post' },
     );
+    const formData = new FormData();
+    formData.set('Kovo-Idem', 'v1_1750000000000_000102030405060708090a0b0c0d0e0f');
     const fetch = vi.fn(async () =>
       mutationTestResponse('/_m/cart/add', {
         headers: {
@@ -122,7 +124,7 @@ describe('loader query apply interposition', () => {
       applyQuery,
       enhancedMutations: {
         fetch,
-        formData: () => new FormData(),
+        formData: () => formData,
         morph(target, html) {
           observedDuringMorph.push(count.textContent ?? '');
           target.replaceWithHtml(html);

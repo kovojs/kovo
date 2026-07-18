@@ -1581,12 +1581,31 @@ export async function executeInlineEnhancedFormLoaderFixture(
     element.replaceChildren(new InlineFixtureText(match[2] ?? ''));
     return element;
   };
+  const formDataValues = new Map<string, string>([
+    ['Kovo-Idem', 'v1_1750000000000_000102030405060708090a0b0c0d0e0f'],
+  ]);
   const formData = { kind: 'form-data' };
+  Object.defineProperties(formData, {
+    get: {
+      value(name: string) {
+        return formDataValues.get(name) ?? null;
+      },
+    },
+    set: {
+      value(name: string, value: string) {
+        formDataValues.set(name, value);
+      },
+    },
+  });
   const fetchCalls: InlineEnhancedFormLoaderFact['fetchCalls'] = [];
   const form = {
     action: '/_m/cart/add',
     getAttribute(name: string) {
-      return name === 'enhance' ? '' : null;
+      if (name === 'enhance') return '';
+      if (name === 'data-mutation') return 'cart/add';
+      if (name === 'action') return '/_m/cart/add';
+      if (name === 'method') return 'post';
+      return null;
     },
     method: 'post',
   };
@@ -1732,6 +1751,10 @@ export async function executeInlineEnhancedFormLoaderFixture(
         url,
       });
       return {
+        headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
+        ok: true,
+        redirected: false,
+        status: 200,
         async text() {
           return [
             '<kovo-query name="cart" key="cart:c1">{"count":1}</kovo-query>',
@@ -1739,6 +1762,7 @@ export async function executeInlineEnhancedFormLoaderFixture(
             '<kovo-fragment target="cart-list" mode="append"><li>2</li></kovo-fragment>',
           ].join('\n');
         },
+        url: 'http://localhost/_m/cart/add',
       };
     },
     setTimeout,

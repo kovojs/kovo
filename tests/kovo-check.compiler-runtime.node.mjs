@@ -330,6 +330,7 @@ void test('P6 navigation bfcache optimism cleanup acceptance is represented', as
         formDataQuantity: '2',
         headers: {
           Accept: 'text/vnd.kovo.fragment+html',
+          'Kovo-Current-Url': 'http://localhost/',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': 'idem_bfcache',
           'Kovo-Live-Targets': '',
@@ -1007,6 +1008,7 @@ void test('P9 verification layer evidence remains represented', async () => {
         ],
         fetchHeaders: {
           Accept: 'text/vnd.kovo.fragment+html',
+          'Kovo-Current-Url': 'http://localhost/',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': 'idem_change_record',
           'Kovo-Live-Targets': '',

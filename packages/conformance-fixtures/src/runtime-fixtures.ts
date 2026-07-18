@@ -7,6 +7,32 @@ import {
   type KovoGraphOptimisticFact,
 } from './graph-fixtures.ts';
 
+function sameOriginMutationResponse<ResponseShape extends object>(
+  path: string,
+  response: ResponseShape,
+): ResponseShape & {
+  headers: { get(name: string): string | null };
+  ok: true;
+  status: 200;
+  url: string;
+} {
+  const responseHeaders = (response as { headers?: { get?(name: string): string | null } }).headers;
+  return {
+    ...response,
+    headers: {
+      get(name: string) {
+        if (name.toLowerCase() === 'content-type') {
+          return 'text/vnd.kovo.fragment+html';
+        }
+        return responseHeaders?.get?.(name) ?? null;
+      },
+    },
+    ok: true,
+    status: 200,
+    url: `http://localhost${path}`,
+  };
+}
+
 export interface LoaderSmokeRuntime {
   applyCompiledQueryUpdatePlan: (
     root: unknown,
@@ -567,14 +593,14 @@ export async function commerceKeyedOptimisticBehaviorFact(options: {
   const optimisticResult = await runtime.submitOptimisticEnhancedMutation({
     fetch: async () => {
       fetchStoreDuringOptimism = store.get('reviews', 'product:p1');
-      return {
+      return sameOriginMutationResponse('/_m/reviews/add', {
         async text() {
           return [
             '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</kovo-query>',
             '<kovo-fragment target="reviews:p1"><section>Reviews ready</section></kovo-fragment>',
           ].join('\n');
         },
-      };
+      });
     },
     form: { action: '/_m/reviews/add', method: 'post' },
     formData: new FormData(),
@@ -679,12 +705,14 @@ export async function optimismCleanupBehaviorFact(
       fetchOptions = options;
       return new Promise((resolve) => {
         releaseFetch = () => {
-          resolve({
-            headers: { get: () => null },
-            async text() {
-              return '<kovo-query name="cart">{"count":2}</kovo-query>';
-            },
-          });
+          resolve(
+            sameOriginMutationResponse('/_m/cart/add', {
+              headers: { get: () => null },
+              async text() {
+                return '<kovo-query name="cart">{"count":2}</kovo-query>';
+              },
+            }),
+          );
         };
       });
     },
@@ -780,7 +808,7 @@ export async function enhancedMutationBehaviorFact(
     },
     fetch: async (_url: string, options: { headers?: unknown }) => {
       enhancedFetchHeaders = options.headers;
-      return {
+      return sameOriginMutationResponse('/_m/cart/add', {
         headers: {
           get(name: string) {
             return name === 'Kovo-Changes'
@@ -791,7 +819,7 @@ export async function enhancedMutationBehaviorFact(
         async text() {
           return '<kovo-query name="cart" key="cart:c1">{"count":2}</kovo-query>';
         },
-      };
+      });
     },
     form: { action: '/_m/cart/add', method: 'post' },
     formData: new FormData(),
@@ -802,16 +830,17 @@ export async function enhancedMutationBehaviorFact(
 
   const malformedHeaderErrors: Error[] = [];
   const malformedResult = await runtime.submitEnhancedMutation({
-    fetch: async () => ({
-      headers: {
-        get(name: string) {
-          return name === 'Kovo-Changes' ? '{bad json' : null;
+    fetch: async () =>
+      sameOriginMutationResponse('/_m/cart/add', {
+        headers: {
+          get(name: string) {
+            return name === 'Kovo-Changes' ? '{bad json' : null;
+          },
         },
-      },
-      async text() {
-        return '<kovo-query name="cart">{"count":3}</kovo-query>';
-      },
-    }),
+        async text() {
+          return '<kovo-query name="cart">{"count":3}</kovo-query>';
+        },
+      }),
     form: { action: '/_m/cart/add', method: 'post' },
     formData: new FormData(),
     onError(error: Error) {
@@ -833,7 +862,7 @@ export async function enhancedMutationBehaviorFact(
       optimisticFetchIdemHeader = options.headers?.['Kovo-Idem'];
       optimisticStoreDuringFetch = optimisticStore.get('reviews', 'product:p1');
       optimisticPendingDuringFetch = pendingElement.getAttribute('kovo-pending');
-      return {
+      return sameOriginMutationResponse('/_m/reviews/add', {
         headers: {
           get(name: string) {
             return name === 'Kovo-Changes' ? '[{"domain":"product","keys":["p1"]}]' : null;
@@ -842,7 +871,7 @@ export async function enhancedMutationBehaviorFact(
         async text() {
           return '<kovo-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</kovo-query>';
         },
-      };
+      });
     },
     form: { action: '/_m/reviews/add', method: 'post' },
     formData: new FormData(),
