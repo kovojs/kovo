@@ -14,12 +14,14 @@ import { pathToFileURL } from 'node:url';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import * as authorizationMatrixGate from './check-authorization-matrix.mjs';
 import * as sinkPolicyGate from './check-sink-policy-gate.mjs';
 import * as fundamentalFixesCensusGate from './fundamental-fixes-census-gate.mjs';
 import * as securityTestBuildGate from './security-test-build-gate.mjs';
 
 const repoRoot = findRepoRoot();
 const scriptsDir = path.join(repoRoot, 'scripts');
+const authorizationMatrixPath = path.join(repoRoot, 'security/authorization-matrix.json');
 const sinkPolicyGatePath = path.join(scriptsDir, 'check-sink-policy-gate.mjs');
 const fundamentalFixesCensusGatePath = path.join(scriptsDir, 'fundamental-fixes-census-gate.mjs');
 const fundamentalFixesCensusManifestPath = path.join(
@@ -40,6 +42,73 @@ const trustedHtmlProvenancePath = path.join(
 );
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
+
+const ownerReadCanary = [
+  '      "id": "endpoint-builder-act-as-owner",',
+  '      "principal": ["act-as-owner"],',
+  '      "ownership": ["own", "other"],',
+  '      "operation": "read",',
+  '      "queryFamily": ["builder"],',
+  '      "surface": "endpoint",',
+  '      "expected": "allow-own-only"',
+].join('\n');
+const weakenedOwnerReadCanary = ownerReadCanary.replace(
+  '"expected": "allow-own-only"',
+  '"expected": "allow"',
+);
+
+const rawWriteCanary = [
+  '      "id": "mutation-raw-cross-owner",',
+  '      "principal": ["session-owner"],',
+  '      "ownership": ["other"],',
+  '      "operation": "insert",',
+  '      "queryFamily": ["raw-sql"],',
+  '      "surface": "mutation",',
+  '      "expected": "deny"',
+].join('\n');
+const weakenedRawWriteCanary = rawWriteCanary.replace('"expected": "deny"', '"expected": "allow"');
+
+const provisionRoleCanary = [
+  '      "id": "runtime-provision-role-assumption-denied",',
+  '      "principal": ["runtime-login"],',
+  '      "ownership": ["not-applicable"],',
+  '      "operation": "boot",',
+  '      "queryFamily": ["none"],',
+  '      "surface": "closure-audit",',
+  '      "expected": "deny"',
+].join('\n');
+const weakenedProvisionRoleCanary = provisionRoleCanary.replace(
+  '"expected": "deny"',
+  '"expected": "allow"',
+);
+
+const definerFunctionCanary = [
+  '      "id": "closure-cross-schema-definer-function-refusal",',
+  '      "principal": ["runtime-login"],',
+  '      "ownership": ["other", "unclassified"],',
+  '      "operation": "boot",',
+  '      "queryFamily": ["function"],',
+  '      "surface": "closure-audit",',
+  '      "expected": "boot-refuse"',
+].join('\n');
+const weakenedDefinerFunctionCanary = definerFunctionCanary.replace(
+  '"expected": "boot-refuse"',
+  '"expected": "allow"',
+);
+
+const durableTaskCanary = [
+  '      "id": "durable-task-act-as-owner",',
+  '      "principal": ["act-as-owner"],',
+  '      "ownership": ["own", "other"],',
+  '      "operation": "schedule",',
+  '      "queryFamily": ["builder"],',
+  '      "surface": "durable-task",',
+  '      "expected": "allow-own-only"',
+].join('\n');
+const weakenedDurableTaskCanary = durableTaskCanary.replace(
+  '"expected": "allow-own-only"',
+  '"expected": "deny"',
+);
 
 const missingRealBuildProofBranch = [
   '      if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
@@ -486,6 +555,56 @@ const weakenedViteJsToTsSiblingCandidatesBranch = [
 ].join('\n');
 
 export const SECURITY_GATE_MUTANTS = [
+  {
+    description: 'Weakens the session-owner builder cell to allow cross-owner reads.',
+    expectedKiller: 'authorization matrix owner-read canary must retain allow-own-only',
+    name: 'authorization-matrix/allow-cross-owner-builder-read',
+    replacement: weakenedOwnerReadCanary,
+    search: ownerReadCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
+  {
+    description: 'Weakens the raw-SQL mutation cell to allow a cross-owner insert.',
+    expectedKiller: 'authorization matrix raw-write canary must retain engine denial',
+    name: 'authorization-matrix/allow-cross-owner-raw-write',
+    replacement: weakenedRawWriteCanary,
+    search: rawWriteCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
+  {
+    description: 'Lets the ordinary runtime assume the provision role.',
+    expectedKiller: 'authorization matrix must deny provision-role assumption',
+    name: 'authorization-matrix/allow-provision-role-assumption',
+    replacement: weakenedProvisionRoleCanary,
+    search: provisionRoleCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
+  {
+    description: 'Allows a reader-reachable cross-schema SECURITY DEFINER function.',
+    expectedKiller: 'authorization matrix closure audit must refuse the definer function',
+    name: 'authorization-matrix/allow-cross-schema-definer-function',
+    replacement: weakenedDefinerFunctionCanary,
+    search: definerFunctionCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
+  {
+    description: 'Turns the durable-task act-as owner path into a surviving denial.',
+    expectedKiller: 'authorization matrix durable-task canary must retain its owner-only success',
+    name: 'authorization-matrix/deny-durable-task-owner-read',
+    replacement: weakenedDurableTaskCanary,
+    search: durableTaskCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
   {
     baseModule: securityTestBuildGate,
     description:
@@ -1001,6 +1120,12 @@ function installMutantScriptLib(tempRoot) {
     readFileSync(path.join(scriptsDir, 'check-security-brands.mjs'), 'utf8'),
     'utf8',
   );
+}
+
+async function assertAuthorizationMatrixDocumentIsClosed(_moduleUnderTest, { sourceText }) {
+  const check = authorizationMatrixGate.validateAuthorizationMatrixDocument(JSON.parse(sourceText));
+  if (check.ok) return;
+  throw new Error(check.findings.join('\n'));
 }
 
 export function applyExactMutation(sourceText, mutant) {
