@@ -260,6 +260,7 @@ export default defineConfig({
           { pattern: 'examples/reference/package.json', base: 'workspace' },
           { pattern: 'examples/reference/tsconfig.json', base: 'workspace' },
           { pattern: 'examples/reference/src/**/*.ts', base: 'workspace' },
+          { pattern: 'examples/reference/src/**/*.tsx', base: 'workspace' },
           { pattern: 'conformance/**/package.json', base: 'workspace' },
           { pattern: 'conformance/**/tsconfig.json', base: 'workspace' },
           { pattern: 'conformance/**/src/**/*.ts', base: 'workspace' },
