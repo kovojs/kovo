@@ -103,8 +103,11 @@ Measurements are versioned and reproducible:
     `plans/bugz-33.md`, and `docs/security-threat-matrix.md` record the rule and proof. The ensuing
     fixed-charter audit found M35 (`R=1` at `e5f613be9`); `766aa8c57` closes its authority-identity
     root cause across the same real-wire/live/generated surfaces and enrolls the verdict in C13.
-- [ ] Restore the exact baseline to green local gates and `origin/main` CI/Pages, integrating the
+- [x] Restore the exact baseline to green local gates and `origin/main` CI/Pages, integrating the
       already-verified fixture/runtime checkpoints without weakening production classifiers.
+  - Evidence: `origin/main` `0bba9051e`; CI run `29647585740` passed 37/37 jobs, Pages run
+    `29647585741` passed, and race-repeat run `29647585733` passed after the local 753-test
+    three-engine browser gate and focused Firefox reload repeats.
 - [x] Consolidate completed security plans through an explicit security-ledger index. Update the
       dogfood/find-bugz workflows to permit transient finding ledgers with an archive deadline;
       do not enforce “exactly two files” through filename guessing.
