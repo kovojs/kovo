@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -170,58 +170,30 @@ describe('create-kovo starter (build integration: production transaction artifac
     }
   }, 180_000);
 
-  // @kovo-security-certifies KV433 readonly-managed-handle-prod-artifact
-  it('keeps the production readonly DB floor active when KV433 static findings are advisory', async () => {
+  // @kovo-security-certifies KV449 finite-ir-query-write-prod-artifact
+  it('keeps query writes KV449-closed when the dedicated KV433 finding is advisory', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-readonly-runtime-floor-'));
-    const port = await reservePort();
-    let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
       writeKovoProject(root, { name: 'Prod Readonly Runtime Floor Proof' });
       linkStarterBuildDependencies(root);
       addRuntimeMutationSafetyProofs(root, { includeReadonlyRuntimeChokeProbe: true });
 
-      // SPEC §6.6/§10.3: paranoid mode makes the dedicated static query-write finding advisory
-      // so the emitted production query can prove the independent KV433 managed-DB membrane.
-      buildParanoidProductionArtifact(root);
-
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
-          HOST: '127.0.0.1',
-          KOVO_PARANOID: '1',
-          NODE_ENV: 'test',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
-
-      await fetchTextWhenReady(`${origin}/api/tx-proof-count`, output);
-      const before = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
-        count: number;
-      };
-      expect(before.count).toBe(0);
-
-      const response = await fetch(
-        `${origin}/_q/runtime-safety-proofs/readonly-runtime-choke-probe`,
+      // SPEC §6.6 keeps a directly reached managed query write KV449-closed even when paranoid
+      // verification makes the separate KV433 reachability finding advisory. The runtime
+      // `readonlyDb` membrane remains independently exercised by managed-db.test.ts; supported
+      // authored source cannot weaken the finite-IR gate merely to reach that defense-in-depth.
+      const output = execFileSyncErrorOutput(
+        captureProductionBuildFailure(() => buildParanoidProductionArtifact(root)),
       );
-      const body = await response.text();
-      expect(response.status, `${body}\n${output()}`).toBe(500);
-      expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
-      expect(output()).toContain('KV433');
-
-      const after = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
-        count: number;
-      };
-      expect(after.count).toBe(0);
+      expect(output).toContain('kovo build check preflight failed');
+      expect(output).toContain('ERROR KV449');
+      expect(output).toContain('query loaders cannot perform a managed database write');
+      expect(output).toContain('KV433');
+      expect(existsSync(join(root, 'dist/server/server.mjs'))).toBe(false);
     } finally {
-      await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
   }, 180_000);
