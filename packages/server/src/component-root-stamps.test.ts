@@ -6,6 +6,7 @@ import { setOrAppendHtmlAttribute, stampKovoComponentRoot } from './component-ro
 import { createLiveTargetAttestation } from './mutation-wire.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { createLiveTargetTestAuthority } from './test-fixtures.js';
+import { runWithResponseLifecycleRequest } from './response-lifecycle-context.js';
 
 const componentRootStampTestBuildToken = 'component-root-stamp-test-build';
 const componentRootStampTestAuthority = createLiveTargetTestAuthority(
@@ -315,21 +316,23 @@ describe('component root stamp security', () => {
     });
     const request = new Request('https://app.test/account');
     const setCookies: string[] = [];
-    const stamped = runWithJsxRequestContext(
-      request,
-      {
-        csrf,
-        onCsrfSetCookie: (cookie) => setCookies.push(cookie),
-      },
-      () =>
-        stampKovoComponentRoot({
-          attestationAuthority: authority.authority,
-          component: Card,
-          componentName: 'components/card/anonymous-card',
-          html: '<anonymous-card>safe</anonymous-card>',
-          props: {},
-          request,
-        }),
+    const stamped = runWithResponseLifecycleRequest(request, request, () =>
+      runWithJsxRequestContext(
+        request,
+        {
+          csrf,
+          onCsrfSetCookie: (cookie) => setCookies.push(cookie),
+        },
+        () =>
+          stampKovoComponentRoot({
+            attestationAuthority: authority.authority,
+            component: Card,
+            componentName: 'components/card/anonymous-card',
+            html: '<anonymous-card>safe</anonymous-card>',
+            props: {},
+            request,
+          }),
+      ),
     );
 
     expect(setCookies).toHaveLength(1);

@@ -1,5 +1,8 @@
 import type { DelegatedEvent, EventElementLike } from './events.js';
 
+/** Canonical server-rendered SPEC §10.3 seed used by browser-free enhanced-form fixtures. */
+export const serverStampedMutationIdem = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
+
 export function mutationTestResponse<ResponseShape extends object>(
   path: string,
   response: ResponseShape,

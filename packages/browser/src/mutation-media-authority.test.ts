@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { fetchEnhancedMutation } from './mutation-fetch.js';
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
+import { serverStampedMutationIdem } from './runtime-test-fakes.js';
 
 describe('enhanced mutation media authority', () => {
   it('rejects a session directive outside the exact mutation media envelope', async () => {
@@ -81,7 +82,7 @@ describe('enhanced mutation media authority', () => {
           postMessage() {}
         };
         globalRecord.FormData = function FormData() {
-          const values = new Map<string, unknown>();
+          const values = new Map<string, unknown>([['Kovo-Idem', serverStampedMutationIdem]]);
           return {
             get(name: string) {
               return values.get(name) ?? null;

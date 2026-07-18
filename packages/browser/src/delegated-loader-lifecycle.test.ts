@@ -9,6 +9,7 @@ import {
   FakeRoot,
   installTestClientModuleManifest,
   mutationTestResponse,
+  serverStampedMutationIdem,
 } from './runtime-test-fakes.js';
 
 const restoreClientModuleManifest = installTestClientModuleManifest([
@@ -107,7 +108,11 @@ describe('delegated loader lifecycle', () => {
             },
           }),
         ),
-        formData: () => new FormData(),
+        formData: () => {
+          const data = new FormData();
+          data.set('Kovo-Idem', serverStampedMutationIdem);
+          return data;
+        },
         root: mutationRoot,
         store,
       },
