@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "a1015dc4d224de702473908110101434a3c6cb68742bc21f0f1591aefe776b24",
+      "sourceTreeSha256": "68c2c8925f2a349a31d25f623b22f91bced58412c53bb2d97baa80c4bb05b774",
       "manifestVariants": [
         {
           "exports": {
@@ -1673,7 +1673,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "fec798bd67b217e56a3ee367f5dc7ded52e2756b6d5c676dbe8c8fb51145c35f"
+      "sourceTreeSha256": "7df4f93e4c754476dcd923d864d3e8e90c34b75a8a434f32e3c0e432968ace51"
     },
     {
       "manifestVariants": [
