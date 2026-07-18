@@ -522,15 +522,18 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
     const key = resolvedSymbolKey(
       symbolForIdentifierReference(expression) ?? expression.getSymbol(),
     );
-    if (
-      (key ? context.opaqueAliases.get(key) : undefined) ??
-      context.opaqueAliases.get(`name:${expression.getText()}`)
-    ) {
+    const opaqueAlias = key
+      ? context.opaqueAliases.get(key)
+      : context.opaqueAliases.get(`name:${expression.getText()}`);
+    if (opaqueAlias) {
       return undefined;
     }
-    const alias =
-      (key ? context.aliases.get(key) : undefined) ??
-      [...context.aliases.values()].find((candidate) => candidate.name === expression.getText());
+    // A resolved lexical symbol is the identity boundary. Falling back to the same identifier
+    // text lets an attacker-controlled shadow inherit a different binding's private provenance.
+    // The `name:*` path exists only for genuinely unresolved AST bindings (SPEC §6.6/§10.3).
+    const alias = key
+      ? context.aliases.get(key)
+      : context.aliases.get(`name:${expression.getText()}`);
     if (!alias || !isConstVariableBindingDeclaration(alias.declaration)) return undefined;
     const stable = alias.requiresGuard
       ? sessionAliasGuardDominatesUse(alias, expression)
@@ -1066,10 +1069,9 @@ function privateScopeAliasForIdentifier(
   context: SessionProvenanceContext,
 ): SessionAlias | undefined {
   const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
-  return (
-    (key ? context.aliases.get(key) : undefined) ??
-    [...context.aliases.values()].find((candidate) => candidate.name === expression.getText())
-  );
+  return key
+    ? context.aliases.get(key)
+    : context.aliases.get(`name:${expression.getText()}`);
 }
 
 function isSafePrivateScopeFallbackExpression(node: Node): boolean {
@@ -1105,10 +1107,9 @@ function helperSummaryForCallCallee(
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isIdentifier(expression)) return undefined;
   const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
-  return (
-    (key ? context.opaqueAliases.get(key) : undefined) ??
-    context.opaqueAliases.get(`name:${expression.getText()}`)
-  );
+  return key
+    ? context.opaqueAliases.get(key)
+    : context.opaqueAliases.get(`name:${expression.getText()}`);
 }
 
 function unsummarizedHelperReasonForExpression(node: Node): string | undefined {

@@ -1632,9 +1632,11 @@ function localConstAcceptedGuardAliasPrivateScope(
 
   const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
   const key = resolvedSymbolKey(symbol);
-  const alias =
-    (key ? sessionContext.aliases.get(key) : undefined) ??
-    sessionContext.aliases.get(`name:${node.getText()}`);
+  // A resolved lexical symbol must never inherit a same-text unresolved alias. The name fallback
+  // exists only for nodes whose symbol genuinely could not be resolved (SPEC §6.6/§10.3).
+  const alias = key
+    ? sessionContext.aliases.get(key)
+    : sessionContext.aliases.get(`name:${node.getText()}`);
   if (!alias || alias.kind !== 'guard') return undefined;
   const privateKey = `guard:${alias.path}`;
   if (!sessionContext.acceptedGuardPrivateKeys?.has(privateKey)) return undefined;

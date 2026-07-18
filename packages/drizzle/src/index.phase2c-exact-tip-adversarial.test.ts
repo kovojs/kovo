@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { Project, SyntaxKind } from 'ts-morph';
 
 import { kovoCheck } from '../../cli/src/graph-output.js';
 import {
   extractOwnerAuditFromProject,
   extractStaticBuildAnalysisFactsFromProject,
+  queryPrivateScopeKeyOperand,
 } from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
@@ -427,6 +429,87 @@ describe('Phase 2C exact-tip adversarial review', () => {
     expect(result.check.exitCode).toBe(1);
     expect(result.check.output).toContain('KV414');
   });
+
+  it('does not launder a non-null private alias through a same-text for-of binding', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({ userId: s.string() }),',
+        '  async load(input: { userId: string }, actual: Context) {',
+        '    const userId = actual.request.guard.userId;',
+        '    for (const userId of [input.userId])',
+        '      return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+        '    return { items: [] };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('does not transfer an accepted guard to a same-text for-of binding', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({ userId: s.string() }),',
+        '  async load(input: { userId: string }, actual: NullableContext) {',
+        '    const userId = actual.request.guard?.userId;',
+        '    if (!userId) return { items: [] };',
+        '    for (const userId of [input.userId])',
+        '      return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+        '    return { items: [] };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('does not erase a resolved shadow through an unresolved accepted-guard alias fallback', () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    const source = project.createSourceFile(
+      'accepted-guard-shadow.ts',
+      [
+        'declare function consume(value: string): void;',
+        'function probe(input: string[], carrier: { guard: { userId: string } }) {',
+        '  const principal = carrier.guard.userId;',
+        '  for (const principal of input) consume(principal);',
+        '}',
+      ].join('\n'),
+    );
+    const declaration = source
+      .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+      .find((candidate) => candidate.getInitializer()?.getText() === 'carrier.guard.userId');
+    const use = source
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .find((candidate) => candidate.getExpression().getText() === 'consume')
+      ?.getArguments()[0];
+    if (!declaration || !use) throw new Error('expected exact shadow probe nodes');
+
+    const operand = queryPrivateScopeKeyOperand(use, undefined, {
+      acceptedGuardPrivateKeys: new Set(['guard:userId']),
+      aliases: new Map([
+        [
+          'name:principal',
+          {
+            declaration,
+            kind: 'guard' as const,
+            name: 'principal',
+            path: 'userId',
+            requiresGuard: true,
+          },
+        ],
+      ]),
+      helpers: new Map(),
+      opaqueAliases: new Map(),
+    });
+    expect(operand.privateKey).toBeUndefined();
+  });
+
   it.each([
     ['direct request replacement', 'context.request = input.request;'],
     ['Object.assign root replacement', 'Object.assign(context, { request: input.request });'],
@@ -565,6 +648,28 @@ describe('Phase 2C exact-tip adversarial review', () => {
       {
         column: 'ownerId',
         provenance: 'input',
+        via: 'set',
+      },
+    ]);
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV438');
+  });
+
+  it('emits KV438 for a same-text for-of binding shadowing a private serverValue alias', () => {
+    const result = massVerdict(
+      [
+        'const ownerId = context.request.guard.userId;',
+        'for (const ownerId of [input.ownerId])',
+        '  await context.db.update(accounts).set({ ownerId: serverValue(ownerId, "private owner") }).where(eq(accounts.id, input.id));',
+      ],
+      {
+        input: 's.object({ id: s.string(), ownerId: s.string() })',
+      },
+    );
+    expect(result.analysis.massAssignmentFacts).toMatchObject([
+      {
+        column: 'ownerId',
+        provenance: 'unknown',
         via: 'set',
       },
     ]);
