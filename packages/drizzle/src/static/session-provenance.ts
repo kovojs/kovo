@@ -549,7 +549,8 @@ export function privateScopeHelperCallCarrierIsProven(call: CallExpression): boo
   return carrier !== undefined && privateScopeCarrierBindingIsProven(carrier, call);
 }
 
-function privateScopeCarrierBindingIsProven(carrier: Node, auditedUse: Node): boolean {
+/** @internal Exact structural-role and whole-callback integrity proof for a private carrier use. */
+export function privateScopeCarrierBindingIsProven(carrier: Node, auditedUse: Node): boolean {
   const root = unwrappedStaticExpressionNode(carrier);
   // SPEC §6.6/§10.3 admits only a structurally enrolled request/context parameter. `this` is the
   // caller-controlled receiver/definition object and cannot mint private principal provenance.

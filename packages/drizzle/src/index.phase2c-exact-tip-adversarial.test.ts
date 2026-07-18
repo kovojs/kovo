@@ -160,6 +160,41 @@ describe('Phase 2C exact-tip adversarial review', () => {
     },
   );
 
+  it('does not recover a non-null session alias from validated input named request', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'type SessionInput = { session: { userId: string } };',
+        'export const list = query("list", {',
+        '  args: s.object({ session: s.object({ userId: s.string() }) }),',
+        '  async load(request: SessionInput, actual: Context) {',
+        '    const userId = request.session.userId;',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('does not let a dominating check bless a guard path rooted in validated input', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({ guard: s.object({ userId: s.string().optional() }) }),',
+        '  async load(context: { guard: { userId?: string } }, actual: Context) {',
+        '    if (!context.guard.userId) throw new Error("missing user");',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, context.guard.userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
   it.each([
     ['direct request replacement', 'context.request = input.request;'],
     ['Object.assign root replacement', 'Object.assign(context, { request: input.request });'],

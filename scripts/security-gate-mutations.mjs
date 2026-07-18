@@ -772,6 +772,34 @@ const weakenedAnalyzerSummaryDirectCarrierIntegrityBranch =
 const analyzerSummaryDestructuredCarrierProofBranch =
   '  return segments !== undefined && privateScopeCarrierBindingIsProven(segments.root, node);';
 const weakenedAnalyzerSummaryDestructuredCarrierProofBranch = '  return segments !== undefined;';
+const analyzerSummarySessionAliasCarrierProofBranch = [
+  'function directNonNullableSessionScopePath(node: Node): string | undefined {',
+  '  const expression = unwrappedStaticExpressionNode(node);',
+  '  const segments = staticAccessSegments(node);',
+  '  if (!segments) return undefined;',
+  '  if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;',
+].join('\n');
+const weakenedAnalyzerSummarySessionAliasCarrierProofBranch = [
+  'function directNonNullableSessionScopePath(node: Node): string | undefined {',
+  '  const expression = unwrappedStaticExpressionNode(node);',
+  '  const segments = staticAccessSegments(node);',
+  '  if (!segments) return undefined;',
+  '  if (false && !privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;',
+].join('\n');
+const analyzerSummaryAcceptedGuardCarrierProofBranch = [
+  'function directGuardPrivateScopePath(node: Node): string | undefined {',
+  '  const expression = unwrappedStaticExpressionNode(node);',
+  '  const segments = staticAccessSegments(node);',
+  '  if (!segments) return undefined;',
+  '  if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;',
+].join('\n');
+const weakenedAnalyzerSummaryAcceptedGuardCarrierProofBranch = [
+  'function directGuardPrivateScopePath(node: Node): string | undefined {',
+  '  const expression = unwrappedStaticExpressionNode(node);',
+  '  const segments = staticAccessSegments(node);',
+  '  if (!segments) return undefined;',
+  '  if (false && !privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;',
+].join('\n');
 const analyzerSummaryOpaqueCarrierEscapeBranch = [
   '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
   '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
@@ -999,6 +1027,26 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
     test: assertAnalyzerSummaryDestructuredCarrierProofIsPinned,
+  },
+  {
+    description: 'Lets a non-null session local recover private provenance from named input.',
+    expectedKiller: 'session-local recovery must retain exact carrier-role proof',
+    name: 'drizzle-analyzer-summary/trust-input-session-local',
+    replacement: weakenedAnalyzerSummarySessionAliasCarrierProofBranch,
+    search: analyzerSummarySessionAliasCarrierProofBranch,
+    sourceFile: drizzleSummariesPath,
+    sourceOnly: true,
+    test: assertAnalyzerSummarySessionAliasCarrierProofIsPinned,
+  },
+  {
+    description: 'Lets accepted-guard dominance trust a guard path rooted in named input.',
+    expectedKiller: 'accepted guard paths must retain exact carrier-role proof',
+    name: 'drizzle-analyzer-summary/trust-input-accepted-guard',
+    replacement: weakenedAnalyzerSummaryAcceptedGuardCarrierProofBranch,
+    search: analyzerSummaryAcceptedGuardCarrierProofBranch,
+    sourceFile: drizzleSummariesPath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryAcceptedGuardCarrierProofIsPinned,
   },
   {
     description: 'Lets a framework carrier escape through an opaque call before private use.',
@@ -2138,6 +2186,24 @@ async function assertAnalyzerSummaryDestructuredCarrierProofIsPinned(
 ) {
   if (!sourceText.includes(analyzerSummaryDestructuredCarrierProofBranch)) {
     throw new Error('destructured private aliases no longer require exact carrier-role proof');
+  }
+}
+
+async function assertAnalyzerSummarySessionAliasCarrierProofIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummarySessionAliasCarrierProofBranch)) {
+    throw new Error('session-local recovery no longer requires exact carrier-role proof');
+  }
+}
+
+async function assertAnalyzerSummaryAcceptedGuardCarrierProofIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryAcceptedGuardCarrierProofBranch)) {
+    throw new Error('accepted guard paths no longer require exact carrier-role proof');
   }
 }
 

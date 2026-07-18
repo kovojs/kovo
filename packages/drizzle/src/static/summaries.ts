@@ -35,6 +35,7 @@ import {
   emptySessionProvenanceContext,
   opaqueAliasReasonForExpression,
   privateScopeAliasIsStableAtUse,
+  privateScopeCarrierBindingIsProven,
   privateScopeForExpression,
   privateScopeHelperCallCarrierIsProven,
   privateScopeIdentifierBindingIsStableAtUse,
@@ -2076,7 +2077,7 @@ function directNonNullableSessionScopePath(node: Node): string | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   const segments = staticAccessSegments(node);
   if (!segments) return undefined;
-  if (!isPrivateScopeCarrierRootName(segments.root)) return undefined;
+  if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;
   const index = segments.path.indexOf('session');
   if (index < 0) return undefined;
   const path = segments.path.slice(index + 1).join('.');
@@ -2086,9 +2087,10 @@ function directNonNullableSessionScopePath(node: Node): string | undefined {
 }
 
 function directGuardPrivateScopePath(node: Node): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
   const segments = staticAccessSegments(node);
   if (!segments) return undefined;
-  if (!isPrivateScopeCarrierRootName(segments.root)) return undefined;
+  if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;
   const index = segments.path.indexOf('guard');
   if (index < 0) return undefined;
   const path = segments.path.slice(index + 1).join('.');
@@ -2103,15 +2105,6 @@ function sessionAccessRequiresGuard(node: Node): boolean {
   const nullable = (type as { isNullable?: () => boolean }).isNullable?.();
   if (nullable) return true;
   return /\bnull\b|\bundefined\b/.test(type.getText());
-}
-
-function isPrivateScopeCarrierRootName(root: Node): boolean {
-  const expression = unwrappedStaticExpressionNode(root);
-  if (Node.isThisExpression(expression)) return true;
-  return (
-    Node.isIdentifier(expression) &&
-    ['req', 'request', 'ctx', 'context'].includes(expression.getText())
-  );
 }
 
 function sessionSegmentExpression(node: Node): Node | undefined {
