@@ -23,7 +23,7 @@ export type { SigningSecret } from '../keyring.js';
 export function mintCsrfToken<Request>(
   request: Request,
   options: CsrfOptions<Request>,
-  context: { audience?: string; mutation?: never } = {},
+  context: { audience: string; mutation?: never },
 ): MintedCsrfToken {
   assertRawCsrfMintContext(context);
   return mintCsrfTokenInternal(request, options, context);
@@ -37,17 +37,20 @@ export function mintCsrfToken<Request>(
  */
 export function mintCsrfField<Request>(
   request: Request,
-  options: CsrfOptions<Request> & { audience?: string; mutation?: never },
+  options: CsrfOptions<Request> & { audience: string; mutation?: never },
 ): MintedCsrfField {
   assertRawCsrfMintContext(options);
   return mintCsrfFieldInternal(request, options);
 }
 
-function assertRawCsrfMintContext(context: { mutation?: never }): void {
+function assertRawCsrfMintContext(context: { audience?: string; mutation?: never }): void {
   if ('mutation' in context) {
     throw new TypeError(
       'Public CSRF mint helpers are for raw endpoint protocols. Mutation forms must use typed <form mutation={definition}> authoring so Kovo emits CSRF and Kovo-Idem together.',
     );
+  }
+  if (typeof context.audience !== 'string' || context.audience.length === 0) {
+    throw new TypeError('Public raw endpoint CSRF mint helpers require an explicit audience.');
   }
 }
 

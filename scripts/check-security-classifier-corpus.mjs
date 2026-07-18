@@ -1695,9 +1695,32 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/replay.test.ts',
       'packages/server/src/mutation/replay-policy.test.ts',
       'packages/server/src/mutation.test.ts',
+      'packages/server/src/build.test.ts',
       'packages/better-auth/src/environment.test.ts',
+      'scripts/check-csrf-mint-delivery.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'csrf-mint-delivery-matrix',
+        file: 'scripts/check-csrf-mint-delivery.test.mjs',
+        snippets: [
+          'closes every lifecycle surface over live proof anchors',
+          'kills a lifecycle-receipt deletion mutant',
+          'kills a partial public mutation-helper mutant',
+          'kills header-seal and cache-posture mutants',
+          'kills rotation and replay-order mutants',
+          'rejects denominator shrinkage, missing canaries, and stale proof anchors',
+        ],
+      },
+      {
+        id: 'packed-node-vercel-csrf-delivery-parity',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells',
+          'packed-csrf-stream-response',
+          'packed-csrf-stream-immediate-response',
+        ],
+      },
       {
         id: 'standalone-response-lifecycle-receipt-and-sharing',
         file: 'packages/server/src/standalone-csrf-mint-security.test.ts',
