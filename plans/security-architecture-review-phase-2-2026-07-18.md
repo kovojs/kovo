@@ -148,11 +148,9 @@ justified by the compiler IR unit tests alone.
 
 ## Architecture that passed review
 
-- **Capability closure:** all ten shipping root kinds are enumerated, including the `createApp()`
-  application lifecycle; the future agent/tool kind remains reserved with no fabricated factory.
-  Relative imports, re-exports, literal dynamic loading, callbacks/containers, separated custom
-  adapters, raw globals/capabilities, and exact-version package summaries are represented. Absent,
-  stale, contradictory, or unresolved package facts close.
+- **Capability closure:** all ten root kinds are enumerated; relative imports, re-exports, literal
+  dynamic loading, callbacks/containers, raw globals/capabilities, and exact-version package
+  summaries are represented. Absent, stale, contradictory, or unresolved package facts close.
 - **Finite IR and authored-source boundary:** the compiler-owned operation union has exact door
   ownership, unknown operations produce KV449, generated ABI imports are provenance-gated, and app
   source remains TSX/JSX rather than hand-authored lowered IR.
