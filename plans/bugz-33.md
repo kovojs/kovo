@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    2 |     20 |
-| Medium   |    1 |     23 |
+| Medium   |    2 |     23 |
 | Low      |    0 |      5 |
 
 ## High
@@ -584,6 +584,16 @@ rendering, Better Auth, and managed SQL.
   - **Open:** require HTTPS for every non-loopback origin regardless of environment mode, preserve
     plaintext only for exact loopback development, and prove both direct and environment binding
     constructors reject the unsafe origin before auth construction.
+
+- [ ] **M25 - The Better Auth GET mount forwarded unauthenticated off-origin redirects.**
+  - Fixed bindings disable Better Auth's ambient origin check because Kovo owns credential ingress,
+    but the callback mount forwarded the dependency's redirect verbatim. Invalid verify-email and
+    reset-password tokens combined with an attacker `callbackURL` therefore produced a public 302
+    to an arbitrary origin.
+  - **Evidence:** real Better Auth 1.6.17 returns `Location: https://evil.example/phish?...` for both
+    mounted GET shapes, and Kovo currently preserves it.
+  - **Open:** the redirect-only mount gate must resolve `Location` against the request and require
+    the exact pinned scheme, host, and effective port before emitting an empty redirect response.
 
 ## Low
 
