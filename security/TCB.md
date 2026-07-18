@@ -47,8 +47,8 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
   "schema": "kovo.security.tcb/v1",
   "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1; plans/fundamental-fixes-followup-7b.md DEC-A; plans/fundamental-fixes-followup-12.md DEC-D1",
   "budgets": {
-    "entryMaxLines": 220,
-    "totalTcbMaxLines": 1800
+    "entryMaxLines": 310,
+    "totalTcbMaxLines": 1900
   },
   "trustedDependencySurfaces": [
     {
@@ -398,10 +398,10 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "id": "server.request-ingress.classifier",
       "file": "packages/server/src/request-ingress-policy.ts",
       "name": "createRequestIngressClassifier",
-      "kind": "finite-request-method-authority-scheme-refusal",
+      "kind": "finite-request-source-method-authority-scheme-target-provenance-refusal",
       "classification": "tcb",
       "proof": "packages/server/src/request-ingress-policy.test.ts; packages/server/src/request-ingress-c13.test.ts; packages/server/src/__bugz_remote_ingress.test.ts; packages/server/src/node.test.ts; packages/server/src/build.test.ts",
-      "lineBudget": 220
+      "lineBudget": 310
     },
     {
       "id": "better-auth.request-secret-surface.manifest",

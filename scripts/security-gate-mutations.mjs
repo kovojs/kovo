@@ -54,14 +54,67 @@ const requestIngressPolicyPath = path.join(
   repoRoot,
   'packages/server/src/request-ingress-policy.ts',
 );
+const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 
 const canonicalPostMethodBranch =
   "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
 const weakenedCanonicalPostMethodBranch =
   "    if (equalsAsciiCaseInsensitive(method, 'post')) return true;";
 
-const dualSchemeAuthorityIdentityBranch = '      parsedHttps.host === authority &&';
-const weakenedDualSchemeAuthorityIdentityBranch = '      true &&';
+const dualSchemeAuthorityIdentityBranch = [
+  '      http.host === value &&',
+  '      https.host === value &&',
+].join('\n');
+const weakenedDualSchemeAuthorityIdentityBranch = [
+  '      http.host === value &&',
+  '      true &&',
+].join('\n');
+
+const rawHttp1HostEvidenceBranch =
+  '    if (input.rawHostHeaderCount !== 1 || input.rawHostHeaderValue !== input.host) return undefined;';
+const weakenedRawHttp1HostEvidenceBranch =
+  '    if (input.rawHostHeaderCount !== 1) return undefined;';
+
+const exactIngressSchemeBranch = "    return value === 'http' || value === 'https'";
+const weakenedExactIngressSchemeBranch = [
+  "    if (value === 'HTTPS') return { ok: true, scheme: 'https' };",
+  "    return value === 'http' || value === 'https'",
+].join('\n');
+
+const encodedIngressTargetBranch = [
+  "        contains(rawTarget, '#') ||",
+  '        containsEncodedPathControl(rawTarget)',
+].join('\n');
+const weakenedEncodedIngressTargetBranch = [
+  "        contains(rawTarget, '#') ||",
+  '        false',
+].join('\n');
+
+const h2IncompatibleSourceBranch = [
+  "        input.httpVersion[0] !== '2' ||",
+  '        input.host !== undefined ||',
+  '        input.forwardedProto !== undefined ||',
+].join('\n');
+const weakenedH2IncompatibleSourceBranch = [
+  "        input.httpVersion[0] !== '2' ||",
+  '        input.forwardedProto !== undefined ||',
+].join('\n');
+
+const canonicalVercelClientBranch =
+  '      if (clientIp === undefined || clientIp !== input.platformClientIp) {';
+const weakenedCanonicalVercelClientBranch =
+  '      if (false && (clientIp === undefined || clientIp !== input.platformClientIp)) {';
+
+const preparedVercelIngressBranch = [
+  '    const prepared = prepareVercelRequestIngress(nodeRequest);',
+  '    if (rejectPreparedNodeRequestIngress(prepared, nodeResponse)) return;',
+  '    const transport = preparedNodeRequestTransportMetadata(prepared);',
+].join('\n');
+const weakenedPreparedVercelIngressBranch = [
+  '    const prepared = prepareVercelRequestIngress(nodeRequest);',
+  '    if (rejectPreparedNodeRequestIngress(prepared, nodeResponse)) return;',
+  '    const transport = preparedNodeRequestTransportMetadata(prepareVercelRequestIngress(nodeRequest));',
+].join('\n');
 
 const ownerReadCanary = [
   '      "id": "endpoint-builder-act-as-owner",',
@@ -968,6 +1021,66 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertRequestIngressDualSchemeAuthorityIsClosed,
   },
   {
+    baseModule: requestIngressPolicy,
+    description: 'Lets normalized Host disagree with the exact raw HTTP/1 Host evidence.',
+    expectedKiller: 'request-ingress HTTP/1 authority must bind raw and normalized Host exactly',
+    name: 'request-ingress/drop-raw-host-value-identity',
+    replacement: weakenedRawHttp1HostEvidenceBranch,
+    search: rawHttp1HostEvidenceBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressRawHostIdentityIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Admits an uppercase HTTP/2 pseudo-scheme that the finite grammar closes.',
+    expectedKiller: 'request-ingress schemes must remain exact lowercase http or https',
+    name: 'request-ingress/allow-uppercase-h2-scheme',
+    replacement: weakenedExactIngressSchemeBranch,
+    search: exactIngressSchemeBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressExactSchemeIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Drops encoded dot and separator refusal from the request-target grammar.',
+    expectedKiller: 'request-ingress targets must close encoded path aliases',
+    name: 'request-ingress/drop-encoded-target-controls',
+    replacement: weakenedEncodedIngressTargetBranch,
+    search: encodedIngressTargetBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressEncodedTargetIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Lets an HTTP/2 posture borrow the incompatible ordinary Host field.',
+    expectedKiller: 'request-ingress HTTP/2 posture must reject ordinary Host evidence',
+    name: 'request-ingress/allow-h2-host-field',
+    replacement: weakenedH2IncompatibleSourceBranch,
+    search: h2IncompatibleSourceBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressH2SourceIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Lets non-canonical Vercel client provenance survive platform classification.',
+    expectedKiller: 'request-ingress Vercel client provenance must be canonical and exact',
+    name: 'request-ingress/drop-vercel-client-canonical-identity',
+    replacement: weakenedCanonicalVercelClientBranch,
+    search: canonicalVercelClientBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressVercelClientIsClosed,
+  },
+  {
+    description: 'Recomputes Vercel request ingress after the accepted prepared snapshot.',
+    expectedKiller: 'generated Vercel dispatch must consume exactly one prepared ingress verdict',
+    name: 'request-ingress/recompute-vercel-prepared-verdict',
+    replacement: weakenedPreparedVercelIngressBranch,
+    search: preparedVercelIngressBranch,
+    sourceFile: serverBuildPath,
+    sourceOnly: true,
+    test: assertGeneratedVercelPreparedIngressIsSingle,
+  },
+  {
     baseModule: fundamentalFixesCensusGate,
     description: 'Deletes the M5 forbidden-status census enforcement branch.',
     expectedKiller: 'M5 census statuses such as future must stay forbidden, not merely unsupported',
@@ -1249,6 +1362,9 @@ async function assertAuthorizationMatrixDocumentIsClosed(_moduleUnderTest, { sou
 
 function requestIngressClassifier(moduleUnderTest) {
   return moduleUnderTest.createRequestIngressClassifier({
+    canonicalClientIp(value) {
+      return value === '203.0.113.020' ? '203.0.113.20' : value;
+    },
     charCodeAt: (value, index) => value.charCodeAt(index),
     isArray: Array.isArray,
     parseAuthority(authority, scheme) {
@@ -1258,14 +1374,70 @@ function requestIngressClassifier(moduleUnderTest) {
           hash: parsed.hash,
           host: parsed.host,
           origin: parsed.origin,
+          password: parsed.password,
           pathname: parsed.pathname,
           search: parsed.search,
+          username: parsed.username,
+        };
+      } catch {
+        return undefined;
+      }
+    },
+    parseTarget(target, base) {
+      try {
+        const parsed = base === undefined ? new URL(target) : new URL(target, base);
+        return {
+          hash: parsed.hash,
+          host: parsed.host,
+          href: parsed.href,
+          origin: parsed.origin,
+          password: parsed.password,
+          pathname: parsed.pathname,
+          protocol: parsed.protocol,
+          search: parsed.search,
+          username: parsed.username,
         };
       } catch {
         return undefined;
       }
     },
   });
+}
+
+function requestIngressHttp1(overrides = {}) {
+  return {
+    encrypted: false,
+    forwardedProto: undefined,
+    host: 'app.example',
+    httpVersion: '1.1',
+    method: 'GET',
+    pseudoAuthority: undefined,
+    pseudoScheme: undefined,
+    rawHostHeaderCount: 1,
+    rawHostHeaderValue: 'app.example',
+    rawTarget: '/',
+    source: 'node-http1',
+    trustedProxy: false,
+    ...overrides,
+  };
+}
+
+function requestIngressHttp2(overrides = {}) {
+  return {
+    encrypted: false,
+    forwardedProto: undefined,
+    host: undefined,
+    httpVersion: '2.0',
+    method: 'GET',
+    pseudoAuthority: 'h2.example',
+    pseudoScheme: 'http',
+    rawHostHeaderCount: 0,
+    rawHostHeaderValue: undefined,
+    rawTarget: '/',
+    source: 'node-http2',
+    trustedProxy: false,
+    ...overrides,
+  };
 }
 
 async function assertRequestIngressMethodIdentityIsClosed(moduleUnderTest) {
@@ -1278,17 +1450,86 @@ async function assertRequestIngressMethodIdentityIsClosed(moduleUnderTest) {
 async function assertRequestIngressDualSchemeAuthorityIsClosed(moduleUnderTest) {
   const classifier = requestIngressClassifier(moduleUnderTest);
   for (const authority of ['app.example:80', 'app.example:443']) {
-    const decision = classifier.classifyAuthority({
-      host: authority,
-      httpVersion: '1.1',
-      pseudoAuthority: undefined,
-      rawHostHeaderCount: 1,
-    });
+    const decision = classifier.classify(
+      requestIngressHttp1({
+        host: authority,
+        rawHostHeaderValue: authority,
+      }),
+    );
     if (decision.ok) {
       throw new Error(
         `request-ingress classifier admitted scheme-relative default port ${authority}`,
       );
     }
+  }
+}
+
+async function assertRequestIngressRawHostIdentityIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify(
+    requestIngressHttp1({ rawHostHeaderValue: 'evil.example' }),
+  );
+  if (decision.ok) {
+    throw new Error('request-ingress classifier admitted a normalized/raw Host mismatch');
+  }
+}
+
+async function assertRequestIngressExactSchemeIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify(
+    requestIngressHttp2({ pseudoScheme: 'HTTPS', trustedProxy: true }),
+  );
+  if (decision.ok) {
+    throw new Error('request-ingress classifier admitted uppercase HTTP/2 :scheme');
+  }
+}
+
+async function assertRequestIngressEncodedTargetIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify(
+    requestIngressHttp1({ rawTarget: '/_m/a/%2f/b' }),
+  );
+  if (decision.ok) {
+    throw new Error('request-ingress classifier admitted an encoded path separator');
+  }
+}
+
+async function assertRequestIngressH2SourceIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify(
+    requestIngressHttp2({ host: 'h1.example' }),
+  );
+  if (decision.ok) {
+    throw new Error('request-ingress classifier let HTTP/2 borrow ordinary Host');
+  }
+}
+
+async function assertRequestIngressVercelClientIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify({
+    host: 'app.example',
+    httpVersion: '1.1',
+    method: 'GET',
+    platformClientIp: '203.0.113.020',
+    platformScheme: 'https',
+    pseudoAuthority: undefined,
+    pseudoScheme: undefined,
+    rawHostHeaderCount: 1,
+    rawHostHeaderValue: 'app.example',
+    rawTarget: '/',
+    source: 'vercel-node',
+  });
+  if (decision.ok) {
+    throw new Error('request-ingress classifier admitted non-canonical Vercel client provenance');
+  }
+}
+
+async function assertGeneratedVercelPreparedIngressIsSingle(_moduleUnderTest, { sourceText }) {
+  const start = sourceText.indexOf('function vercelFunctionSource(): string {');
+  const end = sourceText.indexOf('function vercelIngressMiddlewareSource(): string {', start);
+  if (start < 0 || end < 0) throw new Error('generated Vercel function source boundary is absent');
+  const vercelSource = sourceText.slice(start, end);
+  const matches = vercelSource.match(/prepareVercelRequestIngress\(nodeRequest\)/gu) ?? [];
+  if (matches.length !== 1) {
+    throw new Error(`generated Vercel dispatch has ${matches.length} prepared-ingress evaluations`);
+  }
+  if (!vercelSource.includes(preparedVercelIngressBranch)) {
+    throw new Error('generated Vercel dispatch no longer routes one prepared verdict to rejection');
   }
 }
 

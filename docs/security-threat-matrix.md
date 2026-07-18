@@ -70,11 +70,14 @@ GREEN (no longer pending).
   or cross-origin CSRF attempts before handler execution.
 - **Wire × I (M34) — GREEN.** SPEC §9.5 requires adapters to preserve the raw case-sensitive HTTP
   method identity across the Web `Request` boundary. The finite request-ingress classifier is now
-  the sole method/authority/scheme grammar shared by live Node, emitted Node/Vercel, and generated
-  Cloudflare. `packages/server/src/__bugz_remote_ingress.test.ts` sends real HTTP/2 `post`, `PoSt`,
-  and `POST`; live Node rejects the first two before dispatch and admits only exact `POST`. The
-  request-ingress C13 corpus preserves that raw proof, generated parity, extension methods, and the
-  Cloudflare platform-Fetch verdict.
+  the sole source/method/authority/scheme/target grammar shared by live Node, emitted Node/Vercel,
+  and generated Cloudflare. HTTP/1 requires one byte-identical raw and normalized `Host`; HTTP/2
+  requires exact pseudo-fields and rejects ordinary HTTP/1/proxy evidence; Vercel requires canonical
+  edge-overwritten scheme and client provenance with no unresolved fallback; platform Fetch paths
+  state the narrower canonical-URL proof honestly. `packages/server/src/__bugz_remote_ingress.test.ts`
+  sends real HTTP/2 `post`, `PoSt`, and `POST`; live Node rejects the first two before dispatch and
+  admits only exact `POST`. The request-ingress C13 corpus preserves the complete source and target
+  closure, generated parity, extension methods, and platform-Fetch verdict.
 - **Wire × I (M35) — GREEN.** At audited code SHA `e5f613be9`, real HTTP/2
   `:authority: %65xample.com` reached the handler as URL host `example.com` but app-visible Host
   `%65xample.com`. The shared classifier rejects every authority whose parsed serialization is not
@@ -83,7 +86,13 @@ GREEN (no longer pending).
   Vercel parity plus generated Cloudflare tests preserve the verdict. For Cloudflare, the scoped
   trust boundary is explicit: Kovo validates the canonical platform-owned Fetch URL and makes no
   claim about raw authority bytes the edge bridge already normalized or discarded; HTTP Service
-  Binding ingress remains unsupported.
+  Binding ingress remains unsupported. Origin-form and exactly matching canonical HTTP(S)
+  absolute-form are the only target forms; `OPTIONS *`, authority/scheme-like targets, encoded
+  aliases, and normalizing differentials close before dispatch. Generated Node and Vercel consume
+  one immutable prepared snapshot through pre-static metadata and final `Request` construction.
+  Every Vercel artifact, including static-only output, emits Build Output API v3 Routing Middleware
+  before `handle: filesystem`; it applies the same platform-Fetch target ceiling/classifier and only
+  returns `x-middleware-next: 1` after acceptance.
 - **Runtime × Au (A6) — GREEN.** Capability URLs bind the signed canonical object, method, scope, and expiry before any
   storage read. `packages/server/src/capability-url.test.ts` proves claim-mismatch, expiry, signature, audience, and
   replay rejection; `packages/server/src/capability-route.test.ts` proves the verify sink runs before dereference, so a
