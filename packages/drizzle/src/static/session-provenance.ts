@@ -653,16 +653,6 @@ function privateScopeCarrierBindingIsStableAtUse(
     if (nodeContainsSymbolKey(assignment.getRight(), parameterKey)) return false;
   }
 
-  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (nodeContains(call, auditedUse)) continue;
-    if (!call.getArguments().some((argument) => nodeContainsSymbolKey(argument, parameterKey))) {
-      continue;
-    }
-    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;
-    if (exactDrizzlePrivateScopeProofCall(call)) continue;
-    return false;
-  }
-
   for (const call of body.getDescendantsOfKind(SyntaxKind.NewExpression)) {
     if (nodeContains(call, auditedUse)) continue;
     if (call.getArguments().some((argument) => nodeContainsSymbolKey(argument, parameterKey))) {
@@ -681,11 +671,22 @@ function privateScopeCarrierBindingIsStableAtUse(
     );
     if (referenceKey !== parameterKey || nodeContains(auditedUse, reference)) continue;
     const call = nearestCallExpressionAncestor(reference, body);
-    if (!call || !nodeContains(call.getExpression(), reference)) continue;
-    const access = staticAccessSegments(call.getExpression());
-    if (!access || resolvedSymbolKey(access.root.getSymbol()) !== parameterKey) return false;
-    const receiver = access.path[0];
-    if (!receiver || !PRIVATE_SCOPE_SAFE_CAPABILITY_RECEIVERS.has(receiver)) return false;
+    if (!call) continue;
+    if (nodeContains(call.getExpression(), reference)) {
+      const access = staticAccessSegments(call.getExpression());
+      if (!access || resolvedSymbolKey(access.root.getSymbol()) !== parameterKey) return false;
+      const receiver = access.path[0];
+      if (!receiver || !PRIVATE_SCOPE_SAFE_CAPABILITY_RECEIVERS.has(receiver)) return false;
+      continue;
+    }
+    // Classify the nearest consumer, not every enclosing builder call. For
+    // `where(eq(owner, request.guard.id))`, the framework carrier reaches only the exact Drizzle
+    // `eq` proof call; the enclosing `where` receives SQL IR, not the request object. A bare carrier
+    // passed to Object.assign, an opaque helper, or a cross-file mutator still reaches that opaque
+    // call as its nearest consumer and closes the proof.
+    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;
+    if (exactDrizzlePrivateScopeProofCall(call)) continue;
+    return false;
   }
 
   return true;

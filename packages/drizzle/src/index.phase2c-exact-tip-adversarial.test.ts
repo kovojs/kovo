@@ -39,9 +39,11 @@ function ownerVerdict(
     files: [DB_TYPES, ...extraFiles, { fileName: 'phase2c-adversarial.ts', source }],
   });
   const check = kovoCheck(audit);
+  const scopeAudit = audit.scopeAudits.find((entry) => entry.name === 'list');
   return {
     check,
-    scope: audit.scopeAudits.find((entry) => entry.name === 'list')?.scope,
+    detail: scopeAudit?.detail,
+    scope: scopeAudit?.scope,
   };
 }
 
@@ -193,6 +195,23 @@ describe('Phase 2C exact-tip adversarial review', () => {
     expect(result.scope).not.toBe('session');
     expect(result.check.exitCode).toBe(1);
     expect(result.check.output).toContain('KV414');
+  });
+
+  it('preserves a dominated optional guard principal on an exact query carrier', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, actual: { request: { guard?: { userId?: string } }, db: PgAsyncDatabase<any, any> }) {',
+        '    if (!actual.request.guard?.userId) throw new Error("unauthorized");',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, actual.request.guard?.userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).toBe('session');
+    expect(result.detail).toContain('owner column compared to guard:userId');
+    expect(result.check.exitCode).toBe(0);
   });
 
   it.each([
