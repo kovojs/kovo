@@ -227,15 +227,19 @@ describe('Phase 2C exact-tip adversarial review', () => {
       'a summarized helper',
       'Reflect.set(context, "request", input.request);',
       'serverValue(current(context), "private owner")',
+      'unknown',
     ],
     [
       'a direct private access',
       'Object.assign(context, { request: input.request });',
       'serverValue(context.request.guard.userId, "private owner")',
+      // The direct replacement is itself exactly input-proven; retain that stronger fact while
+      // requiring KV438 instead of collapsing the carrier escape to an undifferentiated unknown.
+      'input',
     ],
   ])(
     'emits KV438 after carrier replacement reaches serverValue through %s',
-    (_label, mutation, value) => {
+    (_label, mutation, value, provenance) => {
       const result = massVerdict([
         mutation,
         `await context.db.update(accounts).set({ ownerId: ${value} }).where(eq(accounts.id, input.id));`,
@@ -243,7 +247,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
       expect(result.analysis.massAssignmentFacts).toMatchObject([
         {
           column: 'ownerId',
-          provenance: 'unknown',
+          provenance,
           via: 'set',
         },
       ]);

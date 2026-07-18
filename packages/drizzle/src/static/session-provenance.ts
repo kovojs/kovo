@@ -549,11 +549,11 @@ export function privateScopeHelperCallCarrierIsProven(call: CallExpression): boo
   return (
     carrier !== undefined &&
     isPrivateScopeCarrierRoot(carrier) &&
-    privateScopeHelperCarrierBindingIsProven(carrier)
+    privateScopeCarrierBindingIsProven(carrier, call)
   );
 }
 
-function privateScopeHelperCarrierBindingIsProven(carrier: Node): boolean {
+function privateScopeCarrierBindingIsProven(carrier: Node, auditedUse: Node): boolean {
   const root = unwrappedStaticExpressionNode(carrier);
   // SPEC §6.6/§10.3 admits only a structurally enrolled request/context parameter. `this` is the
   // caller-controlled receiver/definition object and cannot mint private principal provenance.
@@ -591,11 +591,138 @@ function privateScopeHelperCarrierBindingIsProven(carrier: Node): boolean {
   if (index < 0) return false;
 
   const frameworkRole = exactFrameworkPrivateScopeCarrierRole(callable, index);
-  if (frameworkRole !== undefined) return frameworkRole;
+  if (frameworkRole !== true) return false;
 
-  // Positional order, a DB-shaped sibling parameter, types, and a request-like name do not prove
-  // that an arbitrary exported/nested callable receives framework private authority.
-  return false;
+  return privateScopeCarrierBindingIsStableAtUse(parameter, callable, auditedUse);
+}
+
+const PRIVATE_SCOPE_SAFE_CAPABILITY_RECEIVERS: ReadonlySet<string> = new Set([
+  'cancel',
+  'db',
+  'fail',
+  'fetch',
+  'invalidate',
+  'readonlyAppDb',
+  'recordChange',
+  'runMutation',
+  'runQuery',
+  'runTask',
+  'schedule',
+  'storage',
+  'tx',
+]);
+
+const PRIVATE_SCOPE_SAFE_DRIZZLE_PROOF_CALLS: ReadonlySet<string> = new Set([
+  'and',
+  'eq',
+  'gt',
+  'gte',
+  'inArray',
+  'isNotNull',
+  'isNull',
+  'lt',
+  'lte',
+  'not',
+  'or',
+]);
+
+function privateScopeCarrierBindingIsStableAtUse(
+  parameter: ParameterDeclaration,
+  callable: ExactLocalFunction,
+  auditedUse: Node,
+): boolean {
+  const parameterName = parameter.getNameNode();
+  if (!Node.isIdentifier(parameterName)) return false;
+  const parameterKey = resolvedSymbolKey(parameterName.getSymbol());
+  const body = callable.getBody();
+  if (!parameterKey || !body) return false;
+
+  // Binding immutability is necessary but not sufficient: replacing `context.request`, passing the
+  // carrier to an opaque mutator, or first capturing it through an alias all invalidate private
+  // provenance. Scan the exact enrolled callback body and admit only finite read/capability uses.
+  if (sourceFileMutatesSymbol(callable.getSourceFile(), parameterKey)) return false;
+
+  for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const initializer = declaration.getInitializer();
+    if (!initializer || !nodeContainsSymbolKey(initializer, parameterKey)) continue;
+    if (nodeContains(initializer, auditedUse)) continue;
+    return false;
+  }
+
+  for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    if (nodeContains(assignment, auditedUse)) continue;
+    if (nodeContainsSymbolKey(assignment.getRight(), parameterKey)) return false;
+  }
+
+  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (nodeContains(call, auditedUse)) continue;
+    if (!call.getArguments().some((argument) => nodeContainsSymbolKey(argument, parameterKey))) {
+      continue;
+    }
+    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;
+    if (exactDrizzlePrivateScopeProofCall(call)) continue;
+    return false;
+  }
+
+  for (const call of body.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+    if (nodeContains(call, auditedUse)) continue;
+    if (call.getArguments().some((argument) => nodeContainsSymbolKey(argument, parameterKey))) {
+      return false;
+    }
+  }
+
+  for (const tagged of body.getDescendantsOfKind(SyntaxKind.TaggedTemplateExpression)) {
+    if (nodeContains(tagged, auditedUse)) continue;
+    if (nodeContainsSymbolKey(tagged.getTemplate(), parameterKey)) return false;
+  }
+
+  for (const reference of body.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    const referenceKey = resolvedSymbolKey(
+      symbolForIdentifierReference(reference) ?? reference.getSymbol(),
+    );
+    if (referenceKey !== parameterKey || nodeContains(auditedUse, reference)) continue;
+    const call = nearestCallExpressionAncestor(reference, body);
+    if (!call || !nodeContains(call.getExpression(), reference)) continue;
+    const access = staticAccessSegments(call.getExpression());
+    if (!access || resolvedSymbolKey(access.root.getSymbol()) !== parameterKey) return false;
+    const receiver = access.path[0];
+    if (!receiver || !PRIVATE_SCOPE_SAFE_CAPABILITY_RECEIVERS.has(receiver)) return false;
+  }
+
+  return true;
+}
+
+function exactPrivateScopeProjectionCall(call: CallExpression, parameterKey: string): boolean {
+  const args = call.getArguments();
+  if (args.length !== 1) return false;
+  const argument = unwrappedStaticExpressionNode(args[0]);
+  if (!Node.isIdentifier(argument)) return false;
+  const argumentKey = resolvedSymbolKey(
+    symbolForIdentifierReference(argument) ?? argument.getSymbol(),
+  );
+  if (argumentKey !== parameterKey) return false;
+  return (
+    exactLocalPrivateScopeHelperProvenance(call.getExpression(), call.getSourceFile()) !== undefined
+  );
+}
+
+function exactDrizzlePrivateScopeProofCall(call: CallExpression): boolean {
+  const callee = unwrappedStaticExpressionNode(call.getExpression());
+  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  if (!name || !PRIVATE_SCOPE_SAFE_DRIZZLE_PROOF_CALLS.has(name)) return false;
+  const symbol = Node.isIdentifier(callee)
+    ? symbolForIdentifierReference(callee)
+    : callee.getSymbol();
+  return (
+    symbol?.getDeclarations().some((declaration) => {
+      const fileName = declaration.getSourceFile().getFilePath().replaceAll('\\', '/');
+      if (fileName.includes('/drizzle-orm/')) return true;
+      const imported = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+      return imported?.getModuleSpecifierValue().startsWith('drizzle-orm') === true;
+    }) === true
+  );
 }
 
 function exactFrameworkPrivateScopeCarrierRole(
@@ -878,6 +1005,7 @@ function directPrivateScopeForExpression(node: Node): PrivateScopeProvenance | u
   // Anchor the session/guard/tenant name match to a proven carrier root (SPEC §6.5):
   // an input-rooted `.session.`/`.guard.`/`.tenant.` access is client data, not server scope.
   if (!isPrivateScopeCarrierRoot(segments.root)) return undefined;
+  if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;
   for (const kind of ['guard', 'session', 'tenant'] as const) {
     const index = segments.path.indexOf(kind);
     if (index < 0) continue;
