@@ -5,6 +5,7 @@ import {
   type CsrfOptions,
 } from './csrf.js';
 import { runEndpoint, runEndpointAccessDecision, runEndpointAuth } from './endpoint.js';
+import { endpointBrowserCredentialDelegationPinned } from './endpoint-auth-proof.js';
 import {
   renderQueryRegistryEndpointResponse,
   type QueryEndpointRegistry,
@@ -124,18 +125,27 @@ export async function dispatchMatchedAppRequest({
       surface: 'endpoint',
     });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
-    if (authFailure) return finalizeMatchedEndpointResponse(authFailure, request, endpointRequest);
+    if (authFailure) {
+      return finalizeMatchedEndpointResponse(authFailure, request, endpointRequest, match.endpoint);
+    }
     const csrfFailure = await validateEndpointCsrf(
       match.endpoint,
       request,
       app.csrf,
       match.endpoint.method,
     );
-    if (csrfFailure) return finalizeMatchedEndpointResponse(csrfFailure, request, endpointRequest);
+    if (csrfFailure) {
+      return finalizeMatchedEndpointResponse(csrfFailure, request, endpointRequest, match.endpoint);
+    }
     if (isWebhookEndpoint(match.endpoint)) {
       const accessFailure = await runEndpointAccessDecision(match.endpoint, endpointRequest);
       if (accessFailure) {
-        return finalizeMatchedEndpointResponse(accessFailure, request, endpointRequest);
+        return finalizeMatchedEndpointResponse(
+          accessFailure,
+          request,
+          endpointRequest,
+          match.endpoint,
+        );
       }
       const taskScheduler = appTaskScheduler(app);
       const mutationOptions = {
@@ -156,6 +166,7 @@ export async function dispatchMatchedAppRequest({
         response,
         request,
         endpointRequest,
+        match.endpoint,
         match.endpoint.response,
       );
     }
@@ -167,6 +178,7 @@ export async function dispatchMatchedAppRequest({
       ),
       request,
       endpointRequest,
+      match.endpoint,
       match.endpoint.response,
     );
   }
@@ -197,17 +209,21 @@ function finalizeMatchedEndpointResponse(
   response: Response,
   ingressRequest: Request,
   endpointRequest: Request,
+  endpoint: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   options: Parameters<typeof finalizeRawWebResponse>[2] = {},
 ): Response {
   // The endpoint handler receives a framework-neutralized lifecycle Request, while trusted-scheme
   // and method finalization intentionally consume the accepted ingress Request. Carry only the
   // module-private exact-request CSRF witness across that identity split; never copy Cookie or any
-  // other browser authority back onto ingress.
+  // other browser authority back onto ingress. A credential-delegating adapter is conservatively
+  // personalized even before that witness exists: a raw Response can hide lazy body execution, so
+  // its handler may first consume Cookie or mint anonymous CSRF authority after headers finalize.
   return finalizeRawWebResponse(
     response,
     ingressRequest,
     options,
-    anonymousCsrfResponsePersonalizationWitness(endpointRequest)
+    endpointBrowserCredentialDelegationPinned(endpoint) ||
+      anonymousCsrfResponsePersonalizationWitness(endpointRequest)
       ? { cookiePersonalized: true }
       : {},
   );

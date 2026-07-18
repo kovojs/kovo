@@ -13,6 +13,7 @@ import {
 } from './endpoint.js';
 import { mutation } from './mutation.js';
 import { toNodeHandler } from './node.js';
+import { respond } from './response.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 
@@ -413,6 +414,70 @@ describe('anonymous mutation-form document cache posture', () => {
       });
     }
   });
+
+  it('selects the private posture before a live route stream can mint from pull()', async () => {
+    let releaseStream!: () => void;
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    const download = route('/late-route-token', {
+      page(_context, request) {
+        return respond.stream(
+          new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              await streamGate;
+              const token = mintCsrfToken(request, csrf, {
+                audience: 'endpoint:/late-route-token-submit',
+              }).token;
+              controller.enqueue(new TextEncoder().encode(token));
+              controller.close();
+            },
+          }),
+          {
+            contentType: 'text/plain',
+            headers: { 'Cache-Control': 'public, max-age=60' },
+          },
+        );
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [download],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/late-route-token', {
+        headers: { Cookie: cookieHeader('A'.repeat(43)) },
+      }),
+    );
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+    releaseStream();
+    await expect(response.text()).resolves.not.toBe('');
+  });
+
+  it('keeps an eager route stream helper body eligible for its authored public cache policy', async () => {
+    const download = route('/eager-route-body', {
+      page: () =>
+        respond.stream('public report', {
+          contentType: 'text/plain',
+          headers: { 'Cache-Control': 'public, max-age=60' },
+        }),
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        routes: [download],
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/eager-route-body'));
+    expect(response.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(response.headers.get('vary')).toBeNull();
+    await expect(response.text()).resolves.toBe('public report');
+  });
 });
 
 describe('anonymous CSRF cookie aggregate posture', () => {
@@ -733,7 +798,63 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     expect(attacker.headers.get('vary')).toContain('Cookie');
   });
 
-  it('leaves an unrelated public raw response cacheable even on the credential-delegating path', async () => {
+  it('selects the private posture before a delegated raw stream can mint from pull()', async () => {
+    let releaseStream!: () => void;
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    const bootstrap = pinEndpointBrowserCredentialDelegation(
+      endpoint('/late-csrf-token-bootstrap', {
+        auth: { kind: 'custom', name: 'framework-late-csrf-token-bootstrap' },
+        handler(request) {
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              async pull(controller) {
+                await streamGate;
+                const token = mintCsrfToken(request, csrf, {
+                  audience: 'endpoint:/late-csrf-token-bootstrap-submit',
+                }).token;
+                controller.enqueue(new TextEncoder().encode(token));
+                controller.close();
+              },
+            }),
+            {
+              headers: {
+                'Cache-Control': 'public, max-age=60',
+                'Content-Type': 'text/plain',
+              },
+            },
+          );
+        },
+        method: 'GET',
+        reason: 'framework-owned lazy browser CSRF bootstrap adapter',
+        response: {
+          appOwnedSafety: true,
+          body: 'stream',
+          cache: 'public',
+        },
+      }),
+    );
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [bootstrap],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/late-csrf-token-bootstrap', {
+        headers: { Cookie: cookieHeader('A'.repeat(43)) },
+      }),
+    );
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+    releaseStream();
+    await expect(response.text()).resolves.not.toBe('');
+  });
+
+  it('keeps an unrelated delegated raw response private because it can still vary by Cookie', async () => {
     const publicEndpoint = pinEndpointBrowserCredentialDelegation(
       endpoint('/public-bootstrap-metadata', {
         auth: { kind: 'custom', name: 'framework-public-bootstrap-metadata' },
@@ -757,6 +878,36 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     );
     const response = await handler(
       new Request('https://shop.example.test/public-bootstrap-metadata', {
+        headers: { Cookie: cookieHeader('A'.repeat(43)) },
+      }),
+    );
+
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+  });
+
+  it('leaves a credential-neutral public raw response cacheable', async () => {
+    const publicEndpoint = endpoint('/neutral-public-metadata', {
+      auth: { kind: 'none', justification: 'public cache metadata has no browser authority' },
+      handler: () =>
+        new Response('<p>Public metadata</p>', {
+          headers: {
+            'Cache-Control': 'public, max-age=60',
+            'Content-Type': 'text/html; charset=utf-8',
+          },
+        }),
+      method: 'GET',
+      reason: 'credential-neutral public metadata control',
+      response: publicHtmlResponse,
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        endpoints: [publicEndpoint],
+      }),
+    );
+    const response = await handler(
+      new Request('https://shop.example.test/neutral-public-metadata', {
         headers: { Cookie: cookieHeader('A'.repeat(43)) },
       }),
     );

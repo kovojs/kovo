@@ -158,7 +158,17 @@ describe('server build-time deployment API', () => {
       const packedOut = join(root, 'packed');
       execFileSync(
         'pnpm',
-        ['exec', 'vp', 'pack', 'src/index.ts', '--out-dir', packedOut, '--logLevel', 'error'],
+        [
+          'exec',
+          'vp',
+          'pack',
+          'src/index.ts',
+          'src/endpoint.ts',
+          '--out-dir',
+          packedOut,
+          '--logLevel',
+          'error',
+        ],
         { cwd: packageRoot, stdio: 'pipe' },
       );
 
@@ -251,6 +261,7 @@ describe('server build-time deployment API', () => {
       );
 
       const packedIndexUrl = pathToFileURL(join(packedOut, 'index.mjs')).href;
+      const packedEndpointUrl = pathToFileURL(join(packedOut, 'endpoint.mjs')).href;
       const build = await writeKovoNeutralBuild({
         app: createApp({
           routes: [
@@ -265,9 +276,12 @@ describe('server build-time deployment API', () => {
 import {
   createApp,
   createRequestHandler,
+  endpoint,
   mintCsrfToken,
+  respond,
   route,
 } from ${JSON.stringify(packedIndexUrl)};
+import { pinEndpointBrowserCredentialDelegation } from ${JSON.stringify(packedEndpointUrl)};
 
 const csrf = {
   secret: 'packed-anonymous-csrf-witness-secret-0123456789abcdef',
@@ -278,10 +292,51 @@ const tokenRoute = route('/packed-csrf', {
     return mintCsrfToken(request, csrf, { audience: 'packed-csrf-response' }).token;
   },
 });
+const lateStreamRoute = route('/packed-csrf-stream', {
+  page(_context, request) {
+    return respond.stream(new ReadableStream({
+      async pull(controller) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        const token = mintCsrfToken(request, csrf, { audience: 'packed-csrf-stream-response' }).token;
+        controller.enqueue(new TextEncoder().encode(token));
+        controller.close();
+      },
+    }), {
+      contentType: 'text/plain',
+      headers: { 'Cache-Control': 'public, max-age=60' },
+    });
+  },
+});
+const lateRawStreamEndpoint = pinEndpointBrowserCredentialDelegation(
+  endpoint('/packed-csrf-raw-stream', {
+    auth: { kind: 'custom', name: 'packed-csrf-raw-stream' },
+    handler(request) {
+      return new Response(new ReadableStream({
+        async pull(controller) {
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          const token = mintCsrfToken(request, csrf, {
+            audience: 'packed-csrf-raw-stream-response',
+          }).token;
+          controller.enqueue(new TextEncoder().encode(token));
+          controller.close();
+        },
+      }), {
+        headers: {
+          'Cache-Control': 'public, max-age=60',
+          'Content-Type': 'text/plain',
+        },
+      });
+    },
+    method: 'GET',
+    reason: 'framework-owned packed raw browser CSRF bootstrap',
+    response: { appOwnedSafety: true, body: 'stream', cache: 'public' },
+  }),
+);
 const app = createApp({
   csrf,
   egress: { enabled: false, justification: 'packed cache fixture performs no outbound I/O' },
-  routes: [tokenRoute],
+  endpoints: [lateRawStreamEndpoint],
+  routes: [tokenRoute, lateStreamRoute],
 });
 export default createRequestHandler(app);
 `,
@@ -312,14 +367,16 @@ export default createRequestHandler(app);
         join(vercelOut, 'functions/kovo.func/index.cjs'),
       );
       for (const server of [nodeServer, vercelServer]) {
-        const response = await fetch(`${server.baseUrl}/packed-csrf`, {
-          headers: { Cookie: `__Host-kovo_csrf=${'A'.repeat(43)}` },
-        });
-        expect(response.status, server.stderr()).toBe(200);
-        await expect(response.text()).resolves.not.toBe('');
-        expect(response.headers.get('cache-control')).toBe('private, no-store');
-        expect(response.headers.get('vary')).toContain('Cookie');
-        expect(response.headers.get('set-cookie')).toBeNull();
+        for (const path of ['/packed-csrf', '/packed-csrf-stream', '/packed-csrf-raw-stream']) {
+          const response = await fetch(`${server.baseUrl}${path}`, {
+            headers: { Cookie: `__Host-kovo_csrf=${'A'.repeat(43)}` },
+          });
+          expect(response.status, server.stderr()).toBe(200);
+          expect(response.headers.get('cache-control')).toBe('private, no-store');
+          expect(response.headers.get('vary')).toContain('Cookie');
+          expect(response.headers.get('set-cookie')).toBeNull();
+          await expect(response.text()).resolves.not.toBe('');
+        }
       }
     } finally {
       await nodeServer?.close();

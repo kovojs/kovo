@@ -68,7 +68,7 @@ import {
   requestUrlSnapshot,
 } from './request-body-intrinsics.js';
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
-import { createSecurityMap } from './response-security-intrinsics.js';
+import { createSecurityMap, securityIsReadableStream } from './response-security-intrinsics.js';
 import {
   createWitnessSet,
   witnessCreateNullRecord,
@@ -266,6 +266,7 @@ export async function renderAppRouteDocumentResponse({
   const sessionRequest = isNativeRequest(routeResponse.lifecycleRequest)
     ? routeResponse.lifecycleRequest
     : request;
+  const hasLateExecutableBody = routeResponseHasLiveBody(routeResponse);
   const mayDeferCsrfPersonalization = routeResponseHasDeferredChunks(routeResponse);
   if (mayDeferCsrfPersonalization) {
     primeDeferredCsrfBindings(app, sessionRequest, anonymousCsrfBindings, refreshSetCookies);
@@ -312,6 +313,7 @@ export async function renderAppRouteDocumentResponse({
     routeHasEnforcedAuthorization(route) ||
     refreshSetCookies.length > 0 ||
     anonymousCsrfSensitive ||
+    hasLateExecutableBody ||
     sessionFingerprint !== undefined ||
     principalPosture.kind === 'unresolved';
   const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
@@ -370,9 +372,11 @@ export async function renderAppRouteDocumentResponse({
     },
   );
 
-  if (anonymousCsrfSensitive) {
+  if (anonymousCsrfSensitive || hasLateExecutableBody) {
     // This response is not merely non-restorable: its body bytes vary by Cookie. Force the stronger
-    // private cache floor after document assembly so authored Cache-Control cannot relax it.
+    // private cache floor after document assembly so authored Cache-Control cannot relax it. A live
+    // route stream is conservative for the same reason as a deferred document: app code can first
+    // consume request authority or mint a token from pull() after headers have crossed the wire.
     documentResponse = stampCredentialBearingResponseCacheFloor(documentResponse);
   }
 
@@ -392,6 +396,13 @@ export async function renderAppRouteDocumentResponse({
 interface RefreshSetCookie {
   readonly raw: string;
   readonly source: 'csrf' | 'session-provider';
+}
+
+function routeResponseHasLiveBody(response: RoutePageResponse): boolean {
+  const descriptor = witnessGetOwnPropertyDescriptor(response, 'body');
+  return (
+    descriptor !== undefined && 'value' in descriptor && securityIsReadableStream(descriptor.value)
+  );
 }
 
 function routeResponseHasDeferredChunks(response: RoutePageResponse): boolean {
