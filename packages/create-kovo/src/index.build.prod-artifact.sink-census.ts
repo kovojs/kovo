@@ -29,11 +29,6 @@ export interface ProdArtifactSinkCensusManifest {
   version: typeof prodArtifactSinkCensusVersion;
 }
 
-export interface ProdArtifactSinkInventoryEvidence {
-  hostileValueProof: string;
-  sink: string;
-}
-
 interface ArtifactTextFile {
   path: string;
   text: string;
@@ -63,24 +58,6 @@ export function readProductionGraph(root: string): Record<string, unknown> {
     string,
     unknown
   >;
-}
-
-export function assertRequiredSinkInventoryEvidence(
-  entries: readonly ProdArtifactSinkInventoryEvidence[],
-): readonly ProdArtifactSinkInventoryEvidence[] {
-  const bySink = new Map(entries.map((entry) => [entry.sink, entry]));
-  for (const sink of requiredSinkInventoryEvidenceSinks) {
-    const entry = bySink.get(sink);
-    if (entry === undefined) {
-      throw new Error(`Required sink inventory evidence is missing sink "${sink}".`);
-    }
-    if (entry.hostileValueProof.trim() === '') {
-      throw new Error(
-        `Required sink inventory evidence "${sink}" has an empty hostile-value proof.`,
-      );
-    }
-  }
-  return entries;
 }
 
 function witnessFilesForEntry(
@@ -143,17 +120,3 @@ function productionArtifactTextFiles(root: string): readonly ArtifactTextFile[] 
 function isTextArtifact(path: string): boolean {
   return /\.(?:css|html|js|json|mjs|txt)$/u.test(path);
 }
-
-const requiredSinkInventoryEvidenceSinks = [
-  'db driver statement',
-  'http response body',
-  'http response headers',
-  'redirect URL',
-  'Set-Cookie',
-  'blob/file write',
-  'durable-task payload',
-  'webhook payload',
-  'HTML/render output',
-  'log/error output',
-  'outbound egress request',
-] as const;

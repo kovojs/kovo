@@ -80,9 +80,12 @@ Because instrumentation under-approximates (executed branches only), passing dev
 **C9 sink-proof inventory (normative).** The verification surface MUST keep a single reviewed
 inventory for the required boundary-crossing sinks named in §10.3 C9. Each row names: the sink, its
 mechanism (`reconstruct`, `box`, or framework-`own`), the sole door, at least one lint/check/build
-proof, and at least one hostile-value test file or command. The inventory is a proof index, not a
-runtime policy source: if a sink exists without an inventory row, or a row has no hostile-value
-evidence, the verification surface is incomplete even if the implementation happens to be sound.
+proof, at least one hostile-value test file or command, and the stable owner responsible for a gap.
+The machine gate MUST compare its covered-family union with the complete source/sink census and
+fail on a missing or unknown family, duplicate sink row, missing owner, absent root proof command,
+or stale evidence path. The inventory is a proof index, not a runtime policy source: if a sink
+exists without an inventory row, or a row has no hostile-value evidence, the verification surface
+is incomplete even if the implementation happens to be sound.
 For engine-door claims the inventory row points at the engine-closure audit; for wire/file/task/log
 surfaces it points at the single framework-owned choke or box, never at a proxy-only wrapper.
 
