@@ -483,6 +483,11 @@ function objectBindingPrivateScopeProvenance(
 
   const privateIndex = segments.findIndex(isPrivateScopeKind);
   if (privateIndex < 0) return undefined;
+  // Keep destructured carrier projections on the same finite prefix grammar as direct reads.
+  // Otherwise `const { input: { guard: { userId } } } = context` would launder an
+  // app-controlled input subtree into private provenance even though the equivalent direct
+  // `context.input.guard.userId` access is rejected (SPEC §6.5/§6.6).
+  if (!privateScopePathHasExactCarrierPrefix(segments, privateIndex)) return undefined;
   return {
     kind: segments[privateIndex] as PrivateScopeKind,
     path: segments.slice(privateIndex + 1).join('.'),
@@ -703,6 +708,7 @@ function privateScopeCarrierBindingIsStableAtUse(
     if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;
     if (exactDrizzlePrivateScopeProofCall(call)) continue;
     if (exactFrameworkPrivateScopeValueCall(call)) continue;
+    if (exactFinitePrivateScopeProofConsumer(call)) continue;
     return false;
   }
 
@@ -779,6 +785,94 @@ function exactFrameworkPrivateScopeValueCall(call: CallExpression): boolean {
     call.getExpression(),
     frameworkExport('@kovojs/server', 'serverValue'),
   );
+}
+
+/**
+ * Preserve the already-supported single-principal membership grammar when an enrolled callback
+ * contains more than one direct carrier read. The whole-callback integrity scan sees each sibling
+ * read through its nearest call (`Object.freeze`, `Array.of`, `Array.from`, or literal-array
+ * `concat`) rather than through the enclosing real Drizzle `inArray` call. Admit only an exact,
+ * unshadowed single-element wrapper chain whose next call is an exact Drizzle proof consumer;
+ * opaque outer consumers and mutable/local containers still close provenance (SPEC §6.6/§10.3).
+ */
+function exactFinitePrivateScopeProofConsumer(call: CallExpression): boolean {
+  let current: CallExpression | undefined = call;
+  while (current && exactSinglePrincipalCollectionCall(current)) {
+    const consumer = nearestEnclosingCallExpression(current);
+    if (!consumer) return false;
+    if (exactDrizzlePrivateScopeProofCall(consumer)) return true;
+    current = consumer;
+  }
+  return false;
+}
+
+function exactSinglePrincipalCollectionCall(call: CallExpression): boolean {
+  const callee = unwrappedStaticExpressionNode(call.getExpression());
+  if (!Node.isPropertyAccessExpression(callee)) return false;
+
+  const receiver = unwrappedStaticExpressionNode(callee.getExpression());
+  const name = callee.getName();
+  const args = call.getArguments();
+  if (name === 'freeze') {
+    return (
+      exactUnshadowedGlobalIdentifier(receiver, 'Object') &&
+      args.length === 1 &&
+      exactLiteralArrayElements(args[0])?.length === 1
+    );
+  }
+  if (name === 'of') {
+    if (!exactUnshadowedGlobalIdentifier(receiver, 'Array') || args.length !== 1) return false;
+    const [arg] = args;
+    return (
+      !!arg &&
+      (!Node.isSpreadElement(arg) || exactLiteralArrayElements(arg.getExpression())?.length === 1)
+    );
+  }
+  if (name === 'from') {
+    return (
+      exactUnshadowedGlobalIdentifier(receiver, 'Array') &&
+      args.length === 1 &&
+      !!args[0] &&
+      !Node.isSpreadElement(args[0]) &&
+      exactLiteralArrayElements(args[0])?.length === 1
+    );
+  }
+  if (name !== 'concat' || args.some(Node.isSpreadElement)) return false;
+
+  const receiverElements = exactLiteralArrayElements(receiver);
+  if (!receiverElements) return false;
+  let elementCount = receiverElements.length;
+  for (const arg of args) {
+    const arrayElements = exactLiteralArrayElements(arg);
+    elementCount += arrayElements?.length ?? 1;
+  }
+  return elementCount === 1;
+}
+
+function exactLiteralArrayElements(node: Node | undefined): readonly Node[] | undefined {
+  if (!node) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isArrayLiteralExpression(expression)) return undefined;
+  const elements = expression.getElements();
+  return elements.some(Node.isSpreadElement) ? undefined : elements;
+}
+
+function exactUnshadowedGlobalIdentifier(node: Node, name: 'Array' | 'Object'): boolean {
+  if (!Node.isIdentifier(node) || node.getText() !== name) return false;
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  return !(symbol?.getDeclarations() ?? []).some(
+    (declaration) =>
+      declaration.getSourceFile().getFilePath() === node.getSourceFile().getFilePath(),
+  );
+}
+
+function nearestEnclosingCallExpression(node: Node): CallExpression | undefined {
+  let current = node.getParent();
+  while (current) {
+    if (Node.isCallExpression(current)) return current;
+    current = current.getParent();
+  }
+  return undefined;
 }
 
 function exactFrameworkPrivateScopeCarrierRole(

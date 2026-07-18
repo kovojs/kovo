@@ -345,7 +345,88 @@ describe('Phase 2C exact-tip adversarial review', () => {
       expect(result.check.output).toContain('KV414');
     },
   );
+  it('does not let destructuring launder a carrier-owned input.guard subtree', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, actual: Context & { input: { guard: { userId: string } } }) {',
+        '    const { input: { guard: { userId } } } = actual;',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
 
+  it.each([
+    [
+      'Object.freeze',
+      'Object.freeze([actual.request.guard.userId] as const)',
+    ],
+    ['Array.of', 'Array.of(actual.request.guard.userId)'],
+    [
+      'Array.from',
+      'Array.from([actual.request.guard.userId] as const)',
+    ],
+    [
+      'Array.concat',
+      '([] as string[]).concat(actual.request.guard.userId)',
+    ],
+  ])('keeps repeated exact private reads through %s scope:session', (_label, values) => {
+    const result = ownerVerdict(
+      ownerSource([
+        'import { and, inArray } from "drizzle-orm";',
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, actual: Context) {',
+        `    return { items: await actual.db.select({ id: docs.id }).from(docs).where(and(inArray(docs.userId, ${values}), inArray(docs.userId, ${values}))) };`,
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).toBe('session');
+    expect(result.check.exitCode).toBe(0);
+  });
+
+  it('does not admit an exact finite wrapper when its outer consumer is opaque', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'function observe(_value: unknown) { return undefined; }',
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, actual: Context) {',
+        '    observe(Array.of(actual.request.guard.userId));',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, actual.request.guard.userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('does not admit a shadowed finite wrapper in repeated private predicates', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'import { and, inArray } from "drizzle-orm";',
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, actual: Context) {',
+        '    const Array = { of<T>(value: T): T[] { return [value]; } };',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(and(inArray(docs.userId, Array.of(actual.request.guard.userId)), inArray(docs.userId, Array.of(actual.request.guard.userId)))) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
   it.each([
     ['direct request replacement', 'context.request = input.request;'],
     ['Object.assign root replacement', 'Object.assign(context, { request: input.request });'],
@@ -456,6 +537,28 @@ describe('Phase 2C exact-tip adversarial review', () => {
       {
         handler: 'request, actual: DbRequest',
         input: 's.object({ id: s.string(), guard: s.object({ userId: s.string() }) })',
+      },
+    );
+    expect(result.analysis.massAssignmentFacts).toMatchObject([
+      {
+        column: 'ownerId',
+        provenance: 'input',
+        via: 'set',
+      },
+    ]);
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV438');
+  });
+
+  it('emits KV438 when carrier-owned input.guard is destructured before serverValue', () => {
+    const result = massVerdict(
+      [
+        'const { input: { guard: { userId } } } = context;',
+        'await context.db.update(accounts).set({ ownerId: serverValue(userId, "private owner") }).where(eq(accounts.id, input.id));',
+      ],
+      {
+        handler:
+          'input, context: Context & { input: { guard: { userId: string } } }',
       },
     );
     expect(result.analysis.massAssignmentFacts).toMatchObject([
