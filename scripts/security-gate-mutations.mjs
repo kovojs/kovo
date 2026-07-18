@@ -1139,6 +1139,19 @@ const bypassedStaticBuildAuthoritativeProjectBranch = [
   '  }',
   '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
 ].join('\n');
+const taskBImperativeHandlerOnlyBranch =
+  '  // `element.onclick = () => {...}` style property assignments to on* handlers.';
+const restoredTaskBJsxNameScannerBranch = [
+  '  // JSX attributes whose name starts with `on` (onClick, on:click, onSubmit, ...).',
+  '  for (const attribute of sourceFile.getDescendantsOfKind(SyntaxKind.JsxAttribute)) {',
+  '    const name = attribute.getNameNode().getText();',
+  '    if (!/^on[:A-Z]/.test(name) && !/^on[a-z]/.test(name)) continue;',
+  '    const initializer = attribute.getInitializer();',
+  '    if (initializer && Node.isJsxExpression(initializer)) add(initializer.getExpression());',
+  '  }',
+  '',
+  taskBImperativeHandlerOnlyBranch,
+].join('\n');
 
 const reviewedCommandCapabilityDoorBranch =
   '  if (frameworkExportEquals(frameworkIdentity, RUN_COMMAND_IDENTITY)) {';
@@ -1536,6 +1549,16 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleTrustEscapesPath,
     sourceOnly: true,
     test: assertStaticBuildAuthoritativeProjectIsPinned,
+  },
+  {
+    description: 'Restores the superseded per-name JSX handler sink traversal.',
+    expectedKiller: 'compiler-owned JSX handlers must stay exclusively on finite IR',
+    name: 'drizzle-task-b/restore-jsx-name-scanner',
+    replacement: restoredTaskBJsxNameScannerBranch,
+    search: taskBImperativeHandlerOnlyBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    sourceOnly: true,
+    test: assertTaskBJsxNameScannerRetirementIsPinned,
   },
   {
     description: 'Deletes the exact reviewed runCommand capability-door admission.',
@@ -2962,6 +2985,15 @@ async function assertTrustedAssignNestedReviewIsPinned(_moduleUnderTest, { sourc
 async function assertStaticBuildAuthoritativeProjectIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(staticBuildAuthoritativeProjectBranch)) {
     throw new Error('static build trust facts no longer enter the authoritative TASK B project');
+  }
+}
+
+async function assertTaskBJsxNameScannerRetirementIsPinned(_moduleUnderTest, { sourceText }) {
+  if (
+    !sourceText.includes(taskBImperativeHandlerOnlyBranch) ||
+    sourceText.includes('sourceFile.getDescendantsOfKind(SyntaxKind.JsxAttribute)')
+  ) {
+    throw new Error('TASK B restored the superseded per-name JSX handler traversal');
   }
 }
 

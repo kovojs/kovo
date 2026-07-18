@@ -288,18 +288,16 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
 
 // @kovo-security-classifier-corpus kv424-request-process
 describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () => {
-  it('flags an innerHTML write inside a JSX event handler', () => {
+  it('does not duplicate compiler-owned JSX innerHTML closure in TASK B', () => {
     const facts = sinksFor(`
       export function Widget(userInput: string) {
         return <button onClick={() => { el.innerHTML = userInput; }}>go</button>;
       }
     `);
-    expect(facts).toEqual([
-      expect.objectContaining({ sink: 'innerHTML', safePath: 'trustedHtml', source: 'userInput' }),
-    ]);
+    expect(facts).toEqual([]);
   });
 
-  it('flags eval, document.write, setTimeout-string and new Function in handlers', () => {
+  it('does not duplicate compiler-owned JSX code/DOM closure in TASK B', () => {
     const facts = sinksFor(`
       export function Widget(code: string, markup: string) {
         return (
@@ -316,8 +314,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         );
       }
     `);
-    const sinks = facts.map((fact) => fact.sink).sort();
-    expect(sinks).toEqual(['Function', 'document.write', 'eval', 'setTimeout']);
+    expect(facts).toEqual([]);
   });
 
   it.each([

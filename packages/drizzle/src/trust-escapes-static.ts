@@ -370,12 +370,11 @@ function shortSource(node: Node): string {
 // =====================================================================================
 //
 // CONSERVATIVE BY DESIGN. KV424 fails `kovo check` on ANY entry, so this pass must stay
-// near-zero false-positive on real app code. It flags only the unambiguous imperative-DOM
-// dangerous-sink lexicon, and only inside HANDLER bodies — the closures the compiler
-// serializes across the KV201 handler-serialization boundary (event handlers / lifecycle
-// callbacks reachable from JSX). It deliberately does NOT walk arbitrary module/server
-// code (where `innerHTML` etc. may be legitimate non-app-boundary usage). The flagged
-// lexicon:
+// near-zero false-positive on real app code. Compiler-owned JSX handlers are enforced by the
+// finite browser IR and deliberately do not run through this name classifier. This survivor covers
+// only imperative `on*` assignments and `addEventListener` callbacks that are not serialized by
+// Kovo's JSX compiler. It deliberately does NOT walk arbitrary module/server code (where
+// `innerHTML` etc. may be legitimate non-app-boundary usage). The survivor lexicon:
 //   - `el.innerHTML = ...`      → safePath trustedHtml
 //   - `el.outerHTML = ...`      → safePath trustedHtml
 //   - `eval(...)`               → safePath (no Kovo equivalent; remove)
@@ -390,11 +389,10 @@ interface DangerousSinkMatch {
 }
 
 /**
- * Collect dangerous imperative-DOM sink writes/calls inside app handler bodies as
- * `UnregisteredSinkFact`s (SPEC §6.6, KV424). KV424 is ERROR-severity in `kovo check`
- * (the check fails on ANY entry), so this pass is intentionally conservative: it scans
- * only handler-shaped closures (event/lifecycle callbacks reachable across the KV201
- * serialization boundary) and only the unambiguous dangerous lexicon.
+ * Collect dangerous imperative-DOM sink writes/calls inside raw imperative handler bodies as
+ * `UnregisteredSinkFact`s (SPEC §6.6, KV424). Compiler-owned JSX handlers instead close through
+ * KV449's finite operation set. This narrow survivor covers only callbacks installed through raw
+ * `on*` assignments or `addEventListener` and only the historical unambiguous lexicon.
  *
  * @internal
  */
@@ -29598,10 +29596,6 @@ function requestExpressionResolvesToGovernedFetchTarget(
   return false;
 }
 
-function requestCallIsGovernedFetch(call: import('ts-morph').CallExpression): boolean {
-  return requestGovernedFetchInvocation(call) !== undefined;
-}
-
 /**
  * SPEC §6.6: the reviewed outbound-network door is the exact framework-owned context
  * parameter's direct `fetch` method. A capability role alone is not enough: aliases, computed
@@ -38730,7 +38724,7 @@ function unregisteredSinksForSourceFile(
 ): UnregisteredSinkFact[] {
   const facts: UnregisteredSinkFact[] = [];
 
-  for (const handler of handlerBodies(sourceFile)) {
+  for (const handler of nonCompilerRawHandlerBodies(sourceFile)) {
     // Assignments: el.innerHTML = ..., el.outerHTML = ...
     for (const binary of handler.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
       if (binary.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
@@ -38937,12 +38931,13 @@ function sourceField(node: Node | undefined): { source?: string } {
 }
 
 /**
- * The handler-shaped closures whose bodies the compiler serializes across the KV201
- * boundary: arrow/function expressions passed as JSX event-handler attributes
- * (`onClick={...}` / `on:click={...}`) or assigned to `on*` properties. Narrowing to
- * these bodies (rather than arbitrary module code) keeps the KV424 gate fail-safe.
+ * Raw imperative handler-shaped closures that are not serialized through Kovo's JSX compiler.
+ * JSX `onClick`/`on:click` attributes are intentionally absent: their complete historical closed
+ * corpus is owned by the compiler's finite browser IR and KV449. This survivor keeps older raw
+ * `on*` property assignments and `addEventListener` callbacks fail-closed without pretending that
+ * they are compiler-owned lowered handlers.
  */
-function handlerBodies(sourceFile: SourceFile): Node[] {
+function nonCompilerRawHandlerBodies(sourceFile: SourceFile): Node[] {
   const bodies: Node[] = [];
   const seen = new Set<Node>();
 
@@ -38956,14 +38951,6 @@ function handlerBodies(sourceFile: SourceFile): Node[] {
       }
     }
   };
-
-  // JSX attributes whose name starts with `on` (onClick, on:click, onSubmit, ...).
-  for (const attribute of sourceFile.getDescendantsOfKind(SyntaxKind.JsxAttribute)) {
-    const name = attribute.getNameNode().getText();
-    if (!/^on[:A-Z]/.test(name) && !/^on[a-z]/.test(name)) continue;
-    const initializer = attribute.getInitializer();
-    if (initializer && Node.isJsxExpression(initializer)) add(initializer.getExpression());
-  }
 
   // `element.onclick = () => {...}` style property assignments to on* handlers.
   for (const binary of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
