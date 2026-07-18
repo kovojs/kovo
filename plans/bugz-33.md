@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-17
 
-**Status:** Remediation in progress; final exact-tip verification and publication pending
+**Status:** Remediation complete through M33; final exact-tip verification and publication pending
 **Baseline:** `4403ce7401760725836332aedb3031e1c0833cfe`
 
 **Scope:** Fresh remotely reachable and framework-authority findings after `bugz-32`. Deliberate
@@ -14,8 +14,8 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    2 |     20 |
-| Medium   |    3 |     23 |
+| High     |    0 |     23 |
+| Medium   |    0 |     33 |
 | Low      |    0 |      5 |
 
 ## High
@@ -277,7 +277,7 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** real PostgreSQL identity/GUC/search-path/cluster probes pass 8/8; CLI database
     checks pass 26/26; the generated external-Postgres provision/check/boot lifecycle passes 2/2.
 
-- [ ] **H21 - Public raw Better Auth helpers could accept a cookie posture that authenticates a
+- [x] **H21 - Public raw Better Auth helpers could accept a cookie posture that authenticates a
       sibling-planted session.**
   - Caller-created Better Auth instances could omit canonical origin, use default bare or
     `__Secure-` token/cache cookie names, or enable `session_data` cache outside Kovo's host-only
@@ -286,11 +286,13 @@ rendering, Better Auth, and managed SQL.
     credential first.
   - **Evidence:** real Better Auth + SQLite two-account reproductions cover attacker-first token and
     signed cache cookies, missing/empty context, exact HTTPS defaults, session lookup, and sign-out.
-  - **Open:** remove arbitrary raw auth objects from the public API, admit only fixed
-    SQLite/Postgres bindings through a private identity registry, and verify every supported
-    session/credential/mount path rejects origin or cookie skew before handler/API/database effects.
+  - **Fixed:** `56fa5db4f` removes raw auth consumers from the public API and privately registers
+    only exact fixed SQLite/Postgres bindings. Structural, caller-created, empty-origin, default
+    `__Secure-`, and safe-looking custom-cookie objects fail before handler/API/database effects.
+  - **Evidence:** Better Auth origin, session, credential, SQLite, and API-surface suites exercise
+    the duplicate-cookie controls and fixed-binding lifecycle.
 
-- [ ] **H22 - The Better Auth callback mount exposed the live session bearer through a GET JSON
+- [x] **H22 - The Better Auth callback mount exposed the live session bearer through a GET JSON
       endpoint.**
   - The opaque mount delegated every GET below its prefix. Real Better Auth's `/get-session`
     response includes `session.token`, so same-origin script could bypass both HttpOnly and Kovo's
@@ -298,9 +300,21 @@ rendering, Better Auth, and managed SQL.
     `body: 'redirect'` posture was audit metadata, not a runtime response-shape gate.
   - **Evidence:** an authenticated real SQLite binding returns status 200 with a JSON token exactly
     equal to the live session cookie's unsigned value through `mount('/api/auth', mountAdapter)`.
-  - **Open:** make the mount a runtime redirect-only sink: require an allowed 30x status and a
-    nonempty same-origin `Location`, emit no provider body, preserve only the reviewed callback
-    cookie/redirect posture, and reject JSON/HTML responses opaquely.
+  - **Fixed:** `56fa5db4f` makes the mount an empty-body redirect-only sink with a single canonical
+    same-origin `Location`; session JSON, HTML/errors, ambiguous locations, external redirects, and
+    unreviewed headers fail inside the auth boundary.
+  - **Evidence:** the real authenticated `/get-session` bearer regression and mounted redirect
+    matrix pass in `packages/better-auth/src/index.session.test.ts`.
+
+- [x] **H23 - Conflicting canonical `access` and legacy `guard` declarations could audit one
+      authorization decision while enforcing another.**
+  - Explicit public/verified access metadata took precedence over an authored legacy guard in some
+    audit paths, while runtime and compiler surfaces did not share one fail-closed exclusivity rule.
+  - **Fixed:** `036bfe967`, `993d54857`, and `b224cfff9` reject dual declarations as KV436 at types,
+    constructors, structural resnapshotting, compiler analysis, and access-graph generation; a
+    guard authored alone remains the exact audited and executed decision.
+  - **Evidence:** server access, compiler access/guard exclusivity, route-page, and access-graph
+    regressions pass at the integrated checkpoint.
 
 ## Medium
 
@@ -576,26 +590,29 @@ rendering, Better Auth, and managed SQL.
     mixed DNS answers, RFC 8215 local-use Pref64, every legal layout, and a framework-proven
     Postgres socket that still cannot reopen embedded metadata.
 
-- [ ] **M24 - A non-loopback plaintext Better Auth origin could silently select sibling-settable
+- [x] **M24 - A non-loopback plaintext Better Auth origin could silently select sibling-settable
       cookies outside production mode.**
   - Fixed bindings accepted `http://app.example.test` whenever `NODE_ENV` was not `production`.
     Better Auth then emitted a bare session name, so staging, preview, or mislabelled deployments
     lost both transport confidentiality and the browser-enforced host-only prefix.
-  - **Open:** require HTTPS for every non-loopback origin regardless of environment mode, preserve
-    plaintext only for exact loopback development, and prove both direct and environment binding
-    constructors reject the unsafe origin before auth construction.
+  - **Fixed:** `56fa5db4f` requires HTTPS for every non-loopback origin in every environment and
+    admits plaintext only for exact local-development loopback hosts.
+  - **Evidence:** direct and environment SQLite/Postgres binding tests reject non-loopback HTTP
+    before database or Better Auth construction.
 
-- [ ] **M25 - The Better Auth GET mount forwarded unauthenticated off-origin redirects.**
+- [x] **M25 - The Better Auth GET mount forwarded unauthenticated off-origin redirects.**
   - Fixed bindings disable Better Auth's ambient origin check because Kovo owns credential ingress,
     but the callback mount forwarded the dependency's redirect verbatim. Invalid verify-email and
     reset-password tokens combined with an attacker `callbackURL` therefore produced a public 302
     to an arbitrary origin.
   - **Evidence:** real Better Auth 1.6.17 returns `Location: https://evil.example/phish?...` for both
-    mounted GET shapes, and Kovo currently preserves it.
-  - **Open:** the redirect-only mount gate must resolve `Location` against the request and require
-    the exact pinned scheme, host, and effective port before emitting an empty redirect response.
+    mounted GET shapes, and Kovo preserved it before the fix.
+  - **Fixed:** `56fa5db4f` canonicalizes the single upstream `Location` and requires exact pinned
+    scheme, host, and effective port before reconstructing an empty redirect response.
+  - **Evidence:** real verify-email/reset-password external callback controls and ambiguous
+    `Location` regressions pass in the Better Auth mount suite.
 
-- [ ] **M26 - Shared caches could replay an anonymous form bound to another browser's CSRF
+- [x] **M26 - Shared caches could replay an anonymous form bound to another browser's CSRF
       cookie.**
   - When a public GET rendered a mutation form with an already-present anonymous CSRF cookie, the
     emitted token was cookie-specific but the response carried neither `private, no-store` nor
@@ -604,9 +621,79 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** the real `createRequestHandler` path reproduces attacker-cookie A → cached HTML →
     victim-cookie B rejection, while the first no-cookie render is correctly private because it
     mints browser state.
-  - **Open:** carry a precise CSRF-personalization witness from token rendering to final response
-    posture and force private/no-store plus Cookie variance on every live/generated adapter without
-    de-caching unrelated public HTML.
+  - **Fixed:** `9b5f1b1ec` carries an exact anonymous-CSRF personalization witness to final response
+    posture, pre-delivers first-deferred bindings, and forces private/no-store plus `Vary: Cookie`
+    only for credential-varying output across live and emitted Node/Vercel shells.
+  - **Evidence:** exact attacker-cookie/victim-cookie cache regressions and emitted-shell witness
+    tests pass in `packages/server/src/anonymous-csrf-cache-security.test.tsx` and `build.test.ts`.
+
+- [x] **M27 - Conflicting anonymous-CSRF cookie declarations could mint one logical browser
+      authority under incompatible attributes or prefix aliases.**
+  - Direct/deferred forms and standalone helpers could disagree on Path, SameSite, Secure, or
+    plain/`__Host-`/`__Secure-` names while treating the result as one reusable binding.
+  - **Fixed:** `beb8bf42b` and `002334768` snapshot one aggregate posture per logical cookie,
+    reject incompatible attributes and browser-prefix aliases, and share only exact compatible
+    bindings across direct, deferred, raw, and cloned-request paths.
+  - **Evidence:** anonymous aggregate-posture and standalone mint isolation suites pass at the
+    integrated checkpoint.
+
+- [x] **M28 - Lazy route/raw streams could mint credential-bound output after public cache posture
+      had already been selected.**
+  - A stream `pull()` or queued response task could first consume/mint cookie authority after the
+    cache decision, leaving personalized bytes eligible for shared caching.
+  - **Fixed:** `e6e662fe4` selects conservative private posture before credential-capable lazy
+    execution while preserving public caching for proven credential-neutral eager streams.
+  - **Evidence:** late route/raw stream variant controls and emitted Node/Vercel tests pass.
+
+- [x] **M29 - Repeated standalone CSRF mints in one raw response could rotate bindings or accept
+      conflicting cookie postures.**
+  - Multiple forms could receive tokens for different undeliverable cookies, or one response could
+    silently reuse a logical name under incompatible attributes.
+  - **Fixed:** `fc92ff3f3` reproduces the conflict and `002334768` reuses one exact response binding,
+    isolates request objects, and rejects same-name posture conflicts and prefix aliases.
+  - **Evidence:** `packages/server/src/standalone-csrf-mint-security.test.ts` passes at the integrated
+    checkpoint.
+
+- [x] **M30 - First-anonymous standalone CSRF helpers could mint authority without an atomic
+      response-owned cookie-delivery receipt.**
+  - Detached/direct runners, reconstructed requests, and late callbacks could expose a token whose
+    matching cookie was never delivered; ordinary clones also risked losing the canonical request
+    binding.
+  - **Fixed:** `7b1b21737` binds mint state to a private response lifecycle, captures the exact
+    cookie before token exposure, shares canonical authority with retained clones, and fails closed
+    after sealing or on direct runners without a managed sink.
+  - **Evidence:** integrated route/raw/direct/clone lifecycle matrix 393/393 and emitted build matrix
+    55/55 pass.
+
+- [x] **M31 - A mutable raw `Response` could add browser-state headers after posture validation but
+      before adapter emission.**
+  - Nested microtasks could append `Set-Cookie` or `Clear-Site-Data` to the same Response object
+    after the security snapshot, bypassing the declared raw-response posture.
+  - **Fixed:** `7b1b21737` synchronously seals and snapshots raw headers, then reconstructs an
+    immutable wire response with only the admitted header set and framework-owned cookie snapshot.
+  - **Evidence:** the nested-microtask header-TOCTOU regression and raw response matrix pass.
+
+- [x] **M32 - Nested response finalization could inherit an ambient lifecycle and seal or consume
+      the outer response's CSRF state.**
+  - Early auth/CSRF/access returns and nested route/endpoint dispatch could let an explicit inner
+    request fall back to the ambient outer frame, cross-binding cookies or committing the wrong
+    response headers.
+  - **Fixed:** `7b1b21737` gives exact retained mappings precedence over ambient state and makes
+    finalizers resolve exact-only lifecycle roots, preserving distinct nested response authority.
+  - **Evidence:** nested route/endpoint early-return and exact-over-ambient adversarial controls pass
+    in the 393-test integrated lifecycle matrix.
+
+- [x] **M33 - Reusing the exact handler `Request` in a nested `createRequestHandler()` call can
+      still seal the outer response lifecycle.**
+  - A nested app's early auth, CSRF, or access return resolves the already-retained Request to the
+    outer frame; finalizing the inner response then commits the outer headers, so the outer first
+    anonymous mint fails and returns 500.
+  - **Fixed:** `98e93d516` clears inherited response context at nested handler ingress and rekeys an
+    exact already-owned Request from its pinned authority-neutral source, preserving only explicit
+    adapter peer/database bindings. Inner success, auth, CSRF, and access finalizers therefore own
+    a distinct response lifecycle without transferring outer session/guard authority.
+  - **Evidence:** the integrated seven-file response-lifecycle matrix passes 342/342, including
+    exact same-Request bodies/abort propagation, new-Request controls, and every early-return path.
 
 ## Low
 
@@ -677,5 +764,7 @@ rendering, Better Auth, and managed SQL.
 - Trusted-client-IP live/real-proxy matrix: 54/54 plus generated production Node 1/1; all 16 C13
   corpora passed.
 - Windows environment/database-driver CLI matrix: 162/162; all 16 exact-tip C13 corpora passed.
+- Response-lifecycle exact-request integration matrix: 342/342; VP, imports, wire-output, TCB,
+  security-guarantee, API-surface, and diff gates passed.
 - Publication remains pending until the exact-tip broad gates, `origin/main` push, GitHub
   Actions/Pages monitoring, and post-green no-find pass complete.
