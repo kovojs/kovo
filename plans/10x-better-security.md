@@ -174,21 +174,31 @@ Measurements are versioned and reproducible:
 
 ### 2B. Finite compiler-owned security IR
 
-- [ ] Specify the finite operation set for serialized browser handlers and structured server
+- [x] Specify the finite operation set for serialized browser handlers and structured server
       effects, including ordinary DOM state/focus/dialog/form operations, framework egress,
       database actions, redirects, cookies, headers, and response outcomes.
-- [ ] Lower app-authored TSX/JSX to compiler-owned security IR while preserving authorable-source
+  - Evidence: SPEC §4.3/§5.2/§6.6 defines the exact effect/control union; `pnpm run
+    check:c9-sink-inventory` proves one C9 owner per operation.
+- [x] Lower app-authored TSX/JSX to compiler-owned security IR while preserving authorable-source
       and fixpoint obligations. No public or hand-authored lowered-IR escape is introduced.
-- [ ] Reject unknown operations and raw capability/DOM escapes with stable diagnostics; route
+  - Evidence: `security-operation-ir.security.test.ts` proves generated browser/server manifests,
+    all five server-root families, and inline plus exact same-file referenced handlers.
+- [x] Reject unknown operations and raw capability/DOM escapes with stable diagnostics; route
       legitimate exceptional operations through named, justified, `kovo explain`-visible escapes.
-- [ ] Run realistic green applications and browser workflows to prove the safe operation set is
+  - Evidence: `pnpm run check:security-classifier-corpus` passes 20 corpora, including unknown/raw
+    terminals, opaque roots, query writes, exceptional doors, and root-linked local-call edges.
+- [x] Run realistic green applications and browser workflows to prove the safe operation set is
       sufficient without weakening unknown-operation closure.
+  - Evidence: `pnpm run check:green-corpus` passes 18 rows; gallery materialization and the generated
+    command-dialog/toast browser workflow pass. Root-linked `server.helper.call` records preserve,
+    but do not discharge, the Phase 2C bottom-up summary obligation.
 
 ### 2C. Narrow normalized abstract interpretation
 
 - [ ] Define the normalized semantic graph and the minimum facts still requiring value-flow
-      analysis after 2A/2B. Document transfer semantics, alias/mutation rules, call summaries,
-      recursion/state budgets, and the exact closed verdict for every unsupported condition.
+      analysis after 2A/2B. Consume every root-linked `server.helper.call` with a bottom-up semantic
+      summary; document transfer semantics, alias/mutation rules, recursion/state budgets, and the
+      exact closed verdict for every unsupported condition.
 - [ ] Implement provenance over normalized operations rather than raw syntax shapes. Diagnostic
       output must show the root, transfer path, sink, and reason an opaque/budget verdict closed.
 - [ ] Commit the full C13 corpus before migration; preserve every historical reject/non-public/
