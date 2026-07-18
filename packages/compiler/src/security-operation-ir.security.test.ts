@@ -230,6 +230,66 @@ export const report = endpoint('/report', {
     expect(diagnostics).toEqual([]);
   });
 
+  it('accepts exact reviewed command and module-scope storage capability doors', () => {
+    const diagnostics = kv449(`
+import {
+  cmd,
+  commandAllowlist,
+  createFileSystemStorage,
+  mutation,
+  runCommand,
+} from '@kovojs/server';
+const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixed health probe' });
+const command = cmd('/usr/bin/true', [], { allow });
+const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+export const verify = mutation({
+  async handler() {
+    await runCommand(command);
+    await storage.stat('fixed-key');
+    return { ok: true };
+  },
+});
+`);
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('keeps lookalike, aliased, mutable, and request-time capability doors closed', () => {
+    expect(
+      kv449(`
+import { runCommand } from 'foreign-command-package';
+import { mutation } from '@kovojs/server';
+export const verify = mutation({ handler() { return runCommand(command); } });
+`),
+    ).not.toEqual([]);
+    expect(
+      kv449(`
+import { mutation, runCommand } from '@kovojs/server';
+const invoke = runCommand;
+export const verify = mutation({ handler() { return invoke(command); } });
+`),
+    ).not.toEqual([]);
+    expect(
+      kv449(`
+import { createFileSystemStorage, mutation } from '@kovojs/server';
+let storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+storage = replacement;
+export const verify = mutation({ handler() { return storage.stat('fixed-key'); } });
+`),
+    ).not.toEqual([]);
+    expect(
+      kv449(`
+import { createFileSystemStorage, mutation } from '@kovojs/server';
+export const verify = mutation({
+  handler(input) {
+    const storage = createFileSystemStorage({ root: input.root });
+    return storage.stat('fixed-key');
+  },
+});
+`),
+    ).not.toEqual([]);
+  });
+
   it('treats an exact raw endpoint Response as a reviewed outcome, not escaped authority', () => {
     const result = compile(`
 import { endpoint } from '@kovojs/server';
