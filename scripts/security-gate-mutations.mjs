@@ -816,6 +816,27 @@ const analyzerSummaryPrivatePathPrefixBranch =
   "  if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) return undefined;";
 const weakenedAnalyzerSummaryPrivatePathPrefixBranch =
   '  if (false && prefix.length > 1) return undefined;';
+const analyzerSummaryDirectPrivatePathPrefixBranch = [
+  '    const prefix = segments.path.slice(0, index);',
+  '    // Query contexts expose private request state through `.request`; other enrolled callbacks',
+  "    // receive the request directly. A carrier's app-controlled `.input.guard`-style subtree is",
+  '    // never principal provenance merely because one of its nested property names matches.',
+  "    if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) continue;",
+].join('\n');
+const weakenedAnalyzerSummaryDirectPrivatePathPrefixBranch = [
+  '    const prefix = segments.path.slice(0, index);',
+  '    // Query contexts expose private request state through `.request`; other enrolled callbacks',
+  "    // receive the request directly. A carrier's app-controlled `.input.guard`-style subtree is",
+  '    // never principal provenance merely because one of its nested property names matches.',
+  '    if (false && prefix.length > 1) continue;',
+].join('\n');
+const analyzerSummaryDestructuringDefaultClosureBranch =
+  '  if (segmentElements.some((element) => element.getInitializer() !== undefined)) return undefined;';
+const weakenedAnalyzerSummaryDestructuringDefaultClosureBranch =
+  '  if (false && segmentElements.some((element) => element.getInitializer() !== undefined)) return undefined;';
+const analyzerSummaryMutableScalarTransferClosureBranch =
+  '  return definitelyImmutablePrivateScopeScalarType(expression.getType());';
+const weakenedAnalyzerSummaryMutableScalarTransferClosureBranch = '  return true;';
 const analyzerSummaryImmutableBindingBranch = [
   '  return helper && symbolKey && !sourceFileMutatesSymbol(sourceFile, symbolKey)',
   '    ? helper',
@@ -1069,6 +1090,36 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
     test: assertAnalyzerSummaryPrivatePathPrefixIsPinned,
+  },
+  {
+    description: 'Lets a carrier-owned input.guard subtree mint direct private provenance.',
+    expectedKiller: 'direct private paths must allow only direct or exact request prefixes',
+    name: 'drizzle-analyzer-summary/allow-direct-carrier-input-prefix',
+    replacement: weakenedAnalyzerSummaryDirectPrivatePathPrefixBranch,
+    search: analyzerSummaryDirectPrivatePathPrefixBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryDirectPrivatePathPrefixIsPinned,
+  },
+  {
+    description: 'Lets client-controlled destructuring defaults preserve private provenance.',
+    expectedKiller: 'defaulted private destructuring must remain closed',
+    name: 'drizzle-analyzer-summary/allow-private-destructuring-default',
+    replacement: weakenedAnalyzerSummaryDestructuringDefaultClosureBranch,
+    search: analyzerSummaryDestructuringDefaultClosureBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryDestructuringDefaultClosureIsPinned,
+  },
+  {
+    description: 'Lets mutable object captures pass the immutable scalar transfer rule.',
+    expectedKiller: 'private carrier transfer must remain limited to immutable scalar values',
+    name: 'drizzle-analyzer-summary/allow-mutable-private-scalar-transfer',
+    replacement: weakenedAnalyzerSummaryMutableScalarTransferClosureBranch,
+    search: analyzerSummaryMutableScalarTransferClosureBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryMutableScalarTransferClosureIsPinned,
   },
   {
     description: 'Keeps a summary trusted after its callable binding is reassigned.',
@@ -2218,6 +2269,33 @@ async function assertAnalyzerSummaryOpaqueCarrierEscapeIsPinned(_moduleUnderTest
 async function assertAnalyzerSummaryPrivatePathPrefixIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(analyzerSummaryPrivatePathPrefixBranch)) {
     throw new Error('private summary paths no longer reject arbitrary carrier prefixes');
+  }
+}
+
+async function assertAnalyzerSummaryDirectPrivatePathPrefixIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryDirectPrivatePathPrefixBranch)) {
+    throw new Error('direct private paths no longer reject carrier-owned input prefixes');
+  }
+}
+
+async function assertAnalyzerSummaryDestructuringDefaultClosureIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryDestructuringDefaultClosureBranch)) {
+    throw new Error('defaulted private destructuring no longer fails closed');
+  }
+}
+
+async function assertAnalyzerSummaryMutableScalarTransferClosureIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryMutableScalarTransferClosureBranch)) {
+    throw new Error('private scalar transfer no longer rejects mutable values');
   }
 }
 
