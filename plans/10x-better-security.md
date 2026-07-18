@@ -246,13 +246,20 @@ Measurements are versioned and reproducible:
 
 ### 3B. Imperative DOM: finite capability surface
 
-- [ ] Replace the dangerous-name lexicon with the finite browser operation surface from 2B.
+- [x] Replace the dangerous-name lexicon with the finite browser operation surface from 2B.
       Unrestricted DOM capability, string evaluation, unknown DOM receiver operations, and raw
       property sinks are unavailable in serialized handlers.
-- [ ] Prove a never-before-listed dangerous DOM method is rejected because it is outside the
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/security-operation-ir.security.test.ts`
+    passes 48/48 against the closed `browserSecurityOperationKinds` inventory and rejects every
+    security-relevant effect that cannot map to an exact kind/door pair.
+- [x] Prove a never-before-listed dangerous DOM method is rejected because it is outside the
       finite capability set, not because its name was added to a denylist.
-- [ ] Prove realistic form state, focus, dialog, scroll, selection, and event workflows remain
+  - Evidence: the same focused test rejects never-listed `replaceChildren` with KV449, and
+    `pnpm run check:security-classifier-corpus` passes all 20 enrolled corpora.
+- [x] Prove realistic form state, focus, dialog, scroll, selection, and event workflows remain
       expressible through reviewed operations across all supported browsers.
+  - Evidence: the focused Vitest browser run over `security-operation-workflows.browser.test.ts`
+    and `mutation-response-dom.browser.test.ts` passes 30/30 across Chromium, Firefox, and WebKit.
 
 ### 3C. Reachability: retire per-shape TASK B logic
 
