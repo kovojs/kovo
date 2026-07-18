@@ -759,15 +759,25 @@ const analyzerSummaryCallCarrierBranch = [
 ].join('\n');
 const weakenedAnalyzerSummaryCallCarrierBranch =
   '    return helperSummaryForCallCallee(callee, context.helpers);';
-const analyzerSummaryUnenrolledCarrierClosureBranch = [
-  '  // Positional order, a DB-shaped sibling parameter, types, and a request-like name do not prove',
-  '  // that an arbitrary exported/nested callable receives framework private authority.',
-  '  return false;',
+const analyzerSummaryUnenrolledCarrierClosureBranch = '  if (frameworkRole !== true) return false;';
+const weakenedAnalyzerSummaryUnenrolledCarrierClosureBranch =
+  '  if (frameworkRole === false) return false;';
+const analyzerSummaryCarrierIntegrityBranch =
+  '  return privateScopeCarrierBindingIsStableAtUse(parameter, callable, auditedUse);';
+const weakenedAnalyzerSummaryCarrierIntegrityBranch = '  return true;';
+const analyzerSummaryDirectCarrierIntegrityBranch =
+  '  if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;';
+const weakenedAnalyzerSummaryDirectCarrierIntegrityBranch =
+  '  if (false && !privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;';
+const analyzerSummaryOpaqueCarrierEscapeBranch = [
+  '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
+  '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
+  '    return false;',
 ].join('\n');
-const weakenedAnalyzerSummaryUnenrolledCarrierClosureBranch = [
-  '  // Positional order, a DB-shaped sibling parameter, types, and a request-like name do not prove',
-  '  // that an arbitrary exported/nested callable receives framework private authority.',
-  '  return index > 0;',
+const weakenedAnalyzerSummaryOpaqueCarrierEscapeBranch = [
+  '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
+  '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
+  '    continue;',
 ].join('\n');
 const analyzerSummaryPrivatePathPrefixBranch =
   "  if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) return undefined;";
@@ -956,6 +966,36 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
     test: assertAnalyzerSummaryUnenrolledCarrierClosureIsPinned,
+  },
+  {
+    description: 'Skips the whole-callback integrity proof for an enrolled private carrier.',
+    expectedKiller: 'private carriers must retain the exact binding-integrity proof',
+    name: 'drizzle-analyzer-summary/drop-carrier-integrity-proof',
+    replacement: weakenedAnalyzerSummaryCarrierIntegrityBranch,
+    search: analyzerSummaryCarrierIntegrityBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryCarrierIntegrityIsPinned,
+  },
+  {
+    description: 'Lets direct guard/session/tenant reads bypass carrier integrity.',
+    expectedKiller: 'direct private reads must use the same carrier-integrity proof',
+    name: 'drizzle-analyzer-summary/drop-direct-carrier-integrity-proof',
+    replacement: weakenedAnalyzerSummaryDirectCarrierIntegrityBranch,
+    search: analyzerSummaryDirectCarrierIntegrityBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryDirectCarrierIntegrityIsPinned,
+  },
+  {
+    description: 'Lets a framework carrier escape through an opaque call before private use.',
+    expectedKiller: 'private carriers must close after opaque call escape',
+    name: 'drizzle-analyzer-summary/allow-opaque-carrier-escape',
+    replacement: weakenedAnalyzerSummaryOpaqueCarrierEscapeBranch,
+    search: analyzerSummaryOpaqueCarrierEscapeBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryOpaqueCarrierEscapeIsPinned,
   },
   {
     description: 'Lets an arbitrary wrapper prefix before guard/session/tenant mint private scope.',
@@ -2061,6 +2101,27 @@ async function assertAnalyzerSummaryUnenrolledCarrierClosureIsPinned(
 ) {
   if (!sourceText.includes(analyzerSummaryUnenrolledCarrierClosureBranch)) {
     throw new Error('private helper calls no longer reject positional/name/type carrier guesses');
+  }
+}
+
+async function assertAnalyzerSummaryCarrierIntegrityIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryCarrierIntegrityBranch)) {
+    throw new Error('private carriers no longer require exact binding-integrity proof');
+  }
+}
+
+async function assertAnalyzerSummaryDirectCarrierIntegrityIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryDirectCarrierIntegrityBranch)) {
+    throw new Error('direct private reads no longer share the carrier-integrity proof');
+  }
+}
+
+async function assertAnalyzerSummaryOpaqueCarrierEscapeIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryOpaqueCarrierEscapeBranch)) {
+    throw new Error('private carriers no longer close after opaque call escape');
   }
 }
 
