@@ -35,6 +35,10 @@ import {
   withRepoBinOnPath,
   withStarterBinOnPath,
 } from './index.test-support.js';
+import {
+  assertParanoidPostgresCasesExecuted,
+  requireParanoidPostgresToolchain,
+} from './index.build.prod-artifact.paranoid-runtime-gate.js';
 
 const blockedReadCases = [
   'queries/sqlite-secret-alias-query',
@@ -78,9 +82,21 @@ const phase5WriteContactEmail = 'phase5-write-boundary-proof-contact@example.com
 const phase5WriteMarker = 'phase5-write-boundary-proof';
 
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
+const requiredPostgresCases = [
+  'phase5-postgres-paranoid-dogfood',
+  'paranoid-external-provision-check-boot',
+  'paranoid-external-leak-refusal',
+] as const;
+type RequiredPostgresCase = (typeof requiredPostgresCases)[number];
+const requirePostgresAcceptance = process.env.KOVO_PARANOID === '1';
 const postgresToolchain = localPostgresToolchain();
-const describeIfPostgres = postgresToolchain.available ? describe : describe.skip;
-const itIfPostgres = postgresToolchain.available ? it : it.skip;
+const runPostgresCases = requireParanoidPostgresToolchain(
+  postgresToolchain,
+  requirePostgresAcceptance,
+);
+const executedPostgresCases = new Set<RequiredPostgresCase>();
+const describeIfPostgres = runPostgresCases ? describe : describe.skip;
+const itIfPostgres = runPostgresCases ? it : it.skip;
 const require = createRequire(import.meta.url);
 const { Pool } = require(resolveDependencyRoot('pg')) as {
   Pool: new (options: { connectionString: string; max: number }) => PgPool;
@@ -192,6 +208,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         rmSync(root, { force: true, recursive: true });
         rmSync(clusterRoot, { force: true, recursive: true });
       }
+      executedPostgresCases.add('phase5-postgres-paranoid-dogfood');
     },
     240_000,
   );
@@ -381,6 +398,7 @@ describeIfPostgres(
       } finally {
         await stopProcess(server);
       }
+      executedPostgresCases.add('paranoid-external-provision-check-boot');
     }, 240_000);
 
     it('refuses a materialized-view leak and a PUBLIC-granted leak in the paranoid external Postgres check', async () => {
@@ -437,9 +455,18 @@ describeIfPostgres(
       expect(failure).toMatch(/kovo_paranoid_user_mv/u);
       expect(failure).toMatch(/kovo_public_leak/u);
       if (createdForeignLeak) expect(failure).toMatch(/kovo_foreign_leak/u);
+      executedPostgresCases.add('paranoid-external-leak-refusal');
     }, 240_000);
   },
 );
+
+afterAll(() => {
+  assertParanoidPostgresCasesExecuted(
+    requiredPostgresCases,
+    executedPostgresCases,
+    requirePostgresAcceptance,
+  );
+});
 
 async function expectPostgresEndpoint(origin: string, output: () => string): Promise<void> {
   const response = await fetch(`${origin}/api/phase5-pg-endpoint`);
