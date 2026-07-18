@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -9,9 +10,124 @@ import {
   frameworkSourceSinkInventory,
   sourceSinkRedCorpus,
   sourceSinkRuntimeEvidence,
+  type BoundaryCrossingSinkInventoryEntry,
+  type SourceSinkInventoryEntry,
 } from './source-sink-registry.js';
 
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+const rootScripts = (
+  JSON.parse(readFileSync(new URL('../../../../package.json', import.meta.url), 'utf8')) as {
+    scripts?: Record<string, string>;
+  }
+).scripts;
+const requiredC9SinkNames = [
+  'db driver statement',
+  'http response body',
+  'http response headers',
+  'redirect URL',
+  'Set-Cookie',
+  'blob/file write',
+  'durable-task payload',
+  'webhook payload',
+  'HTML/render output',
+  'log/error output',
+  'outbound egress request',
+  'authorization principal/data access',
+  'dynamic module/process execution',
+] as const;
+
+function assertNonBlank(value: string, label: string): void {
+  if (value.trim() === '') throw new Error(`${label} must be non-blank.`);
+}
+
+function assertC9SinkInventoryComplete(
+  census: readonly SourceSinkInventoryEntry[],
+  inventory: readonly BoundaryCrossingSinkInventoryEntry[],
+): void {
+  if (!rootScripts?.check?.includes('pnpm run check:c9-sink-inventory')) {
+    throw new Error('The C9 completeness gate is not enrolled in pnpm run check.');
+  }
+
+  const censusFamilyNames = census.map((entry) => entry.sink);
+  const censusFamilies = new Set(censusFamilyNames);
+  if (censusFamilies.size !== censusFamilyNames.length) {
+    throw new Error('The source/sink census contains duplicate family rows.');
+  }
+  const requiredSinks = new Set<string>(requiredC9SinkNames);
+  const coveredFamilies = new Set<string>();
+  const seenSinks = new Set<string>();
+
+  for (const entry of inventory) {
+    assertNonBlank(entry.sink, 'C9 sink name');
+    if (seenSinks.has(entry.sink)) throw new Error(`Duplicate C9 sink row: ${entry.sink}.`);
+    if (!requiredSinks.has(entry.sink)) throw new Error(`Unknown C9 sink row: ${entry.sink}.`);
+    seenSinks.add(entry.sink);
+
+    assertNonBlank(entry.mechanismDetail, `${entry.sink} mechanism detail`);
+    assertNonBlank(entry.soleDoor, `${entry.sink} sole door`);
+    assertNonBlank(entry.owner, `${entry.sink} owner`);
+    assertNonBlank(entry.specAnchor, `${entry.sink} SPEC anchor`);
+    if (!/^@kovojs\/[a-z0-9-]+\/[a-z0-9-]+$/u.test(entry.owner)) {
+      throw new Error(`${entry.sink} owner is not a stable package/module owner: ${entry.owner}.`);
+    }
+    if (entry.censusFamilies.length === 0) {
+      throw new Error(`${entry.sink} does not discharge a source/sink census family.`);
+    }
+    for (const family of entry.censusFamilies) {
+      assertNonBlank(family, `${entry.sink} census family`);
+      if (!censusFamilies.has(family)) {
+        throw new Error(`${entry.sink} cites unknown source/sink census family: ${family}.`);
+      }
+      coveredFamilies.add(family);
+    }
+
+    const proofGateMatch = /^pnpm run ([a-z0-9:-]+)$/u.exec(entry.proofGate);
+    if (proofGateMatch === null || rootScripts?.[proofGateMatch[1]!] === undefined) {
+      throw new Error(`${entry.sink} does not cite a live root proof gate: ${entry.proofGate}.`);
+    }
+    if (entry.proofEvidence.length === 0) {
+      throw new Error(`${entry.sink} has no proof evidence.`);
+    }
+    if (entry.hostileValueEvidence.length === 0) {
+      throw new Error(`${entry.sink} has no hostile-value test.`);
+    }
+    for (const evidence of entry.hostileValueEvidence) {
+      assertNonBlank(evidence, `${entry.sink} evidence path`);
+      if (!/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(evidence)) {
+        throw new Error(`${entry.sink} hostile-value evidence is not a test: ${evidence}.`);
+      }
+    }
+    for (const evidence of [...entry.proofEvidence, ...entry.hostileValueEvidence]) {
+      assertNonBlank(evidence, `${entry.sink} evidence path`);
+      const resolvedEvidence = resolve(repositoryRoot, evidence);
+      const relativeEvidence = relative(repositoryRoot, resolvedEvidence);
+      if (relativeEvidence.startsWith('..') || isAbsolute(relativeEvidence)) {
+        throw new Error(`${entry.sink} evidence escapes the repository: ${evidence}.`);
+      }
+      if (!existsSync(resolvedEvidence)) {
+        throw new Error(`${entry.sink} cites stale evidence: ${evidence}.`);
+      }
+    }
+  }
+
+  const missingSinks = [...requiredSinks].filter((sink) => !seenSinks.has(sink));
+  if (missingSinks.length > 0) {
+    throw new Error(`C9 inventory is missing sink rows: ${missingSinks.join(', ')}.`);
+  }
+  const missingFamilies = [...censusFamilies].filter((family) => !coveredFamilies.has(family));
+  if (missingFamilies.length > 0) {
+    throw new Error(`C9 inventory is missing census families: ${missingFamilies.join(', ')}.`);
+  }
+}
+
+function mutableBoundaryInventory(): BoundaryCrossingSinkInventoryEntry[] {
+  return boundaryCrossingSinkInventory().map((entry) => ({
+    ...entry,
+    censusFamilies: [...entry.censusFamilies],
+    hostileValueEvidence: [...entry.hostileValueEvidence],
+    proofEvidence: [...entry.proofEvidence],
+  }));
+}
 
 // @kovo-security-classifier-corpus sink-registry
 describe('boundary crossing sink inventory', () => {
@@ -44,21 +160,7 @@ describe('boundary crossing sink inventory', () => {
 
   it('covers the DEC-E required sink set with mechanism and proof metadata', () => {
     const inventory = boundaryCrossingSinkInventory();
-    expect(inventory.map((entry) => entry.sink)).toEqual([
-      'db driver statement',
-      'http response body',
-      'http response headers',
-      'redirect URL',
-      'Set-Cookie',
-      'blob/file write',
-      'durable-task payload',
-      'webhook payload',
-      'HTML/render output',
-      'log/error output',
-      'outbound egress request',
-      'authorization principal/data access',
-      'dynamic module/process execution',
-    ]);
+    expect(inventory.map((entry) => entry.sink)).toEqual(requiredC9SinkNames);
 
     for (const entry of inventory) {
       expect(entry.censusFamilies.length, entry.sink).toBeGreaterThan(0);
@@ -126,20 +228,81 @@ describe('boundary crossing sink inventory', () => {
   });
 
   it('keeps every owner, proof gate, and hostile-value citation live', () => {
-    const packageJson = JSON.parse(
-      readFileSync(new URL('../../../../package.json', import.meta.url), 'utf8'),
-    ) as { scripts?: Record<string, string> };
-    const seenSinks = new Set<string>();
+    expect(() =>
+      assertC9SinkInventoryComplete(
+        frameworkSourceSinkInventory(),
+        boundaryCrossingSinkInventory(),
+      ),
+    ).not.toThrow();
+  });
 
-    for (const entry of boundaryCrossingSinkInventory()) {
-      expect(seenSinks.has(entry.sink), entry.sink).toBe(false);
-      seenSinks.add(entry.sink);
-      const scriptName = entry.proofGate.slice('pnpm run '.length);
-      expect(packageJson.scripts?.[scriptName], `${entry.sink}: ${entry.proofGate}`).toBeTruthy();
-      for (const evidence of [...entry.proofEvidence, ...entry.hostileValueEvidence]) {
-        expect(existsSync(`${repositoryRoot}${evidence}`), `${entry.sink}: ${evidence}`).toBe(true);
-      }
-    }
+  it.each([
+    {
+      expected: /missing sink rows: Set-Cookie/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) =>
+        inventory.filter((entry) => entry.sink !== 'Set-Cookie'),
+      name: 'missing row',
+    },
+    {
+      expected: /Duplicate C9 sink row/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => [inventory[0]!, ...inventory],
+      name: 'duplicate row',
+    },
+    {
+      expected: /owner must be non-blank/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => [
+        { ...inventory[0]!, owner: '  ' },
+        ...inventory.slice(1),
+      ],
+      name: 'unowned row',
+    },
+    {
+      expected: /unknown source\/sink census family/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => [
+        { ...inventory[0]!, censusFamilies: ['not.a.real.sink'] },
+        ...inventory.slice(1),
+      ],
+      name: 'unknown census family',
+    },
+    {
+      expected: /does not cite a live root proof gate/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => [
+        { ...inventory[0]!, proofGate: 'pnpm run check:not-real' },
+        ...inventory.slice(1),
+      ],
+      name: 'missing proof gate',
+    },
+    {
+      expected: /hostile-value evidence is not a test/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => [
+        { ...inventory[0]!, hostileValueEvidence: ['SPEC.md'] },
+        ...inventory.slice(1),
+      ],
+      name: 'non-test hostile evidence',
+    },
+    {
+      expected: /evidence path must be non-blank/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => [
+        { ...inventory[0]!, hostileValueEvidence: [''] },
+        ...inventory.slice(1),
+      ],
+      name: 'empty hostile evidence',
+    },
+    {
+      expected: /cites stale evidence/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => [
+        { ...inventory[0]!, hostileValueEvidence: ['packages/core/src/not-real.test.ts'] },
+        ...inventory.slice(1),
+      ],
+      name: 'stale hostile evidence',
+    },
+  ])('fails closed for a $name', ({ expected, mutate }) => {
+    expect(() =>
+      assertC9SinkInventoryComplete(
+        frameworkSourceSinkInventory(),
+        mutate(mutableBoundaryInventory()),
+      ),
+    ).toThrow(expected);
   });
 
   it('keeps browser-state cache poisoning in the C13 header/cookie superset corpus', () => {
