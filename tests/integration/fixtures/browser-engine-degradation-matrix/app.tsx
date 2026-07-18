@@ -55,6 +55,8 @@ export const submitMatrixForm = mutation('engine-matrix/submit', {
 const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
     const engine = await readEngineState(request.db);
+    // This is the suite's deliberate L1 native-form control: the cross-engine spec asserts the
+    // browser observes the 303 PRG instead of Kovo's enhanced 200 response.
     return `${renderQueryScript({ name: 'engine', value: engine })}
     <script type="module" src="/client.ts"></script>
     <main>

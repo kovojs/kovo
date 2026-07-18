@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC.md §9.1: Kovo-Changes exposes sanitized domain/key summaries only.
 import { createApp, domain, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -24,13 +25,15 @@ export const saveSecret = mutation('sanitized-kovo-changes/save', {
 });
 
 const homeRoute = route('/', {
-  page: () => `<main>
-    <form method="post" action="/_m/sanitized-kovo-changes/save" enhance data-mutation="sanitized-kovo-changes/save">
-      <input name="id" value="r1">
-      <input name="secret" value="sensitive-token">
-      <button type="submit">Save secret</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <form mutation={saveSecret} enhance>
+        <input name="id" value="r1" />
+        <input name="secret" value="sensitive-token" />
+        <button type="submit">Save secret</button>
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp({

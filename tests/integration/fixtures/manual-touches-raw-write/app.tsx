@@ -28,12 +28,7 @@ const home = route('/', {
   page: () => (
     <main>
       <CartCount />
-      <form
-        method="post"
-        action="/_m/manual-touches-raw-write/add"
-        enhance
-        data-mutation="manual-touches-raw-write/add"
-      >
+      <form mutation={addOpaqueCartItem} enhance>
         <input type="hidden" name="productId" value="p1" />
         <button type="submit">Add opaque item</button>
       </form>

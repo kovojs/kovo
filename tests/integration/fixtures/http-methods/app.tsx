@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -16,12 +17,14 @@ export const record = mutation('methods/record', {
 
 const homeRoute = route('/', {
   meta: { title: 'HTTP Methods' },
-  page: () => `<main>
-    <h1>HTTP Methods</h1>
-    <form method="post" action="/_m/methods/record" data-mutation="methods/record">
-      <button type="submit">Record</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>HTTP Methods</h1>
+      <form mutation={record}>
+        <button type="submit">Record</button>
+      </form>
+    </main>
+  ),
 });
 
 const doneRoute = route('/done', {

@@ -35,12 +35,7 @@ const homeRoute = route('/', {
         {trustedHtml(renderQueryScript({ name: 'profile', value: profile }))}
         <ProfileSummary />
         <ProfileStatus />
-        <form
-          method="post"
-          action="/_m/shared-query-consumers/publish"
-          enhance
-          data-mutation="shared-query-consumers/publish"
-        >
+        <form mutation={publishProfile} enhance>
           <button type="submit">Publish profile</button>
         </form>
       </main>

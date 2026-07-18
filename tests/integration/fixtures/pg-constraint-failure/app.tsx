@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC §9.2/§10.3, §11.4 pillar 5 (plans/bugs-and-testing.md C7; testing-audit §5.1):
 // a REAL Postgres constraint violation (unique PK) inside a transactional domain write
 // must surface a sanitized server error, roll the whole transaction back, and leave no
@@ -83,14 +84,18 @@ export const duplicateCharge = mutation('pg-constraint-failure/charge', {
 });
 
 const homeRoute = route('/', {
-  page: () => `<main>
-    <h1>Constraint failure</h1>
-    <div kovo-fragment-target="charge-status" kovo-deps="charge">ready</div>
-    <form method="post" action="/_m/pg-constraint-failure/charge">
-      <input name="id" value="c1">
-      <button type="submit">Charge</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Constraint failure</h1>
+      <div kovo-fragment-target="charge-status" kovo-deps="charge">
+        ready
+      </div>
+      <form mutation={duplicateCharge}>
+        <input name="id" value="c1" />
+        <button type="submit">Charge</button>
+      </form>
+    </main>
+  ),
 });
 
 export default defineFixture({

@@ -42,6 +42,7 @@ const homeRoute = route('/', {
         <section id="cart-panel" kovo-deps="cart">
           <output data-bind="cart.count">{cart.count}</output>
         </section>
+        {/* client.ts owns these rebaser submits; typed enrollment would double-dispatch them. */}
         <form id="first-form" method="post" action="/_m/optimistic-rebase/add">
           <input type="hidden" name="quantity" value="2" />
           <input type="hidden" name="delay" value="500" />

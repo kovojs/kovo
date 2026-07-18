@@ -41,12 +41,7 @@ const home = route('/', {
   page: () => (
     <main>
       <CartCount />
-      <form
-        method="post"
-        action="/_m/touch-graph-runtime-crosscheck/add"
-        enhance
-        data-mutation="touch-graph-runtime-crosscheck/add"
-      >
+      <form mutation={addCartItem} enhance>
         <input type="hidden" name="productId" value="p1" />
         <button type="submit">Add item</button>
       </form>

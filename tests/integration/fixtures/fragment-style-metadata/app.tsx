@@ -41,13 +41,15 @@ export const revealLateCard = mutation('fragment-style-metadata/reveal', {
 });
 
 const homeRoute = route('/', {
-  page: () => `<main>
-    <h1>Fragment style metadata</h1>
-    <section kovo-fragment-target="late-card" kovo-deps="late-card"></section>
-    <form method="post" action="/_m/fragment-style-metadata/reveal" enhance data-mutation="fragment-style-metadata/reveal" data-mutation-stream="true">
-      <button type="submit">Reveal card</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Fragment style metadata</h1>
+      <section kovo-fragment-target="late-card" kovo-deps="late-card"></section>
+      <form mutation={revealLateCard} enhance stream>
+        <button type="submit">Reveal card</button>
+      </form>
+    </main>
+  ),
 });
 
 export default defineFixture({

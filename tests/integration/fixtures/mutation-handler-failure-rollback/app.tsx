@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC.md §9.2/§10.3: unexpected mutation failures inside a configured
 // transaction roll back writes and return sanitized server-error responses.
 import { createApp, mutation, route, s } from '@kovojs/server';
@@ -74,14 +75,18 @@ export const failAfterWrite = mutation('rollback/fail-after-write', {
 });
 
 const homeRoute = route('/', {
-  page: () => `<main>
-    <h1>Rollback failure</h1>
-    <div kovo-fragment-target="rollback-status" kovo-deps="rollback">ready</div>
-    <form method="post" action="/_m/rollback/fail-after-write">
-      <input name="note" value="before-crash">
-      <button type="submit">Fail after write</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Rollback failure</h1>
+      <div kovo-fragment-target="rollback-status" kovo-deps="rollback">
+        ready
+      </div>
+      <form mutation={failAfterWrite}>
+        <input name="note" value="before-crash" />
+        <button type="submit">Fail after write</button>
+      </form>
+    </main>
+  ),
 });
 
 export default defineFixture({

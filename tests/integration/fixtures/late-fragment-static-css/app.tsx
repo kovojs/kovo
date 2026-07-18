@@ -26,13 +26,15 @@ export const revealRecommendation = mutation('late-fragment-static-css/reveal', 
 });
 
 const homeRoute = route('/', {
-  page: () => `<main>
-    <h1>Fragment CSS</h1>
-    <section kovo-fragment-target="recommendations" kovo-deps="recommendations"></section>
-    <form method="post" action="/_m/late-fragment-static-css/reveal" enhance data-mutation="late-fragment-static-css/reveal" data-mutation-stream="true">
-      <button type="submit">Show recommendation</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Fragment CSS</h1>
+      <section kovo-fragment-target="recommendations" kovo-deps="recommendations"></section>
+      <form mutation={revealRecommendation} enhance stream>
+        <button type="submit">Show recommendation</button>
+      </form>
+    </main>
+  ),
 });
 
 export default defineFixture({

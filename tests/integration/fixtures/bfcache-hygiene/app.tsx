@@ -59,6 +59,8 @@ const increment = mutation('nav-lifecycle/increment', {
 const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
     const counter = await readCounter(request.db);
+    // This fixture deliberately owns submission in client.ts so it can hold an optimistic request
+    // across a bfcache navigation. Typed enrollment would double-dispatch the logical submit.
     return `${renderQueryScript({ name: 'navCounter', value: counter })}
     <script type="module" src="/client.ts"></script>
     <main>

@@ -32,6 +32,7 @@ const homeRoute = route('/', {
         {trustedHtml('<script type="module" src="/client.ts"></script>')}
         <CartPanel />
         <output data-testid="cart-double">{cart.count * 2}</output>
+        {/* client.ts owns this optimistic submit; typed enrollment would double-dispatch it. */}
         <form id="optimistic-form" method="post" action="/_m/optimistic-success/add">
           <input type="hidden" name="quantity" value="2" />
           <button type="submit">Add optimistically</button>

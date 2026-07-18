@@ -29,12 +29,7 @@ const homeRoute = route('/', {
   page: () => (
     <main>
       <BalanceShell />
-      <form
-        method="post"
-        action="/_m/fragment-slot-hoist/deposit"
-        enhance
-        data-mutation="fragment-slot-hoist/deposit"
-      >
+      <form mutation={deposit} enhance>
         <input name="amount" type="number" value="7" />
         <button type="submit">Deposit</button>
       </form>

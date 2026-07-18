@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC §6.4 + §9.1: mutation PRG redirects can be built from typed route targets
 // with params/search and still land on a normal document route.
 import { redirect, type Redirect } from '@kovojs/core';
@@ -26,13 +27,15 @@ export const placeOrder = mutation('redirect-typed-target/place-order', {
 });
 
 const homeRoute = route('/', {
-  page: () => `<main>
-    <h1>Checkout</h1>
-    <form method="post" action="/_m/redirect-typed-target/place-order" data-mutation="redirect-typed-target/place-order">
-      <input name="id" value="ord-42" />
-      <button type="submit">Place order</button>
-    </form>
-  </main>`,
+  page: () => (
+    <main>
+      <h1>Checkout</h1>
+      <form mutation={placeOrder}>
+        <input name="id" value="ord-42" />
+        <button type="submit">Place order</button>
+      </form>
+    </main>
+  ),
 });
 
 const orderRoute = route('/orders/:id', {

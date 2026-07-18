@@ -29,6 +29,7 @@ const homeRoute = route('/', {
     <main>
       {trustedHtml('<script type="module" src="/client.ts"></script>')}
       <ParentPanel />
+      {/* client.ts owns this specialized morph submission; typed enrollment would double-submit. */}
       <form id="refresh-parent" method="post" action="/_m/morph-nested-island-state/refresh">
         <button type="submit">Refresh parent</button>
       </form>
