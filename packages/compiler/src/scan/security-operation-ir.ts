@@ -2016,8 +2016,13 @@ function serverMemberProvenance(
       : 'unknown-authority';
   }
   if (receiver === 'database-table-namespace') {
-    const kind = databaseOperationKind(member);
-    return kind ? serverOperationProvenance(kind) : 'unknown-authority';
+    // The generic one-member namespace exists for plain application table collections such as
+    // `request.db.products.get(...)`. It is not a second raw-driver door: SQL/execution and write
+    // terminals stay on the exact managed DB receiver/`read`/`write` namespaces, while an
+    // arbitrary `db.driver.execute(...)`-shaped chain remains absorbing unknown authority.
+    return member === 'all' || member === 'count' || member === 'get' || member === 'values'
+      ? serverOperationProvenance('server.database.read')
+      : 'unknown-authority';
   }
   if (receiver === 'database-relational-query-namespace') {
     // Drizzle relational queries admit one exact static table member. Computed members never reach

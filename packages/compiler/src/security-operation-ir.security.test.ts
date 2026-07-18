@@ -946,6 +946,9 @@ export const report = endpoint('/report', {
     ['computed read-namespace terminal', 'await ctx.db.read[operation]()'],
     ['extra read namespace', 'await ctx.db.read.schema.accounts.findMany()'],
     ['extra write namespace', 'await ctx.db.write.schema.insert()'],
+    ['raw-driver-shaped namespace', 'await ctx.db.driver.execute("drop table accounts")'],
+    ['raw-pool-shaped namespace', 'await ctx.db.pool.query("select 1")'],
+    ['table-namespace write terminal', 'await ctx.db.products.delete("p1")'],
   ])('rejects %s instead of widening managed relational reads', (_label, operation) => {
     expect(
       kv449(`
