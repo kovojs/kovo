@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form, FormError } from '@kovojs/core';
 
+import { sendMessage } from './app';
 import { composerQuery } from './shared';
 
 interface ModelUnavailableFailure {
@@ -16,7 +17,7 @@ export const Composer = component({
   mutations: { send: sendForm },
   queries: { composer: composerQuery },
   render: () => (
-    <form mutation={sendForm} enhance stream>
+    <form mutation={sendMessage} enhance stream>
       <label>
         Message <textarea name="body">show table</textarea>
       </label>

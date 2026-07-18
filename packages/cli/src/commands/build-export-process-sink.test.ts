@@ -1174,6 +1174,7 @@ import {
   type Schema,
   type VersionedClientModuleInput,
   type VersionedClientModuleRegistry,
+  type WebhookReplayIdentity,
   type WebhookReplayStore,
 } from '@kovojs/server';
 
@@ -1190,15 +1191,28 @@ class BaseSchema implements Schema<Record<string, never>> {
 class InheritedSchema extends BaseSchema {}
 
 class BaseReplay implements WebhookReplayStore, MutationReplayStore {
-  get(_scope: string, _idem: string): undefined {
+  get(
+    _scope: string,
+    _identity: string | WebhookReplayIdentity,
+    _fingerprint?: string,
+  ): undefined {
     execFileSync('replay-get');
     return undefined;
   }
-  reserve(_scope: string, _idem: string): undefined {
+  reserve(
+    _scope: string,
+    _identity: string | WebhookReplayIdentity,
+    _fingerprint?: string,
+  ): undefined {
     execFileSync('replay-reserve');
     return undefined;
   }
-  set(_scope: string, _idem: string, _response: unknown): void {
+  set(
+    _scope: string,
+    _identity: string | WebhookReplayIdentity,
+    _response: unknown,
+    _fingerprint?: string,
+  ): void {
     execFileSync('replay-set');
   }
 }

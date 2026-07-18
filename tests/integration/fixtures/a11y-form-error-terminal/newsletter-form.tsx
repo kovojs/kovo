@@ -2,6 +2,8 @@
 import { component, form, FormError } from '@kovojs/core';
 import { query } from '@kovojs/server';
 
+import { subscribe } from './app';
+
 interface InvalidEmailFailure {
   code: 'INVALID_EMAIL';
   payload: { field: string };
@@ -23,7 +25,7 @@ export const NewsletterForm = component({
     const invalid = forms.subscribe.failure?.code === 'INVALID_EMAIL';
 
     return (
-      <form mutation={subscribeForm} enhance>
+      <form mutation={subscribe} enhance>
         <label for="email">Email</label>
         <input
           id="email"

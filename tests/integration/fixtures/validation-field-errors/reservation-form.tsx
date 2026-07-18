@@ -2,6 +2,8 @@
 import { component, FieldError, form } from '@kovojs/core';
 import { query } from '@kovojs/server';
 
+import { reserve } from './app';
+
 const reserveForm = form<'validation/reserve', { quantity: number }>('validation/reserve');
 const reservationFormQuery = query('reservationForm', {
   load: () => ({ ready: true }),
@@ -15,7 +17,7 @@ export const ReservationForm = component({
     const invalid = forms.reserve.failure?.code === 'VALIDATION';
 
     return (
-      <form mutation={reserveForm} enhance>
+      <form mutation={reserve} enhance>
         <label>
           Quantity{' '}
           <input name="quantity" type="number" value={forms.reserve.submitted?.quantity ?? 0} />

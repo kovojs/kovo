@@ -2,6 +2,8 @@
 import { component, form, FormError } from '@kovojs/core';
 import { query } from '@kovojs/server';
 
+import { addItem } from './app';
+
 interface OutOfStockFailure {
   code: 'OUT_OF_STOCK';
   payload: { available: number };
@@ -19,7 +21,7 @@ export const OptimisticForm = component({
   mutations: { addItem: addItemForm },
   queries: { optimisticForm: optimisticFormQuery },
   render: () => (
-    <form id="optimistic-form" mutation={addItemForm} enhance>
+    <form id="optimistic-form" mutation={addItem} enhance>
       <input type="hidden" name="quantity" value="2" />
       <FormError
         code="OUT_OF_STOCK"

@@ -3,6 +3,6 @@
     "Updated text"
   <button aria-label="Updated card" data-bind:aria-label="card.label" data-bind:data-state="card.status" data-state="ready" type="button">
     "Server binding"
-  <form action="/_m/binding-text-attr/update" method="post">
+  <form action="/_m/binding-text-attr/update" kovo-fragment-target="update-card" method="post">
     <button type="submit">
       "Update server card"

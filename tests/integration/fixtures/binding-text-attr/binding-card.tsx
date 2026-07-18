@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form } from '@kovojs/core';
 
+import { updateCard } from './app';
 import { cardQuery, type CardResult } from './shared';
 
 const updateCardForm = form<'binding-text-attr/update', Record<string, never>>(
@@ -26,7 +27,7 @@ export const BindingCard = component({
       >
         Server binding
       </button>
-      <form mutation={updateCardForm} enhance>
+      <form mutation={updateCard} enhance>
         <button type="submit">Update server card</button>
       </form>
     </binding-card>

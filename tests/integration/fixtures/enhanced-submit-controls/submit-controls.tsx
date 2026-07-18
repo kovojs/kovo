@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form } from '@kovojs/core';
 
+import { submitOrder } from './app';
 import { submissionQuery, type SubmissionReport } from './shared';
 
 interface SubmitOrderInput {
@@ -18,7 +19,7 @@ export const SubmitControls = component({
   queries: { submission: submissionQuery },
   render: ({ submission }: { submission: SubmissionReport }) => (
     <section>
-      <form mutation={submitOrderForm} enhance>
+      <form mutation={submitOrder} enhance>
         <label>
           Quantity <input name="quantity" type="number" value="2" min="1" />
         </label>

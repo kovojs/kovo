@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form, FormError } from '@kovojs/core';
 
+import { buy } from './app';
 import { itemQuery, type StockResult } from './shared';
 
 interface OutOfStockFailure {
@@ -14,7 +15,7 @@ export const BuyForm = component({
   mutations: { buy: buyForm },
   queries: { item: itemQuery },
   render: ({ item }: { item: StockResult }) => (
-    <form mutation={buyForm} enhance>
+    <form mutation={buy} enhance>
       <stock-badge>
         <span>Stock:</span> <output>{item.stock}</output>
       </stock-badge>

@@ -13,8 +13,10 @@ import { createServer as createHttpServer, ServerResponse, type Server } from 'n
 import path from 'node:path';
 
 import { createFrameworkFileSystemBoundary } from '@kovojs/core/internal/filesystem';
+import { projectMutationRegistryFactsFromFiles } from '@kovojs/compiler/internal';
 import { toNodeHandler } from '@kovojs/server';
 import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/internal/app-shell-vite';
+import { dataPlaneSourceFiles } from '@kovojs/server/internal/data-plane-static-analysis';
 import { createServer as createViteServer } from 'vite';
 
 import { isFixtureDescriptor } from './define-fixture.js';
@@ -104,7 +106,13 @@ export async function bootFixtureInLockedChild(
   const host = options.host ?? '127.0.0.1';
   const distAssetsDir = pathJoin(fixtureDir, 'dist');
 
-  const fixtureCompiler = kovoFixtureCompilerPlugin();
+  // SPEC §5.2 rule 10 / §6.3: fixture lowering consumes the same immutable, project-scoped
+  // mutation provenance as production Vite and CLI builds. A bare imported identifier never
+  // becomes form authority merely because the evaluated runtime object looks mutation-shaped.
+  const projectMutationFacts = projectMutationRegistryFactsFromFiles(
+    dataPlaneSourceFiles(fixtureDir, fixtureDir),
+  );
+  const fixtureCompiler = kovoFixtureCompilerPlugin(undefined, projectMutationFacts);
   const vite = await createViteServer({
     appType: 'custom',
     configFile: false,

@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form } from '@kovojs/core';
 
+import { touchHeaders } from './app';
 import { headersQuery } from './shared';
 
 const touchHeadersForm = form<'mutation-response-headers/touch', Record<string, never>>(
@@ -13,7 +14,7 @@ export const HeaderStatus = component({
   render: ({ headers }: { headers: { count: number } }) => (
     <section>
       <output>{headers.count}</output>
-      <form mutation={touchHeadersForm} enhance>
+      <form mutation={touchHeaders} enhance>
         <button type="submit">Touch headers</button>
       </form>
     </section>

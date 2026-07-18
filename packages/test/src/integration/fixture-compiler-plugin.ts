@@ -7,7 +7,11 @@
 // that preserves `component()` so a route page can call `Foo.definition.render(data)`
 // with live query results (SPEC §5.2).
 import { compileComponentModule } from '@kovojs/compiler';
-import { type ComponentCssAsset, type CompileResult } from '@kovojs/compiler/internal';
+import {
+  type ComponentCssAsset,
+  type CompileResult,
+  type ProjectMutationRegistryFacts,
+} from '@kovojs/compiler/internal';
 import type { Plugin } from 'vite';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -52,6 +56,7 @@ export function kovoFixtureCompilerPlugin(
   compile: (
     options: Parameters<typeof compileComponentModule>[0],
   ) => CompileResult = compileComponentModule,
+  projectMutationFacts?: ProjectMutationRegistryFacts,
 ): Plugin & { readonly fixtureCssRuntimeId: string } {
   const privateCssRegistrationId = `${virtualCssManifestId}:register:${randomUUID()}`;
   const resolvedPrivateCssRegistrationId = `\0${privateCssRegistrationId}`;
@@ -277,6 +282,9 @@ export function kovoFixtureStylesheetsForTargets(targets) {
       const compileOptions = {
         fileName,
         packagePrefixDiscoveryRoot: root,
+        ...(projectMutationFacts?.mutationBindings.length
+          ? { registryFacts: projectMutationFacts }
+          : {}),
         source,
       };
       const result = await snapshotCompileResult(compile(compileOptions));

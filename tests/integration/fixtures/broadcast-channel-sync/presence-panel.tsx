@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form } from '@kovojs/core';
 
+import { publishPresence } from './app';
 import { presenceQuery, type Presence } from './shared';
 
 const publishPresenceForm = form<'broadcast-channel-sync/publish', Record<string, never>>(
@@ -15,7 +16,7 @@ export const PresencePanel = component({
   render: ({ presence }: { presence: Presence }) => (
     <section id="presence-panel">
       <output>{presence.status}</output>
-      <form id="presence-form" mutation={publishPresenceForm}>
+      <form id="presence-form" mutation={publishPresence}>
         <button type="submit">Publish presence</button>
       </form>
     </section>

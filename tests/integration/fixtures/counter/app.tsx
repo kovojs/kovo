@@ -29,13 +29,8 @@ const homeRoute = route('/', {
   page: () => (
     <main>
       <CountBadge />
-      <form
-        method="post"
-        action="/_m/counter/increment"
-        enhance
-        data-mutation="counter/increment"
-        kovo-deps="counter"
-      >
+      {/* SPEC §6.2/§6.3: direct mutation provenance lets KV242 own the transport stamps. */}
+      <form mutation={increment} enhance>
         <button type="submit">Increment</button>
       </form>
     </main>

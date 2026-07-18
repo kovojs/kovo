@@ -2,6 +2,8 @@
 import { component, form, FormError } from '@kovojs/core';
 import { query } from '@kovojs/server';
 
+import { checkout } from './app';
+
 type CheckoutFailure =
   | { code: 'CARD_DECLINED'; payload: Record<string, never> }
   | { code: 'OUT_OF_STOCK'; payload: { available: number } };
@@ -18,7 +20,7 @@ export const CheckoutForm = component({
   mutations: { checkout: checkoutForm },
   queries: { checkoutForm: checkoutFormQuery },
   render: (_queries, _state, { forms }) => (
-    <form mutation={checkoutForm} enhance>
+    <form mutation={checkout} enhance>
       <label>
         Quantity{' '}
         <input name="quantity" type="number" value={forms.checkout.submitted?.quantity ?? 1} />

@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form } from '@kovojs/core';
 
+import { guardedIncrement } from './app';
 import { guardedCountQuery } from './shared';
 
 const incrementForm = form<'guarded-mutation/increment', Record<string, never>>(
@@ -13,7 +14,7 @@ export const GuardedPanel = component({
   render: ({ guardedCount }: { guardedCount: { count: number } }) => (
     <section>
       <output data-count>{guardedCount.count}</output>
-      <form mutation={incrementForm} enhance>
+      <form mutation={guardedIncrement} enhance>
         <button type="submit">Increment protected counter</button>
       </form>
     </section>

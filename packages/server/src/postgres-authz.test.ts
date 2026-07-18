@@ -250,6 +250,7 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
 
     expect(log).toEqual([
       'transaction',
+      'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'exec:SET TRANSACTION READ ONLY',
       `exec:SET LOCAL ROLE "${APP_ROLE}"`,
       'query:select id from orders order by id:[]',

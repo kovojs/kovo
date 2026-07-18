@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form } from '@kovojs/core';
 
+import { sellOutInventory } from './app';
 import { inventoryQuery, type InventoryResult } from './shared';
 
 const sellOutForm = form<'derive-binding/sell-out', Record<string, never>>(
@@ -20,7 +21,7 @@ export const InventoryPanel = component({
       <button type="button" data-bind:disabled="/derive.ts#Inventory$disableWhenUnavailable">
         Ship order
       </button>
-      <form mutation={sellOutForm} enhance>
+      <form mutation={sellOutInventory} enhance>
         <button type="submit">Sell out</button>
       </form>
     </inventory-panel>

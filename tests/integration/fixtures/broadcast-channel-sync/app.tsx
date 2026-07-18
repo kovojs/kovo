@@ -6,7 +6,7 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/in
 import { PresencePanel } from './presence-panel';
 import { presenceDomain, presenceQuery } from './shared';
 
-const publishPresence = mutation('broadcast-channel-sync/publish', {
+export const publishPresence = mutation('broadcast-channel-sync/publish', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),

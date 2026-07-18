@@ -16,7 +16,7 @@ async function postStreamingWire(request: APIRequestContext, body: string) {
       Accept: 'text/vnd.kovo.fragment+html; stream=1',
       'Kovo-Form-Target': 'composer',
       'Kovo-Fragment': 'true',
-      'Kovo-Idem': crypto.randomUUID(),
+      'Kovo-Idem': `v1_${Date.now()}_${crypto.randomUUID().replaceAll('-', '')}`,
       'Kovo-Live-Targets': `${messages.descriptor}; ${composer.descriptor}`,
       'Kovo-Stream': 'true',
       'Kovo-Targets': `messages=${messages.deps}; composer=${composer.deps}`,

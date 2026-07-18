@@ -212,6 +212,32 @@ describe('kovoFixtureCompilerPlugin', () => {
     expect(compile).toHaveBeenCalledTimes(3);
   });
 
+  it('forwards precomputed project mutation provenance to fixture component lowering', async () => {
+    const compile = vi.fn(() => compileResult('export const safe = true;'));
+    const projectMutationFacts = {
+      mutationBindings: [
+        {
+          fileName: 'forms.tsx',
+          key: 'cart/add',
+          localName: 'addToCart',
+          source: { exportName: 'addToCart', fileName: 'app.ts', kind: 'kovo-mutation' as const },
+        },
+      ],
+      mutationInputs: { 'cart/add': [] },
+    };
+    const plugin = kovoFixtureCompilerPlugin(compile, projectMutationFacts);
+    (plugin.configResolved as (config: unknown) => void)({ root: '/workspace/app' });
+
+    await (plugin.transform as (source: string, id: string) => Promise<unknown>)(
+      'component({ render: () => null })',
+      '/workspace/app/forms.tsx',
+    );
+
+    expect(compile).toHaveBeenCalledWith(
+      expect.objectContaining({ registryFacts: projectMutationFacts }),
+    );
+  });
+
   it('does not classify noExternal framework modules as fixture-authored source', async () => {
     const compile = vi.fn(() => compileResult('never'));
     const plugin = kovoFixtureCompilerPlugin(compile);
