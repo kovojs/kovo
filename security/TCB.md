@@ -497,13 +497,49 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "lineBudget": 30
     },
     {
-      "id": "better-auth.credential-runtime-gate.run",
+      "id": "better-auth.credential-runtime-gate.source-callable-sync",
       "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
-      "name": "runBetterAuthCredentialConsumerAsync",
-      "kind": "better-auth-credential-non-egress-door",
+      "name": "runBetterAuthCredentialSourceCallable",
+      "kind": "better-auth-exact-source-callable-door",
       "classification": "tcb",
       "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
-      "lineBudget": 30
+      "lineBudget": 35
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.source-callable-async",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "runBetterAuthCredentialSourceCallableAsync",
+      "kind": "better-auth-exact-source-callable-door",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 35
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.source-callable-preparation",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "prepareCredentialSourceCallable",
+      "kind": "better-auth-exact-source-callable-refusal",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 65
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.transform-refusal",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "requirePackageOwnedTransform",
+      "kind": "better-auth-owner-callback-refusal",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 15
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.source-normalization",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "normalizeCredentialSourceResult",
+      "kind": "better-auth-source-result-normalization",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 45
     },
     {
       "id": "better-auth.credential-runtime-gate.consumer-refusal",

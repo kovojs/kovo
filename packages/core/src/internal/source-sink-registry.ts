@@ -1223,7 +1223,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     ],
     mechanism: 'own',
     mechanismDetail:
-      'The package-private gate owns every supported Better Auth secret and credential consumer, admits only exact registered consumer identity, validates the contract result, and seals it for one opening by that same consumer.',
+      'The package-private gate owns every supported Better Auth secret and credential consumer, invokes captured dependency callables inside the door, admits only exact registered consumer/source identity, validates the contract result, and seals it for one opening by that same consumer.',
     operationKinds: [],
     owner: '@kovojs/better-auth/credential-gate',
     proofEvidence: [
@@ -1234,7 +1234,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     proofGate: 'pnpm run check:security-classifier-corpus',
     sink: 'Better Auth credential/non-egress',
     soleDoor:
-      'runBetterAuthCredentialConsumer{Async} + consumeBetterAuthCredentialResult exact registry door',
+      'runBetterAuthCredentialConsumer (package-owned reconstruction) / runBetterAuthCredentialSourceCallable{Async} (external raw sources) + consumeBetterAuthCredentialResult exact registry door',
     specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
   },
   {

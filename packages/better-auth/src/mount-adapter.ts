@@ -1,5 +1,4 @@
 import {
-  betterAuthApply,
   betterAuthCaptureOwnMethod,
   betterAuthCharacterCodeAt,
   betterAuthCreateRedirectResponse,
@@ -20,7 +19,7 @@ import {
 import {
   betterAuthCredentialConsumers,
   consumeBetterAuthCredentialResult,
-  runBetterAuthCredentialConsumerAsync,
+  runBetterAuthCredentialSourceCallableAsync,
 } from './internal/credential-runtime-gate.js';
 import {
   assertBetterAuthCanonicalRequestOrigin,
@@ -127,8 +126,12 @@ export async function invokeBetterAuthMountAdapter(
       'Kovo Better Auth mount',
     );
     const consumer = betterAuthCredentialConsumers.mountHandler;
-    const sealed = await runBetterAuthCredentialConsumerAsync(consumer, () =>
-      betterAuthApply<Promise<Response> | Response>(captured.handler, captured.receiver, [request]),
+    const sealed = await runBetterAuthCredentialSourceCallableAsync<Response>(
+      consumer,
+      'better-auth.callable',
+      captured.handler,
+      captured.receiver,
+      [request],
     );
     const upstream = consumeBetterAuthCredentialResult(consumer, sealed);
     if (typeof upstream !== 'object' || upstream === null) {

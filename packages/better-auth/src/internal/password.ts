@@ -6,7 +6,7 @@ import {
 import {
   betterAuthCredentialConsumers,
   consumeBetterAuthCredentialResult,
-  runBetterAuthCredentialConsumerAsync,
+  runBetterAuthCredentialSourceCallableAsync,
 } from './credential-runtime-gate.js';
 
 const pinnedKovoHashPassword = kovoHashPassword;
@@ -20,8 +20,12 @@ interface BetterAuthPasswordVerification {
 /** Route Better Auth credential storage through Kovo's boot-captured Argon2id-only sink. @internal */
 export async function betterAuthHashPassword(password: string): Promise<string> {
   const consumer = betterAuthCredentialConsumers.passwordHash;
-  const result = await runBetterAuthCredentialConsumerAsync(consumer, () =>
-    pinnedKovoHashPassword(password),
+  const result = await runBetterAuthCredentialSourceCallableAsync<string>(
+    consumer,
+    'password.hash',
+    pinnedKovoHashPassword,
+    undefined,
+    [password],
   );
   return consumeBetterAuthCredentialResult(consumer, result);
 }
@@ -32,9 +36,12 @@ export async function betterAuthVerifyPassword({
   password,
 }: BetterAuthPasswordVerification): Promise<boolean> {
   const consumer = betterAuthCredentialConsumers.passwordVerify;
-  const result = await runBetterAuthCredentialConsumerAsync(consumer, async () => {
-    const verdict = await pinnedKovoVerifyPassword(password, hash);
-    return verdict.ok === true;
-  });
+  const result = await runBetterAuthCredentialSourceCallableAsync<boolean>(
+    consumer,
+    'password.verify',
+    pinnedKovoVerifyPassword,
+    undefined,
+    [password, hash],
+  );
   return consumeBetterAuthCredentialResult(consumer, result);
 }
