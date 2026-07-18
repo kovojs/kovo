@@ -3258,6 +3258,12 @@ export const homeQuery = {
         routes: [
           {
             continue: true,
+            middlewarePath: 'kovo-ingress',
+            middlewareRawSrc: ['/(.*)'],
+            src: '/(.*)',
+          },
+          {
+            continue: true,
             headers: {
               'cache-control': 'public, max-age=31536000, immutable',
               'cross-origin-resource-policy': 'same-origin',
@@ -3351,6 +3357,12 @@ export const homeQuery = {
       expect(existsSync(join(outDir, '.vercel/output/functions/kovo.func/index.cjs'))).toBe(false);
       expect(readBuildJson(join(outDir, '.vercel/output/config.json'))).toEqual({
         routes: [
+          {
+            continue: true,
+            middlewarePath: 'kovo-ingress',
+            middlewareRawSrc: ['/(.*)'],
+            src: '/(.*)',
+          },
           {
             continue: true,
             headers: {

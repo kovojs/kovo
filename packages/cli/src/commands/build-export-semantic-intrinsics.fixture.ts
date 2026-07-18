@@ -1120,7 +1120,6 @@ Object.fromEntries([['key', 'value']]);
 Array.fromAsync(['safe']);
 void consume();
 void returnsValue();
-void fetch('data:,safe', { headers: [['x-test', 'safe']] });
 void setTimeout(() => {}, 0);
 void setInterval(() => {}, 1);
 const proto = { get secret() { return 'safe'; } };

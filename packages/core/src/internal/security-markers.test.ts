@@ -230,7 +230,7 @@ describe('DEC-D security code registry', () => {
 
   it('covers every currently defined security diagnostic code in the checked 4xx family', () => {
     const diagnosticSecurityCodes = Object.keys(diagnosticDefinitions).filter(
-      (code) => /^KV4/u.test(code) && code >= 'KV406' && code <= 'KV439',
+      (code) => (/^KV4/u.test(code) && code >= 'KV406' && code <= 'KV439') || code === 'KV449',
     );
 
     expect(Object.keys(SECURITY_CODE_REGISTRY).sort()).toEqual(diagnosticSecurityCodes.sort());

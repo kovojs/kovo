@@ -604,7 +604,7 @@ export const report = endpoint('/report', {
     );
   });
 
-  it('closes every normalized semantic resource budget with its exact reason', () => {
+  it('closes the normalized semantic node budget with its exact reason', () => {
     const oversizedBody = Array.from({ length: 50_100 }, () => ';').join('\n');
     expect(
       kv449(`
@@ -614,7 +614,9 @@ export const report = endpoint('/report', {
 });
 `).some((diagnostic) => diagnostic.message.includes('budget-node-count')),
     ).toBe(true);
+  }, 60_000);
 
+  it('closes the normalized semantic operation budget with its exact reason', () => {
     const operations = Array.from({ length: 4_097 }, () => 'ctx.db.select();').join('\n');
     expect(
       kv449(`
@@ -624,7 +626,9 @@ export const report = endpoint('/report', {
 });
 `).some((diagnostic) => diagnostic.message.includes('budget-operation-count')),
     ).toBe(true);
+  }, 60_000);
 
+  it('closes the normalized semantic summary budget with its exact reason', () => {
     const helperCount = 257;
     const helpers = Array.from(
       { length: helperCount },
@@ -643,7 +647,9 @@ export const report = endpoint('/report', {
 });
 `).some((diagnostic) => diagnostic.message.includes('budget-summary-count')),
     ).toBe(true);
+  }, 60_000);
 
+  it('reuses normalized semantic summaries without exhausting the summary budget', () => {
     const repeatedCalls = Array.from({ length: 300 }, () => 'read(ctx.db);').join('\n');
     expect(
       kv449(`

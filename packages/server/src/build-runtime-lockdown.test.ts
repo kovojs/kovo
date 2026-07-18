@@ -194,7 +194,12 @@ await new Promise((resolve, reject) => {
   server.listen(0, '127.0.0.1', resolve);
 });
 const address = server.address();
-const response = await fetch('http://127.0.0.1:' + address.port + '/');
+const response = await fetch('http://127.0.0.1:' + address.port + '/', {
+  headers: {
+    'x-forwarded-proto': 'http',
+    'x-vercel-forwarded-for': '203.0.113.254',
+  },
+});
 const handlerProof = JSON.parse(await response.text());
 await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 process.stdout.write(JSON.stringify({

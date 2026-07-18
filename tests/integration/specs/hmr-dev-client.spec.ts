@@ -943,17 +943,19 @@ const hmrQuery = query('hmr', {
 export const HmrSourceCard = component({
   ${options.refreshable ? 'queries: { hmr: hmrQuery },' : ''}
   ${options.css ? `css: ${JSON.stringify(options.css)},` : ''}
-  render: () => (
+  state: () => ({ handler: '' }),
+  render: (_queries, state) => (
     <section>
       <label for="hmr-source-input">Draft</label>
       <input id="hmr-source-input" kovo-key="input" value=${JSON.stringify(options.inputValue)} />
       <output id="hmr-source-output" kovo-key="output">${options.outputText}</output>
       <button
+        data-handler={state.handler}
         id="hmr-source-button"
         kovo-key="button"
         type="button"
         onClick={() => {
-          event.target.dataset.handler = ${JSON.stringify(options.handlerText)};
+          state.handler = ${JSON.stringify(options.handlerText)};
         }}>
         Run
       </button>

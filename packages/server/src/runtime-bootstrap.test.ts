@@ -676,6 +676,7 @@ registerHooks({
 });
 await import(${JSON.stringify(bootstrapEntry)});
 const server = await import(${JSON.stringify(entries['@kovojs/server'])});
+const csrf = await import(${JSON.stringify(entries['@kovojs/server/internal/csrf'])});
 const execution = await import(${JSON.stringify(entries['@kovojs/server/internal/execution'])});
 const sqlite = await import(${JSON.stringify(entries['@kovojs/server/sqlite'])});
 const betterAuth = await import(${JSON.stringify(betterAuthUrl)});
@@ -699,7 +700,7 @@ try {
   const csrfRequest = await execution.resolveLifecycleRequest({}, {
     sessionProvider: () => ({ id: 'packed-session', user: { id: 'packed-user' } }),
   });
-  const packedCsrfToken = server.csrfToken(csrfRequest, appCsrf, { audience: 'auth/sign-in' });
+  const packedCsrfToken = csrf.csrfToken(csrfRequest, appCsrf, { audience: 'auth/sign-in' });
   const bindings = betterAuth.createBetterAuthSqliteBindings({
     baseURL: 'http://localhost:5173',
     csrf: { secret: 'packed-csrf-secret-0123456789abcdef', sessionId: () => undefined },
