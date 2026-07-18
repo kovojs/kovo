@@ -16,6 +16,9 @@ import {
   runMcpSdkServer,
 } from './index.js';
 
+const browserAlertKv449Message =
+  'Security-critical operation is outside the compiler-owned finite IR. semantic root=serialized-browser-handler:onClick@8; transfers=<direct>; sink=browser capability call window.alert is outside the finite handler IR; verdict=closed:opaque-transfer.';
+
 class MemoryMcpTransport implements Transport {
   onclose?: () => void;
   onerror?: (error: Error) => void;
@@ -155,8 +158,7 @@ describe('compile/v1 and kovo mcp', () => {
       fileName: 'cart-badge.tsx',
       help: diagnosticDefinitions.KV449.help,
       length: 17,
-      message:
-        'Security-critical operation is outside the compiler-owned finite IR. browser capability call window.alert is outside the finite handler IR.',
+      message: browserAlertKv449Message,
       severity: 'error',
       start: { column: 24, line: 1 },
     });
@@ -373,8 +375,7 @@ export const Shell = component({
               code: 'KV449',
               help: diagnosticDefinitions.KV449.help,
               length: 17,
-              message:
-                'Security-critical operation is outside the compiler-owned finite IR. browser capability call window.alert is outside the finite handler IR.',
+              message: browserAlertKv449Message,
               severity: 'error',
               start: { column: 24, line: 1 },
             },
@@ -678,8 +679,7 @@ export const Shell = component({
               code: 'KV449',
               help: diagnosticDefinitions.KV449.help,
               length: 17,
-              message:
-                'Security-critical operation is outside the compiler-owned finite IR. browser capability call window.alert is outside the finite handler IR.',
+              message: browserAlertKv449Message,
               severity: 'error',
               start: { column: 24, line: 1 },
             },
