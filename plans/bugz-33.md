@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-17
 
-**Status:** Remediated; final exact-tip verification and publication pending
+**Status:** Remediation in progress; final exact-tip verification and publication pending
 **Baseline:** `4403ce7401760725836332aedb3031e1c0833cfe`
 
 **Scope:** Fresh remotely reachable and framework-authority findings after `bugz-32`. Deliberate
@@ -14,9 +14,9 @@ rendering, Better Auth, and managed SQL.
 
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
-| High     |    0 |     17 |
-| Medium   |    0 |     21 |
-| Low      |    0 |      4 |
+| High     |    1 |     20 |
+| Medium   |    1 |     23 |
+| Low      |    0 |      5 |
 
 ## High
 
@@ -241,6 +241,54 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** the five residual live Node, emitted Node/Vercel, and static cases passed in the
     combined exact-tip matrix (378/378). Generated Cloudflare dynamic output has no public
     arbitrary-handler path and always uses the centrally finalized `createRequestHandler(app)`.
+
+- [x] **H18 - Reads from an unregistered relation could cross the secret boundary as plaintext.**
+  - Postgres views and other relations without an exact schema witness were treated like public
+    sources. A projection whose origin could not be proved could therefore avoid `Secret` boxing
+    instead of failing closed at the managed read boundary (SPEC §10.1/§10.3 C9-C10).
+  - **Fixed:** `e4327ac0d` scopes read provenance to a declared table, and `9df705f1f` boxes direct
+    and computed values from every unknown relation unless an exact engine/capability door proves
+    the read safe.
+  - **Evidence:** `packages/server/src/secret-read-boundary.test.ts` proves unregistered-view,
+    raw-read, privileged-reader, prepared, relational, and derived-projection behavior; the C13
+    corpus requires the secret-provenance suite.
+
+- [x] **H19 - Schema-unqualified relation identity could transfer secret authority between
+      same-named tables.**
+  - Secret metadata and runtime origin facts could collapse relations by base table/column name.
+    Two schemas containing the same names could therefore lend a public classification to a secret
+    projection or attach privileged read authority to the wrong relation (SPEC §10.1/§10.3 C9).
+  - **Fixed:** `9df705f1f` carries canonical schema-qualified relation witnesses through Drizzle
+    metadata, SQL-safe handles, SQLite/Postgres runtime shapes, and the final boxing membrane.
+  - **Evidence:** the exact cross-schema and same-column regressions in
+    `packages/server/src/secret-read-boundary.test.ts` pass, and Postgres schema normalization
+    rejects ambiguous duplicate base names before grants are derived.
+
+- [x] **H20 - Split Postgres posture authority could audit a different database or session than
+      the one executing app SQL.**
+  - Privileged posture checks were not fully bound to the runtime connection's database/cluster,
+    startup GUCs, and catalog-first `search_path`. A runtime URL could elevate through startup
+    settings or reach shadow objects while a separate privileged connection certified a safer
+    database or session (SPEC §10.3 C9-C10).
+  - **Fixed:** `35e84fa8e` witnesses the live runtime identity/database/settings, rejects privileged
+    startup state, pins catalog-first reset behavior, and proves the privileged audit reaches the
+    same writable cluster. `cef887056` requires explicit system/admin authority for standalone
+    checks instead of silently weakening the split.
+  - **Evidence:** real PostgreSQL identity/GUC/search-path/cluster probes pass 8/8; CLI database
+    checks pass 26/26; the generated external-Postgres provision/check/boot lifecycle passes 2/2.
+
+- [ ] **H21 - Public raw Better Auth helpers could accept a cookie posture that authenticates a
+      sibling-planted session.**
+  - Caller-created Better Auth instances could omit canonical origin, use default bare or
+    `__Secure-` token/cache cookie names, or enable `session_data` cache outside Kovo's host-only
+    posture. Real browser duplicate-cookie ordering then let a sibling domain place a valid
+    attacker session before the victim's cookie; session lookup and sign-out consumed the attacker
+    credential first.
+  - **Evidence:** real Better Auth + SQLite two-account reproductions cover attacker-first token and
+    signed cache cookies, missing/empty context, exact HTTPS defaults, session lookup, and sign-out.
+  - **Open:** remove arbitrary raw auth objects from the public API, admit only fixed
+    SQLite/Postgres bindings through a private identity registry, and verify every supported
+    session/credential/mount path rejects origin or cookie skew before handler/API/database effects.
 
 ## Medium
 
@@ -491,6 +539,40 @@ rendering, Better Auth, and managed SQL.
     provision → check → boot regression 1/1; CLI DB matrix 17/17; the 16-corpus C13 gate now requires
     the live identity-skew control via `9ee00a336`.
 
+- [x] **M22 - Omitted IANA special-purpose prefixes were treated as ordinary public egress.**
+  - The classifier's handwritten ranges missed globally reachable special-purpose services,
+    including three IPv4 AS112/AMT blocks and the IPv6 Direct Delegation AS112 block. Those
+    destinations bypassed Kovo's documented deny-by-default treatment of IANA-special space and
+    every mapped/transition representation inherited the mistake (SPEC §6.6).
+  - **Fixed:** `ae21014e7` locks a registry-derived boundary corpus; `e8fcb73ba` applies the complete
+    current IPv4/IPv6 special-purpose tables before public fallback; `d88a2fb15` covers the
+    corresponding NAT64 representation.
+  - **Evidence:** focused classifier/egress matrices pass 121/121 and 63/63. The live IANA IPv4 and
+    IPv6 registries both still identify 2025-10-09 as their latest revision.
+
+- [x] **M23 - Network-specific NAT64 prefixes could translate a public-looking IPv6 address to
+      cloud metadata or an internal IPv4 service.**
+  - Kovo decoded only the RFC 6052 well-known prefix. In a DNS64/NAT64 deployment using an
+    operator-specific `/32`, `/40`, `/48`, `/56`, `/64`, or `/96` Pref64, a synthesized global IPv6
+    answer embedding `169.254.169.254` or RFC1918 space passed every egress door before the
+    translator reached the protected IPv4 destination (SPEC §6.6).
+  - **Fixed:** `35475b430` contributes an independent six-layout red corpus; `8e99b201e` adds strict
+    immutable `egress.nat64Prefixes`, policy-aware RFC 6052 decoding, ambiguity/u-octet validation,
+    process-policy equality, and central enforcement before metadata, internal, database, or
+    transport exceptions.
+  - **Evidence:** the integrated net/HTTP/Undici/datagram/bootstrap corpus passes 135/135, including
+    mixed DNS answers, RFC 8215 local-use Pref64, every legal layout, and a framework-proven
+    Postgres socket that still cannot reopen embedded metadata.
+
+- [ ] **M24 - A non-loopback plaintext Better Auth origin could silently select sibling-settable
+      cookies outside production mode.**
+  - Fixed bindings accepted `http://app.example.test` whenever `NODE_ENV` was not `production`.
+    Better Auth then emitted a bare session name, so staging, preview, or mislabelled deployments
+    lost both transport confidentiality and the browser-enforced host-only prefix.
+  - **Open:** require HTTPS for every non-loopback origin regardless of environment mode, preserve
+    plaintext only for exact loopback development, and prove both direct and environment binding
+    constructors reject the unsafe origin before auth construction.
+
 ## Low
 
 - [x] **L4 - Stored upload filenames could preserve Unicode bidi spoofing into WebKit downloads.**
@@ -523,6 +605,16 @@ rendering, Better Auth, and managed SQL.
   - **Fixed:** `5fb6221e6` threads trusted scheme posture into built-in error rendering while keeping
     production-HTTPS-only HSTS behavior.
   - **Evidence:** integrated document/app-document matrix 96/96 and wire-output boundary gate.
+
+- [x] **L5 - Seedless global-authority analysis could spend its full recursive budget on every
+      harmless call site.**
+  - Source graphs that never named `Object` or `Reflect` still entered the mutually recursive exact
+    global-member lattice repeatedly. Large safe projects could therefore turn a security
+    classifier miss into avoidable build/check CPU exhaustion.
+  - **Fixed:** `e79fd088b` memoizes a cheap project-wide namespace-seed prerequisite before entering
+    the recursive carrier analysis while preserving fail-closed behavior when a seed exists.
+  - **Evidence:** high-fanout, diamond, cyclic, 120-carrier, and 400/800-scaling regressions live in
+    `packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts`.
 
 ## Latest verification
 
