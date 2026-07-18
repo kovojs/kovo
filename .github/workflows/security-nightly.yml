@@ -1,0 +1,51 @@
+name: Security Fuzz Campaign
+
+on:
+  schedule:
+    - cron: '37 8 * * *'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Deterministic campaign budget to execute
+        required: true
+        default: nightly
+        type: choice
+        options:
+          - nightly
+          - release
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-fuzz-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+
+jobs:
+  campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
+        with:
+          rebuild-better-sqlite3: 'true'
+      - name: Validate versioned campaign contract
+        run: vp exec pnpm run check:security-fuzz-campaign
+      - name: Run nightly deterministic campaign
+        if: github.event_name != 'workflow_dispatch' || inputs.profile == 'nightly'
+        run: vp exec pnpm run test:security-fuzz-nightly
+      - name: Run release-budget deterministic campaign
+        if: github.event_name == 'workflow_dispatch' && inputs.profile == 'release'
+        run: vp exec pnpm run test:security-fuzz-release
+      - name: Archive replayable minimized counterexamples
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: ignore
+          name: kovo-security-fuzz-failures
+          path: .kovo/security-failures/**
+          retention-days: 30
