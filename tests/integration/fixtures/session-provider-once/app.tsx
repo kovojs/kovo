@@ -1,16 +1,7 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC §6.5 + §9.5: the request shell resolves the sessionProvider once, then
 // route/query/mutation guards and handlers observe that same session value.
-import {
-  createApp,
-  csrfField,
-  domain,
-  endpoint,
-  guards,
-  mutation,
-  query,
-  route,
-  s,
-} from '@kovojs/server';
+import { createApp, domain, endpoint, guards, mutation, query, route, s } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface AppSession {
@@ -30,7 +21,7 @@ const sessionEvents: SessionEvent[] = [];
 const sessionDomain = domain('session-once');
 const csrf = {
   secret: 'session-provider-once-secret-0123456789',
-  sessionId: () => 'session-provider-once-session',
+  sessionId: (request: AppRequest) => request.session?.id,
 };
 
 function appendSessionEvent(caseKey: string, kind: string, subject: string): void {
@@ -75,7 +66,13 @@ const routeCase = route('/route', {
   guard: recordingAuthed('route'),
   page: async (_context, request: AppRequest) => {
     record(request, 'page:route');
-    return `<main><h1>Session Once</h1><p data-user>${request.session?.user.id}</p><form method="post" action="/_m/session-once/mutate">${csrfField(request, { ...csrf, audience: sessionOnceMutation.key })}</form></main>`;
+    return (
+      <main>
+        <h1>Session Once</h1>
+        <p data-user>{request.session?.user.id}</p>
+        <form mutation={sessionOnceMutation}></form>
+      </main>
+    );
   },
 });
 
@@ -103,8 +100,8 @@ export default defineFixture({
     sessionProvider: async (request) => {
       const caseKey = request.headers.get('x-session-case') ?? new URL(request.url).pathname;
       const session = {
-        id: `session-${caseKey}`,
-        user: { id: `user-${caseKey}`, roles: [] },
+        id: 'session-provider-once-session',
+        user: { id: 'session-provider-once-user', roles: [] },
       };
       // SPEC §6.5/§9.5: the provider runs before the shell attaches managed request.db. Record the
       // lifecycle observation in process; the raw endpoint above exposes it without resolving a
