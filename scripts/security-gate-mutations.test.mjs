@@ -13,6 +13,50 @@ describe('security-gate-mutations', () => {
     expect(results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          name: 'compiler-finite-ir/allow-spelled-trusted-assign',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-finite-ir/drop-ambient-error-stability',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-finite-ir/drop-random-uuid-stability',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-finite-ir/allow-unknown-managed-db-continuation',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-finite-ir/allow-foreign-managed-db-argument',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-finite-ir/allow-foreign-project-schema-factory',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-finite-ir/allow-reassigned-project-schema',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-render-equivalence/drop-project-identity-files',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'threat-matrix-gate/drop-missing-sink-denominator',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'threat-matrix-gate/drop-missing-audited-escape-denominator',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'threat-matrix-gate/drop-missing-public-surface-denominator',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'security-test-build-gate/drop-missing-real-build-proof',
           status: 'killed',
         }),

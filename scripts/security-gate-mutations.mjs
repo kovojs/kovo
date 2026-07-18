@@ -18,6 +18,7 @@ import * as authorizationMatrixGate from './check-authorization-matrix.mjs';
 import * as sinkPolicyGate from './check-sink-policy-gate.mjs';
 import * as fundamentalFixesCensusGate from './fundamental-fixes-census-gate.mjs';
 import * as securityTestBuildGate from './security-test-build-gate.mjs';
+import * as threatMatrixGate from './threat-matrix-gate.mjs';
 import * as requestIngressPolicy from '../packages/server/src/request-ingress-policy.ts';
 
 const repoRoot = findRepoRoot();
@@ -41,6 +42,7 @@ const compilerSecuritySemanticGraphPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/security-operation-ir.ts',
 );
+const threatMatrixGatePath = path.join(scriptsDir, 'threat-matrix-gate.mjs');
 const drizzleSessionProvenancePath = path.join(
   repoRoot,
   'packages/drizzle/src/static/session-provenance.ts',
@@ -734,6 +736,62 @@ const weakenedSemanticTableNamespaceClosureBranch = [
   "    return kind ? serverOperationProvenance(kind) : 'unknown-authority';",
 ].join('\n');
 
+const exactTrustedAssignIdentityBranch =
+  '  if (frameworkIdentityIn(frameworkIdentity, SERVER_REVIEWED_DATA_HELPER_IDENTITIES)) {';
+const weakenedExactTrustedAssignIdentityBranch = [
+  '  if (',
+  '    frameworkIdentityIn(frameworkIdentity, SERVER_REVIEWED_DATA_HELPER_IDENTITIES) ||',
+  "    (ts.isIdentifier(callee) && callee.text === 'trustedAssign')",
+  '  ) {',
+].join('\n');
+const ambientErrorStabilityBranch = [
+  '            (compilerSetHas(serverPureConstructors, callee.text) &&',
+  '              securityIrMemberCallableIsStable(sourceFile, callee, node))) &&',
+].join('\n');
+const weakenedAmbientErrorStabilityBranch =
+  '            compilerSetHas(serverPureConstructors, callee.text)) &&';
+const ambientCryptoRandomUuidStabilityBranch =
+  '    securityIrMemberCallableIsStable(sourceFile, callee, call) &&';
+const weakenedAmbientCryptoRandomUuidStabilityBranch = '    true &&';
+const finiteManagedDatabaseContinuationBranch =
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&';
+const weakenedFiniteManagedDatabaseContinuationBranch = '      true &&';
+const managedDatabaseForeignArgumentClosureBranch =
+  '      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)';
+const weakenedManagedDatabaseForeignArgumentClosureBranch = '      true';
+const exactProjectSchemaFactoryIdentityBranch =
+  '  return frameworkIdentityIn(factoryIdentity, SERVER_REVIEWED_DATABASE_TABLE_FACTORY_IDENTITIES);';
+const weakenedExactProjectSchemaFactoryIdentityBranch = '  return factoryIdentity !== undefined;';
+const immutableProjectSchemaBindingBranch = [
+  '  if (!declaration?.initializer || serverBindingOrMemberIsAssigned(target, imported.exportName)) {',
+  '    return false;',
+  '  }',
+].join('\n');
+const weakenedImmutableProjectSchemaBindingBranch = [
+  '  if (!declaration?.initializer) {',
+  '    return false;',
+  '  }',
+].join('\n');
+const renderEquivalenceProjectIdentityBranch = [
+  '  const registryFactsOptions = {',
+  '    fileName: parsed.compileOptions.fileName,',
+  '    ...(parsed.compileOptions.extraFiles?.length',
+  '      ? { extraFiles: parsed.compileOptions.extraFiles }',
+  '      : {}),',
+  '    ...(parsed.compileOptions.registryFacts',
+  '      ? { registryFacts: parsed.compileOptions.registryFacts }',
+  '      : {}),',
+  '  };',
+].join('\n');
+const weakenedRenderEquivalenceProjectIdentityBranch = [
+  '  const registryFactsOptions = {',
+  '    fileName: parsed.compileOptions.fileName,',
+  '    ...(parsed.compileOptions.registryFacts',
+  '      ? { registryFacts: parsed.compileOptions.registryFacts }',
+  '      : {}),',
+  '  };',
+].join('\n');
+
 const exactContextFetchInvocationBranch = [
   '    !Node.isPropertyAccessExpression(callee) ||',
   '    callee.getQuestionDotTokenNode() ||',
@@ -1039,6 +1097,39 @@ const trustedAssignNestedReviewBranch = [
 const weakenedTrustedAssignNestedReviewBranch = [
   '  if (requestCallIsExactTrustedAssignOutput(call)) {',
   '    return true;',
+  '  }',
+].join('\n');
+
+const threatMatrixMissingSinkDenominatorBranch = [
+  '  const missing = [...expectedSinks.keys()].filter((sink) => !seen.has(sink));',
+  "  if (missing.length > 0) findings.push(`C9 sink mappings missing: ${missing.sort().join(', ')}`);",
+].join('\n');
+const weakenedThreatMatrixMissingSinkDenominatorBranch = [
+  '  const missing = [...expectedSinks.keys()].filter((sink) => !seen.has(sink));',
+  "  if (false && missing.length > 0) findings.push(`C9 sink mappings missing: ${missing.sort().join(', ')}`);",
+].join('\n');
+const threatMatrixMissingAuditedEscapeDenominatorBranch = [
+  '  const missing = [...expected].filter((key) => !seen.has(key));',
+  '  if (missing.length > 0) {',
+  "    findings.push(`audited escape mappings missing: ${missing.sort().join(', ')}`);",
+  '  }',
+].join('\n');
+const weakenedThreatMatrixMissingAuditedEscapeDenominatorBranch = [
+  '  const missing = [...expected].filter((key) => !seen.has(key));',
+  '  if (false && missing.length > 0) {',
+  "    findings.push(`audited escape mappings missing: ${missing.sort().join(', ')}`);",
+  '  }',
+].join('\n');
+const threatMatrixMissingPublicSurfaceDenominatorBranch = [
+  '  const missing = [...expected].filter((id) => !seen.has(id));',
+  '  if (missing.length > 0) {',
+  "    findings.push(`public security surface mappings missing: ${missing.sort().join(', ')}`);",
+  '  }',
+].join('\n');
+const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
+  '  const missing = [...expected].filter((id) => !seen.has(id));',
+  '  if (false && missing.length > 0) {',
+  "    findings.push(`public security surface mappings missing: ${missing.sort().join(', ')}`);",
   '  }',
 ].join('\n');
 
@@ -1496,6 +1587,88 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertSemanticTableNamespaceClosureIsPinned,
   },
   {
+    description:
+      'Lets a same-spelled local or foreign trustedAssign bypass exact @kovojs/server identity.',
+    expectedKiller: 'trustedAssign admission must retain exact framework export identity',
+    name: 'compiler-finite-ir/allow-spelled-trusted-assign',
+    replacement: weakenedExactTrustedAssignIdentityBranch,
+    search: exactTrustedAssignIdentityBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertExactTrustedAssignIdentityIsPinned,
+  },
+  {
+    description: 'Lets a replaced ambient Error constructor pass as the reviewed intrinsic.',
+    expectedKiller: 'ambient Error admission must retain callable stability proof',
+    name: 'compiler-finite-ir/drop-ambient-error-stability',
+    replacement: weakenedAmbientErrorStabilityBranch,
+    search: ambientErrorStabilityBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertAmbientErrorStabilityIsPinned,
+  },
+  {
+    description: 'Lets a replaced ambient crypto.randomUUID member pass as reviewed data.',
+    expectedKiller: 'ambient crypto.randomUUID admission must retain member stability proof',
+    name: 'compiler-finite-ir/drop-random-uuid-stability',
+    replacement: weakenedAmbientCryptoRandomUuidStabilityBranch,
+    search: ambientCryptoRandomUuidStabilityBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertAmbientCryptoRandomUuidStabilityIsPinned,
+  },
+  {
+    description: 'Admits any inline managed-DB continuation instead of the finite method set.',
+    expectedKiller: 'managed-DB continuations must retain the exact finite method vocabulary',
+    name: 'compiler-finite-ir/allow-unknown-managed-db-continuation',
+    replacement: weakenedFiniteManagedDatabaseContinuationBranch,
+    search: finiteManagedDatabaseContinuationBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertFiniteManagedDatabaseContinuationIsPinned,
+  },
+  {
+    description: 'Lets an imported executable value enter a reviewed managed-DB continuation.',
+    expectedKiller: 'managed-DB continuations must reject unreviewed foreign executable arguments',
+    name: 'compiler-finite-ir/allow-foreign-managed-db-argument',
+    replacement: weakenedManagedDatabaseForeignArgumentClosureBranch,
+    search: managedDatabaseForeignArgumentClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertManagedDatabaseForeignArgumentClosureIsPinned,
+  },
+  {
+    description: 'Treats any imported project factory call as a reviewed Drizzle schema table.',
+    expectedKiller: 'project schema admission must retain exact pgTable/sqliteTable identity',
+    name: 'compiler-finite-ir/allow-foreign-project-schema-factory',
+    replacement: weakenedExactProjectSchemaFactoryIdentityBranch,
+    search: exactProjectSchemaFactoryIdentityBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertExactProjectSchemaFactoryIdentityIsPinned,
+  },
+  {
+    description: 'Keeps a project schema value reviewed after its exported binding is reassigned.',
+    expectedKiller: 'project schema admission must retain immutable exported binding proof',
+    name: 'compiler-finite-ir/allow-reassigned-project-schema',
+    replacement: weakenedImmutableProjectSchemaBindingBranch,
+    search: immutableProjectSchemaBindingBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertImmutableProjectSchemaBindingIsPinned,
+  },
+  {
+    description:
+      'Drops project identity files while reparsing emitted source for render equivalence.',
+    expectedKiller: 'render equivalence must preserve exact project schema identity files',
+    name: 'compiler-render-equivalence/drop-project-identity-files',
+    replacement: weakenedRenderEquivalenceProjectIdentityBranch,
+    search: renderEquivalenceProjectIdentityBranch,
+    sourceFile: compilerCompilePath,
+    sourceOnly: true,
+    test: assertRenderEquivalenceProjectIdentityIsPinned,
+  },
+  {
     description: 'Allows computed or optional framework-context fetch invocation shapes.',
     expectedKiller: 'framework egress calls must retain exact direct context.fetch provenance',
     name: 'drizzle-egress/allow-inexact-context-fetch-call',
@@ -1554,6 +1727,36 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: authorizationMatrixPath,
     sourceOnly: true,
     test: assertAuthorizationMatrixDocumentIsClosed,
+  },
+  {
+    baseModule: threatMatrixGate,
+    description: 'Deletes the denominator check for an authoritative C9 sink with no live mapping.',
+    expectedKiller: 'threat-matrix liveness must reject every unmapped authoritative C9 sink',
+    name: 'threat-matrix-gate/drop-missing-sink-denominator',
+    replacement: weakenedThreatMatrixMissingSinkDenominatorBranch,
+    search: threatMatrixMissingSinkDenominatorBranch,
+    sourceFile: threatMatrixGatePath,
+    test: assertThreatMatrixMissingSinkDenominatorIsPinned,
+  },
+  {
+    baseModule: threatMatrixGate,
+    description: 'Deletes the denominator check for a newly registered audited escape kind.',
+    expectedKiller: 'threat-matrix liveness must reject every unmapped audited escape kind',
+    name: 'threat-matrix-gate/drop-missing-audited-escape-denominator',
+    replacement: weakenedThreatMatrixMissingAuditedEscapeDenominatorBranch,
+    search: threatMatrixMissingAuditedEscapeDenominatorBranch,
+    sourceFile: threatMatrixGatePath,
+    test: assertThreatMatrixMissingAuditedEscapeDenominatorIsPinned,
+  },
+  {
+    baseModule: threatMatrixGate,
+    description: 'Deletes the denominator check for a new public security capability surface.',
+    expectedKiller: 'threat-matrix liveness must reject every unmapped public security surface',
+    name: 'threat-matrix-gate/drop-missing-public-surface-denominator',
+    replacement: weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch,
+    search: threatMatrixMissingPublicSurfaceDenominatorBranch,
+    sourceFile: threatMatrixGatePath,
+    test: assertThreatMatrixMissingPublicSurfaceDenominatorIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -2215,6 +2418,112 @@ function installMutantScriptLib(tempRoot) {
     readFileSync(path.join(scriptsDir, 'check-security-brands.mjs'), 'utf8'),
     'utf8',
   );
+}
+
+async function assertExactTrustedAssignIdentityIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(exactTrustedAssignIdentityBranch)) {
+    throw new Error('trustedAssign no longer requires exact @kovojs/server export identity');
+  }
+}
+
+async function assertAmbientErrorStabilityIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(ambientErrorStabilityBranch)) {
+    throw new Error('ambient Error admission no longer requires stable callable identity');
+  }
+}
+
+async function assertAmbientCryptoRandomUuidStabilityIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(ambientCryptoRandomUuidStabilityBranch)) {
+    throw new Error(
+      'ambient crypto.randomUUID admission no longer requires stable member identity',
+    );
+  }
+}
+
+async function assertFiniteManagedDatabaseContinuationIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(finiteManagedDatabaseContinuationBranch)) {
+    throw new Error('managed database continuations no longer require the finite method set');
+  }
+}
+
+async function assertManagedDatabaseForeignArgumentClosureIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(managedDatabaseForeignArgumentClosureBranch)) {
+    throw new Error('managed database continuations no longer reject foreign executable arguments');
+  }
+}
+
+async function assertExactProjectSchemaFactoryIdentityIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(exactProjectSchemaFactoryIdentityBranch)) {
+    throw new Error('project schema values no longer require exact Drizzle table-factory identity');
+  }
+}
+
+async function assertImmutableProjectSchemaBindingIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(immutableProjectSchemaBindingBranch)) {
+    throw new Error('project schema values no longer require immutable exported bindings');
+  }
+}
+
+async function assertRenderEquivalenceProjectIdentityIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(renderEquivalenceProjectIdentityBranch)) {
+    throw new Error('render-equivalence reparsing no longer receives project identity files');
+  }
+}
+
+function threatMatrixDenominatorFixture(overrides = {}) {
+  return {
+    auditedCapabilityKinds: [],
+    auditedTrustEscapeKinds: [],
+    documentedSurfaceLabels: ['Mutant surface'],
+    manifest: {
+      auditedEscapeMappings: [],
+      proofs: {},
+      publicSurfaceMappings: [],
+      sinkMappings: [],
+      surfaces: [{ id: 'mutant-surface', label: 'Mutant surface' }],
+      version: 1,
+    },
+    publicSecuritySurfaceIds: [],
+    repoRoot,
+    rootScripts: {},
+    sourceSinkInventory: [],
+    ...overrides,
+  };
+}
+
+async function assertThreatMatrixMissingSinkDenominatorIsPinned(moduleUnderTest) {
+  const expected = 'C9 sink mappings missing: mutant.unmapped.sink';
+  const findings = moduleUnderTest.validateThreatMatrixCoverage(
+    threatMatrixDenominatorFixture({
+      sourceSinkInventory: [{ escapeHatch: 'none', sink: 'mutant.unmapped.sink' }],
+    }),
+  );
+  if (!findings.includes(expected)) {
+    throw new Error('threat-matrix gate no longer rejects an unmapped authoritative C9 sink');
+  }
+}
+
+async function assertThreatMatrixMissingAuditedEscapeDenominatorIsPinned(moduleUnderTest) {
+  const expected = 'audited escape mappings missing: capability:mutantCapability';
+  const findings = moduleUnderTest.validateThreatMatrixCoverage(
+    threatMatrixDenominatorFixture({ auditedCapabilityKinds: ['mutantCapability'] }),
+  );
+  if (!findings.includes(expected)) {
+    throw new Error('threat-matrix gate no longer rejects an unmapped audited escape kind');
+  }
+}
+
+async function assertThreatMatrixMissingPublicSurfaceDenominatorIsPinned(moduleUnderTest) {
+  const expected = 'public security surface mappings missing: mutant-public-surface';
+  const findings = moduleUnderTest.validateThreatMatrixCoverage(
+    threatMatrixDenominatorFixture({ publicSecuritySurfaceIds: ['mutant-public-surface'] }),
+  );
+  if (!findings.includes(expected)) {
+    throw new Error('threat-matrix gate no longer rejects an unmapped public security surface');
+  }
 }
 
 async function assertSemanticCycleClosureIsPinned(_moduleUnderTest, { sourceText }) {
