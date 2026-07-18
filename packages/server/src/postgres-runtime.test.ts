@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { kovo, sql, trustedSql } from '@kovojs/drizzle';
 import { eq } from 'drizzle-orm';
-import { PgDialect, bigint, pgTable, serial, text } from 'drizzle-orm/pg-core';
+import { PgDialect, bigint, pgSchema, pgTable, serial, text } from 'drizzle-orm/pg-core';
 import { Client, Pool } from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -703,6 +703,52 @@ describe('createPostgresAppRuntimeDb', () => {
       }),
     ).toThrow(/Postgres runtime schema must not be a Proxy/);
     expect(triggered).toBe(0);
+  });
+
+  // @kovo-security-classifier-corpus postgres-identity-posture
+  it('rejects cross-schema duplicate base names before secret grant metadata can collide', () => {
+    const wholeSecretSchema = pgSchema('whole_secret_scope');
+    const partialSecretSchema = pgSchema('partial_secret_scope');
+    const wholeSecretRecords = wholeSecretSchema.table(
+      'duplicate_security_records',
+      {
+        classified: text('classified').notNull(),
+        id: text('id').primaryKey(),
+        ownerId: text('owner_id').notNull(),
+      },
+      kovo({
+        domain: 'whole-secret-duplicate-records',
+        key: 'id',
+        owner: 'ownerId',
+        secret: true,
+      }),
+    );
+    const partialSecretRecords = partialSecretSchema.table(
+      'duplicate_security_records',
+      {
+        classified: text('classified').notNull(),
+        id: text('id').primaryKey(),
+        ownerId: text('owner_id').notNull(),
+        publicLabel: text('public_label').notNull(),
+      },
+      kovo({
+        domain: 'partial-secret-duplicate-records',
+        key: 'id',
+        owner: 'ownerId',
+        secret: ['classified'],
+      }),
+    );
+
+    for (const duplicateSchema of [
+      { partialSecretRecords, wholeSecretRecords },
+      { wholeSecretRecords, partialSecretRecords },
+    ]) {
+      expect(() =>
+        createPostgresAppRuntimeDb({ driver: 'pglite', schema: duplicateSchema }),
+      ).toThrow(
+        /KV433_DUPLICATE_TABLE_NAME.*whole_secret_scope\.duplicate_security_records.*partial_secret_scope\.duplicate_security_records|KV433_DUPLICATE_TABLE_NAME.*partial_secret_scope\.duplicate_security_records.*whole_secret_scope\.duplicate_security_records/u,
+      );
+    }
   });
 
   it('rejects ordinary schema accessors without invoking them', () => {
@@ -3905,6 +3951,40 @@ describe('createPostgresAppRuntimeDb', () => {
         'rolfuturebypass',
       ]),
     ).toEqual(['rolfuturebypass']);
+  });
+
+  it('classifies every pg_settings source and fails closed on future source categories', () => {
+    const issue = __testPostgresRuntimeInternals.externalSessionSettingIssue([
+      {
+        context: 'user',
+        name: 'future_semantics_switch',
+        setting: 'unsafe',
+        source: 'future provider control plane',
+      },
+    ]);
+    expect(issue).toEqual({
+      code: 'KV433_RUNTIME_SETTING',
+      detail: expect.stringContaining(
+        'unclassified pg_settings source future provider control plane',
+      ),
+    });
+
+    expect(
+      __testPostgresRuntimeInternals.externalSessionSettingIssue([
+        {
+          context: 'user',
+          name: 'transaction_isolation',
+          setting: 'repeatable read',
+          source: 'session',
+        },
+        {
+          context: 'user',
+          name: 'transaction_read_only',
+          setting: 'on',
+          source: 'session',
+        },
+      ]),
+    ).toBeUndefined();
   });
 
   it('grants runtime membership for adopted reader and writer roles', async () => {

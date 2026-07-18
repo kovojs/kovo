@@ -364,6 +364,253 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     );
   }, 30_000);
 
+  it('rejects privileged startup settings before they can disable runtime enforcement', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-external-posture-settings-'));
+    roots.push(root);
+    const cluster = await startLocalPostgres(root);
+    clusters.push(cluster);
+    const database = `${probeRun}_settings`;
+    const adminRole = `${probeRun}_settings_admin`;
+    const runtimeRole = `${probeRun}_settings_runtime`;
+    await withPool(cluster.url('postgres', 'postgres'), async (pool) => {
+      await pool.query(`CREATE ROLE ${quoteIdent(adminRole)} LOGIN CREATEROLE NOBYPASSRLS`);
+      await pool.query(
+        `CREATE ROLE ${quoteIdent(runtimeRole)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await pool.query(`CREATE DATABASE ${quoteIdent(database)} OWNER ${quoteIdent(adminRole)}`);
+    });
+    const adminDatabaseUrl = cluster.url(database, adminRole);
+    const runtimeDatabaseUrl = cluster.url(database, runtimeRole);
+    const provisioned = await migratePostgresAppDb({
+      databaseUrl: adminDatabaseUrl,
+      migrations: [createNotesMigration],
+      runtimeDatabaseUrl,
+      schema,
+    });
+    expect(provisioned.posture.ok, JSON.stringify(provisioned.posture.issues)).toBe(true);
+
+    await withPool(cluster.url(database, 'postgres'), async (pool) => {
+      await pool.query('CREATE TABLE posture_parent (id integer PRIMARY KEY)');
+      await pool.query(
+        'CREATE TABLE posture_child (parent_id integer REFERENCES posture_parent(id))',
+      );
+      await pool.query(`GRANT INSERT ON posture_child TO ${quoteIdent(runtimeRole)}`);
+      await pool.query(
+        `ALTER ROLE ${quoteIdent(runtimeRole)} SET session_replication_role = replica`,
+      );
+    });
+
+    // PostgreSQL applies this superuser-authored role setting to the non-superuser login. The
+    // reproduction is an invalid FK insert that succeeds because replica mode suppresses the
+    // constraint trigger; Kovo must reject the session before any framework SQL can run.
+    await withPool(runtimeDatabaseUrl, async (pool) => {
+      await expect(pool.query('SHOW session_replication_role')).resolves.toMatchObject({
+        rows: [{ session_replication_role: 'replica' }],
+      });
+      await expect(
+        pool.query('INSERT INTO posture_child (parent_id) VALUES (404)'),
+      ).resolves.toBeDefined();
+    });
+    await expectRuntimeSettingPostureFailure(runtimeDatabaseUrl, adminDatabaseUrl, {
+      name: 'session_replication_role',
+      value: 'replica',
+    });
+    const unsafeRuntime = createPostgresAppRuntimeDb({
+      adminDatabaseUrl,
+      databaseUrl: runtimeDatabaseUrl,
+      schema,
+    });
+    try {
+      await expect(unsafeRuntime.ready).rejects.toThrow(
+        /session_replication_role.*origin.*replica/u,
+      );
+    } finally {
+      await unsafeRuntime.close();
+    }
+
+    await withPool(cluster.url(database, 'postgres'), async (pool) => {
+      await pool.query(`ALTER ROLE ${quoteIdent(runtimeRole)} RESET session_replication_role`);
+      await pool.query(`ALTER ROLE ${quoteIdent(runtimeRole)} SET row_security = off`);
+    });
+    await expectRuntimeSettingPostureFailure(runtimeDatabaseUrl, adminDatabaseUrl, {
+      name: 'row_security',
+      value: 'off',
+    });
+
+    await withPool(cluster.url(database, 'postgres'), async (pool) => {
+      await pool.query(`ALTER ROLE ${quoteIdent(runtimeRole)} RESET row_security`);
+      await pool.query(`ALTER DATABASE ${quoteIdent(database)} SET search_path = public`);
+    });
+    await expectRuntimeSettingPostureFailure(runtimeDatabaseUrl, adminDatabaseUrl, {
+      name: 'search_path',
+      value: 'database',
+    });
+
+    await withPool(cluster.url(database, 'postgres'), async (pool) => {
+      await pool.query(`ALTER DATABASE ${quoteIdent(database)} RESET search_path`);
+      await pool.query(
+        `ALTER ROLE ${quoteIdent(runtimeRole)} IN DATABASE ${quoteIdent(database)} SET transform_null_equals = on`,
+      );
+    });
+    await expectRuntimeSettingPostureFailure(runtimeDatabaseUrl, adminDatabaseUrl, {
+      name: 'transform_null_equals',
+      value: 'on',
+    });
+  }, 60_000);
+
+  it('pins the whole pre-reset witness under hostile search_path shadow objects', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-external-posture-search-path-'));
+    roots.push(root);
+    const cluster = await startLocalPostgres(root);
+    clusters.push(cluster);
+    const database = `${probeRun}_shadow`;
+    const adminRole = `${probeRun}_shadow_admin`;
+    const runtimeRole = `${probeRun}_shadow_runtime`;
+    await withPool(cluster.url('postgres', 'postgres'), async (pool) => {
+      await pool.query(`CREATE ROLE ${quoteIdent(adminRole)} LOGIN CREATEROLE NOBYPASSRLS`);
+      await pool.query(
+        `CREATE ROLE ${quoteIdent(runtimeRole)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await pool.query(`CREATE DATABASE ${quoteIdent(database)} OWNER ${quoteIdent(adminRole)}`);
+    });
+    const adminDatabaseUrl = cluster.url(database, adminRole);
+    const runtimeDatabaseUrl = cluster.url(database, runtimeRole);
+    const provisioned = await migratePostgresAppDb({
+      databaseUrl: adminDatabaseUrl,
+      migrations: [createNotesMigration],
+      runtimeDatabaseUrl,
+      schema,
+    });
+    expect(provisioned.posture.ok, JSON.stringify(provisioned.posture.issues)).toBe(true);
+
+    await withPool(cluster.url(database, 'postgres'), async (pool) => {
+      await pool.query(`
+        CREATE FUNCTION public.current_setting(pg_catalog.text)
+        RETURNS pg_catalog.text LANGUAGE sql IMMUTABLE
+        AS 'SELECT ''origin''::pg_catalog.text'
+      `);
+      await pool.query('CREATE DOMAIN public.text AS pg_catalog.text');
+      await pool.query(`
+        CREATE FUNCTION public.kovo_name_text_equal(pg_catalog.name, pg_catalog.text)
+        RETURNS pg_catalog.bool LANGUAGE sql IMMUTABLE AS 'SELECT true'
+      `);
+      await pool.query(`
+        CREATE OPERATOR public.= (
+          FUNCTION = public.kovo_name_text_equal,
+          LEFTARG = pg_catalog.name,
+          RIGHTARG = pg_catalog.text
+        )
+      `);
+    });
+
+    const hostileRuntimeUrl = `${runtimeDatabaseUrl}?options=${encodeURIComponent(
+      '-c search_path=public,pg_catalog',
+    )}`;
+    const report = await checkPostgresAppDbPosture({
+      adminDatabaseUrl,
+      databaseUrl: hostileRuntimeUrl,
+      schema,
+    });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toEqual([
+      expect.objectContaining({
+        code: 'KV433_RUNTIME_SETTING',
+        detail: expect.stringContaining('search_path'),
+      }),
+    ]);
+  }, 30_000);
+
+  it('binds split posture authority to the same live database and writable cluster', async () => {
+    const firstRoot = mkdtempSync(join(tmpdir(), 'kovo-external-posture-binding-a-'));
+    const secondRoot = mkdtempSync(join(tmpdir(), 'kovo-external-posture-binding-b-'));
+    roots.push(firstRoot, secondRoot);
+    const firstCluster = await startLocalPostgres(firstRoot);
+    const secondCluster = await startLocalPostgres(secondRoot);
+    clusters.push(firstCluster, secondCluster);
+    const firstDatabase = `${probeRun}_binding_a`;
+    const secondDatabase = `${probeRun}_binding_b`;
+    const siblingDatabase = `${probeRun}_binding_sibling`;
+    const adminRole = `${probeRun}_binding_admin`;
+    const runtimeRole = `${probeRun}_binding_runtime`;
+
+    for (const cluster of [firstCluster, secondCluster]) {
+      await withPool(cluster.url('postgres', 'postgres'), async (pool) => {
+        await pool.query(`CREATE ROLE ${quoteIdent(adminRole)} LOGIN CREATEROLE NOBYPASSRLS`);
+        await pool.query(
+          `CREATE ROLE ${quoteIdent(runtimeRole)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+        );
+      });
+    }
+    await withPool(firstCluster.url('postgres', 'postgres'), async (pool) => {
+      await pool.query(
+        `CREATE DATABASE ${quoteIdent(firstDatabase)} OWNER ${quoteIdent(adminRole)}`,
+      );
+      await pool.query(
+        `CREATE DATABASE ${quoteIdent(siblingDatabase)} OWNER ${quoteIdent(adminRole)}`,
+      );
+    });
+    await withPool(secondCluster.url('postgres', 'postgres'), async (pool) => {
+      await pool.query(
+        `CREATE DATABASE ${quoteIdent(secondDatabase)} OWNER ${quoteIdent(adminRole)}`,
+      );
+    });
+
+    const firstAdminUrl = firstCluster.url(firstDatabase, adminRole);
+    const firstRuntimeUrl = firstCluster.url(firstDatabase, runtimeRole);
+    const siblingAdminUrl = firstCluster.url(siblingDatabase, adminRole);
+    const siblingRuntimeUrl = firstCluster.url(siblingDatabase, runtimeRole);
+    const secondAdminUrl = secondCluster.url(secondDatabase, adminRole);
+    const secondRuntimeUrl = secondCluster.url(secondDatabase, runtimeRole);
+    for (const [databaseUrl, runtimeDatabaseUrl] of [
+      [firstAdminUrl, firstRuntimeUrl],
+      [siblingAdminUrl, siblingRuntimeUrl],
+      [secondAdminUrl, secondRuntimeUrl],
+    ] as const) {
+      const provisioned = await migratePostgresAppDb({
+        databaseUrl,
+        migrations: [createNotesMigration],
+        runtimeDatabaseUrl,
+        schema,
+      });
+      expect(provisioned.posture.ok, JSON.stringify(provisioned.posture.issues)).toBe(true);
+    }
+
+    await expectDatabaseIdentityPostureFailure(firstRuntimeUrl, secondAdminUrl);
+    await expectDatabaseIdentityPostureFailure(firstRuntimeUrl, siblingAdminUrl);
+
+    await withPool(secondCluster.url(secondDatabase, 'postgres'), async (pool) => {
+      await pool.query('ALTER ROLE kovo_system LOGIN');
+    });
+    const wrongSystemUrl = secondCluster.url(secondDatabase, 'kovo_system');
+    const systemPreferred = await checkPostgresAppDbPosture({
+      adminDatabaseUrl: firstAdminUrl,
+      databaseUrl: firstRuntimeUrl,
+      schema,
+      systemDatabaseUrl: wrongSystemUrl,
+    });
+    expect(systemPreferred.ok).toBe(false);
+    expect(systemPreferred.issues).toEqual([
+      expect.objectContaining({ code: 'KV433_DATABASE_IDENTITY' }),
+    ]);
+
+    await withPool(firstCluster.url(firstDatabase, 'postgres'), async (pool) => {
+      await pool.query('REVOKE EXECUTE ON FUNCTION pg_catalog.pg_control_system() FROM PUBLIC');
+      await pool.query('REVOKE EXECUTE ON FUNCTION pg_catalog.pg_control_checkpoint() FROM PUBLIC');
+    });
+    const unavailableOracle = await checkPostgresAppDbPosture({
+      adminDatabaseUrl: firstAdminUrl,
+      databaseUrl: firstRuntimeUrl,
+      schema,
+    });
+    expect(unavailableOracle.ok).toBe(false);
+    expect(unavailableOracle.issues).toEqual([
+      expect.objectContaining({
+        code: 'KV433_DATABASE_IDENTITY',
+        detail: expect.stringContaining('identity oracles'),
+      }),
+    ]);
+  }, 90_000);
+
   it('proves split provisioning, adopted roles, fail-closed posture, and pg Pool scope reset', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-external-postgres-probe-'));
     roots.push(root);
@@ -544,9 +791,9 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       schema,
     });
     expect(staleReport.ok).toBe(false);
-    expect(staleReport.issues.map((issue) => issue.code)).toEqual(
-      expect.arrayContaining(['KV433_FORCE_RLS', 'KV433_OWNER_POLICY']),
-    );
+    expect(staleReport.issues).toEqual([
+      expect.objectContaining({ code: 'KV433_DATABASE_IDENTITY' }),
+    ]);
     const staleRuntime = createPostgresAppRuntimeDb({
       databaseUrl: cluster.url(staleDb, staleRuntimeRole),
       schema,
@@ -673,6 +920,37 @@ async function expectBootPostureWitnessesAuthenticatedRuntimeConnection(
   } finally {
     await runtime.close();
   }
+}
+
+async function expectRuntimeSettingPostureFailure(
+  databaseUrl: string,
+  adminDatabaseUrl: string,
+  expected: { name: string; value: string },
+): Promise<void> {
+  const report = await checkPostgresAppDbPosture({ adminDatabaseUrl, databaseUrl, schema });
+  expect(report.ok).toBe(false);
+  expect(report.issues).toEqual([
+    expect.objectContaining({
+      code: 'KV433_RUNTIME_SETTING',
+      detail: expect.stringMatching(
+        new RegExp(`${expected.name}.*${expected.value}|${expected.value}.*${expected.name}`, 'u'),
+      ),
+    }),
+  ]);
+}
+
+async function expectDatabaseIdentityPostureFailure(
+  databaseUrl: string,
+  adminDatabaseUrl: string,
+): Promise<void> {
+  const report = await checkPostgresAppDbPosture({ adminDatabaseUrl, databaseUrl, schema });
+  expect(report.ok).toBe(false);
+  expect(report.issues).toEqual([
+    expect.objectContaining({
+      code: 'KV433_DATABASE_IDENTITY',
+      detail: expect.stringContaining('not bound to the witnessed runtime database'),
+    }),
+  ]);
 }
 
 async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: string): Promise<void> {
@@ -881,7 +1159,7 @@ async function expectRuntimeIdentityClosure(
         rolsuper: false,
       });
       await expect(client.query('SELECT key FROM kovo_schema_state')).resolves.toMatchObject({
-        rows: [],
+        rows: [{ key: 'database_instance_id' }],
       });
 
       for (const role of options.allowedRoles) {

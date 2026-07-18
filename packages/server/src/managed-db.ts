@@ -2892,6 +2892,12 @@ async function runPostgresTransactionControl(
   controls: PostgresTransactionControls,
   options: PostgresScopedClientOptions,
 ): Promise<void> {
+  // SPEC §10.3 (C9/C10): every framework-owned app transaction starts from a closed namespace.
+  // This overwrites URL, role, database, and pooled-session search_path state before any helper,
+  // policy expression, trigger, or app statement can resolve an unqualified name.
+  await witnessReflectApply<Promise<unknown>>(controls.exec, tx, [
+    'SET LOCAL search_path = pg_catalog, public, pg_temp',
+  ]);
   if (options.readOnly === true) {
     await witnessReflectApply<Promise<unknown>>(controls.exec, tx, ['SET TRANSACTION READ ONLY']);
   }

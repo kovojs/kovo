@@ -16,6 +16,8 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/pglite';
 import { integer, pgTable, text, withReplicas as withPostgresReplicas } from 'drizzle-orm/pg-core';
 import { getTableConfig, sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';
+
+// @kovo-security-classifier-corpus postgres-identity-posture
 import {
   KovoReadonlyHandleError,
   createAuthorizationCensusDb,
@@ -3631,6 +3633,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     await expect(reader.query('select id from contacts')).resolves.toEqual([{ id: 'c1' }]);
     expect(log).toEqual([
       'transaction',
+      'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'exec:SET TRANSACTION READ ONLY',
       'exec:SET LOCAL ROLE "kovo_reader"',
       'query:select id from contacts',
@@ -3670,6 +3673,43 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       await expect(client.query('select * from scoped_surface_proof')).resolves.toMatchObject({
         rows: [],
       });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('normalizes search_path before an unqualified managed Drizzle builder resolves its table', async () => {
+    const client = new PGlite();
+    await client.waitReady;
+    const pathRecords = pgTable('path_records', {
+      classified: text('classified').notNull(),
+      id: text('id').primaryKey(),
+    });
+    try {
+      await client.exec(
+        [
+          'CREATE SCHEMA shadow_scope',
+          'CREATE TABLE public.path_records (id text PRIMARY KEY, classified text NOT NULL)',
+          'CREATE TABLE shadow_scope.path_records (id text PRIMARY KEY, classified text NOT NULL)',
+          "INSERT INTO public.path_records VALUES ('public', 'public-safe')",
+          "INSERT INTO shadow_scope.path_records VALUES ('shadow', 'victim-secret')",
+          'SET search_path = shadow_scope, public',
+        ].join('; '),
+      );
+      await expect(client.query('SELECT classified FROM path_records')).resolves.toMatchObject({
+        rows: [{ classified: 'victim-secret' }],
+      });
+
+      const scoped = createPostgresScopedClient(client, { role: false }) as typeof client;
+      // drizzle-orm rc.4's PGlite config overload does not expose custom client carriers even
+      // though that is its supported runtime form. The assertion stays test-local; `scoped` is the
+      // framework facade whose full query path this regression must exercise.
+      const database = drizzlePostgres({ client: scoped, schema: { pathRecords } } as never);
+      await expect(
+        database
+          .select({ classified: pathRecords.classified, id: pathRecords.id })
+          .from(pathRecords),
+      ).resolves.toEqual([{ classified: 'public-safe', id: 'public' }]);
     } finally {
       await client.close();
     }
@@ -3741,6 +3781,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     await expect(scoped.query('select id from contacts')).resolves.toEqual([{ id: 'safe' }]);
     expect(log).toEqual([
+      'original-exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'original-exec:SET TRANSACTION READ ONLY',
       `original-query:SELECT set_config('kovo.principal', $1, true)`,
       'original-exec:SET LOCAL ROLE "kovo_reader"',
@@ -3773,6 +3814,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     await expect(scoped.query('select id from contacts')).resolves.toEqual([{ id: 'c1' }]);
     expect(log).toEqual([
       'transaction',
+      'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'exec:SET TRANSACTION READ ONLY',
       `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
       'exec:SET LOCAL ROLE "kovo_reader"',
@@ -3853,6 +3895,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     await expect(scoped.query('select id from contacts')).resolves.toEqual([]);
     expect(log).toEqual([
+      'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
       'exec:SET LOCAL ROLE "kovo_reader"',
       'query:select id from contacts:[]',
@@ -3905,6 +3948,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     await expect(query('select id from allowed')).resolves.toEqual([{ secret: 'victim-secret' }]);
     expect(log).toEqual([
       'transaction',
+      'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       `raw:SELECT set_config('kovo.principal', $1, true)`,
       'raw:select id from allowed',
     ]);
@@ -4163,6 +4207,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     carrier.values.push('mutated');
     expect(log).toEqual([
       'transaction',
+      'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'query:{"rowMode":"array","text":"select id from contacts where id = $1","types":{"getTypeParser":"driver-codec-marker"},"values":["c1"]}:[]',
     ]);
 
@@ -4177,6 +4222,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     ).toThrow(/submit-bearing[\s\S]*SPEC §10\.3/);
     expect(log).toEqual([
       'transaction',
+      'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'query:{"rowMode":"array","text":"select id from contacts where id = $1","types":{"getTypeParser":"driver-codec-marker"},"values":["c1"]}:[]',
     ]);
   });
@@ -4210,11 +4256,13 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     expect(log).toEqual([
       'transaction',
+      'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'exec:SET TRANSACTION READ ONLY',
       `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
       'exec:SET LOCAL ROLE "kovo_reader"',
       'query:select id from contacts where id = $1:["c1"]',
       'transaction',
+      'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'exec:SET TRANSACTION READ ONLY',
       `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
       'exec:SET LOCAL ROLE "kovo_reader"',

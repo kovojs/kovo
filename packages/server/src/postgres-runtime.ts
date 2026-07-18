@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { types as nodeUtilTypes } from 'node:util';
 
 import { PGlite } from '@electric-sql/pglite';
@@ -134,6 +134,8 @@ const DEFAULT_SYSTEM_ROLE = 'kovo_system';
 const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
+const POSTGRES_DATABASE_INSTANCE_KEY = 'database_instance_id';
+const POSTGRES_DATABASE_INSTANCE_ID_PATTERN = /^[0-9a-f]{64}$/u;
 const postgresPinnedNodePools = createWitnessWeakMap<object, true>();
 const postgresPinnedNodeClients = createWitnessWeakMap<object, true>();
 const postgresNodeClientReleaseValues = createWitnessWeakMap<object, Function>();
@@ -185,6 +187,48 @@ const POSTGRES_ELEVATED_ROLE_ATTRIBUTES = [
 // is named. This is an ALLOWLIST (member-of-only-known-safe), NOT a denylist of known-bad roles, so
 // a NEW `pg_*` predefined role in a future PostgreSQL release fails closed by default.
 const POSTGRES_BENIGN_PREDEFINED_ROLES: ReadonlySet<string> = createWitnessSet<string>();
+// SPEC §10.3 (C10): the runtime session accepts only pinned-driver UTF-8 negotiation and
+// observability naming from client/role/database startup configuration. Every other explicit GUC
+// is security-relevant until classified: PostgreSQL applies superuser-authored role/database
+// settings to a non-superuser login, including session_replication_role=replica.
+const POSTGRES_BENIGN_EXTERNAL_SESSION_SETTINGS: ReadonlySet<string> = postgresStringSet([
+  'application_name',
+  'client_encoding',
+]);
+const POSTGRES_EXTERNAL_SESSION_SETTING_SOURCES: ReadonlySet<string> = postgresStringSet([
+  'client',
+  'database',
+  'database user',
+  'user',
+]);
+// PostgreSQL 18's complete GucSource_Names display set. `default` intentionally represents both
+// PGC_S_DEFAULT and PGC_S_DYNAMIC_DEFAULT. A future display value is unclassified and fails closed.
+const POSTGRES_RECOGNIZED_SETTING_SOURCES: ReadonlySet<string> = postgresStringSet([
+  'client',
+  'command line',
+  'configuration file',
+  'database',
+  'database user',
+  'default',
+  'environment variable',
+  'global',
+  'interactive',
+  'override',
+  'session',
+  'test',
+  'user',
+]);
+const POSTGRES_SERVER_SETTING_SOURCES: ReadonlySet<string> = postgresStringSet([
+  'command line',
+  'configuration file',
+  'default',
+  'environment variable',
+  'global',
+  'override',
+]);
+const POSTGRES_BENIGN_PERSISTED_SETTINGS: ReadonlySet<string> = postgresStringSet([
+  'application_name',
+]);
 const POSTGRES_CLASSIFIED_ROLE_COLUMNS = postgresStringSet([
   'rolname',
   'rolsuper',
@@ -1704,11 +1748,24 @@ export async function provisionPostgresAppDb(
       schemaDdl: schemaDdl(schemaTables),
       schemaTables,
     });
-    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(safeOptions.runtimeDatabaseUrl);
+    const runtimeConnectionPosture = await witnessConfiguredPostgresRuntimeDatabase(
+      config,
+      safeOptions.runtimeDatabaseUrl,
+    );
+    if (runtimeConnectionPosture?.issue !== undefined) {
+      return postgresRuntimeWitnessFailureReport(config, runtimeConnectionPosture);
+    }
+    const runtimeLoginRole =
+      runtimeConnectionPosture?.runtimeLoginRole ??
+      runtimeLoginRoleFromDatabaseUrl(safeOptions.runtimeDatabaseUrl);
     return await checkRuntimeDbPosture(client.sql, {
       config,
       metadata,
       ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
+      ...(runtimeConnectionPosture?.databaseIdentity === undefined
+        ? {}
+        : { runtimeDatabaseIdentity: runtimeConnectionPosture.databaseIdentity }),
+      runtimeLoginPostureWitnessed: runtimeConnectionPosture !== undefined,
       schemaTables,
     });
   } finally {
@@ -1746,17 +1803,68 @@ export async function migratePostgresAppDb(
       schemaDdl: schemaDdl(schemaTables),
       schemaTables,
     });
-    const runtimeLoginRole = runtimeLoginRoleFromDatabaseUrl(safeOptions.runtimeDatabaseUrl);
+    const runtimeConnectionPosture = await witnessConfiguredPostgresRuntimeDatabase(
+      config,
+      safeOptions.runtimeDatabaseUrl,
+    );
+    if (runtimeConnectionPosture?.issue !== undefined) {
+      return {
+        ...migrations,
+        posture: postgresRuntimeWitnessFailureReport(config, runtimeConnectionPosture),
+      };
+    }
+    const runtimeLoginRole =
+      runtimeConnectionPosture?.runtimeLoginRole ??
+      runtimeLoginRoleFromDatabaseUrl(safeOptions.runtimeDatabaseUrl);
     const posture = await checkRuntimeDbPosture(client.sql, {
       config,
       metadata,
       ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
+      ...(runtimeConnectionPosture?.databaseIdentity === undefined
+        ? {}
+        : { runtimeDatabaseIdentity: runtimeConnectionPosture.databaseIdentity }),
+      runtimeLoginPostureWitnessed: runtimeConnectionPosture !== undefined,
       schemaTables,
     });
     return { ...migrations, posture };
   } finally {
     await client.close();
   }
+}
+
+async function witnessConfiguredPostgresRuntimeDatabase(
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeDatabaseUrl: string | undefined,
+): Promise<PostgresRuntimeConnectionPostureWitness | undefined> {
+  if (config.driver !== 'node-postgres' || runtimeDatabaseUrl === undefined) return undefined;
+  const runtimeClient = createRuntimeClient({ ...config, databaseUrl: runtimeDatabaseUrl });
+  try {
+    return await witnessRuntimeConnectionPosture(runtimeClient.sql, {
+      ...config,
+      databaseUrl: runtimeDatabaseUrl,
+    });
+  } finally {
+    await runtimeClient.close();
+  }
+}
+
+function postgresRuntimeWitnessFailureReport(
+  config: ResolvedPostgresRuntimeConfig,
+  witness: PostgresRuntimeConnectionPostureWitness,
+): KovoPostgresPostureReport {
+  const issue = witness.issue ?? {
+    code: 'KV433_RUNTIME_ROLE',
+    detail: RUNTIME_LEAST_PRIVILEGE_ERROR,
+  };
+  return {
+    driver: config.driver,
+    issues: [issue],
+    ok: false,
+    roleTopology: postgresRoleTopologyReport(
+      config.roleTopology,
+      witness.runtimeLoginRole === undefined ? {} : { runtimeLogin: witness.runtimeLoginRole },
+    ),
+  };
 }
 
 /**
@@ -1841,6 +1949,9 @@ export async function checkPostgresAppDbPosture(
       config,
       metadata,
       ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
+      ...(runtimeConnectionPosture?.databaseIdentity === undefined
+        ? {}
+        : { runtimeDatabaseIdentity: runtimeConnectionPosture.databaseIdentity }),
       runtimeLoginPostureWitnessed: runtimeConnectionPosture !== undefined,
       schemaTables,
     });
@@ -1872,16 +1983,22 @@ async function initializeRuntimeDb(
       runtimeLoginRole: undefined,
     });
   }
-  const runtimeLoginRole =
+  const runtimeConnectionPosture =
     input.config.driver === 'node-postgres'
       ? await assertRuntimeConnectionLeastPrivilege(client, input.config)
-      : runtimeLoginRoleFromDatabaseUrl(input.config.databaseUrl);
+      : undefined;
+  const runtimeLoginRole =
+    runtimeConnectionPosture?.runtimeLoginRole ??
+    runtimeLoginRoleFromDatabaseUrl(input.config.databaseUrl);
   if (input.config.postureCheckOnBoot) {
     const report = await checkRuntimeDbPosture(input.postureClient, {
       config: input.config,
       metadata: input.metadata,
       schemaTables: input.schemaTables,
       ...(runtimeLoginRole === undefined ? {} : { runtimeLoginRole }),
+      ...(runtimeConnectionPosture?.databaseIdentity === undefined
+        ? {}
+        : { runtimeDatabaseIdentity: runtimeConnectionPosture.databaseIdentity }),
       runtimeLoginPostureWitnessed: input.config.driver === 'node-postgres',
     });
     if (!report.ok) {
@@ -1972,7 +2089,12 @@ async function provisionRuntimeDb(
       input.metadata,
       input.config,
     );
-    await withPostgresAppDdlSearchPath(tx, () => ensurePostgresSchemaStateTable(tx));
+    await withPostgresAppDdlSearchPath(tx, async () => {
+      await ensurePostgresSchemaStateTable(tx);
+      if (input.config.driver === 'node-postgres') {
+        await ensurePostgresDatabaseInstanceIdentity(tx, input.config);
+      }
+    });
     await grantPostgresRuntimeLoginRole(tx, roleTopology);
     await withPostgresAppDdlSearchPath(tx, async () => {
       const seedCount = postgresDenseArrayLength(input.config.seedSql, 'Postgres seed SQL');
@@ -2000,6 +2122,7 @@ async function checkRuntimeDbPosture(
   input: {
     config: ResolvedPostgresRuntimeConfig;
     metadata: KovoRuntimeDbMetadata;
+    runtimeDatabaseIdentity?: PostgresDatabaseIdentity;
     runtimeLoginRole?: string;
     runtimeLoginPostureWitnessed?: boolean;
     schemaTables: readonly PgTable[];
@@ -2021,6 +2144,7 @@ async function checkRuntimeDbPostureTransaction(
   input: {
     config: ResolvedPostgresRuntimeConfig;
     metadata: KovoRuntimeDbMetadata;
+    runtimeDatabaseIdentity?: PostgresDatabaseIdentity;
     runtimeLoginRole?: string;
     runtimeLoginPostureWitnessed?: boolean;
     schemaTables: readonly PgTable[];
@@ -2031,6 +2155,32 @@ async function checkRuntimeDbPostureTransaction(
     input.config.driver === 'node-postgres'
       ? (input.runtimeLoginRole ?? (await currentPostgresLogin(client)))
       : input.runtimeLoginRole;
+  if (input.runtimeDatabaseIdentity !== undefined) {
+    const identityIssue = await postgresPostureDatabaseIdentityIssue(
+      client,
+      input.runtimeDatabaseIdentity,
+    );
+    if (identityIssue !== undefined) {
+      return {
+        driver: input.config.driver,
+        issues: [identityIssue],
+        ok: false,
+        roleTopology: postgresRoleTopologyReport(
+          input.config.roleTopology,
+          runtimeLoginRole === undefined ? {} : { runtimeLogin: runtimeLoginRole },
+        ),
+      };
+    }
+    appendPostgresDenseValues(
+      issues,
+      await postgresPersistedRuntimeSettingIssues(
+        client,
+        input.runtimeDatabaseIdentity.databaseName,
+        runtimeLoginRole,
+      ),
+      'Postgres persisted runtime-setting issues',
+    );
+  }
   if (runtimeLoginRole !== undefined && input.runtimeLoginPostureWitnessed !== true) {
     appendPostgresDenseValues(
       issues,
@@ -4554,8 +4704,11 @@ function createNodePostgresRuntimeClient(
   const systemTransactionalClient = createOptionalNodePostgresRuntimeClient(
     config.systemDatabaseUrl,
   );
+  // SPEC §10.3: the system role already owns the exact durable replay truth, so it is the
+  // least-privilege authority for boot/check posture. The admin/owner connection is only a
+  // fallback for deployments that have not supplied the dedicated system URL.
   const postureTransactionalClient =
-    adminTransactionalClient ?? systemTransactionalClient ?? transactionalClient;
+    systemTransactionalClient ?? adminTransactionalClient ?? transactionalClient;
   return {
     close: () =>
       closeNodePostgresRuntimeClients(
@@ -4903,6 +5056,11 @@ async function discardNodePostgresSession(client: PoolClient): Promise<Error | u
 }
 
 export const __testPostgresRuntimeInternals = {
+  externalSessionSettingIssue(
+    settings: readonly { context: string; name: string; setting: string; source: string }[],
+  ): KovoPostgresPostureIssue | undefined {
+    return postgresExternalSessionSettingRowsIssue(settings);
+  },
   createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRuntimeClient {
     return createRuntimeClient(config);
   },
@@ -5373,7 +5531,29 @@ function postgresTablesFromSchema(schema: Record<string, unknown>): PgTable[] {
   if (postgresDenseArrayLength(tables, 'Postgres schema tables') === 0) {
     throw new Error('KV433: Postgres runtime could not derive any Drizzle pgTable exports.');
   }
+  assertPostgresUniqueBaseTableNames(tables);
   return tables;
+}
+
+function assertPostgresUniqueBaseTableNames(tables: readonly PgTable[]): void {
+  // SPEC §10.3 (C9/C10): authorization metadata, owner chains, grant allowlists, and policy
+  // dependencies currently share the Drizzle base table name as their closed-world key. Until the
+  // whole security pipeline uses schema-qualified relation identities, accepting the same base
+  // name in two schemas could merge a public classification into a secret relation (or vice versa).
+  const relationsByBaseName = createWitnessMap<string, string>();
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres schema tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    const config = getTableConfig(postgresDenseArrayValue(tables, index, 'Postgres schema tables'));
+    const baseName = config.name;
+    const relation = `${tableSchemaName(config)}.${baseName}`;
+    const previous = witnessMapGet(relationsByBaseName, baseName);
+    if (previous !== undefined) {
+      throw new Error(
+        `KV433_DUPLICATE_TABLE_NAME: Postgres runtime schema declares both ${previous} and ${relation}; base table names must be globally unique until every authorization and grant key is schema-qualified (SPEC §10.3 C9/C10).`,
+      );
+    }
+    witnessMapSet(relationsByBaseName, baseName, relation);
+  }
 }
 
 function postgresRelationSchemaFromModule(
@@ -6319,6 +6499,41 @@ async function ensurePostgresSchemaStateTable(client: RuntimeTransactionClient):
   );
 }
 
+async function ensurePostgresDatabaseInstanceIdentity(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<void> {
+  const candidate = randomBytes(32).toString('hex');
+  await client.query(
+    `INSERT INTO ${quoteIdent(SCHEMA_STATE_TABLE)} (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
+    [POSTGRES_DATABASE_INSTANCE_KEY, candidate],
+  );
+  const result = await client.query<{ value: string }>(
+    `SELECT value FROM ${quoteIdent(SCHEMA_STATE_TABLE)} WHERE key = $1 FOR UPDATE`,
+    [POSTGRES_DATABASE_INSTANCE_KEY],
+  );
+  const rows = snapshotPostgresQueryRows(result.rows, 'Postgres database-instance rows');
+  const value =
+    rows.length === 0
+      ? undefined
+      : postgresDenseArrayValue(rows, 0, 'Postgres database-instance rows').value;
+  if (value === undefined || !securityRegExpTest(POSTGRES_DATABASE_INSTANCE_ID_PATTERN, value)) {
+    throw new Error(
+      'KV433_DATABASE_IDENTITY: kovo_schema_state database_instance_id must be one framework-minted 256-bit lowercase hexadecimal identity (SPEC §10.3 C9/C10).',
+    );
+  }
+  const readers = [config.adminRole, config.systemRole];
+  const seen = createWitnessSet<string>();
+  for (let index = 0; index < readers.length; index += 1) {
+    const role = postgresDenseValue(readers, index, 'Postgres database-identity readers');
+    if (witnessSetHas(seen, role)) continue;
+    witnessSetAdd(seen, role);
+    await client.exec(
+      `GRANT SELECT ON TABLE ${quoteIdent(SCHEMA_STATE_TABLE)} TO ${quoteIdent(role)}`,
+    );
+  }
+}
+
 async function grantPostgresRuntimeLoginRole(
   client: RuntimeTransactionClient,
   topology: PostgresRoleTopology,
@@ -6380,7 +6595,7 @@ function assertInternalPostgresRuntimeDbCapability(
 async function assertRuntimeConnectionLeastPrivilege(
   client: RuntimeSqlClient,
   config: ResolvedPostgresRuntimeConfig,
-): Promise<string> {
+): Promise<PostgresRuntimeConnectionPostureWitness> {
   const witness = await witnessRuntimeConnectionPosture(client, config);
   if (witness.issue !== undefined) {
     throw new Error(
@@ -6390,12 +6605,54 @@ async function assertRuntimeConnectionLeastPrivilege(
   if (witness.runtimeLoginRole === undefined) {
     throw new Error(`KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR} (SPEC §10.3).`);
   }
-  return witness.runtimeLoginRole;
+  return witness;
 }
 
 interface PostgresRuntimeConnectionPostureWitness {
+  databaseIdentity: PostgresDatabaseIdentity | undefined;
   issue: KovoPostgresPostureIssue | undefined;
   runtimeLoginRole: string | undefined;
+}
+
+interface PostgresDatabaseIdentity {
+  databaseInstanceId: string;
+  databaseName: string;
+  databaseOid: string;
+  postmasterStartEpoch: string;
+  serverAddress: string | null;
+  serverPort: number | null;
+  systemIdentifier: string;
+  timelineId: string;
+}
+
+interface PostgresLiveIdentityRow {
+  backslash_quote: string;
+  client_encoding: string;
+  database_name: string;
+  database_oid: string;
+  default_transaction_isolation: string;
+  in_recovery: boolean;
+  lo_compat_privileges: string;
+  postmaster_start_epoch: string;
+  role_setting: string;
+  row_security: string;
+  runtime_login: string;
+  server_address: string | null;
+  server_port: number | null;
+  session_authorization: string;
+  session_login: string;
+  session_replication_role: string;
+  standard_conforming_strings: string;
+  system_identifier: string;
+  timeline_id: string;
+  transform_null_equals: string;
+}
+
+interface PostgresExternalSessionSettingRow {
+  context: string;
+  name: string;
+  setting: string;
+  source: string;
 }
 
 async function witnessRuntimeConnectionPosture(
@@ -6404,8 +6661,30 @@ async function witnessRuntimeConnectionPosture(
 ): Promise<PostgresRuntimeConnectionPostureWitness> {
   return client.transaction(async (tx) => {
     await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    const witness = await witnessRuntimeConnectionPostureTransaction(tx, config);
+    if (witness.issue !== undefined) return witness;
     await tx.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
-    return witnessRuntimeConnectionPostureTransaction(tx, config);
+    const normalizedSearchPath = await safeQuery<{ search_path: string }>(
+      tx,
+      "SELECT pg_catalog.current_setting('search_path') AS search_path",
+    );
+    const searchPath = normalizedSearchPath?.rows[0]?.search_path;
+    if (searchPath !== 'pg_catalog, public, pg_temp') {
+      return {
+        ...witness,
+        issue: {
+          code: 'KV433_RUNTIME_SETTING',
+          detail:
+            'runtime search_path could not be normalized to the exact pg_catalog, public, pg_temp security path',
+        },
+      };
+    }
+    const runtimeLoginRole = witness.runtimeLoginRole;
+    if (runtimeLoginRole === undefined) return witness;
+    return {
+      ...witness,
+      issue: (await postgresRuntimeLoginPostureIssues(tx, config, runtimeLoginRole))[0],
+    };
   });
 }
 
@@ -6413,25 +6692,59 @@ async function witnessRuntimeConnectionPostureTransaction(
   client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<PostgresRuntimeConnectionPostureWitness> {
-  const current = await client.query<{ runtime_login: string; session_login: string }>(
-    'SELECT current_user AS runtime_login, session_user AS session_login',
-  );
-  const currentRows = snapshotPostgresQueryRows(current.rows, 'Postgres runtime-login rows');
-  const identity =
-    currentRows.length === 0
-      ? undefined
-      : postgresDenseArrayValue(currentRows, 0, 'Postgres runtime-login rows');
-  if (identity === undefined || identity.runtime_login === '') {
+  // Read the session exactly as node-postgres opened it, before Kovo overwrites search_path. This
+  // catches URL `options`, ALTER ROLE, ALTER DATABASE, and ALTER ROLE ... IN DATABASE settings that
+  // would otherwise disappear behind the later framework normalization (SPEC §10.3 C9/C10).
+  const current = await safeQuery<PostgresLiveIdentityRow>(client, postgresLiveIdentitySql());
+  if (current === undefined) {
     return {
+      databaseIdentity: undefined,
       issue: {
-        code: 'KV433_RUNTIME_ROLE',
-        detail: RUNTIME_LEAST_PRIVILEGE_ERROR,
+        code: 'KV433_DATABASE_IDENTITY',
+        detail:
+          'runtime connection could not read pg_control_system()/pg_control_checkpoint() and live database identity; managed providers must preserve these read-only identity oracles for split-authority posture',
       },
       runtimeLoginRole: undefined,
     };
   }
+  const currentRows = snapshotPostgresQueryRows(current.rows, 'Postgres runtime-login rows');
+  const identity =
+    currentRows.length !== 1
+      ? undefined
+      : postgresDenseArrayValue(currentRows, 0, 'Postgres runtime-login rows');
+  if (
+    identity === undefined ||
+    identity.runtime_login === '' ||
+    identity.session_login === '' ||
+    identity.database_name === '' ||
+    identity.database_oid === '' ||
+    identity.system_identifier === '' ||
+    identity.timeline_id === '' ||
+    identity.postmaster_start_epoch === ''
+  ) {
+    return {
+      databaseIdentity: undefined,
+      issue: {
+        code: 'KV433_DATABASE_IDENTITY',
+        detail: 'runtime connection returned an incomplete live database/role identity witness',
+      },
+      runtimeLoginRole: undefined,
+    };
+  }
+  const expectedLogin = runtimeLoginRoleFromDatabaseUrl(config.databaseUrl);
+  if (expectedLogin === undefined || identity.session_login !== expectedLogin) {
+    return {
+      databaseIdentity: undefined,
+      issue: {
+        code: 'KV433_RUNTIME_ROLE',
+        detail: `runtime connection authenticated session_user ${identity.session_login} must match authority login ${expectedLogin ?? '(missing)'} from databaseUrl`,
+      },
+      runtimeLoginRole: identity.runtime_login,
+    };
+  }
   if (identity.runtime_login !== identity.session_login) {
     return {
+      databaseIdentity: undefined,
       issue: {
         code: 'KV433_RUNTIME_ROLE',
         detail: `runtime connection current_user ${identity.runtime_login} must match authenticated session_user ${identity.session_login}; startup SET ROLE/role options are forbidden for the ordinary runtime connection`,
@@ -6439,10 +6752,359 @@ async function witnessRuntimeConnectionPostureTransaction(
       runtimeLoginRole: identity.runtime_login,
     };
   }
+  if (
+    identity.role_setting !== 'none' ||
+    identity.session_authorization !== identity.session_login
+  ) {
+    return {
+      databaseIdentity: undefined,
+      issue: {
+        code: 'KV433_RUNTIME_ROLE',
+        detail: `runtime connection must start with role=none and session_authorization=${identity.session_login}; observed role=${identity.role_setting} session_authorization=${identity.session_authorization}`,
+      },
+      runtimeLoginRole: identity.runtime_login,
+    };
+  }
+  const baselineIssue = postgresRuntimeSemanticSettingIssue(identity);
+  if (baselineIssue !== undefined) {
+    return {
+      databaseIdentity: undefined,
+      issue: baselineIssue,
+      runtimeLoginRole: identity.runtime_login,
+    };
+  }
+  const externalSettingIssue = await postgresExternalSessionSettingIssue(client);
+  if (externalSettingIssue !== undefined) {
+    return {
+      databaseIdentity: undefined,
+      issue: externalSettingIssue,
+      runtimeLoginRole: identity.runtime_login,
+    };
+  }
+  const databaseIdentity = await postgresFrameworkDatabaseIdentity(client, identity);
+  if ('issue' in databaseIdentity) {
+    return {
+      databaseIdentity: undefined,
+      issue: databaseIdentity.issue,
+      runtimeLoginRole: identity.runtime_login,
+    };
+  }
   return {
-    issue: (await postgresRuntimeLoginPostureIssues(client, config, identity.runtime_login))[0],
+    databaseIdentity: databaseIdentity.identity,
+    issue: undefined,
     runtimeLoginRole: identity.runtime_login,
   };
+}
+
+function postgresLiveIdentitySql(): string {
+  return postgresJoin(
+    [
+      'SELECT current_user AS runtime_login, session_user AS session_login,',
+      "pg_catalog.current_setting('role') AS role_setting,",
+      "pg_catalog.current_setting('session_authorization') AS session_authorization,",
+      "pg_catalog.current_setting('client_encoding') AS client_encoding,",
+      "pg_catalog.current_setting('session_replication_role') AS session_replication_role,",
+      "pg_catalog.current_setting('row_security') AS row_security,",
+      "pg_catalog.current_setting('standard_conforming_strings') AS standard_conforming_strings,",
+      "pg_catalog.current_setting('backslash_quote') AS backslash_quote,",
+      "pg_catalog.current_setting('transform_null_equals') AS transform_null_equals,",
+      "pg_catalog.current_setting('lo_compat_privileges') AS lo_compat_privileges,",
+      "pg_catalog.current_setting('default_transaction_isolation') AS default_transaction_isolation,",
+      'pg_catalog.current_database() AS database_name, database_row.oid::pg_catalog.text AS database_oid,',
+      'control.system_identifier::pg_catalog.text AS system_identifier,',
+      'checkpoint.timeline_id::pg_catalog.text AS timeline_id,',
+      'pg_catalog.pg_is_in_recovery() AS in_recovery,',
+      'EXTRACT(EPOCH FROM pg_catalog.pg_postmaster_start_time())::pg_catalog.text AS postmaster_start_epoch,',
+      'pg_catalog.inet_server_addr()::pg_catalog.text AS server_address,',
+      'pg_catalog.inet_server_port() AS server_port',
+      'FROM pg_catalog.pg_database AS database_row',
+      'CROSS JOIN pg_catalog.pg_control_system() AS control',
+      'CROSS JOIN pg_catalog.pg_control_checkpoint() AS checkpoint',
+      'WHERE database_row.datname OPERATOR(pg_catalog.=) pg_catalog.current_database()',
+    ],
+    ' ',
+  );
+}
+
+function postgresRuntimeSemanticSettingIssue(
+  identity: PostgresLiveIdentityRow,
+): KovoPostgresPostureIssue | undefined {
+  const exactSettings: readonly [string, string, string][] = [
+    ['client_encoding', identity.client_encoding, 'UTF8'],
+    ['session_replication_role', identity.session_replication_role, 'origin'],
+    ['row_security', identity.row_security, 'on'],
+    ['standard_conforming_strings', identity.standard_conforming_strings, 'on'],
+    ['transform_null_equals', identity.transform_null_equals, 'off'],
+    ['lo_compat_privileges', identity.lo_compat_privileges, 'off'],
+    ['default_transaction_isolation', identity.default_transaction_isolation, 'read committed'],
+  ];
+  for (let index = 0; index < exactSettings.length; index += 1) {
+    const [name, actual, expected] = postgresDenseValue(
+      exactSettings,
+      index,
+      'Postgres semantic setting baseline',
+    );
+    if (actual !== expected) {
+      return {
+        code: 'KV433_RUNTIME_SETTING',
+        detail: `runtime setting ${name} must be ${expected}; observed ${actual}`,
+      };
+    }
+  }
+  if (identity.backslash_quote !== 'safe_encoding' && identity.backslash_quote !== 'off') {
+    return {
+      code: 'KV433_RUNTIME_SETTING',
+      detail: `runtime setting backslash_quote must be safe_encoding or off; observed ${identity.backslash_quote}`,
+    };
+  }
+  if (identity.in_recovery) {
+    return {
+      code: 'KV433_DATABASE_IDENTITY',
+      detail:
+        'ordinary Kovo runtime connections must target the writable primary; recovery/standby sessions cannot be split-authority posture witnesses',
+    };
+  }
+  return undefined;
+}
+
+async function postgresExternalSessionSettingIssue(
+  client: RuntimeTransactionClient,
+): Promise<KovoPostgresPostureIssue | undefined> {
+  const configured = await safeQuery<PostgresExternalSessionSettingRow>(
+    client,
+    'SELECT name, setting, context, source FROM pg_catalog.pg_settings',
+  );
+  if (configured === undefined) {
+    return {
+      code: 'KV433_RUNTIME_SETTING',
+      detail: 'could not enumerate explicit runtime client/role/database settings',
+    };
+  }
+  return postgresExternalSessionSettingRowsIssue(configured.rows);
+}
+
+function postgresExternalSessionSettingRowsIssue(
+  settings: readonly PostgresExternalSessionSettingRow[],
+): KovoPostgresPostureIssue | undefined {
+  const settingCount = postgresDenseArrayLength(settings, 'Postgres external session settings');
+  for (let index = 0; index < settingCount; index += 1) {
+    const setting = postgresDenseValue(settings, index, 'Postgres external session settings');
+    if (!witnessSetHas(POSTGRES_RECOGNIZED_SETTING_SOURCES, setting.source)) {
+      return {
+        code: 'KV433_RUNTIME_SETTING',
+        detail: `runtime setting ${setting.name} has unclassified pg_settings source ${setting.source}; PostgreSQL source categories are a closed allowlist`,
+      };
+    }
+    if (witnessSetHas(POSTGRES_SERVER_SETTING_SOURCES, setting.source)) continue;
+    if (setting.source === 'interactive' || setting.source === 'test') {
+      return {
+        code: 'KV433_RUNTIME_SETTING',
+        detail: `runtime setting ${setting.name} has forbidden transient pg_settings source ${setting.source}`,
+      };
+    }
+    if (setting.source === 'session') {
+      const frameworkTransactionSetting =
+        (setting.name === 'transaction_isolation' && setting.setting === 'repeatable read') ||
+        (setting.name === 'transaction_read_only' && setting.setting === 'on');
+      if (frameworkTransactionSetting) continue;
+      return {
+        code: 'KV433_RUNTIME_SETTING',
+        detail: `runtime setting ${setting.name} is session-sourced outside Kovo's exact repeatable-read/read-only witness frame`,
+      };
+    }
+    if (!witnessSetHas(POSTGRES_EXTERNAL_SESSION_SETTING_SOURCES, setting.source)) {
+      return {
+        code: 'KV433_RUNTIME_SETTING',
+        detail: `runtime setting ${setting.name} reached an unclassified source branch ${setting.source}`,
+      };
+    }
+    if (!witnessSetHas(POSTGRES_BENIGN_EXTERNAL_SESSION_SETTINGS, setting.name)) {
+      return {
+        code: 'KV433_RUNTIME_SETTING',
+        detail: `runtime setting ${setting.name} is explicitly sourced from ${setting.source}; client/role/database startup settings are denied unless classified as semantics-neutral`,
+      };
+    }
+    if (
+      setting.name === 'client_encoding' &&
+      (setting.setting !== 'UTF8' || setting.context !== 'user' || setting.source !== 'client')
+    ) {
+      return {
+        code: 'KV433_RUNTIME_SETTING',
+        detail: `runtime client_encoding must be the pinned driver UTF8 client negotiation; observed source=${setting.source} context=${setting.context} value=${setting.setting}`,
+      };
+    }
+  }
+  return undefined;
+}
+
+async function postgresFrameworkDatabaseIdentity(
+  client: RuntimeTransactionClient,
+  live: PostgresLiveIdentityRow,
+): Promise<{ identity: PostgresDatabaseIdentity } | { issue: KovoPostgresPostureIssue }> {
+  const nonce = await safeQuery<{ value: string }>(
+    client,
+    `SELECT value FROM public.${quoteIdent(SCHEMA_STATE_TABLE)} WHERE key OPERATOR(pg_catalog.=) $1::pg_catalog.text`,
+    [POSTGRES_DATABASE_INSTANCE_KEY],
+  );
+  const nonceRows = nonce?.rows;
+  const databaseInstanceId =
+    nonceRows === undefined || nonceRows.length !== 1
+      ? undefined
+      : postgresDenseValue(nonceRows, 0, 'Postgres database-instance witness rows').value;
+  if (
+    databaseInstanceId === undefined ||
+    !securityRegExpTest(POSTGRES_DATABASE_INSTANCE_ID_PATTERN, databaseInstanceId)
+  ) {
+    return {
+      issue: {
+        code: 'KV433_DATABASE_IDENTITY',
+        detail:
+          'runtime connection could not read exactly one framework-minted database_instance_id from public.kovo_schema_state; run the current provisioner and preserve its SELECT grant',
+      },
+    };
+  }
+  return {
+    identity: witnessFreeze({
+      databaseInstanceId,
+      databaseName: live.database_name,
+      databaseOid: live.database_oid,
+      postmasterStartEpoch: live.postmaster_start_epoch,
+      serverAddress: live.server_address,
+      serverPort: live.server_port,
+      systemIdentifier: live.system_identifier,
+      timelineId: live.timeline_id,
+    }),
+  };
+}
+
+async function postgresPostureDatabaseIdentityIssue(
+  client: RuntimeTransactionClient,
+  runtimeIdentity: PostgresDatabaseIdentity,
+): Promise<KovoPostgresPostureIssue | undefined> {
+  const current = await safeQuery<PostgresLiveIdentityRow>(client, postgresLiveIdentitySql());
+  const rows = current?.rows;
+  const live =
+    rows === undefined || rows.length !== 1
+      ? undefined
+      : postgresDenseValue(rows, 0, 'Postgres posture database-identity rows');
+  if (live === undefined) {
+    return {
+      code: 'KV433_DATABASE_IDENTITY',
+      detail:
+        'posture authority could not read pg_control_system()/pg_control_checkpoint() and live database identity; managed providers must preserve these read-only identity oracles',
+    };
+  }
+  if (live.in_recovery) {
+    return {
+      code: 'KV433_DATABASE_IDENTITY',
+      detail:
+        'posture authority must target the same writable primary, not a recovery/standby node',
+    };
+  }
+  const postureIdentity = await postgresFrameworkDatabaseIdentity(client, live);
+  if ('issue' in postureIdentity) return postureIdentity.issue;
+  const mismatches: string[] = [];
+  const compared: readonly [string, string | number | null, string | number | null][] = [
+    [
+      'database_instance_id',
+      postureIdentity.identity.databaseInstanceId,
+      runtimeIdentity.databaseInstanceId,
+    ],
+    [
+      'system_identifier',
+      postureIdentity.identity.systemIdentifier,
+      runtimeIdentity.systemIdentifier,
+    ],
+    ['database_name', postureIdentity.identity.databaseName, runtimeIdentity.databaseName],
+    ['database_oid', postureIdentity.identity.databaseOid, runtimeIdentity.databaseOid],
+    ['timeline_id', postureIdentity.identity.timelineId, runtimeIdentity.timelineId],
+    [
+      'postmaster_start_time',
+      postureIdentity.identity.postmasterStartEpoch,
+      runtimeIdentity.postmasterStartEpoch,
+    ],
+    ['server_address', postureIdentity.identity.serverAddress, runtimeIdentity.serverAddress],
+    ['server_port', postureIdentity.identity.serverPort, runtimeIdentity.serverPort],
+  ];
+  for (let index = 0; index < compared.length; index += 1) {
+    const [label, postureValue, runtimeValue] = postgresDenseValue(
+      compared,
+      index,
+      'Postgres database-identity comparisons',
+    );
+    if (!witnessObjectIs(postureValue, runtimeValue)) appendPostgresDenseValue(mismatches, label);
+  }
+  if (mismatches.length === 0) return undefined;
+  return {
+    code: 'KV433_DATABASE_IDENTITY',
+    detail: `privileged posture authority is not bound to the witnessed runtime database; mismatched ${postgresJoin(mismatches, ', ')}`,
+  };
+}
+
+interface PostgresPersistedSettingRow {
+  database_name: string | null;
+  role_name: string | null;
+  setting_name: string;
+}
+
+async function postgresPersistedRuntimeSettingIssues(
+  client: RuntimeTransactionClient,
+  databaseName: string,
+  runtimeLoginRole: string | undefined,
+): Promise<KovoPostgresPostureIssue[]> {
+  if (runtimeLoginRole === undefined) {
+    return [
+      {
+        code: 'KV433_RUNTIME_SETTING',
+        detail: 'could not bind persisted role/database settings without a witnessed runtime login',
+      },
+    ];
+  }
+  const result = await safeQuery<PostgresPersistedSettingRow>(
+    client,
+    postgresJoin(
+      [
+        'WITH relevant_roles AS (',
+        'SELECT role_row.oid FROM pg_catalog.pg_roles AS role_row',
+        'WHERE role_row.rolname = $2',
+        "OR pg_catalog.pg_has_role($2, role_row.oid, 'MEMBER')",
+        ') SELECT database_row.datname AS database_name, role_row.rolname AS role_name,',
+        "split_part(config.value, '=', 1) AS setting_name",
+        'FROM pg_catalog.pg_db_role_setting AS setting_row',
+        'LEFT JOIN pg_catalog.pg_database AS database_row ON database_row.oid = setting_row.setdatabase',
+        'LEFT JOIN pg_catalog.pg_roles AS role_row ON role_row.oid = setting_row.setrole',
+        'CROSS JOIN LATERAL unnest(setting_row.setconfig) AS config(value)',
+        'WHERE (setting_row.setdatabase = 0 OR database_row.datname = $1)',
+        'AND (setting_row.setrole = 0 OR setting_row.setrole IN (SELECT oid FROM relevant_roles))',
+        'ORDER BY database_name NULLS FIRST, role_name NULLS FIRST, setting_name',
+      ],
+      ' ',
+    ),
+    [databaseName, runtimeLoginRole],
+  );
+  if (result === undefined) {
+    return [
+      {
+        code: 'KV433_RUNTIME_SETTING',
+        detail:
+          'could not enumerate persisted ALTER DATABASE/ALTER ROLE settings for the runtime identity closure',
+      },
+    ];
+  }
+  const issues: KovoPostgresPostureIssue[] = [];
+  for (let index = 0; index < result.rows.length; index += 1) {
+    const setting = postgresDenseValue(
+      result.rows,
+      index,
+      'Postgres persisted role/database settings',
+    );
+    if (witnessSetHas(POSTGRES_BENIGN_PERSISTED_SETTINGS, setting.setting_name)) continue;
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_RUNTIME_SETTING',
+      detail: `persisted setting ${setting.setting_name} is configured for database=${setting.database_name ?? '*'} role=${setting.role_name ?? '*'} in the runtime assumable-role closure; only explicitly classified semantics-neutral settings are allowed`,
+    });
+  }
+  return issues;
 }
 
 function assertProductionRuntimeDriver(config: ResolvedPostgresRuntimeConfig): void {
