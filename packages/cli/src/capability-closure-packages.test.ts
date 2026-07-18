@@ -50,6 +50,19 @@ function fixtureRoot(): { importer: string; root: string } {
 }
 
 describe('capability package resolution', () => {
+  it('keeps Node built-ins out of filesystem package-metadata resolution', () => {
+    const { importer } = fixtureRoot();
+    expect(
+      resolveCapabilityPackages(
+        [
+          { importedNames: ['readFileSync'], specifier: 'node:fs' },
+          { importedNames: ['resolve'], specifier: 'path' },
+        ],
+        importer,
+      ),
+    ).toEqual([]);
+  });
+
   it('pins package version, manifest fingerprint, and every conditional export arm', () => {
     const { importer } = fixtureRoot();
     const facts = resolveCapabilityPackages(

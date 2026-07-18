@@ -46,7 +46,11 @@ import {
   requestSerializeUrlSearchParamsEntries,
   requestUrlSearchParamsEntries,
 } from './request-body-intrinsics.js';
-import { securityEncodeURIComponent } from './response-security-intrinsics.js';
+import {
+  securityEncodeURIComponent,
+  securityStringIndexOf,
+  securityStringSlice,
+} from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
   witnessCreateNullRecord,
@@ -1182,7 +1186,19 @@ function appendQuerySearchEntry(entries: QuerySearchEntry[], key: string, value:
 
 function queryEndpointCurrentUrl(queryKey: string, entries: readonly QuerySearchEntry[]): string {
   const queryString = requestSerializeUrlSearchParamsEntries(entries);
-  return `/_q/${securityEncodeURIComponent(queryKey)}${queryString ? `?${queryString}` : ''}`;
+  return `/_q/${encodeQueryPath(queryKey)}${queryString ? `?${queryString}` : ''}`;
+}
+
+function encodeQueryPath(queryKey: string): string {
+  let encoded = '';
+  let remaining = queryKey;
+  for (;;) {
+    const separator = securityStringIndexOf(remaining, '/');
+    const segment = separator < 0 ? remaining : securityStringSlice(remaining, 0, separator);
+    encoded += `${encoded === '' ? '' : '/'}${securityEncodeURIComponent(segment)}`;
+    if (separator < 0) return encoded;
+    remaining = securityStringSlice(remaining, separator + 1);
+  }
 }
 
 const renderQueryEndpointChunk = wireEmitter('server.wire.query-endpoint-chunk', function <

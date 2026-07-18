@@ -304,8 +304,21 @@ function defaultQueryRefetchUrl(wireKey: string): string {
     throw new TypeError('Kovo query URL encoding controls are unavailable.');
   }
   const { keyValue, name } = splitQueryWireKey(wireKey);
-  const path = `/_q/${queryRefetchEncodeURIComponent(name)}`;
+  const path = `/_q/${encodeQueryPath(name)}`;
   return keyValue === undefined ? path : `${path}?key=${queryRefetchEncodeURIComponent(keyValue)}`;
+}
+
+function encodeQueryPath(name: string): string {
+  const security = queryRefetchSecurityControls();
+  let encoded = '';
+  let remaining = name;
+  for (;;) {
+    const separator = security.indexOf(remaining, '/');
+    const segment = separator < 0 ? remaining : security.slice(remaining, 0, separator);
+    encoded += `${encoded === '' ? '' : '/'}${queryRefetchEncodeURIComponent(segment)}`;
+    if (separator < 0) return encoded;
+    remaining = security.slice(remaining, separator + 1);
+  }
 }
 
 /** @internal Options for building the default delta-miss refetch callback (SPEC §9.1.1). */

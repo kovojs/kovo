@@ -227,6 +227,33 @@ describe('query refetch', () => {
     expect(plan).toHaveBeenCalledWith({ stock: 6 });
   });
 
+  it('preserves query-name path hierarchy while encoding each path segment', async () => {
+    const store = createQueryStore();
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () =>
+        '<kovo-query name="queries/product details:p 1">{"stock":4}</kovo-query>',
+    }));
+
+    await expect(
+      refetchQueries({
+        fetch,
+        queries: ['queries/product details:p 1'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([{ fragments: [], queries: ['queries/product details:p 1'] }]);
+
+    // SPEC.md §9.4/§10.2: query names retain their registered slash hierarchy. Encoding
+    // the complete name would produce `%2F`, which the request-ingress floor rejects as an
+    // ambiguous encoded path separator; reserved characters inside a segment remain encoded.
+    expect(fetch).toHaveBeenCalledWith('/_q/queries/product%20details?key=p%201', {
+      cache: 'no-store',
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('queries/product details', 'p 1')).toEqual({ stock: 4 });
+  });
+
   it('does not apply failed or disabled typed read responses', async () => {
     const store = createQueryStore();
     const fetch = vi.fn(async () => ({

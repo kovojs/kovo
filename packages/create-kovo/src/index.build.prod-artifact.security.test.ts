@@ -1185,8 +1185,8 @@ async function assertEnhancedMutationWireServed(
 }
 
 async function assertQueryWireServed(origin: string, output: () => string): Promise<void> {
-  await fetchTextWhenReady(`${origin}/_q/${encodeURIComponent(queryWireProofKey)}`, output);
-  const response = await fetch(`${origin}/_q/${encodeURIComponent(queryWireProofKey)}`);
+  await fetchTextWhenReady(`${origin}/_q/${queryWireProofKey}`, output);
+  const response = await fetch(`${origin}/_q/${queryWireProofKey}`);
   const body = await response.text();
 
   expect(response.status, body).toBe(200);

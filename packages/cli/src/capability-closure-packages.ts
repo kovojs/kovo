@@ -7,6 +7,7 @@ import {
 import { createRequire as builtinCreateRequire } from 'node:module';
 import {
   dirname as builtinDirname,
+  isAbsolute as builtinIsAbsolute,
   join as builtinJoin,
   parse as builtinParsePath,
   relative as builtinRelative,
@@ -136,13 +137,17 @@ function resolvedPackageManifestPath(
   const require = builtinCreateRequire(importerUrl);
   const candidates: string[] = [];
   try {
-    candidates.push(require.resolve(`${packageName}/package.json`));
+    const resolved = require.resolve(`${packageName}/package.json`);
+    if (builtinIsAbsolute(resolved)) candidates.push(resolved);
   } catch {
     // Export maps commonly hide package.json; resolve executable targets below.
   }
   for (const request of [specifier, packageName]) {
     try {
-      candidates.push(require.resolve(request));
+      const resolved = require.resolve(request);
+      // Node built-ins resolve to `node:*` (or a bare built-in name), not a filesystem path.
+      // They remain visible to the raw-capability classifier but cannot own package metadata.
+      if (builtinIsAbsolute(resolved)) candidates.push(resolved);
     } catch {
       // The ESM condition can still resolve an import-only package.
     }

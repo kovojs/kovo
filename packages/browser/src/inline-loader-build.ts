@@ -798,11 +798,22 @@ function installInlineKovoLoader(im) {
         ? key
         : name + ':' + key;
   };
+  const eqp = (name) => {
+    let encoded = '';
+    let remaining = name;
+    for (;;) {
+      const separator = bns.indexOf(remaining, '/');
+      const segment = separator < 0 ? remaining : bns.slice(remaining, 0, separator);
+      encoded += (encoded ? '/' : '') + ec(segment);
+      if (separator < 0) return encoded;
+      remaining = bns.slice(remaining, separator + 1);
+    }
+  };
   const qurl = (wireKey) => {
     const i = bns.indexOf(wireKey, ':');
     const n = i > 0 ? bns.slice(wireKey, 0, i) : wireKey;
     const k = i > 0 ? bns.slice(wireKey, i + 1) : undefined;
-    return n ? '/_q/' + ec(n) + (k == null ? '' : '?key=' + ec(k)) : '';
+    return n ? '/_q/' + eqp(n) + (k == null ? '' : '?key=' + ec(k)) : '';
   };
   const rbd = (nextBody) => {
     const currentBody = bns.readDocumentField(doc, 'body');
