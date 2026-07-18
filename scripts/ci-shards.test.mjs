@@ -526,7 +526,7 @@ describe('ci-shards', () => {
         "create-kovo starter > blocks managed write raw-driver escapes before 'SQLite' artifact emission",
         "create-kovo starter > blocks 'default' readonly DB computed-method escapes before artifact emission",
         "create-kovo starter > blocks 'SQLite' readonly DB computed-method escapes before artifact emission",
-        'create-kovo starter > keeps the production readonly DB floor active when KV433 static findings are advisory',
+        'create-kovo starter > keeps query writes KV449-closed when the dedicated KV433 finding is advisory',
         'create-kovo starter > serves SQLite readonly reads and executes webhook mutation composition in the production artifact',
         "create-kovo starter > blocks 'default' webhook context.tx raw-driver escapes before artifact emission",
         "create-kovo starter > blocks 'SQLite' webhook context.tx raw-driver escapes before artifact emission",
