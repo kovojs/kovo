@@ -1187,6 +1187,12 @@ describe('create-kovo starter (metadata)', () => {
         'BETTER_AUTH_URL=https://app.example.com',
       );
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
+        'KOVO_NODE_ORIGIN=https://app.example.com',
+      );
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
+        '# KOVO_NODE_TRUSTED_PROXY=1',
+      );
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
         'KOVO_DATABASE_URL=postgres://app_runtime@db.example.com:5432/your_app?sslmode=verify-full',
       );
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(

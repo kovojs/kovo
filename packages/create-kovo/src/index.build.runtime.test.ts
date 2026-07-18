@@ -52,6 +52,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
           ...withRepoBinOnPath(),
           BETTER_AUTH_URL: 'https://app.example.com',
           HOST: '127.0.0.1',
+          KOVO_NODE_ORIGIN: 'https://app.example.com',
           NODE_ENV: 'production',
           PORT: String(port),
         },
@@ -85,12 +86,16 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
 
       buildReusableProductionArtifact(root);
 
+      const origin = `http://127.0.0.1:${port}`;
+
       prodServer = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          BETTER_AUTH_URL: origin,
           HOST: '127.0.0.1',
+          KOVO_NODE_ORIGIN: origin,
           NODE_ENV: 'test',
           PORT: String(port),
         },
@@ -98,7 +103,6 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       const output = collectOutput(prodServer);
       await waitForTcpPort('127.0.0.1', port, output);
 
-      const origin = `http://127.0.0.1:${port}`;
       const loginResponse = await fetch(`${origin}/login`);
       const loginHtml = await loginResponse.text();
       expect(loginResponse.status, `${loginHtml}\n${output()}`).toBe(200);

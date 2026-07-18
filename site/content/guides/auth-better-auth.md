@@ -129,11 +129,20 @@ Set these values in the deployment secret store:
 NODE_ENV=production
 BETTER_AUTH_URL=https://app.example.com
 BETTER_AUTH_SECRET=<at-least-32-characters-of-random-material>
+# Generated standalone Node behind TLS termination:
+KOVO_NODE_ORIGIN=https://app.example.com
 ```
 
 `BETTER_AUTH_URL` is required in production. It must be a canonical HTTPS origin: no path, query,
-fragment, credentials, or trailing slash. The generated boundary accepts `BETTER_AUTH_SECRET`, or
-falls back to `KOVO_CSRF_SECRET`, and uses the value without exposing it to generated app code.
+fragment, credentials, or trailing slash. For the generated standalone Node server,
+`KOVO_NODE_ORIGIN` should be the same exact origin so internal HTTP behind a TLS terminator cannot
+downgrade the request authority seen by auth. The fixed origin ignores forwarded authority. If your
+immediate trusted proxy replaces `X-Forwarded-Proto` and preserves the external `Host`, you may set
+`KOVO_NODE_TRUSTED_PROXY=1` instead; never set both variables. Platform adapters such as Vercel own
+their ingress reconstruction and do not use these standalone-Node variables.
+
+The generated boundary accepts `BETTER_AUTH_SECRET`, or falls back to `KOVO_CSRF_SECRET`, and uses
+the value without exposing it to generated app code.
 
 Do not set `BETTER_AUTH_SECRETS` or `BETTER_AUTH_TRUSTED_ORIGINS`. Kovo rejects those upstream
 override variables because they would create a second authority outside the reviewed constructor.

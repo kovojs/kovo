@@ -3456,7 +3456,13 @@ const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeUrlHashGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hash').get;
+const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'origin').get;
+const nativeUrlPasswordGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'password').get;
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
+const nativeUrlProtocolGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'protocol').get;
+const nativeUrlSearchGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'search').get;
+const nativeUrlUsernameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'username').get;
 const nativeBufferByteLength = Buffer.byteLength;
 const nativeServerResponseDestroy = stablePrototypeFunction(ServerResponse.prototype, 'destroy');
 const nativeServerResponseEnd = stablePrototypeFunction(ServerResponse.prototype, 'end');
@@ -4082,13 +4088,67 @@ function isImmutableStaticAssetPath(pathname) {
     apply(nativeRegExpExec, immutableAssetPathPattern, [pathname]) !== null;
 }
 
-if (process.argv[1] && pathToFileUrl(process.argv[1]).href === import.meta.url) {
+function generatedNodeServerOptionsFromEnvironment() {
+  // Snapshot proxy/origin authority before the authored handler graph is imported. The fixed
+  // origin is the strongest reverse-proxy posture: forwarded headers remain untrusted and every
+  // Request receives one operator-pinned public origin. Trusted X-Forwarded-Proto is a separate,
+  // explicit posture for infrastructure that preserves the external Host authority.
+  const configuredOrigin = process.env.KOVO_NODE_ORIGIN;
+  const trustedProxy = process.env.KOVO_NODE_TRUSTED_PROXY;
+  if (configuredOrigin !== undefined && trustedProxy !== undefined) {
+    throw new TypeError(
+      'Set either KOVO_NODE_ORIGIN or KOVO_NODE_TRUSTED_PROXY, not both.',
+    );
+  }
+  if (trustedProxy !== undefined) {
+    if (trustedProxy !== '1') {
+      throw new TypeError('KOVO_NODE_TRUSTED_PROXY must be exactly 1 when enabled.');
+    }
+    return apply(nativeObjectFreeze, NativeObject, [{ trustedProxy: true }]);
+  }
+  if (configuredOrigin === undefined) {
+    return apply(nativeObjectFreeze, NativeObject, [{}]);
+  }
+
+  let parsed;
+  try {
+    parsed = new NativeURL(configuredOrigin);
+  } catch {
+    throw new TypeError('KOVO_NODE_ORIGIN must be one canonical absolute HTTP(S) origin.');
+  }
+  const protocol = apply(nativeUrlProtocolGetter, parsed, []);
+  if (
+    (protocol !== 'http:' && protocol !== 'https:') ||
+    apply(nativeUrlOriginGetter, parsed, []) !== configuredOrigin ||
+    apply(nativeUrlPathnameGetter, parsed, []) !== '/' ||
+    apply(nativeUrlSearchGetter, parsed, []) !== '' ||
+    apply(nativeUrlHashGetter, parsed, []) !== '' ||
+    apply(nativeUrlUsernameGetter, parsed, []) !== '' ||
+    apply(nativeUrlPasswordGetter, parsed, []) !== ''
+  ) {
+    throw new TypeError('KOVO_NODE_ORIGIN must be one canonical absolute HTTP(S) origin.');
+  }
+  return apply(nativeObjectFreeze, NativeObject, [{ origin: configuredOrigin }]);
+}
+
+async function generatedNodeEntryIsMain() {
+  const entryPath = process.argv[1];
+  if (!entryPath) return false;
+  try {
+    return pathToFileUrl(await realpath(entryPath)).href === import.meta.url;
+  } catch {
+    return false;
+  }
+}
+
+if (await generatedNodeEntryIsMain()) {
   const port = Number.parseInt(process.env.PORT ?? '3000', 10);
   const host = process.env.HOST ?? '0.0.0.0';
+  const nodeServerOptions = generatedNodeServerOptionsFromEnvironment();
   // Import the app before opening the listener so framework boot invariants (including the
   // production database-authority floor from SPEC §10.3) fail closed at process startup.
   await loadHandler();
-  createKovoNodeServer().listen(port, host, () => {
+  createKovoNodeServer(nodeServerOptions).listen(port, host, () => {
     console.log('Kovo node server listening on http://' + host + ':' + port);
   });
 }

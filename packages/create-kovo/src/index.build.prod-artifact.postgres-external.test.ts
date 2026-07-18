@@ -26,6 +26,7 @@ import {
   buildReusableProductionArtifact,
   fieldValue,
   formHtmlByAction,
+  waitForTcpPort,
 } from './index.build.test-support.js';
 
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
@@ -152,29 +153,119 @@ describeIfPostgres(
           runtimeUrl,
         ]);
         expect(adminFallbackCheckOutput).toContain('STATUS ok');
-        await seedDemoUser(cluster.url(database, 'postgres'), demoPassword(root));
+        const postgresUrl = cluster.url(database, 'postgres');
+        await seedDemoUser(postgresUrl, demoPassword(root));
         await expectPermissionDenied(runtimeUrl, `CREATE ROLE ${quoteIdent(`${runId}_blocked`)}`);
         await expectPermissionDenied(runtimeUrl, 'ALTER TABLE contacts FORCE ROW LEVEL SECURITY');
 
-        server = spawn(process.execPath, ['dist/server/server.mjs'], {
-          cwd: root,
-          detached: process.platform !== 'win32',
-          env: {
-            ...withRepoBinOnPath(),
-            BETTER_AUTH_URL: `https://127.0.0.1:${port}`,
-            HOST: '127.0.0.1',
-            KOVO_DATABASE_URL: runtimeUrl,
-            KOVO_DB_SYSTEM_URL: systemUrl,
-            NODE_ENV: 'production',
-            PORT: String(port),
-          },
+        const transportOrigin = `http://127.0.0.1:${port}`;
+        const publicOrigin = `https://127.0.0.1:${port}`;
+        const mismatchingPublicOrigin = `https://127.0.0.1:${port === 65_535 ? port - 1 : port + 1}`;
+        const baseEnvironment = withRepoBinOnPath();
+        delete baseEnvironment.KOVO_NODE_ORIGIN;
+        delete baseEnvironment.KOVO_NODE_TRUSTED_PROXY;
+        Object.assign(baseEnvironment, {
+          BETTER_AUTH_URL: publicOrigin,
+          HOST: '127.0.0.1',
+          KOVO_DATABASE_URL: runtimeUrl,
+          KOVO_DB_SYSTEM_URL: systemUrl,
+          NODE_ENV: 'production',
+          PORT: String(port),
         });
-        const output = collectOutput(server);
-        const origin = `http://127.0.0.1:${port}`;
-        const jar = new Map<string, string>();
+        let output = (): string => '';
+        const boot = async (authorityEnvironment: Readonly<Record<string, string>>) => {
+          if (server !== undefined) throw new Error('Generated starter server is already running.');
+          server = spawn(process.execPath, ['dist/server/server.mjs'], {
+            cwd: root,
+            detached: process.platform !== 'win32',
+            env: { ...baseEnvironment, ...authorityEnvironment },
+          });
+          output = collectOutput(server);
+          await waitForTcpPort('127.0.0.1', port, output);
+        };
+        const stop = async (): Promise<void> => {
+          await stopProcess(server);
+          server = undefined;
+        };
 
-        await signInDemoUserWithDiagnostics(root, origin, jar, output);
-        const homeResponse = await fetchTextWhenReady(`${origin}/`, output, {
+        // Capture a valid anonymous CSRF form under the exact fixed public origin. The same signed
+        // form then proves origin rejection happens inside the generated Better Auth credential
+        // boundary before its handler can touch rate-limit/session rows or emit a session cookie.
+        await boot({ KOVO_NODE_ORIGIN: publicOrigin });
+        const failureForm = await readGeneratedSignInForm(root, transportOrigin, output);
+        await stop();
+        const authRowsBeforeFailures = await authMutationSnapshot(postgresUrl);
+
+        await boot({});
+        const spoofedForwardedScheme = await submitGeneratedSignIn({
+          form: failureForm,
+          requestOrigin: transportOrigin,
+          transportOrigin,
+          xForwardedProto: 'https',
+        });
+        const spoofedBody = await spoofedForwardedScheme.text();
+        expect(spoofedForwardedScheme.status, `${spoofedBody}\n${output()}`).not.toBe(303);
+        expect(spoofedForwardedScheme.headers.getSetCookie()).toEqual([]);
+        expect(await authMutationSnapshot(postgresUrl)).toEqual(authRowsBeforeFailures);
+        await stop();
+
+        await boot({ KOVO_NODE_ORIGIN: mismatchingPublicOrigin });
+        const mismatchingPort = await submitGeneratedSignIn({
+          form: failureForm,
+          requestOrigin: mismatchingPublicOrigin,
+          transportOrigin,
+        });
+        const mismatchingPortBody = await mismatchingPort.text();
+        expect(mismatchingPort.status, `${mismatchingPortBody}\n${output()}`).not.toBe(303);
+        expect(mismatchingPort.headers.getSetCookie()).toEqual([]);
+        expect(await authMutationSnapshot(postgresUrl)).toEqual(authRowsBeforeFailures);
+        await stop();
+
+        // Explicit trusted-proxy mode reconstructs the configured HTTPS origin from the preserved
+        // Host authority plus a trusted X-Forwarded-Proto. It remains opt-in at process boot.
+        await boot({ KOVO_NODE_TRUSTED_PROXY: '1' });
+        const trustedProxyForm = await readGeneratedSignInForm(root, transportOrigin, output, {
+          'x-forwarded-proto': 'https',
+        });
+        const trustedProxySignIn = await submitGeneratedSignIn({
+          form: trustedProxyForm,
+          requestOrigin: publicOrigin,
+          transportOrigin,
+          xForwardedProto: 'https',
+        });
+        const trustedProxyBody = await trustedProxySignIn.text();
+        expect(trustedProxySignIn.status, `${trustedProxyBody}\n${output()}`).toBe(303);
+        expect(trustedProxySignIn.headers.getSetCookie().join('\n')).toMatch(
+          /__Host-better-auth\.session_token=/u,
+        );
+        expect((await authMutationSnapshot(postgresUrl)).sessions).toBe(
+          authRowsBeforeFailures.sessions + 1,
+        );
+        await stop();
+
+        // The strongest posture pins every Request to the configured public origin and ignores all
+        // forwarded authority. Keep this exact-origin server running for the rest of the production
+        // starter acceptance flow.
+        await boot({ KOVO_NODE_ORIGIN: publicOrigin });
+        const fixedOriginForm = await readGeneratedSignInForm(root, transportOrigin, output);
+        const exactOriginSignIn = await submitGeneratedSignIn({
+          form: fixedOriginForm,
+          requestOrigin: publicOrigin,
+          transportOrigin,
+          xForwardedProto: 'http',
+        });
+        const exactOriginBody = await exactOriginSignIn.text();
+        expect(exactOriginSignIn.status, `${exactOriginBody}\n${output()}`).toBe(303);
+        expect(exactOriginSignIn.headers.getSetCookie().join('\n')).toMatch(
+          /__Host-better-auth\.session_token=/u,
+        );
+        expect((await authMutationSnapshot(postgresUrl)).sessions).toBe(
+          authRowsBeforeFailures.sessions + 2,
+        );
+        const jar = fixedOriginForm.jar;
+        mergeCookies(jar, exactOriginSignIn.headers.getSetCookie());
+
+        const homeResponse = await fetchTextWhenReady(`${transportOrigin}/`, output, {
           headers: { cookie: cookieHeader(jar) },
         });
         expect(homeResponse).toContain('Demo User');
@@ -183,7 +274,7 @@ describeIfPostgres(
 
         const addForm = formHtmlByAction(homeResponse, '/_m/mutations/add-contact');
         const email = `external-${Date.now()}@example.com`;
-        const addContact = await fetch(`${origin}/_m/mutations/add-contact`, {
+        const addContact = await fetch(`${transportOrigin}/_m/mutations/add-contact`, {
           body: new URLSearchParams({
             company: 'External Postgres',
             csrf: fieldValue(addForm, 'csrf'),
@@ -194,7 +285,7 @@ describeIfPostgres(
           headers: {
             'content-type': 'application/x-www-form-urlencoded',
             cookie: cookieHeader(jar),
-            origin,
+            origin: publicOrigin,
           },
           method: 'POST',
           redirect: 'manual',
@@ -207,7 +298,7 @@ describeIfPostgres(
           );
         }
 
-        const updatedHome = await fetch(`${origin}/`, {
+        const updatedHome = await fetch(`${transportOrigin}/`, {
           headers: { cookie: cookieHeader(jar) },
         });
         const updatedHtml = await updatedHome.text();
@@ -225,50 +316,91 @@ describeIfPostgres(
       } finally {
         await stopProcess(server);
       }
-    }, 180_000);
+    }, 300_000);
   },
 );
 
-async function signInDemoUserWithDiagnostics(
+interface GeneratedSignInForm {
+  readonly csrf: string;
+  readonly idempotencyKey: string;
+  readonly jar: Map<string, string>;
+  readonly password: string;
+}
+
+async function readGeneratedSignInForm(
   root: string,
-  origin: string,
-  jar: Map<string, string>,
+  transportOrigin: string,
   output: () => string,
-): Promise<void> {
-  await fetchTextWhenReady(`${origin}/login`, output);
-  const loginResponse = await fetch(`${origin}/login`);
-  mergeCookies(jar, loginResponse.headers.getSetCookie());
+  headers: Readonly<Record<string, string>> = {},
+): Promise<GeneratedSignInForm> {
+  const loginResponse = await fetch(`${transportOrigin}/login`, { headers });
   const loginHtml = await loginResponse.text();
+  expect(loginResponse.status, `${loginHtml}\n${output()}`).toBe(200);
+  const jar = new Map<string, string>();
+  mergeCookies(jar, loginResponse.headers.getSetCookie());
   const loginCsrf = fieldValue(loginHtml, 'csrf');
   const loginIdem = fieldValue(loginHtml, 'Kovo-Idem');
-  const demoPassword =
-    new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
-      readFileSync(join(root, '.env'), 'utf8'),
-    )?.[1] ?? '';
   expect(loginCsrf).toBeTruthy();
-  expect(demoPassword).toBeTruthy();
+  expect(loginIdem).toBeTruthy();
+  return {
+    csrf: loginCsrf,
+    idempotencyKey: loginIdem,
+    jar,
+    password: demoPassword(root),
+  };
+}
 
-  const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
+async function submitGeneratedSignIn(options: {
+  readonly form: GeneratedSignInForm;
+  readonly requestOrigin: string;
+  readonly transportOrigin: string;
+  readonly xForwardedProto?: string;
+}): Promise<Response> {
+  return await fetch(`${options.transportOrigin}/_m/auth/sign-in`, {
     body: new URLSearchParams({
-      csrf: loginCsrf,
+      csrf: options.form.csrf,
       email: 'demo@example.com',
-      'Kovo-Idem': loginIdem,
+      'Kovo-Idem': options.form.idempotencyKey,
       next: '/',
-      password: demoPassword,
+      password: options.form.password,
     }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
-      cookie: cookieHeader(jar),
-      origin,
+      cookie: cookieHeader(options.form.jar),
+      origin: options.requestOrigin,
+      ...(options.xForwardedProto === undefined
+        ? {}
+        : { 'x-forwarded-proto': options.xForwardedProto }),
     },
     method: 'POST',
     redirect: 'manual',
   });
-  mergeCookies(jar, signIn.headers.getSetCookie());
-  const body = await signIn.text();
-  if (signIn.status !== 303) {
-    throw new Error(`Expected demo sign-in redirect, got ${signIn.status}:\n${body}\n${output()}`);
-  }
+}
+
+interface AuthMutationSnapshot {
+  readonly accounts: number;
+  readonly rateLimits: number;
+  readonly sessions: number;
+  readonly users: number;
+  readonly verifications: number;
+}
+
+async function authMutationSnapshot(databaseUrl: string): Promise<AuthMutationSnapshot> {
+  return await withPool(databaseUrl, async (pool) => {
+    const result = await pool.query<AuthMutationSnapshot>(
+      [
+        'SELECT',
+        '(SELECT count(*)::integer FROM "account") AS accounts,',
+        '(SELECT count(*)::integer FROM "rateLimit") AS "rateLimits",',
+        '(SELECT count(*)::integer FROM "session") AS sessions,',
+        '(SELECT count(*)::integer FROM "user") AS users,',
+        '(SELECT count(*)::integer FROM verification) AS verifications',
+      ].join(' '),
+    );
+    const row = result.rows[0];
+    if (row === undefined) throw new Error('Expected a Better Auth database snapshot row.');
+    return row;
+  });
 }
 
 function demoPassword(root: string): string {

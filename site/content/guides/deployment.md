@@ -193,6 +193,8 @@ instance-specific — the same image runs behind a load balancer unchanged.
 | `KOVO_CSRF_SECRET`                 | Kovo CSRF          | Strong fallback signing secret; at least 32 characters in generated auth apps.       |
 | `BETTER_AUTH_SECRET`               | Better Auth        | Strong signing secret; at least 32 characters when set.                              |
 | `BETTER_AUTH_URL`                  | Better Auth        | Required in production; a canonical HTTPS origin such as `https://app.example.com`.  |
+| `KOVO_NODE_ORIGIN`                 | Node preset        | Recommended behind TLS termination; the exact canonical public origin.               |
+| `KOVO_NODE_TRUSTED_PROXY`          | Node preset        | Alternative exact value `1`; trusts the immediate proxy's forwarded scheme.          |
 | `PORT`                             | Node preset        | Optional; defaults to `3000`.                                                        |
 | `HOST`                             | Node preset        | Optional; defaults to `0.0.0.0` in emitted Node servers.                             |
 | `NODE_ENV`                         | Runtime posture    | Set to `production` for secure-cookie and boot-secret floors.                        |
@@ -204,6 +206,32 @@ instance-specific — the same image runs behind a load balancer unchanged.
 `BETTER_AUTH_SECRET ?? KOVO_CSRF_SECRET` after bootstrap and does not return the raw value to app
 source. Do not set `BETTER_AUTH_SECRETS` or `BETTER_AUTH_TRUSTED_ORIGINS`; generated apps reject
 those upstream override variables.
+
+### Pin the public origin behind TLS termination
+
+The generated standalone Node server listens with plain HTTP. When a reverse proxy terminates TLS,
+pin the public origin that every app `Request` should see:
+
+```dotenv
+BETTER_AUTH_URL=https://app.example.com
+KOVO_NODE_ORIGIN=https://app.example.com
+```
+
+This is the recommended posture. Kovo ignores `X-Forwarded-Proto` and `X-Forwarded-Host` and uses
+the fixed scheme, host, and effective port. The value must be one canonical HTTP(S) origin with no
+path, credentials, query, fragment, explicit default port, or trailing slash.
+
+If the immediate proxy is trusted to replace `X-Forwarded-Proto` and preserve the external `Host`,
+you may use the narrower proxy mode instead:
+
+```dotenv
+KOVO_NODE_TRUSTED_PROXY=1
+```
+
+Do not set both variables. Never enable proxy mode when clients can reach the Node listener directly
+or can supply the forwarded-scheme header unchanged. Kovo still ignores `X-Forwarded-Host`; a host
+or port that differs from `BETTER_AUTH_URL` is rejected before auth reads cookies or writes session
+state.
 
 ## Liveness in the technical preview
 

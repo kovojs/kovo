@@ -21,7 +21,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
-import { connect as netConnect } from 'node:net';
+import { connect as netConnect, createServer as createNetServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1705,6 +1705,113 @@ export default async function handler(request) {
         expect(missingClientModule.headers.get('set-cookie')).toBeNull();
       } finally {
         await server.close();
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('pins generated Node request origins before importing the authored handler', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-public-origin-'));
+
+    try {
+      const handlerImportMarker = join(root, 'handler-imported');
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/probe', {
+              guard: () => true,
+              page: () => renderedHtml('<main>Probe</main>'),
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+import { writeFileSync } from 'node:fs';
+writeFileSync(${JSON.stringify(handlerImportMarker)}, 'imported');
+export default async function handler(request) {
+  return new Response(request.url);
+}
+`,
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      const serverPath = join(nodeOutDir, 'server.mjs');
+      const nodeServer = await readFile(serverPath, 'utf8');
+      expect(nodeServer).toContain('process.env.KOVO_NODE_ORIGIN');
+      expect(nodeServer).toContain('process.env.KOVO_NODE_TRUSTED_PROXY');
+      expect(
+        nodeServer.lastIndexOf(
+          'const nodeServerOptions = generatedNodeServerOptionsFromEnvironment()',
+        ),
+      ).toBeLessThan(nodeServer.lastIndexOf('await loadHandler()'));
+
+      for (const environment of [
+        {
+          KOVO_NODE_ORIGIN: 'https://app.example.test',
+          KOVO_NODE_TRUSTED_PROXY: '1',
+        },
+        { KOVO_NODE_TRUSTED_PROXY: 'true' },
+        { KOVO_NODE_ORIGIN: 'https://App.Example.test' },
+        { KOVO_NODE_ORIGIN: 'https://app.example.test:443' },
+        { KOVO_NODE_ORIGIN: 'https://app.example.test/' },
+        { KOVO_NODE_ORIGIN: 'https://app.example.test/auth' },
+        { KOVO_NODE_ORIGIN: 'https://bücher.example' },
+        { KOVO_NODE_ORIGIN: 'file:///tmp/app' },
+      ]) {
+        const stderr = runGeneratedNodeCliFailure(serverPath, environment);
+        expect(stderr).toMatch(/KOVO_NODE_(?:ORIGIN|TRUSTED_PROXY)|Set either/u);
+        await expect(readFile(handlerImportMarker, 'utf8')).rejects.toThrow();
+      }
+
+      for (const configuredOrigin of [
+        'https://app.example.test',
+        'http://localhost:5173',
+        'https://xn--bcher-kva.example:8443',
+        'https://[::1]:8443',
+      ]) {
+        const server = await startGeneratedNodeCliServer(serverPath, {
+          KOVO_NODE_ORIGIN: configuredOrigin,
+        });
+        try {
+          const response = await fetch(`${server.baseUrl}/probe?mode=fixed`, {
+            headers: {
+              host: 'attacker.example:9443',
+              'x-forwarded-host': 'attacker.example',
+              'x-forwarded-proto': 'http',
+            },
+          });
+          await expect(response.text()).resolves.toBe(`${configuredOrigin}/probe?mode=fixed`);
+        } finally {
+          await server.close();
+        }
+      }
+
+      const trustedProxyServer = await startGeneratedNodeCliServer(serverPath, {
+        KOVO_NODE_TRUSTED_PROXY: '1',
+      });
+      try {
+        const matchingAuthority = await rawHttpExchange(
+          trustedProxyServer.baseUrl,
+          'GET /probe?mode=trusted HTTP/1.1\r\nHost: app.example.test:8443\r\nX-Forwarded-Host: attacker.example\r\nX-Forwarded-Proto: https\r\nConnection: close\r\n\r\n',
+        );
+        expect(matchingAuthority).toContain('https://app.example.test:8443/probe?mode=trusted');
+
+        const mismatchingPort = await rawHttpExchange(
+          trustedProxyServer.baseUrl,
+          'GET /probe?mode=trusted HTTP/1.1\r\nHost: app.example.test:9443\r\nX-Forwarded-Proto: https\r\nConnection: close\r\n\r\n',
+        );
+        expect(mismatchingPort).toContain('https://app.example.test:9443/probe?mode=trusted');
+        expect(mismatchingPort).not.toContain('https://app.example.test:8443/probe?mode=trusted');
+      } finally {
+        await trustedProxyServer.close();
       }
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -4953,6 +5060,114 @@ server.listen(0, '127.0.0.1', () => {
 });
 `;
   return await startGeneratedServerProcess(['--input-type=module', '--eval', source]);
+}
+
+async function startGeneratedNodeCliServer(
+  serverPath: string,
+  environment: Readonly<Record<string, string>>,
+): Promise<GeneratedServerProcess> {
+  const port = await reserveGeneratedNodePort();
+  const child = spawn(process.execPath, [serverPath], {
+    env: generatedNodeEnvironment(environment, port),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', (chunk: string) => stdout.push(chunk));
+  child.stderr.on('data', (chunk: string) => stderr.push(chunk));
+
+  try {
+    await waitForGeneratedNodeCliReady(child, port, stdout, stderr);
+  } catch (error) {
+    child.kill('SIGKILL');
+    throw error;
+  }
+
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    async close() {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+      child.kill('SIGTERM');
+      await exited;
+    },
+    stderr() {
+      return stderr.join('');
+    },
+  };
+}
+
+function runGeneratedNodeCliFailure(
+  serverPath: string,
+  environment: Readonly<Record<string, string>>,
+): string {
+  try {
+    execFileSync(process.execPath, [serverPath], {
+      encoding: 'utf8',
+      env: generatedNodeEnvironment(environment, 0),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 10_000,
+    });
+  } catch (error) {
+    const stderr = (error as { readonly stderr?: Buffer | string }).stderr;
+    return stderr === undefined ? String(error) : String(stderr);
+  }
+  throw new Error(
+    `Generated Node server unexpectedly accepted invalid authority configuration: ${JSON.stringify(environment)}`,
+  );
+}
+
+function generatedNodeEnvironment(
+  environment: Readonly<Record<string, string>>,
+  port: number,
+): NodeJS.ProcessEnv {
+  const result: NodeJS.ProcessEnv = {
+    ...process.env,
+    HOST: '127.0.0.1',
+    PORT: String(port),
+  };
+  delete result.KOVO_NODE_ORIGIN;
+  delete result.KOVO_NODE_TRUSTED_PROXY;
+  return { ...result, ...environment };
+}
+
+async function reserveGeneratedNodePort(): Promise<number> {
+  const server = createNetServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    server.close();
+    throw new TypeError('Expected a generated Node test TCP address.');
+  }
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error === undefined ? resolve() : reject(error)));
+  });
+  return address.port;
+}
+
+async function waitForGeneratedNodeCliReady(
+  child: ReturnType<typeof spawn>,
+  port: number,
+  stdout: readonly string[],
+  stderr: readonly string[],
+): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  const marker = `Kovo node server listening on http://127.0.0.1:${port}`;
+  while (Date.now() < deadline) {
+    if (stdout.join('').includes(marker)) return;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(
+        `Generated Node CLI exited before listening (exit=${child.exitCode}, signal=${child.signalCode}):\nstdout=${stdout.join('')}\nstderr=${stderr.join('')}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`Timed out waiting for generated Node CLI:\n${stderr.join('')}`);
 }
 
 async function startGeneratedVercelServer(entryPath: string): Promise<GeneratedServerProcess> {

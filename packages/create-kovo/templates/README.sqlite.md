@@ -65,7 +65,12 @@ shape.
 emits a self-contained server under `dist/server` using the preset in
 `kovo.config.ts` (Node by default; uncomment Vercel or Cloudflare). Set
 `BETTER_AUTH_URL` to the app's canonical public HTTPS origin in production (for
-example, `https://app.example.com`), and set `KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET`
+example, `https://app.example.com`). When the generated standalone Node server
+runs behind TLS termination, also set `KOVO_NODE_ORIGIN` to that exact origin.
+This fixed posture ignores forwarded authority. As an alternative, set
+`KOVO_NODE_TRUSTED_PROXY=1` only when the immediate trusted proxy replaces
+`X-Forwarded-Proto` and preserves the external `Host`; never set both variables.
+Set `KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET`
 to strong values in the target environment (a fresh `KOVO_CSRF_SECRET` is generated into `.env` at scaffold time
 and is gitignored). If you add client islands, configure the `retention` option in
 `kovo.config.ts` once your deploy keeps prior `/c/__v/...` modules and prior-token

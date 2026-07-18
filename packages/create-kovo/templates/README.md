@@ -78,7 +78,12 @@ emits a Node server under `dist/server` using the preset in `kovo.config.ts`
 manager so production blocks private-network egress by default, emits `Secure`
 host-bound CSRF cookies, and refuses weak signing secrets. Production also
 requires `BETTER_AUTH_URL` to be the app's canonical public HTTPS origin (for
-example, `https://app.example.com`). Set `KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET`
+example, `https://app.example.com`). When the generated standalone Node server
+runs behind TLS termination, also set `KOVO_NODE_ORIGIN` to that exact origin.
+This fixed posture ignores forwarded authority. As an alternative, set
+`KOVO_NODE_TRUSTED_PROXY=1` only when the immediate trusted proxy replaces
+`X-Forwarded-Proto` and preserves the external `Host`; never set both variables.
+Set `KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET`
 to strong values in the target environment
 (a fresh `KOVO_CSRF_SECRET` is generated into `.env` at scaffold time and is
 gitignored). If you add client islands, configure the `retention` option in
