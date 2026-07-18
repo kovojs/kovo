@@ -40,6 +40,8 @@ import {
   privateScopeHelperCallCarrierIsProven,
   privateScopeIdentifierBindingIsStableAtUse,
   privateScopeKey,
+  privateScopePathHasExactCarrierPrefix,
+  privateScopeStatementDefinitelyExits,
   sessionProvenanceContextForNodes,
 } from './session-provenance.js';
 import {
@@ -1085,7 +1087,7 @@ function acceptedGuardPrivateKeysDominatingNode(node: Node): readonly string[] {
 
 function acceptedGuardPrivateKeysFromStatement(statement: Node): readonly string[] {
   if (!Node.isIfStatement(statement)) return [];
-  if (!statementExits(statement.getThenStatement())) return [];
+  if (!privateScopeStatementDefinitelyExits(statement.getThenStatement())) return [];
   const key = falsyDirectGuardPrivateKey(statement.getExpression());
   return key ? [key] : [];
 }
@@ -1096,20 +1098,6 @@ function falsyDirectGuardPrivateKey(expression: Node): string | undefined {
   if (node.getOperatorToken() !== SyntaxKind.ExclamationToken) return undefined;
   const path = directGuardPrivateScopePath(node.getOperand());
   return path ? `guard:${path}` : undefined;
-}
-
-function statementExits(statement: Node): boolean {
-  if (Node.isReturnStatement(statement) || Node.isThrowStatement(statement)) return true;
-  if (Node.isBlock(statement)) {
-    const [first] = statement.getStatements();
-    return first ? statementExits(first) : false;
-  }
-  if (!Node.isExpressionStatement(statement)) return false;
-  const expression = unwrappedStaticExpressionNode(statement.getExpression());
-  if (!Node.isCallExpression(expression)) return false;
-  const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
-  return name === 'fail' || name === 'redirect' || name === 'notFound';
 }
 
 function localConstInitializer(identifier: Node): Node | undefined {
@@ -2080,6 +2068,7 @@ function directNonNullableSessionScopePath(node: Node): string | undefined {
   if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;
   const index = segments.path.indexOf('session');
   if (index < 0) return undefined;
+  if (!privateScopePathHasExactCarrierPrefix(segments.path, index)) return undefined;
   const path = segments.path.slice(index + 1).join('.');
   if (path.length === 0) return undefined;
   if (sessionAccessRequiresGuard(expression)) return undefined;
@@ -2093,6 +2082,7 @@ function directGuardPrivateScopePath(node: Node): string | undefined {
   if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;
   const index = segments.path.indexOf('guard');
   if (index < 0) return undefined;
+  if (!privateScopePathHasExactCarrierPrefix(segments.path, index)) return undefined;
   const path = segments.path.slice(index + 1).join('.');
   return path.length > 0 ? path : undefined;
 }

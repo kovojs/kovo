@@ -130,11 +130,10 @@ function exactLocalPrivateScopeHelperProvenance(
 
   const privateScopeIndex = segments.path.findIndex(isPrivateScopeKind);
   if (privateScopeIndex < 0) return undefined;
-  const prefix = segments.path.slice(0, privateScopeIndex);
   // The parameter is already the enrolled request/context carrier. Only a direct private member
   // or its exact `.request` projection can precede guard/session/tenant; arbitrary wrappers such
   // as `context.input.guard` are attacker-controlled data, not principal provenance.
-  if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) return undefined;
+  if (!privateScopePathHasExactCarrierPrefix(segments.path, privateScopeIndex)) return undefined;
   const kind = segments.path[privateScopeIndex];
   if (!isPrivateScopeKind(kind)) return undefined;
   return {
@@ -293,6 +292,14 @@ function objectLiteralStringProperty(
 
 function isPrivateScopeKind(kind: string | undefined): kind is PrivateScopeKind {
   return kind === 'guard' || kind === 'session' || kind === 'tenant';
+}
+
+/** @internal The sole admitted path from an enrolled carrier to private principal state. */
+export function privateScopePathHasExactCarrierPrefix(
+  path: readonly string[],
+  privateIndex: number,
+): boolean {
+  return privateIndex === 0 || (privateIndex === 1 && path[0] === 'request');
 }
 
 function addSessionAliasesForVariableDeclaration(
@@ -713,8 +720,7 @@ function exactPrivateScopeScalarProjection(node: Node, parameterKey: string): bo
 
   const privateIndex = segments.path.findIndex(isPrivateScopeKind);
   if (privateIndex < 0 || privateIndex === segments.path.length - 1) return false;
-  const prefix = segments.path.slice(0, privateIndex);
-  if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) return false;
+  if (!privateScopePathHasExactCarrierPrefix(segments.path, privateIndex)) return false;
   return definitelyImmutablePrivateScopeScalarType(expression.getType());
 }
 
@@ -1027,11 +1033,10 @@ function directPrivateScopeForExpression(node: Node): PrivateScopeProvenance | u
   for (const kind of ['guard', 'session', 'tenant'] as const) {
     const index = segments.path.indexOf(kind);
     if (index < 0) continue;
-    const prefix = segments.path.slice(0, index);
     // Query contexts expose private request state through `.request`; other enrolled callbacks
     // receive the request directly. A carrier's app-controlled `.input.guard`-style subtree is
     // never principal provenance merely because one of its nested property names matches.
-    if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) continue;
+    if (!privateScopePathHasExactCarrierPrefix(segments.path, index)) continue;
     return {
       kind,
       path: segments.path.slice(index + 1).join('.'),
@@ -1148,7 +1153,7 @@ function sameSourceNode(left: Node, right: Node): boolean {
 function isAcceptedSessionGuard(statement: Node, aliasName: string): boolean {
   if (!Node.isIfStatement(statement)) return false;
   if (!isFalsyIdentifierCheck(statement.getExpression(), aliasName)) return false;
-  return statementExits(statement.getThenStatement());
+  return privateScopeStatementDefinitelyExits(statement.getThenStatement());
 }
 
 function isAcceptedDirectPrivateScopeGuard(
@@ -1157,7 +1162,7 @@ function isAcceptedDirectPrivateScopeGuard(
 ): boolean {
   if (!Node.isIfStatement(statement)) return false;
   if (!isFalsyDirectPrivateScopeCheck(statement.getExpression(), target)) return false;
-  return statementExits(statement.getThenStatement());
+  return privateScopeStatementDefinitelyExits(statement.getThenStatement());
 }
 
 function isFalsyIdentifierCheck(expression: Node, aliasName: string): boolean {
@@ -1177,18 +1182,16 @@ function isFalsyDirectPrivateScopeCheck(expression: Node, target: PrivateScopePr
   return direct !== undefined && privateScopeMatches(direct, target);
 }
 
-function statementExits(statement: Node): boolean {
+/** @internal Finite control-flow exit grammar for private-principal dominance. */
+export function privateScopeStatementDefinitelyExits(statement: Node): boolean {
   if (Node.isReturnStatement(statement) || Node.isThrowStatement(statement)) return true;
   if (Node.isBlock(statement)) {
     const [first] = statement.getStatements();
-    return first ? statementExits(first) : false;
+    return first ? privateScopeStatementDefinitelyExits(first) : false;
   }
-  if (!Node.isExpressionStatement(statement)) return false;
-  const expression = unwrappedStaticExpressionNode(statement.getExpression());
-  if (!Node.isCallExpression(expression)) return false;
-  const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
-  return name === 'fail' || name === 'redirect' || name === 'notFound';
+  // Framework failure/redirect/not-found helpers return typed outcomes. A bare expression call—
+  // exact or merely same-named—does not exit JavaScript control flow; the app must return it.
+  return false;
 }
 
 function statementReassignsAlias(statement: Node, aliasName: string): boolean {

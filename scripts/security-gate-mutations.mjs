@@ -813,22 +813,19 @@ const weakenedAnalyzerSummaryOpaqueCarrierEscapeBranch = [
   '    continue;',
 ].join('\n');
 const analyzerSummaryPrivatePathPrefixBranch =
-  "  if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) return undefined;";
-const weakenedAnalyzerSummaryPrivatePathPrefixBranch =
-  '  if (false && prefix.length > 1) return undefined;';
+  "  return privateIndex === 0 || (privateIndex === 1 && path[0] === 'request');";
+const weakenedAnalyzerSummaryPrivatePathPrefixBranch = '  return privateIndex >= 0;';
 const analyzerSummaryDirectPrivatePathPrefixBranch = [
-  '    const prefix = segments.path.slice(0, index);',
   '    // Query contexts expose private request state through `.request`; other enrolled callbacks',
   "    // receive the request directly. A carrier's app-controlled `.input.guard`-style subtree is",
   '    // never principal provenance merely because one of its nested property names matches.',
-  "    if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) continue;",
+  '    if (!privateScopePathHasExactCarrierPrefix(segments.path, index)) continue;',
 ].join('\n');
 const weakenedAnalyzerSummaryDirectPrivatePathPrefixBranch = [
-  '    const prefix = segments.path.slice(0, index);',
   '    // Query contexts expose private request state through `.request`; other enrolled callbacks',
   "    // receive the request directly. A carrier's app-controlled `.input.guard`-style subtree is",
   '    // never principal provenance merely because one of its nested property names matches.',
-  '    if (false && prefix.length > 1) continue;',
+  '    if (false && !privateScopePathHasExactCarrierPrefix(segments.path, index)) continue;',
 ].join('\n');
 const analyzerSummaryDestructuringDefaultClosureBranch =
   '  if (segmentElements.some((element) => element.getInitializer() !== undefined)) return undefined;';
@@ -837,6 +834,16 @@ const weakenedAnalyzerSummaryDestructuringDefaultClosureBranch =
 const analyzerSummaryMutableScalarTransferClosureBranch =
   '  return definitelyImmutablePrivateScopeScalarType(expression.getType());';
 const weakenedAnalyzerSummaryMutableScalarTransferClosureBranch = '  return true;';
+const analyzerSummaryFiniteExitGrammarBranch = [
+  '  // Framework failure/redirect/not-found helpers return typed outcomes. A bare expression call—',
+  '  // exact or merely same-named—does not exit JavaScript control flow; the app must return it.',
+  '  return false;',
+].join('\n');
+const weakenedAnalyzerSummaryFiniteExitGrammarBranch = [
+  '  // Framework failure/redirect/not-found helpers return typed outcomes. A bare expression call—',
+  '  // exact or merely same-named—does not exit JavaScript control flow; the app must return it.',
+  '  return Node.isExpressionStatement(statement);',
+].join('\n');
 const analyzerSummaryImmutableBindingBranch = [
   '  return helper && symbolKey && !sourceFileMutatesSymbol(sourceFile, symbolKey)',
   '    ? helper',
@@ -1120,6 +1127,16 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
     test: assertAnalyzerSummaryMutableScalarTransferClosureIsPinned,
+  },
+  {
+    description: 'Treats a bare expression call as a control-flow exit for guard dominance.',
+    expectedKiller: 'private guard dominance must require an explicit return or throw',
+    name: 'drizzle-analyzer-summary/allow-nonexiting-outcome-call',
+    replacement: weakenedAnalyzerSummaryFiniteExitGrammarBranch,
+    search: analyzerSummaryFiniteExitGrammarBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryFiniteExitGrammarIsPinned,
   },
   {
     description: 'Keeps a summary trusted after its callable binding is reassigned.',
@@ -2296,6 +2313,12 @@ async function assertAnalyzerSummaryMutableScalarTransferClosureIsPinned(
 ) {
   if (!sourceText.includes(analyzerSummaryMutableScalarTransferClosureBranch)) {
     throw new Error('private scalar transfer no longer rejects mutable values');
+  }
+}
+
+async function assertAnalyzerSummaryFiniteExitGrammarIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryFiniteExitGrammarBranch)) {
+    throw new Error('private guard dominance no longer requires an explicit control-flow exit');
   }
 }
 

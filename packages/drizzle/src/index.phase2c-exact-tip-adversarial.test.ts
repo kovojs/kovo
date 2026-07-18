@@ -267,6 +267,61 @@ describe('Phase 2C exact-tip adversarial review', () => {
     expect(result.check.output).toContain('KV414');
   });
 
+  it('does not let a local guard check bless a carrier-owned input.guard subtree', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, actual: Context & { input: { guard: { userId?: string } } }) {',
+        '    if (!actual.input.guard.userId) return;',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, actual.input.guard.userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('does not recover a session local from a carrier-owned input.session subtree', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, actual: Context & { input: { session: { userId: string } } }) {',
+        '    const userId = actual.input.session.userId;',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it.each(['fail', 'redirect', 'notFound'])(
+    'does not treat a bare app-local %s() call as a control-flow exit',
+    (outcome) => {
+      const result = ownerVerdict(
+        ownerSource([
+          `function ${outcome}() { return undefined; }`,
+          'export const list = query("list", {',
+          '  args: s.object({}),',
+          '  async load(_input: unknown, actual: { request: { guard?: { userId?: string } }, db: PgAsyncDatabase<any, any> }) {',
+          `    if (!actual.request.guard?.userId) ${outcome}();`,
+          '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, actual.request.guard?.userId)) };',
+          '  },',
+          '});',
+        ]),
+      );
+      expect(result.scope).not.toBe('session');
+      expect(result.check.exitCode).toBe(1);
+      expect(result.check.output).toContain('KV414');
+    },
+  );
+
   it.each([
     ['direct request replacement', 'context.request = input.request;'],
     ['Object.assign root replacement', 'Object.assign(context, { request: input.request });'],
