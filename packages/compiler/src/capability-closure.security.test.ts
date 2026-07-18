@@ -293,10 +293,10 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'app.ts',
         source: `
           import { endpoint } from '@kovojs/server';
-          function harmless(fetch, process, globalThis, require) {
+          function harmless(fetch, process, globalThis, require, RTCPeerConnection) {
             const localPlatform = globalThis;
             require('./not-a-module.js');
-            return fetch(process) ?? globalThis.fetch ?? localPlatform.fetch;
+            return fetch(process) ?? globalThis.fetch ?? localPlatform.fetch ?? RTCPeerConnection;
           }
           const platform = globalThis;
           const rawFetch = platform['fetch'];
@@ -341,6 +341,44 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         .map((fact) => fact.capability)
         .sort(),
     ).toEqual(['dynamic-loader', 'network', 'network', 'vm', 'vm', 'vm', 'worker']);
+  });
+
+  it('closes WebRTC peer networking as raw browser network authority', () => {
+    const result = analyze([
+      {
+        fileName: 'webrtc.ts',
+        source: `
+          import { handler } from '@kovojs/browser';
+          const platform = globalThis;
+          const GlobalPeer = globalThis['RTCPeerConnection'];
+          const AliasPeer = platform.RTCPeerConnection;
+          export const connect = handler(() => {
+            const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:peer.example' }] });
+            const globalPeer = new GlobalPeer();
+            const aliasPeer = new AliasPeer();
+            return [
+              peer.createDataChannel('direct'),
+              globalPeer.createDataChannel('global-member'),
+              aliasPeer.createDataChannel('namespace-alias'),
+            ];
+          });
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        capability: 'network',
+        kind: 'closed',
+        reason: expect.stringContaining('global RTCPeerConnection'),
+      }),
+    );
+    expect(
+      result.facts.filter(
+        (fact) => fact.kind === 'closed' && fact.reason.includes('RTCPeerConnection'),
+      ),
+    ).toHaveLength(3);
+    expect(result.diagnostics).toHaveLength(3);
   });
 
   it('closes builtin subpaths but ignores type-only authority imports', () => {

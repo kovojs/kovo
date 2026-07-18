@@ -42,6 +42,10 @@ const compilerSecuritySemanticGraphPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/security-operation-ir.ts',
 );
+const compilerCapabilityClosureScannerPath = path.join(
+  repoRoot,
+  'packages/compiler/src/scan/capability-closure.ts',
+);
 const threatMatrixGatePath = path.join(scriptsDir, 'threat-matrix-gate.mjs');
 const drizzleSessionProvenancePath = path.join(
   repoRoot,
@@ -72,6 +76,22 @@ const requestIngressPolicyPath = path.join(
   'packages/server/src/request-ingress-policy.ts',
 );
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
+
+const browserRtcNetworkCapabilityBranch = [
+  "const globalCapabilities = new Map<string, RawCapabilityKind>([",
+  "  ['Bun', 'process'],",
+  "  ['Deno', 'process'],",
+  "  ['EventSource', 'network'],",
+  "  ['Function', 'vm'],",
+  "  ['RTCPeerConnection', 'network'],",
+].join('\n');
+const weakenedBrowserRtcNetworkCapabilityBranch = [
+  "const globalCapabilities = new Map<string, RawCapabilityKind>([",
+  "  ['Bun', 'process'],",
+  "  ['Deno', 'process'],",
+  "  ['EventSource', 'network'],",
+  "  ['Function', 'vm'],",
+].join('\n');
 
 const canonicalPostMethodBranch =
   "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
@@ -1457,6 +1477,16 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertTrustedAssignNestedReviewIsPinned,
   },
   {
+    description: 'Deletes WebRTC peer construction from raw browser network authority.',
+    expectedKiller: 'capability closure must retain RTCPeerConnection as raw network authority',
+    name: 'compiler-capability-closure/drop-webrtc-network-global',
+    replacement: weakenedBrowserRtcNetworkCapabilityBranch,
+    search: browserRtcNetworkCapabilityBranch,
+    sourceFile: compilerCapabilityClosureScannerPath,
+    sourceOnly: true,
+    test: assertBrowserRtcNetworkCapabilityIsPinned,
+  },
+  {
     description: 'Deletes normalized helper-cycle absorption.',
     expectedKiller: 'recursive helper summaries must retain the helper-cycle closed verdict',
     name: 'compiler-semantic-graph/drop-helper-cycle-closure',
@@ -2423,6 +2453,12 @@ function installMutantScriptLib(tempRoot) {
 async function assertExactTrustedAssignIdentityIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(exactTrustedAssignIdentityBranch)) {
     throw new Error('trustedAssign no longer requires exact @kovojs/server export identity');
+  }
+}
+
+async function assertBrowserRtcNetworkCapabilityIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(browserRtcNetworkCapabilityBranch)) {
+    throw new Error('capability closure no longer classifies RTCPeerConnection as raw network');
   }
 }
 

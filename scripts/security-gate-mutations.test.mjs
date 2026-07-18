@@ -13,6 +13,10 @@ describe('security-gate-mutations', () => {
     expect(results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          name: 'compiler-capability-closure/drop-webrtc-network-global',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'compiler-finite-ir/allow-spelled-trusted-assign',
           status: 'killed',
         }),
