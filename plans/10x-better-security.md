@@ -151,18 +151,26 @@ Measurements are versioned and reproducible:
 
 ### 2A. Capability-closed module graph
 
-- [ ] Define the complete untrusted-data-reachable root census: routes, layouts, mutations,
+- [x] Define the complete untrusted-data-reachable root census: routes, layouts, mutations,
       queries, endpoints, webhooks, durable/scheduled tasks, serialized browser handlers, and
       supported agent/tool callbacks.
-- [ ] Build transitive capability closure across imports, re-exports, local wrappers, dynamic
+  - Evidence: `159f1a141`; `capability-closure.security.test.ts` proves all ten root kinds, and the
+    integrated six-file suite passes 134 tests with one intentional skip.
+- [x] Build transitive capability closure across imports, re-exports, local wrappers, dynamic
       `import()`/`require()`, conditional package exports, globals, and callback/container
       transfers. Raw network, filesystem, process, VM, worker, and database-driver capabilities
       are unavailable unless a reviewed framework door explicitly supplies one.
-- [ ] Define versioned, least-authority package summaries. An absent, stale, contradictory, or
+  - Evidence: the same suite closes wrappers, re-exports, dynamic loading, globals, callback and
+    container transfers across all seven raw capability kinds; C13 passes with 18 corpora.
+- [x] Define versioned, least-authority package summaries. An absent, stale, contradictory, or
       unresolved summary fails closed; package upgrades cannot silently retain an old verdict.
-- [ ] Prove closure with adversarial wrapper/re-export/conditional/dynamic-loading fixtures and
+  - Evidence: `capability-closure-packages.test.ts` pins schema/version, package version, canonical
+    manifest fingerprint, conditional export arms, and fail-closed stale/absent verdicts.
+- [x] Prove closure with adversarial wrapper/re-export/conditional/dynamic-loading fixtures and
       with positive fixtures for each supported framework capability. Emit a provenance path in
       diagnostics and `kovo explain`.
+  - Evidence: `990f0c87a`; the adversarial/positive closure suite and `kovo explain
+    --capabilities` provenance tests pass, alongside API/import/census/spec/pack/build gates.
 
 ### 2B. Finite compiler-owned security IR
 
