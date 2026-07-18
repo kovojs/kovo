@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@kovojs/server';
+import {
+  mutationCsrfTokenForTesting as csrfToken,
+  renderWithRequestForTesting,
+} from '@kovojs/server/testing';
 import {
   componentLiveTargetRenderer,
   renderMutationEndpointResponse,
@@ -23,7 +26,11 @@ import { CartBadge } from './components/cart-badge.js';
 import { createShopDb } from './db.js';
 import { cartQuery, productsQuery } from './queries.js';
 
-const tutorialLiveTargetAuthority = createLiveTargetTestAuthority('tutorial-step-04-test-build');
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority(
+  'tutorial-step-04-test-build',
+  addToCart.csrf === false ? undefined : addToCart.csrf,
+);
+const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 
 // Tutorial step 04: one mutation endpoint, two response modes:
 // POST-redirect-GET without JavaScript, fragment wire with it.
@@ -51,6 +58,7 @@ function submitAddToCart(
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
     buildToken: 'tutorial-step-04-test-build',
+    csrf: tutorialWireCsrf,
     headers: withAttestedLiveTargets(headers, request),
     liveTargetRenderers: successLiveTargetRenderers(),
     liveTargetAttestationAuthority: tutorialLiveTargetAuthority.authority,
@@ -58,7 +66,10 @@ function submitAddToCart(
     rawInput,
     redirectTo: '/',
     renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
-    renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
+    renderFailurePage: (failure) =>
+      renderWithRequestForTesting(request, () =>
+        renderShopPage(request.db, { failure, productId }, request),
+      ),
     request,
   });
 }
@@ -100,7 +111,7 @@ function attestLiveTargetEntries(value: string, request: ShopRequest): string {
       const props = JSON.parse(propsJson) as Record<string, unknown>;
       const token = createLiveTargetAttestation(
         { component, props, target },
-        { buildToken: tutorialLiveTargetAuthority.audience, request },
+        { buildToken: tutorialLiveTargetAuthority.audience, csrf: tutorialWireCsrf, request },
       );
       return `${target}#${component}@${token}:${propsJson}`;
     })
@@ -130,15 +141,18 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
 
 describe('tutorial step 04 — mutations & forms', () => {
   // snippet:form-markup-test
-  it('renders the add-to-cart form, CSRF token included, as the page output', () => {
+  it('renders the complete add-to-cart form bundle as the page output', () => {
     const request = shopRequest();
-    const html = renderShopPage(request.db, undefined, request);
+    const html = renderWithRequestForTesting(request, () =>
+      renderShopPage(request.db, undefined, request),
+    );
     const action = `/_m/${addToCart.key}`;
 
     expect(html).toContain(
       `enhance method="post" action="${action}" data-mutation="${addToCart.key}"`,
     );
     expect(html).toContain('name="kovo-csrf"');
+    expect(html).toContain('name="Kovo-Idem"');
     expect(html).toContain('name="productId" value="p1"');
     expect(html).toContain('name="quantity" type="number" min="1" max="5" value="1"');
     expect(html).toContain('name="kovo-form-key" value="p1"');

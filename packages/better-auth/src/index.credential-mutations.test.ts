@@ -1,4 +1,5 @@
-import { csrfToken, type CsrfOptions, type MutationDefinition, type Schema } from '@kovojs/server';
+import { type CsrfOptions, type MutationDefinition, type Schema } from '@kovojs/server';
+import { csrfToken } from '@kovojs/server/internal/csrf';
 import { runMutation } from '@kovojs/server/internal/execution';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';

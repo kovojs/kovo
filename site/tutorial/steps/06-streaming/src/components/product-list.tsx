@@ -1,19 +1,16 @@
 /** @jsxImportSource @kovojs/server */
-import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
-import { csrfField } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { formatPrice, type ShopProduct, type ShopRequest } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
-import { addToCart, shopCsrf, type AddToCartFailure, type AddToCartFailureState } from '../app.js';
+import { addToCart, type AddToCartFailure, type AddToCartFailureState } from '../app.js';
 
 // Tutorial step 06 (chapter 6), unchanged from step 05: every product card carries a real form
 // posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS
 // fallback IS the output; `enhance` upgrades it to the section 9.1 fragment
-// wire. Failure state and the per-request CSRF token are request context,
-// not query data, so they arrive as an explicit second render argument (the
-// examples/commerce pattern).
+// wire. Failure state is request context, not query data, so it arrives as an
+// explicit second render argument (the examples/commerce pattern).
 
 export interface ProductListRenderContext {
   failure?: AddToCartFailureState | undefined;
@@ -50,20 +47,15 @@ export const ProductList = component({
 // SPEC.md section 6.3: the no-JS add-to-cart form posts to the mutation
 // endpoint; `enhance` upgrades it to the fragment wire. Authored `key` gives
 // repeated forms stable identity; the compiler derives the submitted-form
-// target. The kovo-csrf token is stamped into the form whenever the request
-// carries a session (SPEC.md section 6.6).
+// target. Kovo emits the mutation-bound CSRF and canonical Kovo-Idem fields
+// together (SPEC.md section 6.6).
 export function renderAddToCartForm(
   item: Pick<ShopProduct, 'id' | 'stock'>,
   failure?: AddToCartFailure,
-  request?: ShopRequest,
+  _request?: ShopRequest,
 ) {
   return (
     <form enhance mutation={addToCart} key={item.id}>
-      {request?.session?.id
-        ? trustedHtml(csrfField(request, { ...shopCsrf, mutation: addToCart }), {
-            reason: 'framework-generated CSRF hidden field for the addToCart mutation',
-          })
-        : ''}
       <input type="hidden" name="productId" value={item.id} />
       <label>
         Qty

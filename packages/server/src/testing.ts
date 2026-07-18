@@ -10,11 +10,44 @@ import {
   declareSystemPrincipal,
   isProvenPrincipal,
 } from './auth-principal.js';
+import { csrfToken, type CsrfOptions } from './csrf.js';
 import { guards } from './guards.js';
 import { usePostgresAppRuntimeDb } from './internal/postgres-capability.js';
+import { runWithJsxRequestContext } from './jsx-context.js';
 import { managedDb, type Reader } from './managed-db.js';
 import { createPostgresAppRuntimeDb, type KovoPostgresRuntimeDb } from './postgres-runtime.js';
 import type { KovoPostgresAppRuntimeOptions } from './postgres-runtime.js';
+
+/**
+ * Mint a mutation-bound CSRF token for a synthetic submission in a test.
+ *
+ * Production forms use typed `<form mutation={definition}>` authoring so Kovo emits this token and
+ * `Kovo-Idem` together. This testing-only helper exists for request-level tests that invoke the
+ * mutation lifecycle without first parsing rendered HTML.
+ */
+export function mutationCsrfTokenForTesting<Request>(
+  request: Request,
+  options: CsrfOptions<Request>,
+  context: { mutation: string | { readonly key: string } },
+): string {
+  return csrfToken(request, options, context);
+}
+
+/** Render a synthetic test fragment with the same request-scoped JSX context as a route. */
+export function renderWithRequestForTesting<Request, Value>(
+  request: Request,
+  render: () => Promise<Value>,
+): Promise<Value>;
+export function renderWithRequestForTesting<Request, Value>(
+  request: Request,
+  render: () => Value,
+): Value;
+export function renderWithRequestForTesting<Request, Value>(
+  request: Request,
+  render: () => Promise<Value> | Value,
+): Promise<Value> | Value {
+  return runWithJsxRequestContext(request, render);
+}
 
 /** Drizzle database handle passed to Postgres testing principal callbacks. */
 export type KovoPostgresTestDb = KovoPostgresRuntimeDb;

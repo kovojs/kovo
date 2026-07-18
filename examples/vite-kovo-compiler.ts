@@ -127,6 +127,38 @@ export const commerceRegistryFacts = {
   mutations: { 'domain/add-to-cart': 'typeof addToCart' },
 } satisfies RegistryFacts;
 
+const tutorialAddToCartInputs = [
+  requiredString('productId'),
+  {
+    coercion: 'number' as const,
+    defaulted: true,
+    name: 'quantity',
+    optional: false,
+    provenance: 'registry' as const,
+    required: false,
+  },
+];
+
+/** Closed input facts for tutorial chapters whose mutation is declared in `app.ts`. */
+export const tutorialAppRegistryFacts = {
+  mutationInputs: {
+    'app/add-to-cart': tutorialAddToCartInputs,
+  },
+  mutations: {
+    'app/add-to-cart': 'typeof addToCart',
+  },
+} satisfies RegistryFacts;
+
+/** Closed input facts for chapter 4's cycle-free mutation module. */
+export const tutorialMutationRegistryFacts = {
+  mutationInputs: {
+    'mutations/add-to-cart': tutorialAddToCartInputs,
+  },
+  mutations: {
+    'mutations/add-to-cart': 'typeof addToCart',
+  },
+} satisfies RegistryFacts;
+
 export const crmRegistryFacts = {
   mutationInputs: {
     'mutations/add-contact': [
