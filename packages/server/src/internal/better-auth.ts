@@ -25,7 +25,7 @@ import {
   type EndpointDeclaration,
 } from '../endpoint.js';
 import {
-  mutation,
+  constructMutationDeclaration,
   type MutationCsrfDeclaration,
   type MutationDefinition,
   type MutationFormDefinition,
@@ -101,7 +101,10 @@ export function createBetterAuthCredentialMutation<
     MutationCsrfDeclaration<Request>,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> &
   MutationFormDefinition<Key, Request> {
-  return mutation(key, definition);
+  // This adapter's broad generic keeps both optional keys in its structural type. Enter the same
+  // runtime-validating constructor directly: an actual dual declaration is still rejected before
+  // any mutation snapshot or executable declaration can escape.
+  return constructMutationDeclaration(key, definition);
 }
 
 /**

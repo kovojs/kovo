@@ -5,7 +5,12 @@ import {
 } from '@kovojs/core';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { assertHtmlElementWireValueStable } from '@kovojs/core/internal/semantic-attributes';
-import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
+import {
+  accessDecisionFor,
+  assertUnambiguousAccessDeclaration,
+  pinAccessDecision,
+  type AccessDecision,
+} from './access.js';
 import {
   snapshotAuditJustification,
   snapshotAuditReason,
@@ -128,6 +133,7 @@ export function snapshotAppQuery(
   const object = requireDeclarationObject(source, 'query');
   const existing = witnessWeakMapGet(context.queries, object);
   if (existing !== undefined) return existing;
+  assertUnambiguousAccessDeclaration(object, 'query declaration');
 
   const access = accessDecisionFor(object as AppQueryDeclaration & { access?: AccessDecision });
   const record = snapshotOwnDataRecord(object, 'query declaration', omittedProperties('access'));
@@ -150,6 +156,7 @@ export function snapshotAppMutation(
   const object = requireDeclarationObject(source, 'mutation');
   const existing = witnessWeakMapGet(context.mutations, object);
   if (existing !== undefined) return existing;
+  assertUnambiguousAccessDeclaration(object, 'mutation declaration');
 
   const access = accessDecisionFor(object as AppMutationDeclaration & { access?: AccessDecision });
   const record = snapshotOwnDataRecord(object, 'mutation declaration', omittedProperties('access'));
@@ -183,6 +190,7 @@ export function snapshotAppEndpoint<Db>(
   const object = requireDeclarationObject(source, 'endpoint');
   const existing = witnessWeakMapGet(context.endpoints, object);
   if (existing !== undefined) return existing;
+  assertUnambiguousAccessDeclaration(object, 'endpoint declaration', false);
 
   const access = accessDecisionFor(
     object as EndpointDeclaration<string, EndpointMethod, EndpointMount>,
@@ -280,6 +288,7 @@ export function snapshotAppRoute(
   const object = requireDeclarationObject(source, 'route');
   const existing = witnessWeakMapGet(context.routes, object);
   if (existing !== undefined) return existing;
+  assertUnambiguousAccessDeclaration(object, 'route declaration');
 
   const access = accessDecisionFor(object as AppRouteDeclaration & { access?: AccessDecision });
   const path = stableOwnDataValue(object, 'path', 'route.path');
@@ -329,6 +338,7 @@ export function snapshotAppLayout(
 
   witnessWeakSetAdd(context.layoutsInProgress, object);
   try {
+    assertUnambiguousAccessDeclaration(object, 'layout declaration');
     const access = accessDecisionFor(
       object as LayoutDeclaration<any, any, any, any> & { access?: AccessDecision },
     );
@@ -705,6 +715,7 @@ function snapshotMutationRegistry(
 
 function snapshotWebhookDefinition(source: unknown): Readonly<Record<string, unknown>> {
   const object = requireDeclarationObject(source, 'webhookDefinition');
+  assertUnambiguousAccessDeclaration(object, 'webhook definition', false);
   // Verification is security topology just like route.layout. Reject a Proxy get/descriptor split
   // and then preserve only the stable descriptor value in the canonical definition.
   const verify = stableOwnDataValue(object, 'verify', 'webhookDefinition.verify');

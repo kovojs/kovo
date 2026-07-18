@@ -407,9 +407,6 @@ describe('server createApp request shell', () => {
     ];
     const explicitPublic = route('/explicit-public-file', {
       access: publicAccess('public cache-floor control'),
-      // An explicit access decision suppresses the legacy fallback. Cache posture must mirror that
-      // exact enforcement rule rather than treating property presence as authority.
-      guard: allowVictim,
       page: () =>
         respond.file('PUBLIC', {
           contentType: 'text/plain; charset=utf-8',

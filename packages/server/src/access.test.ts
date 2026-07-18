@@ -24,6 +24,7 @@ import {
 } from './guards.js';
 import { renderedHtml } from './html.js';
 import { mutation, runMutation } from './mutation.js';
+import { assignDerivedMutationKey } from './mutation/definition.js';
 import { query, renderQueryEndpointResponse } from './query.js';
 import { layout, renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
@@ -146,6 +147,233 @@ describe('structured access metadata', () => {
     expect(statusMutation.access).toBe(access);
     expect(statusEndpoint.access).toBe(access);
     expect(statusWebhook.access).toBe(verifiedAccess);
+  });
+
+  it('rejects ambiguous access and guard fields before either can win by precedence', () => {
+    const access = publicAccess('dual access regression');
+    const deny = guard('deny-dual-access', () => ({ kind: 'forbidden' as const }));
+    const dualAccessError = /KV436: .* cannot declare both access and guard/u;
+
+    expect(() => layout({ access, guard: deny } as any)).toThrow(dualAccessError);
+    expect(() =>
+      route('/dual-access', {
+        access,
+        guard: deny,
+        page: () => renderedHtml('unreachable'),
+      } as any),
+    ).toThrow(dualAccessError);
+    expect(() =>
+      query('dual-access', {
+        access,
+        guard: deny,
+        load: () => ({ secret: true }),
+      } as any),
+    ).toThrow(dualAccessError);
+    expect(() =>
+      mutation('dual-access', {
+        access,
+        guard: deny,
+        handler: () => ({ secret: true }),
+        input: s.object({}),
+      } as any),
+    ).toThrow(dualAccessError);
+
+    // Descriptor authorship, not truthiness, owns the choice. Neither explicit undefined field
+    // may turn a dual declaration into the historical "access wins" state.
+    expect(() =>
+      route('/undefined-access', {
+        access: undefined,
+        guard: deny,
+        page: () => renderedHtml('unreachable'),
+      } as any),
+    ).toThrow(dualAccessError);
+    expect(() =>
+      query('undefined-guard', {
+        access,
+        guard: undefined,
+        load: () => ({ secret: true }),
+      } as any),
+    ).toThrow(dualAccessError);
+
+    expect(() =>
+      endpoint('/unsupported-guard', {
+        csrf: false,
+        csrfJustification: 'unsupported guard regression',
+        guard: deny,
+        handler: () => new Response('unreachable'),
+        method: 'GET',
+        reason: 'unsupported guard regression',
+        response: textResponse,
+      } as any),
+    ).toThrow(/KV436: endpoint\(\) definition does not support guard/u);
+    expect(() =>
+      webhook('/unsupported-guard', {
+        guard: deny,
+        handler: () => ({ secret: true }),
+        input: s.object({}),
+        verify: 'none',
+        verifyJustification: 'unsupported guard regression',
+      } as any),
+    ).toThrow(/KV436: webhook\(\) definition does not support guard/u);
+  });
+
+  it('rejects ambiguous structural app declarations while preserving pinned guard-only resnapshots', () => {
+    const access = publicAccess('structural dual access regression');
+    const deny = guard('deny-structural-dual-access', () => ({ kind: 'forbidden' as const }));
+    const dualAccessError = /KV436: .* cannot declare both access and guard/u;
+    const structuralApps = [
+      {
+        queries: [
+          {
+            access,
+            guard: deny,
+            key: 'structural-query',
+            load: () => ({ secret: true }),
+            reads: [],
+          },
+        ],
+      },
+      {
+        mutations: [
+          {
+            access,
+            guard: deny,
+            handler: () => ({ secret: true }),
+            input: s.object({}),
+            key: 'structural-mutation',
+          },
+        ],
+      },
+      {
+        routes: [
+          {
+            access,
+            guard: deny,
+            page: () => renderedHtml('unreachable'),
+            path: '/structural-route',
+          },
+        ],
+      },
+      {
+        routes: [
+          {
+            layout: { access, guard: deny },
+            page: () => renderedHtml('unreachable'),
+            path: '/structural-layout',
+          },
+        ],
+      },
+    ];
+
+    for (let index = 0; index < structuralApps.length; index += 1) {
+      expect(() => createApp(structuralApps[index] as any)).toThrow(dualAccessError);
+    }
+
+    expect(() => createApp({ endpoints: [{ guard: deny }] } as any)).toThrow(
+      /KV436: endpoint declaration does not support guard/u,
+    );
+    const canonicalWebhook = webhook('/structural-webhook-guard', {
+      handler: () => ({ secret: true }),
+      input: s.object({}),
+      verify: 'none',
+      verifyJustification: 'structural webhook guard regression',
+    });
+    expect(() =>
+      createApp({
+        endpoints: [
+          {
+            ...canonicalWebhook,
+            webhookDefinition: { ...canonicalWebhook.webhookDefinition, guard: deny },
+          },
+        ],
+      } as any),
+    ).toThrow(/KV436: webhook definition does not support guard/u);
+
+    const pending = mutation({
+      guard: deny,
+      handler: () => ({ secret: true }),
+      input: s.object({}),
+    });
+    expect(Object.getOwnPropertyDescriptor(pending, 'access')).toMatchObject({
+      enumerable: false,
+      value: undefined,
+    });
+    const derived = assignDerivedMutationKey(pending, 'derived/guard-only');
+    expect(derived.guard).toBe(deny);
+    expect(accessDecisionFor(derived)).toBeUndefined();
+  });
+
+  it('keeps legacy guard call shapes typed while rejecting dual authoring shapes', () => {
+    interface OptionalSessionRequest {
+      session?: { user?: { id: string } | null } | null;
+    }
+
+    const legacyAuthed = guards.authed<OptionalSessionRequest>();
+    const legacyMutation = mutation('legacy-guard-inference', {
+      guard: legacyAuthed,
+      handler(_input, request) {
+        const userId: string = request.session.user.id;
+        return userId;
+      },
+      input: s.object({}),
+    });
+    const legacyRoute = route('/legacy-guard-inference', {
+      guard: legacyAuthed,
+      page(_context, request) {
+        const userId: string = request.session.user.id;
+        return renderedHtml(userId);
+      },
+    });
+    const legacyLayout = layout<OptionalSessionRequest>({ guard: legacyAuthed });
+    const legacyQuery = query('legacy-guard-inference', {
+      guard(request: OptionalSessionRequest) {
+        return request.session?.user ? true : { kind: 'unauthenticated' as const };
+      },
+      load: () => ({ ok: true }),
+    });
+    expect([
+      legacyMutation.guard,
+      legacyRoute.guard,
+      legacyLayout.guard,
+      legacyQuery.guard,
+    ]).toEqual([legacyAuthed, legacyAuthed, legacyAuthed, legacyQuery.guard]);
+
+    if (false) {
+      const dual = {
+        access: publicAccess('type-only dual declaration'),
+        guard: legacyAuthed,
+      };
+
+      // @ts-expect-error SPEC §10.2: query() accepts exactly one access posture.
+      query('type-dual-query', { ...dual, load: () => ({ ok: true }) });
+      // @ts-expect-error SPEC §10.2: mutation() accepts exactly one access posture.
+      mutation('type-dual-mutation', { ...dual, handler: () => true, input: s.object({}) });
+      // @ts-expect-error SPEC §10.2: route() accepts exactly one access posture.
+      route('/type-dual-route', { ...dual, page: () => renderedHtml('unreachable') });
+      // @ts-expect-error SPEC §10.2: layout() accepts exactly one access posture.
+      layout(dual);
+
+      endpoint('/type-endpoint-guard', {
+        access: publicAccess('type-only endpoint guard'),
+        csrf: false,
+        csrfJustification: 'type-only endpoint guard',
+        // @ts-expect-error endpoints do not accept the legacy guard field.
+        guard: legacyAuthed,
+        handler: () => new Response('unreachable'),
+        method: 'GET',
+        reason: 'type-only endpoint guard',
+        response: textResponse,
+      });
+      webhook('/type-webhook-guard', {
+        access: publicAccess('type-only webhook guard'),
+        // @ts-expect-error webhooks do not accept the legacy guard field.
+        guard: legacyAuthed,
+        handler: () => true,
+        input: s.object({}),
+        verify: 'none',
+        verifyJustification: 'type-only webhook guard',
+      });
+    }
   });
 
   it('runs access guards for route, query, mutation, and endpoint enforcement', async () => {

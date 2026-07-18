@@ -298,8 +298,8 @@ export async function renderAppRouteDocumentResponse({
   // (and any per-principal `Set-Cookie`) to other visitors (cross-principal leak / takeover). Three
   // independent signals make a document session-dependent:
   //   1. `routeHasEnforcedAuthorization(route)` — the exact route + parent-layout access graph
-  //      contains an effective guard. `access` arrays own enforcement; legacy `guard` is only the
-  //      fallback when an explicit public/verified decision is absent (§9.4/§9.5).
+  //      contains an effective guard. Declarations cannot author both mechanisms; `access` arrays
+  //      and a legacy `guard` authored alone are the two executable cases (§9.4/§9.5/§10.2).
   //   2. `refreshSetCookies.length > 0` — a rolling/refresh session token forwarded by the
   //      sessionProvider via `onSessionSetCookie`/`onCsrfSetCookie` (part-3 I2) rides the response.
   //   3. `sessionFingerprint !== undefined` — the route lifecycle resolved a per-principal session

@@ -37,7 +37,7 @@ const snapshottedGuardAccessDecisions = createWitnessWeakSet<object>();
 const snapshottedStructuredAccessDecisions = createWitnessWeakSet<object>();
 const pinnedAccessDecisions = createWitnessWeakMap<
   object,
-  { decision: AccessDecision | undefined }
+  { authored: boolean; decision: AccessDecision | undefined }
 >();
 const nativeArrayIsArray = Array.isArray;
 const nativeNumberIsSafeInteger = Number.isSafeInteger;
@@ -151,7 +151,8 @@ export function pinAccessDecision<Declaration extends object>(
 ): Declaration {
   if (witnessWeakMapHas(pinnedAccessDecisions, declaration)) return declaration;
   const decision = snapshotAccessDecision(access);
-  return pinSnapshottedAccessDecision(declaration, decision, access !== undefined);
+  const authored = ownAccessDescriptor(declaration) !== undefined || access !== undefined;
+  return pinSnapshottedAccessDecision(declaration, decision, authored);
 }
 
 /** @internal Resolve (and, for structural/internal declarations, pin) the authoritative decision. */
@@ -175,7 +176,10 @@ export function accessDecisionFor(
     // A frozen/sealed structural declaration may already bind `access` non-configurably. The
     // private snapshot is still authoritative for every audit/runtime consumer, while the stable
     // property cannot be replaced. Constructor-created declarations take the physical path above.
-    witnessWeakMapSet(pinnedAccessDecisions, declaration, { decision });
+    witnessWeakMapSet(pinnedAccessDecisions, declaration, {
+      authored: descriptor !== undefined,
+      decision,
+    });
   }
   return decision;
 }
@@ -194,8 +198,47 @@ function pinSnapshottedAccessDecision<Declaration extends object>(
     value: decision,
     writable: false,
   });
-  witnessWeakMapSet(pinnedAccessDecisions, declaration, { decision });
+  witnessWeakMapSet(pinnedAccessDecisions, declaration, { authored, decision });
   return declaration;
+}
+
+/**
+ * Reject an ambiguous `access` + `guard` record before either field can win by precedence.
+ *
+ * A constructor pins an absent access decision as a non-enumerable `access: undefined` property.
+ * The private authored bit distinguishes that framework-owned pin during later app/derived-key
+ * snapshots from an app-authored `access` field. Descriptor presence, not truthiness, owns the
+ * decision so `guard: undefined` cannot smuggle an ambiguous declaration through JavaScript.
+ *
+ * @internal
+ */
+export function assertUnambiguousAccessDeclaration(
+  declaration: object,
+  label: string,
+  supportsLegacyGuard = true,
+): void {
+  const access = ownAccessDescriptor(declaration);
+  let guard: PropertyDescriptor | undefined;
+  try {
+    guard = witnessGetOwnPropertyDescriptor(declaration, 'guard');
+  } catch {
+    throw new TypeError(`${label} must expose stable own access and guard properties.`);
+  }
+
+  if (guard === undefined) return;
+  if (!supportsLegacyGuard) {
+    throw new TypeError(
+      `KV436: ${label} does not support guard; declare executable guards in access: [guard(...)] instead.`,
+    );
+  }
+
+  const pinned = witnessWeakMapGet(pinnedAccessDecisions, declaration);
+  const accessWasAuthored = pinned?.authored ?? access !== undefined;
+  if (accessWasAuthored) {
+    throw new TypeError(
+      `KV436: ${label} cannot declare both access and guard; choose exactly one access decision.`,
+    );
+  }
 }
 
 function snapshotGuardAccessDecision(access: readonly unknown[]): AccessDecision {

@@ -93,6 +93,14 @@ decision**. A surface's decision is **satisfied** by any one of:
 - a **verified machine-auth** decision — `access: verifiedAccess`, or (for an `endpoint`/`webhook`)
   an `auth:`/`verify:` scheme that authenticates a machine caller.
 
+These alternatives are mutually exclusive on one declaration. A query, mutation, route, or layout
+MUST NOT author both canonical `access` and the legacy top-level `guard`; doing so is **KV436** at
+the static gate and MUST also fail closed in the public constructor and app snapshot. In particular,
+`publicAccess(...)` or `verifiedAccess` MUST NOT suppress an authored guard by runtime precedence.
+Authors compose executable guards in one `access: [guard(...), ...]` chain (or, while using the
+legacy field alone, one `guards.all(...)` guard). Endpoints and webhooks do not accept the legacy
+`guard` field at all; their executable guard chain belongs in `access`.
+
 A surface with **none** of these is **undecided**: the static app graph classifies it
 `decision: 'missing'` and the build fails with **KV436** (§11.3). An existing guard already _counts_
 as a decision — guarded surfaces are not forced to re-declare `access`. The decision is recorded as a

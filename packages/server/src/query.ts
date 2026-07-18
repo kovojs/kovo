@@ -2,7 +2,12 @@ import { isSecret, type JsonValue } from '@kovojs/core';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
-import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
+import {
+  accessDecisionFor,
+  assertUnambiguousAccessDeclaration,
+  pinAccessDecision,
+  type AccessDecision,
+} from './access.js';
 import {
   guardFailureToResult,
   renderHttpGuardFailureResponse,
@@ -182,13 +187,23 @@ type QueryWithArgsBinding<Definition, Input> = Omit<Definition, 'args'> & {
  */
 export type QueryDefinitionBoundary<Definition, Shape> =
   Exclude<keyof Definition, keyof Shape> extends never
-    ? 'load' extends keyof Definition
-      ? Definition extends { load?: (...args: any[]) => infer Result }
-        ? Awaited<Result> extends JsonValue
-          ? []
-          : [__kovoQueryJsonBoundary: QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<Awaited<Result>>]
-        : [__kovoQueryJsonBoundary: QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<unknown>]
-      : []
+    ? 'access' | 'guard' extends keyof Definition
+      ? [
+          __kovoQueryAccessBoundary: {
+            readonly __kovoQueryAccessBoundary: 'query() cannot declare both access and guard; choose exactly one access decision';
+          },
+        ]
+      : 'load' extends keyof Definition
+        ? Definition extends { load?: (...args: any[]) => infer Result }
+          ? Awaited<Result> extends JsonValue
+            ? []
+            : [
+                __kovoQueryJsonBoundary: QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<
+                  Awaited<Result>
+                >,
+              ]
+          : [__kovoQueryJsonBoundary: QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<unknown>]
+        : []
     : [__kovoQueryDefinitionBoundary: QueryUnknownDefinitionFieldError<Definition, Shape>];
 
 /** Type-level diagnostic payload for a `query()` load result that is not JSON-serializable. */
@@ -373,6 +388,7 @@ function snapshotQueryDefinition(
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
     throw new TypeError('query() requires a stable own-data definition object.');
   }
+  assertUnambiguousAccessDeclaration(source, 'query() definition');
   const keys = witnessOwnKeys(source);
   if (keys.length > 100_000) throw new TypeError('query() definition must be bounded.');
   const snapshot = witnessCreateNullRecord<unknown>();

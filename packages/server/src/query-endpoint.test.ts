@@ -593,7 +593,6 @@ describe('query endpoints', () => {
       reads: [domain('catalog')],
     });
     const guardedQuery = query('privateCatalog', {
-      access: publicAccess('audit metadata is not enough when a guard exists'),
       guard: () => true,
       load: () => ({ items: ['p1'] }),
       read: { cacheControl: 'public, max-age=60' },

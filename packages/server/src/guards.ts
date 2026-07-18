@@ -1205,8 +1205,9 @@ export async function runGuardChain<Request>(
  *
  * SPEC §10 requires the audited access decision to be the enforced object. When
  * `access` is an executable guard array, those guards run. `publicAccess` and
- * `verifiedAccess` are explicit no-guard decisions. The legacy top-level
- * `guard:` remains only as a compatibility fallback when `access` is absent.
+ * `verifiedAccess` are explicit no-guard decisions. Declaration constructors reject
+ * an authored `access` plus legacy `guard`; the fallback exists only for a declaration
+ * that authors `guard` alone.
  */
 export async function runAccessDecisionGuards<Request>(
   access: AccessDecision | undefined,

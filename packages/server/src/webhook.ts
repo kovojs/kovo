@@ -19,6 +19,7 @@ import {
 } from './auth-principal.js';
 import type { ChangeRecord } from './change-record.js';
 import {
+  assertUnambiguousAccessDeclaration,
   pinAccessDecision,
   snapshotAccessDecision,
   verifiedAccess,
@@ -832,6 +833,7 @@ function snapshotWebhookDefinitionForDeclaration<
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
     throw new TypeError('webhook() requires a stable own-data definition record.');
   }
+  assertUnambiguousAccessDeclaration(source, 'webhook() definition', false);
   const verifySource = stableOwnWebhookValue(source, 'verify', 'webhook().verify');
   const verify = snapshotWebhookVerification(verifySource);
   const inputSource = stableOwnWebhookValue(source, 'input', 'webhook().input');

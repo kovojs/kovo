@@ -1,6 +1,11 @@
 import type { WebhookVerifier } from '@kovojs/core';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
-import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
+import {
+  accessDecisionFor,
+  assertUnambiguousAccessDeclaration,
+  pinAccessDecision,
+  type AccessDecision,
+} from './access.js';
 import {
   snapshotAuditJustification,
   snapshotAuditReason,
@@ -328,6 +333,7 @@ function constructEndpointDeclaration<
   if (typeof definition !== 'object' || definition === null || witnessIsArray(definition)) {
     throw new TypeError('endpoint() requires a stable own-data definition record.');
   }
+  assertUnambiguousAccessDeclaration(definition, 'endpoint() definition', false);
   const access = stableEndpointValue(definition, 'access');
   const auth = stableEndpointValue(definition, 'auth');
   const csrf = stableEndpointValue(definition, 'csrf');

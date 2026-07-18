@@ -40,7 +40,12 @@ import {
 } from './jsx-context.js';
 import type { CsrfOptions } from './csrf.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
-import { accessDecisionFor, pinAccessDecision, type AccessDecision } from './access.js';
+import {
+  accessDecisionFor,
+  assertUnambiguousAccessDeclaration,
+  pinAccessDecision,
+  type AccessDecision,
+} from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import type { MutationFail } from './mutation.js';
@@ -236,7 +241,12 @@ export interface LayoutFactory<Request = unknown> {
     Page extends LayoutRenderResult = LayoutRenderResult,
     Regions extends LayoutRegionResults = LayoutRegionResults,
   >(
-    definition: LayoutDefinition<Request, Queries, Page, Regions>,
+    definition: Omit<LayoutDefinition<Request, Queries, Page, Regions>, 'access' | 'guard'> &
+      (
+        | { access: AccessDecision; guard?: never }
+        | { access?: never; guard: Guard<Request> }
+        | { access?: never; guard?: never }
+      ),
   ): LayoutDeclaration<Request, Queries, Page, Regions>;
 }
 
@@ -349,7 +359,12 @@ export function layout<
   Page extends LayoutRenderResult = LayoutRenderResult,
   Regions extends LayoutRegionResults = LayoutRegionResults,
 >(
-  definition: LayoutDefinition<Request, Queries, Page, Regions>,
+  definition: Omit<LayoutDefinition<Request, Queries, Page, Regions>, 'access' | 'guard'> &
+    (
+      | { access: AccessDecision; guard?: never }
+      | { access?: never; guard: Guard<Request> }
+      | { access?: never; guard?: never }
+    ),
 ): LayoutDeclaration<Request, Queries, Page, Regions> {
   const closedDefinition = snapshotRouteAuthoringDefinition(
     definition,
@@ -395,7 +410,15 @@ export interface RouteFactory<Request = unknown> {
     >,
   >(
     path: Path,
-    definition?: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, Request, Regions>,
+    definition?: Omit<
+      RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, Request, Regions>,
+      'access' | 'guard'
+    > &
+      (
+        | { access: AccessDecision; guard?: never }
+        | { access?: never; guard: Guard<Request> }
+        | { access?: never; guard?: never }
+      ),
   ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, Request>;
 }
 
@@ -438,15 +461,15 @@ export function route<
   >,
 >(
   path: Path,
-  definition: RouteDefinition<
-    Path,
-    ParamsSchema,
-    SearchSchema,
-    Request,
-    Page,
-    GuardedRequest,
-    Regions
-  > = {},
+  definition: Omit<
+    RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest, Regions>,
+    'access' | 'guard'
+  > &
+    (
+      | { access: AccessDecision; guard?: never }
+      | { access?: never; guard: Guard<Request, GuardedRequest> }
+      | { access?: never; guard?: never }
+    ) = {},
 ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
   const closedDefinition = snapshotRouteAuthoringDefinition(
     definition,
@@ -478,6 +501,7 @@ function snapshotRouteAuthoringDefinition(source: object, label: string): Record
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
     throw new TypeError(`${label} must be a stable own-data record.`);
   }
+  assertUnambiguousAccessDeclaration(source, label);
   const keys = witnessOwnKeys(source);
   if (keys.length > 100_000) throw new TypeError(`${label} must be bounded.`);
   const snapshot = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
@@ -960,9 +984,8 @@ function routeLayoutChain(
  * Return whether route execution enforces an authored route/layout guard before rendering.
  *
  * SPEC §9.4/§9.5: cache posture must follow the exact authorization graph, including every
- * parent layout. An `access` guard array is authoritative; a legacy `guard` is effective only when
- * `access` is absent because explicit `publicAccess`/`verifiedAccess` decisions suppress that
- * fallback in {@link runAccessDecisionGuards}.
+ * parent layout. Constructors reject declarations that author both access mechanisms, so an
+ * `access` guard array or a legacy `guard` authored alone is the effective authorization path.
  *
  * @internal
  */

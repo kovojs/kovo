@@ -6,7 +6,11 @@ import type {
   Redirect,
 } from '@kovojs/core';
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
-import { pinAccessDecision, type AccessDecision } from '../access.js';
+import {
+  assertUnambiguousAccessDeclaration,
+  pinAccessDecision,
+  type AccessDecision,
+} from '../access.js';
 import type { CookieOptions } from '../cookies.js';
 import { snapshotMutationCsrfOptions, type CsrfOptions } from '../csrf.js';
 import type { Domain } from '../domain.js';
@@ -381,6 +385,8 @@ export interface MutationDefinition<
   ) => Promise<Result>;
 }
 
+type MutationDefinitionWithoutKey = Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>;
+
 /**
  * CSRF fields accepted by {@link mutation} declarations (SPEC §6.6/§9.1).
  *
@@ -471,8 +477,13 @@ export interface MutationFactory<Request = unknown> {
   >(
     definition: Omit<
       MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest>,
-      'csrf' | 'csrfJustification' | 'key'
+      'access' | 'csrf' | 'csrfJustification' | 'guard' | 'key'
     > &
+      (
+        | { access: AccessDecision; guard?: never }
+        | { access?: never; guard: Guard<ContextRequest, GuardedRequest> }
+        | { access?: never; guard?: never }
+      ) &
       MutationCsrfDeclaration<ContextRequest>,
   ): MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest> &
     MutationFormDefinition<string, ContextRequest>;
@@ -523,8 +534,13 @@ export function mutation<
 >(
   definition: Omit<
     MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest>,
-    'csrf' | 'csrfJustification' | 'key'
+    'access' | 'csrf' | 'csrfJustification' | 'guard' | 'key'
   > &
+    (
+      | { access: AccessDecision; guard?: never }
+      | { access?: never; guard: Guard<Request, GuardedRequest> }
+      | { access?: never; guard?: never }
+    ) &
     MutationCsrfDeclaration<Request>,
 ): MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest> &
   MutationFormDefinition<string, Request>;
@@ -539,14 +555,46 @@ export function mutation<
   key: Key,
   definition: Omit<
     MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
-    'csrf' | 'csrfJustification' | 'key'
+    'access' | 'csrf' | 'csrfJustification' | 'guard' | 'key'
   > &
+    (
+      | { access: AccessDecision; guard?: never }
+      | { access?: never; guard: Guard<Request, GuardedRequest> }
+      | { access?: never; guard?: never }
+    ) &
     MutationCsrfDeclaration<Request>,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> &
   MutationFormDefinition<Key, Request>;
 export function mutation(
-  keyOrDefinition: string | Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
-  definition?: Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
+  keyOrDefinition: string | MutationDefinitionWithoutKey,
+  definition?: MutationDefinitionWithoutKey,
+): MutationDefinition<string> & MutationFormDefinition<string> {
+  return constructMutationDeclaration(keyOrDefinition, definition);
+}
+
+/** @internal Runtime-validating constructor used by fixed-key framework adapters. */
+export function constructMutationDeclaration<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
+  Request = unknown,
+  Value = unknown,
+  GuardedRequest extends Request = Request,
+>(
+  key: Key,
+  definition: Omit<
+    MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+    'key'
+  >,
+): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> &
+  MutationFormDefinition<Key, Request>;
+export function constructMutationDeclaration(
+  keyOrDefinition: string | MutationDefinitionWithoutKey,
+  definition?: MutationDefinitionWithoutKey,
+): MutationDefinition<string> & MutationFormDefinition<string>;
+export function constructMutationDeclaration(
+  keyOrDefinition: string | MutationDefinitionWithoutKey,
+  definition?: MutationDefinitionWithoutKey,
 ): MutationDefinition<string> & MutationFormDefinition<string> {
   if (typeof keyOrDefinition === 'string') {
     if (definition === undefined) {
@@ -595,11 +643,12 @@ export function mutation(
 }
 
 function snapshotMutationDefinition(
-  source: Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
-): Omit<MutationDefinition<any, any, any, any, any, any>, 'key'> {
+  source: MutationDefinitionWithoutKey,
+): MutationDefinitionWithoutKey {
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
     throw new TypeError('mutation() requires a stable own-data definition object.');
   }
+  assertUnambiguousAccessDeclaration(source, 'mutation() definition');
   const keys = witnessOwnKeys(source);
   if (keys.length > 100_000) throw new TypeError('mutation() definition must be bounded.');
   const snapshot = witnessCreateNullRecord<unknown>();
@@ -636,7 +685,7 @@ function snapshotMutationDefinition(
     });
   }
   validateMutationCsrfPosture(snapshot);
-  return snapshot as Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>;
+  return snapshot as MutationDefinitionWithoutKey;
 }
 
 /**
@@ -674,9 +723,7 @@ export function assignDerivedMutationKey<Mutation extends MutationDefinition<str
   // Consume before reconstruction. Any getter/descriptor failure below permanently closes this
   // transition instead of allowing a caller to mutate and retry the same witnessed declaration.
   witnessWeakMapSet(declaredMutationDefinitions, definition, witnessFreeze({ state: 'consumed' }));
-  const closedDefinition = snapshotMutationDefinition(
-    definition as Omit<MutationDefinition<any, any, any, any, any, any>, 'key'>,
-  );
+  const closedDefinition = snapshotMutationDefinition(definition as MutationDefinitionWithoutKey);
   const queue =
     closedDefinition.queue === true ? boundedKey : normalizeMutationQueue(closedDefinition.queue);
   return markDeclaredMutationDefinition(
