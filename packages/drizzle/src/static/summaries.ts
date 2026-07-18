@@ -35,6 +35,7 @@ import {
   emptySessionProvenanceContext,
   opaqueAliasReasonForExpression,
   privateScopeForExpression,
+  privateScopeHelperCallCarrierIsProven,
   privateScopeKey,
   sessionProvenanceContextForNodes,
 } from './session-provenance.js';
@@ -2108,6 +2109,7 @@ function summarizedStaticCallPrivateScope(
 ): PrivateScopeProvenance | undefined {
   const node = unwrappedStaticExpressionNode(expression);
   if (!Node.isCallExpression(node)) return undefined;
+  if (!privateScopeHelperCallCarrierIsProven(node)) return undefined;
 
   const callee = unwrappedStaticExpressionNode(node.getExpression());
   return summarizedStaticCallablePrivateScope(callee, sessionContext);
@@ -2118,9 +2120,8 @@ function privateScopeForOwnerPredicateExpression(
   sessionContext: SessionProvenanceContext,
 ): PrivateScopeProvenance | undefined {
   const node = unwrappedStaticExpressionNode(expression);
-  // OPP-28 owner-principal proof must not inherit the shared call-name fallback:
-  // callable helpers prove scope only when this file pins the callee identity back
-  // to an explicit kovoAnalyzerSummary.
+  // OPP-28 owner-principal proof does not infer arbitrary calls. Candidate helpers
+  // are admitted only through session-provenance's exact symbol/body/call proof.
   return Node.isCallExpression(node) ? undefined : privateScopeForExpression(node, sessionContext);
 }
 

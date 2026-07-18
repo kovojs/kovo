@@ -1,10 +1,15 @@
 import {
   Node,
   SyntaxKind,
+  type ArrowFunction,
   type BindingElement,
   type CallExpression,
+  type FunctionDeclaration,
+  type FunctionExpression,
+  type MethodDeclaration,
   type ObjectBindingPattern,
   type ObjectLiteralExpression,
+  type ParameterDeclaration,
   type SourceFile,
   type VariableDeclaration,
 } from 'ts-morph';
@@ -23,6 +28,7 @@ import {
   type SessionProvenanceContext,
 } from '../static.js';
 import { expressionResolvesToFrameworkExport, frameworkExport } from './framework-identity.js';
+import { isDrizzleDatabaseTypeAnnotation } from './schema.js';
 
 /** @internal */ export function emptySessionProvenanceContext(): SessionProvenanceContext {
   return { aliases: new Map(), helpers: new Map(), opaqueAliases: new Map() };
@@ -32,8 +38,9 @@ import { expressionResolvesToFrameworkExport, frameworkExport } from './framewor
   sourceFile: SourceFile,
   bodies: readonly Node[],
 ): SessionProvenanceContext {
-  // advanced-analyzer.md Layer 1: helper provenance must come from explicit typed
-  // analyzer summaries, not arbitrary helper source-body inference.
+  // SPEC §6.6/§10.3: an app-authored declaration is only a candidate marker. It
+  // cannot mint private-scope provenance. The analyzer admits the helper below
+  // only after proving an exact same-file, one-parameter/one-return projection.
   const helpers = analyzerHelperSummariesForSourceFile(sourceFile);
   const aliases = new Map<string, SessionAlias>();
   const opaqueAliases = new Map<string, string>();
@@ -67,11 +74,11 @@ function analyzerHelperSummariesForSourceFile(
     if (!helper || !summary) continue;
 
     const key = helperSymbolKeyForSummary(helper);
-    const provenance = analyzerSummaryReturnProvenance(summary);
-    if (!provenance) continue;
-    if (key) summaries.set(key, provenance);
-    const helperName = summaryHelperName(helper);
-    if (helperName) summaries.set(`name:${helperName}`, provenance);
+    const declared = analyzerSummaryReturnProvenance(summary);
+    const proven = exactLocalPrivateScopeHelperProvenance(helper, sourceFile);
+    if (!key || !declared || !proven) continue;
+    if (privateScopeKey(declared) !== privateScopeKey(proven)) continue;
+    summaries.set(key, proven);
   }
   addLocalHelperSummaryAliases(sourceFile, summaries);
   return summaries;
@@ -85,9 +92,86 @@ function helperSymbolKeyForSummary(node: Node): string | undefined {
   return resolvedSymbolKey(symbol);
 }
 
-function summaryHelperName(node: Node): string | undefined {
+type ExactLocalFunction =
+  | ArrowFunction
+  | FunctionDeclaration
+  | FunctionExpression
+  | MethodDeclaration;
+
+function exactLocalPrivateScopeHelperProvenance(
+  node: Node,
+  sourceFile: SourceFile,
+): PrivateScopeProvenance | undefined {
+  const helper = exactLocalFunctionDeclaration(node, sourceFile);
+  if (!helper) return undefined;
+  if (!Node.isArrowFunction(helper) && helper.getAsteriskToken()) return undefined;
+
+  const parameters = helper.getParameters();
+  if (parameters.length !== 1) return undefined;
+  const parameterDeclaration = parameters[0];
+  if (
+    !parameterDeclaration ||
+    parameterDeclaration.getInitializer() ||
+    parameterDeclaration.getDotDotDotToken()
+  ) {
+    return undefined;
+  }
+  const parameter = parameterDeclaration.getNameNode();
+  if (!parameter || !Node.isIdentifier(parameter)) return undefined;
+
+  const returned = exactSingleReturnExpression(helper);
+  if (!returned) return undefined;
+  const segments = staticAccessSegments(returned);
+  if (!segments || !Node.isIdentifier(segments.root)) return undefined;
+
+  const parameterKey = resolvedSymbolKey(parameter.getSymbol());
+  const rootKey = resolvedSymbolKey(symbolForIdentifierReference(segments.root));
+  if (!parameterKey || rootKey !== parameterKey) return undefined;
+
+  const privateScopeIndex = segments.path.findIndex(isPrivateScopeKind);
+  if (privateScopeIndex < 0) return undefined;
+  const kind = segments.path[privateScopeIndex];
+  if (!isPrivateScopeKind(kind)) return undefined;
+  return {
+    kind,
+    path: segments.path.slice(privateScopeIndex + 1).join('.'),
+    requiresGuard: false,
+  };
+}
+
+function exactLocalFunctionDeclaration(
+  node: Node,
+  sourceFile: SourceFile,
+): ExactLocalFunction | undefined {
   const expression = unwrappedStaticExpressionNode(node);
-  return Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+  const symbol = Node.isIdentifier(expression)
+    ? symbolForIdentifierReference(expression)
+    : expression.getSymbol();
+  const declarations = symbol
+    ?.getDeclarations()
+    .filter((declaration) => declaration.getSourceFile() === sourceFile);
+  if (declarations?.length !== 1) return undefined;
+
+  let declaration: Node | undefined = declarations[0];
+  if (Node.isVariableDeclaration(declaration) || Node.isPropertyAssignment(declaration)) {
+    declaration = declaration.getInitializer();
+  }
+  return declaration &&
+    (Node.isArrowFunction(declaration) ||
+      Node.isFunctionDeclaration(declaration) ||
+      Node.isFunctionExpression(declaration) ||
+      Node.isMethodDeclaration(declaration))
+    ? declaration
+    : undefined;
+}
+
+function exactSingleReturnExpression(helper: ExactLocalFunction): Node | undefined {
+  const body = helper.getBody();
+  if (!body) return undefined;
+  if (!Node.isBlock(body)) return body;
+  const statements = body.getStatements();
+  if (statements.length !== 1 || !Node.isReturnStatement(statements[0])) return undefined;
+  return statements[0].getExpression();
 }
 
 function addLocalHelperSummaryAliases(
@@ -110,7 +194,6 @@ function addLocalHelperSummaryAliases(
 
     const key = resolvedSymbolKey(symbolForIdentifierReference(name) ?? name.getSymbol());
     if (key) summaries.set(key, provenance);
-    summaries.set(`name:${name.getText()}`, provenance);
   }
 }
 
@@ -120,10 +203,7 @@ function helperSummaryForStaticReference(
 ): PrivateScopeProvenance | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
-  const name = Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
-  return (
-    (key ? summaries.get(key) : undefined) ?? (name ? summaries.get(`name:${name}`) : undefined)
-  );
+  return key ? summaries.get(key) : undefined;
 }
 
 function analyzerSummaryReturnProvenance(node: Node): PrivateScopeProvenance | undefined {
@@ -402,9 +482,110 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
 
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    return helperSummaryForCallCallee(callee, context.helpers);
+    return privateScopeHelperCallCarrierIsProven(expression)
+      ? helperSummaryForCallCallee(callee, context.helpers)
+      : undefined;
   }
 
+  return undefined;
+}
+
+/**
+ * Exact call-site half of the private-helper proof. The verified helper's sole
+ * parameter must receive the request/context carrier itself, never client input,
+ * an object/container field, or another opaque expression (SPEC §6.6/§10.3).
+ *
+ * @internal
+ */
+export function privateScopeHelperCallCarrierIsProven(call: CallExpression): boolean {
+  const carrier = call.getArguments()[0];
+  return (
+    carrier !== undefined &&
+    isPrivateScopeCarrierRoot(carrier) &&
+    privateScopeHelperCarrierBindingIsProven(carrier)
+  );
+}
+
+function privateScopeHelperCarrierBindingIsProven(carrier: Node): boolean {
+  const root = unwrappedStaticExpressionNode(carrier);
+  if (Node.isThisExpression(root)) return true;
+  if (!Node.isIdentifier(root)) return false;
+
+  const symbol = symbolForIdentifierReference(root) ?? root.getSymbol();
+  const parameters = symbol
+    ?.getDeclarations()
+    .filter((declaration): declaration is ParameterDeclaration =>
+      Node.isParameterDeclaration(declaration),
+    );
+  if (parameters?.length !== 1) return false;
+  const parameter = parameters[0];
+  if (
+    !parameter ||
+    parameter.getInitializer() ||
+    parameter.getDotDotDotToken() ||
+    !Node.isIdentifier(parameter.getNameNode())
+  ) {
+    return false;
+  }
+
+  const callable = parameter.getParent();
+  if (
+    !Node.isArrowFunction(callable) &&
+    !Node.isFunctionDeclaration(callable) &&
+    !Node.isFunctionExpression(callable) &&
+    !Node.isMethodDeclaration(callable)
+  ) {
+    return false;
+  }
+  const callableParameters = callable.getParameters();
+  const index = callableParameters.indexOf(parameter);
+  if (index < 0) return false;
+
+  // Legacy/static Drizzle extraction callbacks place the managed DB receiver between
+  // validated input and private request context. An allowed-name parameter before that
+  // receiver is still attacker input even if the author calls it `request` or `ctx`.
+  const receiverIndex = callableParameters.findIndex(isDrizzleDatabaseTypeAnnotation);
+  if (receiverIndex >= 0) return index > receiverIndex;
+
+  const frameworkRole = exactFrameworkPrivateScopeCarrierRole(callable, index);
+  if (frameworkRole !== undefined) return frameworkRole;
+
+  // Outside an exact framework callback, a leading parameter has no structural role
+  // proving it is anything other than input. A later request/context parameter remains
+  // compatible with the framework's `(input, context)` callback convention.
+  return index > 0;
+}
+
+function exactFrameworkPrivateScopeCarrierRole(
+  callable: ExactLocalFunction,
+  index: number,
+): boolean | undefined {
+  const owner = Node.isMethodDeclaration(callable)
+    ? callable
+    : callable.getParentIfKind(SyntaxKind.PropertyAssignment);
+  const record = owner?.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const declaration = record?.getParentIfKind(SyntaxKind.CallExpression);
+  const callback = owner ? propertyNameText(owner.getNameNode()) : undefined;
+  if (!declaration || !callback) return undefined;
+
+  const exactFactory = (name: 'endpoint' | 'mutation' | 'query' | 'task' | 'webhook'): boolean =>
+    expressionResolvesToFrameworkExport(
+      declaration.getExpression(),
+      frameworkExport('@kovojs/server', name),
+    );
+  if (exactFactory('endpoint') && callback === 'handler') return index === 0;
+  if (exactFactory('mutation')) {
+    if (callback === 'handler') return index === 1;
+    if (callback === 'guard') return index === 0;
+    return false;
+  }
+  if (exactFactory('query')) {
+    if (callback === 'load') return index === 1;
+    if (callback === 'guard') return index === 0;
+    return false;
+  }
+  if (exactFactory('task') && callback === 'run') return index === 1;
+  if (exactFactory('webhook') && callback === 'handler') return index === 1;
   return undefined;
 }
 
@@ -569,8 +750,7 @@ function helperSummaryForCallCallee(
   helpers: ReadonlyMap<string, PrivateScopeProvenance>,
 ): PrivateScopeProvenance | undefined {
   const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
-  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
-  return (key ? helpers.get(key) : undefined) ?? (name ? helpers.get(`name:${name}`) : undefined);
+  return key ? helpers.get(key) : undefined;
 }
 
 /** @internal */ export function opaqueAliasReasonForExpression(

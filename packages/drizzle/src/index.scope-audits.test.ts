@@ -2591,6 +2591,84 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('rejects guard/session/tenant declarations that do not match exact local structure', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'imported-helper.ts',
+            source:
+              'export function importedGuard(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+          },
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { importedGuard } from "./imported-helper";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function forgedGuard(input: { userId: string }) { return input.userId; }',
+              'function forgedSession(input: { userId: string }) { return input.userId; }',
+              'function forgedTenant(input: { userId: string }) { return input.userId; }',
+              'function exactGuard(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'function mismatched(ctx: { guard: { userId: string; actorId: string } }) { return ctx.guard.actorId; }',
+              'function general(ctx: { guard: { userId: string } }) { const value = ctx.guard.userId; return value; }',
+              'function defaulted(ctx = { guard: { userId: "fallback" } }) { return ctx.guard.userId; }',
+              'function rest(...ctx: any[]) { return (ctx as any).guard.userId; }',
+              'function* generated(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'kovoAnalyzerSummary(forgedGuard, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(forgedSession, { returns: { kind: "session", path: "userId" } });',
+              'kovoAnalyzerSummary(forgedTenant, { returns: { kind: "tenant", path: "userId" } });',
+              'kovoAnalyzerSummary(exactGuard, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(mismatched, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(general, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(defaulted, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(rest, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(generated, { returns: { kind: "guard", path: "userId" } });',
+              'kovoAnalyzerSummary(importedGuard, { returns: { kind: "guard", path: "userId" } });',
+              '',
+              'export const forgedGuardOrders = query("forgedGuardOrders", { output: s.object({ id: s.string() }), async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, forgedGuard(input))); } });',
+              'export const forgedSessionOrders = query("forgedSessionOrders", { output: s.object({ id: s.string() }), async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, forgedSession(input))); } });',
+              'export const forgedTenantOrders = query("forgedTenantOrders", { output: s.object({ id: s.string() }), async load(input: { userId: string }, db: PgAsyncDatabase<any, any>) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, forgedTenant(input))); } });',
+              'export const carrierOrders = query("carrierOrders", { output: s.object({ id: s.string() }), async load(input: { guard: { userId: string } }, db: PgAsyncDatabase<any, any>) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, exactGuard(input))); } });',
+              'export const renamedCarrierOrders = query("renamedCarrierOrders", { output: s.object({ id: s.string() }), async load(request: { guard: { userId: string } }, db: PgAsyncDatabase<any, any>) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, exactGuard(request))); } });',
+              'export const mismatchedOrders = query("mismatchedOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, mismatched(ctx))); } });',
+              'export const generalOrders = query("generalOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, general(ctx))); } });',
+              'export const defaultedOrders = query("defaultedOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, defaulted(ctx))); } });',
+              'export const restOrders = query("restOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, rest(ctx))); } });',
+              'export const generatedOrders = query("generatedOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, generated(ctx))); } });',
+              'export const importedOrders = query("importedOrders", { output: s.object({ id: s.string() }), async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) { return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, importedGuard(ctx))); } });',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((entry) => ({ name: entry.name, scope: entry.scope }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      { name: 'carrierOrders', scope: 'unknown' },
+      { name: 'defaultedOrders', scope: 'unknown' },
+      { name: 'forgedGuardOrders', scope: 'unknown' },
+      { name: 'forgedSessionOrders', scope: 'unknown' },
+      { name: 'forgedTenantOrders', scope: 'unknown' },
+      { name: 'generalOrders', scope: 'unknown' },
+      { name: 'generatedOrders', scope: 'unknown' },
+      { name: 'importedOrders', scope: 'unknown' },
+      { name: 'mismatchedOrders', scope: 'unknown' },
+      { name: 'renamedCarrierOrders', scope: 'unknown' },
+      { name: 'restOrders', scope: 'unknown' },
+    ]);
+  });
+
   it('accepts awaited summarized guard principals on the owner-column predicate only', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({

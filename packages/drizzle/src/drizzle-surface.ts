@@ -29,27 +29,25 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = immutablePolicySet([
 
 export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 
-/** Private server-side provenance kinds that the analyzer may use as proof inputs. */
+/** Private server-side provenance kinds used by exact local helper projections. */
 export type KovoAnalyzerPrivateScopeKind = 'guard' | 'session' | 'tenant';
 
 /**
- * The return-provenance kinds a `kovoAnalyzerSummary` may declare. The private-scope
- * kinds (`guard`/`session`/`tenant`) carry a `path` and feed the §10.3 IDOR/session
- * proof. The `server` kind (SPEC §11.1, secure-framework Phase 3) declares that the
- * helper returns a server-derived value with NO request-input provenance — it
- * discharges the write-provenance gate (KV438) for a legitimate server-computed
- * governed value (e.g. `resolveOwner()`), without the looser/false-positive-prone
- * reflexive `serverValue` wrap. It carries no path.
+ * The return-provenance kinds a `kovoAnalyzerSummary` may mark for structural
+ * verification. A declaration never grants provenance by itself: the analyzer must
+ * prove an exact same-file helper projection whose body and path match the marker
+ * (SPEC §6.6/§10.3).
  */
-export type KovoAnalyzerReturnKind = KovoAnalyzerPrivateScopeKind | 'server';
+export type KovoAnalyzerReturnKind = KovoAnalyzerPrivateScopeKind;
 
 /**
- * A declared analyzer summary for a pure helper. The helper body is not inspected
- * for provenance; the static analyzer consumes this typed declaration instead.
+ * A candidate marker for a private-scope helper. Security verdicts use only the
+ * analyzer's exact structural proof; imported, multi-statement, mismatched, or
+ * otherwise opaque helpers remain unknown regardless of this declaration.
  */
-export type KovoAnalyzerFunctionSummary =
-  | { returns: { kind: KovoAnalyzerPrivateScopeKind; path: string } }
-  | { returns: { kind: 'server'; path?: string } };
+export type KovoAnalyzerFunctionSummary = {
+  returns: { kind: KovoAnalyzerPrivateScopeKind; path: string };
+};
 
 /**
  * A column reference inside a Kovo annotation: either the column name as a
@@ -313,12 +311,13 @@ function assertKnownKovoAnnotationFields(
 }
 
 /**
- * Declare a typed provenance summary for a same-package helper that participates
- * in server-side invalidation or optimistic-update proof. The runtime value is
- * the original helper; only the analyzer consumes the summary object.
+ * Mark a same-file private-scope helper as a candidate for exact structural
+ * verification. The marker is not an author assertion and cannot grant a security
+ * verdict: the helper must be a one-parameter, one-return projection whose body
+ * exactly matches `kind` and `path`. The runtime value is the original helper.
  *
  * @param helper - The pure helper being summarized.
- * @param summary - A typed private-scope provenance summary.
+ * @param summary - The private-scope projection the analyzer must independently verify.
  * @returns The original helper, unchanged at runtime.
  * @example
  * import { kovoAnalyzerSummary } from '@kovojs/drizzle';

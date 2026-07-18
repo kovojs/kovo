@@ -1154,6 +1154,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'trusted-assign-audited-escape-closed-grammar',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'admits only exact audited trustedAssign calls while retaining nested closed verdicts',
+          "trustedAssign(opaque(input.email), 'reviewed grant')",
+          "trustedAssign(process.env.CONTACT_ID, 'reviewed grant')",
+          "server.trustedAssign(input.email, 'reviewed grant')",
+          'const grant = trustedAssign;',
+          "trustedAssign(input.email, { ['reason']: 'reviewed grant' })",
+          "trustedAssign(input.email, { reason: 'reviewed grant', reason: 'again' })",
+        ],
+      },
+      {
         id: 'module-scope-authority-controls',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
@@ -2442,6 +2455,65 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'nested false spread with no enumerable keys',
           'keeps emitted runtime sink authority for statically omitted spread values',
           'accepts wire-stable DOM and submitted identities',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'drizzle-analyzer-provenance',
+    marker: '@kovo-security-classifier-corpus drizzle-analyzer-provenance',
+    testFiles: [
+      'packages/drizzle/src/index.scope-audits.test.ts',
+      'packages/drizzle/src/index.mass-assignment.test.ts',
+      'packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'private-summary-structural-proof-boundary',
+        file: 'packages/drizzle/src/index.scope-audits.test.ts',
+        snippets: [
+          'accepts an explicitly summarized guard principal on the owner-column predicate',
+          'rejects guard/session/tenant declarations that do not match exact local structure',
+          'forgedGuard(input)',
+          'forgedSession(input)',
+          'forgedTenant(input)',
+          'exactGuard(input)',
+          'function rest(...ctx: any[])',
+          'function* generated',
+          'kovoAnalyzerSummary(importedGuard',
+          "{ name: 'mismatchedOrders', scope: 'unknown' }",
+          'renamedCarrierOrders',
+          "{ name: 'renamedCarrierOrders', scope: 'unknown' }",
+        ],
+      },
+      {
+        id: 'server-summary-cannot-launder-attacker-input',
+        file: 'packages/drizzle/src/index.mass-assignment.test.ts',
+        snippets: [
+          'rejects app-declared server provenance for a helper returning attacker input',
+          'function resolveOwner(input: { ownerId: string }) { return input.ownerId; }',
+          "detail: 'resolveOwner(input)'",
+          'keeps declared and plain helper calls unknown',
+        ],
+      },
+      {
+        id: 'server-value-requires-positive-non-input-proof',
+        file: 'packages/drizzle/src/index.mass-assignment.test.ts',
+        snippets: [
+          'rejects serverValue when opaque helper flow is not proven non-input',
+          'serverValue(opaque(input.role)',
+          'serverValue(container.role',
+          'rejects serverValue with no value argument',
+          "detail: 'serverValue()'",
+        ],
+      },
+      {
+        id: 'exact-private-helper-positive-control',
+        file: 'packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts',
+        snippets: [
+          'uses exact structurally verified same-file session helper provenance',
+          'return request.session.id;',
+          "{ kind: 'session', path: 'id' }",
         ],
       },
     ],

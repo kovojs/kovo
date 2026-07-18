@@ -1,4 +1,4 @@
-import { mutation, s, serverValue, type MutationContext } from '@kovojs/server';
+import { mutation, s, trustedAssign, type MutationContext } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
 
 import { appAuthed, appCsrf, type AppRequest } from './auth.js';
@@ -34,7 +34,7 @@ async function writeContact(
   await db.insert(contacts).values({
     company: row.company,
     email: row.email,
-    id: serverValue(id, 'server-generated contact id'),
+    id: trustedAssign(id, 'opaque server-generated contact id'),
     name: row.name,
   });
 }

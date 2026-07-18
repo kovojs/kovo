@@ -418,8 +418,9 @@ await db.update(accounts).set({
 });
 ```
 
-`serverValue(...)` says the value is framework or app-server provenance. `trustedAssign(...)` says an
-authorized admin action intentionally writes a governed column and leaves an audit row.
+`serverValue(...)` documents a literal or private value that Kovo already proves is not request
+input. It does not accept an opaque helper result. Use `trustedAssign(...)` for an intentionally
+reviewed opaque computation or an authorized admin write; it leaves an audit row.
 
 ## Serve file downloads with capability URLs
 

@@ -8,8 +8,8 @@
 // proof). They are runtime-transparent — they return the value unchanged — and exist so
 // the analyzer can recognize a deliberate, justified write at the call site:
 //
-//   serverValue(value, reason)  — assert a NON-input value is server-derived. The
-//                                 analyzer still rejects `serverValue(input.x, …)`.
+//   serverValue(value, reason)  — document a value already proven non-input. The
+//                                 analyzer rejects input and opaque/unknown values.
 //   trustedAssign(value, reason)  — the louder, audited path for a deliberate privileged
 //                                 write of a request value to a governed column. Recorded
 //                                 for `kovo explain --writes`.
@@ -57,14 +57,17 @@ const trustedAssignFacts = createBoundedRuntimeAuditCollector<TrustedAssignFact>
 /**
  * Assert that `value` is a server-derived (non-request-input) value flowing into a
  * governed column (SPEC §11.1, KV438). Runtime-transparent: returns `value` unchanged.
- * The analyzer discharges KV438 for this call ONLY when `value` is not request input —
- * `serverValue(input.role, …)` still fails the gate (the assertion cannot launder input).
+ * The analyzer discharges KV438 only when it independently proves `value` literal or
+ * private/server-derived. Request input and opaque computations both fail closed:
+ * neither `serverValue(input.role, …)` nor `serverValue(helper(input.role), …)` can
+ * launder provenance. Use {@link trustedAssign} for a deliberately reviewed opaque
+ * server computation.
  *
  * @param value - The server-derived value being written.
  * @param reason - A short justification, surfaced in review.
  * @returns `value`, unchanged.
  * @example
- * await db.insert(orders).values({ id: serverValue(generatedId, 'server-generated key'), ... });
+ * await db.insert(users).values({ role: serverValue('member', 'default role'), ... });
  */
 export function serverValue<T>(value: T, reason: string): T {
   snapshotAuditReason(reason, 'serverValue() (KV438)');

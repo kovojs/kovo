@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { Node, Project, SyntaxKind } from 'ts-morph';
+import { Project, SyntaxKind } from 'ts-morph';
 
 import {
   extractMassAssignmentFromProject,
-  serverSummaryKeysForSourceFile,
   symbolProvenanceContextForNodes,
   symbolProvenanceForExpression,
 } from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
+// @kovo-security-classifier-corpus drizzle-analyzer-provenance
 // SPEC §10.3/§11.1 — the §11.1 mass-assignment write-provenance gate (KV438).
 // Governed columns: the table `key` (PK) + `owner` (auto-governed) + `kovo({ governed })`.
 
@@ -213,6 +213,39 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
   });
 
+  it('rejects serverValue when opaque helper flow is not proven non-input', () => {
+    const result = facts(
+      handler(
+        [
+          '  function opaque(value: string) { return value; }',
+          '  const alias = opaque(input.role);',
+          '  const container = { role: opaque(input.role) };',
+          '  await db.update(accounts).set({ role: serverValue(opaque(input.role), "opaque"), balance: serverValue(alias, "alias"), ownerId: serverValue(container.role, "container") }).where(eq(accounts.id, input.id));',
+        ].join('\n'),
+      ),
+    );
+    expect(
+      result
+        .map((fact) => ({ column: fact.column, detail: fact.detail, provenance: fact.provenance }))
+        .sort((left, right) => left.column.localeCompare(right.column)),
+    ).toEqual([
+      { column: 'balance', detail: 'alias', provenance: 'unknown' },
+      { column: 'ownerId', detail: 'container.role', provenance: 'unknown' },
+      { column: 'role', detail: 'opaque(input.role)', provenance: 'unknown' },
+    ]);
+  });
+
+  it('rejects serverValue with no value argument', () => {
+    const result = facts(
+      handler(
+        '  await db.update(accounts).set({ role: serverValue() }).where(eq(accounts.id, input.id));',
+      ),
+    );
+    expect(result).toMatchObject([
+      { column: 'role', detail: 'serverValue()', provenance: 'unknown', via: 'set' },
+    ]);
+  });
+
   it('honors per-row serverValue provenance inside bulk values array literals', () => {
     const result = facts(
       handler(
@@ -360,7 +393,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
   });
 
-  it('passes a kovoAnalyzerSummary("server") helper-computed governed value', () => {
+  it('rejects app-declared server provenance for a helper returning attacker input', () => {
     const result = facts(
       [
         HEADER,
@@ -372,7 +405,15 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         '};',
       ].join('\n'),
     );
-    expect(result).toEqual([]);
+    expect(result).toMatchObject([
+      {
+        column: 'ownerId',
+        detail: 'resolveOwner(input)',
+        domain: 'account',
+        provenance: 'unknown',
+        via: 'set',
+      },
+    ]);
   });
 
   it('rejects a local fake kovoAnalyzerSummary declaration', () => {
@@ -745,10 +786,9 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
   });
 });
 
-// Conformance: the new `server` analyzer-summary CallExpression branch must be
-// confined to opted-in contexts and never relax the fail-closed default that backs
-// KV435/IDOR confidentiality. A plain (unsummarized) call still resolves to `unknown`.
-describe('symbol-provenance server-summary branch (KV435/IDOR conformance)', () => {
+// SPEC §6.6/§10.3: app declarations cannot widen symbol provenance. Every opaque
+// helper call stays unknown for KV438 as well as KV435/IDOR consumers.
+describe('symbol-provenance app-summary fail-closed contract', () => {
   function source(text: string) {
     const project = new Project({
       compilerOptions: { module: 99, moduleResolution: 2, target: 99 },
@@ -757,7 +797,7 @@ describe('symbol-provenance server-summary branch (KV435/IDOR conformance)', () 
     return project.createSourceFile('fixture.ts', text);
   }
 
-  it('resolves a server-summary helper to server but leaves a plain helper unknown', () => {
+  it('keeps declared and plain helper calls unknown', () => {
     const file = source(
       [
         'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
@@ -773,37 +813,30 @@ describe('symbol-provenance server-summary branch (KV435/IDOR conformance)', () 
     );
     const body = file.getFunctionOrThrow('handler').getBodyOrThrow();
     const inputRoot = file.getFunctionOrThrow('handler').getParameters()[0]!.getNameNode();
-    const context = symbolProvenanceContextForNodes([body], {
-      inputRoots: [inputRoot],
-      serverSummaryKeys: serverSummaryKeysForSourceFile(file),
-    });
+    const context = symbolProvenanceContextForNodes([body], { inputRoots: [inputRoot] });
     const shorthand = (name: string) =>
       file
         .getDescendantsOfKind(SyntaxKind.ShorthandPropertyAssignment)
         .find((node) => node.getName() === name)!
         .getNameNode();
-    expect(symbolProvenanceForExpression(shorthand('a'), context)).toEqual({
-      kind: 'server',
-      path: '',
-    });
+    expect(symbolProvenanceForExpression(shorthand('a'), context)).toEqual({ kind: 'unknown' });
     expect(symbolProvenanceForExpression(shorthand('b'), context)).toEqual({ kind: 'unknown' });
   });
 
-  it('without serverSummaryKeys (the KV435/IDOR consumer config) a call stays unknown', () => {
+  it('does not infer a server helper from a declaration with no input arguments', () => {
     const file = source(
       [
         'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
-        'function resolveOwner(input: { ownerId: string }) { return input.ownerId; }',
+        'function resolveOwner() { return "owner-1"; }',
         'kovoAnalyzerSummary(resolveOwner, { returns: { kind: "server" } });',
         'export function handler(input: { ownerId: string }) {',
-        '  const a = resolveOwner(input);',
+        '  const a = resolveOwner();',
         '  return { a };',
         '}',
       ].join('\n'),
     );
     const body = file.getFunctionOrThrow('handler').getBodyOrThrow();
     const inputRoot = file.getFunctionOrThrow('handler').getParameters()[0]!.getNameNode();
-    // Confidentiality consumers do NOT pass serverSummaryKeys → the branch is inert.
     const context = symbolProvenanceContextForNodes([body], { inputRoots: [inputRoot] });
     const node = file
       .getDescendantsOfKind(SyntaxKind.ShorthandPropertyAssignment)

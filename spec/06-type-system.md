@@ -408,6 +408,24 @@ helper actually enforces the intended business rule are not proved by this inter
 an explicit database-engine/runtime-policy and audit responsibility; unknown correspondence stays
 `scope: unknown` and MUST NOT be promoted by naming, types, or a permissive helper summary.
 
+**Analyzer-summary proof boundary (normative).** `kovoAnalyzerSummary` is a candidate marker, not
+an app-authored provenance assertion. A private-scope marker contributes to any invalidation,
+owner-scope, accepted-guard, write, or diagnostic verdict only when the analyzer independently
+resolves the exact same-file helper symbol and proves a single identifier parameter plus a body
+containing exactly one return of a literal property chain rooted in that parameter. The first
+private-scope segment MUST be `guard`, `session`, or `tenant` (for example,
+`parameter.guard.userId` or `parameter.request.session.id`), and the declared kind and path MUST
+exactly equal that segment and the literal suffix after it. An invocation used as a value MUST pass
+the exact framework request/context parameter (`req`, `request`, `ctx`, or `context`), proven by its
+callback/receiver position rather than its spelling, as that argument. Imported
+helpers, multi-statement/general bodies, destructured or additional parameters, computed returns,
+mismatched principals, unresolved symbols, and calls with client input or opaque/container
+arguments remain unknown. Stable same-file `const` references may preserve an already-proven helper
+identity but do not widen its proof. No `server` summary kind exists: general server provenance and
+KV438 cannot be discharged by an app declaration. These restrictions apply uniformly to every
+consumer of session provenance; a looser invalidation or explain path MUST NOT become a security
+side door.
+
 **Build-preset capability boundary (normative).** `KovoPreset` is an opaque, framework-owned
 selection token, not a public structural deployment descriptor. `node()`, `vercel()`, and
 `cloudflare()` mint exact frozen tokens registered by identity in a framework-private `WeakMap`;

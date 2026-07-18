@@ -41,6 +41,17 @@ const compilerSecuritySemanticGraphPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/security-operation-ir.ts',
 );
+const drizzleSessionProvenancePath = path.join(
+  repoRoot,
+  'packages/drizzle/src/static/session-provenance.ts',
+);
+const drizzleSummariesPath = path.join(repoRoot, 'packages/drizzle/src/static/summaries.ts');
+const drizzleDerivationPath = path.join(repoRoot, 'packages/drizzle/src/static/derivation.ts');
+const drizzleSymbolProvenancePath = path.join(
+  repoRoot,
+  'packages/drizzle/src/static/symbol-provenance.ts',
+);
+const drizzleTrustEscapesPath = path.join(repoRoot, 'packages/drizzle/src/trust-escapes-static.ts');
 const trustedHtmlProvenancePath = path.join(
   repoRoot,
   'packages/compiler/src/validate/trusted-html-provenance.ts',
@@ -714,7 +725,138 @@ const semanticRestArgumentClosureBranch =
 const removedSemanticRestArgumentClosureBranch =
   '      } else if (false && restParameterIndex !== undefined && index >= restParameterIndex) {';
 
+const analyzerSummaryStructuralProofBranch =
+  '    const proven = exactLocalPrivateScopeHelperProvenance(helper, sourceFile);';
+const weakenedAnalyzerSummaryStructuralProofBranch = '    const proven = declared;';
+const analyzerSummaryCallCarrierBranch = [
+  '    return privateScopeHelperCallCarrierIsProven(expression)',
+  '      ? helperSummaryForCallCallee(callee, context.helpers)',
+  '      : undefined;',
+].join('\n');
+const weakenedAnalyzerSummaryCallCarrierBranch =
+  '    return helperSummaryForCallCallee(callee, context.helpers);';
+const analyzerSummaryDbReceiverOrderingBranch =
+  '  if (receiverIndex >= 0) return index > receiverIndex;';
+const weakenedAnalyzerSummaryDbReceiverOrderingBranch = '  if (receiverIndex >= 0) return true;';
+const analyzerSummaryStaticCallCarrierBranch =
+  '  if (!privateScopeHelperCallCarrierIsProven(node)) return undefined;';
+const weakenedAnalyzerSummaryStaticCallCarrierBranch =
+  '  if (false && !privateScopeHelperCallCarrierIsProven(node)) return undefined;';
+const serverValueMissingInputClosureBranch = [
+  '      if (!inner) {',
+  "        return { ok: false, provenance: 'unknown', detail: expression.getText() };",
+  '      }',
+].join('\n');
+const weakenedServerValueMissingInputClosureBranch = [
+  '      if (!inner) {',
+  "        return { ok: true, provenance: 'unknown' };",
+  '      }',
+].join('\n');
+const serverValuePositiveProofBranch =
+  "      return innerVerdict.ok ? { ok: true, provenance: 'unknown' } : innerVerdict;";
+const weakenedServerValuePositiveProofBranch =
+  "      return innerVerdict.provenance === 'input' ? innerVerdict : { ok: true, provenance: 'unknown' };";
+const opaqueSymbolCallClosureBranch =
+  '  if (Node.isCallExpression(expression)) return unknownProvenance;';
+const weakenedOpaqueSymbolCallClosureBranch =
+  '  if (Node.isCallExpression(expression)) return serverProvenance;';
+const trustedAssignNestedReviewBranch = [
+  '  if (requestCallIsExactTrustedAssignOutput(call)) {',
+  '    // SPEC §6.6/§10.3: trustedAssign is an authored, audit-visible escape, not a proof',
+  '    // boundary. Review every nested expression before admitting the exact wrapper so an opaque',
+  '    // helper or ambient authority cannot be laundered merely by placing it in the first argument.',
+  '    scanRequestFunctionArguments(call, context);',
+  '    return true;',
+  '  }',
+].join('\n');
+const weakenedTrustedAssignNestedReviewBranch = [
+  '  if (requestCallIsExactTrustedAssignOutput(call)) {',
+  '    return true;',
+  '  }',
+].join('\n');
+
 export const SECURITY_GATE_MUTANTS = [
+  {
+    description: 'Trusts an app analyzer declaration without proving the helper body.',
+    expectedKiller: 'private analyzer summaries must retain exact same-file structural proof',
+    name: 'drizzle-analyzer-summary/drop-structural-body-proof',
+    replacement: weakenedAnalyzerSummaryStructuralProofBranch,
+    search: analyzerSummaryStructuralProofBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryStructuralProofIsPinned,
+  },
+  {
+    description:
+      'Lets a verified private helper receive client input instead of a context carrier.',
+    expectedKiller: 'private helper calls must retain exact request/context carrier proof',
+    name: 'drizzle-analyzer-summary/drop-call-carrier-proof',
+    replacement: weakenedAnalyzerSummaryCallCarrierBranch,
+    search: analyzerSummaryCallCarrierBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryCallCarrierIsPinned,
+  },
+  {
+    description: 'Lets a client-input parameter renamed request pass as private context.',
+    expectedKiller: 'private helper calls must retain receiver-relative parameter-role proof',
+    name: 'drizzle-analyzer-summary/trust-renamed-input-carrier',
+    replacement: weakenedAnalyzerSummaryDbReceiverOrderingBranch,
+    search: analyzerSummaryDbReceiverOrderingBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryDbReceiverOrderingIsPinned,
+  },
+  {
+    description: 'Drops the call-carrier proof from the static summary consumer.',
+    expectedKiller: 'every static summary consumer must retain the same call-carrier proof',
+    name: 'drizzle-analyzer-summary/drop-static-call-carrier-proof',
+    replacement: weakenedAnalyzerSummaryStaticCallCarrierBranch,
+    search: analyzerSummaryStaticCallCarrierBranch,
+    sourceFile: drizzleSummariesPath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryStaticCallCarrierIsPinned,
+  },
+  {
+    description: 'Lets serverValue treat a missing value as proven non-input.',
+    expectedKiller: 'serverValue must reject a missing provenance input',
+    name: 'drizzle-server-value/allow-missing-value',
+    replacement: weakenedServerValueMissingInputClosureBranch,
+    search: serverValueMissingInputClosureBranch,
+    sourceFile: drizzleDerivationPath,
+    sourceOnly: true,
+    test: assertServerValueMissingInputClosureIsPinned,
+  },
+  {
+    description: 'Lets serverValue treat opaque unknown provenance as non-input.',
+    expectedKiller: 'serverValue must require a positive non-input proof',
+    name: 'drizzle-server-value/allow-opaque-value',
+    replacement: weakenedServerValuePositiveProofBranch,
+    search: serverValuePositiveProofBranch,
+    sourceFile: drizzleDerivationPath,
+    sourceOnly: true,
+    test: assertServerValuePositiveProofIsPinned,
+  },
+  {
+    description: 'Treats every opaque helper call as server provenance.',
+    expectedKiller: 'opaque symbol-provenance calls must remain unknown',
+    name: 'drizzle-symbol-provenance/trust-opaque-calls',
+    replacement: weakenedOpaqueSymbolCallClosureBranch,
+    search: opaqueSymbolCallClosureBranch,
+    sourceFile: drizzleSymbolProvenancePath,
+    sourceOnly: true,
+    test: assertOpaqueSymbolCallClosureIsPinned,
+  },
+  {
+    description: 'Lets trustedAssign hide an opaque helper or ambient-authority expression.',
+    expectedKiller: 'trustedAssign must retain recursive review of every nested expression',
+    name: 'drizzle-trusted-assign/drop-nested-expression-review',
+    replacement: weakenedTrustedAssignNestedReviewBranch,
+    search: trustedAssignNestedReviewBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    sourceOnly: true,
+    test: assertTrustedAssignNestedReviewIsPinned,
+  },
   {
     description: 'Deletes normalized helper-cycle absorption.',
     expectedKiller: 'recursive helper summaries must retain the helper-cycle closed verdict',
@@ -1616,6 +1758,54 @@ async function assertSemanticOpaqueContainerClosureIsPinned(_moduleUnderTest, { 
 async function assertSemanticRestArgumentClosureIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(semanticRestArgumentClosureBranch)) {
     throw new Error('normalized semantic graph no longer rejects authority-bearing rest mappings');
+  }
+}
+
+async function assertAnalyzerSummaryStructuralProofIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryStructuralProofBranch)) {
+    throw new Error('private analyzer declarations no longer require exact helper-body proof');
+  }
+}
+
+async function assertAnalyzerSummaryCallCarrierIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryCallCarrierBranch)) {
+    throw new Error('private helper calls no longer require the exact request/context carrier');
+  }
+}
+
+async function assertAnalyzerSummaryDbReceiverOrderingIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryDbReceiverOrderingBranch)) {
+    throw new Error('private helper calls no longer prove the carrier role relative to the DB');
+  }
+}
+
+async function assertAnalyzerSummaryStaticCallCarrierIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryStaticCallCarrierBranch)) {
+    throw new Error('a static helper-summary consumer no longer checks its call carrier');
+  }
+}
+
+async function assertServerValueMissingInputClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(serverValueMissingInputClosureBranch)) {
+    throw new Error('serverValue no longer rejects a missing provenance input');
+  }
+}
+
+async function assertServerValuePositiveProofIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(serverValuePositiveProofBranch)) {
+    throw new Error('serverValue no longer requires a positive non-input proof');
+  }
+}
+
+async function assertOpaqueSymbolCallClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(opaqueSymbolCallClosureBranch)) {
+    throw new Error('opaque helper calls no longer close to unknown symbol provenance');
+  }
+}
+
+async function assertTrustedAssignNestedReviewIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(trustedAssignNestedReviewBranch)) {
+    throw new Error('trustedAssign no longer recursively reviews nested expressions');
   }
 }
 

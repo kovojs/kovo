@@ -10698,6 +10698,95 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(rawEnvironmentValue.map((fact) => fact.sink)).toContain('node:process.env');
   });
 
+  it('admits only exact audited trustedAssign calls while retaining nested closed verdicts', () => {
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const contacts = pgTable('contacts', {
+        id: text('id').primaryKey(),
+        email: text('email').notNull(),
+      });
+    `;
+    const mutationSource = ({
+      assignment,
+      extra = '',
+      serverImport = `import { mutation, publicAccess, s, trustedAssign } from '@kovojs/server';`,
+    }: {
+      assignment: string;
+      extra?: string;
+      serverImport?: string;
+    }) => `
+      ${serverImport}
+      import { contacts } from './schema.js';
+      ${extra}
+      export const addContact = mutation({
+        access: publicAccess('fixture'),
+        input: s.object({ email: s.string() }),
+        async handler(input, request) {
+          await request.db.insert(contacts).values({
+            id: ${assignment},
+            email: input.email,
+          });
+          return { ok: true };
+        },
+      });
+    `;
+    const facts = (source: string) =>
+      sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        { fileName: 'mutations.ts', source },
+      ]);
+
+    expect(
+      facts(
+        mutationSource({
+          assignment: `trustedAssign(crypto.randomUUID(), 'opaque server-generated id')`,
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      facts(
+        mutationSource({
+          assignment: `trustedAssign(input.email, { columns: ['id'], reason: 'reviewed grant' })`,
+        }),
+      ),
+    ).toEqual([]);
+
+    const closedVariants = [
+      mutationSource({
+        assignment: `trustedAssign(opaque(input.email), 'reviewed grant')`,
+        extra: `import { opaque } from './opaque.js';`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(process.env.CONTACT_ID, 'reviewed grant')`,
+      }),
+      mutationSource({
+        assignment: `server.trustedAssign(input.email, 'reviewed grant')`,
+        serverImport: [
+          `import { mutation, publicAccess, s } from '@kovojs/server';`,
+          `import * as server from '@kovojs/server';`,
+        ].join('\n'),
+      }),
+      mutationSource({
+        assignment: `grant(input.email, 'reviewed grant')`,
+        extra: `const grant = trustedAssign;`,
+      }),
+      mutationSource({ assignment: `trustedAssign(input.email, '')` }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, reason)`,
+        extra: `const reason = 'reviewed grant';`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, { ['reason']: 'reviewed grant' })`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, { reason: 'reviewed grant', reason: 'again' })`,
+      }),
+    ];
+    for (const source of closedVariants) {
+      expect(facts(source), source).not.toEqual([]);
+    }
+  });
+
   it('accepts only exact relational query-builder reads of pristine reviewed tables', () => {
     const schemaSource = `
       import { pgTable, text } from 'drizzle-orm/pg-core';

@@ -19467,6 +19467,7 @@ function requestExpressionIsProtocolSafeUncached(
     ) {
       return true;
     }
+    if (requestCallIsExactTrustedAssignOutput(node)) return true;
     if (requestCallIsExactReviewedDrizzleRelationalRead(node, callable, session)) return true;
     if (requestCallIsReviewedDrizzleDbReadChain(node, callable)) {
       if (requestCallIsExactManagedReadonlyDbRead(node)) return true;
@@ -24258,6 +24259,14 @@ function requestCallIsKnownSafe(
   if (requestCallIsExactServerValueOutput(call)) {
     scanRequestFunctionArguments(call, context);
     return !requestExactServerValueCarriesRequestAuthority(call, callable, context.provenance);
+  }
+
+  if (requestCallIsExactTrustedAssignOutput(call)) {
+    // SPEC §6.6/§10.3: trustedAssign is an authored, audit-visible escape, not a proof
+    // boundary. Review every nested expression before admitting the exact wrapper so an opaque
+    // helper or ambient authority cannot be laundered merely by placing it in the first argument.
+    scanRequestFunctionArguments(call, context);
+    return true;
   }
 
   if (requestCallIsPublicStyleCreate(call)) {
@@ -32066,6 +32075,64 @@ function requestCallIsExactServerValueOutput(call: Node): boolean {
     (Node.isStringLiteral(reason) || Node.isNoSubstitutionTemplateLiteral(reason)) &&
     runtimeRegExpTest(/\S/u, reason.getLiteralText())
   );
+}
+
+function requestCallIsExactTrustedAssignOutput(call: Node): boolean {
+  if (!Node.isCallExpression(call)) return false;
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isIdentifier(callee) ||
+    !requestExpressionIsDirectImportedExport(callee, '@kovojs/server', 'trustedAssign') ||
+    !requestExactImportedCarrierIsPristine(callee, '@kovojs/server', 'trustedAssign')
+  ) {
+    return false;
+  }
+  const [value, reason, ...extra] = call.getArguments();
+  if (!value || !reason || extra.length !== 0) return false;
+  const source = unwrapStaticExpression(reason);
+  const isNonEmptyStaticString = (candidate: Node): boolean => {
+    const string = unwrapStaticExpression(candidate);
+    return isStringLiteralLike(string) && runtimeRegExpTest(/\S/u, string.getLiteralText());
+  };
+  if (isStringLiteralLike(source)) return isNonEmptyStaticString(source);
+  if (!Node.isObjectLiteralExpression(source)) return false;
+
+  let sawReason = false;
+  const seen = runtimeSet<string>();
+  for (const property of source.getProperties()) {
+    if (
+      !Node.isPropertyAssignment(property) ||
+      Node.isComputedPropertyName(property.getNameNode())
+    ) {
+      return false;
+    }
+    const name = staticMemberName(property.getNameNode());
+    const initializer = property.getInitializer();
+    if (!name || !initializer || runtimeSetHas(seen, name)) return false;
+    runtimeSetAdd(seen, name);
+    if (name === 'columns') {
+      const columns = unwrapStaticExpression(initializer);
+      if (
+        !Node.isArrayLiteralExpression(columns) ||
+        !columns
+          .getElements()
+          .every((entry) => !Node.isSpreadElement(entry) && isNonEmptyStaticString(entry))
+      ) {
+        return false;
+      }
+      continue;
+    }
+    if (
+      !['actor', 'callsite', 'producer', 'reason', 'session', 'sourceProvenance', 'table'].includes(
+        name,
+      ) ||
+      !isNonEmptyStaticString(initializer)
+    ) {
+      return false;
+    }
+    if (name === 'reason') sawReason = true;
+  }
+  return sawReason;
 }
 
 function requestExactServerValueCarriesRequestAuthority(

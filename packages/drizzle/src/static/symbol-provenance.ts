@@ -1,4 +1,4 @@
-import { Node, SyntaxKind, type BindingName, type SourceFile } from 'ts-morph';
+import { Node, SyntaxKind, type BindingName } from 'ts-morph';
 
 import {
   propertyNameText,
@@ -7,7 +7,6 @@ import {
   symbolForIdentifierReference,
   unwrappedStaticExpressionNode,
 } from '../static.js';
-import { expressionResolvesToFrameworkExport, frameworkExport } from './framework-identity.js';
 
 /** @internal */
 export type SymbolProvenanceKind = 'input' | 'literal' | 'server' | 'unknown';
@@ -25,15 +24,6 @@ export interface SymbolProvenanceContext {
   inputSymbolKeys: ReadonlySet<string>;
   rootProvenanceBySymbolKey: ReadonlyMap<string, SymbolProvenance>;
   serverSymbolKeys: ReadonlySet<string>;
-  /**
-   * Symbol keys of same-package helpers declared
-   * `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })`. A call to such a
-   * helper resolves to `server` provenance — the audited interprocedural escape
-   * for the write-provenance gate (SPEC §11.1). This is the ONLY way a
-   * `CallExpression` produces non-`unknown` provenance; an unsummarized call stays
-   * `unknown` (fail-closed), which is what keeps KV435/IDOR confidentiality sound.
-   */
-  serverSummaryKeys: ReadonlySet<string>;
 }
 
 /** @internal */
@@ -47,8 +37,6 @@ export interface SymbolProvenanceContextOptions {
   inputRoots?: readonly Node[];
   inputRootPaths?: readonly SymbolProvenanceRoot[];
   serverRoots?: readonly Node[];
-  /** Symbol keys of `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })` helpers. */
-  serverSummaryKeys?: Iterable<string>;
 }
 
 const inputProvenance: SymbolProvenance = { kind: 'input', path: '' };
@@ -64,14 +52,12 @@ export function symbolProvenanceContextForNodes(
   const inputSymbolKeys = new Set(symbolKeysForNodes(options.inputRoots ?? []));
   const serverSymbolKeys = new Set(symbolKeysForNodes(options.serverRoots ?? []));
   const rootProvenanceBySymbolKey = rootProvenanceMap(options);
-  const serverSummaryKeys = new Set(options.serverSummaryKeys ?? []);
   const aliases = new Map<string, SymbolProvenance>();
   const context: SymbolProvenanceContext = {
     aliases,
     inputSymbolKeys,
     rootProvenanceBySymbolKey,
     serverSymbolKeys,
-    serverSummaryKeys,
   };
 
   for (const body of bodies) {
@@ -187,22 +173,9 @@ export function symbolProvenanceForExpression(
     return symbolProvenanceForExpression(expression.getOperand(), context, depth + 1);
   }
 
-  // Minimal interprocedural branch (SPEC §11.1): a call to a same-package helper
-  // declared `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })` is server
-  // provenance. EVERY other call stays `unknown` (fail-closed) — the argument
-  // provenance is intentionally NOT propagated, so `serverHelper(input.x)` does not
-  // launder input into server, and an unsummarized helper never escapes input. This
-  // is the only `CallExpression` source of non-`unknown` provenance; it cannot relax
-  // KV435/IDOR confidentiality (those consumers never populate `serverSummaryKeys`).
-  if (Node.isCallExpression(expression) && context.serverSummaryKeys.size > 0) {
-    const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    if (Node.isIdentifier(callee)) {
-      const calleeKey = symbolKeyForNode(callee);
-      if (calleeKey && context.serverSummaryKeys.has(calleeKey)) {
-        return serverProvenance;
-      }
-    }
-  }
+  // SPEC §6.6/§10.3: calls are opaque unless a framework-owned structural rule
+  // above proves them. App metadata cannot turn a general helper into `server`.
+  if (Node.isCallExpression(expression)) return unknownProvenance;
 
   return unknownProvenance;
 }
@@ -327,66 +300,6 @@ function rootProvenanceMap(
     for (const key of symbolKeysForNodes([node])) roots.set(key, serverProvenance);
   }
   return roots;
-}
-
-/**
- * Symbol keys of same-package helpers declared
- * `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })`. Mirrors the session-
- * provenance analyzer-summary scan, but collects only the `server` kind for the
- * write-provenance gate (SPEC §11.1). Confidentiality consumers (KV435/IDOR) do not
- * call this, so the interprocedural `server` source never reaches them.
- *
- * @internal
- */
-export function serverSummaryKeysForSourceFile(sourceFile: SourceFile): Set<string> {
-  const keys = new Set<string>();
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const callee = unwrappedStaticExpressionNode(call.getExpression());
-    if (
-      !expressionResolvesToFrameworkExport(
-        callee,
-        frameworkExport('@kovojs/drizzle', 'kovoAnalyzerSummary'),
-      )
-    ) {
-      continue;
-    }
-
-    const [helper, summary] = call.getArguments();
-    if (!helper || !summary) continue;
-    if (analyzerSummaryReturnKind(summary) !== 'server') continue;
-
-    const helperExpression = unwrappedStaticExpressionNode(helper);
-    const symbol = Node.isIdentifier(helperExpression)
-      ? symbolForIdentifierReference(helperExpression)
-      : helperExpression.getSymbol();
-    const key = resolvedSymbolKey(symbol);
-    if (key) keys.add(key);
-  }
-  return keys;
-}
-
-function analyzerSummaryReturnKind(node: Node): string | undefined {
-  const object = unwrappedStaticExpressionNode(node);
-  if (!Node.isObjectLiteralExpression(object)) return undefined;
-  const returns = objectLiteralPropertyInitializer(object, 'returns');
-  const returnsObject = returns ? unwrappedStaticExpressionNode(returns) : undefined;
-  if (!returnsObject || !Node.isObjectLiteralExpression(returnsObject)) return undefined;
-  const kindNode = objectLiteralPropertyInitializer(returnsObject, 'kind');
-  const kindExpression = kindNode ? unwrappedStaticExpressionNode(kindNode) : undefined;
-  return kindExpression &&
-    (Node.isStringLiteral(kindExpression) || Node.isNoSubstitutionTemplateLiteral(kindExpression))
-    ? kindExpression.getLiteralText()
-    : undefined;
-}
-
-function objectLiteralPropertyInitializer(node: Node, name: string): Node | undefined {
-  if (!Node.isObjectLiteralExpression(node)) return undefined;
-  for (const property of node.getProperties()) {
-    if (!Node.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.getNameNode()) !== name) continue;
-    return property.getInitializer();
-  }
-  return undefined;
 }
 
 function symbolKeysForNodes(nodes: readonly Node[]): string[] {

@@ -13,7 +13,7 @@ const extractQueryFactsFromProject = (
 ) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
 describe('@kovojs/drizzle touch graph helpers', () => {
-  it('uses declared analyzer summaries for same-package session helper provenance', () => {
+  it('uses exact structurally verified same-file session helper provenance', () => {
     const files = [
       pgDatabaseTypes([
         'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
@@ -27,14 +27,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '',
           'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
           '',
-          'function requireSessionId(request: { session?: { id?: string } | null }) {',
-          '  if (!request.session?.id) throw new Error("auth required");',
+          'function requireSessionId(request: { session: { id: string } }) {',
           '  return request.session.id;',
+          '',
           '}',
           '',
           'kovoAnalyzerSummary(requireSessionId, { returns: { kind: "session", path: "id" } });',
           '',
-          'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
+          'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session: { id: string } }, targetId: string) {',
           '  const sessionId = requireSessionId(request);',
           '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
           '}',
@@ -243,14 +243,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '',
           'export const tickets = pgTable("tickets", {}, kovo({ domain: "ticket", key: "tenantId,id" }));',
           '',
-          'function tenantId(request: { tenant?: { id?: string } | null }) {',
-          '  if (!request.tenant?.id) throw new Error("tenant required");',
+          'function tenantId(request: { tenant: { id: string } }) {',
           '  return request.tenant.id;',
+          '',
           '}',
           '',
           'kovoAnalyzerSummary(tenantId, { returns: { kind: "tenant", path: "id" } });',
           '',
-          'export async function closeTicket(db: PgAsyncDatabase<any, any>, request: { tenant?: { id?: string } | null }, targetId: string) {',
+          'export async function closeTicket(db: PgAsyncDatabase<any, any>, request: { tenant: { id: string } }, targetId: string) {',
           '  const currentTenantId = tenantId(request);',
           '  await db.update(tickets).set({ status: "closed" }).where(and(eq(tickets.tenantId, currentTenantId), eq(tickets.id, targetId)));',
           '}',

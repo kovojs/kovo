@@ -468,14 +468,14 @@ export function addRawSqlOwnerWriteProof(
   let mutations = readFileSync(mutationsPath, 'utf8');
   mutations = replaceRequired(
     mutations,
-    "import { mutation, s, serverValue, type MutationContext } from '@kovojs/server';",
+    "import { mutation, s, trustedAssign, type MutationContext } from '@kovojs/server';",
     [
       options.trusted
         ? "import { sql, trustedSql } from '@kovojs/drizzle';"
         : staticStatement
           ? "import { staticSql } from '@kovojs/drizzle';"
           : "import { sql } from '@kovojs/drizzle';",
-      "import { domain, mutation, s, serverValue, type MutationContext } from '@kovojs/server';",
+      "import { domain, mutation, s, trustedAssign, type MutationContext } from '@kovojs/server';",
     ].join('\n'),
     'raw SQL proof server import',
   );
@@ -495,22 +495,22 @@ export function addRawSqlOwnerWriteProof(
       '  await db.insert(contacts).values({',
       '    company: row.company,',
       '    email: row.email,',
-      "    id: serverValue(id, 'server-generated contact id'),",
+      "    id: trustedAssign(id, 'opaque server-generated contact id'),",
       '    name: row.name,',
       '  });',
     ].join('\n'),
     [
       `  await db.${rawSqlMethod}(`,
       options.trusted
-        ? "    trustedSql(sql`update raw_owners set label = ${row.company} where id = ${serverValue(id, 'server-generated contact id')}`, { justification: 'reviewed owner predicate' }),"
+        ? "    trustedSql(sql`update raw_owners set label = ${row.company} where id = ${trustedAssign(id, 'opaque server-generated contact id')}`, { justification: 'reviewed owner predicate' }),"
         : staticStatement
           ? "    staticSql`update raw_owners set label = 'fixture' where id = 'fixture'`,"
-          : "    sql`update raw_owners set label = ${row.company} where id = ${serverValue(id, 'server-generated contact id')}`,",
+          : "    sql`update raw_owners set label = ${row.company} where id = ${trustedAssign(id, 'opaque server-generated contact id')}`,",
       '  );',
       '  await db.insert(contacts).values({',
       '    company: row.company,',
       '    email: row.email,',
-      "    id: serverValue(id, 'server-generated contact id'),",
+      "    id: trustedAssign(id, 'opaque server-generated contact id'),",
       '    name: row.name,',
       '  });',
     ].join('\n'),
