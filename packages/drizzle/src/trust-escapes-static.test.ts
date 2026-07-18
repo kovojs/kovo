@@ -320,6 +320,47 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(sinks).toEqual(['Function', 'document.write', 'eval', 'setTimeout']);
   });
 
+  it.each([
+    {
+      label: 'an imperative onclick assignment',
+      registration: (body: string) => `element.onclick = () => { ${body} };`,
+    },
+    {
+      label: 'an imperative addEventListener callback',
+      registration: (body: string) => `element.addEventListener('click', () => { ${body} });`,
+    },
+  ])('keeps the non-compiler $label survivor closed', ({ registration }) => {
+    const facts = sinksFor(
+      registration(`
+        element.innerHTML = input;
+        element.outerHTML = input;
+        eval(input);
+        setTimeout('owned()', 0);
+        setInterval('owned()', 0);
+        document.write(input);
+        document.writeln(input);
+        new Function(input);
+      `),
+    );
+
+    const historicalSinks = new Set([
+      'Function',
+      'document.write',
+      'document.writeln',
+      'eval',
+      'innerHTML',
+      'outerHTML',
+      'setInterval',
+      'setTimeout',
+    ]);
+    expect(
+      facts
+        .map((fact) => fact.sink)
+        .filter((sink) => historicalSinks.has(sink))
+        .sort(),
+    ).toEqual([...historicalSinks].sort());
+  });
+
   it('does NOT flag local Function or document shadows as global sinks', () => {
     const facts = sinksFor(`
       export function Widget(markup: string) {

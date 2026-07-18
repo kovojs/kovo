@@ -118,6 +118,28 @@ export const Demo = component({
   });
 
   it.each([
+    ['innerHTML assignment', "event.target.innerHTML = '<strong>owned</strong>'"],
+    ['outerHTML assignment', "event.target.outerHTML = '<strong>owned</strong>'"],
+    ['direct eval', "eval('owned()')"],
+    ['string setTimeout', "setTimeout('owned()', 0)"],
+    ['string setInterval', "setInterval('owned()', 0)"],
+    ['document.write', "document.write('<strong>owned</strong>')"],
+    ['document.writeln', "document.writeln('<strong>owned</strong>')"],
+    ['Function constructor', "new Function('return 1')"],
+  ])('preserves the historical TASK B closed verdict for %s', (_label, operation) => {
+    const diagnostics = kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain(
+      'Security-critical operation is outside the compiler-owned finite IR.',
+    );
+  });
+
+  it.each([
     ['raw document alias', "const doc = document; doc.body.insertAdjacentHTML('beforeend', html)"],
     ['raw storage alias', "const storage = localStorage; storage.setItem('token', token)"],
     [
