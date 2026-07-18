@@ -26137,9 +26137,10 @@ function requestExactGlobalValueSession(
 }
 
 function requestCanonicalStaticMemberName(node: Node | undefined): string | undefined {
-  const member = staticMemberName(node);
-  if (member === undefined) return undefined;
   const candidate = node && Node.isComputedPropertyName(node) ? node.getExpression() : node;
+  const member =
+    staticMemberName(node) ?? (candidate ? requestStablePropertyKeyValue(candidate) : undefined);
+  if (member === undefined) return undefined;
   const value = candidate ? unwrapStaticExpression(candidate) : undefined;
   if (value && Node.isNumericLiteral(value)) {
     const numeric = Number(value.getText());
@@ -28407,27 +28408,59 @@ const REQUEST_EXACT_GLOBAL_MUTATION_METHOD_MEMO = new WeakMap<
   Project,
   Map<string, { readonly exhausted: boolean; readonly matches: readonly string[] }>
 >();
-const REQUEST_EXACT_GLOBAL_NAMESPACE_SEED_MEMO = new WeakMap<Project, Map<string, boolean>>();
+const REQUEST_EXACT_GLOBAL_NAMESPACE_SEED_MEMO = new WeakMap<Project, ReadonlySet<string>>();
+
+function requestExactGlobalNamespaceSeedSiteName(node: Node): string | undefined {
+  let name: Node | undefined;
+  if (Node.isPropertyAccessExpression(node)) {
+    name = node.getNameNode();
+  } else if (Node.isElementAccessExpression(node)) {
+    name = node.getArgumentExpression();
+  } else if (Node.isBindingElement(node)) {
+    name = node.getPropertyNameNode() ?? node.getNameNode();
+  } else if (
+    Node.isPropertyAssignment(node) ||
+    Node.isShorthandPropertyAssignment(node) ||
+    Node.isMethodDeclaration(node) ||
+    Node.isGetAccessorDeclaration(node) ||
+    Node.isSetAccessorDeclaration(node) ||
+    Node.isPropertyDeclaration(node)
+  ) {
+    name = node.getNameNode();
+  } else if (Node.isComputedPropertyName(node)) {
+    name = node;
+  }
+  if (!name) return undefined;
+  const canonical = requestCanonicalStaticMemberName(name);
+  if (canonical !== undefined) return canonical;
+  return requestStablePropertyKeyValue(
+    Node.isComputedPropertyName(name) ? name.getExpression() : name,
+  );
+}
 
 function requestProjectHasExactGlobalNamespaceSeed(
   project: Project,
   namespace: 'Object' | 'Reflect',
 ): boolean {
-  let memo = REQUEST_EXACT_GLOBAL_NAMESPACE_SEED_MEMO.get(project);
-  if (!memo) {
-    memo = new Map();
-    REQUEST_EXACT_GLOBAL_NAMESPACE_SEED_MEMO.set(project, memo);
+  let seeds = REQUEST_EXACT_GLOBAL_NAMESPACE_SEED_MEMO.get(project);
+  if (!seeds) {
+    const discovered = new Set<string>();
+    for (const file of project.getSourceFiles()) {
+      for (const node of file.getDescendants()) {
+        const candidate = Node.isIdentifier(node)
+          ? node.getText()
+          : isStringLiteralLike(node)
+            ? node.getLiteralText()
+            : requestExactGlobalNamespaceSeedSiteName(node);
+        if (candidate === 'Object' || candidate === 'Reflect') discovered.add(candidate);
+        if (discovered.size === 2) break;
+      }
+      if (discovered.size === 2) break;
+    }
+    seeds = discovered;
+    REQUEST_EXACT_GLOBAL_NAMESPACE_SEED_MEMO.set(project, seeds);
   }
-  const cached = memo.get(namespace);
-  if (cached !== undefined) return cached;
-  const result = project.getSourceFiles().some((file) =>
-    file.getDescendants().some((node) => {
-      if (Node.isIdentifier(node)) return node.getText() === namespace;
-      return isStringLiteralLike(node) && node.getLiteralText() === namespace;
-    }),
-  );
-  memo.set(namespace, result);
-  return result;
+  return seeds.has(namespace);
 }
 
 function requestExactGlobalMutationMethods(
@@ -28445,9 +28478,10 @@ function requestExactGlobalMutationMethods(
   const memoKey = `${nodeKey}:${methods.join(',')}`;
   const cached = memo.get(memoKey);
   if (cached) return cached;
-  // Exact Object/Reflect mutation authority cannot emerge from an authored graph that never names
-  // that namespace. Prove this cheap necessary condition before entering the mutually-recursive
-  // carrier lattice; opaque imports remain misses under the same positive-identity contract.
+  // Every positive Object/Reflect identity proof bottoms out at a bare namespace or a canonical
+  // property/binding projection. This cheap prepass deliberately over-approximates those base cases
+  // (including folded and const-aliased keys) before entering the mutually-recursive carrier lattice;
+  // false positives only disable the optimization, while a negative result is a complete miss.
   if (!requestProjectHasExactGlobalNamespaceSeed(project, namespace)) {
     const result = { exhausted: false, matches: [] };
     memo.set(memoKey, result);

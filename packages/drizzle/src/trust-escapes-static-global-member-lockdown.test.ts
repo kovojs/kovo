@@ -313,6 +313,20 @@ describe('KV424 exact global namespace-member lockdown', () => {
        const { ['define' + 'Property']: replace } = namespace;
        replace(Promise, 'resolve', { value: () => Deferred });`,
     ],
+    [
+      'computed-binding Object.defineProperty',
+      `const { ['Ob' + 'ject']: namespace } = globalThis;
+       const { ['define' + 'Property']: replace } = namespace;
+       replace(Promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'const-key Object.defineProperty',
+      `const namespaceKey = 'Ob' + 'ject';
+       const methodKey = 'define' + 'Property';
+       const namespace = globalThis[namespaceKey];
+       const replace = namespace[methodKey];
+       replace(Promise, 'resolve', { value: () => Deferred });`,
+    ],
   ])('keeps folded %s mutation authority fail closed', (_label, replacement) => {
     const facts = sinksFor(`
       import { s, task } from '@kovojs/server';
@@ -330,6 +344,21 @@ describe('KV424 exact global namespace-member lockdown', () => {
     `);
 
     expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it('keeps a const-aliased folded local member name open', () => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      const namespaceKey = 'Ob' + 'ject';
+      const localRegistry = { [namespaceKey]: { local: true } };
+      void localRegistry[namespaceKey];
+      task('const-aliased-local-seed-control', {
+        input: s.object({}),
+        async run() { return Promise.resolve({ ok: true }); },
+      });
+    `);
+
+    expect(facts.some((fact) => fact.source === 'Promise.resolve')).toBe(false);
   });
 
   it.each([
