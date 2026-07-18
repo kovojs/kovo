@@ -169,16 +169,16 @@ Measurements are versioned and reproducible:
 - [x] Prove closure with adversarial wrapper/re-export/conditional/dynamic-loading fixtures and
       with positive fixtures for each supported framework capability. Emit a provenance path in
       diagnostics and `kovo explain`.
-  - Evidence: `990f0c87a`; the adversarial/positive closure suite and `kovo explain
-    --capabilities` provenance tests pass, alongside API/import/census/spec/pack/build gates.
+  - Evidence: `990f0c87a`; provenance tests for `kovo explain --capabilities` pass alongside the
+    adversarial/positive closure suite and API/import/census/spec/pack/build gates.
 
 ### 2B. Finite compiler-owned security IR
 
 - [x] Specify the finite operation set for serialized browser handlers and structured server
       effects, including ordinary DOM state/focus/dialog/form operations, framework egress,
       database actions, redirects, cookies, headers, and response outcomes.
-  - Evidence: SPEC §4.3/§5.2/§6.6 defines the exact effect/control union; `pnpm run
-    check:c9-sink-inventory` proves one C9 owner per operation.
+  - Evidence: SPEC §4.3/§5.2/§6.6 defines the exact effect/control union;
+    `pnpm run check:c9-sink-inventory` proves one C9 owner per operation.
 - [x] Lower app-authored TSX/JSX to compiler-owned security IR while preserving authorable-source
       and fixpoint obligations. No public or hand-authored lowered-IR escape is introduced.
   - Evidence: `security-operation-ir.security.test.ts` proves generated browser/server manifests,
@@ -222,16 +222,27 @@ Measurements are versioned and reproducible:
 
 ### 3A. Egress: capability door plus declared destinations
 
-- [ ] Make framework-owned egress capabilities the sole supported network door from
+- [x] Make framework-owned egress capabilities the sole supported network door from
       untrusted-data-reachable code. Explicitly update SPEC §6.6: ambient transport hooks remain a
       private-network defense-in-depth floor, not a process sandbox or the positive-allowlist proof.
-- [ ] Canonicalize declared HTTP origins at boot, but resolve, classify, and pin the selected IP at
+  - Evidence: `pnpm run check:egress-boundary` proves raw capability closure and exact,
+    non-replaceable task/webhook `ctx.fetch`; SPEC §6.6 names future agent-tool support as closed
+    until it supplies the same door.
+- [x] Canonicalize declared HTTP origins at boot, but resolve, classify, and pin the selected IP at
       each dial and every redirect hop. Cover DNS rotation/rebinding, proxies, pooled sockets,
       private destinations, metadata capabilities, DB sockets, and task/webhook/agent-tool paths.
-- [ ] Preserve the historical egress closed corpus under C13, then prove any generated origin not
+  - Evidence: integrated `pnpm run check:security-classifier-corpus` passes 20 corpora, including
+    initial/redirect origin closure, all-answer DNS classification, selected-address pinning,
+    proxy/dispatcher stripping, pooled reuse, metadata/private posture, and database sockets.
+- [x] Preserve the historical egress closed corpus under C13, then prove any generated origin not
       in the declared set is rejected before DNS/dial regardless of hostname/IP spelling.
-- [ ] Prove supported declared origins and database endpoints remain usable under DNS rotation
+  - Evidence: the same C13 run exercises the fixed-seed generated-origin oracle before DNS. The
+    49/49 mutation run kills origin-before-DNS, dispatcher-pin, and task/webhook capability-seal
+    deletions.
+- [x] Prove supported declared origins and database endpoints remain usable under DNS rotation
       without widening the allowed origin or private-network posture.
+  - Evidence: C13's `egress-undici.test.ts` re-resolves one declared HTTP origin per request and
+    `egress.test.ts` rotates one exact managed-Postgres endpoint while unrelated sockets stay closed.
 
 ### 3B. Imperative DOM: finite capability surface
 
