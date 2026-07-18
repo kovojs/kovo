@@ -985,11 +985,25 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'kv424-request-process',
     marker: '@kovo-security-classifier-corpus kv424-request-process',
     testFiles: [
+      'packages/drizzle/src/capability-escapes-static.test.ts',
       'packages/drizzle/src/trust-escapes-static.test.ts',
       'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
       'packages/drizzle/src/index.toctou-readonly.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'static-build-task-b-authoritative-consistency',
+        file: 'packages/drizzle/src/capability-escapes-static.test.ts',
+        snippets: [
+          'matches standalone TASK B facts through $label',
+          'a local framework-factory re-export',
+          'a namespace alias',
+          'a computed callback property',
+          'a spread callback record',
+          'a conditionally projected root factory',
+          'expect(collectStaticBuildTrustFactsFromProject({ files })).toEqual(standalone)',
+        ],
+      },
       {
         id: 'existing-dangerous-sink-closed-verdicts',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',

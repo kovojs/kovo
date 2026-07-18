@@ -49,6 +49,10 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'drizzle-task-b/restore-static-build-analysis-bypass',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'threat-matrix-gate/drop-missing-sink-denominator',
           status: 'killed',
         }),

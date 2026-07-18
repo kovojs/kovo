@@ -1120,6 +1120,26 @@ const weakenedTrustedAssignNestedReviewBranch = [
   '  }',
 ].join('\n');
 
+const staticBuildAuthoritativeProjectBranch = [
+  'export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProjectOptions): {',
+  '  capabilities: CapabilityExplain[];',
+  '  cookieDowngrades: CookieDowngradeExplain[];',
+  '  unregisteredSinks: UnregisteredSinkFact[];',
+  '} {',
+  '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
+].join('\n');
+const bypassedStaticBuildAuthoritativeProjectBranch = [
+  'export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProjectOptions): {',
+  '  capabilities: CapabilityExplain[];',
+  '  cookieDowngrades: CookieDowngradeExplain[];',
+  '  unregisteredSinks: UnregisteredSinkFact[];',
+  '} {',
+  '  if (!options.buildConfigEntryFileName) {',
+  '    return { capabilities: [], cookieDowngrades: [], unregisteredSinks: [] };',
+  '  }',
+  '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
+].join('\n');
+
 const threatMatrixMissingSinkDenominatorBranch = [
   '  const missing = [...expectedSinks.keys()].filter((sink) => !seen.has(sink));',
   "  if (missing.length > 0) findings.push(`C9 sink mappings missing: ${missing.sort().join(', ')}`);",
@@ -1485,6 +1505,16 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: compilerCapabilityClosureScannerPath,
     sourceOnly: true,
     test: assertBrowserRtcNetworkCapabilityIsPinned,
+  },
+  {
+    description: 'Restores an early empty-result bypass before authoritative TASK B analysis.',
+    expectedKiller: 'static build trust facts must always construct and run the authoritative pass',
+    name: 'drizzle-task-b/restore-static-build-analysis-bypass',
+    replacement: bypassedStaticBuildAuthoritativeProjectBranch,
+    search: staticBuildAuthoritativeProjectBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    sourceOnly: true,
+    test: assertStaticBuildAuthoritativeProjectIsPinned,
   },
   {
     description: 'Deletes normalized helper-cycle absorption.',
@@ -2874,6 +2904,12 @@ async function assertOpaqueSymbolCallClosureIsPinned(_moduleUnderTest, { sourceT
 async function assertTrustedAssignNestedReviewIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(trustedAssignNestedReviewBranch)) {
     throw new Error('trustedAssign no longer recursively reviews nested expressions');
+  }
+}
+
+async function assertStaticBuildAuthoritativeProjectIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(staticBuildAuthoritativeProjectBranch)) {
+    throw new Error('static build trust facts no longer enter the authoritative TASK B project');
   }
 }
 
