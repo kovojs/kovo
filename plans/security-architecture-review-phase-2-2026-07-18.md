@@ -137,8 +137,8 @@ This is a deletion blocker rather than a newly discovered bypass. At the reviewe
   consumes those facts (`packages/cli/src/commands/build-export.ts:876-915`), and the internal
   Drizzle compile command still emits them (`packages/cli/src/commands/compile.ts:1055-1173`).
 - The finite browser IR rejects unknown DOM operations, but no integrated path currently replaces
-  TASK B's production root discovery and reachability obligation with capability closure + finite IR
-  + normalized provenance.
+  TASK B's production root discovery and reachability obligation with capability closure, finite IR,
+  and normalized provenance.
 - `dangerousCallSink` is not handler-only: request/process authority analysis also calls it at
   `packages/drizzle/src/trust-escapes-static.ts:13973` and `:32587`. Deleting that helper wholesale
   would remove unrelated closure checks.

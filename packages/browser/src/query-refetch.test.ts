@@ -231,8 +231,7 @@ describe('query refetch', () => {
     const store = createQueryStore();
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () =>
-        '<kovo-query name="queries/product details:p 1">{"stock":4}</kovo-query>',
+      text: async () => '<kovo-query name="queries/product details:p 1">{"stock":4}</kovo-query>',
     }));
 
     await expect(

@@ -365,19 +365,10 @@ describe('Phase 2C exact-tip adversarial review', () => {
   });
 
   it.each([
-    [
-      'Object.freeze',
-      'Object.freeze([actual.request.guard.userId] as const)',
-    ],
+    ['Object.freeze', 'Object.freeze([actual.request.guard.userId] as const)'],
     ['Array.of', 'Array.of(actual.request.guard.userId)'],
-    [
-      'Array.from',
-      'Array.from([actual.request.guard.userId] as const)',
-    ],
-    [
-      'Array.concat',
-      '([] as string[]).concat(actual.request.guard.userId)',
-    ],
+    ['Array.from', 'Array.from([actual.request.guard.userId] as const)'],
+    ['Array.concat', '([] as string[]).concat(actual.request.guard.userId)'],
   ])('keeps repeated exact private reads through %s scope:session', (_label, values) => {
     const result = ownerVerdict(
       ownerSource([
@@ -640,8 +631,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
         'await context.db.update(accounts).set({ ownerId: serverValue(userId, "private owner") }).where(eq(accounts.id, input.id));',
       ],
       {
-        handler:
-          'input, context: Context & { input: { guard: { userId: string } } }',
+        handler: 'input, context: Context & { input: { guard: { userId: string } } }',
       },
     );
     expect(result.analysis.massAssignmentFacts).toMatchObject([
