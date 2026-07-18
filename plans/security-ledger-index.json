@@ -2,7 +2,7 @@
   "schema": "kovo.security-ledger-index/v1",
   "ledgerKinds": {
     "bugz": {
-      "nextSequence": 34,
+      "nextSequence": 35,
       "pathTemplate": "plans/bugz-{sequence}.md"
     },
     "papercuts": {
@@ -47,6 +47,15 @@
       "archiveBy": "2026-07-25",
       "archivePath": "plans/history/bugz-33.md",
       "summary": "Remediation is complete; publish the exact verified tip, observe required CI, then archive."
+    },
+    {
+      "path": "plans/bugz-34.md",
+      "kind": "bugz",
+      "state": "open",
+      "openedOn": "2026-07-18",
+      "archiveBy": "2026-07-25",
+      "archivePath": "plans/history/bugz-34.md",
+      "summary": "Close the remote authority-normalization identity split across live and generated adapters."
     }
   ],
   "history": {

@@ -8,15 +8,15 @@ an **audited escape hatch**, or an **explicit out-of-scope note (whose responsib
 
 ## The matrix
 
-| Surface                         | C (confidentiality)                                                                                                                             | I (integrity)                                                                                           | A (availability)                                                         | Au (authenticity)                                                                                            |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| **DB / data plane**             | GREEN¹ — RLS FORCE + non-superuser roles + column-REVOKE + closure/attached-code/identity audits                                                | GREEN¹ — narrowed writer grant, KV438 governed-column floor, WITH CHECK, declared-write choke           | scope: app/deploy (M5); GREEN-footgun — query-list cap 100, bounded pool | GREEN¹ — principal integrity: wrapped-client reconstruct + `set_config` confinement + identity allowlist     |
-| **Auth**                        | GREEN (M2) — adapter non-egress proof: fail-closed reachability proof over every request-reachable secret path, TCB-enrolled; timing GREEN (M4) | GREEN — governed-column floor on `user`/`session` (KV438)                                               | GREEN — pre-dispatch rate budgets on auth endpoints (M5)                 | GREEN — CSRF, HttpOnly+Secure+SameSite cookies, session lifecycle; session unforgeability = dep surface (M6) |
-| **Wire / HTTP**                 | GREEN — DEC-F sink inventory: secret box on every egress channel + log redaction                                                                | GREEN — typed header/cookie channels, response reconstruct, redirect normalization, raw method identity | scope: app/deploy (M5); GREEN — 1 MiB body cap (413), rate budgets (429) | GREEN — CSRF, webhook verify, request-input provenance                                                       |
-| **Render / browser**            | GREEN — escape-by-default; `trustedHtml` the only branded raw door                                                                              | GREEN — contextual escaping across text/attr/URL-scheme positions                                       | N/A — client render cost is app-authored                                 | GREEN — Trusted-Types policy + inline-loader import allowlist                                                |
-| **Build / compiler**            | GREEN — server-only-value capture (KV437); generated code carries no secret                                                                     | GREEN (M7) — codegen framework-constructed; KV235 provenance; sink-policy + import-boundary gates       | N/A — build is dev-time                                                  | GREEN (M7) — `dynamic.import.process` sole door = `/c/` versioned-module allowlist                           |
-| **Dependencies / supply chain** | GREEN (M6) — `trustedDependencySurfaces` + exact pins + `--frozen-lockfile`, `check:tcb-boundary`                                               | GREEN (M6) — `rules/dependency-policy.md` update policy + review triggers                               | out-of-scope — dependency-internal DoS                                   | GREEN (M6) — Better Auth session/hash/reset/2FA/linking surfaces enrolled as review triggers                 |
-| **Runtime / infra**             | GREEN (M8) — no cross-tenant bleed; pool scrubbed; module state per-request; caches principal-independent                                       | GREEN (M8) — transaction-local session state; DISCARD ALL on release                                    | scope: app/deploy (M5); GREEN — bounded pool + rate budgets              | GREEN (M8) — pool identity reset; no principal bleed across reuse                                            |
+| Surface                         | C (confidentiality)                                                                                                                             | I (integrity)                                                                                     | A (availability)                                                         | Au (authenticity)                                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| **DB / data plane**             | GREEN¹ — RLS FORCE + non-superuser roles + column-REVOKE + closure/attached-code/identity audits                                                | GREEN¹ — narrowed writer grant, KV438 governed-column floor, WITH CHECK, declared-write choke     | scope: app/deploy (M5); GREEN-footgun — query-list cap 100, bounded pool | GREEN¹ — principal integrity: wrapped-client reconstruct + `set_config` confinement + identity allowlist     |
+| **Auth**                        | GREEN (M2) — adapter non-egress proof: fail-closed reachability proof over every request-reachable secret path, TCB-enrolled; timing GREEN (M4) | GREEN — governed-column floor on `user`/`session` (KV438)                                         | GREEN — pre-dispatch rate budgets on auth endpoints (M5)                 | GREEN — CSRF, HttpOnly+Secure+SameSite cookies, session lifecycle; session unforgeability = dep surface (M6) |
+| **Wire / HTTP**                 | GREEN — DEC-F sink inventory: secret box on every egress channel + log redaction                                                                | **OPEN (M35)** — non-canonical HTTP authority crosses Node-to-Fetch as split URL/Host identities  | scope: app/deploy (M5); GREEN — 1 MiB body cap (413), rate budgets (429) | GREEN — CSRF, webhook verify, request-input provenance                                                       |
+| **Render / browser**            | GREEN — escape-by-default; `trustedHtml` the only branded raw door                                                                              | GREEN — contextual escaping across text/attr/URL-scheme positions                                 | N/A — client render cost is app-authored                                 | GREEN — Trusted-Types policy + inline-loader import allowlist                                                |
+| **Build / compiler**            | GREEN — server-only-value capture (KV437); generated code carries no secret                                                                     | GREEN (M7) — codegen framework-constructed; KV235 provenance; sink-policy + import-boundary gates | N/A — build is dev-time                                                  | GREEN (M7) — `dynamic.import.process` sole door = `/c/` versioned-module allowlist                           |
+| **Dependencies / supply chain** | GREEN (M6) — `trustedDependencySurfaces` + exact pins + `--frozen-lockfile`, `check:tcb-boundary`                                               | GREEN (M6) — `rules/dependency-policy.md` update policy + review triggers                         | out-of-scope — dependency-internal DoS                                   | GREEN (M6) — Better Auth session/hash/reset/2FA/linking surfaces enrolled as review triggers                 |
+| **Runtime / infra**             | GREEN (M8) — no cross-tenant bleed; pool scrubbed; module state per-request; caches principal-independent                                       | GREEN (M8) — transaction-local session state; DISCARD ALL on release                              | scope: app/deploy (M5); GREEN — bounded pool + rate budgets              | GREEN (M8) — pool identity reset; no principal bleed across reuse                                            |
 
 ¹ **DB cells: `fundamental-fixes-followup-13` LANDED** the round-16 fixes (`claude-bugz-37`: write-propagation
 closure B1, REPLICATION/predefined-role identity B2/round-17, login-identity B4) plus the DEC-E differential fuzzer —
@@ -67,6 +67,10 @@ GREEN (no longer pending).
   admits only exact `POST`. `packages/server/src/node.test.ts` and `build.test.ts` prove the same
   closed verdict and extension-method behavior in live, emitted Node, and Vercel adapters. The
   `node-fetch-method-identity-closed` C13 anchor prevents silent removal.
+- **Wire × I (M35) — OPEN.** At audited code SHA `e5f613be9`, real HTTP/2
+  `:authority: %65xample.com` reaches the handler as URL host `example.com` but app-visible Host
+  `%65xample.com`. `plans/bugz-34.md` owns canonical-authority rejection across live and emitted
+  Node/Vercel, real-wire and parity regressions, SPEC §9.5 text, and a C13 anchor.
 - **Runtime × Au (A6) — GREEN.** Capability URLs bind the signed canonical object, method, scope, and expiry before any
   storage read. `packages/server/src/capability-url.test.ts` proves claim-mismatch, expiry, signature, audience, and
   replay rejection; `packages/server/src/capability-route.test.ts` proves the verify sink runs before dereference, so a
@@ -116,21 +120,20 @@ infrastructure-level (L3/L4) DDoS.
 
 ## Open cells (v1 blockers) + first-fill work
 
-| Cell                                 | State | Owner / next step                                                                                                                                               |
-| ------------------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M2** Auth × C — adapter non-egress | GREEN | Closed: fail-closed non-egress proof TCB-enrolled (`better-auth.request-secret-surface.proof`), `internal.trusted-plaintext.test.ts` 22 pass; round-22 A5 clean |
-| **M3** Escape-hatch visibility       | GREEN | Closed by followup-16: static capability producers surface every escape in `kovo explain --capabilities`/`--cookies`                                            |
-| **M6** Deps / supply chain           | GREEN | Closed by followup-16 M6: exact pins + `--frozen-lockfile` + `trustedDependencySurfaces` (`check:tcb-boundary`) + `rules/dependency-policy.md`                  |
+| Cell                                  | State | Owner / next step                                                                                                                                               |
+| ------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M2** Auth × C — adapter non-egress  | GREEN | Closed: fail-closed non-egress proof TCB-enrolled (`better-auth.request-secret-surface.proof`), `internal.trusted-plaintext.test.ts` 22 pass; round-22 A5 clean |
+| **M3** Escape-hatch visibility        | GREEN | Closed by followup-16: static capability producers surface every escape in `kovo explain --capabilities`/`--cookies`                                            |
+| **M6** Deps / supply chain            | GREEN | Closed by followup-16 M6: exact pins + `--frozen-lockfile` + `trustedDependencySurfaces` (`check:tcb-boundary`) + `rules/dependency-policy.md`                  |
+| **M35** Wire × I — authority identity | OPEN  | Close `plans/bugz-34.md` across live and emitted Node/Vercel before Web `Request` construction                                                                  |
 
 ## Status
 
-- M1 authored (this document). M2–M8 all GREEN.
+- M1 authored (this document). M2–M8 remain GREEN; M35 is OPEN.
 - **Green:** M2 (auth-adapter non-egress proof, closed 2026-07-07), M3 (escape visibility, followup-16), M4 (timing),
   M5 (DoS scope + no footgun), M6 (supply chain, followup-16), M7 (build/compiler), M8 (runtime/infra); DB/Wire/Render/
   Runtime cells green (followup-{6..17} landed).
-- **Open cells: NONE.** Every {surface × category} cell has a named control+test, an audited escape, or a signed-off
-  out-of-scope note. The first-line pipeline (CSRF/session/wire/authz/capability) was swept clean in round-22, with one
-  bounded authz audit-vs-enforcement fix tracked in `fundamental-fixes-followup-18` (DEC-A) — a hardening item, not an
-  open matrix cell.
-- **Next:** the matrix is green → commission the external audit (`plans/threat-matrix-plan.md` §3 A1), the last v1
-  security-signoff step.
+- **Open cells: M35.** The first comparable convergence audit found a remotely supplied authority
+  identity split at the Node-to-Fetch boundary; `plans/bugz-34.md` owns closure.
+- **Next:** close and retest M35, then commission the external audit
+  (`plans/threat-matrix-plan.md` §3 A1), the last v1 security-signoff step.
