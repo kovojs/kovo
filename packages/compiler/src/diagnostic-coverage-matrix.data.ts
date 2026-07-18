@@ -193,7 +193,7 @@ export const outOfScopeCompilerDiagnostics = [
   {
     code: 'KV436',
     reason:
-      'Security-heavy, but the compiler derives access facts while kovo check consumes undecided facts as KV436 diagnostics.',
+      'Security-heavy: kovo check consumes compiler-derived undecided access facts, while compileRouteModule emits access/legacy-guard ambiguity into the static build graph; the latter is covered by route-pages and kovo-build security fixtures rather than the component/registry matrix.',
   },
   {
     code: 'KV438',

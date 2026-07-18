@@ -349,7 +349,6 @@ import { guard, guards, layout, publicAccess, route, verifiedAccess } from '@kov
 const authed = guards.authed();
 const AdminLayout = layout({
   access: [guard('admin', authed)],
-  guard: authed,
   render: (_queries, _state, { children }) => <main>{children}</main>,
 });
 
@@ -366,6 +365,11 @@ export const admin = route('/admin', {
 export const signed = route('/signed', {
   access: verifiedAccess,
   page: () => <SignedPage />,
+});
+
+export const legacy = route('/legacy', {
+  guard: authed,
+  page: () => <LegacyPage />,
 });
 
 export const missing = route('/missing', {
@@ -385,14 +389,206 @@ export const missing = route('/missing', {
       { access: { kind: 'public', reason: 'public docs' }, guards: undefined, route: '/docs' },
       {
         access: { guards: ['admin'], kind: 'guard-chain' },
-        guards: ['authed'],
+        guards: undefined,
         route: '/admin',
       },
       { access: { kind: 'verified-machine-auth' }, guards: undefined, route: '/signed' },
+      { access: undefined, guards: ['authed'], route: '/legacy' },
       { access: undefined, guards: undefined, route: '/missing' },
     ]);
     expect(result.files[0]?.source).toContain('"access":{"kind":"public","reason":"public docs"}');
     expect(result.files[0]?.source).toContain('"guards":["authed"]');
+  });
+
+  it('fails KV436 when access and legacy guard coexist on a request surface', () => {
+    const result = compileRouteModule({
+      fileName: 'src/security-surfaces.tsx',
+      source: `
+import {
+  endpoint,
+  guards,
+  layout,
+  mutation,
+  publicAccess,
+  query as defineQuery,
+  route,
+  webhook,
+} from '@kovojs/server';
+
+const ACCESS_FIELD = 'access';
+const GUARD_FIELD = 'guard';
+const ACCESS = ACCESS_FIELD;
+const GUARD = GUARD_FIELD;
+const authed = guards.authed();
+const rateGuard = guards.rateLimit({ max: 5, per: 'ip' });
+const defineMutation = mutation;
+const mutationAccess = { access: publicAccess('public mutation') };
+const mutationGuard = { guard: rateGuard };
+
+export const conflictedQuery = defineQuery({
+  [ACCESS]: publicAccess('public query'),
+  get [GUARD]() { return authed; },
+  load: () => ({ ok: true }),
+});
+
+const conflictedMutationDefinition = {
+  ...mutationAccess,
+  ...mutationGuard,
+  handler: () => ({ ok: true }),
+  input: { parse: (value) => value },
+};
+export const conflictedMutation = defineMutation(conflictedMutationDefinition);
+
+const ConflictedLayout = layout({
+  access: publicAccess('public layout'),
+  guard: authed,
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+
+export const conflictedRoute = route('/conflicted', {
+  access: publicAccess('public route'),
+  guard: rateGuard,
+  layout: ConflictedLayout,
+  page: () => <main>conflicted</main>,
+});
+
+export const conflictedEndpoint = endpoint('/conflicted-endpoint', {
+  access: publicAccess('public endpoint'),
+  guard: authed,
+  handler: () => new Response('ok'),
+  method: 'GET',
+  reason: 'compiler conflict fixture',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+});
+
+export const conflictedWebhook = webhook('/conflicted-webhook', {
+  access: publicAccess('public webhook'),
+  guard: rateGuard,
+  handler: () => ({ ok: true }),
+  input: { parse: (value) => value },
+  verify: 'none',
+  verifyJustification: 'compiler conflict fixture',
+});
+
+export const guardOnlyEndpoint = endpoint('/guard-only-endpoint', {
+  guard: authed,
+  handler: () => new Response('ok'),
+  method: 'GET',
+  reason: 'compiler unsupported guard fixture',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+});
+
+export const guardOnlyWebhook = webhook('/guard-only-webhook', {
+  guard: rateGuard,
+  handler: () => ({ ok: true }),
+  input: { parse: (value) => value },
+  verify: 'none',
+  verifyJustification: 'compiler unsupported guard fixture',
+});
+`,
+    });
+
+    expect(
+      result.diagnostics.map((diagnostic) => ({
+        code: diagnostic.code,
+        message: diagnostic.message,
+      })),
+    ).toEqual([
+      {
+        code: 'KV436',
+        message:
+          'Conflicting access decisions: query() cannot declare both access and legacy guard.',
+      },
+      {
+        code: 'KV436',
+        message:
+          'Conflicting access decisions: mutation() cannot declare both access and legacy guard.',
+      },
+      {
+        code: 'KV436',
+        message:
+          'Conflicting access decisions: layout() cannot declare both access and legacy guard.',
+      },
+      {
+        code: 'KV436',
+        message:
+          'Conflicting access decisions: route() cannot declare both access and legacy guard.',
+      },
+      {
+        code: 'KV436',
+        message: 'Unsupported access decision: endpoint() cannot declare legacy guard.',
+      },
+      {
+        code: 'KV436',
+        message: 'Unsupported access decision: webhook() cannot declare legacy guard.',
+      },
+      {
+        code: 'KV436',
+        message: 'Unsupported access decision: endpoint() cannot declare legacy guard.',
+      },
+      {
+        code: 'KV436',
+        message: 'Unsupported access decision: webhook() cannot declare legacy guard.',
+      },
+    ]);
+    expect(result.diagnostics.every((diagnostic) => diagnostic.help?.includes('SPEC §10.2'))).toBe(
+      true,
+    );
+  });
+
+  it('preserves access-only and guard-only declarations and ignores local lookalikes', () => {
+    const result = compileRouteModule({
+      fileName: 'src/security-controls.tsx',
+      source: `
+import {
+  endpoint,
+  guards,
+  layout,
+  publicAccess,
+  query,
+  route,
+  webhook,
+} from '@kovojs/server';
+
+const authed = guards.authed();
+export const publicQuery = query({
+  access: publicAccess('public control'),
+  load: () => ({ ok: true }),
+});
+export const guardedQuery = query({
+  guard: authed,
+  load: () => ({ ok: true }),
+});
+const PublicLayout = layout({
+  access: publicAccess('public layout control'),
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+export const guardedRoute = route('/guarded', {
+  guard: authed,
+  layout: PublicLayout,
+  page: () => <main>guarded</main>,
+});
+export const publicEndpoint = endpoint('/public-endpoint', {
+  access: publicAccess('public endpoint control'),
+  handler: () => new Response('ok'),
+  method: 'GET',
+  reason: 'safe compiler control',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+});
+export const verifiedWebhook = webhook('/verified-webhook', {
+  access: publicAccess('public webhook control'),
+  handler: () => ({ ok: true }),
+  input: { parse: (value) => value },
+  verify: 'none',
+  verifyJustification: 'safe compiler control',
+});
+
+function localQuery(definition) { return definition; }
+localQuery({ access: publicAccess('local lookalike'), guard: authed });
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('lowers route-level parallel regions to compiler-owned navigation segment metadata', () => {

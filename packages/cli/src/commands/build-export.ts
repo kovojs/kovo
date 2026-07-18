@@ -864,16 +864,54 @@ function runPreEvaluationStaticTrustPreflight(
     files.length === 0
       ? { capabilities: [], cookieDowngrades: [], unregisteredSinks: [] }
       : collectStaticBuildTrustFactsFromProject({ files });
+  const accessGuardDiagnostics = preEvaluationAccessGuardDiagnostics(files);
   const { unregisteredSinks } = facts;
-  if (unregisteredSinks.length === 0) return { facts, files };
+  if (unregisteredSinks.length === 0 && accessGuardDiagnostics.length === 0) {
+    return { facts, files };
+  }
 
-  const result = kovoCheck({ unregisteredSinks }, { paranoidStaticAdvisory });
+  const result = kovoCheck(
+    {
+      ...(accessGuardDiagnostics.length === 0 ? {} : { diagnostics: accessGuardDiagnostics }),
+      ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
+    },
+    { paranoidStaticAdvisory },
+  );
   if (result.exitCode === 0) return { facts, files };
   if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
     return { facts, files };
   }
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+}
+
+function preEvaluationAccessGuardDiagnostics(
+  files: readonly BuildCheckSourceFile[],
+): CoreGraph.StaticDiagnosticFact[] {
+  const diagnostics: CoreGraph.StaticDiagnosticFact[] = [];
+  const sourceFiles = buildSnapshotDenseArray(files, 'Pre-evaluation access/guard source files');
+  for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
+    const file = sourceFiles[fileIndex]!;
+    const compiled = compileRouteModule({ fileName: file.fileName, source: file.source });
+    const compileDiagnostics = buildSnapshotDenseArray(
+      compiled.diagnostics,
+      `Pre-evaluation access/guard diagnostics for ${file.fileName}`,
+    );
+    for (
+      let diagnosticIndex = 0;
+      diagnosticIndex < compileDiagnostics.length;
+      diagnosticIndex += 1
+    ) {
+      const diagnostic = compileDiagnostics[diagnosticIndex]!;
+      if (diagnostic.code !== 'KV436') continue;
+      buildSecurityArrayAppend(
+        diagnostics,
+        staticDiagnosticFact(diagnostic),
+        'Pre-evaluation access/guard diagnostics',
+      );
+    }
+  }
+  return diagnostics;
 }
 
 function preEvaluationAppSourceFiles(appModulePath: string, root: string): BuildCheckSourceFile[] {

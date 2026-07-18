@@ -721,6 +721,87 @@ export default createApp({
     }
   });
 
+  it('fails KV436 before evaluation for conflicting and unsupported legacy guards', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-access-guard-conflict-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        appPath,
+        `
+import {
+  createApp,
+  endpoint,
+  guards,
+  publicAccess,
+  query as defineQuery,
+  s,
+  webhook,
+} from '@kovojs/server';
+
+const requestGuard = guards.authed();
+
+export const conflicted = defineQuery({
+  access: publicAccess('public catalog fixture'),
+  guard: requestGuard,
+  load: () => ({ ok: true }),
+});
+
+export const guardedEndpoint = endpoint('/guarded-endpoint', {
+  guard: requestGuard,
+  handler: () => new Response('ok'),
+  method: 'GET',
+  reason: 'H23 build fixture',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+});
+
+export const guardedWebhook = webhook('/guarded-webhook', {
+  guard: requestGuard,
+  handler: () => ({ ok: true }),
+  input: s.object({}),
+  verify: 'none',
+  verifyJustification: 'H23 build fixture',
+});
+
+throw new Error('H23 fixture must not be evaluated');
+export default createApp({
+  endpoints: [guardedEndpoint, guardedWebhook],
+  queries: [conflicted],
+});
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toContain('ERROR KV436');
+      expect(errorOutput).toContain(
+        'Conflicting access decisions: query() cannot declare both access and legacy guard.',
+      );
+      expect(errorOutput).toContain(
+        'Unsupported access decision: endpoint() cannot declare legacy guard.',
+      );
+      expect(errorOutput).toContain(
+        'Unsupported access decision: webhook() cannot declare legacy guard.',
+      );
+      expect(errorOutput).not.toContain('H23 fixture must not be evaluated');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('rejects app-authored live-target registration ABI before module evaluation', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-live-target-authority-'));
     const appPath = join(root, 'app.mjs');
@@ -1279,13 +1360,12 @@ export default createApp({ mutations: [actual] });
       writeFileSync(
         appPath,
         `
-import { createApp, guards, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
+import { createApp, guards, mutation, query, route, s, trustedHtml } from '@kovojs/server';
 
 const allow = guards.rateLimit({ max: 100, per: 'global' });
 
 const adminQuery = query('adminOrders', {
   args: s.object({ id: s.string() }),
-  access: publicAccess('build access fixture query'),
   guard: allow,
   load(input) {
     return { id: input.id };
@@ -1293,7 +1373,6 @@ const adminQuery = query('adminOrders', {
 });
 
 const adminMutation = mutation('admin/update', {
-  access: publicAccess('build access fixture mutation'),
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   guard: allow,
@@ -1308,7 +1387,6 @@ export default createApp({
   queries: [adminQuery],
   routes: [
     route('/admin', {
-      access: publicAccess('build access fixture shell'),
       guard: allow,
       page: () => trustedHtml('<main>Admin</main>', 'build access fixture'),
     }),

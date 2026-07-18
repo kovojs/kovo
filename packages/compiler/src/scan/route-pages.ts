@@ -24,6 +24,7 @@ import type {
   RouteNavigationSegmentFact,
 } from '../types.js';
 import { propertyAccessPath, propertyNameText, unwrapExpression } from './ast.js';
+import { accessGuardExclusivityDiagnostics } from './access-guard-exclusivity.js';
 import type { StaticLiteralValue } from './object.js';
 import {
   applySourceReplacements,
@@ -157,6 +158,11 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
     diagnostics,
     routeAuthoringSurfaceDiagnostics(stableOptions.fileName, stableOptions.source, sourceFile),
     'Compiler route diagnostics',
+  );
+  appendRouteValues(
+    diagnostics,
+    accessGuardExclusivityDiagnostics(stableOptions.fileName, stableOptions.source, sourceFile),
+    'Compiler access/guard exclusivity diagnostics',
   );
 
   const artifactFileName =
