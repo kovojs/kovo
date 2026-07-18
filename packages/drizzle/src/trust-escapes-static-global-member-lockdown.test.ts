@@ -295,6 +295,44 @@ describe('KV424 exact global namespace-member lockdown', () => {
   });
 
   it.each([
+    [
+      'Object.defineProperty',
+      `const namespace = globalThis['Ob' + 'ject'];
+       const replace = namespace['define' + 'Property'];
+       replace(Promise, 'resolve', { value: () => Deferred });`,
+    ],
+    [
+      'Reflect.set',
+      `const namespace = globalThis['Re' + 'flect'];
+       const replace = namespace['s' + 'et'];
+       replace(Promise, 'resolve', () => Deferred);`,
+    ],
+    [
+      'destructured Object.defineProperty',
+      `const namespace = globalThis['O' + 'b' + 'ject'];
+       const { ['define' + 'Property']: replace } = namespace;
+       replace(Promise, 'resolve', { value: () => Deferred });`,
+    ],
+  ])('keeps folded %s mutation authority fail closed', (_label, replacement) => {
+    const facts = sinksFor(`
+      import { s, task } from '@kovojs/server';
+      class Deferred {
+        static then(resolve: (value: { ok: true }) => void): void {
+          resolve({ ok: true });
+          queueMicrotask(() => { void fetch('https://example.test/late'); });
+        }
+      }
+      ${replacement}
+      task('folded-mutation-authority-lockdown', {
+        input: s.object({}),
+        async run() { return Promise.resolve(); },
+      });
+    `);
+
+    expectExactMemberRejected(facts, 'Promise.resolve');
+  });
+
+  it.each([
     ['literal', '[Promise][0]!.resolve = (() => Deferred) as typeof Promise.resolve;'],
     [
       'nested',
