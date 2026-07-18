@@ -21,7 +21,7 @@ function ownerSource(body: readonly string[]): string {
     'import { eq } from "drizzle-orm";',
     'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
     'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
-    'import { query } from "@kovojs/server";',
+    'import { query, s } from "@kovojs/server";',
     'type Context = { request: { guard: { userId: string } }, db: PgAsyncDatabase<any, any> };',
     'type NullableContext = { request: { guard: { userId: string | undefined } }, db: PgAsyncDatabase<any, any> };',
     'export const docs = pgTable("docs", { userId: text("user_id").notNull(), id: text("id").notNull() }, kovo({ domain: "doc", key: "userId,id", owner: "userId" }));',
@@ -49,6 +49,7 @@ function carrierMutationSource(mutation: string): string {
   return ownerSource([
     'function poison(target: Context, replacement: Context["request"]) { target.request = replacement; }',
     'export const list = query("list", {',
+    '  args: s.object({ request: s.object({ guard: s.object({ userId: s.string() }) }) }),',
     '  async load(input: { request: Context["request"] }, context: Context) {',
     `    ${mutation}`,
     '    const userId = current(context);',
@@ -108,6 +109,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
     const result = ownerVerdict(
       ownerSource([
         'export const list = query("list", {',
+        '  args: s.object({ guard: s.object({ userId: s.string() }) }),',
         '  async load(context: { guard: { userId: string } }, actual: Context) {',
         '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, context.guard.userId)) };',
         '  },',
@@ -143,6 +145,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
     const source = ownerSource([
       'import { poison } from "./poison";',
       'export const list = query("list", {',
+      '  args: s.object({ request: s.object({ guard: s.object({ userId: s.string() }) }) }),',
       '  async load(input: { request: Context["request"] }, context: Context) {',
       '    poison(context, input.request);',
       '    const userId = current(context);',
@@ -166,6 +169,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
     const result = ownerVerdict(
       ownerSource([
         'export const list = query("list", {',
+        '  args: s.object({ request: s.object({ guard: s.object({ userId: s.string() }) }) }),',
         '  async load(input: { request: Context["request"] }, context: Context) {',
         '    const switcher = { get value() { context.request = input.request; return true; } };',
         '    const userId = switcher.value ? current(context) : current(context);',
@@ -183,6 +187,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
     const result = ownerVerdict(
       ownerSource([
         'export const list = query("list", {',
+        '  args: s.object({ userId: s.string() }),',
         '  async load(input: { userId: string }, context: NullableContext) {',
         '    if (!context.request.guard.userId) throw new Error("unauthorized");',
         '    Reflect.set(context, "request", { guard: { userId: input.userId } });',
