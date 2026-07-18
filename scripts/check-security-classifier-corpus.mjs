@@ -156,6 +156,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: [
       'packages/cli/src/commands/security-disposition.test.ts',
       'packages/cli/src/index.kovo-db.test.ts',
+      'packages/server/src/egress-nat64-nsp.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
       'packages/server/src/runtime-environment-authority.test.ts',
@@ -188,6 +189,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "'::ffff:192.31.196.1'",
           "'64:ff9b::192.31.196.1'",
           "'2620:4f:8001::'",
+        ],
+      },
+      {
+        id: 'rfc6052-network-specific-pref64-regression',
+        file: 'packages/server/src/egress-nat64-nsp.test.ts',
+        snippets: [
+          'Network-Specific Pref64 egress corpus',
+          "'2606:4700::/32'",
+          "'2606:4700:1200::/40'",
+          "'2606:4700:1234::/48'",
+          "'2606:4700:1234:5600::/56'",
+          "'2606:4700:1234:5678::/64'",
+          "'2606:4700:1234:5678::/96'",
+          'non-zero RFC6052 u octet',
+          'never lets allowInternal reopen metadata',
         ],
       },
       {
