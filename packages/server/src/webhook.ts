@@ -11,6 +11,7 @@ import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier
 import { requestVerifierInput } from './app-load-shed.js';
 import { snapshotAuditJustification } from './audit-justification.js';
 import { resolveBootMode } from './env.js';
+import { frameworkEgressFetch } from './egress.js';
 import {
   actAsNonRequestPrincipal,
   declareSystemPrincipal,
@@ -369,6 +370,11 @@ export interface WebhookHandlerContext<
   Tx = unknown,
   Writes extends WebhookDeclaredWrites | undefined = WebhookDeclaredWrites,
 > {
+  /**
+   * Framework-owned positive HTTP egress capability (SPEC §6.6). Every initial and redirect
+   * origin must be declared by `egress.allowDestinations`; the resolved-IP floor still applies.
+   */
+  readonly fetch: typeof globalThis.fetch;
   fail<Code extends string, Payload>(
     code: Code,
     payload: Payload,
@@ -1871,6 +1877,7 @@ function webhookHandlerContext<Input, Tx>(
     declareSystemWrite(reason: string) {
       return writeScope(declareSystemPrincipal(reason, webhookPrincipalAudit(name, 'write')));
     },
+    fetch: frameworkEgressFetch,
     fail(code, payload, options = {}) {
       const failure = witnessFreeze({
         error: witnessFreeze({ code, payload }),

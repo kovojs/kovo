@@ -1,3 +1,4 @@
+// @kovo-security-classifier-corpus egress-ip
 import http from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -255,6 +256,26 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
 
     server.close();
+  });
+
+  it('refuses application proxy/dispatcher configuration instead of bypassing the capability', () => {
+    expect(() =>
+      createApp({
+        egress: {
+          allowDestinations: ['https://api.example.com'],
+          proxy: 'http://proxy.internal:8080',
+        } as never,
+      }),
+    ).toThrow(/unsupported property proxy.*proxy\/dispatcher/s);
+
+    expect(() =>
+      createApp({
+        egress: {
+          allowDestinations: ['https://api.example.com'],
+          dispatcher: {},
+        } as never,
+      }),
+    ).toThrow(/unsupported property dispatcher.*proxy\/dispatcher/s);
   });
 
   it('refuses a later app aggregate that would widen the process-global egress floor', async () => {
@@ -703,3 +724,4 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     }
   });
 });
+// @kovo-security-classifier-corpus egress-ip

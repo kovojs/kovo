@@ -44,6 +44,7 @@ import {
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
+  witnessOwnKeys,
   witnessSetAdd,
   witnessSetHas,
 } from './security-witness-intrinsics.js';
@@ -429,11 +430,21 @@ function snapshotAppEgressOptions(
     throw new TypeError('createApp({ egress }) must be false or a stable own-data object.');
   }
 
+  assertExactAppEgressKeys(value, [
+    'allowDestinations',
+    'allowInternal',
+    'enabled',
+    'hardening',
+    'justification',
+    'nat64Prefixes',
+  ]);
+
   const enabled = appEgressOwnDataValue(value, 'enabled');
   if (enabled !== undefined) {
     if (enabled !== false) {
       throw new TypeError('createApp({ egress.enabled }) may only be false.');
     }
+    assertExactAppEgressKeys(value, ['enabled', 'justification']);
     let justification: string;
     try {
       justification = snapshotAuditJustification(
@@ -485,6 +496,29 @@ function snapshotAppEgressOptions(
         }),
     ...(snapshottedHardening === undefined ? {} : { hardening: snapshottedHardening }),
   });
+}
+
+function assertExactAppEgressKeys(value: object, allowed: readonly string[]): void {
+  const keys = witnessOwnKeys(value);
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+    const key = keys[keyIndex];
+    let accepted = false;
+    if (typeof key === 'string') {
+      for (let allowedIndex = 0; allowedIndex < allowed.length; allowedIndex += 1) {
+        if (key === allowed[allowedIndex]) {
+          accepted = true;
+          break;
+        }
+      }
+    }
+    if (!accepted) {
+      throw new TypeError(
+        `createApp({ egress }) has unsupported property ${String(key)}. ` +
+          'Application-supplied proxy/dispatcher transports are not supported by the ' +
+          'framework-owned egress capability (SPEC §6.6).',
+      );
+    }
+  }
 }
 
 function appEgressOwnDataValue(value: object, property: PropertyKey): unknown {

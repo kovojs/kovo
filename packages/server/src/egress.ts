@@ -4,7 +4,7 @@ import http from 'node:http';
 import net from 'node:net';
 import type { LookupAddress } from 'node:dns';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
-import { isUndiciFloorInstalled } from './egress-undici.js';
+import { activeUndiciFloorDispatcher } from './egress-undici.js';
 
 import {
   egressApply,
@@ -29,6 +29,7 @@ import {
   egressReflectGet,
   egressRegExpTest,
   egressRequest,
+  egressRequestWithDispatcher,
   egressRequestUrl,
   egressSetAdd,
   egressSetDelete,
@@ -381,15 +382,28 @@ export function resolveEgressPolicy(
   const allowDestinations = egressCreateSet<string>();
   const allowInternalCidrs: string[] = [];
   const destinationInputs = options?.allowDestinations ?? [];
+  if (!egressArrayIsArray(destinationInputs)) {
+    throw new EgressConfigError(
+      'egress.allowDestinations must be a dense array of exact http(s) origin strings.',
+      '<allowDestinations>',
+    );
+  }
   for (let index = 0; index < destinationInputs.length; index += 1) {
-    const entry = egressStringTrim(egressString(destinationInputs[index]));
-    if (entry === '') continue;
+    const raw = destinationInputs[index];
+    if (typeof raw !== 'string') {
+      throw new EgressConfigError(
+        'Every egress.allowDestinations entry must be an exact http(s) origin string.',
+        '<non-string destination entry>',
+      );
+    }
+    const entry = egressStringTrim(raw);
     const normalized = normalizeHttpOrigin(entry);
     if (!normalized) {
-      warn(
-        `allowDestinations entry "${entry}" is not a valid http(s) origin (e.g. "https://api.example.com"); ignored.`,
+      throw new EgressConfigError(
+        `egress.allowDestinations entry "${entry}" is not an exact http(s) origin. ` +
+          'Declare only scheme, host, and optional port (for example "https://api.example.com").',
+        entry,
       );
-      continue;
     }
     egressSetAdd(allowDestinations, normalized);
   }
@@ -844,11 +858,39 @@ function normalizeHttpOrigin(entry: string): string | null {
     ) {
       return null;
     }
-    const port = normalizedUrlPort(url);
-    return `${protocol}//${egressStringToLowerCase(egressUrlHostname(url))}:${port}`;
+    return canonicalHttpOrigin(protocol, egressUrlHostname(url), normalizedUrlPort(url));
   } catch {
     return null;
   }
+}
+
+/**
+ * Canonical origin identity for the framework-owned positive egress capability (SPEC §6.6).
+ * URL parsing owns Unicode/legacy-IPv4 normalization before this helper is called. This final
+ * step collapses DNS trailing dots, brackets IPv6, and makes the effective port explicit so boot,
+ * initial requests, redirect hops, and pooled requests compare one spelling.
+ *
+ * @internal
+ */
+export function canonicalHttpOrigin(
+  protocol: string | undefined,
+  host: string,
+  port: number,
+): string | null {
+  if (
+    (protocol !== 'http:' && protocol !== 'https:') ||
+    !egressNumberIsInteger(port) ||
+    port < 1 ||
+    port > 65_535
+  ) {
+    return null;
+  }
+  const canonicalHost = normalizeAuthorityHost(host);
+  if (canonicalHost === '') return null;
+  const authorityHost = egressStringIncludes(canonicalHost, ':')
+    ? `[${canonicalHost}]`
+    : canonicalHost;
+  return `${protocol}//${authorityHost}:${port}`;
 }
 
 function normalizedUrlPort(url: URL): number {
@@ -1654,7 +1696,8 @@ function evaluateDestinationAllowlist(args: {
   policy: EgressPolicy;
 }): EgressBlockedError | null {
   const { host, port, protocol, resolvedIp, policy } = args;
-  if (protocol !== 'http:' && protocol !== 'https:') {
+  const origin = canonicalHttpOrigin(protocol, host, port);
+  if (origin === null) {
     return new EgressBlockedError({
       destination: `${host}:${port}`,
       resolvedIp,
@@ -1662,12 +1705,27 @@ function evaluateDestinationAllowlist(args: {
       reason: 'destination-allowlist',
     });
   }
-  const origin = `${protocol}//${egressStringToLowerCase(host)}:${port}`;
   if (egressSetHas(policy.allowDestinations, origin)) return null;
   return new EgressBlockedError({
     destination: origin,
     resolvedIp,
     classification: classifyIpForPolicy(resolvedIp, policy),
+    reason: 'destination-allowlist',
+  });
+}
+
+/** Reject an undeclared framework origin before any DNS lookup or transport dispatch. */
+export function evaluateFrameworkDestinationOrigin(args: {
+  host: string;
+  port: number;
+  protocol: string | undefined;
+  policy: EgressPolicy;
+}): EgressBlockedError | null {
+  const origin = canonicalHttpOrigin(args.protocol, args.host, args.port);
+  if (origin !== null && egressSetHas(args.policy.allowDestinations, origin)) return null;
+  return new EgressBlockedError({
+    destination: origin ?? `${args.host}:${args.port}`,
+    classification: 'special-use',
     reason: 'destination-allowlist',
   });
 }
@@ -1714,13 +1772,19 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
   // the framework surface when either half of the dual floor is missing or has been replaced.
   // This import is deliberately after the synchronous Request snapshot above: native fetch pins
   // caller-owned URL/init carriers before yielding, and the security wrapper must do the same.
-  if (!isUndiciFloorInstalled()) {
+  const dispatcher = activeUndiciFloorDispatcher();
+  if (dispatcher === undefined) {
     throw new EgressBlockedError({
       destination: requestUrl,
       classification: 'special-use',
       reason: 'missing-floor',
     });
   }
+  // Undici Request objects retain a non-standard per-call dispatcher in private state. Rebind
+  // the already-snapshotted Request to the exact installed framework dispatcher before any
+  // request can run; this keeps native replayable-body/redirect semantics while closing proxy
+  // and custom-dispatcher bypasses through ctx.fetch.
+  request = egressRequestWithDispatcher(request, dispatcher);
 
   const protocol = egressUrlProtocol(url);
   if (protocol !== 'http:' && protocol !== 'https:') {
@@ -1732,14 +1796,11 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
   }
   const host = stripIpv6Brackets(egressDecodeURIComponent(egressUrlHostname(url)));
   const port = normalizedUrlPort(url);
-  const origin = `${protocol}//${egressStringToLowerCase(host)}:${port}`;
-  if (!egressSetHas(policy.allowDestinations, origin)) {
-    throw new EgressBlockedError({
-      destination: origin,
-      classification: 'special-use',
-      reason: 'destination-allowlist',
-    });
-  }
+  const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });
+  if (originBlocked) throw originBlocked;
+  // Classify the initial request before native fetch can observe an abort or other caller state.
+  // The dispatcher repeats this all-address decision for every request/redirect hop and pins its
+  // selected connector lookup; the net layer independently rechecks the exact dial result.
   const literalIp = normalizeFastPathIpLiteral(host);
   if (literalIp !== null) {
     const blocked = evaluateEgress({
@@ -1768,12 +1829,11 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
       });
     }
     for (let index = 0; index < resolved.length; index += 1) {
-      const address = resolved[index]!.address;
       const blocked = evaluateEgress({
         host,
         port,
         protocol,
-        resolvedIp: address,
+        resolvedIp: resolved[index]!.address,
         policy,
         requireDestinationAllowlist: true,
       });
@@ -1788,9 +1848,9 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
 
 function lookupAllAddresses(host: string): Promise<LookupAddress[]> {
   return new Promise((resolve, reject) => {
-    dns.lookup(host, { all: true }, (err, addresses) => {
-      if (err) {
-        reject(err);
+    dns.lookup(host, { all: true }, (error, addresses) => {
+      if (error) {
+        reject(error);
         return;
       }
       resolve(addresses);
