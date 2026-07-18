@@ -194,22 +194,25 @@ output directory (default `dist`). See [deployment](/guides/deployment/).
 
 Applies or verifies the framework-owned Postgres database posture derived from `src/schema.ts`:
 reviewed SQL migrations, roles, forced RLS, owner policies, grants, and the closure audit. External
-Postgres migration/provisioning uses a privileged admin URL; runtime/checking uses the
-least-privilege app URL. Pass both URLs to provision so Kovo can grant the runtime login membership
-in the reader and writer roles and `kovo_schema_state` read access.
+Postgres migration/provisioning uses a privileged admin URL. Check witnesses the ordinary runtime
+session, then binds an independent authority audit to that exact live database before it verifies
+the closed privilege set. Prefer the dedicated least-privilege system login as the check authority;
+use the admin URL only when CI cannot access that login. Provision also receives the ordinary
+runtime URL so Kovo can install its exact membership and state-table read grants.
 
 ```sh
 kovo db generate --migrations migrations
 KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full \
   kovo db provision --migrations migrations
-KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check
-KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full kovo db check
+KOVO_DB_SYSTEM_URL=postgres://kovo_system@db:5432/app?sslmode=verify-full KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full \
+  kovo db check
 kovo db check --driver pglite --data-dir .kovo/pglite
 ```
 
-`kovo db check` uses the same target selection as provision and migrate. `KOVO_DATABASE_URL` checks
-the runtime target. If only `KOVO_ADMIN_DATABASE_URL` is set, Kovo checks that external Postgres
-target and reports the missing runtime posture instead of silently falling back to embedded PGlite.
+External `kovo db check` requires the runtime witness URL plus either the system authority URL
+(`KOVO_DB_SYSTEM_URL` or `--system-database-url`) or the admin fallback. When both authorities are
+present, check uses the system URL. Supplying only one side of the proof fails before connection
+instead of checking a different database or falling back to embedded PGlite.
 The output includes `TARGET source=...`, the four role lines, and any runtime membership edges:
 
 ```text

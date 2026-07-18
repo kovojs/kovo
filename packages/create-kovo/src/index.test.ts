@@ -1196,6 +1196,9 @@ describe('create-kovo starter (metadata)', () => {
         'KOVO_ADMIN_DATABASE_URL=postgres://app_admin@db.example.com:5432/your_app?sslmode=verify-full',
       );
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
+        'KOVO_DB_SYSTEM_URL=postgres://kovo_system@db.example.com:5432/your_app?sslmode=verify-full',
+      );
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
         '# KOVO_DB_DRIVER=node-postgres',
       );
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(

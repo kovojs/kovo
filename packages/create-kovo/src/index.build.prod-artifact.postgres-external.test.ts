@@ -135,10 +135,23 @@ describeIfPostgres(
           'check',
           '--schema',
           '.kovo/external-postgres-schema.mjs',
+          '--system-database-url',
+          systemUrl,
           '--database-url',
           runtimeUrl,
         ]);
         expect(runtimeCheckOutput).toContain('STATUS ok');
+        const adminFallbackCheckOutput = execKovo(root, [
+          'db',
+          'check',
+          '--schema',
+          '.kovo/external-postgres-schema.mjs',
+          '--admin-database-url',
+          adminUrl,
+          '--database-url',
+          runtimeUrl,
+        ]);
+        expect(adminFallbackCheckOutput).toContain('STATUS ok');
         await seedDemoUser(cluster.url(database, 'postgres'), demoPassword(root));
         await expectPermissionDenied(runtimeUrl, `CREATE ROLE ${quoteIdent(`${runId}_blocked`)}`);
         await expectPermissionDenied(runtimeUrl, 'ALTER TABLE contacts FORCE ROW LEVEL SECURITY');

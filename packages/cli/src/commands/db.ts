@@ -70,6 +70,7 @@ interface KovoDbOptions {
   migrationsDir?: string;
   readerRole?: string;
   schemaPath: string;
+  systemDatabaseUrl?: string;
   writerRole?: string;
 }
 
@@ -116,6 +117,7 @@ export function parseDbArgs(args: readonly string[]): DbArgParseResult {
   const databaseUrl = parsedStringOption(parsed.value, '--database-url');
   const migrationsDir = parsedStringOption(parsed.value, '--migrations');
   const readerRole = parsedStringOption(parsed.value, '--reader-role');
+  const systemDatabaseUrl = parsedStringOption(parsed.value, '--system-database-url');
   const writerRole = parsedStringOption(parsed.value, '--writer-role');
   const options: KovoDbOptions = {
     action,
@@ -127,6 +129,7 @@ export function parseDbArgs(args: readonly string[]): DbArgParseResult {
   if (driver !== undefined) options.driver = driver;
   if (migrationsDir !== undefined) options.migrationsDir = migrationsDir;
   if (readerRole !== undefined) options.readerRole = readerRole;
+  if (systemDatabaseUrl !== undefined) options.systemDatabaseUrl = systemDatabaseUrl;
   if (writerRole !== undefined) options.writerRole = writerRole;
   return { ok: true, options };
 }
@@ -517,6 +520,8 @@ function applyRuntimeOptionOverrides(
   if (overrides.adminDatabaseUrl !== undefined)
     result.adminDatabaseUrl = overrides.adminDatabaseUrl;
   if (overrides.schema !== undefined) result.schema = overrides.schema;
+  if (overrides.systemDatabaseUrl !== undefined)
+    result.systemDatabaseUrl = overrides.systemDatabaseUrl;
   if (overrides.dataDir !== undefined) result.dataDir = overrides.dataDir;
   if (overrides.databaseUrl !== undefined) result.databaseUrl = overrides.databaseUrl;
   if (overrides.driver !== undefined) result.driver = overrides.driver;
@@ -540,8 +545,10 @@ function shouldProvisionEmbeddedPglite(options: ResolvedKovoDbOptions): boolean 
   if (driver === 'pg' || driver === 'node-postgres') return false;
   return (
     nonEmptyValue(options.adminDatabaseUrl) === undefined &&
+    nonEmptyValue(options.systemDatabaseUrl) === undefined &&
     resolveRuntimeDatabaseUrl(options) === undefined &&
     nonEmptyValue(invocationEnvironmentValue(options, 'KOVO_ADMIN_DATABASE_URL')) === undefined &&
+    nonEmptyValue(invocationEnvironmentValue(options, 'KOVO_DB_SYSTEM_URL')) === undefined &&
     nonEmptyValue(invocationEnvironmentValue(options, 'KOVO_RUNTIME_DATABASE_URL')) === undefined &&
     nonEmptyValue(invocationEnvironmentValue(options, 'KOVO_DATABASE_URL')) === undefined
   );
@@ -553,7 +560,8 @@ function shouldCheckEmbeddedPglite(options: ResolvedKovoDbOptions): boolean {
   if (driver === 'pg' || driver === 'node-postgres') return false;
   return (
     resolveRuntimeDatabaseUrl(options) === undefined &&
-    resolveAdminDatabaseUrl(options) === undefined
+    resolveAdminDatabaseUrl(options) === undefined &&
+    resolveSystemDatabaseUrl(options) === undefined
   );
 }
 
@@ -569,38 +577,30 @@ function checkTargetOptions(options: ResolvedKovoDbOptions): {
   if (driver === 'pglite') return { overrides: { driver: 'pglite' }, source: 'explicit-driver' };
   const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
   const adminDatabaseUrl = resolveAdminDatabaseUrl(options);
-  if (driver === 'pg' || driver === 'node-postgres') {
-    const databaseUrl = runtimeDatabaseUrl ?? adminDatabaseUrl;
-    if (databaseUrl === undefined) {
+  const systemDatabaseUrl = resolveSystemDatabaseUrl(options);
+  if (
+    driver === 'pg' ||
+    driver === 'node-postgres' ||
+    runtimeDatabaseUrl !== undefined ||
+    adminDatabaseUrl !== undefined ||
+    systemDatabaseUrl !== undefined
+  ) {
+    if (
+      runtimeDatabaseUrl === undefined ||
+      (systemDatabaseUrl === undefined && adminDatabaseUrl === undefined)
+    ) {
       throw new Error(
-        'kovo db check with external Postgres requires KOVO_DATABASE_URL, KOVO_RUNTIME_DATABASE_URL, KOVO_ADMIN_DATABASE_URL, --database-url, or --admin-database-url.',
+        'kovo db check with external Postgres requires a runtime witness URL (KOVO_RUNTIME_DATABASE_URL, KOVO_DATABASE_URL, or --database-url) and a posture authority (prefer KOVO_DB_SYSTEM_URL or --system-database-url; otherwise KOVO_ADMIN_DATABASE_URL or --admin-database-url).',
       );
     }
-    return {
-      overrides: {
-        ...(runtimeDatabaseUrl === undefined || adminDatabaseUrl === undefined
-          ? {}
-          : { adminDatabaseUrl }),
-        databaseUrl,
-        driver: 'node-postgres',
-      },
-      source: runtimeDatabaseUrl === undefined ? 'admin' : 'runtime',
-    };
-  }
-  if (runtimeDatabaseUrl !== undefined) {
     return {
       overrides: {
         ...(adminDatabaseUrl === undefined ? {} : { adminDatabaseUrl }),
         databaseUrl: runtimeDatabaseUrl,
         driver: 'node-postgres',
+        ...(systemDatabaseUrl === undefined ? {} : { systemDatabaseUrl }),
       },
       source: 'runtime',
-    };
-  }
-  if (adminDatabaseUrl !== undefined) {
-    return {
-      overrides: { databaseUrl: adminDatabaseUrl, driver: 'node-postgres' },
-      source: 'admin',
     };
   }
   return { overrides: { driver: 'pglite' }, source: 'pglite' };
@@ -633,6 +633,12 @@ function resolveRuntimeDatabaseUrl(options: ResolvedKovoDbOptions): string | und
     options.databaseUrl ??
       invocationEnvironmentValue(options, 'KOVO_RUNTIME_DATABASE_URL') ??
       invocationEnvironmentValue(options, 'KOVO_DATABASE_URL'),
+  );
+}
+
+function resolveSystemDatabaseUrl(options: ResolvedKovoDbOptions): string | undefined {
+  return nonEmptyValue(
+    options.systemDatabaseUrl ?? invocationEnvironmentValue(options, 'KOVO_DB_SYSTEM_URL'),
   );
 }
 

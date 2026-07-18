@@ -50,25 +50,26 @@ shape.
 
 Local development defaults to embedded PGlite under `.kovo/pglite`. External
 Postgres is the deploy path: keep one least-privilege runtime/login URL for app
-boot and `kovo db check`, and a separate owner/admin URL for
-`kovo db generate|migrate|provision`. The scaffolded `.env.example` documents
+requests, one dedicated system URL for framework replay/auth work, and a separate owner/admin URL
+for setup and fallback posture checks. All three must target the same database on the same writable
+primary. The scaffolded `.env.example` documents
 the full DB surface: `KOVO_DATABASE_URL`, `KOVO_RUNTIME_DATABASE_URL`,
-`KOVO_ADMIN_DATABASE_URL`, `KOVO_DB_DRIVER`, and `KOVO_DATA_DIR`.
+`KOVO_ADMIN_DATABASE_URL`, `KOVO_DB_SYSTEM_URL`, `KOVO_DB_DRIVER`, and `KOVO_DATA_DIR`.
 
 ### Deploying to Postgres
 
 1. Generate or review migrations from your schema changes: `kovo db generate`.
 2. Apply the reviewed SQL with the privileged URL: `kovo db migrate`.
 3. Provision Kovo-managed roles, grants, and RLS posture: `kovo db provision`.
-4. Verify the live runtime posture with the least-privilege login:
-   `kovo db check`.
-5. Build and start the app against that same runtime URL.
+4. Verify the live runtime posture with `KOVO_RUNTIME_DATABASE_URL` plus
+   `KOVO_DB_SYSTEM_URL` (preferred) or `KOVO_ADMIN_DATABASE_URL`: `kovo db check`.
+5. Build and start the app with `KOVO_DATABASE_URL` and `KOVO_DB_SYSTEM_URL`.
 
-Until the server-side runtime grant handoff lands, set
-`KOVO_RUNTIME_DATABASE_URL` to the same least-privilege login as
-`KOVO_DATABASE_URL`. Keep `KOVO_ADMIN_DATABASE_URL` scoped to setup commands
-only; the app itself should boot with the runtime login, not the owner/admin
-connection.
+Set `KOVO_RUNTIME_DATABASE_URL` to the same ordinary login as `KOVO_DATABASE_URL` unless your CI
+uses an equivalent separate credential. Keep `KOVO_ADMIN_DATABASE_URL` scoped to setup and fallback
+checks; do not put it in the app process. The app boots with the ordinary runtime login plus the
+dedicated `kovo_system` login, never the owner/admin connection. `kovo db check` prefers that same
+system URL when both authorities are present.
 
 `kovo build ./src/app.tsx` reruns TypeScript and Kovo graph verification, then
 emits a Node server under `dist/server` using the preset in `kovo.config.ts`

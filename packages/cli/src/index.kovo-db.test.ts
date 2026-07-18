@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from './index.js';
+import { parseDbArgs } from './commands/db.js';
 import { captureKovoCommandSecurityDisposition } from './commands/security-disposition.js';
 import { snapshotKovoInvocationEnvironment } from './invocation-environment.js';
 
@@ -134,7 +135,7 @@ describe('kovo db', () => {
     expect(check.stderr).toContain('ISSUE code=KV433_SCHEMA_TABLE');
   });
 
-  it('treats an admin URL as an external db check target instead of falling back to PGlite', async () => {
+  it('requires a runtime witness alongside an admin db check authority', async () => {
     const { schemaPath } = writeDbCommandFixture('admin-url-check');
     const previousAdminUrl = process.env.KOVO_ADMIN_DATABASE_URL;
     const previousDatabaseUrl = process.env.KOVO_DATABASE_URL;
@@ -151,7 +152,7 @@ describe('kovo db', () => {
       expect(check.result).toBe(1);
       expect(check.stdout).toBe('');
       expect(check.stderr).not.toContain('DRIVER pglite');
-      expect(check.stderr).toMatch(/ECONNREFUSED|connect/);
+      expect(check.stderr).toContain('requires a runtime witness URL');
     } finally {
       restoreEnv('KOVO_ADMIN_DATABASE_URL', previousAdminUrl);
       restoreEnv('KOVO_DATABASE_URL', previousDatabaseUrl);
@@ -159,7 +160,7 @@ describe('kovo db', () => {
     }
   });
 
-  it('uses Windows-equivalent mixed-case DB carriers instead of falling back to PGlite', async () => {
+  it('recognizes a Windows-equivalent mixed-case admin carrier but still requires runtime', async () => {
     const { schemaPath } = writeDbCommandFixture('windows-env-admin-url-check');
     const security = Object.freeze({
       invocationCwd: process.cwd(),
@@ -179,7 +180,27 @@ describe('kovo db', () => {
     expect(check.result).toBe(1);
     expect(check.stdout).toBe('');
     expect(check.stderr).not.toContain('DRIVER pglite');
-    expect(check.stderr).toMatch(/ECONNREFUSED|connect/u);
+    expect(check.stderr).toContain('requires a runtime witness URL');
+  });
+
+  it('parses an explicit least-privilege system posture authority URL', () => {
+    expect(
+      parseDbArgs([
+        'check',
+        '--database-url',
+        'postgres://app@127.0.0.1:5432/app',
+        '--system-database-url',
+        'postgres://kovo_system@127.0.0.1:5432/app',
+      ]),
+    ).toEqual({
+      ok: true,
+      options: {
+        action: 'check',
+        databaseUrl: 'postgres://app@127.0.0.1:5432/app',
+        schemaPath: 'src/schema.ts',
+        systemDatabaseUrl: 'postgres://kovo_system@127.0.0.1:5432/app',
+      },
+    });
   });
 
   it.each(['check', 'generate', 'migrate', 'provision'] as const)(

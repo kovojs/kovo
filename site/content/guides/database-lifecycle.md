@@ -92,9 +92,12 @@ KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full \
 kovo db provision --schema src/schema.ts --migrations migrations
 ```
 
-Use the admin URL for setup commands only. Use the runtime URL for the live app and for `kovo db
-check`. Reader and writer roles default to `kovo_reader` and `kovo_writer`, or you can override
-them with `KOVO_DB_READER_ROLE` and `KOVO_DB_WRITER_ROLE`.
+Use the admin URL for setup and only as a check fallback, never in the app process. Give the live
+app the ordinary runtime URL plus a dedicated `KOVO_DB_SYSTEM_URL` for framework replay/auth
+storage. Your DBA can pre-create `kovo_system` as a least-privilege login; provision adopts it and
+installs its exact grants. `kovo db check` prefers that system authority. Reader and writer roles
+default to `kovo_reader` and `kovo_writer`, or you can override them with
+`KOVO_DB_READER_ROLE` and `KOVO_DB_WRITER_ROLE`.
 
 Every Postgres URL must explicitly name its login, database, and decimal port. Remote URLs must use
 a DNS hostname and exact `sslmode=verify-full`; Kovo refuses IP literals, every query user/database
@@ -112,11 +115,15 @@ port, for example
 Make the live database prove it matches the schema and grants:
 
 ```sh
-KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check --schema src/schema.ts
+KOVO_DB_SYSTEM_URL=postgres://kovo_system@db:5432/app?sslmode=verify-full \
+KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full \
+kovo db check --schema src/schema.ts
 ```
 
 On a healthy database the command reports `STATUS ok` with `issues=0`. On an empty or drifted
-database it fails closed with a posture report instead of guessing.
+database it fails closed with a posture report instead of guessing. The check also proves both URLs
+reach the same database on the same writable primary. Use `KOVO_ADMIN_DATABASE_URL` instead when a
+deployment cannot expose a dedicated system login to CI.
 
 ## Handle failure
 

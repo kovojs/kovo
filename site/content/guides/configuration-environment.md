@@ -64,23 +64,25 @@ may omit TLS for local development. Write the IPv6 control as
 pinned `pg` passes those brackets to DNS. A process booted with `NODE_TLS_REJECT_UNAUTHORIZED=0`
 cannot use a non-local managed Postgres URL.
 
-| Variable                       | Used by                                                      | What it does                                                                                   |
-| ------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `KOVO_CSRF_SECRET`             | `createApp({ csrf })`, starter auth                          | Framework signing secret for browser mutation CSRF when you wire it through app config.        |
-| `KOVO_DATABASE_URL`            | runtime DB, `kovo db check`, egress bootstrap                | Least-privilege runtime database URL. Production Postgres posture hangs off this.              |
-| `KOVO_RUNTIME_DATABASE_URL`    | `kovo db provision` / `kovo db migrate`                      | Explicit runtime login for posture checks and grants when it differs from `KOVO_DATABASE_URL`. |
-| `KOVO_ADMIN_DATABASE_URL`      | `kovo db provision` / `kovo db migrate` / `kovo db generate` | Privileged setup URL. Keep it out of normal app boot.                                          |
-| `KOVO_DB_DRIVER`               | Postgres/PGlite runtime and `kovo db`                        | Chooses `pglite`, `pg`, or `node-postgres`.                                                    |
-| `KOVO_DATA_DIR`                | PGlite runtime and starter template                          | Overrides the local PGlite directory.                                                          |
-| `KOVO_DB_READER_ROLE`          | Postgres provision/check                                     | Reader role name. Defaults to `kovo_reader`.                                                   |
-| `KOVO_DB_WRITER_ROLE`          | Postgres provision/check, durable tasks                      | Writer role name. Defaults to `kovo_writer`.                                                   |
-| `KOVO_DB_ADMIN_ROLE`           | audited `crossOwnerRead(...)` posture                        | Admin role for the narrower cross-owner read path.                                             |
-| `KOVO_PRESET`                  | `kovo build`                                                 | Forces `node`, `vercel`, or `cloudflare` instead of host autodetection.                        |
-| `KOVO_PARANOID`                | build/dev diagnostics                                        | Turns on advisory extra security auditing.                                                     |
-| `KOVO_SQL_GUARD`               | raw SQL migration escape hatch                               | Temporary fail-open escape for unmanaged raw SQL sinks.                                        |
-| `KOVO_DEVTOOL_BASE`            | devtool mount                                                | Prefixes emitted devtool URLs when you serve it under a subpath.                               |
-| `KOVO_VERIFY_ENDPOINT_POSTURE` | endpoint posture verification                                | Forces runtime endpoint posture checks in tests and verification flows.                        |
-| `KOVO_EXPERIMENTAL_SQLITE`     | `create-kovo`                                                | Required to scaffold the experimental SQLite starter.                                          |
+| Variable                       | Used by                                                                       | What it does                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `KOVO_CSRF_SECRET`             | `createApp({ csrf })`, starter auth                                           | Framework signing secret for browser mutation CSRF when you wire it through app config.     |
+| `KOVO_DATABASE_URL`            | runtime DB, egress bootstrap                                                  | Ordinary least-privilege app login.                                                         |
+| `KOVO_RUNTIME_DATABASE_URL`    | `kovo db provision` / `kovo db migrate` / `kovo db check`                     | Runtime witness used for grants and posture. Usually the same login as `KOVO_DATABASE_URL`. |
+| `KOVO_ADMIN_DATABASE_URL`      | `kovo db generate` / `kovo db migrate` / `kovo db provision` / fallback check | Privileged setup and fallback-check authority. Keep it out of the app process.              |
+| `KOVO_DB_SYSTEM_URL`           | app boot, replay/auth storage, boot posture, `kovo db check`                  | Dedicated system login and preferred check authority on the same writable primary.          |
+| `KOVO_DB_DRIVER`               | Postgres/PGlite runtime and `kovo db`                                         | Chooses `pglite`, `pg`, or `node-postgres`.                                                 |
+| `KOVO_DATA_DIR`                | PGlite runtime and starter template                                           | Overrides the local PGlite directory.                                                       |
+| `KOVO_DB_READER_ROLE`          | Postgres provision/check                                                      | Reader role name. Defaults to `kovo_reader`.                                                |
+| `KOVO_DB_WRITER_ROLE`          | Postgres provision/check, durable tasks                                       | Writer role name. Defaults to `kovo_writer`.                                                |
+| `KOVO_DB_ADMIN_ROLE`           | audited `crossOwnerRead(...)` posture                                         | Admin role for the narrower cross-owner read path.                                          |
+| `KOVO_DB_SYSTEM_ROLE`          | framework replay/auth storage                                                 | System role name. Defaults to `kovo_system`.                                                |
+| `KOVO_PRESET`                  | `kovo build`                                                                  | Forces `node`, `vercel`, or `cloudflare` instead of host autodetection.                     |
+| `KOVO_PARANOID`                | build/dev diagnostics                                                         | Turns on advisory extra security auditing.                                                  |
+| `KOVO_SQL_GUARD`               | raw SQL migration escape hatch                                                | Temporary fail-open escape for unmanaged raw SQL sinks.                                     |
+| `KOVO_DEVTOOL_BASE`            | devtool mount                                                                 | Prefixes emitted devtool URLs when you serve it under a subpath.                            |
+| `KOVO_VERIFY_ENDPOINT_POSTURE` | endpoint posture verification                                                 | Forces runtime endpoint posture checks in tests and verification flows.                     |
+| `KOVO_EXPERIMENTAL_SQLITE`     | `create-kovo`                                                                 | Required to scaffold the experimental SQLite starter.                                       |
 
 Two more names matter even though they are not `KOVO_*`:
 
@@ -94,7 +96,7 @@ There are three common failure classes:
 
 - Your app env schema rejects a missing or malformed app-owned variable.
 - Production boot rejects a weak framework signing secret.
-- `kovo db` reads the wrong URL or driver and reports posture problems against the wrong database.
+- The runtime and admin/system URLs resolve to different databases, clusters, or primary instances.
 
 When that happens, fix the source env or the app wiring. Do not paper over it by catching the boot
 error and continuing anyway.

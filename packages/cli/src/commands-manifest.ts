@@ -61,7 +61,7 @@ export const DEV_USAGE =
 
 /** @internal Usage line emitted for `kovo db` (see `dbUsage`). */
 export const DB_USAGE =
-  'usage: kovo db provision|migrate|generate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]';
+  'usage: kovo db provision|migrate|generate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--system-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]';
 
 /** @internal Usage forms emitted for `kovo compile` (see `compileUsage`). */
 export const COMPILE_USAGE = [
@@ -242,6 +242,11 @@ export const DB_ARGV_SPEC = {
       flag: '--admin-database-url',
       kind: 'value',
       requiresValueMessage: 'kovo: db --admin-database-url requires a URL.\n',
+    },
+    {
+      flag: '--system-database-url',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --system-database-url requires a URL.\n',
     },
     {
       flag: '--data-dir',
@@ -662,7 +667,7 @@ export const COMMANDS_MANIFEST = [
       {
         flag: 'check',
         description:
-          'Verify the existing database has the expected live Postgres posture: forced RLS, policies, grants, and least-privilege runtime access.',
+          'Bind the ordinary runtime witness to a privileged authority on the same live database, then verify forced RLS, policies, grants, and least-privilege access.',
       },
       { flag: '--schema <module>', description: 'Schema module path (default: src/schema.ts).' },
       {
@@ -677,12 +682,17 @@ export const COMMANDS_MANIFEST = [
       {
         flag: '--database-url <url>',
         description:
-          'Least-privilege runtime/check URL. Defaults to KOVO_RUNTIME_DATABASE_URL, then KOVO_DATABASE_URL.',
+          'Least-privilege runtime witness URL. Defaults to KOVO_RUNTIME_DATABASE_URL, then KOVO_DATABASE_URL.',
       },
       {
         flag: '--admin-database-url <url>',
         description:
-          'Privileged provision URL. Defaults to KOVO_ADMIN_DATABASE_URL for external provision.',
+          'Privileged setup/check fallback authority URL. Defaults to KOVO_ADMIN_DATABASE_URL.',
+      },
+      {
+        flag: '--system-database-url <url>',
+        description:
+          'Least-privilege system/check authority URL. Preferred over admin; defaults to KOVO_DB_SYSTEM_URL.',
       },
       {
         flag: '--data-dir <dir>',
@@ -696,7 +706,8 @@ export const COMMANDS_MANIFEST = [
       'kovo db generate --migrations migrations',
       'kovo db migrate --migrations migrations',
       'KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db provision',
-      'KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check',
+      'KOVO_DB_SYSTEM_URL=postgres://kovo_system@db:5432/app?sslmode=verify-full KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check',
+      'KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check',
       'kovo db check --driver pglite --data-dir .kovo/pglite',
     ],
   },

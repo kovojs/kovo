@@ -80,13 +80,14 @@ readable, protected posture; `owner: 'userId'` supplies that posture for the mem
 
 ## Provision and check it
 
-Run provision with an admin connection. Run check with the same least-privilege connection the app
-uses at request time:
+Run provision with an admin connection and the ordinary runtime login. Give check the runtime and
+system URLs so it can bind the runtime witness to the isolated posture audit:
 
 ```sh
 KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full \
   kovo db provision
-KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check
+KOVO_DB_SYSTEM_URL=postgres://kovo_system@db:5432/app?sslmode=verify-full KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full \
+  kovo db check
 ```
 
 The command derives the table posture from `src/schema.ts`. For the document table, the important
@@ -148,7 +149,7 @@ Provision once, then check with the app credential and a member/non-member seed:
 
 ```sh
 KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db provision
-KOVO_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check
+KOVO_DB_SYSTEM_URL=postgres://kovo_system@db:5432/app?sslmode=verify-full KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check
 ```
 
 Then run the two reads above. The member sees the row. The non-member gets zero rows, and a cross-team

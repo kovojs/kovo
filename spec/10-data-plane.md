@@ -333,6 +333,40 @@ must be a member of only framework-owned roles plus an explicit benign don't-car
 role-attribute columns and non-allowlisted `pg_*` predefined-role memberships (C10/C11) both fail
 closed until classified.
 
+**Split Postgres authority is bound to one live writable database (normative).** A runtime identity
+witness and a privileged posture audit are one proof only when they address the same logical
+database on the same current primary. Provisioning MUST mint one random framework-owned database
+instance identity in `kovo_schema_state`. Before normalizing the session, the ordinary runtime
+connection snapshots exactly one live-identity row containing the database name/OID, cluster system
+identifier, timeline, recovery state, postmaster start time, and server address/port, plus exactly
+one framework identity row. The selected system authority (preferred) or admin authority MUST
+independently reproduce the same compound identity before its audit result is accepted. A mismatch,
+recovery/standby endpoint, missing exact framework identity row, or provider that withholds the
+read-only `pg_control_system()` /
+`pg_control_checkpoint()` identity oracles fails closed. This supports one writable primary (or a
+failover where both URLs reconnect to the same promoted primary). Independently writable physical
+clones and split proxy routes are unsupported even if their logical schema bytes match; operators
+must point every authority URL at the same live primary and rerun provision after a logical clone.
+
+**Runtime Postgres session state is an allowlist (normative).** The runtime witness runs before Kovo
+overwrites `search_path`. It MUST reject startup `SET ROLE`/session-authorization skew, require the
+safe semantic baseline (`session_replication_role=origin`, `row_security=on`, UTF-8, standard
+strings, and the other classified parser/transaction settings), and enumerate every setting whose
+live source is client, database, role, or database-plus-role. Only the pinned UTF-8 driver
+negotiation and semantics-neutral application naming are allowed. The privileged posture authority
+also enumerates persisted settings for the runtime login and its complete assumable-role closure;
+an unclassified setting fails closed rather than joining a denylist. Every live `pg_settings.source`
+category MUST be explicitly classified; an unknown future source category fails closed. Every
+framework-owned app SQL transaction then starts with the exact local `pg_catalog, public, pg_temp`
+search path before it sets the principal, role selector, or app role.
+
+**Postgres security metadata currently requires globally unique base table names (normative).**
+Owner chains, secret-column grants, authorization classifications, and policy dependency sets share
+the Drizzle base table name as their closed-world key. Until all of those keys are schema-qualified
+end to end, a schema declaring two physical relations with the same base name MUST fail before any
+database side effect, even when the relations live in different PostgreSQL schemas. This prevents a
+public or partially secret classification from colliding with a whole-secret relation.
+
 **C15 — classify-and-pin or reconstruct after runtime classification (normative).** When a
 security-relevant sink accepts a caller-owned carrier whose bytes or object identity can still
 change after runtime validation/classification, the framework MUST do one of the following before

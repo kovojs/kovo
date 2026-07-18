@@ -341,7 +341,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'windows-cli-database-carrier-regression',
         file: 'packages/cli/src/index.kovo-db.test.ts',
         snippets: [
-          'uses Windows-equivalent mixed-case DB carriers instead of falling back to PGlite',
+          'recognizes a Windows-equivalent mixed-case admin carrier but still requires runtime',
           "Kovo_Admin_Database_Url: 'postgres://bad@127.0.0.1:1/nope'",
           "kovo_db_driver: 'node-postgres'",
           "expect(check.stderr).not.toContain('DRIVER pglite')",
@@ -466,8 +466,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'postgres-identity-posture',
     marker: '@kovo-security-classifier-corpus postgres-identity-posture',
     testFiles: [
+      'packages/server/src/managed-db.test.ts',
       'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
       'packages/server/src/postgres-external-probe.test.ts',
+      'packages/server/src/postgres-runtime.test.ts',
     ],
     verdictAnchors: [
       {
@@ -493,6 +495,76 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'expectStandalonePostureWitnessesAuthenticatedRuntimeConnection',
           'expectBootPostureWitnessesAuthenticatedRuntimeConnection',
           'runtime connection current_user kovo_admin must match authenticated session_user',
+        ],
+      },
+      {
+        id: 'runtime-startup-setting-baseline',
+        file: 'packages/server/src/postgres-external-probe.test.ts',
+        snippets: [
+          'rejects privileged startup settings before they can disable runtime enforcement',
+          'session_replication_role = replica',
+          'INSERT INTO posture_child (parent_id) VALUES (404)',
+          'ALTER ROLE ${quoteIdent(runtimeRole)} SET row_security = off',
+          'ALTER DATABASE ${quoteIdent(database)} SET search_path = public',
+        ],
+      },
+      {
+        id: 'runtime-pre-reset-namespace-witness',
+        file: 'packages/server/src/postgres-external-probe.test.ts',
+        snippets: [
+          'pins the whole pre-reset witness under hostile search_path shadow objects',
+          'CREATE FUNCTION public.current_setting(pg_catalog.text)',
+          'CREATE DOMAIN public.text AS pg_catalog.text',
+          'CREATE OPERATOR public.=',
+        ],
+      },
+      {
+        id: 'split-posture-database-binding',
+        file: 'packages/server/src/postgres-external-probe.test.ts',
+        snippets: [
+          'binds split posture authority to the same live database and writable cluster',
+          'expectDatabaseIdentityPostureFailure(firstRuntimeUrl, secondAdminUrl)',
+          'expectDatabaseIdentityPostureFailure(firstRuntimeUrl, siblingAdminUrl)',
+          'REVOKE EXECUTE ON FUNCTION pg_catalog.pg_control_system() FROM PUBLIC',
+        ],
+      },
+      {
+        id: 'cross-schema-base-name-authz-collision',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'rejects cross-schema duplicate base names before secret grant metadata can collide',
+          'secret: true',
+          "secret: ['classified']",
+          'KV433_DUPLICATE_TABLE_NAME',
+        ],
+      },
+      {
+        id: 'app-transaction-search-path-normalization',
+        file: 'packages/server/src/managed-db.test.ts',
+        snippets: [
+          'server-owned Postgres scoped client parameterizes the principal before assuming the app role',
+          'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
+          "query:SELECT set_config('kovo.principal', $1, true)",
+          'exec:SET LOCAL ROLE "kovo_reader"',
+        ],
+      },
+      {
+        id: 'app-transaction-search-path-data-path',
+        file: 'packages/server/src/managed-db.test.ts',
+        snippets: [
+          'normalizes search_path before an unqualified managed Drizzle builder resolves its table',
+          "'SET search_path = shadow_scope, public'",
+          "rows: [{ classified: 'victim-secret' }]",
+          "resolves.toEqual([{ classified: 'public-safe', id: 'public' }])",
+        ],
+      },
+      {
+        id: 'postgres-setting-source-closure',
+        file: 'packages/server/src/postgres-runtime.test.ts',
+        snippets: [
+          'classifies every pg_settings source and fails closed on future source categories',
+          'future provider control plane',
+          'unclassified pg_settings source future provider control plane',
         ],
       },
     ],
