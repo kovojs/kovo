@@ -1,4 +1,9 @@
 import type * as ts from 'typescript';
+import type {
+  BrowserSecurityOperationKind,
+  SecurityOperationDoor,
+  ServerSecurityOperationKind,
+} from '@kovojs/core/internal/security-operation-ir';
 
 import type { StaticLiteralValue } from './object.js';
 
@@ -99,6 +104,35 @@ export interface MutationHandlerModel {
   paramNames: readonly (string | undefined)[];
   params: readonly string[];
   paramSpans: readonly SourceSpan[];
+  securityOperations?: readonly ServerSecurityOperationModel[];
+  securityOperationViolations?: readonly SecurityOperationViolationModel[];
+}
+
+export interface BrowserSecurityOperationModel {
+  door: SecurityOperationDoor;
+  kind: BrowserSecurityOperationKind;
+  span: SourceSpan;
+  target?: string;
+}
+
+export interface ServerSecurityOperationModel {
+  door: SecurityOperationDoor;
+  justification?: string;
+  kind: ServerSecurityOperationKind;
+  span: SourceSpan;
+  target?: string;
+}
+
+export interface SecurityOperationViolationModel {
+  detail: string;
+  kind:
+    | 'computed-security-operation'
+    | 'incomplete-mutation-form'
+    | 'raw-capability-operation'
+    | 'raw-dom-operation'
+    | 'unknown-security-operation';
+  span: SourceSpan;
+  surface: HandlerWriteSinkSurface | 'browser';
 }
 
 export interface TaskRunHandlerModel extends MutationHandlerModel {
@@ -163,6 +197,8 @@ export interface CallExpressionModel {
   exportedConstName?: string;
   /** Parser-owned exact framework factory identity; a same-named local function never receives it. */
   frameworkFactory?: 'endpoint' | 'mutation' | 'task' | 'webhook';
+  /** Exact framework identity for a security helper whose call shape participates in finite IR. */
+  frameworkSecurityOperation?: 'csrf-field' | 'csrf-token';
   name: string;
   start: number;
 }
@@ -318,6 +354,8 @@ export interface ZeroArgArrowModel {
   callArguments?: readonly string[];
   documentElementAction?: DocumentElementActionModel;
   references: readonly string[];
+  securityOperations?: readonly BrowserSecurityOperationModel[];
+  securityOperationViolations?: readonly SecurityOperationViolationModel[];
 }
 
 export interface ComponentModel {

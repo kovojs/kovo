@@ -169,6 +169,10 @@ export const CartBadge = component({
         code: 'KV201',
         severity: 'error',
       },
+      {
+        code: 'KV449',
+        severity: 'error',
+      },
     ]);
     const kv201 = result.diagnostics.find((diagnostic) => diagnostic.code === 'KV201');
     expect(kv201?.help).toMatch(
@@ -387,7 +391,11 @@ export const Counter = component({
         source: `<button onClick={() => ${expression}}>x</button>`,
       });
 
-      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+        'KV210',
+        'KV201',
+        'KV449',
+      ]);
     }
   });
 
@@ -537,7 +545,11 @@ export const CartBadge = component({
       source: '<button onClick={() => window.alert("x")}>x</button>',
     });
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV210',
+      'KV201',
+      'KV449',
+    ]);
     expect(result.diagnostics[0]).toMatchObject({
       code: 'KV210',
       severity: kv210.severity,

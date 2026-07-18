@@ -54,6 +54,10 @@ import { deriveRegistryIdentity } from '../registry-identities.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
 import {
+  scanBrowserSecurityOperations,
+  scanServerSecurityOperations,
+} from './security-operation-ir.js';
+import {
   callExpressionReceiverSegments,
   propertyAccessPath,
   propertyNameText,
@@ -120,6 +124,14 @@ const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
 const WEBHOOK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
+const CSRF_FIELD_IDENTITIES: readonly FrameworkExportIdentity[] = [
+  frameworkExport('@kovojs/server', 'csrfField'),
+  frameworkExport('@kovojs/server', 'mintCsrfField'),
+];
+const CSRF_TOKEN_IDENTITIES: readonly FrameworkExportIdentity[] = [
+  frameworkExport('@kovojs/server', 'csrfToken'),
+  frameworkExport('@kovojs/server', 'mintCsrfToken'),
+];
 const SERVER_CALL_FACTORY_IDENTITIES: readonly FrameworkExportIdentity[] = [
   ENDPOINT_FACTORY_IDENTITY,
   MUTATION_FACTORY_IDENTITY,
@@ -388,9 +400,14 @@ export function parseComponentModule(
             : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
               ? 'webhook'
               : undefined;
+      const frameworkSecurityOperation = frameworkIdentityIn(factoryIdentity, CSRF_FIELD_IDENTITIES)
+        ? 'csrf-field'
+        : frameworkIdentityIn(factoryIdentity, CSRF_TOKEN_IDENTITIES)
+          ? 'csrf-token'
+          : undefined;
       compilerArrayAppend(
         calls,
-        callExpressionModel(sourceFile, source, node, frameworkFactory),
+        callExpressionModel(sourceFile, source, node, frameworkFactory, frameworkSecurityOperation),
         'Call models',
       );
       if (frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)) {
@@ -2276,6 +2293,7 @@ function mutationHandlerModels(
           surface: 'mutation',
         }),
         mutationOwner: owner,
+        ...serverSecurityOperationModel(sourceFile, body, 'mutation'),
         ...(handlerReadsAmbientCookie(body, parameters)
           ? { readsAmbientCookie: true as const }
           : {}),
@@ -3221,6 +3239,7 @@ function endpointHandlerModels(
           owner,
           surface: 'endpoint',
         }),
+        ...serverSecurityOperationModel(sourceFile, entry.body, 'endpoint'),
       },
       'Endpoint handler models',
     );
@@ -3358,6 +3377,7 @@ function webhookHandlerModels(
           contextParamName,
           'runMutation',
         ),
+        ...serverSecurityOperationModel(sourceFile, entry.body, 'webhook'),
       },
       'Webhook handler models',
     );
@@ -3406,6 +3426,7 @@ function taskRunHandlerModels(
         ),
         runQueryEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'runQuery'),
         scheduleEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'schedule'),
+        ...serverSecurityOperationModel(sourceFile, handler.body, 'task'),
       },
       'Task run handler models',
     );
@@ -3964,6 +3985,18 @@ function functionBodyModel(
     paramNames,
     params,
     paramSpans,
+  };
+}
+
+function serverSecurityOperationModel(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  surface: HandlerWriteSinkSurface,
+): Pick<MutationHandlerModel, 'securityOperations' | 'securityOperationViolations'> {
+  const facts = scanServerSecurityOperations(sourceFile, body, surface);
+  return {
+    ...(facts.operations.length === 0 ? {} : { securityOperations: facts.operations }),
+    ...(facts.violations.length === 0 ? {} : { securityOperationViolations: facts.violations }),
   };
 }
 
@@ -5153,6 +5186,7 @@ function callExpressionModel(
   source: string,
   node: ts.CallExpression,
   frameworkFactory: CallExpressionModel['frameworkFactory'],
+  frameworkSecurityOperation: CallExpressionModel['frameworkSecurityOperation'],
 ): CallExpressionModel {
   const argumentSources: string[] = [];
   const argumentArrowFunctionParts: (ArrowFunctionPartsModel | null)[] = [];
@@ -5221,9 +5255,26 @@ function callExpressionModel(
     end: node.getEnd(),
     ...exportedConstInitializerName(node),
     ...(frameworkFactory === undefined ? {} : { frameworkFactory }),
+    ...(frameworkSecurityOperation === undefined ? {} : { frameworkSecurityOperation }),
     name: node.expression.getText(sourceFile),
     start: node.getStart(sourceFile),
   };
+}
+
+function frameworkIdentityIn(
+  candidate: FrameworkExportIdentity | undefined,
+  expected: readonly FrameworkExportIdentity[],
+): boolean {
+  if (candidate === undefined) return false;
+  const length = compilerArrayLength(expected, 'Framework security identities');
+  for (let index = 0; index < length; index += 1) {
+    const identity = compilerOwnDataValue(expected, index, 'Framework security identities') as
+      | FrameworkExportIdentity
+      | undefined;
+    if (!identity) throw new TypeError(`Framework security identities[${index}] must be own data.`);
+    if (frameworkExportEquals(candidate, identity)) return true;
+  }
+  return false;
 }
 
 function exportedConstInitializerName(node: ts.CallExpression): { exportedConstName: string } | {} {
@@ -5619,6 +5670,7 @@ function zeroArgArrowModel(
   if (!ts.isArrowFunction(expression) || expression.parameters.length > 0) return {};
 
   const body = expression.body;
+  const securityOperations = scanBrowserSecurityOperations(sourceFile, body);
   const bodyStart = ts.isBlock(body) ? body.getStart(sourceFile) + 1 : body.getStart(sourceFile);
   const bodyEnd = ts.isBlock(body) ? body.getEnd() - 1 : body.getEnd();
   const rawBodySource = compilerStringSlice(source, bodyStart, bodyEnd);
@@ -5696,6 +5748,12 @@ function zeroArgArrowModel(
       ...(callArguments === undefined ? {} : { callArguments }),
       ...documentElementActionModel(sourceFile, body),
       references: referenceIdentifiers(body),
+      ...(securityOperations.operations.length === 0
+        ? {}
+        : { securityOperations: securityOperations.operations }),
+      ...(securityOperations.violations.length === 0
+        ? {}
+        : { securityOperationViolations: securityOperations.violations }),
     },
   };
 }

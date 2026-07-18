@@ -117,6 +117,14 @@ describe('framework identity resolver', () => {
       exportName: 'runCommand',
       module: '@kovojs/server',
     });
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'csrfField')).toEqual({
+      exportName: 'csrfField',
+      module: '@kovojs/server',
+    });
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'mintCsrfToken')).toEqual({
+      exportName: 'mintCsrfToken',
+      module: '@kovojs/server',
+    });
     expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createFileSystemStorage'),
     ).toEqual({

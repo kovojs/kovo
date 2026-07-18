@@ -103,4 +103,27 @@ export const PayButton = component({
 `,
       }).diagnostics,
   },
+  {
+    code: 'KV449',
+    spec: 'SPEC.md §4.3/§5.2/§6.6/§9.1',
+    positive: () =>
+      coverageFixtures.compileComponentModule({
+        fileName: 'finite-security-ir-ok.tsx',
+        source: `
+export const FiniteSecurityIrOk = component({
+  state: () => ({ open: false }),
+  render: () => <button onClick={() => { state.open = true; }}>Open</button>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      coverageFixtures.compileComponentModule({
+        fileName: 'finite-security-ir-bad.tsx',
+        source: `
+export const FiniteSecurityIrBad = component({
+  render: () => <button onClick={() => { event.target.innerHTML = '<script>x</script>'; }}>Open</button>,
+});
+`,
+      }).diagnostics,
+  },
 ]);

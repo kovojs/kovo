@@ -1682,6 +1682,54 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'finite-security-operation-ir',
+    marker: '@kovo-security-classifier-corpus finite-security-operation-ir',
+    testFiles: ['packages/compiler/src/security-operation-ir.security.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'realistic-reviewed-browser-operations',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'accepts realistic state, delegated-event, reviewed primitive, focus, form, and timer effects',
+          'tabsTriggerClick',
+          "Object(next)['focus']?.call(next)",
+          'requestSubmit',
+        ],
+      },
+      {
+        id: 'unknown-and-raw-browser-operations-close',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'raw DOM property assignment',
+          'never-listed DOM method',
+          'computed DOM method',
+          'raw browser-global method',
+          'raw storage capability',
+        ],
+      },
+      {
+        id: 'structured-server-and-exception-doors',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'accepts exact structured server operations and named justified exceptional doors',
+          'unknown managed database method',
+          'computed managed database method',
+          'raw Response from mutation',
+          'requires static justifications on the trustedSql and trustedHtml exceptional doors',
+        ],
+      },
+      {
+        id: 'complete-mutation-form-security-fields',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'rejects standalone CSRF helpers targeting mutations but not same-named local lookalikes',
+          "import { csrfField as field, mutation } from '@kovojs/server'",
+          'function csrfField(_context, _options)',
+        ],
+      },
+    ],
+  },
+  {
     id: 'csrf-principal-binding',
     marker: '@kovo-security-classifier-corpus csrf-principal-binding',
     testFiles: [

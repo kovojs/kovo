@@ -1259,6 +1259,26 @@ export const CartActions = component({
       bodyStart: source.indexOf(" log('item.id');"),
       bodySourceStart: source.indexOf("log('item.id');"),
       references: ['log', 'state', 'item'],
+      securityOperations: [
+        {
+          door: 'reviewed-client-export',
+          kind: 'browser.framework.call',
+          span: {
+            end: source.indexOf("log('item.id')") + "log('item.id')".length,
+            start: source.indexOf("log('item.id')"),
+          },
+          target: 'log',
+        },
+        {
+          door: 'compiler-state',
+          kind: 'browser.state.write',
+          span: {
+            end: source.indexOf('state.count') + 'state.count'.length,
+            start: source.indexOf('state.count'),
+          },
+          target: 'state.count',
+        },
+      ],
     });
   });
 
