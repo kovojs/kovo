@@ -1048,10 +1048,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     installFrameworkFetchFloor(
       resolveEgressPolicy(
         {
-          allowDestinations: [
-            'https://iana-special.test',
-            'https://iana-adjacent-public.test',
-          ],
+          allowDestinations: ['https://iana-special.test', 'https://iana-adjacent-public.test'],
         },
         () => {},
       ),
@@ -1061,8 +1058,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
         error: Error | null,
         addresses: { address: string; family: number }[],
       ) => void;
-      const address =
-        hostname === 'iana-special.test' ? '192.31.196.1' : '192.31.195.255';
+      const address = hostname === 'iana-special.test' ? '192.31.196.1' : '192.31.195.255';
       cb(null, [{ address, family: 4 }]);
     }) as typeof dns.lookup);
 
@@ -1126,6 +1122,70 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
         req.on('error', reject);
       }),
     ).rejects.toMatchObject({ name: EGRESS_BLOCKED_ERROR_NAME });
+  });
+
+  it('blocks IANA-special literals and DNS answers at the net.connect dial boundary', async () => {
+    const connectDescriptor = Object.getOwnPropertyDescriptor(net.Socket.prototype, 'connect');
+    const fakeNativeConnect = vi.fn(function (this: net.Socket) {
+      return this;
+    });
+    Object.defineProperty(net.Socket.prototype, 'connect', {
+      configurable: true,
+      value: fakeNativeConnect,
+      writable: true,
+    });
+
+    try {
+      uninstall = installNetConnectFloor(emptyPolicy());
+      for (const host of [
+        '192.31.196.1',
+        '192.52.193.1',
+        '192.175.48.1',
+        '2620:4f:8000::1',
+        '::ffff:192.31.196.1',
+      ]) {
+        const socket = new net.Socket();
+        expect(() => socket.connect({ host, port: 443 }), host).toThrow(EgressBlockedError);
+        socket.destroy();
+      }
+      expect(fakeNativeConnect).not.toHaveBeenCalled();
+
+      const publicSocket = new net.Socket();
+      expect(() => publicSocket.connect({ host: '192.31.195.255', port: 443 })).not.toThrow();
+      publicSocket.destroy();
+      expect(fakeNativeConnect).toHaveBeenCalledOnce();
+
+      const options: net.NetConnectOpts = {
+        host: 'iana-special-dns.test',
+        port: 443,
+        lookup(_hostname, lookupOptions, callback) {
+          const cb = (typeof lookupOptions === 'function' ? lookupOptions : callback) as (
+            error: Error | null,
+            address: string,
+            family: number,
+          ) => void;
+          cb(null, '2620:4f:8000::1', 6);
+        },
+      };
+      const dnsSocket = new net.Socket();
+      expect(() => dnsSocket.connect(options)).not.toThrow();
+      const pinnedLookup = options.lookup!;
+      const lookupError = await new Promise<Error | null>((resolve) => {
+        pinnedLookup('iana-special-dns.test', {}, (error) => resolve(error));
+      });
+      expect(lookupError).toMatchObject({
+        classification: 'special-use',
+        name: EGRESS_BLOCKED_ERROR_NAME,
+      });
+      dnsSocket.destroy();
+      expect(fakeNativeConnect).toHaveBeenCalledTimes(2);
+    } finally {
+      uninstall?.();
+      uninstall = () => {};
+      if (connectDescriptor !== undefined) {
+        Object.defineProperty(net.Socket.prototype, 'connect', connectDescriptor);
+      }
+    }
   });
 
   // @kovo-security-classifier-corpus egress-ip

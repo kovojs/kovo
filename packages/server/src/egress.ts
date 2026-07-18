@@ -957,6 +957,45 @@ export function classifyIp(host: string): PrivateAddressClass {
   return 'special-use';
 }
 
+type Ipv4SpecialPurposePrefix = readonly [cidr: string, classification: PrivateAddressClass];
+
+/**
+ * Minimal covering prefixes from the IANA IPv4 Special-Purpose Address Space registry,
+ * snapshot 2025-10-09. Nested registry records are covered by their parent prefix. Keeping the
+ * registry as one declared table makes a newly omitted globally-reachable special-purpose range
+ * visible in review instead of relying on an incomplete chain of first-octet conditions.
+ *
+ * Source: https://www.iana.org/assignments/iana-ipv4-special-registry/
+ */
+const IANA_IPV4_SPECIAL_PURPOSE_PREFIXES: readonly Ipv4SpecialPurposePrefix[] = [
+  ['0.0.0.0/8', 'unspecified'],
+  ['10.0.0.0/8', 'private-rfc1918'],
+  ['100.64.0.0/10', 'carrier-nat'],
+  ['127.0.0.0/8', 'loopback'],
+  ['169.254.0.0/16', 'link-local'],
+  ['172.16.0.0/12', 'private-rfc1918'],
+  ['192.0.0.0/24', 'special-use'],
+  ['192.0.2.0/24', 'special-use'],
+  ['192.31.196.0/24', 'special-use'],
+  ['192.52.193.0/24', 'special-use'],
+  ['192.88.99.0/24', 'special-use'],
+  ['192.168.0.0/16', 'private-rfc1918'],
+  ['192.175.48.0/24', 'special-use'],
+  ['198.18.0.0/15', 'special-use'],
+  ['198.51.100.0/24', 'special-use'],
+  ['203.0.113.0/24', 'special-use'],
+  ['240.0.0.0/4', 'special-use'],
+];
+
+/** C13: retain every broader closed verdict from the predecessor classifier as a superset. */
+const CONSERVATIVE_IPV4_CLOSED_PREFIXES: readonly Ipv4SpecialPurposePrefix[] = [
+  ['192.0.0.0/16', 'special-use'],
+  ['192.88.0.0/16', 'special-use'],
+  ['198.51.0.0/16', 'special-use'],
+  ['203.0.0.0/16', 'special-use'],
+  ['224.0.0.0/4', 'special-use'], // multicast is non-public even though separately registered
+];
+
 function classifyIpv4(ip: string): PrivateAddressClass {
   const octets = egressArrayMap(egressStringSplit(ip, '.'), (octet) => egressNumber(octet));
   if (
@@ -965,8 +1004,6 @@ function classifyIpv4(ip: string): PrivateAddressClass {
   ) {
     return 'special-use';
   }
-  const a = octets[0]!;
-  const b = octets[1]!;
   // Cloud instance-metadata (AWS/GCP/Azure all use 169.254.169.254; AWS also 169.254.169.123 NTP,
   // 169.254.170.2 ECS task creds, 169.254.170.23 EKS Pod Identity). Treat the whole 169.254/16
   // link-local block as metadata-sensitive: it is the SSRF credential-theft surface. (A genuine
@@ -974,7 +1011,7 @@ function classifyIpv4(ip: string): PrivateAddressClass {
   // classify: link-local is its own class. We single out the documented metadata IPs here and
   // leave the rest of 169.254/16 as link-local so allowInternal can reach a bespoke link-local
   // service if truly needed, while the metadata IPs require the credential frame.)
-  if (a === 169 && b === 254) {
+  if (octets[0] === 169 && octets[1] === 254) {
     if (
       ip === '169.254.169.254' ||
       ip === '169.254.169.123' ||
@@ -985,64 +1022,149 @@ function classifyIpv4(ip: string): PrivateAddressClass {
     }
     return 'link-local';
   }
-  if (a === 127) return 'loopback';
-  if (a === 0) return 'unspecified';
-  if (a === 10) return 'private-rfc1918';
-  if (a === 172 && b >= 16 && b <= 31) return 'private-rfc1918';
-  if (a === 192 && b === 168) return 'private-rfc1918';
-  if (a === 100 && b >= 64 && b <= 127) return 'carrier-nat'; // 100.64/10 CGNAT (RFC6598)
-  if (a === 198 && (b === 18 || b === 19)) return 'special-use'; // benchmarking
-  if (a === 192 && b === 0) return 'special-use'; // 192.0.0/24, 192.0.2/24 docs
-  if (a === 192 && b === 88) return 'special-use'; // 6to4 relay anycast
-  if (a === 198 && b === 51) return 'special-use'; // 198.51.100/24 docs
-  if (a === 203 && b === 0) return 'special-use'; // 203.0.113/24 docs
-  if (a >= 224) return 'special-use'; // multicast + reserved (224/4, 240/4, 255.255.255.255)
+  const registryClassification = classifyIpv4FromPrefixes(
+    octets,
+    IANA_IPV4_SPECIAL_PURPOSE_PREFIXES,
+  );
+  if (registryClassification !== null) return registryClassification;
+  const conservativeClassification = classifyIpv4FromPrefixes(
+    octets,
+    CONSERVATIVE_IPV4_CLOSED_PREFIXES,
+  );
+  if (conservativeClassification !== null) return conservativeClassification;
   return 'public';
+}
+
+function classifyIpv4FromPrefixes(
+  octets: readonly number[],
+  prefixes: readonly Ipv4SpecialPurposePrefix[],
+): PrivateAddressClass | null {
+  for (let index = 0; index < prefixes.length; index += 1) {
+    const prefix = prefixes[index]!;
+    if (ipv4OctetsInCidr(octets, prefix[0])) return prefix[1];
+  }
+  return null;
+}
+
+function ipv4OctetsInCidr(octets: readonly number[], cidr: string): boolean {
+  const cidrParts = egressStringSplit(cidr, '/');
+  const rangeParts = egressStringSplit(cidrParts[0] ?? '', '.');
+  const bits = egressNumber(cidrParts[1]);
+  if (
+    octets.length !== 4 ||
+    rangeParts.length !== 4 ||
+    !egressNumberIsInteger(bits) ||
+    bits < 0 ||
+    bits > 32
+  ) {
+    return false;
+  }
+
+  let address = 0;
+  let network = 0;
+  for (let index = 0; index < 4; index += 1) {
+    address = ((address << 8) | (octets[index]! & 0xff)) >>> 0;
+    network = ((network << 8) | (egressNumber(rangeParts[index]) & 0xff)) >>> 0;
+  }
+  const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+  return (address & mask) === (network & mask);
 }
 
 interface Ipv6Bytes {
   readonly bytes: readonly number[];
 }
 
+type Ipv6SpecialPurposeDisposition = PrivateAddressClass | 'embedded-ipv4';
+type Ipv6SpecialPurposePrefix = readonly [
+  prefixWords: readonly number[],
+  prefixLength: number,
+  disposition: Ipv6SpecialPurposeDisposition,
+];
+
+/**
+ * IANA IPv6 Special-Purpose Address Space registry, snapshot 2025-10-09. Nested 2001::/23
+ * records are represented by that parent. The mapped/NAT64 /96 entries follow SPEC §6.6's
+ * explicit normalization rule and inherit the embedded IPv4 destination's classification.
+ *
+ * Source: https://www.iana.org/assignments/iana-ipv6-special-registry/
+ */
+const IANA_IPV6_SPECIAL_PURPOSE_PREFIXES: readonly Ipv6SpecialPurposePrefix[] = [
+  [[0, 0, 0, 0, 0, 0, 0, 1], 128, 'loopback'], // ::1/128
+  [[0, 0, 0, 0, 0, 0, 0, 0], 128, 'unspecified'], // ::/128
+  [[0, 0, 0, 0, 0, 0xffff], 96, 'embedded-ipv4'], // ::ffff:0:0/96
+  [[0x0064, 0xff9b, 0, 0, 0, 0], 96, 'embedded-ipv4'], // 64:ff9b::/96
+  [[0x0064, 0xff9b, 0x0001], 48, 'special-use'],
+  [[0x0100, 0, 0, 0], 64, 'special-use'],
+  [[0x0100, 0, 0, 1], 64, 'special-use'],
+  [[0x2001, 0], 23, 'special-use'],
+  [[0x2001, 0x0db8], 32, 'special-use'],
+  [[0x2002], 16, 'special-use'],
+  [[0x2620, 0x004f, 0x8000], 48, 'special-use'],
+  [[0x3fff, 0], 20, 'special-use'],
+  [[0x5f00], 16, 'special-use'],
+  [[0xfc00], 7, 'unique-local'],
+  [[0xfe80], 10, 'link-local'],
+];
+
 function classifyIpv6Bytes(ip: Ipv6Bytes): PrivateAddressClass {
   const bytes = ip.bytes;
-  if (egressArrayEvery(bytes, (byte) => byte === 0)) return 'unspecified';
-  if (egressArrayEvery(egressArraySlice(bytes, 0, 15), (byte) => byte === 0) && bytes[15] === 1) {
-    return 'loopback';
-  }
-
-  const extractedV4 = extractedIpv4FromIpv6(bytes);
-  if (extractedV4 !== null) return classifyIpv4(extractedV4);
-
   // Azure/GCP also expose metadata over v6 link-local addresses; AWS IMDSv6 is fd00:ec2::254.
   if (canonicalizeIpv6Bytes(ip) === 'fd00:ec2::254') return 'metadata';
 
+  const registryDisposition = classifyIpv6FromPrefixes(bytes, IANA_IPV6_SPECIAL_PURPOSE_PREFIXES);
+  if (registryDisposition === 'embedded-ipv4') {
+    return classifyIpv4(embeddedIpv4FromIpv6(bytes));
+  }
+  if (registryDisposition !== null) return registryDisposition;
+
+  // IPv4-compatible and ISATAP forms are normalization carriers outside the live registry.
+  const extractedV4 = extractedIpv4FromIpv6(bytes);
+  if (extractedV4 !== null) return classifyIpv4(extractedV4);
+
   const firstWord = wordAt(bytes, 0);
-  if ((firstWord & 0xffc0) === 0xfe80) return 'link-local'; // fe80::/10
-  if ((firstWord & 0xfe00) === 0xfc00) return 'unique-local'; // fc00::/7
   if ((firstWord & 0xffc0) === 0xfec0) return 'special-use'; // fec0::/10 site-local
   if ((bytes[0] ?? 0) === 0xff) return 'special-use'; // multicast ff00::/8
-  // SPEC §6.6 denies IANA-special destinations by default. The IPv6 Special-Purpose Address
-  // Registry reserves all of 2001::/23 for IETF protocol assignments (including benchmarking,
-  // ORCHID, and Teredo) and 3fff::/20 for documentation. Keep those ranges closed before the
-  // broad 2000::/3 global-unicast fallback; an operator can still name an intentional target in
-  // egress.allowInternal.
-  if (firstWord === 0x2001 && (wordAt(bytes, 1) & 0xfe00) === 0) return 'special-use';
-  if (firstWord === 0x3fff && (wordAt(bytes, 1) & 0xf000) === 0) return 'special-use';
-  if (firstWord === 0x2001 && wordAt(bytes, 1) === 0x0db8) return 'special-use'; // docs
-  if (firstWord === 0x2002) return 'special-use'; // 6to4
 
   // Fail closed: only genuine global unicast is public, after extracting/denying special forms.
   if ((firstWord & 0xe000) === 0x2000) return 'public'; // 2000::/3
   return 'special-use';
 }
 
+function classifyIpv6FromPrefixes(
+  bytes: readonly number[],
+  prefixes: readonly Ipv6SpecialPurposePrefix[],
+): Ipv6SpecialPurposeDisposition | null {
+  for (let index = 0; index < prefixes.length; index += 1) {
+    const prefix = prefixes[index]!;
+    if (ipv6MatchesPrefix(bytes, prefix[0], prefix[1])) return prefix[2];
+  }
+  return null;
+}
+
+function ipv6MatchesPrefix(
+  bytes: readonly number[],
+  prefixWords: readonly number[],
+  prefixLength: number,
+): boolean {
+  const remainder = prefixLength % 16;
+  const fullWords = (prefixLength - remainder) / 16;
+  for (let index = 0; index < fullWords; index += 1) {
+    if (wordAt(bytes, index) !== prefixWords[index]) return false;
+  }
+  if (remainder === 0) return true;
+  const mask = (0xffff << (16 - remainder)) & 0xffff;
+  return (wordAt(bytes, fullWords) & mask) === ((prefixWords[fullWords] ?? 0) & mask);
+}
+
+function embeddedIpv4FromIpv6(bytes: readonly number[]): string {
+  return `${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`;
+}
+
 function extractedIpv4FromIpv6(bytes: readonly number[]): string | null {
   const prefix96 = egressArraySlice(bytes, 0, 12);
-  const embedded = (): string => `${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`;
 
   // ::a.b.c.d / ::hhhh:hhhh IPv4-compatible.
-  if (egressArrayEvery(prefix96, (byte) => byte === 0)) return embedded();
+  if (egressArrayEvery(prefix96, (byte) => byte === 0)) return embeddedIpv4FromIpv6(bytes);
 
   // ::ffff:a.b.c.d / ::ffff:hhhh:hhhh IPv4-mapped.
   if (
@@ -1050,17 +1172,19 @@ function extractedIpv4FromIpv6(bytes: readonly number[]): string | null {
     bytes[10] === 0xff &&
     bytes[11] === 0xff
   ) {
-    return embedded();
+    return embeddedIpv4FromIpv6(bytes);
   }
 
   // 64:ff9b::/96 NAT64.
   const nat64Prefix = [0x00, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0];
-  if (egressArrayEvery(prefix96, (byte, index) => byte === nat64Prefix[index])) return embedded();
+  if (egressArrayEvery(prefix96, (byte, index) => byte === nat64Prefix[index])) {
+    return embeddedIpv4FromIpv6(bytes);
+  }
 
   // ISATAP embeds IPv4 in the low 32 bits after a 0000:5efe interface-id marker:
   // <prefix>:0:5efe:w.x.y.z or <prefix>:0:5efe:hhhh:hhhh.
   if (bytes[8] === 0 && bytes[9] === 0 && bytes[10] === 0x5e && bytes[11] === 0xfe) {
-    const v4 = embedded();
+    const v4 = embeddedIpv4FromIpv6(bytes);
     return classifyIpv4(v4) === 'public' ? null : v4;
   }
 

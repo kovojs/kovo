@@ -143,6 +143,41 @@ describe('undici egress floor (layer a): gates every fetch incl. pooled reuse', 
     );
   });
 
+  it('gates IANA-special redirect/reuse hops before the dispatcher connector', async () => {
+    dnsLookupMock.mockReset();
+    dnsLookupMock.mockResolvedValue([{ address: '2620:4f:8000::1', family: 6 }]);
+    const connector = vi.fn((_options: unknown, callback: (error: Error, socket: null) => void) => {
+      callback(new Error('synthetic connector stop'), null);
+    });
+    const dispatcher = new EgressGatingDispatcher(
+      resolveEgressPolicy(undefined, () => {}),
+      {
+        connect: connector,
+      },
+    );
+
+    try {
+      await expect(
+        dispatcher.request({ method: 'GET', origin: 'http://192.31.196.1', path: '/' }),
+      ).rejects.toMatchObject({ classification: 'special-use' });
+      await expect(
+        dispatcher.request({
+          method: 'GET',
+          origin: 'http://iana-special-redirect-hop.test',
+          path: '/',
+        }),
+      ).rejects.toMatchObject({ classification: 'special-use' });
+      expect(connector).not.toHaveBeenCalled();
+
+      await dispatcher
+        .request({ method: 'GET', origin: 'http://192.31.195.255', path: '/' })
+        .catch(() => undefined);
+      expect(connector).toHaveBeenCalledOnce();
+    } finally {
+      await dispatcher.close();
+    }
+  });
+
   it('binds the checked literal host to native URL bytes after late String.replace poisoning', async () => {
     uninstall = await installUndiciFloor(resolveEgressPolicy(undefined, () => {}));
     const originalReplace = String.prototype.replace;
