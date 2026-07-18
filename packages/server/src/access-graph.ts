@@ -16,7 +16,7 @@ import {
   type EndpointMethod,
   type EndpointMount,
 } from './endpoint.js';
-import { guardAuditName } from './guards.js';
+import { guardAuditName, type Guard } from './guards.js';
 import type { LayoutDeclaration, RouteDeclaration } from './route.js';
 import type { WebhookDeclaration } from './webhook.js';
 import { appendDenseOwnArrayValue, denseOwnArrayForEach } from './registry-lookup.js';
@@ -53,23 +53,21 @@ function appendAccessFacts<Input>(
 }
 
 function queryAccessFact(query: AppQueryDeclaration): AccessExplainFact {
-  const explicit = explicitAccessFact('query', query.key, accessDecisionFor(query));
+  const explicit = declarationAccessFact('query', query.key, query);
   if (explicit) return explicit;
 
   return missingAccessFact('query', query.key);
 }
 
 function mutationAccessFact(mutation: AppMutationDeclaration): AccessExplainFact {
-  const explicit = explicitAccessFact('mutation', mutation.key, accessDecisionFor(mutation));
+  const explicit = declarationAccessFact('mutation', mutation.key, mutation);
   if (explicit) return explicit;
 
   return missingAccessFact('mutation', mutation.key);
 }
 
 function routeAccessFact(route: RouteDeclaration<any, any, any, any, any, any>): AccessExplainFact {
-  const explicit =
-    explicitAccessFact('page', route.path, accessDecisionFor(route)) ??
-    explicitLayoutAccessFact(route);
+  const explicit = declarationAccessFact('page', route.path, route) ?? layoutAccessFact(route);
   if (explicit) return explicit;
 
   return missingAccessFact('page', route.path);
@@ -127,22 +125,51 @@ function endpointAccessDetail(
   );
 }
 
-function explicitLayoutAccessFact(
+function layoutAccessFact(
   route: RouteDeclaration<any, any, any, any, any, any>,
 ): AccessExplainFact | undefined {
   let layout: LayoutDeclaration<any, any, any> | undefined = route.layout;
   while (layout !== undefined) {
-    const fact = explicitAccessFact('page', route.path, accessDecisionFor(layout));
+    const fact = declarationAccessFact('page', route.path, layout);
     if (fact) {
       return {
         ...fact,
-        detail: `${fact.detail} source=layout.access`,
+        detail: `${fact.detail} source=${accessDecisionFor(layout) === undefined ? 'layout.guard' : 'layout.access'}`,
       };
     }
     layout = layout.parent;
   }
 
   return undefined;
+}
+
+function declarationAccessFact(
+  kind: AccessExplainFact['kind'],
+  name: string,
+  declaration: object & {
+    access?: AccessDecision;
+    guard?: Guard<any, any>;
+  },
+): AccessExplainFact | undefined {
+  return (
+    explicitAccessFact(kind, name, accessDecisionFor(declaration)) ??
+    legacyGuardAccessFact(kind, name, declaration.guard)
+  );
+}
+
+function legacyGuardAccessFact(
+  kind: AccessExplainFact['kind'],
+  name: string,
+  guard: Guard<any, any> | undefined,
+): AccessExplainFact | undefined {
+  if (guard === undefined) return undefined;
+  return {
+    decision: 'guard',
+    detail: `access=legacy-guard guards=${guardAuditName(guard)}`,
+    kind,
+    name,
+    source: 'access',
+  };
 }
 
 function explicitAccessFact(

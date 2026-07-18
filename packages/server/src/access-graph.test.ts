@@ -135,8 +135,8 @@ describe('app access graph extraction', () => {
         source: 'access',
       },
       {
-        decision: 'missing',
-        detail: 'missing access fact',
+        decision: 'guard',
+        detail: 'access=legacy-guard guards=authed',
         kind: 'mutation',
         name: 'cart/add',
         source: 'access',
@@ -156,8 +156,8 @@ describe('app access graph extraction', () => {
         source: 'access',
       },
       {
-        decision: 'missing',
-        detail: 'missing access fact',
+        decision: 'guard',
+        detail: 'access=legacy-guard guards=authed source=layout.guard',
         kind: 'page',
         name: '/cart',
         source: 'access',
@@ -170,8 +170,8 @@ describe('app access graph extraction', () => {
         source: 'access',
       },
       {
-        decision: 'missing',
-        detail: 'missing access fact',
+        decision: 'guard',
+        detail: 'access=legacy-guard guards=authed',
         kind: 'query',
         name: 'cart',
         source: 'access',
@@ -424,6 +424,59 @@ describe('app access graph extraction', () => {
     );
     expect(response.status).toBe(403);
     await expect(response.text()).resolves.not.toContain('leaked');
+  });
+
+  it('reports guard-only declarations as the exact legacy access decision runtime enforces', () => {
+    const deny = guard('legacy-ledger-deny', () => ({ kind: 'forbidden' as const }));
+    const guardedLayout = layout({ guard: deny });
+    const app = createApp({
+      mutations: [
+        mutation('legacy/write', {
+          guard: deny,
+          handler: () => ({ ok: true }),
+          input: s.object({}),
+        }),
+      ],
+      queries: [query('legacy/read', { guard: deny, load: () => ({ private: true }) })],
+      routes: [
+        route('/legacy-layout', {
+          layout: guardedLayout,
+          page: () => '<main>private</main>',
+        }),
+        route('/legacy-route', { guard: deny, page: () => '<main>private</main>' }),
+      ],
+    });
+
+    expect(accessFactsFromApp(app)).toEqual([
+      {
+        decision: 'guard',
+        detail: 'access=legacy-guard guards=legacy-ledger-deny',
+        kind: 'mutation',
+        name: 'legacy/write',
+        source: 'access',
+      },
+      {
+        decision: 'guard',
+        detail: 'access=legacy-guard guards=legacy-ledger-deny source=layout.guard',
+        kind: 'page',
+        name: '/legacy-layout',
+        source: 'access',
+      },
+      {
+        decision: 'guard',
+        detail: 'access=legacy-guard guards=legacy-ledger-deny',
+        kind: 'page',
+        name: '/legacy-route',
+        source: 'access',
+      },
+      {
+        decision: 'guard',
+        detail: 'access=legacy-guard guards=legacy-ledger-deny',
+        kind: 'query',
+        name: 'legacy/read',
+        source: 'access',
+      },
+    ]);
   });
 
   it('rejects the copied capability auth name while preserving the genuine private witness', async () => {

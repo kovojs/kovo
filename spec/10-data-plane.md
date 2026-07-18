@@ -105,7 +105,7 @@ A surface with **none** of these is **undecided**: the static app graph classifi
 `decision: 'missing'` and the build fails with **KV436** (§11.3). An existing guard already _counts_
 as a decision — guarded surfaces are not forced to re-declare `access`. The decision is recorded as a
 static graph fact (`graph.access`) that the build derives from each surface's source-captured
-`access` posture; `kovo explain --access` renders the full ledger (every surface, its decision, the
+`access` or legacy-`guard` posture; `kovo explain --access` renders the full ledger (every surface, its decision, the
 names of the guards that actually execute, and any public justification), and a reviewer audits the
 `public` set before ship.
 
