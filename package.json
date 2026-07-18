@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "acceptance": "pnpm run check && pnpm run check:api-surface && pnpm run test && pnpm run test:browser && pnpm run test:gallery-browser && pnpm run test:integration && pnpm run check:build && pnpm run check:publish && pnpm run test:p10-perf && pnpm run test:compiler-perf && pnpm run test:conformance && pnpm run check:kovo && pnpm run test:authz-paranoid",
-    "check": "pnpm run check:inline-loader && pnpm run check:inline-loader:trusted-types && pnpm run check:imports && pnpm run check:no-committed-generated && pnpm run check:spec-index && pnpm run check:sink-policy && pnpm run check:single-choke && pnpm run check:filesystem-boundary && pnpm run check:egress-boundary && pnpm run check:wire-output-boundary && pnpm run check:tcb-boundary && pnpm run check:security-guarantee && pnpm run check:security-brands && pnpm run check:fail-closed-classifiers && pnpm run check:classifier-verdict-routing && pnpm run check:green-corpus && pnpm run check:security-classifier-corpus && pnpm run check:security-test-builds && pnpm run check:security-gate-mutations && pnpm run check:fundamental-fixes-census && pnpm run check:capability-surface-census && pnpm run check:vp && vp run typecheck-examples",
+    "check": "pnpm run check:inline-loader && pnpm run check:inline-loader:trusted-types && pnpm run check:imports && pnpm run check:no-committed-generated && pnpm run check:spec-index && pnpm run check:security-ledger-index && pnpm run check:sink-policy && pnpm run check:single-choke && pnpm run check:filesystem-boundary && pnpm run check:egress-boundary && pnpm run check:wire-output-boundary && pnpm run check:tcb-boundary && pnpm run check:security-guarantee && pnpm run check:security-brands && pnpm run check:fail-closed-classifiers && pnpm run check:classifier-verdict-routing && pnpm run check:green-corpus && pnpm run check:security-classifier-corpus && pnpm run check:security-test-builds && pnpm run check:security-gate-mutations && pnpm run check:fundamental-fixes-census && pnpm run check:capability-surface-census && pnpm run check:vp && vp run typecheck-examples",
     "check:api-surface": "node scripts/api-surface-gate.mjs",
     "check:build": "pnpm run check:inline-loader && node scripts/egress-floor.mjs --policy build -- vp run build",
     "check:build:ci": "node scripts/egress-floor.mjs --policy build -- vp run build",
@@ -21,6 +21,7 @@
     "check:imports": "node scripts/import-boundary.mjs",
     "check:pack-security": "node scripts/egress-floor.mjs --policy publish -- node scripts/check-pack-security.mjs",
     "check:security-guarantee": "node scripts/check-security-guarantee.mjs",
+    "check:security-ledger-index": "node scripts/check-security-ledger-index.mjs",
     "check:security-gate-mutations": "node scripts/security-gate-mutations.mjs",
     "check:security-brands": "node scripts/check-security-brands.mjs",
     "check:security-classifier-corpus": "node scripts/check-security-classifier-corpus.mjs",

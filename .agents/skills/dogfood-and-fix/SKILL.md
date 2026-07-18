@@ -21,7 +21,8 @@ than only writing them.
 
 - **Named reports first.** If the user names specific `plans/bugz-*.md` or
   `plans/papercuts-*.md` files, implement those before creating new reports. Treat each unchecked
-  task-list item as open until same-session evidence proves it fixed.
+  task-list item as open until same-session evidence proves it fixed. If a named current report is
+  not registered, enroll it before treating it as an active transient ledger.
 - **Dogfood then fix.** If the user asks for a fresh dogfood pass, create the next appropriate
   ledger(s), reproduce and classify issues, then immediately implement the confirmed items unless
   the user explicitly asks for report-only mode.
@@ -40,8 +41,9 @@ Read enough before editing to judge behavior correctly:
   notes when it prevents ambiguity.
 - `AGENTS.md` and `rules/*.md` govern repo discipline, plan evidence, compiler behavior, API
   surface, workflow edits, docs, and release claims.
-- Existing `plans/bugz*.md`, `plans/papercuts*.md`, `plans/papercuts-super-*.md`,
-  `plans/archive.md`, and the named active reports prevent duplicate findings and stale evidence.
+- `plans/security-ledger-index.json` and `plans/security-ledger-index.md` define active roadmaps,
+  transient reports, historical dedup roots, and the closure/publication/archive lifecycle. Do not
+  infer active reports from filename patterns or checkbox counts.
 - `packages/create-kovo`, `packages/compiler`, `packages/server`, `packages/browser`,
   `packages/drizzle`, examples, templates, and generated app output identify whether a symptom is a
   framework bug, starter papercut, docs gap, or app-author mistake.
@@ -85,6 +87,14 @@ Read enough before editing to judge behavior correctly:
   transcripts or historical logs.
 - When integrating a branch forked before ledger cleanup, preserve the compact main-thread ledger
   and port only the new evidence required by the integrated fix.
+- Keep every current report explicitly registered with the transient content marker and a deadline
+  no more than 30 days after opening. Multiple transient reports are valid.
+- When all items close, record exact evidence, `closedOn`, and `closed-pending-publication`. After the
+  closing commit reaches the intended remote ref and required CI is known, record publication proof
+  and use `published-pending-archive`. Before `archiveBy`, replace the transient marker with
+  `<!-- kovo-security-ledger: archived -->`, move the report to its declared `plans/history/` path,
+  and remove its transient entry; preserve one compact series summary for future deduplication.
+- Run `pnpm run check:security-ledger-index` after every lifecycle transition.
 
 ## Parallel Strategy
 
@@ -153,13 +163,15 @@ Worker rules:
    compiler, runtime, or generated-artifact boundaries.
 7. Run the narrow verification first, then shared gates such as `vp check`, relevant `vitest`
    suites, `pnpm exec tsc --noEmit`, `git diff --check`, or package-specific scripts.
-8. Update report checkboxes only after verification, with concise evidence beside the item.
+8. Update report checkboxes only after verification, with concise evidence beside the item. Move a
+   fully closed transient report to `closed-pending-publication` in the registry.
 9. Commit coherent batches. Push after meaningful closure or when CI feedback is needed.
 10. Monitor GitHub Actions for the pushed commit. If CI fails, inspect logs, fix the root cause,
     push again, and continue monitoring.
-11. After named reports close, run at least one fresh dogfood or targeted regression pass that
+11. Record verified publication, then archive the report before its registered deadline.
+12. After named reports close, run at least one fresh dogfood or targeted regression pass that
     exercises the just-fixed surfaces. If it finds new confirmed issues, create or update the next
-    compact ledger and loop back through implementation.
+    compact registered ledger and loop back through implementation.
 
 ## Completion Criteria
 
@@ -169,6 +181,7 @@ Finish only when all of these are true:
 - any newly created dogfood ledger either has no confirmed issues or all confirmed issues are fixed
   with current evidence;
 - explicit deferrals are listed as deferred, not silently counted as complete;
+- no transient ledger is overdue or missing its marker/registry entry;
 - relevant local gates passed, or each skipped gate has a concrete reason;
 - the branch or local `main` containing the fixes has been pushed when pushing is in scope;
 - CI for the pushed commit has been checked, and any failures attributable to the work are handled

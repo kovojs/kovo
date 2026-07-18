@@ -1,0 +1,89 @@
+{
+  "schema": "kovo.security-ledger-index/v1",
+  "ledgerKinds": {
+    "bugz": {
+      "nextSequence": 34,
+      "pathTemplate": "plans/bugz-{sequence}.md"
+    },
+    "papercuts": {
+      "nextSequence": 23,
+      "pathTemplate": "plans/papercuts-{sequence}.md"
+    }
+  },
+  "activeRoadmaps": [
+    {
+      "path": "plans/10x-better-security.md",
+      "role": "convergence",
+      "summary": "Class-kill, forcing-gate, and measurable security-convergence roadmap."
+    },
+    {
+      "path": "plans/threat-matrix-plan.md",
+      "role": "v1-signoff",
+      "summary": "Threat-matrix coverage, external audit, and v1 freeze-gate roadmap."
+    },
+    {
+      "path": "plans/most-secure-web-framework.md",
+      "role": "strategic-backlog",
+      "summary": "Ranked long-horizon security opportunity backlog."
+    },
+    {
+      "path": "plans/secure-framework.md",
+      "role": "implementation-backlog",
+      "summary": "Audit-driven security wiring and hardening backlog."
+    },
+    {
+      "path": "plans/secure-framework-3.md",
+      "role": "follow-up-backlog",
+      "summary": "Additional security capability follow-ups not owned by the primary backlog."
+    }
+  ],
+  "transientLedgers": [
+    {
+      "path": "plans/bugz-33.md",
+      "kind": "bugz",
+      "state": "closed-pending-publication",
+      "openedOn": "2026-07-17",
+      "closedOn": "2026-07-18",
+      "archiveBy": "2026-07-25",
+      "archivePath": "plans/history/bugz-33.md",
+      "summary": "Remediation is complete; publish the exact verified tip, observe required CI, then archive."
+    }
+  ],
+  "history": {
+    "dedupRoots": ["plans"],
+    "series": [
+      {
+        "id": "security-foundations",
+        "summary": "Foundational provenance, SQL, and source/sink roadmaps; later roadmaps own remaining work.",
+        "representativePaths": [
+          "plans/secure-by-construction.md",
+          "plans/sql-injection.md",
+          "plans/sources-sinks.md"
+        ]
+      },
+      {
+        "id": "fundamental-fixes",
+        "summary": "The fail-closed verifier and deep-layer follow-up sequence through round 18.",
+        "representativePaths": [
+          "plans/fundamental-fixes.md",
+          "plans/fundamental-fixes-followup-18.md"
+        ]
+      },
+      {
+        "id": "security-dogfood-rounds",
+        "summary": "Historical adversarial security rounds and paired ergonomics reports retained for deduplication.",
+        "representativePaths": [
+          "plans/claude-bugz-22.md",
+          "plans/claude-bugz-43.md",
+          "plans/claude-papercuts-20.md",
+          "plans/claude-papercuts-41.md"
+        ]
+      },
+      {
+        "id": "numbered-bug-ledgers",
+        "summary": "Numbered bug ledgers through bugz-32; exact findings and refutations remain in the source files.",
+        "representativePaths": ["plans/bugz.md", "plans/bugz-32.md"]
+      }
+    ]
+  }
+}

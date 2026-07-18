@@ -1,9 +1,13 @@
 # Security Bug Ledger (`bugz-33`)
 
+<!-- kovo-security-ledger: transient -->
+
 **Date:** 2026-07-17
 
 **Status:** Remediation complete through M34; final exact-tip verification and publication pending
 **Baseline:** `4403ce7401760725836332aedb3031e1c0833cfe`
+**Lifecycle:** `closed-pending-publication`; archive by 2026-07-25 after the verified tip is on
+`origin/main` and required CI is green.
 
 **Scope:** Fresh remotely reachable and framework-authority findings after `bugz-32`. Deliberate
 same-realm application/dependency compromise is excluded under SPEC §6.6; the final pass instead

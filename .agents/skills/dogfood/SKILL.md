@@ -33,10 +33,10 @@ Read these before judging behavior:
   strains the framework contract. The `### N.M` subsection headings are the fastest map of the
   feature surface.
 - `AGENTS.md`/`CLAUDE.md` and `rules/*.md` for repo discipline.
-- **Every** existing ledger for prior findings and current state — dedup against all of them:
-  `plans/papercuts*.md`, `plans/papercut-super-*.md`, `plans/bugz*.md`, and active plans. A new
-  papercut must be distinct, or clearly marked as a regression/variant of a named prior item. An
-  item marked `[x]` fixed that still reproduces is a **regression** worth noting.
+- `plans/security-ledger-index.json` for the explicit active-roadmap and transient-ledger registry,
+  and `plans/security-ledger-index.md` for its lifecycle. Dedup against all Markdown under the
+  registry's `history.dedupRoots`; do not infer activity from a `bugz-*`/`papercuts-*` filename or
+  stale checkbox. A reproduced closed item is a regression worth noting.
 - `packages/create-kovo`, `packages/server`, `packages/browser`, `packages/compiler`,
   `packages/drizzle`, and the app's generated source as needed to identify whether the rough edge
   belongs to the starter, runtime, compiler, browser loader, or app code.
@@ -74,26 +74,23 @@ These cost real time to discover; honor them up front.
   (vp dev). `pnpm exec tsc --noEmit` for a pure typecheck. Note that `vp check` and `kovo build` run
   **different** verifiers — a green `check` does not imply a green `build`.
 
-## Choose The Ledger
+## Choose And Register The Ledger
 
-Honor the filename the user names (e.g. `plans/papercut-super-2.md`). Otherwise create the next
-numbered `plans/papercuts-N.md`:
+Honor a user-named path. Otherwise allocate the conventional path from
+`ledgerKinds.papercuts.nextSequence` in `plans/security-ledger-index.json`; allocate security or
+soundness findings from `ledgerKinds.bugz.nextSequence`. Never scan filenames to discover the next
+or active ledger.
 
-```bash
-next=$(
-  ls plans 2>/dev/null \
-    | grep -E '^papercuts(-[0-9]+)?\.md$' \
-    | sed -E 's/papercuts-?([0-9]*)\.md/\1/' \
-    | awk '{print ($1==""?1:$1)}' \
-    | sort -n \
-    | tail -1
-)
-echo "plans/papercuts-$(( ${next:-0} + 1 )).md"
-```
+Create each report as a registered transient ledger in the same change:
 
-**Security/soundness defects go to a `bugz` ledger, not the papercuts ledger** (next
-`plans/bugz-N.md`). If the user asked for everything in one papercuts file, still file the
-security finding in `bugz-N.md` and leave a one-line pointer in the papercuts ledger.
+- add `<!-- kovo-security-ledger: transient -->` to the report;
+- add its exact path, kind, `open` state, opening date, archive path, summary, and an archive deadline
+  no more than 30 days away to `transientLedgers`;
+- increment the kind's sequence only when its conventional path is consumed; and
+- run `pnpm run check:security-ledger-index`.
+
+Multiple transient reports are valid. Keep security findings in their registered `bugz` ledger and
+leave a one-line pointer in the papercuts report when both are produced.
 
 ## Dogfood Workflow (applies to both modes)
 
@@ -118,10 +115,11 @@ security finding in `bugz-N.md` and leave a one-line pointer in the papercuts le
    prove it with the grep/import-error/source evidence.
 5. **Minimize workaround bias.** Workarounds help prove causality, but the ledger must describe the
    framework/starter failure and acceptance criteria, not just the workaround.
-6. **Keep the main tree clean except the ledger(s).** Do not modify the monorepo's `packages/*`,
-   templates, `SPEC.md`, or other plans. Do not commit example-app experiments. Keep throwaway apps
-   as repro evidence until synthesis is done; tell the user where they live and that they are safe to
-   delete (and not to re-run `pnpm install` in them without isolation).
+6. **Keep the main tree clean except the ledger(s) and ledger registry.** Do not modify the
+   monorepo's `packages/*`, templates, `SPEC.md`, or unrelated plans. Do not commit example-app
+   experiments. Keep throwaway apps as repro evidence until synthesis is done; tell the user where
+   they live and that they are safe to delete (and not to re-run `pnpm install` in them without
+   isolation).
 
 ## Exhaustive Workflow (multi-app, orchestrated)
 
@@ -138,8 +136,8 @@ candidates.** The shape is **baseline → author fan-out → adversarial verify 
 De-risk the toolchain before fanning out:
 
 - Map the advanced surface from `SPEC.md` `###` headings and the `examples/` apps.
-- Read **all** prior ledgers and extract their issue titles, so the fan-out targets *distinct*
-  ground (and so you can recognize regressions).
+- Read the registered active reports and all Markdown below `history.dedupRoots`; extract prior issue
+  titles so the fan-out targets distinct ground and recognizes regressions.
 - Rebuild `create-kovo` dist, scaffold ONE base app, link, install (warms the store), and verify the
   toolchain end to end: `check`, `test`, `build:prod`, and a dev HTTP smoke. Capture any first-run
   papercuts yourself. This base also confirms whether previously-filed items are now fixed.
@@ -172,7 +170,7 @@ repro(command+output), specRefs, confidence, whyFrameworkNotApp`.
 For each candidate, spawn an **independent, skeptical** verifier that defaults to doubt. It must:
 (1) read the cited framework source to confirm/deny the mechanism; (2) independently reproduce
 (re-run the repro in the track's app dir, or a minimal tsc/build/curl/grep check — avoid long-lived
-servers); (3) **dedup** by grepping all ledgers (`papercuts*`, `papercut-super-*`, `bugz*`);
+servers); (3) **dedup** across the registry's complete `history.dedupRoots` Markdown scope;
 (4) **triage** papercut vs genuine security/soundness hole (`escalateToBugz`). Return a verdict:
 `confirmed | refuted | needs-info`, plus corrected `classification`/`severity`, `duplicateOf`,
 `independentRepro`, `rootCauseConfirmed(file:line)`, `confidence`. Run verify as a `pipeline` stage
@@ -186,10 +184,10 @@ app-error/expected/dup"; that is the point.
   to one issue citing the deepest root cause).
 - **Self-verify the top 1–3 findings first-hand** before writing them up, especially anything
   surprising or escalated to bugz. Reproduce the exact symptom yourself.
-- Write the papercuts ledger; route any `escalateToBugz` confirmed findings into a `bugz-N.md` with a
-  pointer from the papercuts ledger.
+- Write and register the papercuts ledger; route any `escalateToBugz` confirmed findings into a
+  separately registered `bugz` ledger with a pointer from the papercuts ledger.
 - Repair the monorepo (`pnpm install` at root) and confirm a transitive dep resolves; kill stray dev
-  servers; verify `git status` shows only the new ledger(s).
+  servers; verify `git status` shows only the new ledger(s) and registry update.
 
 ## Ledger Format
 
@@ -199,8 +197,12 @@ one-line **meta-theme** when one root area dominates (e.g. "the build gate is th
 ```markdown
 # <Title> N
 
+<!-- kovo-security-ledger: transient -->
+
 Created YYYY-MM-DD. Source of truth remains `SPEC.md`; this ledger captures
 framework/template/docs/dev-tooling papercuts found while dogfooding <what>.
+
+Lifecycle: `open`; archive by YYYY-MM-DD to `<registered archivePath>`.
 
 ## Scope
 
@@ -245,3 +247,4 @@ the fix, with the exact evidence (test/command) nested under the checkbox.
 - Prefer framework fixes over starter workarounds when the framework can reasonably infer, preserve,
   validate, or diagnose the behavior.
 - Keep the ledger current-state focused. Do not paste long logs, transcripts, or historical debates.
+- Keep the report and registry in sync; the ledger-index gate must pass before handoff.

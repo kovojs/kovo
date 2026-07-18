@@ -7,7 +7,7 @@ description: Run a fresh adversarial bug hunt across the Kovo framework and prod
 
 ## Overview
 
-Produce the next bug ledger at `./plans/bugz-<N>.md`: a severity-ranked list of NEW, **distinct**,
+Produce the next explicitly registered bug ledger: a severity-ranked list of NEW, **distinct**,
 **reproduced** security and correctness defects in the Kovo framework. Every confirmed finding is
 reproduced in a throwaway `git worktree` off `HEAD` (by a runnable test wherever practical, otherwise
 a precise source-level proof), then the worktree is removed. The hunt runs as a multi-agent loop:
@@ -27,10 +27,10 @@ separate step (use `implement-plan` or a fix worktree for that). No production c
 Read these before hunting:
 
 - `SPEC.md`: normative framework behavior; cite the relevant section / KV code on every finding.
-- All prior ledgers — `plans/bugz.md`, `plans/bugz-2.md`, `plans/bugz-3.md`, … and any
-  `plans/{bug,bugs,framework-bugs,secure-*,sources-sinks,compiler-soundness}*.md`. These define the
-  **exclusion set**: a finding is only in scope if it is distinct from every item in every prior
-  ledger (including each ledger's "Refuted / not carried forward" notes).
+- `plans/security-ledger-index.json` and `plans/security-ledger-index.md` for active roadmaps,
+  transient reports, and their lifecycle. Build the **exclusion set** from all Markdown below the
+  registry's `history.dedupRoots`, including refuted notes. Do not infer activity or sequence from
+  `bugz-*` / `papercuts-*` filenames.
 - `rules/*.md` for the area under test (`compiler-hard-rules.md`, `api-surface.md`,
   `accessibility-conformance.md`, …).
 - `CLAUDE.md` Technical-Preview bias (stronger default over compatibility) — it shapes severity.
@@ -67,13 +67,13 @@ Harness facts (current repo):
 - Every agent must keep the main working tree clean, never touch other worktrees, and
   `git worktree remove --force` its own worktree when done.
 
-## Choose The Next Ledger Path
+## Choose And Register The Ledger
 
-```bash
-n=$(ls plans/ | grep -E '^bugz(-[0-9]+)?\.md$' | sed -E 's/bugz-?([0-9]*)\.md/\1/' | awk '{print ($1==""?1:$1)}' | sort -n | tail -1)
-echo "next ledger: plans/bugz-$((n+1)).md"
-date=$(date +%Y-%m-%d); head=$(git rev-parse --short HEAD)
-```
+Honor a user-named path. Otherwise use `ledgerKinds.bugz.nextSequence` and its `pathTemplate` from
+`plans/security-ledger-index.json`; never discover the sequence by scanning filenames. Add the
+transient content marker and an `open` registry entry in the same change, with opening date,
+summary, archive path, and an archive deadline no more than 30 days away. Increment the sequence
+only when the conventional path is consumed. Multiple transient ledgers are valid.
 
 ## Fan Out — Dimension Finders
 
@@ -157,7 +157,10 @@ Write `plans/bugz-<N>.md`:
 ```markdown
 # Bug Ledger (`bugz-<N>`)
 
+<!-- kovo-security-ledger: transient -->
+
 **Date:** YYYY-MM-DD
+**Lifecycle:** `open`; archive by YYYY-MM-DD to `<registered archivePath>`.
 **Scope:** Adversarial sweep beyond prior ledgers, at `main` HEAD `<short-sha>`.
 **Method:** <rounds, # agents, dimensions; find → adversarial-verify → critic; every confirmed item
 reproduced in a throwaway git worktree (recipe at the end); no production code changed.>
@@ -191,6 +194,7 @@ reproduced in a throwaway git worktree (recipe at the end); no production code c
 ```
 
 All items are open (`- [ ]`); this skill does not fix. Use checkboxes so a later fix pass can track them.
+Run `pnpm run check:security-ledger-index` after writing the report and registry entry.
 
 ## Quality Bar
 
@@ -203,4 +207,6 @@ All items are open (`- [ ]`); this skill does not fix. Use checkboxes so a later
 - Record refuted candidates with reasons (the "Refuted" section is load-bearing for future runs).
 - Keep the main working tree clean throughout; remove every throwaway worktree afterward and verify
   none leak (`git worktree list`).
-- Do not edit production code or other plans; the output is a new ledger, not fixes or checkbox churn.
+- Do not edit production code or unrelated plans; the output is a new ledger plus its registry
+  lifecycle update, not fixes or checkbox churn.
+- Keep the transient marker, registry state, sequence, and finite archive deadline consistent.
