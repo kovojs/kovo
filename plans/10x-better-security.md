@@ -198,24 +198,38 @@ Measurements are versioned and reproducible:
 
 ### 2C. Narrow normalized abstract interpretation
 
-- [ ] Define the normalized semantic graph and the minimum facts still requiring value-flow
+- [x] Define the normalized semantic graph and the minimum facts still requiring value-flow
       analysis after 2A/2B. Consume every root-linked `server.helper.call` with a bottom-up semantic
       summary; document transfer semantics, alias/mutation rules, recursion/state budgets, and the
       exact closed verdict for every unsupported condition.
-- [ ] Implement provenance over normalized operations rather than raw syntax shapes. Diagnostic
+  - Evidence: SPEC §6.6 defines `kovo-security-semantic-graph/v1`, its finite lattice/transfers,
+    four fixed budgets, and closed reasons; the integrated semantic/CLI/diagnostic suite passes
+    118/118.
+- [x] Implement provenance over normalized operations rather than raw syntax shapes. Diagnostic
       output must show the root, transfer path, sink, and reason an opaque/budget verdict closed.
-- [ ] Commit the full C13 corpus before migration; preserve every historical reject/non-public/
+  - Evidence: the same 118-test suite proves bottom-up summaries plus root/transfer/sink/reason
+    traces in diagnostics, manifests, graphs, and `kovo explain`.
+- [x] Commit the full C13 corpus before migration; preserve every historical reject/non-public/
       secret verdict and add security mutations that delete or invert each new semantic rule.
+  - Evidence: `pnpm run check:security-classifier-corpus` passes 20 corpora.
+  - Evidence: `pnpm run check:security-gate-mutations` kills 68/68 mutants, including cycles, all
+    four budgets, surface propagation, laundering, alias/member mutation, rest/arguments, capture,
+    and opaque containers.
 - [ ] Remove only predicates proven superseded by the normalized engine. Record P across all moved
       modules and G across real fixtures; do not claim success from moving LOC elsewhere.
-- [ ] Apply the substrate to OPP-28 only where principal-to-predicate correspondence is structurally
+- [x] Apply the substrate to OPP-28 only where principal-to-predicate correspondence is structurally
       provable. Re-scope the remainder to an explicit audit/engine responsibility instead of
       overclaiming full JavaScript predicate correctness.
+  - Evidence: SPEC §6.6 restricts the claim to exact private-principal/owner-column/equality
+    correspondence and leaves all general predicate semantics to engine/runtime policy and audit;
+    the focused OPP-28 suite passes 151/151.
 
 ### 2D. Runtime floor integration
 
-- [ ] For every remaining dynamic fact, identify the real sink, classify-and-pin or reconstruct
+- [x] For every remaining dynamic fact, identify the real sink, classify-and-pin or reconstruct
       its carrier, and enroll the door plus hostile-value evidence in the C9 inventory.
+  - Evidence: `pnpm run check:c9-sink-inventory` passes 23/23 and mechanically maps every census
+    family and finite operation to one owned reconstruct/box/own door with live hostile evidence.
 - [x] Prove no TypeScript brand, module-private sentinel, proxy, or static diagnostic is treated as
       the runtime security mechanism.
   - Evidence: `pnpm run check:c9-sink-inventory` passes; C9 rejects `brand`, `sentinel`, `proxy`,
@@ -278,10 +292,12 @@ Measurements are versioned and reproducible:
 
 ## Phase 4 — Close recurrent single-door families
 
-- [ ] **Better Auth adapter TCB:** make the runtime credential/non-egress gate the sole enforcement
+- [x] **Better Auth adapter TCB:** make the runtime credential/non-egress gate the sole enforcement
       door and cover every adapter secret/credential consumer. Use a module-private `unique symbol`
       and validating constructor only to make unsafe calls awkward; hostile-value/runtime tests,
       not the type shape, close threat-matrix M2.
+  - Evidence: the complete Better Auth suite passes 231/231; C13 passes 20 corpora and the 68/68
+    mutation run kills exact source and result-consumer identity deletions.
 - [x] **CSRF mint delivery:** census every anonymous mint path and prove the response-lifecycle sink
       owns mutation forms, raw endpoints, bootstraps, query/live channels, redirects, errors,
       streams, nested handlers, cloned/reused requests, and cache posture. Remove per-path bindings
@@ -292,24 +308,28 @@ Measurements are versioned and reproducible:
   - Evidence: `pnpm run check:c9-sink-inventory` passes 16/16; the shared integrated C13 run reports
     `check-security-classifier-corpus/v1 OK corpora=17` (54 files / 2,257 tests). API, docs-snippet,
     and example-typecheck gates pass.
-- [ ] **Request method/authority:** separate trusted transport-source selection from strict grammar.
+- [x] **Request method/authority:** separate trusted transport-source selection from strict grammar.
       Share one implementation across direct HTTP/1, direct HTTP/2, generated Node, trusted-proxy,
       Vercel, Cloudflare/worker, and future adapters; reject raw-to-Fetch method case changes,
       ambiguous Host/`:authority`, and scheme/forwarding differentials under a C13 corpus.
+  - Evidence: the integrated policy/C13/real-wire/live/generated suite passes 126/126; C13 passes
+    20 corpora and the 68/68 mutation run kills all eight ingress decision weakenings.
 - [x] **C9 completeness:** mechanically compare the boundary/sink census with the single reviewed
       inventory. Every sink has mechanism, sole door, proof gate, hostile-value test, and owner;
       an unowned or missing row fails `pnpm run check`.
-  - Evidence: `pnpm run check:c9-sink-inventory` (16/16) proves all 13 named sinks across the 12
+  - Evidence: `pnpm run check:c9-sink-inventory` (23/23) proves all 15 named sinks across the 12
     census families have executable ownership/evidence rows and fail closed on inventory drift;
     `pnpm run check:sink-policy` and `pnpm run check:imports` pass at merge `7bdd75a38`.
 
 ## Phase 5 — Independent oracles and external review
 
-- [ ] Build executable property oracles rather than treating parser disagreement as truth:
+- [x] Build executable property oracles rather than treating parser disagreement as truth:
       egress asserts undeclared means no DNS/dial and simulates rebinding; authority asserts the
       normative grammar/source-precedence matrix across adapters; CSRF uses a mint/deliver/
       validate/rotate/replay state model; ReDoS enforces a versioned work bound; headers round-trip
       through real HTTP implementations.
+  - Evidence: the 20-corpus C13 run executes the five normative oracle families; the authority
+    matrix additionally passes its 126-test multi-adapter suite.
 - [ ] Run deterministic seeded fuzzers in nightly CI with minimized repro persistence, execution
       and coverage budgets, mutation score, and an exact release-time command. Cross-implementation
       disagreement is triaged; only the normative property decides safe versus unsafe.
