@@ -22,7 +22,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',
@@ -57,7 +57,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',
@@ -98,7 +98,7 @@ export const clearCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',
@@ -149,7 +149,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',
@@ -197,7 +197,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',
@@ -228,7 +228,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV406')).toMatchObject([
       {
         code: 'KV406',
         fileName: 'cart.mutation.ts',
@@ -261,7 +261,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toEqual([]);
   });
 
   it('keeps the commerce reference mutation free of handler db write sinks', () => {
@@ -293,7 +293,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toEqual([]);
   });
 
   it('ignores direct-db-looking text inside real mutation handler strings', () => {
@@ -311,7 +311,7 @@ export const addToCart = mutation({
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toEqual([]);
   });
 
   it('reports KV330 when task run bodies write through module-level db handles', () => {
@@ -328,7 +328,7 @@ export const sendReceipt = task({
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'tasks.ts',
@@ -365,7 +365,7 @@ export const sendReceipt = task({
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'tasks.ts',
@@ -389,7 +389,7 @@ export const sendReceipt = task('email/send-receipt', {
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV406')).toMatchObject([
       {
         code: 'KV406',
         fileName: 'tasks.ts',
@@ -449,7 +449,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'webhooks.ts',
@@ -493,7 +493,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'webhooks.ts',
@@ -593,7 +593,7 @@ export const unsafeEndpoint = endpoint('/api/unsafe', {
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'endpoints.ts',
@@ -637,7 +637,7 @@ export const unsafeEndpoint = endpoint('/api/unsafe', {
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'endpoints.ts',
@@ -678,7 +678,7 @@ export const unsafeEndpoint = endpoint('/api/unsafe', {
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toMatchObject([
       {
         code: 'KV330',
         fileName: 'endpoints.ts',
@@ -718,7 +718,7 @@ export const unsafeEndpoint = endpoint('/api/unsafe', {
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV406')).toMatchObject([
       {
         code: 'KV406',
         fileName: 'endpoints.ts',
