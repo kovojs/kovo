@@ -851,6 +851,9 @@ function verifyComponentPhase(
 
   const registryFactsOptions = {
     fileName: parsed.compileOptions.fileName,
+    ...(parsed.compileOptions.extraFiles?.length
+      ? { extraFiles: parsed.compileOptions.extraFiles }
+      : {}),
     ...(parsed.compileOptions.registryFacts
       ? { registryFacts: parsed.compileOptions.registryFacts }
       : {}),

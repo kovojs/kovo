@@ -135,7 +135,11 @@ export function semanticRenderEquivalenceCheck(
       ok: false,
     };
   }
-  const actualModel = parseComponentModule(artifact, actualSource);
+  const actualModel = parseComponentModule(
+    artifact,
+    actualSource,
+    options.extraFiles?.length ? { frameworkIdentityFiles: options.extraFiles } : {},
+  );
   const actual = semanticRenderModel(actualModel);
   const normalizedExpected = normalizeSemanticHtmlForComparison(expected);
   const normalizedActual = normalizeSemanticHtmlForComparison(actual);
@@ -387,6 +391,7 @@ for (let index = 0; index < semanticVoidElementNames.length; index += 1) {
 }
 
 interface SemanticRenderContext {
+  extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
   fileName?: string;
   registryFacts?: RegistryFacts;
 }

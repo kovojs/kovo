@@ -386,6 +386,16 @@ export function registerFrameworkIdentityProject(
   }
 }
 
+/** @internal Resolve one relative module against the compiler-registered source project. */
+export function resolveFrameworkIdentityProjectSourceFile(
+  importingSourceFile: TypeScript.SourceFile,
+  specifier: string,
+): TypeScript.SourceFile | undefined {
+  return isRelativeSpecifier(specifier)
+    ? resolveProjectSourceFile(importingSourceFile, specifier)
+    : undefined;
+}
+
 /** @internal Return the call expression whose span exactly matches a parser model span. */
 export function callExpressionAtSpan(
   ts: FrameworkIdentityTypeScript,

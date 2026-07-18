@@ -4,6 +4,7 @@ import {
   canonicalFrameworkExportForExpression,
   frameworkExport,
   frameworkExportEquals,
+  resolveFrameworkIdentityProjectSourceFile,
   type FrameworkExportIdentity,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
@@ -24,6 +25,7 @@ import {
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerCreateWeakMap,
   compilerFailClosed,
   compilerMapForEach,
   compilerMapGet,
@@ -36,6 +38,8 @@ import {
   compilerStringSlice,
   compilerStringStartsWith,
   compilerStringTrim,
+  compilerWeakMapGet,
+  compilerWeakMapSet,
 } from '../compiler-security-intrinsics.js';
 import type {
   BrowserSecurityOperationModel,
@@ -110,6 +114,7 @@ const SERVER_OPERATION_LEGACY_IDENTITIES = [
 ] as const;
 const SERVER_REVIEWED_DATA_HELPER_IDENTITIES = [
   frameworkExport('@kovojs/server', 'serverValue'),
+  frameworkExport('@kovojs/server', 'trustedAssign'),
   frameworkExport('drizzle-orm', 'and'),
   frameworkExport('drizzle-orm', 'arrayContained'),
   frameworkExport('drizzle-orm', 'arrayContains'),
@@ -149,6 +154,10 @@ const SERVER_REVIEWED_DATA_TAG_IDENTITIES = [
   frameworkExport('@kovojs/drizzle', 'staticSql'),
   frameworkExport('drizzle-orm', 'sql'),
 ] as const;
+const SERVER_REVIEWED_DATABASE_TABLE_FACTORY_IDENTITIES = [
+  frameworkExport('drizzle-orm', 'pgTable'),
+  frameworkExport('drizzle-orm', 'sqliteTable'),
+] as const;
 
 function finiteStringSet(values: readonly string[]): ReadonlySet<string> {
   const result = compilerCreateSet<string>();
@@ -182,6 +191,17 @@ const browserPureConstructors = finiteStringSet([
   'WeakMap',
   'WeakSet',
 ]);
+const serverPureConstructors = finiteStringSet(['Error']);
+const serverPureGlobalMemberCalls = finiteStringSet(['crypto.randomUUID']);
+const serverReviewedDatabaseBuilderMethods = finiteStringSet([
+  'from',
+  'limit',
+  'orderBy',
+  'set',
+  'values',
+  'where',
+]);
+const serverReviewedDatabaseSchemaValueCache = compilerCreateWeakMap<ts.Expression, boolean>();
 const browserPureGlobalMemberCalls = finiteStringSet([
   'Array.from',
   'Array.isArray',
@@ -868,7 +888,7 @@ function securityIrStatementsDeclareName(
 function securityIrMemberCallableIsStable(
   sourceFile: ts.SourceFile,
   callee: ts.Expression,
-  call: ts.CallExpression,
+  call: ts.CallExpression | ts.NewExpression,
 ): boolean {
   const root = securityIrLeftmostExecutableRoot(callee);
   if (!root) return true;
@@ -2367,7 +2387,9 @@ function scanServerSecurityOperationsDirect(
         !(
           ts.isIdentifier(callee) &&
           (compilerSetHas(browserPureConstructors, callee.text) ||
-            compilerSetHas(browserPureGlobalCalls, callee.text)) &&
+            compilerSetHas(browserPureGlobalCalls, callee.text) ||
+            (compilerSetHas(serverPureConstructors, callee.text) &&
+              securityIrMemberCallableIsStable(sourceFile, callee, node))) &&
           !identifierIsShadowedWithinBoundary(callee, sourceFile) &&
           !serverArgumentsContainForeignExecutable(node.arguments ?? [], aliases)
         )
@@ -2688,6 +2710,29 @@ function classifyServerCall(
     // These exact framework exports construct plain validation/query-expression data. They do not
     // receive a capability or own a runtime sink; aliases and same-spelled app/import exports do
     // not inherit this reviewed identity.
+    if (serverArgumentsContainAuthority(call.arguments, aliases)) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `reviewed server data helper ${nodeName(callee)} cannot receive server authority`,
+      );
+    } else if (
+      frameworkIdentity?.module === 'drizzle-orm'
+        ? serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)
+        : serverArgumentsContainForeignExecutable(call.arguments, aliases)
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `reviewed server data helper ${nodeName(callee)} cannot receive an unreviewed imported executable value`,
+      );
+    } else if (!securityIrMemberCallableIsStable(sourceFile, callee, call)) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `mutable, escaped, or aliased reviewed server data helper ${nodeName(callee)} is outside the finite server IR`,
+      );
+    }
     return;
   }
   const unsupportedCallback = serverUnreviewedCallbackArgument(sourceFile, call);
@@ -2756,9 +2801,27 @@ function classifyServerCall(
     }
     return;
   }
-  const provenance = serverExpressionProvenance(callee, aliases);
   const path = expressionPath(member.receiver);
   const target = path ? `${path}.${member.name}` : member.name;
+  const globalRoot = unwrapExpression(member.receiver);
+  const globalMember = ts.isIdentifier(globalRoot)
+    ? `${globalRoot.text}.${member.name}`
+    : undefined;
+  if (
+    globalMember !== undefined &&
+    compilerSetHas(serverPureGlobalMemberCalls, globalMember) &&
+    ts.isIdentifier(globalRoot) &&
+    !identifierIsShadowedWithinBoundary(globalRoot, sourceFile) &&
+    securityIrMemberCallableIsStable(sourceFile, callee, call) &&
+    !serverArgumentsContainAuthority(call.arguments, aliases) &&
+    !serverArgumentsContainForeignExecutable(call.arguments, aliases)
+  ) {
+    // SPEC §5.2/§6.6: this is one exact ambient data operation. The ambient root is seeded as
+    // foreign executable below so aliases, containers, getters, and replacement fall back to the
+    // closed provenance path instead of inheriting this direct-call verdict.
+    return;
+  }
+  const provenance = serverExpressionProvenance(callee, aliases);
   if (
     classifyServerProvenanceCall(
       provenance,
@@ -2771,10 +2834,6 @@ function classifyServerCall(
   ) {
     return;
   }
-  const globalRoot = unwrapExpression(member.receiver);
-  const globalMember = ts.isIdentifier(globalRoot)
-    ? `${globalRoot.text}.${member.name}`
-    : undefined;
   if (
     globalMember !== undefined &&
     compilerSetHas(browserPureGlobalMemberCalls, globalMember) &&
@@ -2783,6 +2842,24 @@ function classifyServerCall(
     !serverArgumentsContainAuthority(call.arguments, aliases) &&
     !serverArgumentsContainForeignExecutable(call.arguments, aliases)
   ) {
+    return;
+  }
+  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {
+    if (
+      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&
+      !serverArgumentsContainAuthority(call.arguments, aliases) &&
+      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)
+    ) {
+      // SPEC §5.2/§6.6: a Drizzle continuation is reviewed only while it remains an inline static
+      // chain rooted in an exact managed database operation. A detached, replaced, imported, or
+      // same-spelled method never reaches this branch.
+      return;
+    }
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `unknown or authority-bearing managed database builder continuation ${member.name} is outside the finite server IR`,
+    );
     return;
   }
   if (!securityIrMemberCallableIsStable(sourceFile, callee, call)) {
@@ -2852,6 +2929,190 @@ function serverCallDescendsFromReviewedDatabaseOperation(
   }
   const member = staticMember(current);
   return member ? serverCallDescendsFromReviewedDatabaseOperation(member.receiver, aliases) : false;
+}
+
+interface ServerImportedProjectValue {
+  readonly exportName: string;
+  readonly specifier: string;
+}
+
+function serverArgumentsContainUnreviewedForeignExecutable(
+  sourceFile: ts.SourceFile,
+  argumentsList: readonly ts.Expression[],
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const snapshot = compilerSnapshotDenseArray(
+    argumentsList,
+    'Finite managed database builder arguments',
+  );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const argument = snapshot[index]!;
+    if (ts.isSpreadElement(argument)) {
+      if (serverExpressionProvenance(argument.expression, aliases) === 'foreign-executable') {
+        return true;
+      }
+      continue;
+    }
+    if (
+      serverExpressionProvenance(argument, aliases) === 'foreign-executable' &&
+      !serverExpressionIsReviewedDatabaseSchemaValue(sourceFile, argument)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function serverExpressionIsReviewedDatabaseSchemaValue(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  const cached = compilerWeakMapGet(serverReviewedDatabaseSchemaValueCache, current);
+  if (cached !== undefined) return cached;
+  const member = staticMember(current);
+  const reviewed =
+    serverExpressionIsReviewedDatabaseTable(sourceFile, current) ||
+    (member !== undefined && serverExpressionIsReviewedDatabaseTable(sourceFile, member.receiver));
+  compilerWeakMapSet(serverReviewedDatabaseSchemaValueCache, current, reviewed);
+  return reviewed;
+}
+
+function serverExpressionIsReviewedDatabaseTable(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const imported = serverImportedProjectValue(sourceFile, expression);
+  if (!imported) return false;
+  const target = resolveFrameworkIdentityProjectSourceFile(sourceFile, imported.specifier);
+  if (!target) return false;
+
+  let declaration: ts.VariableDeclaration | undefined;
+  const statements = compilerSnapshotDenseArray(
+    target.statements,
+    'Finite database schema source statements',
+  );
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (
+      !ts.isVariableStatement(statement) ||
+      !securityIrNodeHasExportModifier(statement) ||
+      (statement.declarationList.flags & ts.NodeFlags.Const) === 0
+    ) {
+      continue;
+    }
+    const declarations = compilerSnapshotDenseArray(
+      statement.declarationList.declarations,
+      'Finite database schema export declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
+      const candidate = declarations[declarationIndex]!;
+      if (!ts.isIdentifier(candidate.name) || candidate.name.text !== imported.exportName) continue;
+      if (declaration) return false;
+      declaration = candidate;
+    }
+  }
+  if (!declaration?.initializer || serverBindingOrMemberIsAssigned(target, imported.exportName)) {
+    return false;
+  }
+  const initializer = unwrapExpression(declaration.initializer);
+  if (!ts.isCallExpression(initializer)) return false;
+  const factoryIdentity = canonicalFrameworkExportForExpression(
+    ts as FrameworkIdentityTypeScript,
+    target,
+    initializer.expression,
+  );
+  return frameworkIdentityIn(factoryIdentity, SERVER_REVIEWED_DATABASE_TABLE_FACTORY_IDENTITIES);
+}
+
+function serverImportedProjectValue(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): ServerImportedProjectValue | undefined {
+  const current = unwrapExpression(expression);
+  const member = staticMember(current);
+  const identifier = ts.isIdentifier(current)
+    ? current
+    : member && ts.isIdentifier(unwrapExpression(member.receiver))
+      ? (unwrapExpression(member.receiver) as ts.Identifier)
+      : undefined;
+  if (!identifier) return undefined;
+
+  let resolved: ServerImportedProjectValue | undefined;
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Finite server import statements',
+  );
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings) continue;
+    let exportName: string | undefined;
+    if (ts.isNamedImports(bindings) && ts.isIdentifier(current)) {
+      const elements = compilerSnapshotDenseArray(bindings.elements, 'Finite server named imports');
+      for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+        const element = elements[elementIndex]!;
+        if (element.name.text === identifier.text) {
+          exportName = element.propertyName?.text ?? element.name.text;
+          break;
+        }
+      }
+    } else if (
+      ts.isNamespaceImport(bindings) &&
+      member !== undefined &&
+      bindings.name.text === identifier.text
+    ) {
+      exportName = member.name;
+    }
+    if (!exportName) continue;
+    if (resolved) return undefined;
+    resolved = { exportName, specifier: statement.moduleSpecifier.text };
+  }
+  return resolved;
+}
+
+function securityIrNodeHasExportModifier(
+  node: ts.Node & { readonly modifiers?: ts.NodeArray<ts.ModifierLike> },
+): boolean {
+  const modifiers = node.modifiers;
+  if (!modifiers) return false;
+  const snapshot = compilerSnapshotDenseArray(modifiers, 'Finite source modifiers');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    if (snapshot[index]!.kind === ts.SyntaxKind.ExportKeyword) return true;
+  }
+  return false;
+}
+
+function serverBindingOrMemberIsAssigned(sourceFile: ts.SourceFile, name: string): boolean {
+  let assigned = false;
+  const visit = (node: ts.Node): void => {
+    if (assigned) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      isAssignmentOperator(node.operatorToken.kind) &&
+      rootIdentifier(node.left) === name
+    ) {
+      assigned = true;
+      return;
+    }
+    const mutationOperand = ts.isDeleteExpression(node)
+      ? node.expression
+      : (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+          (node.operator === ts.SyntaxKind.PlusPlusToken ||
+            node.operator === ts.SyntaxKind.MinusMinusToken)
+        ? node.operand
+        : undefined;
+    if (mutationOperand && rootIdentifier(mutationOperand) === name) {
+      assigned = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return assigned;
 }
 
 function serverUnreviewedCallbackArgument(
@@ -2999,6 +3260,9 @@ function serverAliasProvenance(
   compilerMapSet(aliases, 'Response', 'response-constructor');
   compilerMapSet(aliases, 'globalThis', 'global-object');
   compilerMapSet(aliases, 'Object', 'intrinsic-object');
+  // Direct crypto.randomUUID() has one exact reviewed branch. Treat every other movement of the
+  // ambient executable object like foreign code so aliases and opaque containers stay KV449.
+  compilerMapSet(aliases, 'crypto', 'foreign-executable');
   seedServerForeignImports(sourceFile, aliases);
   if (inheritedAliases) {
     compilerMapForEach(inheritedAliases, (value, name) => compilerMapSet(aliases, name, value));
@@ -4137,6 +4401,14 @@ function securityIrScopeDeclaresName(scope: ts.Node, name: string): boolean {
     }
     if (node !== scope && ts.isClassDeclaration(node)) {
       if (node.name && !insideNestedLexicalBlock) visitBindingName(node.name);
+      return;
+    }
+    if (
+      ts.isImportDeclaration(node) &&
+      !insideNestedLexicalBlock &&
+      securityIrImportDeclaresName(node, name)
+    ) {
+      found = true;
       return;
     }
     if (ts.isParameter(node)) visitBindingName(node.name);

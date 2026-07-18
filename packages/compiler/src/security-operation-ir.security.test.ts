@@ -14,6 +14,17 @@ function kv449(source: string) {
   return compile(source).diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
 }
 
+function kv449Project(
+  source: string,
+  extraFiles: readonly { readonly fileName: string; readonly source: string }[],
+) {
+  return compileComponentModule({
+    extraFiles,
+    fileName: 'src/finite-security-ir.tsx',
+    source,
+  }).diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
+}
+
 describe('SPEC §4.3/§5.2 finite compiler-owned security IR', () => {
   it('carries exact compiler-derived operations in emitted browser and server artifacts', () => {
     const result = compile(`
@@ -1007,6 +1018,276 @@ export const report = endpoint('/report', {
     expect(serverSource).toContain('"kind":"server.database.read"');
     expect(serverSource).toContain('"kind":"server.database.write"');
     expect(serverSource).toContain('"kind":"server.task.compose"');
+  });
+
+  it('accepts the starter database chains and exact plain-data identities without widening the finite IR', () => {
+    expect(
+      kv449Project(
+        `
+import { mutation, query, trustedAssign } from '@kovojs/server';
+import { eq } from 'drizzle-orm';
+import { contacts } from './schema.js';
+
+async function writeContact(db, row) {
+  const id = crypto.randomUUID();
+  await db.insert(contacts).values({
+    id: trustedAssign(id, 'framework-generated opaque identifier'),
+    email: row.email,
+  });
+}
+
+export const save = mutation('contacts/save', {
+  async handler(input, request) {
+    const [existing] = await request.db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.email, input.email))
+      .limit(1);
+    if (!existing) await writeContact(request.db, input);
+    return { id: existing?.id ?? null };
+  },
+});
+
+export const list = query('contacts/list', {
+  async load(_input, context) {
+    const db = context?.db;
+    if (!db) throw new Error('missing managed database');
+    return {
+      items: await db.select({ id: contacts.id }).from(contacts).orderBy(contacts.id),
+    };
+  },
+});
+`,
+        [
+          {
+            fileName: 'src/schema.ts',
+            source: `
+import { pgTable, text } from 'drizzle-orm/pg-core';
+export const contacts = pgTable('contacts', {
+  email: text('email').notNull(),
+  id: text('id').primaryKey(),
+});
+`,
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'a same-named imported trustedAssign',
+      `import { trustedAssign } from './lookalike.js';`,
+      `return trustedAssign(input.id, 'not a framework identity');`,
+    ],
+    [
+      'a same-named local trustedAssign that returns a privileged outcome',
+      ``,
+      `function trustedAssign() { return new Response('raw'); }
+       return trustedAssign();`,
+    ],
+    [
+      'a getter-carried trustedAssign lookalike',
+      ``,
+      `const helpers = { get trustedAssign() { return () => new Response('raw'); } };
+       return helpers.trustedAssign(input.id, 'getter');`,
+    ],
+    [
+      'a replaced exact trustedAssign binding',
+      `import { trustedAssign } from '@kovojs/server';`,
+      `trustedAssign = () => new Response('raw');
+       return trustedAssign(input.id, 'replaced');`,
+    ],
+    [
+      'a mutable trustedAssign container',
+      `import { trustedAssign } from '@kovojs/server';`,
+      `const helpers = { trustedAssign };
+       helpers.trustedAssign = () => new Response('raw');
+       return helpers.trustedAssign(input.id, 'container');`,
+    ],
+    [
+      'an exact trustedAssign call carrying managed authority',
+      `import { trustedAssign } from '@kovojs/server';`,
+      `return trustedAssign(request.db, 'authority laundering');`,
+    ],
+  ])(
+    'does not grant reviewed data-helper identity through %s',
+    (_label, moduleDeclarations, handlerBody) => {
+      expect(
+        kv449(`
+import { mutation } from '@kovojs/server';
+${moduleDeclarations}
+export const save = mutation('contacts/save', {
+  handler(input, request) {
+    ${handlerBody}
+  },
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each([
+    [
+      'a same-named imported crypto object',
+      `import { crypto } from './lookalike.js';`,
+      `return crypto.randomUUID();`,
+    ],
+    [
+      'a same-named local crypto object',
+      ``,
+      `const crypto = { randomUUID() { return new Response('raw'); } };
+       return crypto.randomUUID();`,
+    ],
+    [
+      'a getter-carried randomUUID lookalike',
+      ``,
+      `const entropy = { get randomUUID() { return () => new Response('raw'); } };
+       return entropy.randomUUID();`,
+    ],
+    [
+      'an ambient crypto container alias',
+      ``,
+      `const entropy = crypto;
+       return entropy.randomUUID();`,
+    ],
+    [
+      'a replaced ambient crypto member',
+      ``,
+      `crypto.randomUUID = () => 'fixed';
+       return crypto.randomUUID();`,
+    ],
+  ])('keeps randomUUID closed through %s', (_label, moduleDeclarations, handlerBody) => {
+    expect(
+      kv449(`
+import { mutation } from '@kovojs/server';
+${moduleDeclarations}
+export const save = mutation('contacts/save', {
+  handler() {
+    ${handlerBody}
+  },
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    [
+      'an imported Error lookalike',
+      `import { Error } from './lookalike.js';`,
+      `throw new Error('raw');`,
+    ],
+    [
+      'a local Error lookalike',
+      ``,
+      `class Error { constructor() { return new Response('raw'); } } throw new Error();`,
+    ],
+    ['an Error constructor alias', ``, `const Failure = Error; throw new Failure('aliased');`],
+    ['a replaced ambient Error binding', ``, `Error = class {}; throw new Error('replaced');`],
+  ])(
+    'keeps the ambient Error constructor closed through %s',
+    (_label, moduleDeclarations, handlerBody) => {
+      expect(
+        kv449(`
+import { query } from '@kovojs/server';
+${moduleDeclarations}
+export const list = query('contacts/list', {
+  load() { ${handlerBody} },
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each([
+    [
+      'an imported same-named builder method',
+      `import { builder } from './lookalike.js';`,
+      `return builder.from(contacts);`,
+    ],
+    [
+      'a same-named local builder method that returns a privileged outcome',
+      ``,
+      `const builder = { from() { return new Response('raw'); } };
+       return builder.from(contacts);`,
+    ],
+    [
+      'a getter-carried builder method',
+      ``,
+      `const builder = { get from() { return () => new Response('raw'); } };
+       return builder.from(contacts);`,
+    ],
+    [
+      'a mutable managed-builder container',
+      `import { foreignFrom } from './lookalike.js';`,
+      `const builder = request.db.select();
+       builder.from = foreignFrom;
+       return builder.from(contacts);`,
+    ],
+    [
+      'an unreviewed managed-builder continuation',
+      ``,
+      `return request.db.select().dropEverything();`,
+    ],
+    [
+      'a reviewed managed-builder continuation carrying authority',
+      ``,
+      `return request.db.select().where(request.db);`,
+    ],
+  ])(
+    'does not recognize finite database continuations through %s',
+    (_label, moduleDeclarations, handlerBody) => {
+      expect(
+        kv449(`
+import { mutation } from '@kovojs/server';
+import { contacts } from './schema.js';
+${moduleDeclarations}
+export const save = mutation('contacts/save', {
+  handler(_input, request) {
+    ${handlerBody}
+  },
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each([
+    [
+      'a getter-backed export passed to from',
+      `export const contacts = { get id() { return new Response('getter'); } };`,
+      `return request.db.select().from(contacts);`,
+    ],
+    [
+      'a Proxy export passed to where',
+      `export const contacts = new Proxy({}, { get() { return new Response('proxy'); } });`,
+      `return request.db.select().where(contacts);`,
+    ],
+    [
+      'a callable export passed to orderBy',
+      `export function contacts() { return new Response('callable'); }`,
+      `return request.db.select().orderBy(contacts);`,
+    ],
+    [
+      'a reassigned table export passed to limit',
+      `import { pgTable } from 'drizzle-orm/pg-core';
+       export const contacts = pgTable('contacts', {});
+       contacts = new Proxy({}, {});`,
+      `return request.db.select().limit(contacts);`,
+    ],
+  ])('rejects imported executable database data through %s', (_label, schemaSource, call) => {
+    expect(
+      kv449Project(
+        `
+import { mutation } from '@kovojs/server';
+import { contacts } from './schema.js';
+export const save = mutation('contacts/save', {
+  handler(_input, request) { ${call} },
+});
+`,
+        [{ fileName: 'src/schema.ts', source: schemaSource }],
+      ),
+    ).not.toEqual([]);
   });
 
   it('classifies exact static managed relational reads through direct and scoped read handles', () => {

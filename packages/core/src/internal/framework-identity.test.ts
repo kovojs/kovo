@@ -9,6 +9,7 @@ import {
   frameworkExport,
   frameworkIdentityExpressionKindRows,
   registerFrameworkIdentityProject,
+  resolveFrameworkIdentityProjectSourceFile,
 } from './framework-identity.js';
 
 const trustedHtmlIdentity = frameworkExport('@kovojs/browser', 'trustedHtml');
@@ -101,6 +102,25 @@ function expectedExpressionSyntaxKinds(): readonly ts.SyntaxKind[] {
 }
 
 describe('framework identity resolver', () => {
+  it('resolves only registered local schema modules and exact Drizzle table factories', () => {
+    const schema = sourceFile(
+      '/app/schema.ts',
+      "import { pgTable } from 'drizzle-orm/pg-core'; export const contacts = pgTable('contacts', {});",
+    );
+    const usage = sourceFile('/app/usage.tsx', "import { contacts } from './schema.js';");
+
+    registerFrameworkIdentityProject(usage, [schema]);
+
+    expect(resolveFrameworkIdentityProjectSourceFile(usage, './schema.js')).toBe(schema);
+    expect(frameworkCatalogExportForModuleSpecifier('drizzle-orm/pg-core', 'pgTable')).toEqual({
+      exportName: 'pgTable',
+      module: 'drizzle-orm',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('drizzle-orm/pg-core', 'notATableFactory'),
+    ).toBeUndefined();
+  });
+
   it('catalogs createApp as the app-authoring root by exact package identity', () => {
     expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createApp')).toEqual({
       exportName: 'createApp',

@@ -223,6 +223,18 @@ function drizzleOrmSql(exportName: string): FrameworkIdentityCatalogEntry {
   };
 }
 
+function drizzleOrmSchema(
+  exportName: string,
+  specifier: 'drizzle-orm/pg-core' | 'drizzle-orm/sqlite-core',
+): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: 'drizzle-orm',
+    scopes: ['data-plane'],
+    specifiers: [specifier],
+  };
+}
+
 const catalogEntries: FrameworkIdentityCatalogEntry[] = [];
 
 appendCatalogEntry(catalogEntries, serverApp('createApp'));
@@ -337,6 +349,8 @@ appendCatalogFactories(
   ],
   drizzleOrmSql,
 );
+appendCatalogEntry(catalogEntries, drizzleOrmSchema('pgTable', 'drizzle-orm/pg-core'));
+appendCatalogEntry(catalogEntries, drizzleOrmSchema('sqliteTable', 'drizzle-orm/sqlite-core'));
 
 /** @internal Shared manifest-backed export catalog for TS and ts-morph identity adapters. */
 export const frameworkIdentityCatalog: readonly FrameworkIdentityCatalogEntry[] =

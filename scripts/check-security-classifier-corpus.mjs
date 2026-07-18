@@ -2111,6 +2111,23 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'starter-exact-data-identities-and-database-continuations',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'accepts the starter database chains and exact plain-data identities without widening the finite IR',
+          'crypto.randomUUID()',
+          "trustedAssign(id, 'framework-generated opaque identifier')",
+          '.from(contacts).orderBy(contacts.id)',
+          'does not grant reviewed data-helper identity through %s',
+          'keeps randomUUID closed through %s',
+          'keeps the ambient Error constructor closed through %s',
+          'does not recognize finite database continuations through %s',
+          'rejects imported executable database data through %s',
+          'new Proxy({}, { get()',
+          'request.db.select().dropEverything()',
+        ],
+      },
+      {
         id: 'complete-mutation-form-security-fields',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
