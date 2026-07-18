@@ -115,8 +115,9 @@ Measurements are versioned and reproducible:
       informational LOC. Record the first comparable row in the table below.
   - Evidence: `f7a82a75c` adds the fixed charter, exact audit-round record, deterministic collector,
     six-test gate, and report; `b3de9e512` preserves the immutable e5 row while refreshing the
-    post-M35 structural snapshot. `pnpm run check:security-convergence-baseline` passes with M=37,
-    P=5,956, G=18, and C13=17/144.
+    post-M35 structural snapshot; `497f6eee6` refreshes it after the bounded-diamond repair.
+    `pnpm run check:security-convergence-baseline` passes with M=37, P=5,958, G=18, and
+    C13=17/144. The immutable comparable e5 row remains P=5,956 below.
 
 ## Phase 1 — Make the forcing gates non-skippable
 

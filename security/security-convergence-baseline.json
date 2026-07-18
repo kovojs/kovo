@@ -20,8 +20,8 @@
     }
   ],
   "currentSnapshot": {
-    "measuredCodeSha": "f7a82a75c84da95d675c4c713340f3984328d8ca",
-    "reason": "Post-M35 structural refresh; the immutable comparable audit remains the e5 historical row.",
+    "measuredCodeSha": "497f6eee65919910d7c832660224e4aa29c74571",
+    "reason": "Post-M35 and bounded-diamond structural refresh; the immutable comparable audit remains the e5 historical row.",
     "snapshot": {
       "schema": "kovo-security-convergence-baseline/v1",
       "charter": {
@@ -119,11 +119,11 @@
             "writeln"
           ]
         },
-        "total": 5956,
+        "total": 5958,
         "trustStatic": {
-          "directNamePredicates": 1316,
+          "directNamePredicates": 1318,
           "inlineMembershipEntries": 558,
-          "nameBranches": 2564,
+          "nameBranches": 2566,
           "namedInventoryEntries": 674,
           "namedInventorySha256": "a17407a73922b8152013190c0c715c3ae7d483b2c5926ca89a091fba1c0d4aad",
           "namedInventoryTableCount": 62,
@@ -131,7 +131,7 @@
           "syntaxBranches": 3335,
           "syntaxGuardSites": 2508,
           "syntaxKindSites": 827,
-          "total": 5899
+          "total": 5901
         }
       },
       "g": {
@@ -146,7 +146,7 @@
       },
       "informational": {
         "egressLoc": 2299,
-        "trustStaticLoc": 38480
+        "trustStaticLoc": 38496
       }
     }
   }
