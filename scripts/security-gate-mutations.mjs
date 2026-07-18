@@ -18,6 +18,7 @@ import * as authorizationMatrixGate from './check-authorization-matrix.mjs';
 import * as sinkPolicyGate from './check-sink-policy-gate.mjs';
 import * as fundamentalFixesCensusGate from './fundamental-fixes-census-gate.mjs';
 import * as securityTestBuildGate from './security-test-build-gate.mjs';
+import * as requestIngressPolicy from '../packages/server/src/request-ingress-policy.ts';
 
 const repoRoot = findRepoRoot();
 const scriptsDir = path.join(repoRoot, 'scripts');
@@ -42,6 +43,25 @@ const trustedHtmlProvenancePath = path.join(
 );
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
+const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
+const taskRunnerPath = path.join(repoRoot, 'packages/server/src/task-runner.ts');
+const webhookPath = path.join(repoRoot, 'packages/server/src/webhook.ts');
+const betterAuthCredentialRuntimeGatePath = path.join(
+  repoRoot,
+  'packages/better-auth/src/internal/credential-runtime-gate.ts',
+);
+const requestIngressPolicyPath = path.join(
+  repoRoot,
+  'packages/server/src/request-ingress-policy.ts',
+);
+
+const canonicalPostMethodBranch =
+  "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
+const weakenedCanonicalPostMethodBranch =
+  "    if (equalsAsciiCaseInsensitive(method, 'post')) return true;";
+
+const dualSchemeAuthorityIdentityBranch = '      parsedHttps.host === authority &&';
+const weakenedDualSchemeAuthorityIdentityBranch = '      true &&';
 
 const ownerReadCanary = [
   '      "id": "endpoint-builder-act-as-owner",',
@@ -395,6 +415,12 @@ const queryWireHtmlEscapeBranch = '${escapeHtml(stringifyKovoWireValue(options.v
 
 const removedQueryWireHtmlEscapeBranch = '${stringifyKovoWireValue(options.value)}';
 
+const betterAuthCredentialResultIdentityBranch =
+  '  if (registered === undefined || registered.consumer !== consumer) {';
+
+const removedBetterAuthCredentialResultIdentityBranch =
+  '  if (registered === undefined || false) {';
+
 const m5ForbiddenStatusBranch = [
   '  } else if (FORBIDDEN_STATUS_PATTERN.test(row.status)) {',
   '    violations.push(`${label}: M5 forbids status ${JSON.stringify(row.status)}`);',
@@ -553,6 +579,25 @@ const weakenedViteJsToTsSiblingCandidatesBranch = [
   "      case '.js':",
   '        return [basePath];',
 ].join('\n');
+
+const frameworkEgressOriginCheck =
+  '  const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });';
+const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
+const frameworkEgressDispatcherPin =
+  '  request = egressRequestWithDispatcher(request, dispatcher);';
+const removedFrameworkEgressDispatcherPin = '  request = request;';
+const taskEgressCapabilitySeal =
+  "    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);";
+const removedTaskEgressCapabilitySeal = '    return context;';
+const webhookEgressCapabilitySeal = [
+  "  witnessDefineProperty(context, 'fetch', {",
+  '    configurable: false,',
+  '    enumerable: true,',
+  '    value: frameworkEgressFetch,',
+  '    writable: false,',
+  '  });',
+].join('\n');
+const removedWebhookEgressCapabilitySeal = '';
 
 export const SECURITY_GATE_MUTANTS = [
   {
@@ -889,6 +934,40 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertQueryWireHtmlBodyEscapingIsCaught,
   },
   {
+    description:
+      'Deletes exact same-consumer identity from the Better Auth credential result refusal.',
+    expectedKiller:
+      'M2 Better Auth runtime results must be opened only by the exact consumer that minted them',
+    name: 'better-auth-credential-gate/drop-result-consumer-identity',
+    replacement: removedBetterAuthCredentialResultIdentityBranch,
+    search: betterAuthCredentialResultIdentityBranch,
+    sourceFile: betterAuthCredentialRuntimeGatePath,
+    sourceOnly: true,
+    test: assertBetterAuthCredentialResultIdentityIsPinned,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Allows Fetch to canonicalize a lower-case standard POST method before dispatch.',
+    expectedKiller: 'request-ingress method identity must reject lower-case standard methods',
+    name: 'request-ingress/allow-lowercase-standard-post',
+    replacement: weakenedCanonicalPostMethodBranch,
+    search: canonicalPostMethodBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressMethodIdentityIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description:
+      'Drops the HTTPS serialization half of canonical authority identity and admits :443.',
+    expectedKiller:
+      'request-ingress authority identity must stay byte-identical under both HTTP schemes',
+    name: 'request-ingress/drop-https-authority-identity',
+    replacement: weakenedDualSchemeAuthorityIdentityBranch,
+    search: dualSchemeAuthorityIdentityBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressDualSchemeAuthorityIsClosed,
+  },
+  {
     baseModule: fundamentalFixesCensusGate,
     description: 'Deletes the M5 forbidden-status census enforcement branch.',
     expectedKiller: 'M5 census statuses such as future must stay forbidden, not merely unsupported',
@@ -1018,6 +1097,46 @@ export const SECURITY_GATE_MUTANTS = [
     sourceOnly: true,
     test: assertViteSourceKeepsJsToTsSiblingCandidates,
   },
+  {
+    description: 'Deletes the positive origin decision before framework-owned DNS resolution.',
+    expectedKiller: 'framework egress must reject an undeclared origin before DNS',
+    name: 'server-egress/drop-origin-before-dns',
+    replacement: removedFrameworkEgressOriginCheck,
+    search: frameworkEgressOriginCheck,
+    sourceFile: serverEgressPath,
+    sourceOnly: true,
+    test: assertFrameworkEgressSourceKeepsPositiveCapability,
+  },
+  {
+    description: "Deletes rebinding of Request private state to Kovo's installed dispatcher.",
+    expectedKiller: 'framework egress must replace application dispatcher authority',
+    name: 'server-egress/drop-dispatcher-pin',
+    replacement: removedFrameworkEgressDispatcherPin,
+    search: frameworkEgressDispatcherPin,
+    sourceFile: serverEgressPath,
+    sourceOnly: true,
+    test: assertFrameworkEgressSourceKeepsPositiveCapability,
+  },
+  {
+    description: 'Makes the durable-task contextual fetch capability replaceable after delivery.',
+    expectedKiller: 'task ctx.fetch must be an exact non-replaceable own capability',
+    name: 'server-egress/drop-task-context-fetch-seal',
+    replacement: removedTaskEgressCapabilitySeal,
+    search: taskEgressCapabilitySeal,
+    sourceFile: taskRunnerPath,
+    sourceOnly: true,
+    test: assertTaskEgressContextKeepsCapabilitySeal,
+  },
+  {
+    description: 'Makes the webhook contextual fetch capability replaceable after verification.',
+    expectedKiller: 'webhook ctx.fetch must be an exact non-replaceable own capability',
+    name: 'server-egress/drop-webhook-context-fetch-seal',
+    replacement: removedWebhookEgressCapabilitySeal,
+    search: webhookEgressCapabilitySeal,
+    sourceFile: webhookPath,
+    sourceOnly: true,
+    test: assertWebhookEgressContextKeepsCapabilitySeal,
+  },
 ];
 
 export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_MUTANTS } = {}) {
@@ -1126,6 +1245,51 @@ async function assertAuthorizationMatrixDocumentIsClosed(_moduleUnderTest, { sou
   const check = authorizationMatrixGate.validateAuthorizationMatrixDocument(JSON.parse(sourceText));
   if (check.ok) return;
   throw new Error(check.findings.join('\n'));
+}
+
+function requestIngressClassifier(moduleUnderTest) {
+  return moduleUnderTest.createRequestIngressClassifier({
+    charCodeAt: (value, index) => value.charCodeAt(index),
+    isArray: Array.isArray,
+    parseAuthority(authority, scheme) {
+      try {
+        const parsed = new URL(`${scheme}://${authority}`);
+        return {
+          hash: parsed.hash,
+          host: parsed.host,
+          origin: parsed.origin,
+          pathname: parsed.pathname,
+          search: parsed.search,
+        };
+      } catch {
+        return undefined;
+      }
+    },
+  });
+}
+
+async function assertRequestIngressMethodIdentityIsClosed(moduleUnderTest) {
+  const classifier = requestIngressClassifier(moduleUnderTest);
+  if (classifier.classifyMethod('post') || !classifier.classifyMethod('POST')) {
+    throw new Error('request-ingress classifier no longer preserves exact POST identity');
+  }
+}
+
+async function assertRequestIngressDualSchemeAuthorityIsClosed(moduleUnderTest) {
+  const classifier = requestIngressClassifier(moduleUnderTest);
+  for (const authority of ['app.example:80', 'app.example:443']) {
+    const decision = classifier.classifyAuthority({
+      host: authority,
+      httpVersion: '1.1',
+      pseudoAuthority: undefined,
+      rawHostHeaderCount: 1,
+    });
+    if (decision.ok) {
+      throw new Error(
+        `request-ingress classifier admitted scheme-relative default port ${authority}`,
+      );
+    }
+  }
 }
 
 export function applyExactMutation(sourceText, mutant) {
@@ -1742,6 +1906,17 @@ async function assertQueryWireHtmlBodyEscapingIsCaught(_moduleUnderTest, { sourc
   }
 }
 
+async function assertBetterAuthCredentialResultIdentityIsPinned(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (!sourceText?.includes(betterAuthCredentialResultIdentityBranch)) {
+    throw new Error(
+      'Better Auth credential results no longer require exact same-consumer registry identity',
+    );
+  }
+}
+
 async function assertM5ForbiddenStatusIsCaught(moduleUnderTest) {
   const { manifest, planText } = loadDefaultCensusFixture();
   manifest.rows[0].status = 'future';
@@ -1868,6 +2043,41 @@ async function assertCompilerSourceKeepsSiblingRegistration(_moduleUnderTest, { 
 async function assertViteSourceKeepsJsToTsSiblingCandidates(_moduleUnderTest, { sourceText } = {}) {
   if (!sourceText?.includes(viteJsToTsSiblingCandidatesBranch)) {
     throw new Error('Vite sibling discovery no longer maps .js specifiers to .ts/.tsx candidates');
+  }
+}
+
+async function assertFrameworkEgressSourceKeepsPositiveCapability(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  const fetchStart = sourceText?.indexOf('export const frameworkEgressFetch') ?? -1;
+  const dispatcherPin = sourceText?.indexOf(frameworkEgressDispatcherPin, fetchStart) ?? -1;
+  const originCheck = sourceText?.indexOf(frameworkEgressOriginCheck, fetchStart) ?? -1;
+  const dnsLookup = sourceText?.indexOf('lookupAllAddresses(host)', fetchStart) ?? -1;
+  if (
+    fetchStart < 0 ||
+    dispatcherPin < fetchStart ||
+    originCheck < dispatcherPin ||
+    dnsLookup < originCheck
+  ) {
+    throw new Error(
+      'framework egress no longer pins its dispatcher and rejects undeclared origins before DNS',
+    );
+  }
+}
+
+async function assertTaskEgressContextKeepsCapabilitySeal(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(taskEgressCapabilitySeal)) {
+    throw new Error('durable-task ctx.fetch is no longer an exact non-replaceable own property');
+  }
+}
+
+async function assertWebhookEgressContextKeepsCapabilitySeal(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (!sourceText?.includes(webhookEgressCapabilitySeal)) {
+    throw new Error('webhook ctx.fetch is no longer an exact non-replaceable own property');
   }
 }
 

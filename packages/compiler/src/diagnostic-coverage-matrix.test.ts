@@ -1450,7 +1450,7 @@ describe('compiler diagnostic coverage matrix', () => {
       SPEC §4.3, §5.2, §6.6, and §9.1 make the finite compiler-owned operation set fail closed. There is no general raw-DOM/capability or hand-authored lowered-IR escape; only the named exceptional doors documented by their owning sink are accepted.
       Escape: trustedSql, trustedHtml, and endpoint/webhook raw Response are the only exceptional IR operations, and each remains visible in kovo explain with its justification/posture.",
           "length": 22,
-          "message": "Security-critical operation is outside the compiler-owned finite IR. raw DOM assignment event.target.innerHTML is not a finite operation.",
+          "message": "Security-critical operation is outside the compiler-owned finite IR. raw browser assignment event.target.innerHTML is not a finite operation.",
           "severity": "error",
           "start": {
             "column": 42,

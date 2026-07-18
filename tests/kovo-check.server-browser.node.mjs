@@ -172,8 +172,6 @@ import {
 } from '../packages/conformance-fixtures/src/verification-fixtures.ts';
 import {
   createApp,
-  csrfField,
-  csrfToken,
   domain,
   errorBoundary,
   guards,
@@ -188,6 +186,7 @@ import {
   t,
   exportStaticApp,
 } from '../dist/server/src/index.mjs';
+import { csrfField, csrfToken } from '../dist/server/src/internal/csrf.mjs';
 import { runMutation, runQuery, runRoutePage } from '../dist/server/src/internal/execution.mjs';
 import {
   renderDeferredStream,
@@ -1260,7 +1259,7 @@ void test('P10 perf acceptance is wired through Playwright and CDP', async () =>
       navigationCount: 100,
       paintEntry: 'first-contentful-paint',
       prerenderTimingField: 'activationStart',
-      ttiMetric: 'ttiMinusFcpMs',
+      ttiMetric: 'listenerEnrollmentBeforeContentfulPaint',
     },
     inputFacts: [
       { auto: true },

@@ -258,10 +258,16 @@ Measurements are versioned and reproducible:
       door and cover every adapter secret/credential consumer. Use a module-private `unique symbol`
       and validating constructor only to make unsafe calls awkward; hostile-value/runtime tests,
       not the type shape, close threat-matrix M2.
-- [ ] **CSRF mint delivery:** census every anonymous mint path and prove the response-lifecycle sink
+- [x] **CSRF mint delivery:** census every anonymous mint path and prove the response-lifecycle sink
       owns mutation forms, raw endpoints, bootstraps, query/live channels, redirects, errors,
       streams, nested handlers, cloned/reused requests, and cache posture. Remove per-path bindings
       only when that exact matrix stays green.
+  - Evidence: `pnpm run check:csrf-mint-delivery` closes 18 mint/deliver/validate/rotate/replay
+    surfaces with 6 canaries; the focused lifecycle suite passes 11 files / 433 tests, and the
+    separate packed Node/Vercel proof passes.
+  - Evidence: `pnpm run check:c9-sink-inventory` passes 16/16; the shared integrated C13 run reports
+    `check-security-classifier-corpus/v1 OK corpora=17` (54 files / 2,257 tests). API, docs-snippet,
+    and example-typecheck gates pass.
 - [ ] **Request method/authority:** separate trusted transport-source selection from strict grammar.
       Share one implementation across direct HTTP/1, direct HTTP/2, generated Node, trusted-proxy,
       Vercel, Cloudflare/worker, and future adapters; reject raw-to-Fetch method case changes,

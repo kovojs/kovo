@@ -64,6 +64,7 @@ import {
 } from './static-host-header-policy.js';
 import { MAX_REQUEST_QUERY_ENTRIES, MAX_REQUEST_URL_CHARACTERS } from './request-url-limits.js';
 import { createTransportResponseHeaderClassifier } from './response-transport-headers.js';
+import { createRequestIngressClassifier } from './request-ingress-policy.js';
 
 const immutableAssetPathPatternSourceLiteral = buildSecuritySourceLiteral(
   staticHostImmutableAssetPathPatternSource,
@@ -1067,13 +1068,23 @@ const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.p
 const nativeUrlSearchGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'search').get;
 const nativeStringCharCodeAt = String.prototype.charCodeAt;
 const nativeStringIndexOf = String.prototype.indexOf;
-const nativeStringLastIndexOf = String.prototype.lastIndexOf;
 const nativeStringSlice = String.prototype.slice;
 const nativeStringToLowerCase = String.prototype.toLowerCase;
 const nativeStringTrim = String.prototype.trim;
 const classifyTransportResponseHeaders = (${generatedTransportResponseHeaderClassifierSource})({
   lowerCase(value) {
     return apply(nativeStringToLowerCase, value, []);
+  },
+});
+const requestIngressClassifier = (${generatedRequestIngressClassifierSource})({
+  charCodeAt(value, index) {
+    return apply(nativeStringCharCodeAt, value, [index]);
+  },
+  isArray(value) {
+    return apply(nativeArrayIsArray, NativeArray, [value]);
+  },
+  parseAuthority(authority, scheme) {
+    return parseRequestIngressAuthority(authority, scheme);
   },
 });
 const bodylessMethods = new Set(['GET', 'HEAD']);
@@ -1125,17 +1136,14 @@ function nodeRequestToWebRequestFromSnapshot(
   if (requestUrlLimitFailure(pinnedNodeRequest.rawTarget) !== undefined) {
     throw new RangeError('Kovo Node request target exceeds the SPEC §9.5 resource ceiling.');
   }
-  if (!nodeRequestMethodIsFetchStable(pinnedNodeRequest.method)) {
-    throw new TypeError('Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.');
-  }
+  const ingress = classifyPinnedNodeRequestIngress(pinnedNodeRequest, pinnedOptions);
+  if (!ingress.ok) throw new TypeError(requestIngressFailureMessage(ingress.issue));
   if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
-  if (!validNodeRequestAuthority(pinnedNodeRequest)) {
-    throw new TypeError('Kovo Node adapter request authority must be one valid host[:port].');
-  }
-  const method = pinnedNodeRequest.method;
-  const headers = nodeHeadersToWebHeaders(pinnedNodeRequest.headers);
+  const method = ingress.method;
+  const requestTarget = nodeRequestUrl(pinnedNodeRequest, pinnedOptions, ingress);
+  const headers = nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority);
   const controller = new NativeAbortController();
   const signal = apply(nativeAbortControllerSignalGetter, controller, []);
   const abort = () => {
@@ -1173,7 +1181,7 @@ function nodeRequestToWebRequestFromSnapshot(
         }),
   };
 
-  const request = constructNativeRequest(nodeRequestUrl(pinnedNodeRequest, pinnedOptions), init);
+  const request = constructNativeRequest(requestTarget.href, init);
   if (apply(nativeRequestMethodGetter, request, []) !== method) {
     throw new TypeError('Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.');
   }
@@ -1402,10 +1410,28 @@ export function rejectNodeRequestTargetLimit(nodeRequest, nodeResponse) {
   return true;
 }
 
+export function rejectInvalidNodeRequestIngress(nodeRequest, nodeResponse, options = {}) {
+  pinNodeResponseTransport(nodeResponse);
+  const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
+  const decision = classifyPinnedNodeRequestIngress(
+    pinnedNodeRequest,
+    snapshotNodeHandlerOptions(options),
+  );
+  if (decision.ok) return false;
+  armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+  nodeResponse.writeHead(400, {
+    'cache-control': 'no-store',
+    'content-type': 'text/plain; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+  });
+  nodeResponse.end(pinnedNodeRequest.method === 'HEAD' ? undefined : 'Bad Request');
+  return true;
+}
+
 export function rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse) {
   pinNodeResponseTransport(nodeResponse);
   const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
-  if (nodeRequestMethodIsFetchStable(pinnedNodeRequest.method)) return false;
+  if (requestIngressClassifier.classifyMethod(pinnedNodeRequest.method)) return false;
   armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
   nodeResponse.writeHead(400, {
     'cache-control': 'no-store',
@@ -1419,7 +1445,7 @@ export function rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse) {
 export function rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse) {
   pinNodeResponseTransport(nodeResponse);
   const pinnedNodeRequest = snapshotNodeRequest(nodeRequest);
-  if (validNodeRequestAuthority(pinnedNodeRequest)) return false;
+  if (requestIngressClassifier.classifyAuthority(pinnedNodeRequestAuthorityInput(pinnedNodeRequest)).ok) return false;
   armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
   nodeResponse.writeHead(400, {
     'cache-control': 'no-store',
@@ -1701,12 +1727,50 @@ export function assertSafeTransportResponseHeaderEntries(entries) {
   );
 }
 
-function nodeRequestUrl(nodeRequest, options) {
+function classifyPinnedNodeRequestIngress(nodeRequest, options) {
+  return requestIngressClassifier.classifyNode({
+    ...pinnedNodeRequestAuthorityInput(nodeRequest),
+    encrypted: nodeRequest.encrypted,
+    forwardedProto: nodeRequest.headers['x-forwarded-proto'],
+    method: nodeRequest.method,
+    pseudoScheme: nodeRequest.headers[':scheme'],
+    trustedProxy: options.origin === undefined && options.trustedProxy === true,
+  });
+}
+
+function pinnedNodeRequestAuthorityInput(nodeRequest) {
+  return {
+    host: nodeRequest.headers.host,
+    httpVersion: nodeRequest.httpVersion,
+    pseudoAuthority: nodeRequest.headers[':authority'],
+    ...(nodeRequest.rawHostHeaderCount === undefined
+      ? {}
+      : { rawHostHeaderCount: nodeRequest.rawHostHeaderCount }),
+  };
+}
+
+function requestIngressFailureMessage(issue) {
+  if (issue === 'method') {
+    return 'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.';
+  }
+  if (issue === 'authority') {
+    return 'Kovo Node adapter request authority must be one valid host[:port].';
+  }
+  if (issue === 'forwarded-scheme') {
+    return 'Trusted proxy scheme headers must end in http or https.';
+  }
+  if (issue === 'pseudo-scheme') {
+    return 'Trusted HTTP/2 :scheme must identify one http or https scheme.';
+  }
+  return 'Kovo platform request scheme must be http or https.';
+}
+
+function nodeRequestUrl(nodeRequest, options, ingress) {
   const rawUrl = nodeRequest.rawTarget;
   const origin =
     typeof options.origin === 'function'
       ? options.origin(nodeRequest.carrier)
-      : (options.origin ?? defaultOrigin(nodeRequest, options));
+      : (options.origin ?? defaultOrigin(ingress));
 
   const originUrl = new NativeURL(origin);
   const pinnedOrigin = urlOrigin(originUrl);
@@ -1719,7 +1783,7 @@ function nodeRequestUrl(nodeRequest, options) {
   const assembled = new NativeURL(
     pinnedOrigin + (pathname[0] === '/' ? '' : '/') + pathname + urlSearch(pathTarget) + urlHash(pathTarget),
   );
-  return urlHref(assembled);
+  return { authority: urlHost(assembled), href: urlHref(assembled) };
 }
 
 function canonicalRelativeRequestTarget(rawTarget) {
@@ -1795,96 +1859,23 @@ function urlOrigin(url) { return apply(nativeUrlOriginGetter, url, []); }
 function urlPathname(url) { return apply(nativeUrlPathnameGetter, url, []); }
 function urlSearch(url) { return apply(nativeUrlSearchGetter, url, []); }
 
-function validNodeRequestAuthority(nodeRequest) {
-  const pseudoAuthority = nodeRequest.headers[':authority'];
-  const authority = pseudoAuthority === undefined ? nodeRequest.headers.host : pseudoAuthority;
-  // HTTP/2 :authority owns the target. For HTTP/1, preserve the raw Host occurrence count because
-  // Node's normalized header bag silently keeps only the first duplicate field. Native HTTP/1.1
-  // must also carry Host even when an embedding server disables Node's requireHostHeader gate;
-  // HTTP/1.0 remains host-optional, and custom carriers without rawHeaders keep the fallback.
-  if (pseudoAuthority === undefined && nodeRequest.rawHostHeaderCount !== undefined) {
-    if (authority === undefined) {
-      if (nodeRequest.rawHostHeaderCount !== 0 || nodeRequest.httpVersion !== '1.0') return false;
-    } else if (nodeRequest.rawHostHeaderCount !== 1) return false;
-  }
-  if (authority === undefined) return true;
-  if (typeof authority !== 'string' || authority.length === 0) return false;
-  for (let index = 0; index < authority.length; index += 1) {
-    const character = authority[index];
-    const code = apply(nativeStringCharCodeAt, authority, [index]);
-    if (code <= 0x20 || code === 0x7f || character === '@' || character === '/' ||
-      character === '\\\\' || character === '?' || character === '#' || character === ',') {
-      return false;
-    }
-  }
+function parseRequestIngressAuthority(authority, scheme) {
   try {
-    // SPEC §9.5: preserve one canonical authority byte identity for either adapter scheme.
-    // Parsing both schemes rejects normalization and scheme-dependent default ports.
-    const parsedHttp = new NativeURL('http://' + authority);
-    const parsedHttps = new NativeURL('https://' + authority);
-    return urlOrigin(parsedHttp) !== 'null' && urlOrigin(parsedHttps) !== 'null' &&
-      urlHost(parsedHttp) === authority && urlHost(parsedHttps) === authority &&
-      urlPathname(parsedHttp) === '/' && urlSearch(parsedHttp) === '' &&
-      urlHash(parsedHttp) === '';
+    const parsed = new NativeURL(scheme + '://' + authority);
+    return {
+      hash: urlHash(parsed),
+      host: urlHost(parsed),
+      origin: urlOrigin(parsed),
+      pathname: urlPathname(parsed),
+      search: urlSearch(parsed),
+    };
   } catch {
-    return false;
+    return undefined;
   }
 }
 
-function nodeRequestMethodIsFetchStable(method) {
-  if (!isHttpMethodToken(method)) return false;
-  const lower = apply(nativeStringToLowerCase, method, []);
-  switch (lower) {
-    case 'delete': return method === 'DELETE';
-    case 'get': return method === 'GET';
-    case 'head': return method === 'HEAD';
-    case 'options': return method === 'OPTIONS';
-    case 'post': return method === 'POST';
-    case 'put': return method === 'PUT';
-    case 'connect':
-    case 'trace':
-    case 'track': return false;
-    default: return true;
-  }
-}
-
-function isHttpMethodToken(method) {
-  if (method.length === 0) return false;
-  for (let index = 0; index < method.length; index += 1) {
-    const code = apply(nativeStringCharCodeAt, method, [index]);
-    if ((code >= 0x30 && code <= 0x39) ||
-      (code >= 0x41 && code <= 0x5a) ||
-      (code >= 0x61 && code <= 0x7a) ||
-      code === 0x21 || (code >= 0x23 && code <= 0x27) || code === 0x2a ||
-      code === 0x2b || code === 0x2d || code === 0x2e || code === 0x5e ||
-      code === 0x5f || code === 0x60 || code === 0x7c || code === 0x7e) continue;
-    return false;
-  }
-  return true;
-}
-
-function defaultOrigin(nodeRequest, options) {
-  // SPEC §9.5 / RFC 9113 §8.3.1: HTTP/2 \`:authority\` is request-target authority. A peer can
-  // still send a divergent regular \`Host\`, but recipients must not use it to determine the
-  // target URI when \`:authority\` is present.
-  const host = firstHeaderValue(nodeRequest.headers[':authority']) ?? firstHeaderValue(nodeRequest.headers.host) ?? '127.0.0.1';
-  // SPEC §9.5: Node joins duplicate forwarding headers with commas. The closest trusted proxy
-  // owns the rightmost value; reject an empty/unknown terminal scheme rather than falling through.
-  const forwardedProto = options.trustedProxy
-    ? rightmostHeaderListValue(nodeRequest.headers['x-forwarded-proto'])
-    : undefined;
-  // SPEC §9.5 / RFC 9113 §8.3.1: :scheme is peer-supplied request-target control data, not proof
-  // that this hop is encrypted. Under explicit trust, require one canonical value instead of
-  // silently downgrading an invalid field; canonical XFP retains precedence.
-  const pseudoScheme = options.trustedProxy && forwardedProto === undefined
-    ? trustedPseudoSchemeValue(nodeRequest.headers[':scheme'])
-    : undefined;
-  const proto =
-    forwardedProto ??
-    pseudoScheme ??
-    (nodeRequest.encrypted ? 'https' : 'http');
-
-  return (proto === 'https' ? 'https' : 'http') + '://' + host;
+function defaultOrigin(ingress) {
+  return ingress.scheme + '://' + (ingress.authority ?? '127.0.0.1');
 }
 
 function snapshotNodeHeaders(nodeRequest) {
@@ -1947,9 +1938,8 @@ function snapshotNodeHeaders(nodeRequest) {
   return snapshot;
 }
 
-function nodeHeadersToWebHeaders(nodeHeaders) {
+function nodeHeadersToWebHeaders(nodeHeaders, authority) {
   const headers = new NativeHeaders();
-  const authority = firstHeaderValue(nodeHeaders[':authority']);
   const names = apply(nativeObjectKeys, Object, [nodeHeaders]);
   for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
     const name = apply(nativeObjectGetOwnPropertyDescriptor, Object, [names, nameIndex])?.value;
@@ -1960,9 +1950,9 @@ function nodeHeadersToWebHeaders(nodeHeaders) {
     // name starting with \`:\`, so copying them unfiltered 500'd every HTTP/2 request. Skip them
     // — they are addressed via \`nodeRequest.method\`/\`nodeRequest.url\`/the \`:authority\` URL fallback.
     if (name[0] === ':') continue;
-    // The Web Request bridge otherwise exposes two authorities to application code. Match
-    // RFC 9113's safe HTTP/2-to-HTTP/1 translation rule by replacing Host with \`:authority\`.
-    if (authority !== undefined && name === 'host') continue;
+    // The classifier owns the sole accepted authority. Reconstruct Host from its decision instead
+    // of rereading either raw Host or :authority at this later Web Request boundary.
+    if (name === 'host') continue;
     if (apply(nativeArrayIsArray, NativeArray, [value])) {
       for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
         const entry = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, valueIndex])?.value;
@@ -2008,42 +1998,6 @@ function firstHeaderValue(value) {
   if (!apply(nativeArrayIsArray, NativeArray, [value])) return value;
   const first = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, 0])?.value;
   return typeof first === 'string' ? first : undefined;
-}
-
-function rightmostHeaderListValue(value) {
-  if (value === undefined) return undefined;
-  let list = value;
-  if (apply(nativeArrayIsArray, NativeArray, [value])) {
-    const descriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [value, value.length - 1]);
-    if (
-      value.length === 0 ||
-      descriptor === undefined ||
-      !('value' in descriptor) ||
-      typeof descriptor.value !== 'string'
-    ) {
-      throw new TypeError('Trusted proxy scheme headers must end in an own string.');
-    }
-    list = descriptor.value;
-  }
-  const comma = apply(nativeStringLastIndexOf, list, [',']);
-  const candidate = apply(nativeStringSlice, list, [comma + 1]);
-  const scheme = apply(nativeStringTrim, candidate, []);
-  if (scheme !== 'http' && scheme !== 'https') {
-    throw new TypeError('Trusted proxy scheme headers must end in http or https.');
-  }
-  return scheme;
-}
-
-function trustedPseudoSchemeValue(value) {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string') {
-    throw new TypeError('Trusted HTTP/2 :scheme must identify one http or https scheme.');
-  }
-  const scheme = apply(nativeStringToLowerCase, value, []);
-  if (scheme !== 'http' && scheme !== 'https') {
-    throw new TypeError('Trusted HTTP/2 :scheme must identify one http or https scheme.');
-  }
-  return scheme;
 }
 
 function hasPrototype(value, expected) {
@@ -2129,6 +2083,7 @@ function cloudflareWorkerSource(): string {
   return `const lockRequestSafeRuntimeRealm = (${generatedRequestSafeRuntimeLockSource});
 lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
 
+const NativeArray = globalThis.Array;
 const NativeHeaders = globalThis.Headers;
 const NativeObject = globalThis.Object;
 const NativeRegExp = globalThis.RegExp;
@@ -2137,6 +2092,7 @@ const NativeResponse = globalThis.Response;
 const NativeURL = globalThis.URL;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeReflectApply = Reflect.apply;
+const nativeArrayIsArray = NativeArray.isArray;
 const nativeHeadersAppend = NativeHeaders.prototype.append;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
 const nativeHeadersGet = NativeHeaders.prototype.get;
@@ -2154,12 +2110,29 @@ const nativeResponseBodyGetter = nativeObjectGetOwnPropertyDescriptor(NativeResp
 const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'headers').get;
 const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
 const nativeResponseStatusTextGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'statusText').get;
+const nativeStringCharCodeAt = String.prototype.charCodeAt;
 const nativeStringIndexOf = String.prototype.indexOf;
 const nativeStringSlice = String.prototype.slice;
 const nativeStringStartsWith = String.prototype.startsWith;
 const nativeStringTrim = String.prototype.trim;
 const nativeUrlHostnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hostname').get;
+const nativeUrlHashGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hash').get;
+const nativeUrlHostGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'host').get;
+const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'origin').get;
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
+const nativeUrlProtocolGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'protocol').get;
+const nativeUrlSearchGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'search').get;
+const requestIngressClassifier = (${generatedRequestIngressClassifierSource})({
+  charCodeAt(value, index) {
+    return apply(nativeStringCharCodeAt, value, [index]);
+  },
+  isArray(value) {
+    return apply(nativeArrayIsArray, NativeArray, [value]);
+  },
+  parseAuthority(authority, scheme) {
+    return parseRequestIngressAuthority(authority, scheme);
+  },
+});
 const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
 const ipv4AddressPattern = new NativeRegExp('^(?:0|[1-9][0-9]{0,2})(?:[.](?:0|[1-9][0-9]{0,2})){3}$', 'u');
 const ipv6AddressPattern = new NativeRegExp('^[0-9A-Fa-f:.]+$', 'u');
@@ -2188,6 +2161,33 @@ export default {
       });
     }
     const url = new NativeURL(requestUrl);
+    // Cloudflare owns the raw HTTP-to-Fetch bridge. Kovo trusts that platform source selection,
+    // then applies the same finite grammar as Node/Vercel before static serving or app import.
+    const protocol = apply(nativeUrlProtocolGetter, url, []);
+    const ingress = requestIngressClassifier.classifyPlatformFetch({
+      authority: apply(nativeUrlHostGetter, url, []),
+      method,
+      scheme: protocol === 'http:' ? 'http' : protocol === 'https:' ? 'https' : protocol,
+    });
+    if (!ingress.ok) {
+      return new NativeResponse(method === 'HEAD' ? null : 'Bad Request', {
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+          'x-content-type-options': 'nosniff',
+        },
+        status: 400,
+        statusText: 'Bad Request',
+      });
+    }
+    const dispatchRequest = cloudflareRequestForDispatch(request, ingress);
+    if (dispatchRequest === undefined) {
+      return new NativeResponse(null, {
+        headers: { 'cache-control': 'no-store' },
+        status: 403,
+        statusText: 'Forbidden',
+      });
+    }
     const pathname = apply(nativeUrlPathnameGetter, url, []);
     const assets = ownDataValue(env, 'ASSETS');
     // Cloudflare consumes _headers as host configuration, and Kovo's static manifest is build
@@ -2220,14 +2220,6 @@ export default {
       }
     }
 
-    const dispatchRequest = cloudflareRequestForDispatch(request);
-    if (dispatchRequest === undefined) {
-      return new NativeResponse(null, {
-        headers: { 'cache-control': 'no-store' },
-        status: 403,
-        statusText: 'Forbidden',
-      });
-    }
     const handler = await loadHandler();
     return handler(dispatchRequest);
   },
@@ -2235,6 +2227,21 @@ export default {
 
 function apply(fn, receiver, args) {
   return nativeReflectApply(fn, receiver, args);
+}
+
+function parseRequestIngressAuthority(authority, scheme) {
+  try {
+    const parsed = new NativeURL(scheme + '://' + authority);
+    return {
+      hash: apply(nativeUrlHashGetter, parsed, []),
+      host: apply(nativeUrlHostGetter, parsed, []),
+      origin: apply(nativeUrlOriginGetter, parsed, []),
+      pathname: apply(nativeUrlPathnameGetter, parsed, []),
+      search: apply(nativeUrlSearchGetter, parsed, []),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function requestUrlLimitFailure(value) {
@@ -2281,21 +2288,21 @@ function ownDataValue(value, property) {
   return before.value;
 }
 
-function cloudflareRequestForDispatch(request) {
-  const headers = apply(nativeRequestHeadersGetter, request, []);
+function cloudflareRequestForDispatch(request, ingress) {
+  const sourceHeaders = apply(nativeRequestHeadersGetter, request, []);
   // Cloudflare documents that a direct edge request has no x-real-ip, same-zone Worker
   // subrequests derive CF-Connecting-IP from caller-mutable x-real-ip, and cross-zone Worker
   // subrequests use the fixed IPv6 sentinel below. CF-Worker is added to fetch() subrequests, but
   // Cloudflare does not promise to strip a direct caller's header of that name. Every such signal
   // is therefore rejection-only: it must never mint an alternate admitted rate-limit identity.
   if (
-    apply(nativeHeadersGet, headers, ['cf-worker']) !== null ||
-    apply(nativeHeadersGet, headers, ['x-real-ip']) !== null
+    apply(nativeHeadersGet, sourceHeaders, ['cf-worker']) !== null ||
+    apply(nativeHeadersGet, sourceHeaders, ['x-real-ip']) !== null
   ) {
     return undefined;
   }
   const clientIp = canonicalPlatformIpAddress(
-    apply(nativeHeadersGet, headers, ['cf-connecting-ip']),
+    apply(nativeHeadersGet, sourceHeaders, ['cf-connecting-ip']),
   );
   if (clientIp === undefined || clientIp === '2a06:98c0:3600::103') return undefined;
 
@@ -2303,7 +2310,9 @@ function cloudflareRequestForDispatch(request) {
   // entrypoint, and Cloudflare documents no authenticated invocation-kind bit on that Request.
   // Kovo consequently does not support HTTP Service Binding ingress here. A separate gateway must
   // establish caller authority with platform-authenticated ctx.props before entering an app.
-  const dispatchRequest = new NativeRequest(request);
+  const headers = cloneHeaders(sourceHeaders);
+  apply(nativeHeadersSet, headers, ['host', ingress.authority]);
+  const dispatchRequest = new NativeRequest(request, { headers });
   apply(nativeObjectDefineProperty, NativeObject, [dispatchRequest, '__kovoPeerAddress', {
     configurable: false,
     enumerable: false,
@@ -3424,6 +3433,9 @@ const generatedContentDispositionFactorySource = buildSecurityFunctionSource(
 const generatedTransportResponseHeaderClassifierSource = buildSecurityFunctionSource(
   createTransportResponseHeaderClassifier,
 );
+const generatedRequestIngressClassifierSource = buildSecurityFunctionSource(
+  createRequestIngressClassifier,
+);
 const generatedRequestSafeRuntimeLockSource = buildSecurityFunctionSource(
   lockRequestSafeRuntimeRealmWithInventory,
 );
@@ -3464,8 +3476,7 @@ const {
   armIncompleteNodeRequestClose,
   assertSafeTransportResponseHeaderEntries,
   nodeRequestToWebRequest,
-  rejectInvalidNodeRequestAuthority,
-  rejectInvalidNodeRequestMethod,
+  rejectInvalidNodeRequestIngress,
   rejectNodeRequestTargetLimit,
   rejectUnsafeNodeMutationTarget,
   writeWebResponseToNode,
@@ -3676,8 +3687,7 @@ export function createKovoNodeServer(options = {}) {
     let diagnosticRequestUrl;
     try {
       if (rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)) return;
-      if (rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse)) return;
-      if (rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)) return;
+      if (rejectInvalidNodeRequestIngress(nodeRequest, nodeResponse, options)) return;
       if (rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)) return;
       const method = ownStringOr(nodeRequest, 'method', 'GET');
       const rawTarget = ownStringOr(nodeRequest, 'url', '/');

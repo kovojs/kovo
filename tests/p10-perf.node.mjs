@@ -25,9 +25,8 @@ export const p10PerfAcceptance = {
   heapNoiseBudget: 64 * 1024,
   navigationCount: 100,
   paintEntry: 'first-contentful-paint',
-  paintTimingJitterBudgetMs: 16,
   prerenderTimingField: 'activationStart',
-  ttiMetric: 'ttiMinusFcpMs',
+  ttiMetric: 'listenerEnrollmentBeforeContentfulPaint',
 };
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
@@ -143,20 +142,59 @@ function renderDocument({ head = '', route, title }) {
     <script>
       globalThis.__readyEpoch = Date.now();
       globalThis.__handlerImports = 0;
-      globalThis.__kovoPerf = { firstDelegatedListenerMark: 0, lastDelegatedListenerMark: 0 };
-      const addEventListenerOriginal = globalThis.addEventListener.bind(globalThis);
-      globalThis.addEventListener = (type, listener, options) => {
-        if (['click', 'submit', 'input', 'change'].includes(type)) {
-          const mark = performance.now();
-          if (!globalThis.__kovoPerf.firstDelegatedListenerMark) {
-            globalThis.__kovoPerf.firstDelegatedListenerMark = mark;
-          }
-          globalThis.__kovoPerf.lastDelegatedListenerMark = mark;
-        }
-        return addEventListenerOriginal(type, listener, options);
+      globalThis.__kovoPerf = {
+        contentfulPaintObservedAtEnrollmentCheckpoint: false,
+        enrollmentCheckpoint: null,
+        firstDelegatedListenerMark: 0,
+        lastDelegatedListenerMark: 0,
+        listenerEnrollmentCompletedBeforeContent: false,
       };
+      const kovoPerfEventTargetPrototype = EventTarget.prototype;
+      const kovoPerfAddEventListenerDescriptor = Object.getOwnPropertyDescriptor(
+        kovoPerfEventTargetPrototype,
+        'addEventListener',
+      );
+      const kovoPerfAddEventListenerOriginal =
+        kovoPerfAddEventListenerDescriptor?.value;
+      Object.defineProperty(kovoPerfEventTargetPrototype, 'addEventListener', {
+        ...kovoPerfAddEventListenerDescriptor,
+        value(type, listener, options) {
+          if (type === 'click' || type === 'submit') {
+            const mark = performance.now();
+            if (!globalThis.__kovoPerf.firstDelegatedListenerMark) {
+              globalThis.__kovoPerf.firstDelegatedListenerMark = mark;
+            }
+            globalThis.__kovoPerf.lastDelegatedListenerMark = mark;
+          }
+          return Reflect.apply(kovoPerfAddEventListenerOriginal, this, [type, listener, options]);
+        },
+      });
     </script>
     <script>${kovoLoaderSource}</script>
+    <script>
+      // The loader above is parser-blocking and this checkpoint is still executing in <head> before
+      // the app's first content node. This structural witness proves listener enrollment precedes
+      // parsing that content and therefore its contentful paint;
+      // comparing performance.now() with Chrome's coarsely timestamped paint entry is not a valid
+      // ordering oracle (SPEC introduction: first paint is interactive).
+      Object.defineProperty(
+        kovoPerfEventTargetPrototype,
+        'addEventListener',
+        kovoPerfAddEventListenerDescriptor,
+      );
+      globalThis.__kovoPerf.enrollmentCheckpoint = {
+        actionPresent: document.querySelector('#action') !== null,
+        currentScriptInHead: document.currentScript?.parentElement === document.head,
+        readyState: document.readyState,
+      };
+      globalThis.__kovoPerf.listenerEnrollmentCompletedBeforeContent =
+        globalThis.__kovoPerf.enrollmentCheckpoint.currentScriptInHead &&
+        globalThis.__kovoPerf.enrollmentCheckpoint.readyState === 'loading' &&
+        !globalThis.__kovoPerf.enrollmentCheckpoint.actionPresent &&
+        globalThis.__kovoPerf.firstDelegatedListenerMark > 0;
+      globalThis.__kovoPerf.contentfulPaintObservedAtEnrollmentCheckpoint =
+        performance.getEntriesByName('first-contentful-paint').length > 0;
+    </script>
   </head>
   <body>
     <main data-route="${route}">

@@ -29,11 +29,13 @@ const requiredC9SinkNames = [
   'Set-Cookie',
   'blob/file write',
   'durable-task payload',
+  'request method/authority/scheme',
   'webhook payload',
   'HTML/render output',
   'log/error output',
   'outbound egress request',
   'authorization principal/data access',
+  'Better Auth credential/non-egress',
   'dynamic module/process execution',
 ] as const;
 
@@ -210,11 +212,13 @@ describe('boundary crossing sink inventory', () => {
         ['Set-Cookie', 'own'],
         ['blob/file write', 'own'],
         ['durable-task payload', 'own'],
+        ['request method/authority/scheme', 'reconstruct'],
         ['webhook payload', 'own'],
         ['HTML/render output', 'reconstruct'],
         ['log/error output', 'box'],
         ['outbound egress request', 'own'],
         ['authorization principal/data access', 'own'],
+        ['Better Auth credential/non-egress', 'own'],
         ['dynamic module/process execution', 'own'],
       ]),
     );
@@ -239,6 +243,14 @@ describe('boundary crossing sink inventory', () => {
     expect(inventory.find((entry) => entry.sink === 'webhook payload')?.censusFamilies).toEqual([
       'ingress.endpoint.webhook',
     ]);
+    const requestIngressDoor = inventory.find(
+      (entry) => entry.sink === 'request method/authority/scheme',
+    );
+    expect(requestIngressDoor?.censusFamilies).toEqual(['ingress.endpoint.webhook']);
+    expect(requestIngressDoor?.soleDoor).toContain('createRequestIngressClassifier');
+    expect(requestIngressDoor?.hostileValueEvidence).toContain(
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+    );
     expect(inventory.find((entry) => entry.sink === 'HTML/render output')?.censusFamilies).toEqual([
       'html.dom.output',
       'document.shell.output',
@@ -247,6 +259,15 @@ describe('boundary crossing sink inventory', () => {
     expect(
       inventory.find((entry) => entry.sink === 'outbound egress request')?.censusFamilies,
     ).toEqual(['network.egress']);
+    const credentialDoor = inventory.find(
+      (entry) => entry.sink === 'Better Auth credential/non-egress',
+    );
+    expect(credentialDoor?.censusFamilies).toEqual(['auth.credential.non-egress']);
+    expect(credentialDoor?.soleDoor).toContain('runBetterAuthCredentialConsumer{Async}');
+    expect(credentialDoor?.soleDoor).toContain('consumeBetterAuthCredentialResult');
+    expect(credentialDoor?.hostileValueEvidence).toContain(
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+    );
   });
 
   it('assigns every finite compiler-owned operation to exactly one C9 sink owner', () => {

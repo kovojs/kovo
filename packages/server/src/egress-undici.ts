@@ -13,6 +13,7 @@ import {
   EgressBlockedError,
   classifyIp,
   evaluateEgress,
+  evaluateFrameworkDestinationOrigin,
   isNodeAcceptedUnnormalizedIpLiteral,
   normalizeFastPathIpLiteral,
   type EgressPolicy,
@@ -68,10 +69,10 @@ interface PinnedResolution {
  */
 export class EgressGatingDispatcher extends Agent {
   #policy: EgressPolicy;
-  // Short-lived resolved-IP pin per origin so the dispatch-time check and the connect-time
-  // dial classify the SAME IP within a request window (DNS-rebind resistance at this layer too).
-  // The write epoch bounds retained hostnames even when an attacker never revisits them after
-  // expiry; clearing wholesale is safer and cheaper than trusting mutable iterator/LRU controls.
+  // Short-lived ambient verdict cache for pooled requests that do not dial again. Framework-owned
+  // capability calls bypass it and resolve every hop; every new dial is independently classified
+  // and pinned by the net layer. The write epoch bounds retained hostnames even when an attacker
+  // never revisits them after expiry.
   #resolutionCache = egressCreateMap<string, PinnedResolution>();
   #resolutionCacheWrites = 0;
 
@@ -86,8 +87,20 @@ export class EgressGatingDispatcher extends Agent {
   ): boolean {
     const origin = options.origin;
     const url = typeof origin === 'string' ? safeUrl(origin) : (origin as URL | undefined);
+    const frameworkPolicy = activeFrameworkEgressPolicy();
     if (!url) {
-      // No origin to classify — let undici reject/handle it normally.
+      if (frameworkPolicy !== undefined) {
+        rejectHandler(
+          handler,
+          new EgressBlockedError({
+            classification: 'special-use',
+            destination: '<invalid-undici-origin>',
+            reason: 'destination-allowlist',
+          }),
+        );
+        return false;
+      }
+      // No framework capability is active; let Undici reject malformed ambient input normally.
       return super.dispatch(options, handler);
     }
     const host = stripIpv6Brackets(egressDecodeURIComponent(egressUrlHostname(url)));
@@ -95,9 +108,25 @@ export class EgressGatingDispatcher extends Agent {
     const urlProtocol = egressUrlProtocol(url);
     const port = egressNumber(urlPort) || (urlProtocol === 'https:' ? 443 : 80);
     const protocol = urlProtocol === 'http:' || urlProtocol === 'https:' ? urlProtocol : undefined;
-    const frameworkPolicy = activeFrameworkEgressPolicy();
     const policy = frameworkPolicy ?? this.#policy;
     const requireDestinationAllowlist = frameworkPolicy !== undefined;
+
+    // Positive capability proof is decided before DNS. This is load-bearing on redirects:
+    // options.origin is the current hop, including a hop served from an existing connection pool.
+    // An undeclared hostname must not reach the resolver merely because the ambient private-IP
+    // floor would eventually reject (SPEC §6.6 / C9 network.egress.dns.dial.redirect).
+    if (frameworkPolicy !== undefined) {
+      const originBlocked = evaluateFrameworkDestinationOrigin({
+        host,
+        port,
+        protocol,
+        policy: frameworkPolicy,
+      });
+      if (originBlocked) {
+        rejectHandler(handler, originBlocked);
+        return false;
+      }
+    }
 
     // Literal IP at dispatch: classify + decide synchronously (catches metadata literals and
     // pooled reuse to a literal private IP without any DNS).
@@ -129,11 +158,13 @@ export class EgressGatingDispatcher extends Agent {
       return false;
     }
 
-    // Hostname: resolve (with a short pin) and classify the resolved IP before dispatching.
+    // Hostname: resolve (with a short ambient verdict cache) and classify every IP before dispatch.
     // `dispatch` is synchronous-returning; we resolve asynchronously and then either reject the
     // handler or forward to the real dispatch. undici accepts an async gate as long as we drive
     // the handler ourselves on the deny path.
-    const cached = egressMapGet(this.#resolutionCache, host);
+    const cached = requireDestinationAllowlist
+      ? undefined
+      : egressMapGet(this.#resolutionCache, host);
     if (cached && cached.expires > egressDateNow()) {
       const blocked = evaluateEgress({
         host,
@@ -204,16 +235,20 @@ export class EgressGatingDispatcher extends Agent {
         return;
       }
     }
-    // All addresses passed; pin the first for the short rebind-resistance cache window.
-    if (this.#resolutionCacheWrites >= ORIGIN_RESOLUTION_CACHE_MAX_WRITES) {
-      egressMapClear(this.#resolutionCache);
-      this.#resolutionCacheWrites = 0;
+    // The ambient floor may cache this defense-in-depth check briefly. Framework capability
+    // requests deliberately resolve every request/redirect hop; the net layer independently
+    // pins the exact all-address lookup result used by any new dial.
+    if (!requireDestinationAllowlist) {
+      if (this.#resolutionCacheWrites >= ORIGIN_RESOLUTION_CACHE_MAX_WRITES) {
+        egressMapClear(this.#resolutionCache);
+        this.#resolutionCacheWrites = 0;
+      }
+      egressMapSet(this.#resolutionCache, host, {
+        ip: resolved[0]!.address,
+        expires: egressDateNow() + ORIGIN_RESOLUTION_CACHE_MS,
+      });
+      this.#resolutionCacheWrites += 1;
     }
-    egressMapSet(this.#resolutionCache, host, {
-      ip: resolved[0]!.address,
-      expires: egressDateNow() + ORIGIN_RESOLUTION_CACHE_MS,
-    });
-    this.#resolutionCacheWrites += 1;
     super.dispatch(options, handler);
   }
 }
@@ -305,6 +340,12 @@ export function installUndiciFloor(policy: EgressPolicy): () => void {
 /** Whether the undici egress floor is currently installed (used by the bootstrap self-probe). */
 export function isUndiciFloorInstalled(): boolean {
   return undiciFloorTamperStatus().installed;
+}
+
+/** @internal Exact dispatcher authority that framework-owned Request snapshots must pin. */
+export function activeUndiciFloorDispatcher(): Dispatcher | undefined {
+  if (installedDispatcher === undefined) return undefined;
+  return getGlobalDispatcher() === installedDispatcher ? installedDispatcher : undefined;
 }
 
 /** Inspect whether the process-global undici dispatcher is still Kovo's wrapper. */

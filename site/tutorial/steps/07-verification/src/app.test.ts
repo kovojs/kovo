@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@kovojs/server';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import {
   componentLiveTargetRenderer,
   renderMutationEndpointResponse,
@@ -31,7 +31,11 @@ import { createShopDb, type ShopDb } from './db.js';
 import { cart, order, product } from './domains.js';
 import { cartQuery, orderHistoryQuery, productsQuery } from './queries.js';
 
-const tutorialLiveTargetAuthority = createLiveTargetTestAuthority('tutorial-step-07-test-build');
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority(
+  'tutorial-step-07-test-build',
+  addToCart.csrf === false ? undefined : addToCart.csrf,
+);
+const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 
 // Tutorial step 07: the whole behavior surface is checkable without a
 // browser — kovo check over the app graph, kovo explain as the queryable
@@ -57,6 +61,7 @@ function submitAddToCart(
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
     buildToken: 'tutorial-step-07-test-build',
+    csrf: tutorialWireCsrf,
     headers: withAttestedLiveTargets(headers, request),
     liveTargetRenderers: successLiveTargetRenderers(),
     liveTargetAttestationAuthority: tutorialLiveTargetAuthority.authority,
@@ -110,7 +115,7 @@ function attestLiveTargetEntries(value: string, request: ShopRequest): string {
       const props = JSON.parse(propsJson) as Record<string, unknown>;
       const token = createLiveTargetAttestation(
         { component, props, target },
-        { buildToken: tutorialLiveTargetAuthority.audience, request },
+        { buildToken: tutorialLiveTargetAuthority.audience, csrf: tutorialWireCsrf, request },
       );
       return `${target}#${component}@${token}:${propsJson}`;
     })

@@ -51,14 +51,16 @@ The served HTML is still a real form:
 ```html
 <form method="post" action="/_m/cart/add-to-cart" enhance>
   <input type="hidden" name="kovo-csrf" value="..." />
+  <input type="hidden" name="Kovo-Idem" value="..." />
   <input type="hidden" name="productId" value="p1" />
   <input name="quantity" type="number" min="1" value="1" />
   <button type="submit">Add to cart</button>
 </form>
 ```
 
-No JavaScript path gets a different server contract. Enhancement only changes how the response is
-applied.
+Kovo emits the CSRF and `Kovo-Idem` fields as one bundle. Do not build a mutation form with a
+standalone token helper: that would omit the replay identity. No JavaScript path gets a different
+server contract. Enhancement only changes how the response is applied.
 
 ## Run it
 

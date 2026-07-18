@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertParanoidPostgresCasesExecuted,
+  pinAuthorizationMatrixReplayCommand,
   requireParanoidPostgresToolchain,
   runParanoidAuthorizationMatrix,
   seededAuthorizationMatrixOrder,
@@ -71,10 +72,24 @@ describe('paranoid authorization acceptance gate', () => {
       executors: Object.fromEntries(cases.map((testCase) => [testCase.id, async () => undefined])),
       failureDirectory: await mkdtemp(join(tmpdir(), 'kovo-authz-matrix-success-')),
       onExecuted: (caseId) => executed.push(caseId),
-      replayCommand: 'pnpm run test:authz-paranoid',
+      replayCommand: 'KOVO_AUTHZ_MATRIX_SEED=authz-seed-v1 pnpm run test:authz-paranoid',
       seed: 'authz-seed-v1',
     });
     expect(executed).toEqual(firstOrder);
+  });
+
+  it('pins persisted replay commands to the seed that actually ran', () => {
+    expect(
+      pinAuthorizationMatrixReplayCommand(
+        'KOVO_AUTHZ_MATRIX_SEED=manifest-default pnpm run test:authz-paranoid',
+        "override seed's exact value",
+      ),
+    ).toBe(
+      `KOVO_AUTHZ_MATRIX_SEED='override seed'\"'\"'s exact value' pnpm run test:authz-paranoid`,
+    );
+    expect(() =>
+      pinAuthorizationMatrixReplayCommand('pnpm run test:authz-paranoid', 'seed'),
+    ).toThrow('authorization matrix replay command must set KOVO_AUTHZ_MATRIX_SEED');
   });
 
   it('persists a one-cell minimized repro with the exact seed and replay command', async () => {
@@ -90,7 +105,7 @@ describe('paranoid authorization acceptance gate', () => {
           },
         },
         failureDirectory,
-        replayCommand: 'KOVO_AUTHZ_MATRIX_SEED=authz-seed-v1 pnpm run test:authz-paranoid',
+        replayCommand: 'KOVO_AUTHZ_MATRIX_SEED=manifest-default pnpm run test:authz-paranoid',
         seed: 'authz-seed-v1',
       }),
     ).rejects.toThrow(/minimized replay saved/u);
@@ -106,7 +121,7 @@ describe('paranoid authorization acceptance gate', () => {
     expect(artifact).toEqual({
       error: 'cross-owner row became visible',
       minimizedRepro: testCase,
-      replayCommand: 'KOVO_AUTHZ_MATRIX_SEED=authz-seed-v1 pnpm run test:authz-paranoid',
+      replayCommand: "KOVO_AUTHZ_MATRIX_SEED='authz-seed-v1' pnpm run test:authz-paranoid",
       schema: 'kovo.authorization-matrix-failure/v1',
       seed: 'authz-seed-v1',
     });
@@ -118,7 +133,7 @@ describe('paranoid authorization acceptance gate', () => {
         cases: [matrixCase('missing')],
         executors: {},
         failureDirectory: await mkdtemp(join(tmpdir(), 'kovo-authz-matrix-missing-')),
-        replayCommand: 'pnpm run test:authz-paranoid',
+        replayCommand: 'KOVO_AUTHZ_MATRIX_SEED=authz-seed-v1 pnpm run test:authz-paranoid',
         seed: 'authz-seed-v1',
       }),
     ).rejects.toThrow('authorization matrix has no executor for: missing');

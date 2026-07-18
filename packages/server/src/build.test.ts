@@ -72,6 +72,11 @@ interface NodeAdapterModule {
     response?: ServerResponse,
   ): Request;
   rejectInvalidNodeRequestAuthority(request: IncomingMessage, response: ServerResponse): boolean;
+  rejectInvalidNodeRequestIngress(
+    request: IncomingMessage,
+    response: ServerResponse,
+    options?: { origin?: string; trustedProxy?: boolean },
+  ): boolean;
   rejectInvalidNodeRequestMethod(request: IncomingMessage, response: ServerResponse): boolean;
   rejectNodeRequestTargetLimit(request: IncomingMessage, response: ServerResponse): boolean;
   vercelRequestToWebRequest(request: IncomingMessage, response?: ServerResponse): Request;
@@ -1816,6 +1821,7 @@ export default async function handler(request) {
       const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
       expect(nodeAdapter).toContain('export function rejectInvalidNodeRequestAuthority');
+      expect(nodeAdapter).toContain('export function rejectInvalidNodeRequestIngress');
       expect(nodeAdapter).toContain('export function rejectInvalidNodeRequestMethod');
       expect(nodeAdapter).toContain('export function rejectNodeRequestTargetLimit');
       expect(nodeAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
@@ -1830,6 +1836,13 @@ export default async function handler(request) {
       expect(nodeAdapter).toContain('apply(nativeSocketRemoteAddressGetter');
       expect(nodeAdapter).toContain('headers: snapshotNodeHeaders(nodeRequest)');
       expect(nodeAdapter).toContain("'__kovoPeerAddress'");
+      expect(nodeAdapter).toContain('const requestIngressClassifier = (');
+      expect(nodeAdapter).toContain(
+        'nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority)',
+      );
+      expect(nodeAdapter).not.toContain('function nodeRequestMethodIsFetchStable');
+      expect(nodeAdapter).not.toContain('function validNodeRequestAuthority');
+      expect(nodeAdapter).not.toContain('function rightmostHeaderListValue');
       expect(nodeServer).not.toContain('function nodeRequestToWebRequest');
       expect(nodeServer).not.toContain('function responseHeadersToNodeHeaders');
       expect(nodeServer).toContain('apply(nativeServerResponseDestroy, nodeResponse, [])');
@@ -1845,10 +1858,7 @@ export default async function handler(request) {
         nodeServer.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
       ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
       expect(
-        nodeServer.indexOf('rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)'),
-      ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
-      expect(
-        nodeServer.indexOf('rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse)'),
+        nodeServer.indexOf('rejectInvalidNodeRequestIngress(nodeRequest, nodeResponse, options)'),
       ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
       expect(
         nodeServer.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
@@ -2011,6 +2021,24 @@ export default async function handler(request) {
         expect(missingClientModule.headers.get('set-cookie')).toBeNull();
       } finally {
         await server.close();
+      }
+
+      const trustedProxyServer = await startGeneratedNodeServer(join(nodeOutDir, 'server.mjs'), {
+        trustedProxy: true,
+      });
+      try {
+        const invalidStaticScheme = await rawHttpExchange(
+          trustedProxyServer.baseUrl,
+          'GET /assets/cart.css HTTP/1.1\r\n' +
+            'Host: app.example\r\n' +
+            'X-Forwarded-Proto: https, ftp\r\n' +
+            'Connection: close\r\n\r\n',
+        );
+        expect(invalidStaticScheme).toContain('HTTP/1.1 400');
+        expect(invalidStaticScheme).toContain('Bad Request');
+        expect(invalidStaticScheme).not.toContain('body { color: navy; }');
+      } finally {
+        await trustedProxyServer.close();
       }
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -3395,6 +3423,13 @@ export default async function handler(request) {
       expect(vercelAdapter).toContain('apply(nativeSocketRemoteAddressGetter');
       expect(vercelAdapter).toContain('headers: snapshotNodeHeaders(nodeRequest)');
       expect(vercelAdapter).toContain("'__kovoPeerAddress'");
+      expect(vercelAdapter).toContain('const requestIngressClassifier = (');
+      expect(vercelAdapter).toContain(
+        'nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority)',
+      );
+      expect(vercelAdapter).not.toContain('function nodeRequestMethodIsFetchStable');
+      expect(vercelAdapter).not.toContain('function validNodeRequestAuthority');
+      expect(vercelAdapter).not.toContain('function rightmostHeaderListValue');
       expect(vercelFunction).not.toContain('function nodeRequestToWebRequest');
       expect(vercelFunction).not.toContain('function responseHeadersToNodeHeaders');
       expect(vercelFunction).toContain('nodeResponse.destroy()');
@@ -4155,6 +4190,13 @@ export default async function handler(request) {
         serverHandlerSource: `
 export default async function handler(request) {
   const url = new URL(request.url);
+  if (url.pathname === '/ingress-identity') {
+    return Response.json({
+      host: request.headers.get('host'),
+      method: request.method,
+      urlHost: url.host,
+    });
+  }
   return new Response('cloudflare:' + url.pathname, {
     headers: { 'content-type': 'text/plain; charset=utf-8' },
   });
@@ -4199,6 +4241,17 @@ export default async function handler(request) {
         ].join('\n'),
       );
 
+      const workerPath = join(cloudflareOutDir, 'worker.mjs');
+      const workerSource = await readFile(workerPath, 'utf8');
+      expect(workerSource).toContain('const requestIngressClassifier = (');
+      expect(workerSource).toContain('requestIngressClassifier.classifyPlatformFetch');
+      expect(workerSource.indexOf('requestIngressClassifier.classifyPlatformFetch')).toBeLessThan(
+        workerSource.indexOf("ownDataValue(env, 'ASSETS')"),
+      );
+      expect(workerSource.indexOf('requestIngressClassifier.classifyPlatformFetch')).toBeLessThan(
+        workerSource.indexOf('await loadHandler()'),
+      );
+
       const [
         postedAssetProbe,
         fetchedAssetProbe,
@@ -4207,7 +4260,9 @@ export default async function handler(request) {
         assetErrorProbe,
         routeProbe,
         overLimitProbe,
-      ] = runGeneratedCloudflareWorker(join(cloudflareOutDir, 'worker.mjs'), [
+        invalidSchemeProbe,
+        extensionMethodProbe,
+      ] = runGeneratedCloudflareWorker(workerPath, [
         {
           asset: { body: 'STATIC_POST_MUST_NOT_WIN' },
           method: 'POST',
@@ -4246,6 +4301,15 @@ export default async function handler(request) {
         {
           asset: { body: 'OVER_LIMIT_ASSET_MUST_NOT_RUN' },
           url: `https://worker.test/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`,
+        },
+        {
+          asset: { body: 'INVALID_SCHEME_ASSET_MUST_NOT_RUN' },
+          url: 'ftp://worker.test/hello',
+        },
+        {
+          asset: { body: 'EXTENSION_METHOD_ASSET_MUST_NOT_RUN' },
+          method: 'custom',
+          url: 'https://worker.test/ingress-identity',
         },
       ]);
 
@@ -4296,6 +4360,21 @@ export default async function handler(request) {
       expect(overLimit.response.status).toBe(414);
       expect(overLimit.response.headers.get('cache-control')).toBe('no-store');
       await expect(overLimit.response.text()).resolves.toBe('URI Too Long');
+
+      const invalidScheme = invalidSchemeProbe!;
+      expect(invalidScheme.assetCalls).toBe(0);
+      expect(invalidScheme.response.status).toBe(400);
+      expect(invalidScheme.response.headers.get('cache-control')).toBe('no-store');
+      await expect(invalidScheme.response.text()).resolves.toBe('Bad Request');
+
+      const extensionMethod = extensionMethodProbe!;
+      expect(extensionMethod.assetCalls).toBe(0);
+      expect(extensionMethod.response.status).toBe(200);
+      await expect(extensionMethod.response.json()).resolves.toEqual({
+        host: 'worker.test',
+        method: 'custom',
+        urlHost: 'worker.test',
+      });
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -4331,7 +4410,7 @@ export default async function handler(request) {
       });
       const workerPath = join(outDir, 'worker.mjs');
       const workerSource = await readFile(workerPath, 'utf8');
-      expect(workerSource).toContain('cloudflareRequestForDispatch(request)');
+      expect(workerSource).toContain('cloudflareRequestForDispatch(request, ingress)');
       expect(workerSource).toContain('does not support HTTP Service Binding ingress');
       expect(workerSource.indexOf('requestUrlLimitFailure(requestUrl)')).toBeLessThan(
         workerSource.indexOf('new NativeURL(requestUrl)'),
@@ -4339,7 +4418,10 @@ export default async function handler(request) {
       expect(workerSource.indexOf('requestUrlLimitFailure(requestUrl)')).toBeLessThan(
         workerSource.indexOf("ownDataValue(env, 'ASSETS')"),
       );
-      expect(workerSource.indexOf('cloudflareRequestForDispatch(request)')).toBeLessThan(
+      expect(workerSource.indexOf('cloudflareRequestForDispatch(request, ingress)')).toBeLessThan(
+        workerSource.indexOf("ownDataValue(env, 'ASSETS')"),
+      );
+      expect(workerSource.indexOf('cloudflareRequestForDispatch(request, ingress)')).toBeLessThan(
         workerSource.indexOf('await loadHandler()'),
       );
 
@@ -4366,6 +4448,7 @@ export default async function handler(request) {
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: {
             'cf-connecting-ip': '203.0.113.20',
             // Cloudflare does not promise to strip a direct caller's CF-Worker header. Presence
@@ -4379,6 +4462,7 @@ export default async function handler(request) {
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: {
             'cf-connecting-ip': '198.51.100.30',
             'x-real-ip': '198.51.100.30',
@@ -4386,6 +4470,7 @@ export default async function handler(request) {
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: {
             'cf-connecting-ip': '198.51.100.99',
             'x-real-ip': '198.51.100.99',
@@ -4393,18 +4478,25 @@ export default async function handler(request) {
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: { 'cf-connecting-ip': '2a06:98c0:3600::103' },
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: { 'cf-connecting-ip': '203.0.113.40, 203.0.113.41' },
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: { 'cf-connecting-ip': 'not-an-ip' },
           url: 'https://worker.test/rate',
         },
-        { cloudflareClientIp: false, url: 'https://worker.test/rate' },
+        {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
+          cloudflareClientIp: false,
+          url: 'https://worker.test/rate',
+        },
         {
           headers: { 'cf-connecting-ip': '2001:0db8:0000:0000:0000:0000:0000:0001' },
           url: 'https://worker.test/rate',
@@ -4431,6 +4523,7 @@ export default async function handler(request) {
         nonIpLiteral,
         missing,
       ]) {
+        expect(rejected!.assetCalls).toBe(0);
         expect(rejected!.response.status).toBe(403);
         expect(rejected!.response.headers.get('cache-control')).toBe('no-store');
         await expect(rejected!.response.text()).resolves.toBe('');
@@ -4965,6 +5058,31 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     ).toThrow(/must end in http or https|must end in an own string/u);
   }
 
+  const invalidStaticIngress = adapterParityRequest();
+  invalidStaticIngress.headers['x-forwarded-proto'] = 'https, ftp';
+  let ingressBody = '';
+  let ingressStatus = 0;
+  const ingressResponse = Object.assign(new EventEmitter(), {
+    end(value?: string) {
+      ingressBody = value ?? '';
+      return this;
+    },
+    headersSent: false,
+    writeHead(value: number) {
+      ingressStatus = value;
+      return this;
+    },
+  }) as unknown as ServerResponse;
+  expect(
+    adapter.rejectInvalidNodeRequestIngress(invalidStaticIngress, ingressResponse, {
+      trustedProxy: true,
+    }),
+  ).toBe(true);
+  expect({ body: ingressBody, status: ingressStatus }).toEqual({
+    body: 'Bad Request',
+    status: 400,
+  });
+
   for (const invalid of ['', 'javascript', 'https, http', ['https']] as const) {
     const liveInvalidPseudo = adapterParityRequest();
     liveInvalidPseudo.headers[':scheme'] = invalid;
@@ -5076,6 +5194,17 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   expect(adapter.nodeRequestToWebRequest(customCarrierWithoutRawHeaders).url).toBe(
     'http://127.0.0.1/from-url?x=1',
   );
+
+  for (const convert of [
+    (request: IncomingMessage) =>
+      liveNodeRequestToWebRequest(request, { origin: 'https://canonical.example:8443' }),
+    (request: IncomingMessage) =>
+      adapter.nodeRequestToWebRequest(request, { origin: 'https://canonical.example:8443' }),
+  ]) {
+    const reconstructed = convert(adapterParityRequest());
+    expect(reconstructed.url).toBe('https://canonical.example:8443/from-url?x=1');
+    expect(reconstructed.headers.get('host')).toBe('canonical.example:8443');
+  }
 
   for (const convert of [
     (request: IncomingMessage) => liveNodeRequestToWebRequest(request),
@@ -5449,10 +5578,13 @@ interface GeneratedWorkerResult {
 // Generated entries eagerly and irreversibly lock their request-safe realm (SPEC §6.6). Exercise
 // those exact bytes in disposable child processes so one deployment probe cannot freeze Vitest's
 // shared worker or weaken the emitted artifact just to make a broad build suite reusable.
-async function startGeneratedNodeServer(serverPath: string): Promise<GeneratedServerProcess> {
+async function startGeneratedNodeServer(
+  serverPath: string,
+  options: Readonly<{ trustedProxy?: boolean }> = {},
+): Promise<GeneratedServerProcess> {
   const source = `
 const imported = await import(${JSON.stringify(pathToFileURL(serverPath).href)});
-const server = imported.createKovoNodeServer();
+const server = imported.createKovoNodeServer(${JSON.stringify(options)});
 server.listen(0, '127.0.0.1', () => {
   console.log('KOVO_GENERATED_TEST_SERVER:' + server.address().port);
 });

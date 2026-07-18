@@ -1,9 +1,12 @@
+// @kovo-security-classifier-corpus egress-ip
 import http from 'node:http';
+import dns from 'node:dns';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   EGRESS_BLOCKED_ERROR_NAME,
+  frameworkEgressFetch,
   installNetConnectFloor,
   resolveEgressPolicy,
 } from './egress.js';
@@ -31,8 +34,16 @@ describe('undici egress floor (layer a): gates every fetch incl. pooled reuse', 
   let uninstall: (() => void) | undefined;
 
   beforeAll(async () => {
-    server = http.createServer((_req, res) => res.end('ok'));
-    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    server = http.createServer((req, res) => {
+      if (req.url === '/redirect-undeclared') {
+        res.writeHead(302, { location: 'http://undeclared-hop.invalid/secret' });
+        res.end();
+        return;
+      }
+      if (req.url === '/rotation') res.setHeader('connection', 'close');
+      res.end('ok');
+    });
+    await new Promise<void>((r) => server.listen(0, '::', () => r()));
     port = (server.address() as AddressInfo).port;
   });
 
@@ -134,6 +145,76 @@ describe('undici egress floor (layer a): gates every fetch incl. pooled reuse', 
     await expect(fetch('http://169.254.169.254/latest/meta-data/')).rejects.toSatisfy(
       (e) => reason(e) === EGRESS_BLOCKED_ERROR_NAME || reason(e) === 'metadata',
     );
+  });
+
+  it('rejects an undeclared redirect origin before DNS or dial', async () => {
+    dnsLookupMock.mockReset();
+    dnsLookupMock.mockRejectedValue(new Error('undeclared redirect reached DNS'));
+    const policy = resolveEgressPolicy(
+      {
+        allowDestinations: [`http://127.0.0.1:${port}`],
+        allowInternal: [`127.0.0.1:${port}`],
+      },
+      () => {},
+    );
+    const uninstallNet = installNetConnectFloor(policy);
+    try {
+      uninstall = installUndiciFloor(policy);
+      const outcome = await frameworkEgressFetch(
+        `http://127.0.0.1:${port}/redirect-undeclared`,
+      ).catch((error: unknown) => error);
+
+      expect(reason(outcome)).toBe(EGRESS_BLOCKED_ERROR_NAME);
+      expect(dnsLookupMock).not.toHaveBeenCalled();
+    } finally {
+      uninstallNet();
+    }
+  });
+
+  it('re-resolves a declared framework origin on every request while keeping the origin closed', async () => {
+    dnsLookupMock.mockReset();
+    dnsLookupMock
+      .mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }])
+      .mockResolvedValueOnce([{ address: '::1', family: 6 }]);
+    let initialLookup = 0;
+    const lookup = vi.spyOn(dns, 'lookup').mockImplementation(((_host, options, callback) => {
+      const cb = (typeof options === 'function' ? options : callback) as (
+        error: Error | null,
+        addresses: { address: string; family: number }[],
+      ) => void;
+      initialLookup += 1;
+      cb(null, [
+        initialLookup <= 2 ? { address: '127.0.0.1', family: 4 } : { address: '::1', family: 6 },
+      ]);
+    }) as typeof dns.lookup);
+    const policy = resolveEgressPolicy(
+      {
+        allowDestinations: [`http://localhost:${port}`],
+        allowInternal: [`localhost:${port}`],
+      },
+      () => {},
+    );
+    const uninstallNet = installNetConnectFloor(policy);
+    try {
+      uninstall = installUndiciFloor(policy);
+      for (let iteration = 0; iteration < 2; iteration += 1) {
+        const response = await frameworkEgressFetch(`http://localhost:${port}/rotation`, {
+          headers: { connection: 'close' },
+        });
+        expect(await response.text()).toBe('ok');
+      }
+
+      expect(dnsLookupMock).toHaveBeenCalledTimes(2);
+      // Each request performs one framework preclassification and one independently pinned
+      // net-layer dial lookup. The second request rotates both answers from IPv4 to IPv6.
+      expect(initialLookup).toBe(4);
+      await expect(frameworkEgressFetch(`http://127.0.0.2:${port}/rotation`)).rejects.toMatchObject(
+        { reason: 'destination-allowlist' },
+      );
+    } finally {
+      lookup.mockRestore();
+      uninstallNet();
+    }
   });
 
   it('DENIES a fetch to a private RFC1918 literal not in allowInternal', async () => {

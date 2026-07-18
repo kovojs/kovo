@@ -1,7 +1,11 @@
 export type { Secret } from '@kovojs/core';
 export { publicAccess, verifiedAccess } from '../access.js';
 export type { AccessDecision, PublicAccess, VerifiedMachineAccess } from '../access.js';
-export { csrfField, csrfToken, mintCsrfField, mintCsrfToken } from '../csrf.js';
+import {
+  mintCsrfField as mintCsrfFieldInternal,
+  mintCsrfToken as mintCsrfTokenInternal,
+} from '../csrf.js';
+import type { CsrfOptions, MintedCsrfField, MintedCsrfToken } from '../csrf.js';
 export type {
   CsrfAnonymousCookieOptions,
   CsrfOptions,
@@ -9,6 +13,47 @@ export type {
   MintedCsrfToken,
 } from '../csrf.js';
 export type { SigningSecret } from '../keyring.js';
+
+/**
+ * Mint a CSRF token for a verified raw-endpoint protocol (SPEC §6.6/§9.1).
+ *
+ * Mutation forms use typed `<form mutation={definition}>` authoring instead. That path emits the
+ * mutation-bound CSRF field and canonical `Kovo-Idem` field as one framework-owned bundle.
+ */
+export function mintCsrfToken<Request>(
+  request: Request,
+  options: CsrfOptions<Request>,
+  context: { audience: string; mutation?: never },
+): MintedCsrfToken {
+  assertRawCsrfMintContext(context);
+  return mintCsrfTokenInternal(request, options, context);
+}
+
+/**
+ * Mint a hidden CSRF field for a verified raw-endpoint form protocol (SPEC §6.6/§9.1).
+ *
+ * This is not a mutation-form helper. Use typed `<form mutation={definition}>` for mutations so
+ * CSRF and idempotency authority cannot drift apart.
+ */
+export function mintCsrfField<Request>(
+  request: Request,
+  options: CsrfOptions<Request> & { audience: string; mutation?: never },
+): MintedCsrfField {
+  assertRawCsrfMintContext(options);
+  return mintCsrfFieldInternal(request, options);
+}
+
+function assertRawCsrfMintContext(context: { audience?: string; mutation?: never }): void {
+  if ('mutation' in context) {
+    throw new TypeError(
+      'Public CSRF mint helpers are for raw endpoint protocols. Mutation forms must use typed <form mutation={definition}> authoring so Kovo emits CSRF and Kovo-Idem together.',
+    );
+  }
+  if (typeof context.audience !== 'string' || context.audience.length === 0) {
+    throw new TypeError('Public raw endpoint CSRF mint helpers require an explicit audience.');
+  }
+}
+
 export { domain } from '../domain.js';
 export type { Domain } from '../domain.js';
 export { errorBoundary, queue, stream } from '../mutation.js';

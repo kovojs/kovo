@@ -31,6 +31,7 @@ import {
   taskDateGetTime,
   taskDateIsDate,
   taskDateNow,
+  taskDefineDataProperty,
   taskFloor,
   taskInstanceOf,
   taskIsArray,
@@ -45,6 +46,7 @@ import {
   taskNumberIsFinite,
   taskNumberIsSafeInteger,
   taskOptionalOwnDataValue,
+  taskObjectKeys,
   taskOwnDataValue,
   taskPromiseAll,
   taskPromiseFinally,
@@ -62,7 +64,6 @@ import {
 } from './task-security-intrinsics.js';
 
 export interface DurableTaskRunnerHooks {
-  readonly fetch?: typeof globalThis.fetch;
   onError?: (error: unknown, context: DurableTaskRunnerErrorContext) => Promise<void> | void;
   runMutation?: (
     definition: Parameters<TaskRunContext['runMutation']>[0],
@@ -368,10 +369,12 @@ export class DurableTaskRunner {
   private createContext(job: DurableTaskJob): TaskRunContext {
     const runMutation = this.hooks.runMutation;
     const runQuery = this.hooks.runQuery;
-    return {
+    const context: TaskRunContext = {
       jobId: job.id,
       idempotencyKey: job.id,
-      fetch: this.hooks.fetch ?? frameworkEgressFetch,
+      // SPEC §6.6: task code receives exactly the framework-owned positive egress capability.
+      // Runner hooks may adapt persistence/query execution, but cannot replace the network door.
+      fetch: frameworkEgressFetch,
       actAs: (principalId: string): TaskPrincipalScope =>
         this.createPrincipalScope(
           job,
@@ -418,6 +421,10 @@ export class DurableTaskRunner {
         );
       },
     };
+    // The type is readonly for authors, but the runtime invariant must survive JavaScript and
+    // casts too. Close the delivered capability property itself after constructing the context;
+    // task code cannot swap in ambient fetch or a proxy dispatcher (SPEC §6.6).
+    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);
   }
 
   private createPrincipalScope(
@@ -669,12 +676,20 @@ function snapshotDurableTaskRunnerHooks(source: unknown): DurableTaskRunnerHooks
   if (typeof source !== 'object' || source === null || taskIsArray(source)) {
     throw new TypeError('Durable task runner hooks must be a stable own-data record.');
   }
-  const fetch = taskOptionalOwnDataValue(source, 'fetch');
+  const keys = taskObjectKeys(source);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (key !== 'onError' && key !== 'runMutation' && key !== 'runQuery') {
+      throw new TypeError(
+        `Unsupported durable task runner hook "${key}". The task egress capability is ` +
+          'framework-owned and cannot be replaced (SPEC §6.6).',
+      );
+    }
+  }
   const onError = taskOptionalOwnDataValue(source, 'onError');
   const runMutation = taskOptionalOwnDataValue(source, 'runMutation');
   const runQuery = taskOptionalOwnDataValue(source, 'runQuery');
   if (
-    (fetch !== undefined && typeof fetch !== 'function') ||
     (onError !== undefined && typeof onError !== 'function') ||
     (runMutation !== undefined && typeof runMutation !== 'function') ||
     (runQuery !== undefined && typeof runQuery !== 'function')
@@ -682,7 +697,6 @@ function snapshotDurableTaskRunnerHooks(source: unknown): DurableTaskRunnerHooks
     throw new TypeError('Durable task runner hooks must contain only function data properties.');
   }
   return taskFreeze({
-    ...(fetch === undefined ? {} : { fetch: fetch as typeof globalThis.fetch }),
     ...(onError === undefined
       ? {}
       : { onError: onError as NonNullable<DurableTaskRunnerHooks['onError']> }),

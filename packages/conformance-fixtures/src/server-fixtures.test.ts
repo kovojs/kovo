@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  csrfField,
-  csrfToken,
   domain,
   errorBoundary,
   guards,
@@ -15,6 +13,7 @@ import {
   s,
   t,
 } from '@kovojs/server';
+import { csrfField, csrfToken } from '@kovojs/server/internal/csrf';
 import { runMutation, runQuery, runRoutePage } from '@kovojs/server/internal/execution';
 import {
   renderDeferredStream,

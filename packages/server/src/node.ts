@@ -35,6 +35,11 @@ import {
   createTransportResponseHeaderClassifier,
   type TransportResponseHeaderEntry,
 } from './response-transport-headers.js';
+import {
+  createRequestIngressClassifier,
+  type RequestIngressDecision,
+  type RequestIngressIssue,
+} from './request-ingress-policy.js';
 
 /** Options for adapting a Web `RequestHandler` to a Node `http` listener. */
 export interface NodeHandlerOptions {
@@ -105,12 +110,15 @@ const nativeAbortSignalAbortedGetter = stablePrototypeGetter(
 );
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringFromCharCode = NativeString.fromCharCode;
-const nativeStringLastIndexOf = NativeString.prototype.lastIndexOf;
-const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
 const classifyNodeTransportResponseHeaders = createTransportResponseHeaderClassifier({
   lowerCase: (value) => witnessReflectApply<string>(nativeStringToLowerCase, value, []),
+});
+const requestIngressClassifier = createRequestIngressClassifier({
+  charCodeAt: (value, index) => witnessReflectApply<number>(nativeStringCharCodeAt, value, [index]),
+  isArray: witnessIsArray,
+  parseAuthority: parseRequestIngressAuthority,
 });
 const nativeRequestMethodGetter = requiredGetter(NativeRequest.prototype, 'method');
 const nativeIncomingMessageHeadersGetter = stablePrototypeGetter(
@@ -676,19 +684,14 @@ function nodeRequestToWebRequestFromSnapshot(
   if (requestUrlLimitFailure(pinnedNodeRequest.rawTarget) !== undefined) {
     throw new RangeError('Kovo Node request target exceeds the SPEC §9.5 resource ceiling.');
   }
-  if (!nodeRequestMethodIsFetchStable(pinnedNodeRequest.method)) {
-    throw new TypeError(
-      'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.',
-    );
-  }
+  const ingress = classifyPinnedNodeRequestIngress(pinnedNodeRequest, options);
+  if (!ingress.ok) throw new TypeError(requestIngressFailureMessage(ingress.issue));
   if (unsafeReservedMutationRequestTarget(pinnedNodeRequest.rawTarget)) {
     throw new TypeError('Reserved mutation request targets must use their canonical raw path.');
   }
-  if (!validNodeRequestAuthority(pinnedNodeRequest)) {
-    throw new TypeError('Kovo Node adapter request authority must be one valid host[:port].');
-  }
-  const method = pinnedNodeRequest.method;
-  const headers = nodeHeadersToWebHeaders(pinnedNodeRequest.headers);
+  const method = ingress.method;
+  const requestTarget = nodeRequestUrl(pinnedNodeRequest, options, ingress);
+  const headers = nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority);
   // E3 (SPEC §9.5): bridge a client disconnect into the Web `Request.signal` so handlers,
   // queries, webhooks, and any downstream `fetch(url, { signal: request.signal })` abort
   // instead of running against a dead socket (a cheap resource-exhaustion amplifier under an
@@ -752,7 +755,7 @@ function nodeRequestToWebRequestFromSnapshot(
         }),
   };
 
-  const request = constructNativeRequest(nodeRequestUrl(pinnedNodeRequest, options), init);
+  const request = constructNativeRequest(requestTarget.href, init);
   if (witnessReflectApply<string>(nativeRequestMethodGetter, request, []) !== method) {
     throw new TypeError(
       'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.',
@@ -991,7 +994,7 @@ function rejectInvalidPinnedNodeRequestMethod(
   pinnedNodeRequest: PinnedNodeRequest,
   nodeResponse: ServerResponse,
 ): boolean {
-  if (nodeRequestMethodIsFetchStable(pinnedNodeRequest.method)) return false;
+  if (requestIngressClassifier.classifyMethod(pinnedNodeRequest.method)) return false;
 
   const responseTransport = pinNodeResponseTransport(nodeResponse);
   armIncompleteNodeRequestClose(pinnedNodeRequest.carrier, nodeResponse);
@@ -1011,58 +1014,6 @@ function rejectInvalidPinnedNodeRequestMethod(
   return true;
 }
 
-function nodeRequestMethodIsFetchStable(method: string): boolean {
-  if (!isHttpMethodToken(method)) return false;
-  const lower = witnessReflectApply<string>(nativeStringToLowerCase, method, []);
-  switch (lower) {
-    case 'delete':
-      return method === 'DELETE';
-    case 'get':
-      return method === 'GET';
-    case 'head':
-      return method === 'HEAD';
-    case 'options':
-      return method === 'OPTIONS';
-    case 'post':
-      return method === 'POST';
-    case 'put':
-      return method === 'PUT';
-    case 'connect':
-    case 'trace':
-    case 'track':
-      return false;
-    default:
-      return true;
-  }
-}
-
-function isHttpMethodToken(method: string): boolean {
-  if (method.length === 0) return false;
-  for (let index = 0; index < method.length; index += 1) {
-    const code = witnessReflectApply<number>(nativeStringCharCodeAt, method, [index]);
-    if (
-      (code >= 0x30 && code <= 0x39) ||
-      (code >= 0x41 && code <= 0x5a) ||
-      (code >= 0x61 && code <= 0x7a) ||
-      code === 0x21 ||
-      (code >= 0x23 && code <= 0x27) ||
-      code === 0x2a ||
-      code === 0x2b ||
-      code === 0x2d ||
-      code === 0x2e ||
-      code === 0x5e ||
-      code === 0x5f ||
-      code === 0x60 ||
-      code === 0x7c ||
-      code === 0x7e
-    ) {
-      continue;
-    }
-    return false;
-  }
-  return true;
-}
-
 /**
  * SPEC §9.5 / RFC 9112 §3.2: Node accepts duplicate and syntactically invalid Host fields even
  * though an HTTP/1 server must reject them. Do so before URL normalization, static serving, or app
@@ -1072,7 +1023,12 @@ function rejectInvalidPinnedNodeRequestAuthority(
   pinnedNodeRequest: PinnedNodeRequest,
   nodeResponse: ServerResponse,
 ): boolean {
-  if (validNodeRequestAuthority(pinnedNodeRequest)) return false;
+  if (
+    requestIngressClassifier.classifyAuthority(pinnedNodeRequestAuthorityInput(pinnedNodeRequest))
+      .ok
+  ) {
+    return false;
+  }
 
   const responseTransport = pinNodeResponseTransport(nodeResponse);
   armIncompleteNodeRequestClose(pinnedNodeRequest.carrier, nodeResponse);
@@ -1574,12 +1530,57 @@ function splitLinkHeaderEntries(header: string): string[] {
   return entries;
 }
 
-function nodeRequestUrl(request: PinnedNodeRequest, options: PinnedNodeHandlerOptions): string {
+function classifyPinnedNodeRequestIngress(
+  request: PinnedNodeRequest,
+  options: PinnedNodeHandlerOptions,
+): RequestIngressDecision {
+  return requestIngressClassifier.classifyNode({
+    ...pinnedNodeRequestAuthorityInput(request),
+    encrypted: request.encrypted,
+    forwardedProto: request.headers['x-forwarded-proto'],
+    method: request.method,
+    pseudoScheme: request.headers[':scheme'],
+    trustedProxy: options.origin === undefined && options.trustedProxy === true,
+  });
+}
+
+function pinnedNodeRequestAuthorityInput(request: PinnedNodeRequest) {
+  return {
+    host: request.headers.host,
+    httpVersion: request.httpVersion,
+    pseudoAuthority: request.headers[':authority'],
+    ...(request.rawHostHeaderCount === undefined
+      ? {}
+      : { rawHostHeaderCount: request.rawHostHeaderCount }),
+  };
+}
+
+function requestIngressFailureMessage(issue: RequestIngressIssue): string {
+  if (issue === 'method') {
+    return 'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.';
+  }
+  if (issue === 'authority') {
+    return 'Kovo Node adapter request authority must be one valid host[:port].';
+  }
+  if (issue === 'forwarded-scheme') {
+    return 'Trusted proxy scheme headers must end in http or https.';
+  }
+  if (issue === 'pseudo-scheme') {
+    return 'Trusted HTTP/2 :scheme must identify one http or https scheme.';
+  }
+  return 'Kovo platform request scheme must be http or https.';
+}
+
+function nodeRequestUrl(
+  request: PinnedNodeRequest,
+  options: PinnedNodeHandlerOptions,
+  ingress: Extract<RequestIngressDecision, { ok: true }>,
+): { readonly authority: string; readonly href: string } {
   const rawUrl = request.rawTarget;
   const origin =
     typeof options.origin === 'function'
       ? options.origin(request.carrier)
-      : (options.origin ?? defaultOrigin(request, options));
+      : (options.origin ?? defaultOrigin(ingress));
 
   const originUrl = new NativeURL(origin);
   const pinnedOrigin = urlOrigin(originUrl);
@@ -1593,7 +1594,7 @@ function nodeRequestUrl(request: PinnedNodeRequest, options: PinnedNodeHandlerOp
   const assembled = new NativeURL(
     `${pinnedOrigin}${pathname[0] === '/' ? '' : '/'}${pathname}${urlSearch(pathTarget)}${urlHash(pathTarget)}`,
   );
-  return urlHref(assembled);
+  return { authority: urlHost(assembled), href: urlHref(assembled) };
 }
 
 function canonicalRelativeRequestTarget(rawTarget: string): string {
@@ -1605,95 +1606,30 @@ function canonicalRelativeRequestTarget(rawTarget: string): string {
   return `/${rawRequestTargetRange(rawTarget, first, rawTarget.length)}`;
 }
 
-function validNodeRequestAuthority(request: PinnedNodeRequest): boolean {
-  const pseudoAuthority = request.headers[':authority'];
-  const authority = pseudoAuthority === undefined ? request.headers.host : pseudoAuthority;
-
-  // HTTP/2 :authority owns the request target and a divergent Host is ignored. For HTTP/1,
-  // retain the raw occurrence count because Node's normalized header bag silently keeps only the
-  // first Host field, erasing ambiguities RFC 9112 requires the server to reject. A native
-  // HTTP/1.1 request must also carry Host even when the embedding server disables Node's own
-  // requireHostHeader gate; HTTP/1.0 remains host-optional. Carriers without rawHeaders are custom
-  // synthetic integrations, so preserve their documented loopback-origin fallback.
-  if (pseudoAuthority === undefined && request.rawHostHeaderCount !== undefined) {
-    if (authority === undefined) {
-      if (request.rawHostHeaderCount !== 0 || request.httpVersion !== '1.0') return false;
-    } else if (request.rawHostHeaderCount !== 1) return false;
-  }
-  if (authority === undefined) return true;
-  if (typeof authority !== 'string' || authority.length === 0) return false;
-
-  for (let index = 0; index < authority.length; index += 1) {
-    const character = authority[index];
-    const code = witnessReflectApply<number>(nativeStringCharCodeAt, authority, [index]);
-    if (
-      code <= 0x20 ||
-      code === 0x7f ||
-      character === '@' ||
-      character === '/' ||
-      character === '\\' ||
-      character === '?' ||
-      character === '#' ||
-      character === ','
-    ) {
-      return false;
-    }
-  }
-
+function parseRequestIngressAuthority(authority: string, scheme: 'http' | 'https') {
   try {
-    // SPEC §9.5: one remote authority must retain one byte identity across either possible
-    // adapter scheme and the Web URL/Headers boundary. Parsing under both schemes also rejects
-    // explicit default ports (:80/:443), whose serialization otherwise depends on trusted
-    // transport posture.
-    const parsedHttp = new NativeURL(`http://${authority}`);
-    const parsedHttps = new NativeURL(`https://${authority}`);
-    return (
-      urlOrigin(parsedHttp) !== 'null' &&
-      urlOrigin(parsedHttps) !== 'null' &&
-      urlHost(parsedHttp) === authority &&
-      urlHost(parsedHttps) === authority &&
-      urlPathname(parsedHttp) === '/' &&
-      urlSearch(parsedHttp) === '' &&
-      urlHash(parsedHttp) === ''
-    );
+    const parsed = new NativeURL(`${scheme}://${authority}`);
+    return {
+      hash: urlHash(parsed),
+      host: urlHost(parsed),
+      origin: urlOrigin(parsed),
+      pathname: urlPathname(parsed),
+      search: urlSearch(parsed),
+    };
   } catch {
-    return false;
+    return undefined;
   }
 }
 
-function defaultOrigin(request: PinnedNodeRequest, options: PinnedNodeHandlerOptions): string {
-  // SPEC §9.5 / RFC 9113 §8.3.1: HTTP/2 `:authority` is request-target authority. A peer can
-  // still send a divergent regular `Host`, but recipients must not use it to determine the
-  // target URI when `:authority` is present.
-  const host =
-    firstHeaderValue(request.headers[':authority']) ??
-    firstHeaderValue(request.headers.host) ??
-    '127.0.0.1';
-  // SPEC §9.5: Node joins duplicate forwarding headers with commas. Under explicit proxy trust,
-  // the closest trusted hop owns the rightmost value; earlier values remain attacker-controlled.
-  // Reject an empty/unknown closest-hop scheme instead of falling through to another authority.
-  const forwardedProto = options.trustedProxy
-    ? rightmostHeaderListValue(request.headers['x-forwarded-proto'])
-    : undefined;
-  // SPEC §9.5 / RFC 9113 §8.3.1: `:scheme` is request-target control data supplied by the peer,
-  // not transport authentication. A cleartext h2c peer can spell `https`, and a TLS peer can
-  // spell `http`. Only a canonical single value is usable under explicit proxy trust; a present
-  // invalid value must not silently downgrade an otherwise encrypted request. Canonical XFP owns
-  // precedence when both trusted fields are present.
-  const pseudoScheme =
-    options.trustedProxy && forwardedProto === undefined
-      ? trustedPseudoSchemeValue(request.headers[':scheme'])
-      : undefined;
-  const proto = forwardedProto ?? pseudoScheme ?? (request.encrypted ? 'https' : 'http');
-
-  return `${proto === 'https' ? 'https' : 'http'}://${host}`;
+function defaultOrigin(ingress: Extract<RequestIngressDecision, { ok: true }>): string {
+  return `${ingress.scheme}://${ingress.authority ?? '127.0.0.1'}`;
 }
 
 function nodeHeadersToWebHeaders(
   nodeHeaders: Record<string, string | string[] | undefined>,
+  authority: string | undefined,
 ): Headers {
   const headers = new NativeHeaders();
-  const authority = firstHeaderValue(nodeHeaders[':authority']);
   const names = witnessObjectKeys(nodeHeaders);
   for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
     const name = names[nameIndex]!;
@@ -1708,9 +1644,9 @@ function nodeHeadersToWebHeaders(
     // name starting with `:`, so copying them unfiltered 500'd every HTTP/2 request. Skip them
     // — they are addressed via `request.method`/`request.url`/the `:authority` URL fallback.
     if (name[0] === ':') continue;
-    // The Web Request bridge otherwise exposes two authorities to application code. Match
-    // RFC 9113's safe HTTP/2-to-HTTP/1 translation rule by replacing Host with `:authority`.
-    if (authority !== undefined && name === 'host') continue;
+    // The classifier owns the sole accepted authority. Reconstruct Host from its decision instead
+    // of rereading either raw Host or :authority at this later Web Request boundary.
+    if (name === 'host') continue;
     if (witnessIsArray(value)) {
       for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
         const entry = witnessGetOwnPropertyDescriptor(value, valueIndex)?.value;
@@ -1871,40 +1807,4 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
   if (!witnessIsArray(value)) return value;
   const first = witnessGetOwnPropertyDescriptor(value, 0)?.value;
   return typeof first === 'string' ? first : undefined;
-}
-
-function rightmostHeaderListValue(value: string | string[] | undefined): string | undefined {
-  if (value === undefined) return undefined;
-  let list = value;
-  if (witnessIsArray(value)) {
-    const descriptor = witnessGetOwnPropertyDescriptor(value, value.length - 1);
-    if (
-      value.length === 0 ||
-      descriptor === undefined ||
-      !('value' in descriptor) ||
-      typeof descriptor.value !== 'string'
-    ) {
-      throw new TypeError('Trusted proxy scheme headers must end in an own string.');
-    }
-    list = descriptor.value;
-  }
-  const comma = witnessReflectApply<number>(nativeStringLastIndexOf, list, [',']);
-  const candidate = witnessReflectApply<string>(nativeStringSlice, list, [comma + 1]);
-  const scheme = witnessReflectApply<string>(nativeStringTrim, candidate, []);
-  if (scheme !== 'http' && scheme !== 'https') {
-    throw new TypeError('Trusted proxy scheme headers must end in http or https.');
-  }
-  return scheme;
-}
-
-function trustedPseudoSchemeValue(value: string | string[] | undefined): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string') {
-    throw new TypeError('Trusted HTTP/2 :scheme must identify one http or https scheme.');
-  }
-  const scheme = witnessReflectApply<string>(nativeStringToLowerCase, value, []);
-  if (scheme !== 'http' && scheme !== 'https') {
-    throw new TypeError('Trusted HTTP/2 :scheme must identify one http or https scheme.');
-  }
-  return scheme;
 }

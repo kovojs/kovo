@@ -14,6 +14,7 @@ import {
   type EndpointResponsePosture,
 } from './endpoint.js';
 import { mutation } from './mutation.js';
+import { query } from './query.js';
 import { guard } from './guards.js';
 import { resolveLifecycleRequest } from './guards.js';
 import { toNodeHandler } from './node.js';
@@ -2507,5 +2508,20 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
 
     expect(response.headers.get('cache-control')).toBe('public, max-age=60');
     expect(response.headers.get('vary')).toBeNull();
+  });
+
+  it('keeps the query channel read-only and unable to mint CSRF browser authority', async () => {
+    const handler = createRequestHandler(
+      createApp({
+        csrf,
+        queries: [query('public-metadata', { load: () => ({ ok: true }), reads: [] })],
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/_q/public-metadata'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    await expect(response.text()).resolves.toContain('{"ok":true}');
   });
 });

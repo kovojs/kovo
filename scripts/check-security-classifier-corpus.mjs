@@ -177,12 +177,105 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: [
       'packages/cli/src/commands/security-disposition.test.ts',
       'packages/cli/src/index.kovo-db.test.ts',
+      'packages/server/src/egress-bootstrap.test.ts',
       'packages/server/src/egress-nat64-nsp.test.ts',
+      'packages/server/src/egress-property-oracle.test.ts',
+      'packages/server/src/egress-undici.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
       'packages/server/src/runtime-environment-authority.test.ts',
+      'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'destination-origin-boot-canonicalization',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'canonicalizes framework-owned destination origins and refuses malformed boot input',
+          "'https://API.EXAMPLE.COM.'",
+          "'http://[2001:db8::1]:80'",
+          'toThrow(EgressConfigError)',
+        ],
+      },
+      {
+        id: 'undeclared-origin-before-dns-dial',
+        file: 'packages/server/src/egress-property-oracle.test.ts',
+        snippets: [
+          'rejects generated undeclared origin spellings before DNS',
+          'undeclared-origin-before-dns-dial',
+          'expect(lookup).not.toHaveBeenCalled()',
+        ],
+      },
+      {
+        id: 'redirect-hop-before-dns-dial',
+        file: 'packages/server/src/egress-undici.test.ts',
+        snippets: [
+          'rejects an undeclared redirect origin before DNS or dial',
+          'undeclared-hop.invalid',
+          'expect(dnsLookupMock).not.toHaveBeenCalled()',
+        ],
+      },
+      {
+        id: 'declared-origin-dns-rotation',
+        file: 'packages/server/src/egress-undici.test.ts',
+        snippets: [
+          're-resolves a declared framework origin on every request while keeping the origin closed',
+          "{ address: '::1', family: 6 }",
+          'expect(initialLookup).toBe(4)',
+          "reason: 'destination-allowlist'",
+        ],
+      },
+      {
+        id: 'database-endpoint-dns-rotation',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'keeps an exact framework database endpoint usable across pinned DNS rotation',
+          'db-rotation.test',
+          'createDatabaseEgressSocket(databaseUrl)',
+          'unrelatedError',
+        ],
+      },
+      {
+        id: 'application-proxy-dispatcher-closed',
+        file: 'packages/server/src/egress-property-oracle.test.ts',
+        snippets: [
+          'strips an application-supplied dispatcher from the sole supported fetch door',
+          'application dispatcher gained egress authority',
+          'expect(attackerDispatches).toBe(0)',
+        ],
+      },
+      {
+        id: 'proxy-config-refuses-boot',
+        file: 'packages/server/src/egress-bootstrap.test.ts',
+        snippets: [
+          'refuses application proxy/dispatcher configuration instead of bypassing the capability',
+          "proxy: 'http://proxy.internal:8080'",
+          'unsupported property dispatcher',
+        ],
+      },
+      {
+        id: 'task-context-fetch-nonreplaceable',
+        file: 'packages/server/src/task-runner.test.ts',
+        snippets: [
+          'pins the queue identity and never accepts a replaceable egress hook',
+          "Object.getOwnPropertyDescriptor(observedContext!, 'fetch')",
+          'configurable: false',
+          'writable: false',
+          'toThrow(TypeError)',
+        ],
+      },
+      {
+        id: 'webhook-context-fetch-nonreplaceable',
+        file: 'packages/server/src/webhook.test.ts',
+        snippets: [
+          'exposes exactly the framework-owned egress capability to verified handlers',
+          "Object.getOwnPropertyDescriptor(observedContext!, 'fetch')",
+          'configurable: false',
+          'writable: false',
+          'toThrow(TypeError)',
+        ],
+      },
       {
         id: 'octal-ip-regression',
         file: 'packages/server/src/egress.test.ts',
@@ -415,10 +508,41 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'better-auth-credentials',
     marker: '@kovo-security-classifier-corpus better-auth-credentials',
     testFiles: [
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
       'packages/better-auth/src/index.schema-bridge.test.ts',
       'packages/better-auth/src/index.schema-materialize.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'credential-runtime-gate-identity-and-replay',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'rejects forged, cross-consumer, and replayed runtime results',
+          'KV439: unregistered Better Auth credential consumer',
+          'KV439: mismatched Better Auth credential consumer result',
+        ],
+      },
+      {
+        id: 'credential-runtime-gate-complete-consumer-denominator',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'keeps the raw Better Auth credential-consumer denominator equal to the reviewed census',
+          'scanBetterAuthRawCredentialConsumers()',
+          "{ consumer: 'betterAuth', file: 'postgres.ts' }",
+          "{ consumer: 'betterAuth', file: 'sqlite.ts' }",
+        ],
+      },
+      {
+        id: 'credential-runtime-gate-result-and-error',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'validates hostile consumer results and redacts provider errors at runtime',
+          'returned a non-Argon2id hash',
+          'expect(resultTrapRan).toBe(false)',
+          'expect(String(caught)).not.toContain(password)',
+          'expect(String(proxyCaught)).not.toContain(password)',
+        ],
+      },
       {
         id: 'apikey-secret-classification',
         file: 'packages/better-auth/src/index.schema-bridge.test.ts',
@@ -1802,9 +1926,32 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/replay.test.ts',
       'packages/server/src/mutation/replay-policy.test.ts',
       'packages/server/src/mutation.test.ts',
+      'packages/server/src/build.test.ts',
       'packages/better-auth/src/environment.test.ts',
+      'scripts/check-csrf-mint-delivery.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'csrf-mint-delivery-matrix',
+        file: 'scripts/check-csrf-mint-delivery.test.mjs',
+        snippets: [
+          'closes every lifecycle surface over live proof anchors',
+          'kills a lifecycle-receipt deletion mutant',
+          'kills a partial public mutation-helper mutant',
+          'kills header-seal and cache-posture mutants',
+          'kills rotation and replay-order mutants',
+          'rejects denominator shrinkage, missing canaries, and stale proof anchors',
+        ],
+      },
+      {
+        id: 'packed-node-vercel-csrf-delivery-parity',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells',
+          'packed-csrf-stream-response',
+          'packed-csrf-stream-immediate-response',
+        ],
+      },
       {
         id: 'standalone-response-lifecycle-receipt-and-sharing',
         file: 'packages/server/src/standalone-csrf-mint-security.test.ts',
@@ -2050,7 +2197,13 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'request-ingress',
     marker: '@kovo-security-classifier-corpus request-ingress',
-    testFiles: ['packages/server/src/request-ingress-c13.test.ts'],
+    testFiles: [
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'method-authority-scheme-superset',
@@ -2064,6 +2217,41 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "'example.com:443'",
           'selects only the explicitly trusted transport scheme before applying strict grammar',
           "'https, ftp'",
+        ],
+      },
+      {
+        id: 'finite-classifier-source-selection',
+        file: 'packages/server/src/request-ingress-policy.test.ts',
+        snippets: [
+          'finite request-ingress classifier',
+          'admits exactly canonical standard methods plus byte-stable extension tokens',
+          'accepts only one byte-identical authority under both supported schemes',
+          'selects transport-owned scheme sources before applying one strict grammar',
+          'applies the same finite verdict to the platform-owned Fetch bridge',
+        ],
+      },
+      {
+        id: 'real-http2-method-authority-closure',
+        file: 'packages/server/src/__bugz_remote_ingress.test.ts',
+        snippets: [
+          'rejects HTTP/2 method identities that Fetch would canonicalize before dispatch',
+          "request('PoSt')",
+          'rejects HTTP/2 authorities that URL would normalize before app policy',
+          "request('%65xample.com')",
+        ],
+      },
+      {
+        id: 'generated-node-vercel-worker-parity',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'const requestIngressClassifier = (',
+          'nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority)',
+          'rejectInvalidNodeRequestIngress(nodeRequest, nodeResponse, options)',
+          'invalidStaticScheme',
+          "'X-Forwarded-Proto: https, ftp\\r\\n'",
+          'requestIngressClassifier.classifyPlatformFetch',
+          'INVALID_SCHEME_ASSET_MUST_NOT_RUN',
+          'EXTENSION_METHOD_ASSET_MUST_NOT_RUN',
         ],
       },
     ],

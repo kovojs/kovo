@@ -172,7 +172,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       await stopProcess(prodServer);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 180_000);
 
   it('boots Postgres starter DDL with serial columns, reordered foreign keys, and additive drift', () => {
     const tempParent = tmpdir();

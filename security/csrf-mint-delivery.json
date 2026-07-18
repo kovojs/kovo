@@ -1,0 +1,229 @@
+{
+  "schema": "kovo.csrf-mint-delivery/v1",
+  "surfaces": [
+    {
+      "id": "typed-mutation-form",
+      "mint": "framework-bundle",
+      "deliver": "response-lifecycle",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "idem-deduplicated",
+      "proof": {
+        "file": "packages/server/src/jsx-runtime.test.ts",
+        "anchor": "renders one session-bound CSRF field for direct server JSX mutation forms"
+      }
+    },
+    {
+      "id": "raw-endpoint-form-bootstrap",
+      "mint": "raw-endpoint-audience",
+      "deliver": "response-lifecycle",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "protocol-owned",
+      "proof": {
+        "file": "packages/server/src/csrf.test.ts",
+        "anchor": "mintCsrfField returns the anonymous Set-Cookie needed for a first raw endpoint form"
+      }
+    },
+    {
+      "id": "raw-endpoint-json-bootstrap",
+      "mint": "raw-endpoint-audience",
+      "deliver": "response-lifecycle",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "protocol-owned",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "does the same for mintCsrfToken JSON output from the exact endpoint request"
+      }
+    },
+    {
+      "id": "anonymous-document-bootstrap",
+      "mint": "framework-bundle",
+      "deliver": "response-lifecycle",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "idem-deduplicated",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "keeps the first anonymous render private when it mints the binding cookie"
+      }
+    },
+    {
+      "id": "query-channel",
+      "mint": "forbidden",
+      "deliver": "no-browser-authority",
+      "validate": "read-only",
+      "rotate": "not-applicable",
+      "replay": "read-only",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "keeps the query channel read-only and unable to mint CSRF browser authority"
+      }
+    },
+    {
+      "id": "live-target-binding",
+      "mint": "reuse-binding",
+      "deliver": "same-response",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "idem-deduplicated",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "selects the private posture before a live route stream can mint from pull()"
+      }
+    },
+    {
+      "id": "no-js-redirect",
+      "mint": "reuse-binding",
+      "deliver": "existing-binding",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "idem-deduplicated",
+      "proof": {
+        "file": "packages/server/src/mutation-no-js.test.ts",
+        "anchor": "A2: deduplicates no-JS form submissions by Kovo-Idem, running the handler only once"
+      }
+    },
+    {
+      "id": "error-and-not-found",
+      "mint": "reuse-binding",
+      "deliver": "seal-before-replacement",
+      "validate": "not-applicable",
+      "rotate": "not-applicable",
+      "replay": "not-replayable",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "seals a no-boundary notFound route before returning the replacement error document"
+      }
+    },
+    {
+      "id": "immediate-stream",
+      "mint": "raw-endpoint-audience",
+      "deliver": "response-lifecycle",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "protocol-owned",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "auto-delivers a first-anonymous cookie from a verified safe endpoint stream pull"
+      }
+    },
+    {
+      "id": "late-stream",
+      "mint": "forbidden-after-seal",
+      "deliver": "forbidden-after-seal",
+      "validate": "not-applicable",
+      "rotate": "not-applicable",
+      "replay": "not-replayable",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "fails closed when a route stream first mints anonymous authority after headers commit"
+      }
+    },
+    {
+      "id": "nested-handler",
+      "mint": "independent-lifecycle",
+      "deliver": "response-lifecycle",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "protocol-owned",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "keeps a nested route dispatch isolated from its ambient outer endpoint lifecycle"
+      }
+    },
+    {
+      "id": "cloned-request",
+      "mint": "reuse-binding",
+      "deliver": "response-lifecycle",
+      "validate": "canonical-ingress",
+      "rotate": "old-rejected-new-required",
+      "replay": "protocol-owned",
+      "proof": {
+        "file": "packages/server/src/standalone-csrf-mint-security.test.ts",
+        "anchor": "reuses one standalone binding across a response request and its ordinary clone"
+      }
+    },
+    {
+      "id": "reused-exact-request",
+      "mint": "independent-lifecycle",
+      "deliver": "response-lifecycle",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "protocol-owned",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "isolates a successful nested endpoint dispatch that reuses the exact handler Request"
+      }
+    },
+    {
+      "id": "cache-posture",
+      "mint": "reuse-binding",
+      "deliver": "private-no-store-cookie-vary",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "not-replayable",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "marks an existing-cookie CSRF document variant private and cookie-varying"
+      }
+    },
+    {
+      "id": "exact-ingress-validation",
+      "mint": "forbidden",
+      "deliver": "existing-binding",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "not-replayable",
+      "proof": {
+        "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
+        "anchor": "rejects a detached reconstructed request in an external event after header commit"
+      }
+    },
+    {
+      "id": "session-rotation",
+      "mint": "reuse-binding",
+      "deliver": "existing-binding",
+      "validate": "exact-ingress-audience",
+      "rotate": "old-rejected-new-required",
+      "replay": "principal-isolated",
+      "proof": {
+        "file": "packages/server/src/app-mutation-request.test.ts",
+        "anchor": "keeps shared CSRF rotation ids and replay records bound to the current framework principal"
+      }
+    },
+    {
+      "id": "mutation-replay",
+      "mint": "reuse-binding",
+      "deliver": "existing-binding",
+      "validate": "before-replay",
+      "rotate": "principal-isolated",
+      "replay": "idem-deduplicated",
+      "proof": {
+        "file": "packages/server/src/csrf.test.ts",
+        "anchor": "does not consult replay records before default CSRF validation"
+      }
+    },
+    {
+      "id": "packed-node-vercel",
+      "mint": "framework-and-raw",
+      "deliver": "response-lifecycle",
+      "validate": "generated-parity",
+      "rotate": "generated-parity",
+      "replay": "generated-parity",
+      "proof": {
+        "file": "packages/server/src/build.test.ts",
+        "anchor": "shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells"
+      }
+    }
+  ],
+  "canaries": [
+    { "id": "drop-lifecycle-receipt", "killedBy": "anonymous-document-bootstrap" },
+    { "id": "allow-partial-public-mutation-helper", "killedBy": "typed-mutation-form" },
+    { "id": "drop-header-seal", "killedBy": "late-stream" },
+    { "id": "make-csrf-response-cacheable", "killedBy": "cache-posture" },
+    { "id": "accept-pre-rotation-token", "killedBy": "session-rotation" },
+    { "id": "replay-before-csrf", "killedBy": "mutation-replay" }
+  ]
+}

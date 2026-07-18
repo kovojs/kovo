@@ -348,6 +348,36 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     trust: 'principal-derived',
   },
   {
+    consumers: [
+      'better-auth-fixed-binding-constructors',
+      'better-auth-routed-credential-handlers',
+      'better-auth-session-provider',
+      'better-auth-password-hash-verify',
+      'better-auth-mount-adapter',
+      'better-auth-rate-limit-storage',
+      'better-auth-cookie-forwarders',
+    ],
+    context: 'auth.credential.secret.non-egress',
+    diagnostic: 'KV439',
+    escapeHatch: 'none',
+    firstParser: 'fixed-binding-option-validation+credential-consumer-contract-census',
+    guard: 'exact-runtime-consumer-registry+complete-M2-path-census+same-consumer-one-shot-results',
+    runtimeGuard:
+      'runBetterAuthCredentialConsumer{Async}+consumeBetterAuthCredentialResult+result-shape-validation+provider-error-redaction',
+    schema:
+      'signing-secret|submitted-password|stored-password-hash|request-cookie|session-token|session-record|Set-Cookie|dependency-result',
+    sink: 'auth.credential.non-egress',
+    source:
+      'operator-signing-material|credential-form-input|Better-Auth-systemDb|request-headers|Better-Auth-handler/API/results',
+    specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
+    testEvidence: [
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+      'packages/better-auth/src/index.credential-mutations.test.ts',
+      'packages/better-auth/src/index.session.test.ts',
+    ],
+    trust: 'secret-or-credential-bearing-framework-owned-boundary',
+  },
+  {
     consumers: ['drizzle-source-sink-plan', 'query-shape-observer'],
     context: 'sql.executable-text',
     diagnostic: 'KV406|KV410|KV422',
@@ -402,9 +432,12 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       'request-derived-url|task-payload-url|webhook-payload-url|agent-tool-argument|redirect-location|dns-answer|app-config-env-values',
     specAnchor: 'spec/06-type-system.md#6.6;spec/10-data-plane.md#10.3',
     testEvidence: [
+      'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/egress-redirect.test.ts',
+      'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
     ],
     trust: 'remote-and-configuration-derived-network-authority',
   },
@@ -639,8 +672,10 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'an undeclared origin is rejected before DNS or dial; every redirect and selected address is independently origin-checked, classified, and pinned before transport use',
     family: 'network.egress',
     negativeTestEvidence: [
+      'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/egress-redirect.test.ts',
+      'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
     ],
     payloads: [
@@ -656,9 +691,12 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'proxy-selected destination mismatch',
     ],
     positiveTestEvidence: [
+      'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/egress-redirect.test.ts',
+      'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
     ],
   },
 ] as const;
@@ -963,20 +1001,27 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     censusFamilies: ['http.header.cookie'],
     hostileValueEvidence: [
       'packages/server/src/cookies.test.ts',
+      'packages/server/src/anonymous-csrf-cache-security.test.tsx',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
+      'scripts/check-csrf-mint-delivery.test.mjs',
     ],
     mechanism: 'own',
     mechanismDetail:
-      'Cookie values cross the boundary only through the typed cookie builder, which owns encoding and attribute serialization.',
+      'Cookie values cross through the typed serializer; first-anonymous CSRF authority additionally requires a private response-lifecycle receipt whose atomic seal/snapshot is consumed only by an authorized response finalizer.',
     operationKinds: ['server.response.cookie'],
-    owner: '@kovojs/server/cookies',
+    owner: '@kovojs/server/response-lifecycle',
     proofEvidence: [
       'packages/server/src/cookies.test.ts',
+      'packages/server/src/standalone-csrf-mint-security.test.ts',
+      'packages/server/src/anonymous-csrf-cache-security.test.tsx',
+      'packages/server/src/build.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
+      'security/csrf-mint-delivery.json',
     ],
-    proofGate: 'pnpm run check:wire-output-boundary',
+    proofGate: 'pnpm run check:csrf-mint-delivery',
     sink: 'Set-Cookie',
-    soleDoor: 'typed cookie builder + serializer on the Set-Cookie channel',
+    soleDoor:
+      'typed cookie builder + serializer; anonymous CSRF response-lifecycle receipt, synchronous record, and seal/snapshot; authorized final response reconstruction',
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
   },
   {
@@ -1019,6 +1064,34 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     sink: 'durable-task payload',
     soleDoor: 'task queue envelope + observability redaction/export helpers',
     specAnchor: 'spec/09-wire-protocol.md §9.6; spec/11-verification.md §11.4',
+  },
+  {
+    censusFamilies: ['ingress.endpoint.webhook'],
+    hostileValueEvidence: [
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
+    mechanism: 'reconstruct',
+    mechanismDetail:
+      'Each adapter snapshots only its transport-owned method, authority, and scheme sources; one finite classifier rejects ambiguous or lossy values and reconstructs the Web Request method, URL authority, and app-visible Host from the same decision.',
+    operationKinds: [],
+    owner: '@kovojs/server/request-ingress',
+    proofEvidence: [
+      'packages/server/src/request-ingress-policy.ts',
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
+    proofGate: 'pnpm run check:security-classifier-corpus',
+    sink: 'request method/authority/scheme',
+    soleDoor:
+      'createRequestIngressClassifier after adapter-owned source snapshot; reconstructed method, URL authority, scheme, and Host decision',
+    specAnchor: 'spec/09-wire-protocol.md §9.5; spec/11-verification.md §11.4',
   },
   {
     censusFamilies: ['ingress.endpoint.webhook'],
@@ -1095,16 +1168,29 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
   },
   {
     censusFamilies: ['network.egress'],
-    hostileValueEvidence: ['packages/server/src/task-runner.test.ts'],
+    hostileValueEvidence: [
+      'packages/compiler/src/capability-closure.security.test.ts',
+      'packages/server/src/egress-property-oracle.test.ts',
+      'packages/server/src/egress-undici.test.ts',
+      'packages/server/src/task-runner.test.ts',
+    ],
     mechanism: 'own',
     mechanismDetail:
-      'Outbound network requests use the framework allowlist choke instead of arbitrary request-authored fetch targets on privileged task/runtime surfaces.',
+      'Task and verified-webhook code receives the exact non-replaceable ctx.fetch capability. It canonicalizes a positive origin allowlist at boot, rejects every undeclared initial/redirect origin before DNS, classifies every DNS answer, and leaves selected-address pinning to the exact dial sink.',
     operationKinds: ['server.egress.request'],
     owner: '@kovojs/server/egress',
-    proofEvidence: ['packages/server/src/task-runner.test.ts'],
+    proofEvidence: [
+      'packages/compiler/src/capability-closure.security.test.ts',
+      'packages/server/src/egress-property-oracle.test.ts',
+      'packages/server/src/egress-undici.test.ts',
+      'packages/server/src/egress.test.ts',
+      'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
+    ],
     proofGate: 'pnpm run check:egress-boundary',
     sink: 'outbound egress request',
-    soleDoor: 'framework egress allowlist choke on ctx.fetch and equivalent owned egress surfaces',
+    soleDoor:
+      'exact framework-owned ctx.fetch on task/webhook/future agent-tool contexts; exact module-private database socket witness for managed Postgres',
     specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
   },
   {
@@ -1126,6 +1212,29 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     sink: 'authorization principal/data access',
     soleDoor:
       'pinned request principal + least-privilege Postgres role/RLS/engine-closure boundary',
+    specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
+  },
+  {
+    censusFamilies: ['auth.credential.non-egress'],
+    hostileValueEvidence: [
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+      'packages/better-auth/src/index.credential-mutations.test.ts',
+      'packages/better-auth/src/index.session.test.ts',
+    ],
+    mechanism: 'own',
+    mechanismDetail:
+      'The package-private gate owns every supported Better Auth secret and credential consumer, admits only exact registered consumer identity, validates the contract result, and seals it for one opening by that same consumer.',
+    operationKinds: [],
+    owner: '@kovojs/better-auth/credential-gate',
+    proofEvidence: [
+      'packages/better-auth/src/internal/credential-runtime-gate.ts',
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+      'security/TCB.md',
+    ],
+    proofGate: 'pnpm run check:security-classifier-corpus',
+    sink: 'Better Auth credential/non-egress',
+    soleDoor:
+      'runBetterAuthCredentialConsumer{Async} + consumeBetterAuthCredentialResult exact registry door',
     specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
   },
   {

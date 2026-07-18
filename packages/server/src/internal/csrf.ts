@@ -1,4 +1,6 @@
 export {
+  csrfField,
+  csrfToken,
   frameworkCsrfRequestSnapshot,
   KOVO_IDEM_FIELD_NAME,
   mintIdemToken,
@@ -6,4 +8,4 @@ export {
   renderMutationCsrfField,
   renderMutationIdemField,
 } from '../csrf.js';
-export type { FrameworkCsrfRequestSnapshot } from '../csrf.js';
+export type { CsrfOptions, FrameworkCsrfRequestSnapshot } from '../csrf.js';

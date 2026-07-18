@@ -1,4 +1,5 @@
 export type BetterAuthRequestSecretCarrier =
+  | 'adapter-signing-secret'
   | 'adapter-system-db-secret-column'
   | 'request-cookie'
   | 'set-cookie'
@@ -9,6 +10,7 @@ export type BetterAuthRequestSecretDisposition =
   | 'confined-cookie-forwarding'
   | 'confined-third-party-adapter'
   | 'reconstructed-non-secret-projection'
+  | 'vetted-sign-or-hash'
   | 'vetted-compare-or-verify';
 
 export interface BetterAuthRequestSecretPath {
@@ -19,6 +21,7 @@ export interface BetterAuthRequestSecretPath {
     | 'credential-mutation:sign-in-email'
     | 'credential-mutation:sign-out'
     | 'credential-mutation:sign-up-email'
+    | 'binding-constructor'
     | 'mounted-better-auth-handler'
     | 'session-provider';
   /** Secret carrier consumed by this path. */
@@ -141,6 +144,36 @@ export const betterAuthRequestSecretPaths = betterAuthDeepFreeze(
       readsCrossUserCredential: false,
       reason:
         'Only an opaque Kovo-owned adapter delegates a GET callback request to Better Auth and returns its Response.',
+    },
+    {
+      id: 'better-auth.mount.set-cookie-forwarding',
+      entrypoint: 'mounted-better-auth-handler',
+      carrier: 'set-cookie',
+      source: 'packages/better-auth/src/mount-adapter.ts',
+      disposition: 'confined-cookie-forwarding',
+      readsCrossUserCredential: false,
+      reason:
+        'Mounted callback cookies can reach only the reconstructed Kovo redirect response cookie sink.',
+    },
+    {
+      id: 'better-auth.binding.signing-secret',
+      entrypoint: 'binding-constructor',
+      carrier: 'adapter-signing-secret',
+      source: 'packages/better-auth/src/postgres.ts and packages/better-auth/src/sqlite.ts',
+      disposition: 'confined-third-party-adapter',
+      readsCrossUserCredential: false,
+      reason:
+        'Validated signing material reaches only the privately constructed Better Auth instances.',
+    },
+    {
+      id: 'better-auth.rate-limit.signing-secret',
+      entrypoint: 'binding-constructor',
+      carrier: 'adapter-signing-secret',
+      source: 'packages/better-auth/src/internal/rate-limit-storage.ts',
+      disposition: 'vetted-sign-or-hash',
+      readsCrossUserCredential: false,
+      reason:
+        'Validated signing material reaches only the bounded credential-rate HMAC key import.',
     },
   ] as const satisfies readonly BetterAuthRequestSecretPath[],
   'Better Auth request secret path manifest',

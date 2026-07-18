@@ -13,11 +13,13 @@ describe('prod artifact sink census inventory evidence', () => {
       'Set-Cookie',
       'blob/file write',
       'durable-task payload',
+      'request method/authority/scheme',
       'webhook payload',
       'HTML/render output',
       'log/error output',
       'outbound egress request',
       'authorization principal/data access',
+      'Better Auth credential/non-egress',
       'dynamic module/process execution',
     ]);
     for (const entry of entries) {

@@ -32,7 +32,14 @@ import {
   betterAuthTrim,
   betterAuthUrlSnapshot,
 } from './intrinsics.js';
-import { assertBetterAuthRequestSecretPath } from './non-egress-proof.js';
+import {
+  betterAuthCredentialConsumers,
+  consumeBetterAuthCredentialResult,
+  runBetterAuthCredentialConsumer,
+  runBetterAuthCredentialConsumerAsync,
+  type BetterAuthCredentialConsumer,
+  type BetterAuthCredentialConsumerId,
+} from './credential-runtime-gate.js';
 import {
   assertBetterAuthCanonicalRequestOrigin,
   pinBetterAuthCanonicalOrigin,
@@ -407,13 +414,6 @@ export async function callBetterAuthCredentialHandler(
   headers: Headers,
   request: BetterAuthBindingRequest,
 ): Promise<BetterAuthResponseLike> {
-  if (auth.operation === 'signInEmail') {
-    assertBetterAuthRequestSecretPath('better-auth.sign-in.submitted-password');
-    assertBetterAuthRequestSecretPath('better-auth.adapter.sign-in.account-password');
-  } else {
-    assertBetterAuthRequestSecretPath('better-auth.sign-up.submitted-password');
-  }
-
   await assertBetterAuthCanonicalRequestOrigin(
     auth.canonicalOrigin,
     request,
@@ -430,9 +430,14 @@ export async function callBetterAuthCredentialHandler(
       method: 'POST',
     },
   );
-  return await betterAuthApply<Promise<Response> | Response>(auth.handler, auth.receiver, [
-    routedRequest,
-  ]);
+  const consumer =
+    auth.operation === 'signInEmail'
+      ? betterAuthCredentialConsumers.credentialHandlerSignInEmail
+      : betterAuthCredentialConsumers.credentialHandlerSignUpEmail;
+  const result = await runBetterAuthCredentialConsumerAsync(consumer, () =>
+    betterAuthApply<Promise<Response> | Response>(auth.handler, auth.receiver, [routedRequest]),
+  );
+  return consumeBetterAuthCredentialResult(consumer, result);
 }
 
 function credentialHandlerHeaders(
@@ -546,32 +551,21 @@ function credentialHandlerUrl(
 }
 
 /** @internal Pass an email/password sign-in secret only to Better Auth's comparison sink. */
-export function callBetterAuthSignInEmail(
-  auth: Pick<BetterAuthSignInEmailLike, 'api'>,
-  body: BetterAuthSignInEmailBody,
-  headers: Headers,
-): Promise<BetterAuthResponseLike> | BetterAuthResponseLike {
-  assertBetterAuthRequestSecretPath('better-auth.sign-in.submitted-password');
-  assertBetterAuthRequestSecretPath('better-auth.adapter.sign-in.account-password');
-  return auth.api.signInEmail({
-    asResponse: true,
-    body,
-    headers,
-  });
-}
-
 /** @internal Pass an email/password sign-up secret only to Better Auth's write/comparison sink. */
-export function callBetterAuthSignUpEmail(
+export async function callBetterAuthSignUpEmail(
   auth: Pick<BetterAuthSignUpEmailLike, 'api'>,
   body: BetterAuthSignUpEmailBody,
   headers: Headers,
-): Promise<BetterAuthResponseLike> | BetterAuthResponseLike {
-  assertBetterAuthRequestSecretPath('better-auth.sign-up.submitted-password');
-  return auth.api.signUpEmail({
-    asResponse: true,
-    body,
-    headers,
+): Promise<void> {
+  const consumer = betterAuthCredentialConsumers.seedSignUpEmail;
+  const result = await runBetterAuthCredentialConsumerAsync(consumer, async () => {
+    await auth.api.signUpEmail({
+      asResponse: true,
+      body,
+      headers,
+    });
   });
+  consumeBetterAuthCredentialResult(consumer, result);
 }
 
 /** @internal Pass the request cookie material only to Better Auth's revocation sink. */
@@ -584,11 +578,14 @@ export async function callBetterAuthSignOut(
     request,
     'Better Auth sign-out',
   );
-  assertBetterAuthRequestSecretPath('better-auth.sign-out.request-cookie');
-  return await auth.api.signOut({
-    asResponse: true,
-    headers: request.headers,
-  });
+  const consumer = betterAuthCredentialConsumers.signOut;
+  const result = await runBetterAuthCredentialConsumerAsync(consumer, () =>
+    auth.api.signOut({
+      asResponse: true,
+      headers: request.headers,
+    }),
+  );
+  return consumeBetterAuthCredentialResult(consumer, result);
 }
 
 /** @internal Pass request cookies only to Better Auth's session lookup sink. */
@@ -606,18 +603,51 @@ export async function callBetterAuthGetSession<AuthSession, AuthUser>(
     request,
     'Better Auth session',
   );
-  assertBetterAuthRequestSecretPath('better-auth.get-session.request-cookie');
-  assertBetterAuthRequestSecretPath('better-auth.adapter.session-token-lookup');
-  return await auth.api.getSession({
-    headers: request.headers,
-    returnHeaders: true,
-  });
+  const consumer = betterAuthCredentialConsumers.getSession;
+  const result = await runBetterAuthCredentialConsumerAsync(consumer, () =>
+    auth.api.getSession({
+      headers: request.headers,
+      returnHeaders: true,
+    }),
+  );
+  return consumeBetterAuthCredentialResult(consumer, result);
 }
 
 /** @internal Read all Better Auth `Set-Cookie` values for the session-cookie sink. */
 export function getBetterAuthSetCookie(headers: Headers | null | undefined): string[] {
-  assertBetterAuthRequestSecretPath('better-auth.set-cookie.forwarding');
-  assertBetterAuthRequestSecretPath('better-auth.session-refresh.set-cookie');
+  return getBetterAuthSetCookieForConsumer(
+    betterAuthCredentialConsumers.credentialCookieForwarding,
+    headers,
+  );
+}
+
+/** @internal Read session-refresh cookies only through their reviewed forwarding consumer. */
+export function getBetterAuthSessionSetCookie(headers: Headers | null | undefined): string[] {
+  return getBetterAuthSetCookieForConsumer(
+    betterAuthCredentialConsumers.sessionCookieForwarding,
+    headers,
+  );
+}
+
+/** @internal Read mounted-handler cookies only through their reviewed forwarding consumer. */
+export function getBetterAuthMountSetCookie(headers: Headers | null | undefined): string[] {
+  return getBetterAuthSetCookieForConsumer(
+    betterAuthCredentialConsumers.mountCookieForwarding,
+    headers,
+  );
+}
+
+function getBetterAuthSetCookieForConsumer<Id extends BetterAuthCredentialConsumerId>(
+  consumer: BetterAuthCredentialConsumer<Id>,
+  headers: Headers | null | undefined,
+): string[] {
+  const result = runBetterAuthCredentialConsumer(consumer, () =>
+    snapshotBetterAuthSetCookie(headers),
+  );
+  return consumeBetterAuthCredentialResult(consumer, result);
+}
+
+function snapshotBetterAuthSetCookie(headers: Headers | null | undefined): string[] {
   if (headers === null || headers === undefined) return [];
 
   // A native Headers instance is positive platform evidence. Read it through the boot-pinned

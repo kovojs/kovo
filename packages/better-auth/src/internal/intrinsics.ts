@@ -25,6 +25,7 @@ const nativeDateParse = NativeDate.parse;
 const nativeJsonParse = NativeJSON.parse;
 const nativeJsonStringify = NativeJSON.stringify;
 const nativeMapForEach = NativeMap.prototype.forEach;
+const nativeMapDelete = NativeMap.prototype.delete;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
 const nativeMapSet = NativeMap.prototype.set;
@@ -153,6 +154,9 @@ function capturedControlsAreSound(): boolean {
       apply<string>(nativeJsonStringify, NativeJSON, [{ safe: true }]) === '{"safe":true}' &&
       apply(nativeObjectIsFrozen, NativeObject, [frozenProbe]) === true &&
       apply(nativeMapGet, map, ['safe']) === 'value' &&
+      apply(nativeMapDelete, map, ['safe']) === true &&
+      apply(nativeMapHas, map, ['safe']) === false &&
+      apply(nativeMapSet, map, ['safe', 'value']) === map &&
       apply(nativeMapHas, map, ['safe']) === true &&
       apply(nativeMapHas, map, ['missing']) === false &&
       apply(nativeSetHas, set, ['safe']) === true &&
@@ -533,6 +537,11 @@ export function betterAuthMapGet<Key, Value>(
   return apply(nativeMapGet, map, [key]);
 }
 
+export function betterAuthMapDelete<Key, Value>(map: Map<Key, Value>, key: Key): boolean {
+  assertBetterAuthIntrinsics();
+  return apply(nativeMapDelete, map, [key]);
+}
+
 export function betterAuthMapHas<Key, Value>(map: ReadonlyMap<Key, Value>, key: Key): boolean {
   assertBetterAuthIntrinsics();
   return apply(nativeMapHas, map, [key]);
@@ -633,6 +642,12 @@ export function betterAuthIsNaN(value: number): boolean {
 export function betterAuthIsSafeInteger(value: number): boolean {
   assertBetterAuthIntrinsics();
   return apply(nativeNumberIsSafeInteger, NativeNumber, [value]);
+}
+
+/** @internal Refuse hostile Proxy carriers before own-data security classification. */
+export function betterAuthIsProxy(value: unknown): boolean {
+  assertBetterAuthIntrinsics();
+  return nativeUtilIsProxy(value);
 }
 
 export function betterAuthRegExpExec(pattern: RegExp, value: string): RegExpExecArray | null {
