@@ -474,7 +474,9 @@ describe('create-kovo starter (build integration: adversarial production artifac
           const unsafe = await fetch(`${origin}/m1/header-unsafe.txt`);
           const unsafeBody = await unsafe.text();
           expect(unsafe.status, unsafeBody).toBe(500);
-          expect(unsafe.headers.get('vary')).toBeNull();
+          // SPEC.md §9.1.1: the response lifecycle keeps its conservative cookie-vary
+          // posture even though the rejected authored header cannot emit Set-Cookie bytes.
+          expect(unsafe.headers.get('vary')).toBe('Cookie');
           expect(unsafe.headers.getSetCookie()).toEqual([]);
 
           const headerCookieJar = new Map<string, string>();
