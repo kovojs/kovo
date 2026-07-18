@@ -1260,7 +1260,7 @@ void test('P10 perf acceptance is wired through Playwright and CDP', async () =>
       navigationCount: 100,
       paintEntry: 'first-contentful-paint',
       prerenderTimingField: 'activationStart',
-      ttiMetric: 'ttiMinusFcpMs',
+      ttiMetric: 'listenerEnrollmentBeforeContentfulPaint',
     },
     inputFacts: [
       { auto: true },

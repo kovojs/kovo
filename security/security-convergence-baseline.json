@@ -20,8 +20,8 @@
     }
   ],
   "currentSnapshot": {
-    "measuredCodeSha": "497f6eee65919910d7c832660224e4aa29c74571",
-    "reason": "Post-M35 and bounded-diamond structural refresh; the immutable comparable audit remains the e5 historical row.",
+    "measuredCodeSha": "ffd7c978696709ad8abd5fa613f2eb311c7eb4e9",
+    "reason": "Post-main-restoration structural refresh; the immutable comparable audit remains the e5 historical row.",
     "snapshot": {
       "schema": "kovo-security-convergence-baseline/v1",
       "charter": {
@@ -119,19 +119,19 @@
             "writeln"
           ]
         },
-        "total": 5958,
+        "total": 5971,
         "trustStatic": {
-          "directNamePredicates": 1318,
-          "inlineMembershipEntries": 558,
-          "nameBranches": 2566,
+          "directNamePredicates": 1325,
+          "inlineMembershipEntries": 562,
+          "nameBranches": 2577,
           "namedInventoryEntries": 674,
           "namedInventorySha256": "a17407a73922b8152013190c0c715c3ae7d483b2c5926ca89a091fba1c0d4aad",
           "namedInventoryTableCount": 62,
           "switchLiteralCases": 16,
-          "syntaxBranches": 3335,
-          "syntaxGuardSites": 2508,
+          "syntaxBranches": 3337,
+          "syntaxGuardSites": 2510,
           "syntaxKindSites": 827,
-          "total": 5901
+          "total": 5914
         }
       },
       "g": {
@@ -140,13 +140,13 @@
         "unexpectedClosedVerdicts": 0
       },
       "c13": {
-        "anchorCount": 144,
+        "anchorCount": 145,
         "corpusCount": 17,
-        "testFileCount": 56
+        "testFileCount": 57
       },
       "informational": {
         "egressLoc": 2299,
-        "trustStaticLoc": 38496
+        "trustStaticLoc": 38591
       }
     }
   }
