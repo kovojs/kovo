@@ -42,6 +42,10 @@ const trustedHtmlProvenancePath = path.join(
 );
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
+const betterAuthCredentialRuntimeGatePath = path.join(
+  repoRoot,
+  'packages/better-auth/src/internal/credential-runtime-gate.ts',
+);
 
 const ownerReadCanary = [
   '      "id": "endpoint-builder-act-as-owner",',
@@ -394,6 +398,12 @@ const removedResponseFragmentTrustedHtmlRouteBranch = [
 const queryWireHtmlEscapeBranch = '${escapeHtml(stringifyKovoWireValue(options.value))}';
 
 const removedQueryWireHtmlEscapeBranch = '${stringifyKovoWireValue(options.value)}';
+
+const betterAuthCredentialResultIdentityBranch =
+  '  if (registered === undefined || registered.consumer !== consumer) {';
+
+const removedBetterAuthCredentialResultIdentityBranch =
+  '  if (registered === undefined || false) {';
 
 const m5ForbiddenStatusBranch = [
   '  } else if (FORBIDDEN_STATUS_PATTERN.test(row.status)) {',
@@ -887,6 +897,18 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: queryWireHtmlPath,
     sourceOnly: true,
     test: assertQueryWireHtmlBodyEscapingIsCaught,
+  },
+  {
+    description:
+      'Deletes exact same-consumer identity from the Better Auth credential result refusal.',
+    expectedKiller:
+      'M2 Better Auth runtime results must be opened only by the exact consumer that minted them',
+    name: 'better-auth-credential-gate/drop-result-consumer-identity',
+    replacement: removedBetterAuthCredentialResultIdentityBranch,
+    search: betterAuthCredentialResultIdentityBranch,
+    sourceFile: betterAuthCredentialRuntimeGatePath,
+    sourceOnly: true,
+    test: assertBetterAuthCredentialResultIdentityIsPinned,
   },
   {
     baseModule: fundamentalFixesCensusGate,
@@ -1739,6 +1761,17 @@ async function assertQueryWireHtmlBodyEscapingIsCaught(_moduleUnderTest, { sourc
   const findings = sinkPolicyGate.queryWireHtmlInvariantFindings('wire-html.ts', sourceText ?? '');
   if (findings.includes('wire-html.ts: /_q query wire body must HTML-escape serialized values')) {
     throw new Error('/_q query wire body escaping invariant was removed');
+  }
+}
+
+async function assertBetterAuthCredentialResultIdentityIsPinned(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (!sourceText?.includes(betterAuthCredentialResultIdentityBranch)) {
+    throw new Error(
+      'Better Auth credential results no longer require exact same-consumer registry identity',
+    );
   }
 }
 

@@ -12,6 +12,11 @@ import {
   validateBetterAuthBaseUrl,
 } from './environment.js';
 import { betterAuthFixedCookieSecurity } from './internal/cookie-security.js';
+import {
+  betterAuthCredentialConsumers,
+  consumeBetterAuthCredentialResult,
+  runBetterAuthCredentialConsumer,
+} from './internal/credential-runtime-gate.js';
 import { betterAuthFreezeOwn, betterAuthOwnDataOption } from './internal/intrinsics.js';
 import { betterAuthHashPassword, betterAuthVerifyPassword } from './internal/password.js';
 import { registerFixedBetterAuthCanonicalOrigin } from './internal/request-origin.js';
@@ -193,31 +198,40 @@ export function createBetterAuthSqliteBindings<
   const database = useSqliteSystemDb(systemDb, (db) =>
     drizzleAdapter(db, { provider: 'sqlite', schema: pinnedSchema }),
   );
-  const auth = betterAuth({
-    // The raw Better Auth router is structurally unreachable. Kovo exposes only an opaque,
-    // GET-only callback adapter; fixed credential wrappers own unsafe-method ingress (SPEC
-    // §6.6/§10.3 C9), so ambient trusted-origin configuration cannot become widenable authority.
-    advanced: {
-      ...betterAuthFixedCookieSecurity(baseURL),
-      disableCSRFCheck: true,
-      disableOriginCheck: true,
-      ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] },
-    },
-    baseURL,
-    database,
-    // Seeding provisions a credential only. A session must require the explicit, CSRF-protected
-    // sign-in mutation rather than being created as a side effect of server boot (SPEC §6.6).
-    emailAndPassword: {
-      autoSignIn: false,
-      enabled: true,
-      password: { hash: betterAuthHashPassword, verify: betterAuthVerifyPassword },
-    },
-    rateLimit: createBetterAuthSqliteRateLimitStorage(secret, systemDb, rateLimitTable),
-    secret,
-    secrets: [{ version: 0, value: secret }],
-    telemetry: { enabled: false },
-    trustedOrigins: [],
-  });
+  const rateLimitConsumer = betterAuthCredentialConsumers.sqliteRateLimit;
+  const sealedRateLimit = runBetterAuthCredentialConsumer(rateLimitConsumer, () =>
+    createBetterAuthSqliteRateLimitStorage(secret, systemDb, rateLimitTable),
+  );
+  const rateLimit = consumeBetterAuthCredentialResult(rateLimitConsumer, sealedRateLimit);
+  const adapterConsumer = betterAuthCredentialConsumers.sqliteAdapter;
+  const sealedAuth = runBetterAuthCredentialConsumer(adapterConsumer, () =>
+    betterAuth({
+      // The raw Better Auth router is structurally unreachable. Kovo exposes only an opaque,
+      // GET-only callback adapter; fixed credential wrappers own unsafe-method ingress (SPEC
+      // §6.6/§10.3 C9), so ambient trusted-origin configuration cannot become widenable authority.
+      advanced: {
+        ...betterAuthFixedCookieSecurity(baseURL),
+        disableCSRFCheck: true,
+        disableOriginCheck: true,
+        ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] },
+      },
+      baseURL,
+      database,
+      // Seeding provisions a credential only. A session must require the explicit, CSRF-protected
+      // sign-in mutation rather than being created as a side effect of server boot (SPEC §6.6).
+      emailAndPassword: {
+        autoSignIn: false,
+        enabled: true,
+        password: { hash: betterAuthHashPassword, verify: betterAuthVerifyPassword },
+      },
+      rateLimit,
+      secret,
+      secrets: [{ version: 0, value: secret }],
+      telemetry: { enabled: false },
+      trustedOrigins: [],
+    }),
+  );
+  const auth = consumeBetterAuthCredentialResult(adapterConsumer, sealedAuth);
   registerFixedBetterAuthCanonicalOrigin(auth, baseURL, 'Better Auth SQLite binding');
   const mountAdapter = createBetterAuthMountAdapter(auth, baseURL);
   const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);

@@ -41,6 +41,7 @@ import {
   betterAuthToLowerCase,
   betterAuthTrim,
 } from './intrinsics.js';
+import { isBetterAuthCredentialGateFailure } from './credential-runtime-gate.js';
 import { getBetterAuthRetryAfter, getBetterAuthSetCookie } from './trusted-plaintext.js';
 
 export { getBetterAuthSetCookie } from './trusted-plaintext.js';
@@ -245,6 +246,7 @@ export async function resolveBetterAuthCredentialSuccess<Status extends string>(
 
 /** @internal True when a thrown Better Auth error carries a 400/401/403 credential-failure status. */
 export function isBetterAuthCredentialFailureError(error: unknown): boolean {
+  if (isBetterAuthCredentialGateFailure(error)) return true;
   if (!error || typeof error !== 'object') return false;
 
   const status =

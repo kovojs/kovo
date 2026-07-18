@@ -33,6 +33,7 @@ const requiredC9SinkNames = [
   'log/error output',
   'outbound egress request',
   'authorization principal/data access',
+  'Better Auth credential/non-egress',
   'dynamic module/process execution',
 ] as const;
 
@@ -193,6 +194,7 @@ describe('boundary crossing sink inventory', () => {
         ['log/error output', 'box'],
         ['outbound egress request', 'own'],
         ['authorization principal/data access', 'own'],
+        ['Better Auth credential/non-egress', 'own'],
         ['dynamic module/process execution', 'own'],
       ]),
     );
@@ -225,6 +227,15 @@ describe('boundary crossing sink inventory', () => {
     expect(
       inventory.find((entry) => entry.sink === 'outbound egress request')?.censusFamilies,
     ).toEqual(['network.egress']);
+    const credentialDoor = inventory.find(
+      (entry) => entry.sink === 'Better Auth credential/non-egress',
+    );
+    expect(credentialDoor?.censusFamilies).toEqual(['auth.credential.non-egress']);
+    expect(credentialDoor?.soleDoor).toContain('runBetterAuthCredentialConsumer{Async}');
+    expect(credentialDoor?.soleDoor).toContain('consumeBetterAuthCredentialResult');
+    expect(credentialDoor?.hostileValueEvidence).toContain(
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+    );
   });
 
   it('keeps every owner, proof gate, and hostile-value citation live', () => {
