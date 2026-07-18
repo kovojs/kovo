@@ -2537,6 +2537,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'an opaque local value escape',
           'a private-value conditional condition contains %s',
           'an inline assignment',
+          'a private value escapes earlier in the audited sink statement',
+          'Object.assign(userId, { value: input.userId })',
         ],
       },
       {

@@ -156,6 +156,25 @@ function sideEffectingConditionSource(condition: string): string {
   ].join('\n');
 }
 
+function sameStatementValueEscapeSource(): string {
+  return [
+    'import { eq } from "drizzle-orm";',
+    'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+    'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+    'import { query } from "@kovojs/server";',
+    'type Context = { request: { guard: { userId: unknown } }, db: PgAsyncDatabase<any, any> };',
+    'export const docs = pgTable("docs", { userId: text("user_id").notNull(), id: text("id").notNull() }, kovo({ domain: "doc", key: "userId,id", owner: "userId" }));',
+    'function current(context: Context) { return context.request.guard.userId; }',
+    'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+    'export const list = query("list", {',
+    '  async load(input: { userId: string }, context: Context) {',
+    '    const userId = current(context);',
+    '    return { items: await context.db.select({ id: docs.id, poison: Object.assign(userId, { value: input.userId }) }).from(docs).where(eq(docs.userId, userId)) };',
+    '  },',
+    '});',
+  ].join('\n');
+}
+
 describe('analyzer-summary callable stability', () => {
   it.each([
     ['Object.assign', { mutation: 'Object.assign(helpers, { current: unsafe });' }],
@@ -328,6 +347,12 @@ describe('analyzer-summary callable stability', () => {
     ['an inline assignment', '(context.request.guard.userId = input.userId)'],
   ])('fails closed when a private-value conditional condition contains %s', (_label, condition) => {
     const result = verdictForSource(sideEffectingConditionSource(condition));
+    expect(result.scope).toBe('unknown');
+    expect(result.check.exitCode).toBe(1);
+  });
+
+  it('fails closed when a private value escapes earlier in the audited sink statement', () => {
+    const result = verdictForSource(sameStatementValueEscapeSource());
     expect(result.scope).toBe('unknown');
     expect(result.check.exitCode).toBe(1);
   });

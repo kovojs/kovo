@@ -750,9 +750,38 @@ function privateScopeBindingIsStableAtUse(declaration: Node, name: string, use: 
   const useIndex = statements.findIndex((statement) => sameSourceNode(statement, used.statement));
   if (declarationIndex < 0 || useIndex <= declarationIndex) return false;
 
-  return !statements
-    .slice(declarationIndex + 1, useIndex)
-    .some((statement) => statementContainsAliasIdentifier(statement, name));
+  const nameNode =
+    Node.isIdentifier(variable.getNameNode()) && variable.getNameNode().getText() === name
+      ? variable.getNameNode()
+      : Node.isBindingElement(declaration) &&
+          Node.isIdentifier(declaration.getNameNode()) &&
+          declaration.getNameNode().getText() === name
+        ? declaration.getNameNode()
+        : undefined;
+  const bindingKey = nameNode
+    ? resolvedSymbolKey(symbolForIdentifierReference(nameNode) ?? nameNode.getSymbol())
+    : undefined;
+  if (!bindingKey) return false;
+
+  // Scan through the whole sink statement, not merely preceding statements. Query builders may
+  // evaluate another argument before `.where(...)`, and they may retain an object parameter until
+  // dispatch; either an earlier or later same-statement escape can therefore rewrite the value.
+  return !use
+    .getSourceFile()
+    .getDescendantsOfKind(SyntaxKind.Identifier)
+    .some((candidate) => {
+      if (sameSourceNode(candidate, use)) return false;
+      if (
+        candidate.getStart() < variable.getEnd() ||
+        candidate.getEnd() > used.statement.getEnd()
+      ) {
+        return false;
+      }
+      const candidateKey = resolvedSymbolKey(
+        symbolForIdentifierReference(candidate) ?? candidate.getSymbol(),
+      );
+      return candidateKey === bindingKey;
+    });
 }
 
 function privateScopeAliasForIdentifier(

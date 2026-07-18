@@ -857,11 +857,32 @@ const analyzerSummaryConstValueAliasBranch =
 const weakenedAnalyzerSummaryConstValueAliasBranch =
   '  if (false && !isConstVariableBindingDeclaration(declaration)) return false;';
 const analyzerSummaryValueAliasEscapeClosureBranch = [
-  '  return !statements',
-  '    .slice(declarationIndex + 1, useIndex)',
-  '    .some((statement) => statementContainsAliasIdentifier(statement, name));',
+  '  // Scan through the whole sink statement, not merely preceding statements. Query builders may',
+  '  // evaluate another argument before `.where(...)`, and they may retain an object parameter until',
+  '  // dispatch; either an earlier or later same-statement escape can therefore rewrite the value.',
+  '  return !use',
+  '    .getSourceFile()',
+  '    .getDescendantsOfKind(SyntaxKind.Identifier)',
+  '    .some((candidate) => {',
+  '      if (sameSourceNode(candidate, use)) return false;',
+  '      if (',
+  '        candidate.getStart() < variable.getEnd() ||',
+  '        candidate.getEnd() > used.statement.getEnd()',
+  '      ) {',
+  '        return false;',
+  '      }',
+  '      const candidateKey = resolvedSymbolKey(',
+  '        symbolForIdentifierReference(candidate) ?? candidate.getSymbol(),',
+  '      );',
+  '      return candidateKey === bindingKey;',
+  '    });',
 ].join('\n');
-const weakenedAnalyzerSummaryValueAliasEscapeClosureBranch = '  return true;';
+const weakenedAnalyzerSummaryValueAliasEscapeClosureBranch = [
+  '  // Scan through the whole sink statement, not merely preceding statements. Query builders may',
+  '  // evaluate another argument before `.where(...)`, and they may retain an object parameter until',
+  '  // dispatch; either an earlier or later same-statement escape can therefore rewrite the value.',
+  '  return true;',
+].join('\n');
 const analyzerSummaryConditionalEffectClosureBranch = [
   'function privateScopeConditionIsEffectFree(condition: Node): boolean {',
   '  for (const node of [condition, ...condition.getDescendants()]) {',
