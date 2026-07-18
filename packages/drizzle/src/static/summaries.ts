@@ -1918,13 +1918,9 @@ function summarizedStaticCallablePrivateScope(
   const direct = strictHelperSummaryForStaticReference(node, sessionContext.helpers);
   if (direct) return direct;
 
-  if (Node.isIdentifier(node)) {
-    const initializer = stableLocalConstInitializer(node);
-    return initializer
-      ? summarizedStaticCallablePrivateScope(initializer, sessionContext, depth + 1)
-      : undefined;
-  }
-
+  // The shared helper map already contains the structurally proved callable and at most one direct
+  // immutable alias. Recursing through another const initializer would create an unreviewed second
+  // hop in only this OPP consumer (SPEC §6.6/§10.3).
   return undefined;
 }
 

@@ -80,7 +80,7 @@ function analyzerHelperSummariesForSourceFile(
     if (privateScopeKey(declared) !== privateScopeKey(proven)) continue;
     summaries.set(key, proven);
   }
-  addLocalHelperSummaryAliases(sourceFile, summaries);
+  addLocalHelperSummaryAliases(sourceFile, new Map(summaries), summaries);
   return summaries;
 }
 
@@ -223,6 +223,7 @@ function exactSingleReturnExpression(helper: ExactLocalFunction): Node | undefin
 
 function addLocalHelperSummaryAliases(
   sourceFile: SourceFile,
+  directSummaries: ReadonlyMap<string, PrivateScopeProvenance>,
   summaries: Map<string, PrivateScopeProvenance>,
 ): void {
   for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
@@ -236,7 +237,10 @@ function addLocalHelperSummaryAliases(
     const initializer = declaration.getInitializer();
     if (!initializer) continue;
 
-    const provenance = helperSummaryForStaticReference(initializer, summaries);
+    // SPEC §6.6 permits one direct immutable alias of a structurally proved helper. Resolve every
+    // alias from the pre-alias snapshot so a declaration encountered earlier in this walk cannot
+    // become provenance for a second hop.
+    const provenance = helperSummaryForStaticReference(initializer, directSummaries);
     if (!provenance) continue;
 
     const key = resolvedSymbolKey(symbolForIdentifierReference(name) ?? name.getSymbol());
@@ -552,7 +556,12 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
  * @internal
  */
 export function privateScopeHelperCallCarrierIsProven(call: CallExpression): boolean {
-  const carrier = call.getArguments()[0];
+  const args = call.getArguments();
+  // SPEC §6.6/§10.3 requires the exact carrier as the sole argument. Extra argument evaluation can
+  // mutate that carrier before the helper body reads it, including through a strict-TS widened
+  // direct alias; a spread is an independent evaluation channel even when its static tuple is empty.
+  if (args.length !== 1 || args.some(Node.isSpreadElement)) return false;
+  const carrier = args[0];
   return carrier !== undefined && privateScopeCarrierBindingIsProven(carrier, call);
 }
 

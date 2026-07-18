@@ -759,6 +759,46 @@ const analyzerSummaryCallCarrierBranch = [
 ].join('\n');
 const weakenedAnalyzerSummaryCallCarrierBranch =
   '    return helperSummaryForCallCallee(callee, context.helpers);';
+const analyzerSummarySoleCarrierArgumentBranch = [
+  '  const args = call.getArguments();',
+  '  // SPEC §6.6/§10.3 requires the exact carrier as the sole argument. Extra argument evaluation can',
+  '  // mutate that carrier before the helper body reads it, including through a strict-TS widened',
+  '  // direct alias; a spread is an independent evaluation channel even when its static tuple is empty.',
+  '  if (args.length !== 1 || args.some(Node.isSpreadElement)) return false;',
+].join('\n');
+const weakenedAnalyzerSummarySoleCarrierArgumentBranch = [
+  '  const args = call.getArguments();',
+  '  // SPEC §6.6/§10.3 requires the exact carrier as the sole argument. Extra argument evaluation can',
+  '  // mutate that carrier before the helper body reads it, including through a strict-TS widened',
+  '  // direct alias; a spread is an independent evaluation channel even when its static tuple is empty.',
+  '  if (args.length === 0 || args.some(Node.isSpreadElement)) return false;',
+].join('\n');
+const analyzerSummaryDirectAliasSnapshotBranch = [
+  '  addLocalHelperSummaryAliases(sourceFile, new Map(summaries), summaries);',
+  '  return summaries;',
+].join('\n');
+const weakenedAnalyzerSummaryDirectAliasSnapshotBranch = [
+  '  addLocalHelperSummaryAliases(sourceFile, summaries, summaries);',
+  '  return summaries;',
+].join('\n');
+const analyzerSummaryOppAliasChainClosureBranch = [
+  '  // The shared helper map already contains the structurally proved callable and at most one direct',
+  '  // immutable alias. Recursing through another const initializer would create an unreviewed second',
+  '  // hop in only this OPP consumer (SPEC §6.6/§10.3).',
+  '  return undefined;',
+].join('\n');
+const weakenedAnalyzerSummaryOppAliasChainClosureBranch = [
+  '  // The shared helper map already contains the structurally proved callable and at most one direct',
+  '  // immutable alias. Recursing through another const initializer would create an unreviewed second',
+  '  // hop in only this OPP consumer (SPEC §6.6/§10.3).',
+  '  if (Node.isIdentifier(node)) {',
+  '    const initializer = stableLocalConstInitializer(node);',
+  '    return initializer',
+  '      ? summarizedStaticCallablePrivateScope(initializer, sessionContext, depth + 1)',
+  '      : undefined;',
+  '  }',
+  '  return undefined;',
+].join('\n');
 const analyzerSummaryUnenrolledCarrierClosureBranch = '  if (frameworkRole !== true) return false;';
 const weakenedAnalyzerSummaryUnenrolledCarrierClosureBranch =
   '  if (frameworkRole === false) return false;';
@@ -1023,6 +1063,37 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
     test: assertAnalyzerSummaryCallCarrierIsPinned,
+  },
+  {
+    description:
+      'Lets extra argument evaluation run before a proved private helper reads its carrier.',
+    expectedKiller: 'private helper calls must retain the sole carrier argument grammar',
+    name: 'drizzle-analyzer-summary/allow-extra-carrier-argument',
+    replacement: weakenedAnalyzerSummarySoleCarrierArgumentBranch,
+    search: analyzerSummarySoleCarrierArgumentBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummarySoleCarrierArgumentIsPinned,
+  },
+  {
+    description: 'Lets derived helper aliases become provenance for another alias hop.',
+    expectedKiller: 'private helper aliases must derive only from the direct proved snapshot',
+    name: 'drizzle-analyzer-summary/allow-transitive-helper-alias',
+    replacement: weakenedAnalyzerSummaryDirectAliasSnapshotBranch,
+    search: analyzerSummaryDirectAliasSnapshotBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryDirectAliasSnapshotIsPinned,
+  },
+  {
+    description: 'Restores recursive const-alias expansion in the OPP private-scope consumer.',
+    expectedKiller: 'OPP private helper aliases must stop after one direct alias',
+    name: 'drizzle-analyzer-summary/allow-opp-alias-chain',
+    replacement: weakenedAnalyzerSummaryOppAliasChainClosureBranch,
+    search: analyzerSummaryOppAliasChainClosureBranch,
+    sourceFile: drizzleSummariesPath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryOppAliasChainClosureIsPinned,
   },
   {
     description: 'Lets an unenrolled positional parameter pass as private context.',
@@ -2239,6 +2310,24 @@ async function assertAnalyzerSummaryStructuralProofIsPinned(_moduleUnderTest, { 
 async function assertAnalyzerSummaryCallCarrierIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(analyzerSummaryCallCarrierBranch)) {
     throw new Error('private helper calls no longer require the exact request/context carrier');
+  }
+}
+
+async function assertAnalyzerSummarySoleCarrierArgumentIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummarySoleCarrierArgumentBranch)) {
+    throw new Error('private helper calls no longer require the carrier as their sole argument');
+  }
+}
+
+async function assertAnalyzerSummaryDirectAliasSnapshotIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryDirectAliasSnapshotBranch)) {
+    throw new Error('private helper aliases no longer derive from the direct proved snapshot');
+  }
+}
+
+async function assertAnalyzerSummaryOppAliasChainClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryOppAliasChainClosureBranch)) {
+    throw new Error('OPP private helper aliases no longer stop after one direct alias');
   }
 }
 
