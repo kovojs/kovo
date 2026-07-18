@@ -304,8 +304,12 @@ function appendSetCookie(res, cookie) {
     if (last && typeof last === 'object' && !Array.isArray(last)) {
       const provided = last['Set-Cookie'] ?? last['set-cookie'];
       if (provided !== undefined) {
-        last['Set-Cookie'] = [].concat(ours ?? [], provided);
-        delete last['set-cookie'];
+        // Node adapters may freeze their snapshotted header carrier before calling writeHead.
+        // Never mutate that caller-owned proof object just to merge the demo isolation cookie.
+        const mergedHeaders = { ...last };
+        mergedHeaders['Set-Cookie'] = [].concat(ours ?? [], provided);
+        delete mergedHeaders['set-cookie'];
+        rest = [...rest.slice(0, -1), mergedHeaders];
       }
     }
     res.writeHead = originalWriteHead;

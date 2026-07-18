@@ -62,6 +62,22 @@ describe('createPerSessionDispatcher', () => {
     expect(dispatcher.size).toBe(1);
   });
 
+  it('merges app cookies without mutating a frozen writeHead carrier', async () => {
+    const appHeaders = Object.freeze({ 'set-cookie': ['app_session=ready; Path=/'] });
+    const dispatcher = createPerSessionDispatcher({
+      buildHandler: () => (_req, res) => res.writeHead(200, appHeaders),
+    });
+    const res = fakeRes();
+
+    await expect(dispatcher.dispatch(fakeReq(), res)).resolves.toBe(res);
+
+    expect(appHeaders).toEqual({ 'set-cookie': ['app_session=ready; Path=/'] });
+    expect(res.getHeader('Set-Cookie')).toEqual([
+      expect.stringContaining('kovo_demo_sid='),
+      'app_session=ready; Path=/',
+    ]);
+  });
+
   it('isolates state between two different cookies', async () => {
     const dispatcher = createPerSessionDispatcher({
       buildHandler: () => {
