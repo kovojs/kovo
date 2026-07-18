@@ -101,6 +101,12 @@ const LOAD_ISOLATED_TEST_CONFIGS = [
     freshTestNames: ['keeps 120 distinct iterable and parameter-pattern safe misses bounded'],
   },
   {
+    file: 'packages/drizzle/src/trust-escapes-static-temporal-final-review.test.ts',
+    freshTestNames: [
+      'keeps one hundred twenty unrelated safe class carriers within the provenance budget',
+    ],
+  },
+  {
     file: 'packages/server/src/build.test.ts',
     freshTestNames: [
       'shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells',
@@ -1293,6 +1299,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus kv424-request-global-member-lockdown',
     testFiles: [
       'packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts',
+      'packages/drizzle/src/trust-escapes-static-temporal-final-review.test.ts',
       'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
     ],
     verdictAnchors: [
@@ -1372,6 +1379,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'keeps 120 distinct iterable and parameter-pattern safe misses bounded',
           'indexes 400/800 distinct exact-global helper safe misses with near-linear bounded scaling',
           'retainDistinctSafeMissCalls',
+        ],
+      },
+      {
+        id: 'temporal-class-and-root-provenance-superset',
+        file: 'packages/drizzle/src/trust-escapes-static-temporal-final-review.test.ts',
+        snippets: [
+          'temporal final adversarial review',
+          'C1 rejects a Promise carrier through %s',
+          'C2 rejects a class-derived thenable through %s',
+          'C3 invalidates the root through a %s alias',
+          'keeps one hundred twenty unrelated safe class carriers within the provenance budget',
+          'performance.now() - startedAt',
+          'toBeLessThan(8_000)',
         ],
       },
       {
