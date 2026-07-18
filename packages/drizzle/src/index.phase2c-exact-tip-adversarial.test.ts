@@ -214,6 +214,59 @@ describe('Phase 2C exact-tip adversarial review', () => {
     expect(result.check.exitCode).toBe(0);
   });
 
+  it('preserves a dominated optional guard principal captured into an immutable scalar', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, actual: { request: { guard?: { userId?: string } }, db: PgAsyncDatabase<any, any> }) {',
+        '    if (!actual.request.guard?.userId) throw new Error("unauthorized");',
+        '    const userId = actual.request.guard?.userId;',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).toBe('session');
+    expect(result.detail).toContain('owner column compared to guard:userId');
+    expect(result.check.exitCode).toBe(0);
+  });
+
+  it('does not transfer private provenance through a mutable object capture', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({ userId: s.string() }),',
+        '  async load(input: { userId: string }, actual: { request: { guard?: { user?: { id: string } } }, db: PgAsyncDatabase<any, any> }) {',
+        '    if (!actual.request.guard?.user?.id) throw new Error("unauthorized");',
+        '    const user = actual.request.guard?.user;',
+        '    user.id = input.userId;',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, user.id)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('does not treat a carrier-owned input.guard subtree as private principal state', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, actual: Context & { input: { guard: { userId: string } } }) {',
+        '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, actual.input.guard.userId)) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
   it.each([
     ['direct request replacement', 'context.request = input.request;'],
     ['Object.assign root replacement', 'Object.assign(context, { request: input.request });'],

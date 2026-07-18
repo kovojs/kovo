@@ -803,11 +803,13 @@ const weakenedAnalyzerSummaryAcceptedGuardCarrierProofBranch = [
 const analyzerSummaryOpaqueCarrierEscapeBranch = [
   '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
   '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
+  '    if (exactFrameworkPrivateScopeValueCall(call)) continue;',
   '    return false;',
 ].join('\n');
 const weakenedAnalyzerSummaryOpaqueCarrierEscapeBranch = [
   '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
   '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
+  '    if (exactFrameworkPrivateScopeValueCall(call)) continue;',
   '    continue;',
 ].join('\n');
 const analyzerSummaryPrivatePathPrefixBranch =

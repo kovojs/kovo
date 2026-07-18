@@ -11,6 +11,7 @@ import {
   type ObjectLiteralExpression,
   type ParameterDeclaration,
   type SourceFile,
+  type Type,
   type VariableDeclaration,
 } from 'ts-morph';
 
@@ -456,6 +457,10 @@ function objectBindingPrivateScopeProvenance(
   segments: readonly string[],
   segmentElements: readonly BindingElement[],
 ): PrivateScopeProvenance | undefined {
+  // A binding default is executable fallback data, not a projection. In particular,
+  // `const { userId = input.userId } = request.guard` must never preserve private provenance.
+  if (segmentElements.some((element) => element.getInitializer() !== undefined)) return undefined;
+
   if (base) {
     const provenance: PrivateScopeProvenance = {
       kind: base.kind,
@@ -497,7 +502,7 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
   const direct = directPrivateScopeForExpression(expression);
   if (direct) {
     return !direct.requiresGuard || directPrivateScopeGuardDominatesUse(direct, expression)
-      ? { kind: direct.kind, path: direct.path }
+      ? { kind: direct.kind, path: direct.path, requiresGuard: false }
       : undefined;
   }
 
@@ -643,6 +648,10 @@ function privateScopeCarrierBindingIsStableAtUse(
     const initializer = declaration.getInitializer();
     if (!initializer || !nodeContainsSymbolKey(initializer, parameterKey)) continue;
     if (nodeContains(initializer, auditedUse)) continue;
+    // A dominated read may be captured into an immutable scalar for a later predicate. The
+    // callback carrier itself, its private object branches, and containers remain non-transferable:
+    // `const alias = request` and `const guard = request.guard` still close every proof.
+    if (exactPrivateScopeScalarProjection(initializer, parameterKey)) continue;
     return false;
   }
 
@@ -686,10 +695,46 @@ function privateScopeCarrierBindingIsStableAtUse(
     // call as its nearest consumer and closes the proof.
     if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;
     if (exactDrizzlePrivateScopeProofCall(call)) continue;
+    if (exactFrameworkPrivateScopeValueCall(call)) continue;
     return false;
   }
 
   return true;
+}
+
+function exactPrivateScopeScalarProjection(node: Node, parameterKey: string): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  const segments = staticAccessSegments(expression);
+  if (!segments || !Node.isIdentifier(segments.root)) return false;
+  const rootKey = resolvedSymbolKey(
+    symbolForIdentifierReference(segments.root) ?? segments.root.getSymbol(),
+  );
+  if (rootKey !== parameterKey) return false;
+
+  const privateIndex = segments.path.findIndex(isPrivateScopeKind);
+  if (privateIndex < 0 || privateIndex === segments.path.length - 1) return false;
+  const prefix = segments.path.slice(0, privateIndex);
+  if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) return false;
+  return definitelyImmutablePrivateScopeScalarType(expression.getType());
+}
+
+function definitelyImmutablePrivateScopeScalarType(type: Type): boolean {
+  if (type.isUnion()) {
+    const members = type.getUnionTypes();
+    return members.length > 0 && members.every(definitelyImmutablePrivateScopeScalarType);
+  }
+  return (
+    type.isString() ||
+    type.isStringLiteral() ||
+    type.isNumber() ||
+    type.isNumberLiteral() ||
+    type.isBoolean() ||
+    type.isBooleanLiteral() ||
+    type.isBigInt() ||
+    type.isBigIntLiteral() ||
+    type.isNull() ||
+    type.isUndefined()
+  );
 }
 
 function exactPrivateScopeProjectionCall(call: CallExpression, parameterKey: string): boolean {
@@ -720,6 +765,13 @@ function exactDrizzlePrivateScopeProofCall(call: CallExpression): boolean {
       const imported = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
       return imported?.getModuleSpecifierValue().startsWith('drizzle-orm') === true;
     }) === true
+  );
+}
+
+function exactFrameworkPrivateScopeValueCall(call: CallExpression): boolean {
+  return expressionResolvesToFrameworkExport(
+    call.getExpression(),
+    frameworkExport('@kovojs/server', 'serverValue'),
   );
 }
 
@@ -975,6 +1027,11 @@ function directPrivateScopeForExpression(node: Node): PrivateScopeProvenance | u
   for (const kind of ['guard', 'session', 'tenant'] as const) {
     const index = segments.path.indexOf(kind);
     if (index < 0) continue;
+    const prefix = segments.path.slice(0, index);
+    // Query contexts expose private request state through `.request`; other enrolled callbacks
+    // receive the request directly. A carrier's app-controlled `.input.guard`-style subtree is
+    // never principal provenance merely because one of its nested property names matches.
+    if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) continue;
     return {
       kind,
       path: segments.path.slice(index + 1).join('.'),

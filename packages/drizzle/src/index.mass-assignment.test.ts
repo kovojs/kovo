@@ -325,10 +325,9 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     const result = facts(
       mutationHandler(
         [
-          '  const ownerId = request.session.userId;',
           '  await request.db.insert(accounts).values([',
-          '    { id: serverValue("account-1", "seed id"), ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name },',
-          '    { id: serverValue("account-2", "seed id"), ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name },',
+          '    { id: serverValue("account-1", "seed id"), ownerId: serverValue(request.session.userId, "session owner"), role: "user", balance: 0, name: input.name },',
+          '    { id: serverValue("account-2", "seed id"), ownerId: serverValue(request.session.userId, "session owner"), role: "user", balance: 0, name: input.name },',
           '  ]);',
         ].join('\n'),
       ),
