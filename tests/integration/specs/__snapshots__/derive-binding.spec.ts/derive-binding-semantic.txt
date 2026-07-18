@@ -7,6 +7,6 @@
       "0"
   <button data-bind:disabled="/derive.ts#Inventory$disableWhenUnavailable" disabled="" type="button">
     "Ship order"
-  <form action="/_m/derive-binding/sell-out" method="post">
+  <form action="/_m/derive-binding/sell-out" kovo-fragment-target="sell-out-inventory" method="post">
     <button type="submit">
       "Sell out"
