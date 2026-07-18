@@ -53,6 +53,12 @@ function hiddenValue(html: string, name: string): string {
   return match[1];
 }
 
+function formHiddenValue(html: string, formId: string, name: string): string {
+  const form = new RegExp(`<form[^>]*id="${formId}"[\\s\\S]*?<\\/form>`, 'u').exec(html)?.[0];
+  if (form === undefined) throw new Error(`expected form ${formId} in ${html}`);
+  return hiddenValue(form, name);
+}
+
 function cookieHeader(binding: string): string {
   return `__Host-kovo_csrf=${binding}`;
 }
@@ -406,6 +412,210 @@ describe('anonymous mutation-form document cache posture', () => {
         nodeServer.close((error) => (error === undefined ? resolve() : reject(error)));
       });
     }
+  });
+});
+
+describe('anonymous CSRF cookie aggregate posture', () => {
+  it('rejects conflicting mutation-local cookie attributes before a direct form can render', () => {
+    const first = mutation('collision/direct-first', {
+      csrf: {
+        anonymousCookie: { name: 'shared_csrf', path: '/', sameSite: 'lax' },
+        secret: 'direct-first-collision-secret-0123456789abcdef',
+        sessionId: () => undefined,
+      },
+      input: s.object({ value: s.string() }),
+      handler: (input) => input,
+    });
+    const second = mutation('collision/direct-second', {
+      csrf: {
+        anonymousCookie: { name: 'shared_csrf', path: '/', sameSite: 'strict' },
+        secret: 'direct-second-collision-secret-0123456789abcdef',
+        sessionId: () => undefined,
+      },
+      input: s.object({ value: s.string() }),
+      handler: (input) => input,
+    });
+    const direct = route('/collision-direct', {
+      page: () => (
+        <main>
+          <form mutation={first} />
+          <form mutation={second} />
+        </main>
+      ),
+    });
+
+    expect(() =>
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        mutations: [first, second],
+        routes: [direct],
+      }),
+    ).toThrow(/conflicting browser attribute postures/u);
+  });
+
+  it('rejects an app/local conflict before a deferred form can commit ambiguous cookies', () => {
+    const appCsrf = {
+      anonymousCookie: { maxAge: 3600, name: 'deferred_shared_csrf', path: '/' },
+      secret: 'deferred-app-collision-secret-0123456789abcdef',
+      sessionId: () => undefined,
+    };
+    const submit = mutation('collision/deferred-local', {
+      csrf: {
+        ...appCsrf,
+        anonymousCookie: { maxAge: 7200, name: 'deferred_shared_csrf', path: '/' },
+      },
+      input: s.object({ value: s.string() }),
+      handler: (input) => input,
+    });
+    const deferred = route('/collision-deferred', {
+      page: () => (
+        <Defer
+          priority="after-paint"
+          render={() => <form mutation={submit} />}
+          target="collision-form"
+        />
+      ),
+    });
+
+    expect(() =>
+      createApp({
+        csrf: appCsrf,
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        mutations: [submit],
+        routes: [deferred],
+      }),
+    ).toThrow(/one Path, Max-Age, SameSite, and Secure posture/u);
+  });
+
+  it('shares one binding across compatible direct and deferred local configurations', async () => {
+    let releaseRegion!: () => void;
+    const regionGate = new Promise<void>((resolve) => {
+      releaseRegion = resolve;
+    });
+    let firstRuns = 0;
+    let secondRuns = 0;
+    const cookie = {
+      maxAge: 3600,
+      name: 'compatible_shared_csrf',
+      path: '/',
+      sameSite: 'strict' as const,
+    };
+    const first = mutation('compatible/direct', {
+      csrf: {
+        anonymousCookie: { ...cookie },
+        secret: 'compatible-direct-secret-0123456789abcdef012345',
+        sessionId: () => undefined,
+      },
+      input: s.object({ value: s.string() }),
+      handler(input) {
+        firstRuns += 1;
+        return input;
+      },
+    });
+    const second = mutation('compatible/deferred', {
+      csrf: {
+        anonymousCookie: { ...cookie },
+        secret: 'compatible-deferred-secret-0123456789abcdef0123',
+        sessionId: () => undefined,
+      },
+      input: s.object({ value: s.string() }),
+      handler(input) {
+        secondRuns += 1;
+        return input;
+      },
+    });
+    const page = route('/compatible-cookie-postures', {
+      page: () => (
+        <main>
+          <form id="direct-compatible" mutation={first}>
+            <input name="value" />
+          </form>
+          <Defer
+            priority="after-paint"
+            render={async () => {
+              await regionGate;
+              return (
+                <form id="deferred-compatible" mutation={second}>
+                  <input name="value" />
+                </form>
+              );
+            }}
+            target="compatible-deferred-form"
+          />
+        </main>
+      ),
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        mutations: [first, second],
+        routes: [page],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/compatible-cookie-postures'),
+    );
+    const setCookies = response.headers.getSetCookie();
+    expect(setCookies).toHaveLength(1);
+    releaseRegion();
+    const html = await response.text();
+    const cookiePair = setCookies[0]?.split(';')[0];
+    if (cookiePair === undefined) throw new Error('expected compatible anonymous binding cookie');
+
+    for (const submission of [
+      { formId: 'direct-compatible', key: 'compatible/direct', value: 'one' },
+      { formId: 'deferred-compatible', key: 'compatible/deferred', value: 'two' },
+    ]) {
+      const result = await handler(
+        new Request(`https://shop.example.test/_m/${submission.key}`, {
+          body: new URLSearchParams({
+            'Kovo-Idem': formHiddenValue(html, submission.formId, 'Kovo-Idem'),
+            'kovo-csrf': formHiddenValue(html, submission.formId, 'kovo-csrf'),
+            value: submission.value,
+          }),
+          headers: { Cookie: cookiePair, Origin: 'https://shop.example.test' },
+          method: 'POST',
+        }),
+      );
+      expect(result.status).toBe(303);
+    }
+    expect({ firstRuns, secondRuns }).toEqual({ firstRuns: 1, secondRuns: 1 });
+  });
+
+  it('rejects prefixed, malformed, and accessor-backed cookie declarations without invoking getters', () => {
+    const prefixed = {
+      anonymousCookie: { name: '__Host-owned_by_framework' },
+      secret: 'prefixed-cookie-posture-secret-0123456789abcdef',
+      sessionId: () => undefined,
+    };
+    expect(() => createApp({ csrf: prefixed })).toThrow(/must be an unprefixed logical name/u);
+
+    const malformed = {
+      anonymousCookie: { name: 'malformed_csrf', path: '/; injected=1' },
+      secret: 'malformed-cookie-posture-secret-0123456789abcdef',
+      sessionId: () => undefined,
+    };
+    expect(() => createApp({ csrf: malformed })).toThrow(/cookie path/u);
+
+    let getterCalls = 0;
+    const accessorCookie = {};
+    Object.defineProperty(accessorCookie, 'name', {
+      get() {
+        getterCalls += 1;
+        return 'getter_csrf';
+      },
+    });
+    expect(() =>
+      createApp({
+        csrf: {
+          anonymousCookie: accessorCookie,
+          secret: 'accessor-cookie-posture-secret-0123456789abcdef',
+          sessionId: () => undefined,
+        },
+      }),
+    ).toThrow(/own data property/u);
+    expect(getterCalls).toBe(0);
   });
 });
 

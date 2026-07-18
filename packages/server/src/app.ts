@@ -32,6 +32,7 @@ import {
   registerAppLiveTargetIdentity,
 } from './live-target-app-identity.js';
 import { mutation } from './mutation.js';
+import { assertCompatibleAnonymousCsrfCookiePostures } from './csrf.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import { query } from './query.js';
 import { layout, route, routeLayoutLiveTargetRenderers } from './route.js';
@@ -273,6 +274,10 @@ export function createApp<
   const mutations = snapshotAppRegistry(runtimeFacts.mutations, 'app.mutations', (declaration) =>
     snapshotAppMutation(declaration, snapshotContext),
   );
+  // SPEC §6.6/§9.1: Cookie headers omit attribute scope. Reusing one anonymous-CSRF cookie name
+  // with incompatible Path/Max-Age/SameSite/Secure declarations would let the browser collapse
+  // multiple minted bindings into one last-wins value and strand another emitted form.
+  assertCompatibleAnonymousCsrfCookiePostures(csrf, mutations);
   if (
     resolveBootMode() === 'production' &&
     (mutationReplayStore !== undefined || mutations.length > 0) &&

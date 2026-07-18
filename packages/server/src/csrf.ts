@@ -681,7 +681,126 @@ interface CsrfBinding {
 }
 
 const DEFAULT_ANONYMOUS_CSRF_COOKIE = 'kovo_csrf';
+const DEFAULT_ANONYMOUS_CSRF_MAX_AGE = 24 * 60 * 60;
+const ANONYMOUS_CSRF_POSTURE_VALIDATION_VALUE = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 const MAX_CSRF_SESSION_ID_LENGTH = MAX_MUTATION_REPLAY_IDENTITY_COMPONENT_LENGTH;
+
+interface AnonymousCsrfCookiePosture {
+  readonly label: string;
+  readonly maxAge: number;
+  readonly name: string;
+  readonly path: string;
+  readonly sameSite: 'lax' | 'none' | 'strict';
+  readonly secure: boolean | 'request';
+}
+
+/**
+ * Refuse app aggregates whose anonymous-CSRF declarations can create ambiguous browser cookies.
+ *
+ * Cookie request headers do not carry Path, SameSite, Max-Age, or Secure metadata. Two declarations
+ * that reuse one logical name with different attributes can therefore mint different secrets that
+ * the browser later collapses to one last-wins value (or sends as indistinguishable duplicate-name
+ * pairs). One emitted form then carries authority the browser can no longer return. Kovo also owns
+ * the `__Host-`/`__Secure-` strengthening prefix, so authored prefixed aliases are rejected instead
+ * of being allowed to collide with the effective name of an unprefixed declaration.
+ *
+ * @internal createApp aggregate-construction gate (SPEC §6.6/§9.1).
+ */
+export function assertCompatibleAnonymousCsrfCookiePostures<Request>(
+  appCsrf: CsrfOptions<Request> | undefined,
+  mutations: readonly {
+    readonly csrf?: CsrfOptions<Request> | false;
+    readonly key: string;
+  }[],
+): void {
+  const byName = createSecurityMap<string, AnonymousCsrfCookiePosture>();
+  if (appCsrf !== undefined) {
+    assertCompatibleAnonymousCsrfCookiePosture(byName, appCsrf, 'app.csrf');
+  }
+  for (let index = 0; index < mutations.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(mutations, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Kovo app mutations must remain a dense exact snapshot.');
+    }
+    const definition = descriptor.value;
+    const csrf = mutationCsrfOptions(definition, appCsrf);
+    if (csrf === undefined || csrf === false) continue;
+    const key = mutationCsrfOwnDataValue(definition, 'key');
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new TypeError('Mutation CSRF definition.key must be a stable own data string.');
+    }
+    assertCompatibleAnonymousCsrfCookiePosture(byName, csrf, `mutation ${key}`);
+  }
+}
+
+function assertCompatibleAnonymousCsrfCookiePosture<Request>(
+  byName: Map<string, AnonymousCsrfCookiePosture>,
+  options: CsrfOptions<Request>,
+  label: string,
+): void {
+  const source = mutationCsrfOptionOwnDataValue(options, 'anonymousCookie');
+  if (source === false) return;
+  const cookie = source === undefined ? undefined : (source as CsrfAnonymousCookieOptions);
+  const name = anonymousCsrfCookieOption(cookie, 'name') ?? DEFAULT_ANONYMOUS_CSRF_COOKIE;
+  const maxAge = anonymousCsrfCookieOption(cookie, 'maxAge') ?? DEFAULT_ANONYMOUS_CSRF_MAX_AGE;
+  const path = anonymousCsrfCookieOption(cookie, 'path') ?? '/';
+  const sameSite = anonymousCsrfCookieOption(cookie, 'sameSite') ?? 'lax';
+  const secure = anonymousCsrfCookieOption(cookie, 'secure') ?? 'request';
+
+  if (securityRegExpTest(/^__(?:Host|Secure)-/u, name)) {
+    throw new TypeError(
+      `${label}.anonymousCookie.name must be an unprefixed logical name; Kovo owns the ` +
+        '`__Host-`/`__Secure-` browser prefix.',
+    );
+  }
+
+  // Validate the same cookie grammar and credential floor the eventual response sink consumes,
+  // now at aggregate construction rather than on the first request that happens to render a form.
+  serializeCookie(name, ANONYMOUS_CSRF_POSTURE_VALIDATION_VALUE, {
+    class: 'session',
+    maxAge,
+    path,
+    sameSite,
+    ...(secure === 'request' ? {} : { secure }),
+  });
+
+  const posture: AnonymousCsrfCookiePosture = {
+    label,
+    maxAge,
+    name,
+    path,
+    sameSite,
+    secure,
+  };
+  const existing = securityMapGet(byName, name);
+  if (existing === undefined) {
+    securityMapSet(byName, name, posture);
+    return;
+  }
+  if (
+    existing.maxAge === posture.maxAge &&
+    existing.path === posture.path &&
+    existing.sameSite === posture.sameSite &&
+    existing.secure === posture.secure
+  ) {
+    return;
+  }
+  throw new TypeError(
+    `Anonymous CSRF cookie ${securityJsonStringify(name)} has conflicting browser attribute postures ` +
+      `between ${existing.label} and ${label}; one logical name must use one Path, Max-Age, ` +
+      'SameSite, and Secure posture across the app.',
+  );
+}
+
+function anonymousCsrfCookieOption<Key extends keyof CsrfAnonymousCookieOptions>(
+  cookie: CsrfAnonymousCookieOptions | undefined,
+  key: Key,
+): CsrfAnonymousCookieOptions[Key] | undefined {
+  if (cookie === undefined) return undefined;
+  return mutationCsrfAnonymousOwnDataValue(cookie, key) as
+    | CsrfAnonymousCookieOptions[Key]
+    | undefined;
+}
 
 type CsrfSessionBindingResolution =
   | { kind: 'absent' }
@@ -738,7 +857,7 @@ function buildAnonymousCsrfCookieOptions(
 ): CookieOptions {
   const options: CookieOptions = {
     class: 'session',
-    maxAge: cookieOptions.maxAge ?? 24 * 60 * 60,
+    maxAge: cookieOptions.maxAge ?? DEFAULT_ANONYMOUS_CSRF_MAX_AGE,
     path: cookieOptions.path ?? '/',
     sameSite: cookieOptions.sameSite ?? 'lax',
   };
