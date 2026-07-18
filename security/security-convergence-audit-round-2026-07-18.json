@@ -1,0 +1,68 @@
+{
+  "schema": "kovo-security-audit-round/v1",
+  "charterId": "remote-node-ingress-bridge",
+  "charterVersion": 1,
+  "auditedCodeSha": "e5f613be9f1bb1f1cfc568a53e88ee741b3a4ded",
+  "startedAt": "2026-07-18T08:05:52Z",
+  "endedAt": "2026-07-18T08:13:58Z",
+  "actualElapsedSeconds": 486,
+  "budget": {
+    "investigatorCount": 1,
+    "model": "Codex GPT-5",
+    "turnsUsed": 1,
+    "tokenBudget": null,
+    "withinThirtyMinuteLimit": true
+  },
+  "execution": {
+    "promptsExecuted": 3,
+    "productionFilesReviewed": [
+      "packages/server/src/node.ts",
+      "packages/server/src/request-method.ts",
+      "packages/server/src/build.ts"
+    ],
+    "proofFilesReviewed": [
+      "packages/server/src/__bugz_remote_ingress.test.ts",
+      "packages/server/src/build.test.ts",
+      "packages/server/src/node.test.ts"
+    ],
+    "verification": [
+      {
+        "command": "pnpm exec vitest --run packages/server/src/__bugz_remote_ingress.test.ts packages/server/src/node.test.ts packages/server/src/build.test.ts -t 'method|authority|Host|scheme|adapter parity'",
+        "result": "3 files passed; 17 tests passed; 95 skipped by the focused name filter"
+      },
+      {
+        "command": "pnpm exec vitest --run packages/server/src/__phase0_authority_repro.test.ts",
+        "result": "1 file and 1 real HTTP/2 reproduction passed; the temporary proof is preserved in the immediate follow-up test-only commit"
+      }
+    ]
+  },
+  "canaries": {
+    "detected": 2,
+    "total": 2,
+    "results": [
+      {
+        "id": "method-case-to-fetch-canonicalization",
+        "detected": true,
+        "evidence": "The investigator identified the raw-method-to-Fetch identity boundary; the fixed real HTTP/2 M34 regression passed in the scoped proof run."
+      },
+      {
+        "id": "duplicate-host-normalization",
+        "detected": true,
+        "evidence": "The investigator identified rawHeaders as the pre-normalization authority source; the real duplicate-Host rejection passed in the scoped proof run."
+      }
+    ]
+  },
+  "r": {
+    "newRootCauses": 1,
+    "findings": [
+      {
+        "provisionalId": "remote-authority-normalization-split",
+        "severity": "medium",
+        "deduplication": "new",
+        "rootCause": "The Node and emitted adapters accepted a non-canonical percent-encoded authority, then exposed its URL-normalized hostname and its raw Host spelling as two different app-visible authority identities.",
+        "reproduction": "A real HTTP/2 peer sent :authority=%65xample.com. The handler received request.url=http://example.com/ while request.headers.get('host')=%65xample.com, and the response status was 200.",
+        "disposition": "Open at the audited SHA; route through the ordinary remote-ingress ledger and threat matrix, then close in live and generated Node/Vercel adapters."
+      }
+    ]
+  }
+}

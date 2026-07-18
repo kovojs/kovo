@@ -1,0 +1,155 @@
+{
+  "schema": "kovo-security-convergence-record/v1",
+  "auditedCodeSha": "e5f613be9f1bb1f1cfc568a53e88ee741b3a4ded",
+  "recordedAt": "2026-07-18T08:13:58Z",
+  "auditRound": {
+    "file": "security/security-convergence-audit-round-2026-07-18.json",
+    "sha256": "89655b20fae63b1ac1ae34885bea482ba8840e5f7241b1e5c3f4459ca0223ce5",
+    "r": 1,
+    "canaryRecall": "2/2"
+  },
+  "liveMeasurements": {
+    "m": {
+      "killed": 37,
+      "total": 37,
+      "survivors": 0
+    },
+    "g": {
+      "durationMs": 2350,
+      "peakRssBytes": 468713472,
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "v24.18.0",
+      "cpu": "Apple M4",
+      "memoryBytes": 17179869184,
+      "command": "pnpm run check:green-corpus"
+    }
+  },
+  "snapshot": {
+    "schema": "kovo-security-convergence-baseline/v1",
+    "charter": {
+      "id": "remote-node-ingress-bridge",
+      "sha256": "b0915be07a0fb6bcb9a08c7567ec5a56a7e36784a9aa6927261e659e24ad508b",
+      "version": 1
+    },
+    "m": {
+      "mutantCount": 37,
+      "mutantNames": [
+        "check-sink-policy-gate/drop-managed-db-throw-invariant",
+        "check-sink-policy-gate/drop-response-fragment-trustedhtml-route-count",
+        "check-sink-policy-gate/drop-sql-guard-env-detector",
+        "compiler-compile/drop-framework-identity-project-registration",
+        "compiler-vite/drop-js-to-ts-sibling-candidates",
+        "core-framework-identity/drop-element-access-canonicalization",
+        "core-framework-identity/drop-element-access-kind-resolution",
+        "core-framework-identity/drop-export-star-resolution",
+        "fundamental-fixes-census-gate/drift-resolver-expression-kind-denominator",
+        "fundamental-fixes-census-gate/drop-closed-row-m1-evidence-enforcement",
+        "fundamental-fixes-census-gate/drop-dialect-matrix-requirement",
+        "fundamental-fixes-census-gate/drop-m5-forbidden-status-enforcement",
+        "fundamental-fixes-census-gate/drop-resolver-coverage-expectation-requirement",
+        "fundamental-fixes-census-gate/drop-resolver-status-requirement",
+        "fundamental-fixes-census-gate/drop-unknown-resolver-expression-kind-rejection",
+        "security-test-build-gate/drop-generated-paranoid-acceptance-proof-enrollment",
+        "security-test-build-gate/drop-generated-read-source-proof-enrollment",
+        "security-test-build-gate/drop-generated-wrapping-proof-enrollment",
+        "security-test-build-gate/drop-kv426-generated-sink-position-proof-enrollment",
+        "security-test-build-gate/drop-missing-real-build-proof",
+        "security-test-build-gate/drop-production-build-invocation-check",
+        "security-test-build-gate/drop-required-proof-evidence",
+        "security-test-build-gate/drop-required-proof-file-evidence",
+        "security-test-build-gate/drop-security-certification-marker-extractor",
+        "security-test-build-gate/drop-skipped-proof-rejection",
+        "security-test-build-gate/drop-stale-proof-row-rejection",
+        "security-test-build-gate/drop-starter-helper-evidence",
+        "security-test-build-gate/weaken-js-to-ts-sibling-proof-enrollment",
+        "security-test-build-gate/weaken-kv311-island-derive-proof-enrollment",
+        "security-test-build-gate/weaken-kv330-webhook-context-tx-escape-proof-enrollment",
+        "security-test-build-gate/weaken-kv426-trusted-output-safe-sibling-proof-enrollment",
+        "security-test-build-gate/weaken-kv426-trusted-url-attribute-proof-enrollment",
+        "security-test-build-gate/weaken-kv433-storage-delete-proof-enrollment",
+        "security-test-build-gate/weaken-kv435-safe-sibling-proof-enrollment",
+        "server-wire-html/drop-query-wire-body-escaping",
+        "sql-safe-handle/drop-managed-raw-driver-escape-denial",
+        "trusted-html-provenance/weaken-call-result-taint-fail-closed"
+      ]
+    },
+    "p": {
+      "egress": {
+        "exactMetadataAddressCount": 5,
+        "exactMetadataAddresses": [
+          "169.254.169.123",
+          "169.254.169.254",
+          "169.254.170.2",
+          "169.254.170.23",
+          "fd00:ec2::254"
+        ],
+        "opaqueAllowPathCount": 7,
+        "opaqueAllowPaths": [
+          "databaseSocketEndpoint !== undefined && egressSetHas(policy.allowDatabaseEndpoints, databaseSocketEndpoint) && (databaseSocketEndpoint === hostKey || databaseSocketEndpoint === ipKey)",
+          "egressArraySome(policy.allowInternalCidrs, (cidr) => ipInCidr(resolvedIp, cidr))",
+          "egressSetHas(policy.allowDestinations, origin)",
+          "egressSetHas(policy.allowInternal, hostKey) || egressSetHas(policy.allowInternal, ipKey)",
+          "isMetadataAllowed('azure')",
+          "isMetadataAllowed()",
+          "policy.allowPrivateNetwork"
+        ],
+        "rangeEntryCount": 37,
+        "rangeTables": [
+          {
+            "count": 17,
+            "name": "IANA_IPV4_SPECIAL_PURPOSE_PREFIXES"
+          },
+          {
+            "count": 5,
+            "name": "CONSERVATIVE_IPV4_CLOSED_PREFIXES"
+          },
+          {
+            "count": 15,
+            "name": "IANA_IPV6_SPECIAL_PURPOSE_PREFIXES"
+          }
+        ]
+      },
+      "imperativeDom": {
+        "sinkNames": [
+          "Function",
+          "eval",
+          "innerHTML",
+          "outerHTML",
+          "setInterval",
+          "setTimeout",
+          "write",
+          "writeln"
+        ]
+      },
+      "total": 5956,
+      "trustStatic": {
+        "directNamePredicates": 1316,
+        "inlineMembershipEntries": 558,
+        "nameBranches": 2564,
+        "namedInventoryEntries": 674,
+        "namedInventorySha256": "a17407a73922b8152013190c0c715c3ae7d483b2c5926ca89a091fba1c0d4aad",
+        "namedInventoryTableCount": 62,
+        "switchLiteralCases": 16,
+        "syntaxBranches": 3335,
+        "syntaxGuardSites": 2508,
+        "syntaxKindSites": 827,
+        "total": 5899
+      }
+    },
+    "g": {
+      "acceptedFullApps": 0,
+      "acceptedFixtureRows": 18,
+      "unexpectedClosedVerdicts": 0
+    },
+    "c13": {
+      "anchorCount": 143,
+      "corpusCount": 17,
+      "testFileCount": 56
+    },
+    "informational": {
+      "egressLoc": 2299,
+      "trustStaticLoc": 38480
+    }
+  }
+}

@@ -25,6 +25,7 @@
     "check:security-gate-mutations": "node scripts/security-gate-mutations.mjs",
     "check:security-brands": "node scripts/check-security-brands.mjs",
     "check:security-classifier-corpus": "node scripts/check-security-classifier-corpus.mjs",
+    "check:security-convergence-baseline": "node scripts/security-convergence-baseline.mjs",
     "check:fail-closed-classifiers": "node scripts/check-fail-closed-classifiers.mjs",
     "check:classifier-verdict-routing": "node scripts/check-classifier-verdict-routing.mjs",
     "check:paranoid-classifiers": "KOVO_PARANOID=1 pnpm run check:fail-closed-classifiers && KOVO_PARANOID=1 pnpm run check:classifier-verdict-routing",

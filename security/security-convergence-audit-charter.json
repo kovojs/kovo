@@ -1,0 +1,52 @@
+{
+  "schema": "kovo-security-audit-charter/v1",
+  "id": "remote-node-ingress-bridge",
+  "version": 1,
+  "threatModel": "An ordinary remote peer controls HTTP method, request-target, authority, forwarding, and header bytes. Deliberately hostile same-process code and pre-bootstrap host compromise are excluded by SPEC section 6.6.",
+  "scope": {
+    "productionFiles": [
+      "packages/server/src/node.ts",
+      "packages/server/src/request-method.ts",
+      "packages/server/src/build.ts"
+    ],
+    "proofFiles": [
+      "packages/server/src/__bugz_remote_ingress.test.ts",
+      "packages/server/src/build.test.ts",
+      "packages/server/src/node.test.ts"
+    ],
+    "surfaces": [
+      "direct Node HTTP/1 and HTTP/2 request conversion",
+      "generated Node and Vercel request conversion",
+      "raw method, request-target, Host/:authority, :scheme, and trusted-proxy reconstruction"
+    ]
+  },
+  "promptFamily": [
+    "Trace each scoped remote carrier from its raw Node representation through the Web Request boundary. Report any case where parsing or normalization changes security-relevant identity before rejection.",
+    "Compare direct HTTP/1, direct HTTP/2, generated Node, and generated Vercel behavior for method, target, authority, and scheme. Report any adapter differential that changes dispatch, authentication, CSRF, cache, or mutation behavior.",
+    "For each accepted carrier, identify the sole trusted source, grammar, snapshot point, and fail-closed verdict. Report missing hostile-value proof or a path that consults attacker-controlled fallback authority."
+  ],
+  "budget": {
+    "investigatorCount": 1,
+    "maxElapsedMinutes": 30,
+    "maxTurns": 1,
+    "fileScopeIsClosed": true,
+    "tokenBudget": null,
+    "tokenBudgetNote": "The runtime exposes no enforceable per-audit token meter; comparability is bounded by one investigator, one turn, 30 wall-clock minutes, and the closed file/surface list."
+  },
+  "seededCanaries": [
+    {
+      "id": "method-case-to-fetch-canonicalization",
+      "controlledFixture": "An HTTP/2 peer sends :method=post; an unsafe adapter passes it directly to new Request(...), which exposes POST and dispatches a state-changing mutation.",
+      "expectedRootCause": "The raw case-sensitive HTTP method identity changed at the Node-to-Fetch bridge before policy and dispatch."
+    },
+    {
+      "id": "duplicate-host-normalization",
+      "controlledFixture": "An HTTP/1 peer sends two Host fields; an unsafe adapter trusts Node's normalized headers.host value and constructs the request URL without checking rawHeaders.",
+      "expectedRootCause": "Normalization erased an ambiguous authority before the adapter enforced exactly one Host field."
+    }
+  ],
+  "deduplication": {
+    "sources": ["docs/security-threat-matrix.md", "plans/bugz-33.md"],
+    "rule": "Count one R root cause only when a remotely triggerable invariant failure is reproduced or proven at the audited SHA and no existing matrix/ledger row has the same violated invariant and enforcement door. Variants of an existing root cause are deduplicated to that row; an unproved suspicion is recorded as a follow-up, not as R."
+  }
+}
