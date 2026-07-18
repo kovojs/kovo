@@ -92,6 +92,17 @@ function handler(
   return `${HEADER}export const updateAccount = async (${signature}) => {\n${body}\n};\n`;
 }
 
+function mutationHandler(
+  body: string,
+  signature = 'input: { id: string; ownerId: string; role: string; balance: number; name: string }, request: { db: PgAsyncDatabase<any, any>; session: { userId: string } }',
+): string {
+  const header = HEADER.replace(
+    '{ serverValue, trustedAssign }',
+    '{ mutation, serverValue, trustedAssign }',
+  );
+  return `${header}export const updateAccount = mutation("updateAccount", { async handler(${signature}) {\n${body}\n} });\n`;
+}
+
 describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
   it('rejects request input reaching a governed column (role)', () => {
     const result = facts(
@@ -149,8 +160,8 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
   it('passes a session-derived (server) governed value', () => {
     expect(
       facts(
-        handler(
-          '  await db.update(accounts).set({ ownerId: request.session.userId }).where(eq(accounts.id, input.id));',
+        mutationHandler(
+          '  await request.db.update(accounts).set({ ownerId: request.session.userId }).where(eq(accounts.id, input.id));',
         ),
       ),
     ).toEqual([]);
@@ -312,11 +323,12 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
 
   it('honors per-row serverValue provenance inside bulk values array literals', () => {
     const result = facts(
-      handler(
+      mutationHandler(
         [
-          '  await db.insert(accounts).values([',
-          '    { id: serverValue("account-1", "seed id"), ownerId: serverValue(request.session.userId, "session owner"), role: "user", balance: 0, name: input.name },',
-          '    { id: serverValue("account-2", "seed id"), ownerId: serverValue(request.session.userId, "session owner"), role: "user", balance: 0, name: input.name },',
+          '  const ownerId = request.session.userId;',
+          '  await request.db.insert(accounts).values([',
+          '    { id: serverValue("account-1", "seed id"), ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name },',
+          '    { id: serverValue("account-2", "seed id"), ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name },',
           '  ]);',
         ].join('\n'),
       ),
@@ -326,9 +338,9 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
 
   it('still rejects unsafe governed fields inside bulk values array literals', () => {
     const result = facts(
-      handler(
+      mutationHandler(
         [
-          '  await db.insert(accounts).values([',
+          '  await request.db.insert(accounts).values([',
           '    { id: serverValue("account-1", "seed id"), ownerId: input.ownerId, role: input.role, balance: 0, name: input.name },',
           '    { id: input.id, ownerId: serverValue(request.session.userId, "session owner"), role: "user", balance: input.balance, name: input.name },',
           '  ]);',
@@ -355,23 +367,23 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
   it('passes serverValue(session-derived local) but rejects input and non-session request locals', () => {
     expect(
       facts(
-        handler(
+        mutationHandler(
           [
             '  const ownerId = request.session?.user.id ?? "demo-user";',
-            '  await db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
+            '  await request.db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
           ].join('\n'),
-          'db: PgAsyncDatabase<any, any>, input: { id: string; ownerId: string; name: string }, request: { session?: { user: { id: string } } }',
+          'input: { id: string; ownerId: string; name: string }, request: { db: PgAsyncDatabase<any, any>; session?: { user: { id: string } } }',
         ),
       ),
     ).toEqual([]);
 
     const inputLocal = facts(
-      handler(
+      mutationHandler(
         [
           '  const ownerId = input.ownerId;',
-          '  await db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
+          '  await request.db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
         ].join('\n'),
-        'db: PgAsyncDatabase<any, any>, input: { id: string; ownerId: string; name: string }, request: { session?: { user: { id: string } } }',
+        'input: { id: string; ownerId: string; name: string }, request: { db: PgAsyncDatabase<any, any>; session?: { user: { id: string } } }',
       ),
     );
     expect(inputLocal).toEqual([
@@ -379,7 +391,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         column: 'ownerId',
         detail: 'ownerId',
         domain: 'account',
-        name: 'updateAccount',
+        name: '<anonymous>',
         provenance: 'input',
         site: 'account.domain.ts:8',
         via: 'values',
@@ -387,12 +399,12 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
 
     const requestLocal = facts(
-      handler(
+      mutationHandler(
         [
           '  const ownerId = request.body.ownerId;',
-          '  await db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
+          '  await request.db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
         ].join('\n'),
-        'db: PgAsyncDatabase<any, any>, input: { name: string }, request: { session?: { user: { id: string } }; body: { ownerId: string } }',
+        'input: { name: string }, request: { db: PgAsyncDatabase<any, any>; session?: { user: { id: string } }; body: { ownerId: string } }',
       ),
     );
     expect(requestLocal).toEqual([
@@ -400,7 +412,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         column: 'ownerId',
         detail: 'body.ownerId',
         domain: 'account',
-        name: 'updateAccount',
+        name: '<anonymous>',
         provenance: 'input',
         site: 'account.domain.ts:8',
         via: 'values',
@@ -408,13 +420,13 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
 
     const mutableLocal = facts(
-      handler(
+      mutationHandler(
         [
           '  let ownerId = request.session?.user.id ?? "demo-user";',
           '  ownerId = input.ownerId;',
-          '  await db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
+          '  await request.db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
         ].join('\n'),
-        'db: PgAsyncDatabase<any, any>, input: { id: string; ownerId: string; name: string }, request: { session?: { user: { id: string } } }',
+        'input: { id: string; ownerId: string; name: string }, request: { db: PgAsyncDatabase<any, any>; session?: { user: { id: string } } }',
       ),
     );
     expect(mutableLocal).toEqual([
@@ -422,7 +434,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         column: 'ownerId',
         detail: 'ownerId',
         domain: 'account',
-        name: 'updateAccount',
+        name: '<anonymous>',
         provenance: 'input',
         site: 'account.domain.ts:9',
         via: 'values',
