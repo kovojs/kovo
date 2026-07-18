@@ -129,6 +129,8 @@ const frameworkDoorExports = new Map<string, readonly RawCapabilityKind[]>([
   ['@kovojs/server\0*\0runCommand', ['process']],
   ['@kovojs/server\0./build\0*', ['filesystem', 'process', 'worker']],
   ['@kovojs/server\0./sqlite\0*', ['database-driver']],
+  ['@kovojs/server\0./testing\0*', ['database-driver', 'filesystem']],
+  ['@kovojs/server\0./vite\0*', ['dynamic-loader', 'filesystem']],
 ]);
 
 /**

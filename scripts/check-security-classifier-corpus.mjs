@@ -1645,6 +1645,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/compiler/src/capability-closure.security.test.ts',
         snippets: [
           'keeps supported framework network, filesystem, process, and database doors open',
+          'classifies public testing and Vite subpaths as reviewed capability doors',
           'preserves raw driver closure while allowing reviewed Drizzle schema/query construction',
         ],
       },

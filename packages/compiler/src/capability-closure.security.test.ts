@@ -497,6 +497,30 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     );
   });
 
+  it('classifies public testing and Vite subpaths as reviewed capability doors', () => {
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import { createPostgresTestRuntime } from '@kovojs/server/testing';
+          import { kovo } from '@kovojs/server/vite';
+          export const page = route('/tooling-doors', { render() {
+            return [createPostgresTestRuntime, kovo];
+          } });
+        `,
+      },
+    ];
+    const result = analyze(files);
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'door')
+        .map((fact) => fact.capability)
+        .sort(),
+    ).toEqual(['database-driver', 'dynamic-loader', 'filesystem', 'filesystem']);
+  });
+
   it('preserves raw driver closure while allowing reviewed Drizzle schema/query construction', () => {
     const safeFiles = [
       {
