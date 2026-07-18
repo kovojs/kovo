@@ -276,6 +276,165 @@ export const verify = mutation({
     expect(diagnostics).toEqual([]);
   });
 
+  // @kovo-security-classifier-corpus C13 finite-ir-reviewed-data-doors
+  it('accepts exact reviewed secret, raw SQL, table-alias, and managed-read operations', () => {
+    const diagnostics = kv449Project(
+      `
+import { secret, trustedReveal } from '@kovojs/core';
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { endpoint, declareSecretReadCapability } from '@kovojs/server';
+import { eq } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { accounts, items } from './schema.js';
+
+export const report = endpoint('/report', {
+  db: true,
+  async handler(_request, context) {
+    const scoped = await context.actAs('reviewed-fixture-principal');
+    const db = scoped.db.read;
+    const owned = alias(accounts, 'reviewed_accounts');
+    const statement = trustedSql(sql.raw('select id, classified from accounts'), {
+      justification: 'reviewed static secret read',
+    });
+    declareSecretReadCapability(statement, {
+      columns: ['classified'],
+      justification: 'review the classified fixture value on the server',
+      source: 'accounts.classified',
+      table: 'accounts',
+    });
+    const rawRows = await db.all(statement);
+    const rows = await db
+      .select({ classified: owned.classified, id: owned.id })
+      .from(owned)
+      .innerJoin(items, eq(items.accountId, owned.id))
+      .union(db.select({ classified: accounts.classified, id: accounts.id }).from(accounts));
+    const reviewed = trustedReveal(secret(rows[0]?.classified ?? rawRows[0]?.classified), {
+      justification: 'publish the reviewed fixture projection',
+      method: 'server-projection',
+      source: 'accounts.classified',
+    });
+    return Response.json({ reviewed });
+  },
+});
+`,
+      [
+        {
+          fileName: 'src/schema.ts',
+          source: `
+import { pgTable, text } from 'drizzle-orm/pg-core';
+export const accounts = pgTable('accounts', {
+  classified: text('classified').notNull(),
+  id: text('id').primaryKey(),
+});
+export const items = pgTable('items', {
+  accountId: text('account_id').notNull(),
+  id: text('id').primaryKey(),
+});
+`,
+        },
+      ],
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it.each([
+    [
+      'request-derived sql.raw text',
+      `import { sql, trustedSql } from '@kovojs/drizzle';`,
+      `return trustedSql(sql.raw(input.statement), { justification: 'dynamic text is not reviewed' });`,
+    ],
+    [
+      'an aliased sql.raw callable',
+      `import { sql, trustedSql } from '@kovojs/drizzle';`,
+      `const raw = sql.raw;
+       return trustedSql(raw('select 1'), { justification: 'aliased raw callable' });`,
+    ],
+    [
+      'a renamed declared-secret capability import',
+      `import { declareSecretReadCapability as declareRead } from '@kovojs/server';`,
+      `declareRead(statement, { columns: ['classified'], justification: 'renamed', source: 'accounts.classified', table: 'accounts' });`,
+    ],
+    [
+      'a declared-secret lookalike',
+      `import { declareSecretReadCapability } from './lookalike.js';`,
+      `declareSecretReadCapability(statement, { columns: ['classified'], justification: 'foreign', source: 'accounts.classified', table: 'accounts' });`,
+    ],
+    [
+      'computed declared-secret metadata',
+      `import { declareSecretReadCapability } from '@kovojs/server';`,
+      `declareSecretReadCapability(statement, { [input.key]: ['classified'], justification: 'computed', source: 'accounts.classified', table: 'accounts' });`,
+    ],
+    [
+      'an aliased trustedReveal import',
+      `import { trustedReveal as reveal } from '@kovojs/core';`,
+      `return reveal(input.value, { justification: 'renamed reveal' });`,
+    ],
+    [
+      'a dynamically justified trustedReveal',
+      `import { trustedReveal } from '@kovojs/core';`,
+      `return trustedReveal(input.value, { justification: input.reason });`,
+    ],
+    [
+      'authority passed to trustedReveal',
+      `import { trustedReveal } from '@kovojs/core';`,
+      `return trustedReveal(context.db, { justification: 'authority laundering' });`,
+    ],
+    [
+      'an aliased secret constructor',
+      `import { secret as box } from '@kovojs/core';`,
+      `return box(input.value);`,
+    ],
+    [
+      'an extra secret-constructor argument',
+      `import { secret } from '@kovojs/core';`,
+      `return secret(input.value, 'forged');`,
+    ],
+    [
+      'authority passed to the secret constructor',
+      `import { secret } from '@kovojs/core';`,
+      `return secret(context.db);`,
+    ],
+    [
+      'an aliased Drizzle table-alias callable',
+      `import { alias } from 'drizzle-orm/pg-core';`,
+      `const makeAlias = alias;
+       return makeAlias(input.table, 'accounts');`,
+    ],
+    [
+      'a replaced Drizzle table-alias binding',
+      `import { alias } from 'drizzle-orm/pg-core';`,
+      `alias = input.alias;
+       return alias(input.table, 'accounts');`,
+    ],
+    ['a computed managed-read continuation', ``, `return context.db.select()[input.operation](input.value);`],
+    [
+      'authority passed to a managed innerJoin continuation',
+      ``,
+      `return context.db.select().from(input.table).innerJoin(context.db, input.predicate);`,
+    ],
+    [
+      'a foreign executable passed to a managed union continuation',
+      `import { buildForeignQuery } from './lookalike.js';`,
+      `return context.db.select().from(input.table).union(buildForeignQuery());`,
+    ],
+  ])('keeps %s outside the exact reviewed finite-IR doors', (_label, moduleDeclarations, body) => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+${moduleDeclarations}
+export const report = endpoint('/report', {
+  db: true,
+  handler(input, context) {
+    const statement = input.statement;
+    ${body}
+    return Response.json({ ok: true });
+  },
+});
+`),
+    ).not.toEqual([]);
+  });
+
   it('keeps lookalike, aliased, mutable, and request-time capability doors closed', () => {
     expect(
       kv449(`
