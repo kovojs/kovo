@@ -1046,6 +1046,33 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
   {
     censusFamilies: ['ingress.endpoint.webhook'],
     hostileValueEvidence: [
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
+    mechanism: 'reconstruct',
+    mechanismDetail:
+      'Each adapter snapshots only its transport-owned method, authority, and scheme sources; one finite classifier rejects ambiguous or lossy values and reconstructs the Web Request method, URL authority, and app-visible Host from the same decision.',
+    owner: '@kovojs/server/request-ingress',
+    proofEvidence: [
+      'packages/server/src/request-ingress-policy.ts',
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
+    proofGate: 'pnpm run check:security-classifier-corpus',
+    sink: 'request method/authority/scheme',
+    soleDoor:
+      'createRequestIngressClassifier after adapter-owned source snapshot; reconstructed method, URL authority, scheme, and Host decision',
+    specAnchor: 'spec/09-wire-protocol.md §9.5; spec/11-verification.md §11.4',
+  },
+  {
+    censusFamilies: ['ingress.endpoint.webhook'],
+    hostileValueEvidence: [
       'packages/server/src/webhook.test.ts',
       'tests/integration/specs/webhook-hmac.spec.ts',
     ],

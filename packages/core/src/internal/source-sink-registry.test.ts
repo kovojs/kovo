@@ -28,6 +28,7 @@ const requiredC9SinkNames = [
   'Set-Cookie',
   'blob/file write',
   'durable-task payload',
+  'request method/authority/scheme',
   'webhook payload',
   'HTML/render output',
   'log/error output',
@@ -189,6 +190,7 @@ describe('boundary crossing sink inventory', () => {
         ['Set-Cookie', 'own'],
         ['blob/file write', 'own'],
         ['durable-task payload', 'own'],
+        ['request method/authority/scheme', 'reconstruct'],
         ['webhook payload', 'own'],
         ['HTML/render output', 'reconstruct'],
         ['log/error output', 'box'],
@@ -219,6 +221,14 @@ describe('boundary crossing sink inventory', () => {
     expect(inventory.find((entry) => entry.sink === 'webhook payload')?.censusFamilies).toEqual([
       'ingress.endpoint.webhook',
     ]);
+    const requestIngressDoor = inventory.find(
+      (entry) => entry.sink === 'request method/authority/scheme',
+    );
+    expect(requestIngressDoor?.censusFamilies).toEqual(['ingress.endpoint.webhook']);
+    expect(requestIngressDoor?.soleDoor).toContain('createRequestIngressClassifier');
+    expect(requestIngressDoor?.hostileValueEvidence).toContain(
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+    );
     expect(inventory.find((entry) => entry.sink === 'HTML/render output')?.censusFamilies).toEqual([
       'html.dom.output',
       'document.shell.output',

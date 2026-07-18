@@ -1997,7 +1997,13 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'request-ingress',
     marker: '@kovo-security-classifier-corpus request-ingress',
-    testFiles: ['packages/server/src/request-ingress-c13.test.ts'],
+    testFiles: [
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'method-authority-scheme-superset',
@@ -2011,6 +2017,41 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "'example.com:443'",
           'selects only the explicitly trusted transport scheme before applying strict grammar',
           "'https, ftp'",
+        ],
+      },
+      {
+        id: 'finite-classifier-source-selection',
+        file: 'packages/server/src/request-ingress-policy.test.ts',
+        snippets: [
+          'finite request-ingress classifier',
+          'admits exactly canonical standard methods plus byte-stable extension tokens',
+          'accepts only one byte-identical authority under both supported schemes',
+          'selects transport-owned scheme sources before applying one strict grammar',
+          'applies the same finite verdict to the platform-owned Fetch bridge',
+        ],
+      },
+      {
+        id: 'real-http2-method-authority-closure',
+        file: 'packages/server/src/__bugz_remote_ingress.test.ts',
+        snippets: [
+          'rejects HTTP/2 method identities that Fetch would canonicalize before dispatch',
+          "request('PoSt')",
+          'rejects HTTP/2 authorities that URL would normalize before app policy',
+          "request('%65xample.com')",
+        ],
+      },
+      {
+        id: 'generated-node-vercel-worker-parity',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'const requestIngressClassifier = (',
+          'nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority)',
+          'rejectInvalidNodeRequestIngress(nodeRequest, nodeResponse, options)',
+          'invalidStaticScheme',
+          "'X-Forwarded-Proto: https, ftp\\r\\n'",
+          'requestIngressClassifier.classifyPlatformFetch',
+          'INVALID_SCHEME_ASSET_MUST_NOT_RUN',
+          'EXTENSION_METHOD_ASSET_MUST_NOT_RUN',
         ],
       },
     ],

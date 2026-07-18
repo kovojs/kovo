@@ -69,17 +69,21 @@ GREEN (no longer pending).
   `packages/server/src/app-dispatch.test.ts` covers the end-to-end mutation/endpoint dispatch paths that reject missing
   or cross-origin CSRF attempts before handler execution.
 - **Wire × I (M34) — GREEN.** SPEC §9.5 requires adapters to preserve the raw case-sensitive HTTP
-  method identity across the Web `Request` boundary. `packages/server/src/__bugz_remote_ingress.test.ts`
-  sends real HTTP/2 `post`, `PoSt`, and `POST`; live Node rejects the first two before dispatch and
-  admits only exact `POST`. `packages/server/src/node.test.ts` and `build.test.ts` prove the same
-  closed verdict and extension-method behavior in live, emitted Node, and Vercel adapters. The
-  `node-fetch-method-identity-closed` C13 anchor prevents silent removal.
+  method identity across the Web `Request` boundary. The finite request-ingress classifier is now
+  the sole method/authority/scheme grammar shared by live Node, emitted Node/Vercel, and generated
+  Cloudflare. `packages/server/src/__bugz_remote_ingress.test.ts` sends real HTTP/2 `post`, `PoSt`,
+  and `POST`; live Node rejects the first two before dispatch and admits only exact `POST`. The
+  request-ingress C13 corpus preserves that raw proof, generated parity, extension methods, and the
+  Cloudflare platform-Fetch verdict.
 - **Wire × I (M35) — GREEN.** At audited code SHA `e5f613be9`, real HTTP/2
   `:authority: %65xample.com` reached the handler as URL host `example.com` but app-visible Host
-  `%65xample.com`. `766aa8c57` now rejects every authority whose parsed serialization is not
-  byte-identical under both HTTP schemes before `Request` construction. Real-wire, live/generated
-  Node and Vercel parity tests, SPEC §9.5, and the `node-fetch-authority-identity-closed` C13 anchor
-  preserve the verdict; canonical lower-case DNS/non-default-port and bracketed IPv6 remain valid.
+  `%65xample.com`. The shared classifier rejects every authority whose parsed serialization is not
+  byte-identical under both HTTP schemes, and one final target object now reconstructs both URL and
+  app-visible `Host`, including under a pinned operator origin. Real-wire, live/generated Node and
+  Vercel parity plus generated Cloudflare tests preserve the verdict. For Cloudflare, the scoped
+  trust boundary is explicit: Kovo validates the canonical platform-owned Fetch URL and makes no
+  claim about raw authority bytes the edge bridge already normalized or discarded; HTTP Service
+  Binding ingress remains unsupported.
 - **Runtime × Au (A6) — GREEN.** Capability URLs bind the signed canonical object, method, scope, and expiry before any
   storage read. `packages/server/src/capability-url.test.ts` proves claim-mismatch, expiry, signature, audience, and
   replay rejection; `packages/server/src/capability-route.test.ts` proves the verify sink runs before dereference, so a

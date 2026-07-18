@@ -18,6 +18,7 @@ import * as authorizationMatrixGate from './check-authorization-matrix.mjs';
 import * as sinkPolicyGate from './check-sink-policy-gate.mjs';
 import * as fundamentalFixesCensusGate from './fundamental-fixes-census-gate.mjs';
 import * as securityTestBuildGate from './security-test-build-gate.mjs';
+import * as requestIngressPolicy from '../packages/server/src/request-ingress-policy.ts';
 
 const repoRoot = findRepoRoot();
 const scriptsDir = path.join(repoRoot, 'scripts');
@@ -46,6 +47,18 @@ const betterAuthCredentialRuntimeGatePath = path.join(
   repoRoot,
   'packages/better-auth/src/internal/credential-runtime-gate.ts',
 );
+const requestIngressPolicyPath = path.join(
+  repoRoot,
+  'packages/server/src/request-ingress-policy.ts',
+);
+
+const canonicalPostMethodBranch =
+  "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
+const weakenedCanonicalPostMethodBranch =
+  "    if (equalsAsciiCaseInsensitive(method, 'post')) return true;";
+
+const dualSchemeAuthorityIdentityBranch = '      parsedHttps.host === authority &&';
+const weakenedDualSchemeAuthorityIdentityBranch = '      true &&';
 
 const ownerReadCanary = [
   '      "id": "endpoint-builder-act-as-owner",',
@@ -911,6 +924,28 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertBetterAuthCredentialResultIdentityIsPinned,
   },
   {
+    baseModule: requestIngressPolicy,
+    description: 'Allows Fetch to canonicalize a lower-case standard POST method before dispatch.',
+    expectedKiller: 'request-ingress method identity must reject lower-case standard methods',
+    name: 'request-ingress/allow-lowercase-standard-post',
+    replacement: weakenedCanonicalPostMethodBranch,
+    search: canonicalPostMethodBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressMethodIdentityIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description:
+      'Drops the HTTPS serialization half of canonical authority identity and admits :443.',
+    expectedKiller:
+      'request-ingress authority identity must stay byte-identical under both HTTP schemes',
+    name: 'request-ingress/drop-https-authority-identity',
+    replacement: weakenedDualSchemeAuthorityIdentityBranch,
+    search: dualSchemeAuthorityIdentityBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressDualSchemeAuthorityIsClosed,
+  },
+  {
     baseModule: fundamentalFixesCensusGate,
     description: 'Deletes the M5 forbidden-status census enforcement branch.',
     expectedKiller: 'M5 census statuses such as future must stay forbidden, not merely unsupported',
@@ -1148,6 +1183,51 @@ async function assertAuthorizationMatrixDocumentIsClosed(_moduleUnderTest, { sou
   const check = authorizationMatrixGate.validateAuthorizationMatrixDocument(JSON.parse(sourceText));
   if (check.ok) return;
   throw new Error(check.findings.join('\n'));
+}
+
+function requestIngressClassifier(moduleUnderTest) {
+  return moduleUnderTest.createRequestIngressClassifier({
+    charCodeAt: (value, index) => value.charCodeAt(index),
+    isArray: Array.isArray,
+    parseAuthority(authority, scheme) {
+      try {
+        const parsed = new URL(`${scheme}://${authority}`);
+        return {
+          hash: parsed.hash,
+          host: parsed.host,
+          origin: parsed.origin,
+          pathname: parsed.pathname,
+          search: parsed.search,
+        };
+      } catch {
+        return undefined;
+      }
+    },
+  });
+}
+
+async function assertRequestIngressMethodIdentityIsClosed(moduleUnderTest) {
+  const classifier = requestIngressClassifier(moduleUnderTest);
+  if (classifier.classifyMethod('post') || !classifier.classifyMethod('POST')) {
+    throw new Error('request-ingress classifier no longer preserves exact POST identity');
+  }
+}
+
+async function assertRequestIngressDualSchemeAuthorityIsClosed(moduleUnderTest) {
+  const classifier = requestIngressClassifier(moduleUnderTest);
+  for (const authority of ['app.example:80', 'app.example:443']) {
+    const decision = classifier.classifyAuthority({
+      host: authority,
+      httpVersion: '1.1',
+      pseudoAuthority: undefined,
+      rawHostHeaderCount: 1,
+    });
+    if (decision.ok) {
+      throw new Error(
+        `request-ingress classifier admitted scheme-relative default port ${authority}`,
+      );
+    }
+  }
 }
 
 export function applyExactMutation(sourceText, mutant) {
