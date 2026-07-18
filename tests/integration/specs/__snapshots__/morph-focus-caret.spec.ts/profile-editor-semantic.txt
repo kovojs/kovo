@@ -1,5 +1,5 @@
 <section kovo-c="profile-editor" kovo-deps="profile" kovo-fragment-target="profile-editor" kovo-key="profile-editor">
-  <form action="/_m/profile/save-draft" kovo-key="draft-form" method="post">
+  <form action="/_m/profile/save-draft" kovo-fragment-target="save-draft:draft-form" kovo-key="draft-form" method="post">
     <label>
       "Draft"
     <input kovo-key="draft" name="draft">
@@ -9,3 +9,4 @@
         "1"
     <button type="submit">
       "Refresh server truth"
+    <input name="kovo-form-key" type="hidden" value="draft-form">

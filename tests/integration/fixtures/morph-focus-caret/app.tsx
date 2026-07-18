@@ -12,7 +12,7 @@ export const saveDraft = mutation('profile/save-draft', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   defaultRedirectTo: '/',
-  input: s.object({}),
+  input: s.object({ draft: s.string() }),
   registry: { queries: [profileQuery], tables: ['profile'], touches: [profileDomain] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
     await request.db.exec(staticSql`update profile set version = version + 1 where id = 1`);

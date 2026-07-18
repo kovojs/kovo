@@ -1,19 +1,17 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, form } from '@kovojs/core';
 
+import { saveDraft } from './app';
 import { profileQuery, type ProfileResult } from './shared';
 
+const saveDraftForm = form<'profile/save-draft', { draft: string }>('profile/save-draft');
+
 export const ProfileEditor = component({
+  mutations: { saveDraft: saveDraftForm },
   queries: { profile: profileQuery },
   render: ({ profile }: { profile: ProfileResult }) => (
     <section kovo-key="profile-editor">
-      <form
-        kovo-key="draft-form"
-        method="post"
-        action="/_m/profile/save-draft"
-        enhance
-        data-mutation="profile/save-draft"
-      >
+      <form key="draft-form" mutation={saveDraft} enhance>
         <label for="draft">Draft</label>
         <input id="draft" name="draft" kovo-key="draft" value={`server draft ${profile.version}`} />
         <p>
