@@ -298,8 +298,8 @@ Measurements are versioned and reproducible:
         static-column reads it covers. Any byte/span/name/root/category/operation mismatch, closed
         sibling summary, or closed root trace falls back to the legacy closed verdict.
     - Evidence: `pnpm exec vitest run packages/compiler/src/security-operation-ir.security.test.ts packages/compiler/src/security-operation-ir.response-provenance.test.ts`
-      passes 169/169; the finite-IR C13 anchor inventory passes with no missing verdict anchors;
-      focused CLI/Drizzle regressions prove cross-file Response/protocol closure and every
+      passes 169/169; the isolated `finite-security-operation-ir` C13 corpus passes with no
+      findings; focused CLI/Drizzle regressions prove cross-file Response/protocol closure and every
       byte/span/callable/root/authority/operation semantic-proof mismatch.
   - [x] Preserve the specialized exact Drizzle private-scope proof while the compiler carrier is
         introduced; do not describe that legacy KV406 discharge as compiler-owned or delete its
