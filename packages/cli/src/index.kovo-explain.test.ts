@@ -1340,6 +1340,70 @@ export const save = mutation('cart/save', {
     `);
   });
 
+  it('explains untrusted roots, reviewed doors, package verdicts, and closed provenance', () => {
+    const result = kovoExplain(
+      {
+        capabilityClosure: [
+          {
+            kind: 'root',
+            module: 'src/webhooks/billing.ts',
+            name: 'billing',
+            rootKind: 'webhook',
+            site: 'src/webhooks/billing.ts:4:16',
+          },
+          {
+            conditions: ['default', 'import', 'node'],
+            kind: 'summary',
+            manifestFingerprint: 'sha256:abc123',
+            packageName: 'safe-parser',
+            packageVersion: '1.2.3',
+            site: 'src/webhooks/billing.ts:2:1',
+            status: 'valid',
+            summaryVersion: 'safe-parser/4',
+          },
+          {
+            capability: 'database-driver',
+            kind: 'door',
+            module: 'src/webhooks/billing.ts',
+            name: 'billing',
+            path: ['webhook:billing', 'src/db.ts', '@kovojs/server/postgres'],
+            reason: 'framework-owned Postgres door',
+            rootKind: 'webhook',
+            site: 'src/db.ts:7:1',
+          },
+          {
+            capability: 'network',
+            kind: 'closed',
+            module: 'src/webhooks/billing.ts',
+            name: 'billing',
+            path: ['webhook:billing', 'src/send.ts', 'package:raw-http'],
+            reason: 'package summary is absent',
+            rootKind: 'webhook',
+            site: 'src/send.ts:3:1',
+            status: 'unresolved',
+          },
+        ],
+      },
+      { capabilities: true },
+    );
+
+    expect(result).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'CAPABILITIES',
+        'CAPABILITY-CLOSURE',
+        'CLOSED root=webhook:"billing" capability=network module=src/webhooks/billing.ts site=src/send.ts:3:1 path="webhook:billing -> src/send.ts -> package:raw-http" reason="package summary is absent"',
+        'DOOR root=webhook:"billing" capability=database-driver module=src/webhooks/billing.ts site=src/db.ts:7:1 path="webhook:billing -> src/db.ts -> @kovojs/server/postgres" reason="framework-owned Postgres door"',
+        'ROOT kind=webhook name="billing" module=src/webhooks/billing.ts site=src/webhooks/billing.ts:4:16',
+        'PACKAGE-SUMMARY package=safe-parser@1.2.3 summary=safe-parser/4 status=valid conditions=default,import,node fingerprint=sha256:abc123 site=src/webhooks/billing.ts:2:1',
+        'CLOSURE-SUMMARY roots=1 doors=1 packages=1 closed=1',
+        'SUMMARY total=0',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('prints the cookie downgrade audit table (--cookies)', () => {
     const result = kovoExplain(
       {

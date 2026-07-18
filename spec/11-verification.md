@@ -91,8 +91,8 @@ surfaces it points at the single framework-owned choke or box, never at a proxy-
 For a Kovo app, the following are checkable **without executing a browser**:
 
 1. TypeScript static checking — all wiring (handlers, routes & links, forms, targets, bindings, IDREFs, transforms, guards).
-2. `kovo check` — touch-graph consistency, optimistic exhaustiveness (KV310), update coverage (KV311), fixpoint + render-equivalence invariants, unguarded and unscoped audits.
-3. Graph queries over `kovo explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs.
+2. `kovo check` — touch-graph consistency, optimistic exhaustiveness (KV310), update coverage (KV311), fixpoint + render-equivalence invariants, capability closure (KV448), unguarded and unscoped audits.
+3. Graph queries over `kovo explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs, including the `--capabilities` root/door/package/closed provenance ledger from §6.6.
 4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms and derivation soundness (commuting diagrams).
 5. HTTP-level integration tests — mutations as request/response assertions against pglite (real Postgres semantics, in-memory, no container).
 

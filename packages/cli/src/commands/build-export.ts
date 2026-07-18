@@ -44,6 +44,8 @@ import {
 } from '@kovojs/compiler';
 import { deriveAppGraph } from '@kovojs/compiler/graph';
 import {
+  analyzeCapabilityClosure,
+  collectCapabilityPackageRequests,
   cssRouteDeliveryGate,
   dedupeCss,
   lowerStandaloneSourceDerivedRegistryDeclarations,
@@ -53,6 +55,7 @@ import {
   projectMutationRegistryFactsFromFiles,
   type ProjectMutationRegistryFacts,
   type QueryShapeFact,
+  type AnalyzeCapabilityClosureResult,
   viteFrameworkIdentityFiles,
 } from '@kovojs/compiler/internal';
 import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
@@ -102,6 +105,10 @@ import {
 } from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
+import {
+  readCapabilityPackageSummaries,
+  resolveCapabilityPackages,
+} from '../capability-closure-packages.js';
 import {
   buildOutputVersion,
   type CliCommandResult,
@@ -270,6 +277,23 @@ function buildFlatMapDense<Value, Result>(
         'CLI packages/cli/src/commands/build-export.ts collection',
       );
     }
+  }
+  return result;
+}
+
+function buildConcatDense<Value>(
+  first: readonly Value[],
+  second: readonly Value[],
+  label: string,
+): Value[] {
+  const result = buildSnapshotDenseArray(first, `${label} first collection`);
+  const tail = buildSnapshotDenseArray(second, `${label} second collection`);
+  for (let index = 0; index < tail.length; index += 1) {
+    buildSecurityArrayAppend(
+      result,
+      tail[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
   }
   return result;
 }
@@ -811,11 +835,14 @@ async function loadAndCheckBuildApp(
 }
 
 interface PreEvaluationStaticTrust {
+  readonly capabilityClosure: AnalyzeCapabilityClosureResult;
   readonly facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>;
   readonly files: readonly BuildCheckSourceFile[];
 }
 
-interface PreEvaluationBuildConfigTrust extends PreEvaluationStaticTrust {
+interface PreEvaluationBuildConfigTrust {
+  readonly facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>;
+  readonly files: readonly BuildCheckSourceFile[];
   readonly path: string;
 }
 
@@ -856,6 +883,12 @@ function runPreEvaluationStaticTrustPreflight(
   // config Vite build can transform. A project-root census would incorrectly promote unrelated
   // authored tooling such as vite.config.ts into app runtime authority.
   const files = preEvaluationAppSourceFiles(appModulePath, root);
+  const packageRequests = collectCapabilityPackageRequests(files);
+  const capabilityClosure = analyzeCapabilityClosure({
+    files,
+    packageSummaries: readCapabilityPackageSummaries(root),
+    packages: resolveCapabilityPackages(packageRequests, appModulePath),
+  });
   // SPEC §6.6: authored modules are untrusted inputs to the compiler. Reject statically visible
   // authority and credential-wire escapes before SSR evaluation can execute top-level app code or
   // reject a framework factory shape that the runtime-derived registry does not understand. The
@@ -865,21 +898,39 @@ function runPreEvaluationStaticTrustPreflight(
       ? { capabilities: [], cookieDowngrades: [], unregisteredSinks: [] }
       : collectStaticBuildTrustFactsFromProject({ files });
   const accessGuardDiagnostics = preEvaluationAccessGuardDiagnostics(files);
+  const capabilityClosureDiagnostics = buildMapDense(
+    capabilityClosure.diagnostics,
+    'Capability-closure diagnostics',
+    staticDiagnosticFact,
+  );
   const { unregisteredSinks } = facts;
-  if (unregisteredSinks.length === 0 && accessGuardDiagnostics.length === 0) {
-    return { facts, files };
+  if (
+    unregisteredSinks.length === 0 &&
+    accessGuardDiagnostics.length === 0 &&
+    capabilityClosureDiagnostics.length === 0
+  ) {
+    return { capabilityClosure, facts, files };
   }
 
   const result = kovoCheck(
     {
       ...(accessGuardDiagnostics.length === 0 ? {} : { diagnostics: accessGuardDiagnostics }),
+      ...(capabilityClosureDiagnostics.length === 0
+        ? {}
+        : {
+            diagnostics: buildConcatDense(
+              accessGuardDiagnostics,
+              capabilityClosureDiagnostics,
+              'Pre-evaluation static diagnostics',
+            ),
+          }),
       ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
     },
     { paranoidStaticAdvisory },
   );
-  if (result.exitCode === 0) return { facts, files };
+  if (result.exitCode === 0) return { capabilityClosure, facts, files };
   if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
-    return { facts, files };
+    return { capabilityClosure, facts, files };
   }
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
@@ -1231,6 +1282,7 @@ async function staticBuildCheckGraph(
   // The aggregate shares one in-memory syntactic project across all three build trust surfaces.
   const { capabilities, cookieDowngrades, unregisteredSinks } =
     options.preEvaluationStaticTrust.facts;
+  const capabilityClosure = options.preEvaluationStaticTrust.capabilityClosure.facts;
   const queryShapeFacts = buildCompilerQueryShapeFacts(
     files,
     drizzleFacts,
@@ -1297,6 +1349,7 @@ async function staticBuildCheckGraph(
         : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
       ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
       ...(capabilities.length === 0 ? {} : { capabilities }),
+      ...(capabilityClosure.length === 0 ? {} : { capabilityClosure }),
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
       ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
       endpoints,

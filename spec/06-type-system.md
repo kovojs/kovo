@@ -276,6 +276,33 @@ fails closed and is never replaced by an anonymous fallback within that request.
 
 **Trusted application-code boundary (normative).** Kovo does not sandbox app-authored server modules or third-party packages that execute in the server realm. The public-import and provenance rules in §5.2 prevent unsupported or accidental authority use inside the supported authoring subset; they are not a claim that deliberately hostile same-realm code cannot recover ambient JavaScript authority through `Function`, dynamic loading, reflection, native addons, or equivalent language/host facilities. Such code is privileged application compromise, not a remote-input framework boundary. Deployments that execute mutually untrusted plugins or generated server code MUST place that code in a separate process or genuinely isolated realm and expose only a fail-closed typed RPC capability surface. Finite syntax deny-lists and intrinsic pinning may remain defense-in-depth, but MUST NOT be described or tested as a sandbox proof.
 
+**Capability-closed untrusted roots (normative, supported-subset static gate).** Before evaluating
+authored app modules, `kovo build` MUST scan the immutable app-source snapshot and census every
+route, layout, query, mutation, endpoint, webhook, durable or scheduled task, serialized browser
+handler, and supported agent/tool callback as an untrusted-data root. For each root, Kovo computes a
+transitive module/callback graph across eager imports, re-exports, local aliases and wrappers,
+literal `import()`/`require()` edges, conditional local targets, and callbacks or callback-bearing
+containers transferred through a local wrapper. A non-literal loader, unresolved local target, or
+reachable raw filesystem, network, process, worker, VM/dynamic-loader, or database-driver capability
+fails the pre-evaluation build gate with **KV448** and a root-to-terminal provenance path. Reviewed
+framework APIs are the only nodes that may terminate such a path as a capability door; app or
+package metadata cannot mint a framework door.
+
+Reachable package code requires a least-authority verdict for the exact installed package name,
+version, security-relevant manifest fingerprint, requested subpath, imported export, and complete
+conditional-export arm set. Kovo packages and explicitly reviewed framework companions use a
+compiler-owned, version-pinned verdict. Other packages use the committed
+`kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
+independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
+`<module>` entry and MUST classify package initialization explicitly rather than relying on an empty
+export list. An absent, stale, duplicate,
+contradictory, malformed, export-incomplete, condition-incomplete, or unresolved verdict fails
+closed with KV448. `kovo explain --capabilities` prints the root census, reviewed doors, exact
+package-summary versions/fingerprints, and every closed fact with the same provenance used by the
+diagnostic. This is a conservative proof about accidental authority in Kovo's supported static
+authoring subset; consistent with the trusted application-code boundary above, it is not a
+same-realm JavaScript sandbox or a claim about deliberately hostile dependencies.
+
 **Build-preset capability boundary (normative).** `KovoPreset` is an opaque, framework-owned
 selection token, not a public structural deployment descriptor. `node()`, `vercel()`, and
 `cloudflare()` mint exact frozen tokens registered by identity in a framework-private `WeakMap`;

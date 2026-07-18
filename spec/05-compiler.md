@@ -54,6 +54,11 @@ kovo explain mutation cart/add     # writes → domains → invalidated queries 
 kovo explain mutation cart/add --optimistic   # transform coverage per query; derivation traces + punts (§10.5)
 kovo explain query cart            # read set, consumers, every mutation that invalidates it
 kovo explain page /products/:id    # emitted modulepreloads, per-route prefetch config, param/search schemas, query payloads
+kovo explain --capabilities        # held capabilities plus untrusted roots, reviewed doors, exact package verdicts, and closed provenance paths
 ```
+
+The capability-closure rows are the stable rendering of the pre-evaluation proof from §6.6, not a
+runtime sandbox trace. Root, door, package-summary, and closed rows are sorted independently of
+source traversal order; a closed row retains the exact root-to-terminal path also emitted by KV448.
 
 ---

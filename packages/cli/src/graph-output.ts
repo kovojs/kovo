@@ -10,8 +10,10 @@ import {
   accessKv436Line,
   accessLine,
   accessSummary,
+  capabilityClosureLine,
   capabilityLine,
   collectCapabilityFacts,
+  compareCapabilityClosureFact,
   compareCookieDowngrade,
   compareEndpointExplain,
   compareRevealExplain,
@@ -303,6 +305,21 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
 
     for (const capability of capabilities) {
       lines.push(capabilityLine(capability));
+    }
+
+    const closure = [...(graph.capabilityClosure ?? [])].sort(compareCapabilityClosureFact);
+    if (closure.length > 0) {
+      lines.push('CAPABILITY-CLOSURE');
+      for (const fact of closure) lines.push(capabilityClosureLine(fact));
+      lines.push(
+        [
+          'CLOSURE-SUMMARY',
+          `roots=${closure.filter((fact) => fact.kind === 'root').length}`,
+          `doors=${closure.filter((fact) => fact.kind === 'door').length}`,
+          `packages=${closure.filter((fact) => fact.kind === 'summary').length}`,
+          `closed=${closure.filter((fact) => fact.kind === 'closed').length}`,
+        ].join(' '),
+      );
     }
 
     lines.push(`SUMMARY total=${capabilities.length}`);

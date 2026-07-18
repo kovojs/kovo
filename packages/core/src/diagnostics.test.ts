@@ -149,6 +149,7 @@ describe('diagnostic registry', () => {
       'KV445',
       'KV446',
       'KV447',
+      'KV448',
     ]);
   });
 
@@ -903,6 +904,15 @@ describe('diagnostic registry', () => {
       SPEC §10.3 and fundamental-fixes-followup-6 DEC-A: SQLite is explicitly experimental and non-guaranteeing for owner-scoped runtime authorization.",
           "message": "SQLite owner annotations are advisory only in the experimental SQLite runtime.",
           "severity": "warn",
+        },
+        "KV448": {
+          "code": "KV448",
+          "help": "Would lower to: an untrusted-data root whose complete module/callback closure contains only ordinary pure modules and reviewed Kovo capability doors.
+      Blocked reason: the provenance path reaches raw network, filesystem, process, VM, worker, database-driver, or unresolved loading authority; alternatively an external package summary is absent, stale, contradictory, or incomplete for the installed version and conditional exports.
+      Fixes: route the operation through the named Kovo capability, remove the raw authority from the reachable module graph, make a dynamic import/require target literal, or add/update an exact-version reviewed pure-package summary. The diagnostic path names the root and every transfer edge.
+      SPEC §6.6 capability-closed module graph: this is a static supported-subset gate, not a JavaScript process sandbox; deliberately hostile same-realm app/package code remains outside the app-level proof.",
+          "message": "Untrusted-data-reachable module graph acquires raw or unresolved authority.",
+          "severity": "error",
         },
       }
     `);
