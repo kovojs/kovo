@@ -39,6 +39,12 @@ jobs:
           rebuild-better-sqlite3: 'true'
       - name: Paranoid static classifier harness
         run: vp exec pnpm run check:paranoid-classifiers
+      - name: Expose hosted PostgreSQL server binaries
+        run: |
+          postgres_bindir="$(pg_config --bindir)"
+          test -x "$postgres_bindir/initdb"
+          test -x "$postgres_bindir/postgres"
+          echo "$postgres_bindir" >> "$GITHUB_PATH"
       - name: Paranoid production runtime chokes
         run: vp exec pnpm run check:paranoid-runtime
 

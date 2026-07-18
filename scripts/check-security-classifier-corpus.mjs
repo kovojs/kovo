@@ -92,6 +92,21 @@ const CUSTOM_REQUEST_HANDLER_DOC_FILES = [
 ];
 const RUNTIME_BOOTSTRAP_IMPORT = "import '@kovojs/server/runtime-bootstrap';";
 const PACKED_RUNTIME_BOOTSTRAP_IMPORT = "import '../dist/server/src/runtime-bootstrap.mjs';";
+// C13 keeps these budgets and verdicts unchanged, but runs their files away from the broad batch
+// and their named load-sensitive tests in fresh processes. The complementary first pattern still
+// executes every other test in each file, so isolation cannot narrow the corpus.
+const LOAD_ISOLATED_TEST_CONFIGS = [
+  {
+    file: 'packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts',
+    freshTestNames: ['keeps 120 distinct iterable and parameter-pattern safe misses bounded'],
+  },
+  {
+    file: 'packages/server/src/build.test.ts',
+    freshTestNames: [
+      'shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells',
+    ],
+  },
+];
 
 const REQUEST_SAFE_RUNTIME_SET_ALIGNMENT = [
   ['requestSafeGlobalCallables', 'REQUEST_SAFE_GLOBAL_CALLABLES'],
@@ -1957,7 +1972,7 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
   const corpora = options.corpora ?? REQUIRED_CLASSIFIER_CORPORA;
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
-  const run = options.run ?? ((testFiles) => runVitest(testFiles, root));
+  const run = options.run ?? ((testFiles, runOptions) => runVitest(testFiles, root, runOptions));
   const findings = [];
   const testFiles = [];
   const fileText = new Map();
@@ -1995,17 +2010,76 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
     }
   }
 
+  const uniqueTestFiles = [...new Set(testFiles)];
+  const loadIsolatedTestConfigs =
+    options.loadIsolatedTestConfigs ??
+    (options.corpora === undefined ? LOAD_ISOLATED_TEST_CONFIGS : []);
+  for (const config of loadIsolatedTestConfigs) {
+    if (!uniqueTestFiles.includes(config.file)) {
+      findings.push(`load-isolated corpus file is not enrolled: ${config.file}`);
+      continue;
+    }
+    const text = fileText.get(config.file);
+    for (const testName of config.freshTestNames ?? []) {
+      if (!text?.includes(testName)) {
+        findings.push(`load-isolated corpus test is missing from ${config.file}: ${testName}`);
+      }
+    }
+  }
   if (findings.length === 0) {
-    const result = run([...new Set(testFiles)]);
-    if (!result.ok) findings.push(result.output || 'security classifier corpus vitest failed');
+    const batches = classifierCorpusTestBatches(uniqueTestFiles, loadIsolatedTestConfigs);
+    for (const batch of batches) {
+      const result = run(batch.files, {
+        noFileParallelism: batch.noFileParallelism,
+        testNamePattern: batch.testNamePattern,
+      });
+      if (!result.ok) findings.push(result.output || 'security classifier corpus vitest failed');
+    }
   }
 
   return {
     corpora: corpora.length,
     findings,
     ok: findings.length === 0,
-    testFiles: [...new Set(testFiles)],
+    testFiles: uniqueTestFiles,
   };
+}
+
+function classifierCorpusTestBatches(testFiles, loadIsolatedTestConfigs) {
+  const configByFile = new Map(loadIsolatedTestConfigs.map((config) => [config.file, config]));
+  const ordinaryTestFiles = testFiles.filter((file) => !configByFile.has(file));
+  const batches =
+    ordinaryTestFiles.length > 0
+      ? [{ files: ordinaryTestFiles, noFileParallelism: false, testNamePattern: undefined }]
+      : [];
+
+  for (const file of testFiles) {
+    const config = configByFile.get(file);
+    if (config === undefined) continue;
+    const freshTestNames = config.freshTestNames ?? [];
+    if (freshTestNames.length === 0) {
+      batches.push({ files: [file], noFileParallelism: true, testNamePattern: undefined });
+      continue;
+    }
+    const freshPattern = freshTestNames.map(escapeRegex).join('|');
+    batches.push({
+      files: [file],
+      noFileParallelism: true,
+      testNamePattern: `^(?!.*(?:${freshPattern})).*$`,
+    });
+    for (const testName of freshTestNames) {
+      batches.push({
+        files: [file],
+        noFileParallelism: true,
+        testNamePattern: escapeRegex(testName),
+      });
+    }
+  }
+  return batches;
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 /**
@@ -2502,11 +2576,22 @@ export function main(options = {}) {
   return result.ok;
 }
 
-function runVitest(testFiles, root) {
-  const result = spawnSync('pnpm', ['exec', 'vitest', '--run', ...testFiles], {
-    cwd: root,
-    encoding: 'utf8',
-  });
+function runVitest(testFiles, root, options = {}) {
+  const result = spawnSync(
+    'pnpm',
+    [
+      'exec',
+      'vitest',
+      '--run',
+      ...(options.noFileParallelism ? ['--no-file-parallelism'] : []),
+      ...(options.testNamePattern ? ['--testNamePattern', options.testNamePattern] : []),
+      ...testFiles,
+    ],
+    {
+      cwd: root,
+      encoding: 'utf8',
+    },
+  );
   return {
     ok: result.status === 0,
     output: `${result.stdout ?? ''}${result.stderr ?? ''}`.trim(),

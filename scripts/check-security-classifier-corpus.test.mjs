@@ -433,6 +433,104 @@ describe('check-security-classifier-corpus gate', () => {
     });
   });
 
+  it('runs load-sensitive corpus files in fresh serial batches without dropping coverage', () => {
+    const runs = [];
+    const result = evaluateSecurityClassifierCorpus({
+      corpora: [
+        {
+          id: 'redos',
+          marker: '@kovo-security-classifier-corpus redos',
+          testFiles: ['ordinary.test.ts', 'cpu-budget.test.ts', 'packed-runtime.test.ts'],
+        },
+      ],
+      loadIsolatedTestConfigs: [
+        {
+          file: 'cpu-budget.test.ts',
+          freshTestNames: ['keeps safe misses bounded'],
+        },
+        {
+          file: 'packed-runtime.test.ts',
+          freshTestNames: ['shares one packed witness'],
+        },
+      ],
+      readText: (file) =>
+        file === 'cpu-budget.test.ts'
+          ? '// @kovo-security-classifier-corpus redos\nkeeps safe misses bounded\n'
+          : file === 'packed-runtime.test.ts'
+            ? '// @kovo-security-classifier-corpus redos\nshares one packed witness\n'
+            : '// @kovo-security-classifier-corpus redos\n',
+      run: (testFiles, runOptions) => {
+        runs.push({ testFiles, runOptions });
+        return { ok: true, output: '' };
+      },
+    });
+
+    expect(runs).toEqual([
+      {
+        testFiles: ['ordinary.test.ts'],
+        runOptions: { noFileParallelism: false, testNamePattern: undefined },
+      },
+      {
+        testFiles: ['cpu-budget.test.ts'],
+        runOptions: {
+          noFileParallelism: true,
+          testNamePattern: '^(?!.*(?:keeps safe misses bounded)).*$',
+        },
+      },
+      {
+        testFiles: ['cpu-budget.test.ts'],
+        runOptions: { noFileParallelism: true, testNamePattern: 'keeps safe misses bounded' },
+      },
+      {
+        testFiles: ['packed-runtime.test.ts'],
+        runOptions: {
+          noFileParallelism: true,
+          testNamePattern: '^(?!.*(?:shares one packed witness)).*$',
+        },
+      },
+      {
+        testFiles: ['packed-runtime.test.ts'],
+        runOptions: { noFileParallelism: true, testNamePattern: 'shares one packed witness' },
+      },
+    ]);
+    expect(result).toMatchObject({
+      ok: true,
+      testFiles: ['ordinary.test.ts', 'cpu-budget.test.ts', 'packed-runtime.test.ts'],
+    });
+  });
+
+  it('fails closed when a configured fresh-process proof is no longer enrolled by name', () => {
+    let ran = false;
+    const result = evaluateSecurityClassifierCorpus({
+      corpora: [
+        {
+          id: 'redos',
+          marker: '@kovo-security-classifier-corpus redos',
+          testFiles: ['cpu-budget.test.ts'],
+        },
+      ],
+      loadIsolatedTestConfigs: [
+        {
+          file: 'cpu-budget.test.ts',
+          freshTestNames: ['keeps safe misses bounded'],
+        },
+      ],
+      readText: () => '// @kovo-security-classifier-corpus redos\nrenamed budget proof\n',
+      run: () => {
+        ran = true;
+        return { ok: true, output: '' };
+      },
+    });
+
+    expect(ran).toBe(false);
+    expect(result).toMatchObject({
+      ok: false,
+      findings: [
+        'load-isolated corpus test is missing from cpu-budget.test.ts: keeps safe misses bounded',
+      ],
+    });
+  });
+
   it('fails when the corpus test runner fails', () => {
     const result = evaluateSecurityClassifierCorpus({
       corpora: [
