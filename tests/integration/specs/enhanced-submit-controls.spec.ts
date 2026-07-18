@@ -7,7 +7,7 @@ test.use({ kovoFixture: 'enhanced-submit-controls' });
 test('keeps real post markup and submits supported coerced values', async ({ page, kovoApp }) => {
   await page.goto('/');
 
-  const form = page.locator('form[data-mutation="enhanced-submit-controls/submit"]');
+  const form = page.locator('form[data-mutation="enhanced-submit-controls/submit"]').first();
   await expect(form).toHaveAttribute('method', 'post');
   await expect(form).toHaveAttribute('action', '/_m/enhanced-submit-controls/submit');
 

@@ -23,13 +23,15 @@ export const SubmitControls = component({
         <label>
           Quantity <input name="quantity" type="number" value="2" min="1" />
         </label>
-        <label>
-          <input name="includeGift" type="checkbox" value="true" checked /> Include gift wrap
-        </label>
+        <input name="includeGift" type="hidden" value="true" />
         <input name="adminNote" value="do-not-include" disabled />
         <button type="submit" name="intent" value="confirm">
           Submit order
         </button>
+      </form>
+      <form mutation={submitOrder} enhance>
+        <input name="quantity" type="hidden" value="2" />
+        <input name="includeGift" type="hidden" value="true" />
         <button type="submit" name="intent" value="preview">
           Preview order
         </button>
