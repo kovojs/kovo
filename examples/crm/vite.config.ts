@@ -2,7 +2,11 @@ import { kovo } from '@kovojs/server/vite';
 import { defineConfig } from 'vite-plus';
 import { fileURLToPath } from 'node:url';
 
-import { exampleDrizzleRegistryPlugin, exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
+import {
+  crmRegistryFacts,
+  exampleDrizzleRegistryPlugin,
+  exampleKovoCompilerPlugin,
+} from '../vite-kovo-compiler.js';
 import { kovoExampleServeTask } from '../vite-plus-tasks.js';
 
 const exampleGeneratedGraphsGlobalSetup = fileURLToPath(
@@ -34,10 +38,9 @@ export const crmViteConfig = defineConfig({
       appEntries: ['src/app-shell.ts', 'src/interactive-app.tsx'],
       sourceRoot: 'src',
     }),
-    exampleKovoCompilerPlugin({
-      include: ['src'],
-    }),
-    ...(process.env.KOVO_DEMO_MULTITENANT ? [] : [kovo({ app: '/src/app-shell.ts' })]),
+    ...(process.env.KOVO_DEMO_MULTITENANT
+      ? [exampleKovoCompilerPlugin({ include: ['src'], registryFacts: crmRegistryFacts })]
+      : [exampleKovoCompilerPlugin({ include: ['src'] }), kovo({ app: '/src/app-shell.ts' })]),
   ],
   // PGlite (WASM) makes the build/dev paths slow; give the tests room.
   test: {

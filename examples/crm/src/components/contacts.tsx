@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
-import { mutationFormAttributes } from '@kovojs/server';
 import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
@@ -149,7 +148,7 @@ export const ContactsRegion = component({
         </div>
 
         {/* The refreshed fragment resets the form with a fresh contact id. */}
-        <form {...mutationFormAttributes(addContact)} style={contactStyles.formPanel}>
+        <form mutation={addContact} enhance style={contactStyles.formPanel}>
           <input type="hidden" name="id" value={freshId('c')} />
           <div style={contactStyles.formGrid}>
             <input name="name" required placeholder="Full name" style={contactStyles.input} />

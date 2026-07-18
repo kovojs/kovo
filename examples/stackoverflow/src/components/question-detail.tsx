@@ -326,6 +326,7 @@ function sortedAnswers(answers: QuestionAnswersResult): QuestionAnswersResult {
 
 // Interactive region rendered inside the full page and fragment responses.
 export const QuestionDetailRegion = component({
+  mutations: { postAnswer: postAnswerMutation },
   props: { questionId: String },
   queries: {
     answers: questionAnswers.args((props) => ({ questionId: props.questionId })),

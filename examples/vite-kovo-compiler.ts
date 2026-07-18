@@ -99,6 +99,17 @@ function requiredString(name: string) {
   };
 }
 
+function requiredNumber(name: string) {
+  return {
+    coercion: 'number' as const,
+    defaulted: false,
+    name,
+    optional: false,
+    provenance: 'registry' as const,
+    required: true,
+  };
+}
+
 export const commerceRegistryFacts = {
   mutationInputs: {
     'domain/add-to-cart': [
@@ -114,4 +125,45 @@ export const commerceRegistryFacts = {
     ],
   },
   mutations: { 'domain/add-to-cart': 'typeof addToCart' },
+} satisfies RegistryFacts;
+
+export const crmRegistryFacts = {
+  mutationInputs: {
+    'mutations/add-contact': [requiredString('id'), requiredString('name'), requiredString('email')],
+    'mutations/close-deal': [requiredString('dealId')],
+    'mutations/create-deal': [
+      requiredString('id'),
+      requiredString('contactId'),
+      requiredString('stage'),
+      requiredNumber('amount'),
+    ],
+    'mutations/move-deal': [requiredString('dealId'), requiredString('stage')],
+  },
+  mutations: {
+    'mutations/add-contact': 'typeof addContact',
+    'mutations/close-deal': 'typeof closeDeal',
+    'mutations/create-deal': 'typeof createDeal',
+    'mutations/move-deal': 'typeof moveDeal',
+  },
+} satisfies RegistryFacts;
+
+export const stackOverflowRegistryFacts = {
+  mutationInputs: {
+    'mutations/post-answer-mutation': [
+      requiredString('id'),
+      requiredString('questionId'),
+      requiredString('body'),
+    ],
+    'mutations/post-question-mutation': [
+      requiredString('id'),
+      requiredString('title'),
+      requiredString('body'),
+    ],
+    'mutations/vote-up-mutation': [requiredString('id'), requiredString('targetId')],
+  },
+  mutations: {
+    'mutations/post-answer-mutation': 'typeof postAnswerMutation',
+    'mutations/post-question-mutation': 'typeof postQuestionMutation',
+    'mutations/vote-up-mutation': 'typeof voteUpMutation',
+  },
 } satisfies RegistryFacts;

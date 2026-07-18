@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { mutationFormAttributes } from '@kovojs/server';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 import * as style from '@kovojs/style';
@@ -29,9 +28,6 @@ import { freshId, money, stageBadge } from '../components/chrome.js';
 
 // Pipeline dashboard for `/`. A new deal refreshes the stage totals and open
 // deals table.
-
-// A new deal starts in one of these stages; closing moves it to `won`.
-const NEW_DEAL_STAGES = ['lead', 'qualified', 'open', 'proposal'] as const;
 
 const pipelineStyles = style.create({
   backLink: {
@@ -242,18 +238,26 @@ export const PipelineRegion = component({
         {/* The refreshed fragment resets the form with a fresh deal id. */}
         <section>
           <h2 style={pipelineStyles.sectionLabel}>New deal</h2>
-          <form {...mutationFormAttributes(createDeal)} style={pipelineStyles.formPanel}>
+          <datalist id="crm-contact-options">
+            {contacts.map((contact) => (
+              <option value={contact.id}>{contact.name}</option>
+            ))}
+          </datalist>
+          <form mutation={createDeal} enhance style={pipelineStyles.formPanel}>
             <input type="hidden" name="id" value={freshId('d')} />
             <div style={pipelineStyles.formGrid}>
-              <select name="contactId" required style={pipelineStyles.input}>
-                {contacts.map((contact) => (
-                  <option value={contact.id}>{contact.name}</option>
-                ))}
-              </select>
+              <input
+                name="contactId"
+                list="crm-contact-options"
+                required
+                placeholder="Contact"
+                style={pipelineStyles.input}
+              />
               <select name="stage" style={[pipelineStyles.input, pipelineStyles.stageText]}>
-                {NEW_DEAL_STAGES.map((stage) => (
-                  <option value={stage}>{stage}</option>
-                ))}
+                <option value="lead">lead</option>
+                <option value="qualified">qualified</option>
+                <option value="open">open</option>
+                <option value="proposal">proposal</option>
               </select>
               <input
                 name="amount"
