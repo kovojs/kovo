@@ -151,7 +151,10 @@ browser-state authorization proof.
 import { mintCsrfField } from '@kovojs/server';
 
 export async function renderUploadForm(request: Request) {
-  const csrf = mintCsrfField(request, appCsrf);
+  const csrf = mintCsrfField(request, {
+    ...appCsrf,
+    audience: 'endpoint:/files',
+  });
 
   return new Response(
     `<form method="post" action="/files">${csrf.html}<button>Upload</button></form>`,
@@ -159,13 +162,16 @@ export async function renderUploadForm(request: Request) {
 }
 ```
 
-Call `renderUploadForm(request)` only from the verified raw endpoint handler. Route mutation forms
-use Kovo's framework-rendered CSRF field instead. The returned `setCookie` remains available for
+Call `renderUploadForm(request)` only from the verified raw endpoint handler. The public mint
+helpers do not accept a mutation target. Route mutation forms use typed
+`<form mutation={definition}>` authoring so Kovo emits CSRF and `Kovo-Idem` together. The returned
+`setCookie` remains available for
 non-Kovo response integrations; explicitly attaching its exact bytes to a managed raw response is
 deduplicated, but it still requires the same endpoint browser-state proof and reserved-header
 posture as any app-authored `Set-Cookie`.
 
-For verified JSON bootstraps, send `mintCsrfToken(request, appCsrf).token` as `kovo-csrf`; the
+For verified JSON bootstraps, send
+`mintCsrfToken(request, appCsrf, { audience: 'endpoint:/bootstrap' }).token` as `kovo-csrf`; the
 managed finalizer delivers a first binding cookie. A detached call can still use a session or an
 anonymous cookie already on the request. It cannot create the first anonymous binding: Kovo rejects
 that call because there is no active response lifecycle proving the new cookie can reach the

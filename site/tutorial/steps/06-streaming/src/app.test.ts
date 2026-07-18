@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@kovojs/server';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { renderDeferredStream } from '../../../../../packages/server/src/internal/html.js';
 import {
+  componentLiveTargetRenderer,
   renderMutationEndpointResponse,
   type MutationWireHeaderSource,
 } from '../../../../../packages/server/src/internal/wire.js';
+import { createLiveTargetAttestation } from '../../../../../packages/server/src/mutation-wire.js';
+import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
 
 import {
   addToCart,
@@ -20,6 +23,12 @@ import { createShopDb } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
 import { ProductList } from './components/product-list.js';
 import { cartQuery, loadCart, loadProducts, productsQuery } from './queries.js';
+
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority(
+  'tutorial-step-06-test-build',
+  addToCart.csrf === false ? undefined : addToCart.csrf,
+);
+const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 
 // Tutorial step 06: <kovo-defer> streams the product list out of order inside
 // one response, reusing the mutation wire's fragment/query vocabulary
@@ -41,13 +50,61 @@ function submitAddToCart(
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
     buildToken: 'tutorial-step-06-test-build',
-    headers,
+    csrf: tutorialWireCsrf,
+    headers: withAttestedLiveTargets(headers, request),
+    liveTargetRenderers: successLiveTargetRenderers(),
+    liveTargetAttestationAuthority: tutorialLiveTargetAuthority.authority,
+    liveTargetAudience: tutorialLiveTargetAuthority.audience,
     rawInput,
     redirectTo: '/',
     renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
     renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
     request,
   });
+}
+
+function successLiveTargetRenderers() {
+  return [
+    componentLiveTargetRenderer({
+      component: CartBadge,
+      componentId: 'components/cart-badge/cart-badge',
+    }),
+    componentLiveTargetRenderer({
+      component: ProductList,
+      componentId: 'components/product-list/product-list',
+    }),
+  ];
+}
+
+function withAttestedLiveTargets(
+  headers: MutationWireHeaderSource,
+  request: ShopRequest,
+): MutationWireHeaderSource {
+  const value = headers['Kovo-Live-Targets'];
+  if (typeof value !== 'string') return headers;
+
+  return { ...headers, 'Kovo-Live-Targets': attestLiveTargetEntries(value, request) };
+}
+
+function attestLiveTargetEntries(value: string, request: ShopRequest): string {
+  return value
+    .split(';')
+    .map((entry) => {
+      const trimmed = entry.trim();
+      const componentSeparator = trimmed.indexOf('#');
+      const propsSeparator = trimmed.indexOf(':', componentSeparator + 1);
+      if (componentSeparator <= 0 || propsSeparator <= componentSeparator + 1) return trimmed;
+      const target = trimmed.slice(0, componentSeparator);
+      const component = trimmed.slice(componentSeparator + 1, propsSeparator);
+      const propsJson = trimmed.slice(propsSeparator + 1);
+      const props = JSON.parse(propsJson) as Record<string, unknown>;
+      const token = createLiveTargetAttestation(
+        { component, props, target },
+        { buildToken: tutorialLiveTargetAuthority.audience, csrf: tutorialWireCsrf, request },
+      );
+      return `${target}#${component}@${token}:${propsJson}`;
+    })
+    .join('; ');
 }
 
 function renderAddToCartFailureFragment(

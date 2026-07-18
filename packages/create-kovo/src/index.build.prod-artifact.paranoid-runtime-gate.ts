@@ -61,6 +61,23 @@ export interface RunParanoidAuthorizationMatrixOptions {
   readonly seed: string;
 }
 
+const authorizationMatrixSeedAssignment = /(^|\s)KOVO_AUTHZ_MATRIX_SEED=[^\s]+(?=\s|$)/u;
+
+/**
+ * Pin a persisted replay command to the seed that actually selected this execution order.
+ * The checked-in command names the default seed, while a release or investigation may override it.
+ * Persisting the template unchanged would make that failure impossible to replay exactly.
+ */
+export function pinAuthorizationMatrixReplayCommand(replayCommand: string, seed: string): string {
+  const match = authorizationMatrixSeedAssignment.exec(replayCommand);
+  if (!match) {
+    throw new Error('authorization matrix replay command must set KOVO_AUTHZ_MATRIX_SEED');
+  }
+  const leadingWhitespace = match[1] ?? '';
+  const assignment = `${leadingWhitespace}KOVO_AUTHZ_MATRIX_SEED=${shellQuote(seed)}`;
+  return `${replayCommand.slice(0, match.index)}${assignment}${replayCommand.slice(match.index + match[0].length)}`;
+}
+
 /**
  * Execute every SPEC §10.3 authorization cell in deterministic seeded order. A failed cell is
  * already the minimized reproducer: the persisted artifact contains only that cell, the exact
@@ -74,6 +91,7 @@ export async function runParanoidAuthorizationMatrix({
   replayCommand,
   seed,
 }: RunParanoidAuthorizationMatrixOptions): Promise<void> {
+  const pinnedReplayCommand = pinAuthorizationMatrixReplayCommand(replayCommand, seed);
   const orderedCases = seededAuthorizationMatrixOrder(cases, seed);
   const missingExecutors = orderedCases
     .filter((testCase) => executors[testCase.id] === undefined)
@@ -96,7 +114,7 @@ export async function runParanoidAuthorizationMatrix({
       const artifactPath = persistAuthorizationMatrixFailure({
         error,
         failureDirectory,
-        replayCommand,
+        replayCommand: pinnedReplayCommand,
         seed,
         testCase,
       });
@@ -107,6 +125,10 @@ export async function runParanoidAuthorizationMatrix({
       );
     }
   }
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 export function seededAuthorizationMatrixOrder<

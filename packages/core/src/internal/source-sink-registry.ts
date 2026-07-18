@@ -990,19 +990,26 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     censusFamilies: ['http.header.cookie'],
     hostileValueEvidence: [
       'packages/server/src/cookies.test.ts',
+      'packages/server/src/anonymous-csrf-cache-security.test.tsx',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
+      'scripts/check-csrf-mint-delivery.test.mjs',
     ],
     mechanism: 'own',
     mechanismDetail:
-      'Cookie values cross the boundary only through the typed cookie builder, which owns encoding and attribute serialization.',
-    owner: '@kovojs/server/cookies',
+      'Cookie values cross through the typed serializer; first-anonymous CSRF authority additionally requires a private response-lifecycle receipt whose atomic seal/snapshot is consumed only by an authorized response finalizer.',
+    owner: '@kovojs/server/response-lifecycle',
     proofEvidence: [
       'packages/server/src/cookies.test.ts',
+      'packages/server/src/standalone-csrf-mint-security.test.ts',
+      'packages/server/src/anonymous-csrf-cache-security.test.tsx',
+      'packages/server/src/build.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
+      'security/csrf-mint-delivery.json',
     ],
-    proofGate: 'pnpm run check:wire-output-boundary',
+    proofGate: 'pnpm run check:csrf-mint-delivery',
     sink: 'Set-Cookie',
-    soleDoor: 'typed cookie builder + serializer on the Set-Cookie channel',
+    soleDoor:
+      'typed cookie builder + serializer; anonymous CSRF response-lifecycle receipt, synchronous record, and seal/snapshot; authorized final response reconstruction',
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
   },
   {
@@ -1043,6 +1050,33 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     sink: 'durable-task payload',
     soleDoor: 'task queue envelope + observability redaction/export helpers',
     specAnchor: 'spec/09-wire-protocol.md §9.6; spec/11-verification.md §11.4',
+  },
+  {
+    censusFamilies: ['ingress.endpoint.webhook'],
+    hostileValueEvidence: [
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
+    mechanism: 'reconstruct',
+    mechanismDetail:
+      'Each adapter snapshots only its transport-owned method, authority, and scheme sources; one finite classifier rejects ambiguous or lossy values and reconstructs the Web Request method, URL authority, and app-visible Host from the same decision.',
+    owner: '@kovojs/server/request-ingress',
+    proofEvidence: [
+      'packages/server/src/request-ingress-policy.ts',
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
+    proofGate: 'pnpm run check:security-classifier-corpus',
+    sink: 'request method/authority/scheme',
+    soleDoor:
+      'createRequestIngressClassifier after adapter-owned source snapshot; reconstructed method, URL authority, scheme, and Host decision',
+    specAnchor: 'spec/09-wire-protocol.md §9.5; spec/11-verification.md §11.4',
   },
   {
     censusFamilies: ['ingress.endpoint.webhook'],

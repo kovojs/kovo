@@ -1,7 +1,12 @@
 import { defineConfig } from 'vite-plus';
 
 import { exampleDrizzleRegistryPlugin } from './examples/vite-drizzle-registry.js';
-import { commerceRegistryFacts, exampleKovoCompilerPlugin } from './examples/vite-kovo-compiler.js';
+import {
+  commerceRegistryFacts,
+  exampleKovoCompilerPlugin,
+  tutorialAppRegistryFacts,
+  tutorialMutationRegistryFacts,
+} from './examples/vite-kovo-compiler.js';
 
 const repoRoot = workspaceRootFromCwd();
 const exampleGeneratedGraphsGlobalSetup = repoRoot
@@ -21,7 +26,18 @@ function workspaceRootFromCwd(): string {
 
 export default defineConfig({
   plugins: [
-    exampleKovoCompilerPlugin({ include: ['site/tutorial/steps'] }),
+    exampleKovoCompilerPlugin({
+      include: ['site/tutorial/steps/04-mutations'],
+      registryFacts: tutorialMutationRegistryFacts,
+    }),
+    exampleKovoCompilerPlugin({
+      include: [
+        'site/tutorial/steps/05-optimistic',
+        'site/tutorial/steps/06-streaming',
+        'site/tutorial/steps/07-verification',
+      ],
+      registryFacts: tutorialAppRegistryFacts,
+    }),
     exampleKovoCompilerPlugin({
       include: [
         'examples/commerce/src/components',

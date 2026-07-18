@@ -170,8 +170,6 @@ import {
 } from '../packages/conformance-fixtures/src/verification-fixtures.ts';
 import {
   createApp,
-  csrfField,
-  csrfToken,
   domain,
   errorBoundary,
   guards,
@@ -185,6 +183,7 @@ import {
   s,
   t,
 } from '../dist/server/src/index.mjs';
+import { csrfField, csrfToken } from '../dist/server/src/internal/csrf.mjs';
 import { runMutation, runQuery, runRoutePage } from '../dist/server/src/internal/execution.mjs';
 import {
   renderDeferredStream,

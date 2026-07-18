@@ -1795,9 +1795,32 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/replay.test.ts',
       'packages/server/src/mutation/replay-policy.test.ts',
       'packages/server/src/mutation.test.ts',
+      'packages/server/src/build.test.ts',
       'packages/better-auth/src/environment.test.ts',
+      'scripts/check-csrf-mint-delivery.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'csrf-mint-delivery-matrix',
+        file: 'scripts/check-csrf-mint-delivery.test.mjs',
+        snippets: [
+          'closes every lifecycle surface over live proof anchors',
+          'kills a lifecycle-receipt deletion mutant',
+          'kills a partial public mutation-helper mutant',
+          'kills header-seal and cache-posture mutants',
+          'kills rotation and replay-order mutants',
+          'rejects denominator shrinkage, missing canaries, and stale proof anchors',
+        ],
+      },
+      {
+        id: 'packed-node-vercel-csrf-delivery-parity',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells',
+          'packed-csrf-stream-response',
+          'packed-csrf-stream-immediate-response',
+        ],
+      },
       {
         id: 'standalone-response-lifecycle-receipt-and-sharing',
         file: 'packages/server/src/standalone-csrf-mint-security.test.ts',
@@ -2043,7 +2066,13 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'request-ingress',
     marker: '@kovo-security-classifier-corpus request-ingress',
-    testFiles: ['packages/server/src/request-ingress-c13.test.ts'],
+    testFiles: [
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'method-authority-scheme-superset',
@@ -2057,6 +2086,41 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "'example.com:443'",
           'selects only the explicitly trusted transport scheme before applying strict grammar',
           "'https, ftp'",
+        ],
+      },
+      {
+        id: 'finite-classifier-source-selection',
+        file: 'packages/server/src/request-ingress-policy.test.ts',
+        snippets: [
+          'finite request-ingress classifier',
+          'admits exactly canonical standard methods plus byte-stable extension tokens',
+          'accepts only one byte-identical authority under both supported schemes',
+          'selects transport-owned scheme sources before applying one strict grammar',
+          'applies the same finite verdict to the platform-owned Fetch bridge',
+        ],
+      },
+      {
+        id: 'real-http2-method-authority-closure',
+        file: 'packages/server/src/__bugz_remote_ingress.test.ts',
+        snippets: [
+          'rejects HTTP/2 method identities that Fetch would canonicalize before dispatch',
+          "request('PoSt')",
+          'rejects HTTP/2 authorities that URL would normalize before app policy',
+          "request('%65xample.com')",
+        ],
+      },
+      {
+        id: 'generated-node-vercel-worker-parity',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'const requestIngressClassifier = (',
+          'nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority)',
+          'rejectInvalidNodeRequestIngress(nodeRequest, nodeResponse, options)',
+          'invalidStaticScheme',
+          "'X-Forwarded-Proto: https, ftp\\r\\n'",
+          'requestIngressClassifier.classifyPlatformFetch',
+          'INVALID_SCHEME_ASSET_MUST_NOT_RUN',
+          'EXTENSION_METHOD_ASSET_MUST_NOT_RUN',
         ],
       },
     ],

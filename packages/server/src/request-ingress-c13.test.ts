@@ -88,6 +88,13 @@ describe('SPEC §9.5 request-ingress closed corpus', () => {
     expect(canonical.url).toBe('http://app.example:8443/probe');
     expect(canonical.headers.get('host')).toBe('app.example:8443');
 
+    const pinnedOrigin = nodeRequestToWebRequest(
+      requestCarrier({ headers: { host: 'remote.example' } }),
+      { origin: 'https://canonical.example:8443' },
+    );
+    expect(pinnedOrigin.url).toBe('https://canonical.example:8443/probe');
+    expect(pinnedOrigin.headers.get('host')).toBe('canonical.example:8443');
+
     expect(
       nodeRequestToWebRequest(
         requestCarrier({

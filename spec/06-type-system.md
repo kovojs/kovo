@@ -156,6 +156,15 @@ CSRF field, idempotency token, and submitted-form target. The string-keyed `form
 survives for sites that cannot import the value, but author TSX should not hard-code mutation URLs.
 An end-to-end add-to-cart walkthrough lives in `docs/worked-example-add-to-cart.md`.
 
+The typed `mutation={definition}` path is the **sole complete public mutation-form bundle**: the
+framework emits the mutation-audience CSRF field and canonical `Kovo-Idem` field together, from one
+proven definition, before authored controls. An exact compiler-recognized
+`{...mutationFormAttributes(definition)}` JSX spread is an equivalent typed spelling and receives
+the same generated field bundle. Standalone CSRF token/field construction is not a mutation-form
+authoring API because it cannot establish the idempotency half of the protocol. TypeScript prevents
+the ordinary partial call shape, while compiler provenance and the runtime request lifecycle remain
+the enforcement boundaries.
+
 Enhanced form failures use the same render function as the no-JS full-page path. Expected failures
 are typed mutation results: schema validation maps to `<FieldError name="...">`, declared
 application codes map to `<FormError code="...">`, and both helpers are compiler-bound to the
@@ -263,6 +272,14 @@ post-seal mint cannot enter the snapshot. Detached session-bound generation and 
 already-present anonymous cookie do not mint a cookie and remain valid. CSRF validation and replay
 resolution always use the exact supplied ingress request and never inherit response-generation
 authority.
+
+The public `mintCsrfToken` and `mintCsrfField` helpers serve only a verified raw endpoint protocol
+with an explicit custom audience. They reject mutation targeting. The lower-level
+`csrfToken` and `csrfField` helpers are internal/test-only; exposing either at the package root would
+make an incomplete handwritten mutation form look supported while omitting canonical `Kovo-Idem`.
+The closed mint/deliver/validate/rotate/replay surface and its proof anchors are recorded in
+`security/csrf-mint-delivery.json`; adding a response or bootstrap surface requires adding a closed
+matrix row before release.
 
 Every independently resolved authorization principal entering a CSRF or replay identity, and every
 source-derived mutation identity, MUST likewise be a non-empty string of at most 1,024 JavaScript

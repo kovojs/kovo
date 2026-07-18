@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@kovojs/server';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import {
   componentLiveTargetRenderer,
   renderMutationEndpointResponse,
@@ -27,7 +27,11 @@ import { createShopDb } from './db.js';
 import { cart, product } from './domains.js';
 import { cartQuery, productsQuery } from './queries.js';
 
-const tutorialLiveTargetAuthority = createLiveTargetTestAuthority('tutorial-step-05-test-build');
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority(
+  'tutorial-step-05-test-build',
+  addToCart.csrf === false ? undefined : addToCart.csrf,
+);
+const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 
 // Tutorial step 05: invalidation is derived from declared touches, server
 // truth rides the same wire as fragments, and every optimistic prediction is
@@ -50,6 +54,7 @@ function submitAddToCart(
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
     buildToken: 'tutorial-step-05-test-build',
+    csrf: tutorialWireCsrf,
     headers: withAttestedLiveTargets(headers, request),
     liveTargetRenderers: successLiveTargetRenderers(),
     liveTargetAttestationAuthority: tutorialLiveTargetAuthority.authority,
@@ -99,7 +104,7 @@ function attestLiveTargetEntries(value: string, request: ShopRequest): string {
       const props = JSON.parse(propsJson) as Record<string, unknown>;
       const token = createLiveTargetAttestation(
         { component, props, target },
-        { buildToken: tutorialLiveTargetAuthority.audience, request },
+        { buildToken: tutorialLiveTargetAuthority.audience, csrf: tutorialWireCsrf, request },
       );
       return `${target}#${component}@${token}:${propsJson}`;
     })

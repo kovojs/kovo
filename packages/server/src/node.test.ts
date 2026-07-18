@@ -164,6 +164,14 @@ describe('server node adapter', () => {
       'http://127.0.0.1/authority',
     );
 
+    const pinnedOrigin = nodeRequest('/authority');
+    pinnedOrigin.headers = { host: 'remote.example' };
+    const reconstructed = nodeRequestToWebRequest(pinnedOrigin, {
+      origin: 'https://canonical.example:8443',
+    });
+    expect(reconstructed.url).toBe('https://canonical.example:8443/authority');
+    expect(reconstructed.headers.get('host')).toBe('canonical.example:8443');
+
     const invalidPseudoAuthority = nodeRequest('/authority');
     invalidPseudoAuthority.headers = {
       ':authority': 'victim.example@evil.example',
@@ -203,7 +211,7 @@ describe('server node adapter', () => {
         origin: 'https://app.example',
       });
       expect(converted.url).toBe('https://app.example/captured?ok=1');
-      expect(converted.headers.get('host')).toBe('internal.example');
+      expect(converted.headers.get('host')).toBe('app.example');
     } finally {
       globalThis.Headers = OriginalHeaders;
       globalThis.Request = OriginalRequest;
