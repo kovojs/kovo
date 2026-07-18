@@ -608,6 +608,73 @@ export const report = endpoint('/report', {
     );
   });
 
+  it('binds every semantic-v2 span to authored bytes across structural lowering', () => {
+    // SPEC §5.2: semantic proof coordinates belong to the immutable authored source. Style and
+    // handler lowering rewrite multiple earlier regions, so facts emitted from the lowered model
+    // would point past these exact factory, callback, helper, call, and argument byte ranges.
+    const helperSource = `async function dial(outbound, url) {
+  return outbound(url);
+}`;
+    const callSource = `dial(ctx.fetch, 'https://api.example.test/report')`;
+    const handlerSource = `async handler(_input, ctx) {
+    await ${callSource};
+    return Response.json({ ok: true });
+  }`;
+    const factorySource = `endpoint('/report', {
+  ${handlerSource},
+})`;
+    const source = `
+import { component } from '@kovojs/core';
+import { endpoint } from '@kovojs/server';
+import * as style from '@kovojs/style';
+
+const styles = style.create({
+  root: { color: 'teal' },
+});
+
+export const Styled = component({
+  state: () => ({ active: false }),
+  render: () => (
+    <button style={styles.root} onClick={() => { state.active = !state.active; }}>Styled</button>
+  ),
+});
+
+${helperSource}
+
+export const report = ${factorySource};
+`;
+    const result = compile(source);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const semanticGraph = result.componentGraphFacts[0]?.securitySemanticGraph;
+    const root = semanticGraph?.roots.find((candidate) => candidate.root === 'endpoint:/report');
+    const invocation = root?.helperInvocations.find(
+      (candidate) => candidate.callable === 'local:dial',
+    );
+    const summary = root?.summaries.find((candidate) => candidate.callable === 'local:dial');
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(serverSource).not.toContain('style={styles.root}');
+    expect(serverSource).toContain(JSON.stringify(semanticGraph));
+    expect(root).toBeDefined();
+    expect(invocation).toBeDefined();
+    expect(summary).toBeDefined();
+    expect(
+      source.slice(root!.binding.factoryCallSpan.start, root!.binding.factoryCallSpan.end),
+    ).toBe(factorySource);
+    expect(source.slice(root!.binding.callableSpan.start, root!.binding.callableSpan.end)).toBe(
+      handlerSource,
+    );
+    expect(source.slice(invocation!.callableSpan.start, invocation!.callableSpan.end)).toBe(
+      helperSource,
+    );
+    expect(source.slice(summary!.callableSpan.start, summary!.callableSpan.end)).toBe(helperSource);
+    expect(source.slice(invocation!.callSpan.start, invocation!.callSpan.end)).toBe(callSource);
+    expect(invocation!.argumentSpans.map((span) => source.slice(span.start, span.end))).toEqual([
+      'ctx.fetch',
+      "'https://api.example.test/report'",
+    ]);
+  });
+
   it('keeps helper summaries context-sensitive to exact authority inputs', () => {
     const result = compile(`
 import { endpoint } from '@kovojs/server';
