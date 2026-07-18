@@ -197,14 +197,23 @@ satisfy §6.6's exact configured-origin binding, so a trusted forwarded scheme p
 host or port is rejected before auth state is read or changed.
 
 **Shared request-ingress decision (normative).** Transport-source selection and hostile-value
-grammar are separate steps. A raw-capable Node adapter MUST first snapshot the exact method, the
-HTTP/1 raw `Host` occurrence count and normalized value or the HTTP/2 `:authority`, the authenticated
-transport encryption bit, and—only under explicit trusted-proxy posture—the proxy-nearest
-`X-Forwarded-Proto` or single `:scheme`. Generated Node and Vercel use the same sources. A
-Fetch-native Worker adapter instead consumes the method and URL scheme/authority selected by the
-platform-owned HTTP-to-Fetch bridge; it cannot recover or make claims about raw bytes that the
-platform normalized or discarded. Cloudflare's public edge bridge is the supported Worker source;
-unauthenticated HTTP Service Binding ingress remains unsupported.
+grammar are separate steps, and the supported source set is finite. An HTTP/1 Node source MUST
+snapshot the exact method, authenticated transport encryption bit, normalized `Host`, and exact raw
+`Host` count/value; it admits exactly one raw occurrence whose value is byte-identical to the
+normalized field and rejects pseudo-headers. An HTTP/2 Node source MUST snapshot the exact method,
+transport bit, `:authority`, and `:scheme`; it rejects ordinary `Host`, `X-Forwarded-Proto`, raw
+HTTP/1 `Host` evidence, or a non-HTTP/2 version. `:scheme` is exact lowercase `http` or `https` and,
+outside an explicit trusted-proxy posture, MUST match the authenticated transport bit. A generated
+Vercel Node source is a distinct HTTP/1 posture: one exact raw/normalized `Host` plus mandatory,
+canonical edge-overwritten `X-Forwarded-Proto` and `X-Vercel-Forwarded-For`; missing, ambiguous, or
+non-canonical platform provenance has no fallback identity. Synthetic/custom carriers MUST declare
+which enrolled source they emulate; a coincidental bag of fields is not source provenance.
+
+A Fetch-native platform source instead consumes the exact method and canonical URL
+scheme/authority selected by the named platform-owned HTTP-to-Fetch bridge; it cannot recover or
+make claims about raw bytes that the platform normalized or discarded. Cloudflare's public edge
+bridge is the supported Worker source; unauthenticated HTTP Service Binding ingress remains
+unsupported. Unknown and mixed source postures fail closed before static serving or app import.
 
 After source selection, live and emitted adapters MUST invoke the same finite classifier for method
 token, authority, and scheme grammar. An absent verdict, unknown source posture, ambiguous value, or
@@ -213,6 +222,27 @@ object supplies the Web URL authority and app-visible `Host`, including when an 
 origin replaces the validated remote authority. No later sink may reread raw `Host`, `:authority`,
 or forwarding fields to make a second decision, and a future adapter MUST enroll its source posture
 and generated/source parity in the request-ingress C13 corpus before dispatching static or app code.
+
+**Adapter request-target identity (normative).** The same classifier admits only (1) canonical
+origin-form `path[?query]` beginning with exactly one `/`, or (2) a canonical absolute-form HTTP(S)
+URL whose scheme and authority exactly match the selected ingress verdict. The accepted value is
+reconstructed as canonical origin form before routing. Scheme-relative, authority-form,
+non-HTTP(S) scheme-like (`javascript:`, `mailto:`), backslash, fragment, encoded dot/separator,
+WHATWG-normalizing, mismatched-origin, and otherwise lossy targets MUST fail closed. Kovo assigns no
+server-wide semantics to asterisk-form: `OPTIONS *` is explicitly unsupported and returns 400
+before static or app dispatch. The 65,536-character and 10,000-query-entry ceilings apply before
+target parsing on raw Node sources and on the platform-preserved absolute URL for Fetch-native
+sources.
+
+**Vercel pre-filesystem ingress (normative).** Every generated Vercel Build Output API v3 artifact,
+including a static-only build, MUST route all paths through Kovo's generated Edge Routing
+Middleware before `handle: filesystem`. That middleware applies the shared platform-Fetch
+method/URL/target classifier and target ceiling, returns a closed 400/414 response on failure, and
+uses `x-middleware-next: 1` only after acceptance. A mixed build then enters the Vercel Node
+function's distinct platform-provenance posture. The function MUST prepare one immutable request
+snapshot and accepted verdict before static/app dispatch, and both its pre-static metadata and final
+Web `Request` MUST consume that same prepared value; carrier mutation after preparation cannot
+trigger a second source, scheme, authority, method, or target decision.
 
 **Adapter method identity (normative).** HTTP method tokens are case-sensitive (RFC 9110 §9.1),
 while the Fetch `Request` constructor canonicalizes its standard methods and rejects several

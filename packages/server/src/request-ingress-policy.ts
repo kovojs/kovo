@@ -1,80 +1,208 @@
 /** One URL parse snapshot used by the shared request-ingress classifier. */
-export interface RequestIngressAuthorityParse {
+export interface RequestIngressUrlParse {
   readonly hash: string;
   readonly host: string;
+  readonly href: string;
   readonly origin: string;
+  readonly password: string;
   readonly pathname: string;
+  readonly protocol: string;
   readonly search: string;
+  readonly username: string;
 }
 
 interface RequestIngressClassifierControls {
+  canonicalClientIp(value: string): string | undefined;
   charCodeAt(value: string, index: number): number;
   isArray(value: unknown): value is readonly unknown[];
   parseAuthority(
     authority: string,
     scheme: 'http' | 'https',
-  ): RequestIngressAuthorityParse | undefined;
+  ): Omit<RequestIngressUrlParse, 'href' | 'protocol'> | undefined;
+  parseTarget(target: string, base?: string): RequestIngressUrlParse | undefined;
 }
 
-export interface RequestIngressAuthorityInput {
+interface RequestIngressCommonInput {
+  readonly method: string;
+  readonly rawTarget: string;
+}
+
+export interface NodeHttp1RequestIngressInput extends RequestIngressCommonInput {
+  readonly encrypted: boolean;
+  readonly forwardedProto: unknown;
   readonly host: unknown;
   readonly httpVersion: string;
   readonly pseudoAuthority: unknown;
-  readonly rawHostHeaderCount?: number;
-}
-
-export interface NodeRequestIngressInput extends RequestIngressAuthorityInput {
-  readonly encrypted: boolean;
-  readonly forwardedProto: unknown;
-  readonly method: string;
   readonly pseudoScheme: unknown;
+  readonly rawHostHeaderCount: number | undefined;
+  readonly rawHostHeaderValue: string | undefined;
+  readonly source: 'node-http1';
   readonly trustedProxy: boolean;
 }
+
+export interface NodeHttp2RequestIngressInput extends RequestIngressCommonInput {
+  readonly encrypted: boolean;
+  readonly forwardedProto: unknown;
+  readonly host: unknown;
+  readonly httpVersion: string;
+  readonly pseudoAuthority: unknown;
+  readonly pseudoScheme: unknown;
+  readonly rawHostHeaderCount: number | undefined;
+  readonly rawHostHeaderValue: string | undefined;
+  readonly source: 'node-http2';
+  readonly trustedProxy: boolean;
+}
+
+export interface VercelNodeRequestIngressInput extends RequestIngressCommonInput {
+  readonly host: unknown;
+  readonly httpVersion: string;
+  readonly platformClientIp: unknown;
+  readonly platformScheme: unknown;
+  readonly pseudoAuthority: unknown;
+  readonly pseudoScheme: unknown;
+  readonly rawHostHeaderCount: number | undefined;
+  readonly rawHostHeaderValue: string | undefined;
+  readonly source: 'vercel-node';
+}
+
+export interface PlatformFetchRequestIngressInput extends RequestIngressCommonInput {
+  readonly authority: string;
+  readonly scheme: string;
+  readonly source: 'platform-fetch';
+}
+
+export type RequestIngressInput =
+  | NodeHttp1RequestIngressInput
+  | NodeHttp2RequestIngressInput
+  | PlatformFetchRequestIngressInput
+  | VercelNodeRequestIngressInput;
 
 export type RequestIngressIssue =
   | 'authority'
   | 'forwarded-scheme'
   | 'method'
+  | 'platform-client'
   | 'platform-scheme'
-  | 'pseudo-scheme';
+  | 'pseudo-scheme'
+  | 'source'
+  | 'target';
 
 export type RequestIngressDecision =
   | {
-      readonly authority?: string;
+      readonly authority: string;
+      readonly clientIp?: string;
       readonly method: string;
       readonly ok: true;
       readonly scheme: 'http' | 'https';
+      /** Canonical origin-form pathname plus query, reconstructed from the accepted target. */
+      readonly target: string;
+      readonly targetForm: 'absolute' | 'origin';
     }
   | { readonly issue: RequestIngressIssue; readonly ok: false };
 
 export interface RequestIngressClassifier {
-  classifyAuthority(
-    input: RequestIngressAuthorityInput,
-  ): { readonly authority?: string; readonly ok: true } | { readonly ok: false };
+  classify(input: RequestIngressInput): RequestIngressDecision;
   classifyMethod(method: string): boolean;
-  classifyNode(input: NodeRequestIngressInput): RequestIngressDecision;
-  classifyPlatformFetch(input: {
-    readonly authority: string;
-    readonly method: string;
-    readonly scheme: string;
-  }): RequestIngressDecision;
 }
 
 /**
- * Build the single finite method/authority/scheme verdict used by source and emitted adapters.
- *
- * Transport adapters first snapshot the source they are entitled to trust: raw Node HTTP/1 or
- * HTTP/2 fields, platform-owned Vercel fields, or a platform-owned Fetch request. This classifier
- * then applies one strict grammar and returns reconstructed values; it never rereads a transport
- * carrier (SPEC §6.6 C9/C15 and §9.5).
+ * Build the one finite source/method/authority/scheme/target verdict used by live and emitted
+ * adapters. Transport kind is an explicit discriminant, never inferred from whichever hostile
+ * carrier fields happen to be present. Accepted values are reconstruction facts and must travel
+ * with the snapshot that produced them (SPEC §2, §6.6 C9/C15, and §9.5).
  *
  * @internal
  */
 export function createRequestIngressClassifier(
   controls: RequestIngressClassifierControls,
 ): RequestIngressClassifier {
+  function classify(input: RequestIngressInput): RequestIngressDecision {
+    if (!input || typeof input !== 'object') return { issue: 'source', ok: false };
+    if (!classifyMethod(input.method)) return { issue: 'method', ok: false };
+
+    let authority: string | undefined;
+    let clientIp: string | undefined;
+    let scheme: 'http' | 'https' | undefined;
+    if (input.source === 'node-http1') {
+      if (
+        input.httpVersion[0] === '2' ||
+        input.pseudoAuthority !== undefined ||
+        input.pseudoScheme !== undefined
+      ) {
+        return { issue: 'source', ok: false };
+      }
+      authority = canonicalRawHttp1Authority(input);
+      if (authority === undefined) return { issue: 'authority', ok: false };
+      if (input.trustedProxy) {
+        const forwarded = forwardedScheme(input.forwardedProto);
+        if (!forwarded.ok) return forwarded;
+        scheme = forwarded.scheme;
+      } else {
+        scheme = input.encrypted ? 'https' : 'http';
+      }
+    } else if (input.source === 'node-http2') {
+      if (
+        input.httpVersion[0] !== '2' ||
+        input.host !== undefined ||
+        input.forwardedProto !== undefined ||
+        (input.rawHostHeaderCount !== undefined && input.rawHostHeaderCount !== 0) ||
+        input.rawHostHeaderValue !== undefined
+      ) {
+        return { issue: 'source', ok: false };
+      }
+      authority = canonicalAuthorityValue(input.pseudoAuthority);
+      if (authority === undefined) return { issue: 'authority', ok: false };
+      const pseudo = exactScheme(input.pseudoScheme, 'pseudo-scheme');
+      if (!pseudo.ok) return pseudo;
+      scheme = pseudo.scheme;
+      if (!input.trustedProxy && scheme !== (input.encrypted ? 'https' : 'http')) {
+        return { issue: 'pseudo-scheme', ok: false };
+      }
+    } else if (input.source === 'vercel-node') {
+      if (
+        input.httpVersion[0] === '2' ||
+        input.pseudoAuthority !== undefined ||
+        input.pseudoScheme !== undefined
+      ) {
+        return { issue: 'source', ok: false };
+      }
+      authority = canonicalRawHttp1Authority(input);
+      if (authority === undefined) return { issue: 'authority', ok: false };
+      const platformScheme = exactScheme(input.platformScheme, 'platform-scheme');
+      if (!platformScheme.ok) return platformScheme;
+      scheme = platformScheme.scheme;
+      if (typeof input.platformClientIp !== 'string') {
+        return { issue: 'platform-client', ok: false };
+      }
+      clientIp = controls.canonicalClientIp(input.platformClientIp);
+      if (clientIp === undefined || clientIp !== input.platformClientIp) {
+        return { issue: 'platform-client', ok: false };
+      }
+    } else if (input.source === 'platform-fetch') {
+      authority = canonicalAuthorityValue(input.authority);
+      if (authority === undefined) return { issue: 'authority', ok: false };
+      const platformScheme = exactScheme(input.scheme, 'platform-scheme');
+      if (!platformScheme.ok) return platformScheme;
+      scheme = platformScheme.scheme;
+    } else {
+      return { issue: 'source', ok: false };
+    }
+
+    const target = canonicalTarget(input.rawTarget, scheme, authority);
+    if (target === undefined) return { issue: 'target', ok: false };
+    return {
+      authority,
+      ...(clientIp === undefined ? {} : { clientIp }),
+      method: input.method,
+      ok: true,
+      scheme,
+      target: target.value,
+      targetForm: target.form,
+    };
+  }
+
   function classifyMethod(method: string): boolean {
-    if (!isHttpMethodToken(method)) return false;
+    if (typeof method !== 'string' || !isHttpMethodToken(method)) return false;
     if (equalsAsciiCaseInsensitive(method, 'delete')) return method === 'DELETE';
     if (equalsAsciiCaseInsensitive(method, 'get')) return method === 'GET';
     if (equalsAsciiCaseInsensitive(method, 'head')) return method === 'HEAD';
@@ -88,70 +216,56 @@ export function createRequestIngressClassifier(
     );
   }
 
-  function classifyAuthority(
-    input: RequestIngressAuthorityInput,
-  ): { readonly authority?: string; readonly ok: true } | { readonly ok: false } {
-    const authority = input.pseudoAuthority === undefined ? input.host : input.pseudoAuthority;
-    if (input.pseudoAuthority === undefined && input.rawHostHeaderCount !== undefined) {
-      if (authority === undefined) {
-        if (input.rawHostHeaderCount !== 0 || input.httpVersion !== '1.0') return { ok: false };
-      } else if (input.rawHostHeaderCount !== 1) {
-        return { ok: false };
+  function canonicalTarget(
+    rawTarget: string,
+    scheme: 'http' | 'https',
+    authority: string,
+  ): { readonly form: 'absolute' | 'origin'; readonly value: string } | undefined {
+    // Kovo intentionally does not assign app/static semantics to server-wide OPTIONS *.
+    if (typeof rawTarget !== 'string' || rawTarget === '' || rawTarget === '*') return undefined;
+    const origin = `${scheme}://${authority}`;
+    if (rawTarget[0] === '/') {
+      if (
+        rawTarget[1] === '/' ||
+        contains(rawTarget, '\\') ||
+        contains(rawTarget, '#') ||
+        containsEncodedPathControl(rawTarget)
+      ) {
+        return undefined;
       }
+      const parsed = controls.parseTarget(rawTarget, origin);
+      if (
+        parsed === undefined ||
+        parsed.origin !== origin ||
+        parsed.hash !== '' ||
+        parsed.pathname + parsed.search !== rawTarget
+      ) {
+        return undefined;
+      }
+      return { form: 'origin', value: rawTarget };
     }
-    if (authority === undefined) return { ok: true };
-    if (typeof authority !== 'string' || !canonicalAuthority(authority)) return { ok: false };
-    return { authority, ok: true };
+
+    const parsed = controls.parseTarget(rawTarget);
+    if (
+      parsed === undefined ||
+      parsed.protocol !== `${scheme}:` ||
+      parsed.host !== authority ||
+      parsed.origin !== origin ||
+      parsed.password !== '' ||
+      parsed.hash !== '' ||
+      parsed.username !== '' ||
+      parsed.href !== rawTarget
+    ) {
+      return undefined;
+    }
+    return { form: 'absolute', value: parsed.pathname + parsed.search };
   }
 
-  function classifyNode(input: NodeRequestIngressInput): RequestIngressDecision {
-    if (!classifyMethod(input.method)) return { issue: 'method', ok: false };
-    const authority = classifyAuthority(input);
-    if (!authority.ok) return { issue: 'authority', ok: false };
-    const scheme = input.trustedProxy
-      ? input.forwardedProto === undefined
-        ? pseudoScheme(input.pseudoScheme, input.encrypted)
-        : forwardedScheme(input.forwardedProto)
-      : { ok: true as const, scheme: input.encrypted ? ('https' as const) : ('http' as const) };
-    if (!scheme.ok) return { issue: scheme.issue, ok: false };
-    return {
-      ...(authority.authority === undefined ? {} : { authority: authority.authority }),
-      method: input.method,
-      ok: true,
-      scheme: scheme.scheme,
-    };
-  }
-
-  function classifyPlatformFetch(input: {
-    readonly authority: string;
-    readonly method: string;
-    readonly scheme: string;
-  }): RequestIngressDecision {
-    if (!classifyMethod(input.method)) return { issue: 'method', ok: false };
-    const authority = classifyAuthority({
-      host: undefined,
-      httpVersion: 'platform-fetch',
-      pseudoAuthority: input.authority,
-    });
-    if (!authority.ok || authority.authority === undefined) {
-      return { issue: 'authority', ok: false };
-    }
-    if (input.scheme !== 'http' && input.scheme !== 'https') {
-      return { issue: 'platform-scheme', ok: false };
-    }
-    return {
-      authority: authority.authority,
-      method: input.method,
-      ok: true,
-      scheme: input.scheme,
-    };
-  }
-
-  function canonicalAuthority(authority: string): boolean {
-    if (authority.length === 0) return false;
-    for (let index = 0; index < authority.length; index += 1) {
-      const character = authority[index];
-      const code = controls.charCodeAt(authority, index);
+  function canonicalAuthorityValue(value: unknown): string | undefined {
+    if (typeof value !== 'string' || value.length === 0) return undefined;
+    for (let index = 0; index < value.length; index += 1) {
+      const character = value[index];
+      const code = controls.charCodeAt(value, index);
       if (
         code <= 0x20 ||
         code === 0x7f ||
@@ -162,25 +276,38 @@ export function createRequestIngressClassifier(
         character === '#' ||
         character === ','
       ) {
-        return false;
+        return undefined;
       }
     }
-    const parsedHttp = controls.parseAuthority(authority, 'http');
-    const parsedHttps = controls.parseAuthority(authority, 'https');
-    return (
-      parsedHttp !== undefined &&
-      parsedHttps !== undefined &&
-      parsedHttp.origin !== 'null' &&
-      parsedHttps.origin !== 'null' &&
-      parsedHttp.host === authority &&
-      parsedHttps.host === authority &&
-      parsedHttp.pathname === '/' &&
-      parsedHttps.pathname === '/' &&
-      parsedHttp.search === '' &&
-      parsedHttps.search === '' &&
-      parsedHttp.hash === '' &&
-      parsedHttps.hash === ''
-    );
+    const http = controls.parseAuthority(value, 'http');
+    const https = controls.parseAuthority(value, 'https');
+    return http !== undefined &&
+      https !== undefined &&
+      http.origin !== 'null' &&
+      https.origin !== 'null' &&
+      http.password === '' &&
+      https.password === '' &&
+      http.host === value &&
+      https.host === value &&
+      http.pathname === '/' &&
+      https.pathname === '/' &&
+      http.search === '' &&
+      https.search === '' &&
+      http.hash === '' &&
+      https.hash === '' &&
+      http.username === '' &&
+      https.username === ''
+      ? value
+      : undefined;
+  }
+
+  function canonicalRawHttp1Authority(input: {
+    readonly host: unknown;
+    readonly rawHostHeaderCount: number | undefined;
+    readonly rawHostHeaderValue: string | undefined;
+  }): string | undefined {
+    if (input.rawHostHeaderCount !== 1 || input.rawHostHeaderValue !== input.host) return undefined;
+    return canonicalAuthorityValue(input.host);
   }
 
   function forwardedScheme(
@@ -195,26 +322,19 @@ export function createRequestIngressClassifier(
     }
     if (typeof list !== 'string') return { issue: 'forwarded-scheme', ok: false };
     let start = 0;
-    for (let index = 0; index < list.length; index += 1) {
-      if (list[index] === ',') start = index + 1;
-    }
-    const scheme = trimOws(list, start, list.length);
-    return scheme === 'http' || scheme === 'https'
-      ? { ok: true, scheme }
-      : { issue: 'forwarded-scheme', ok: false };
+    for (let index = 0; index < list.length; index += 1) if (list[index] === ',') start = index + 1;
+    return exactScheme(trimOws(list, start, list.length), 'forwarded-scheme');
   }
 
-  function pseudoScheme(
+  function exactScheme<Issue extends 'forwarded-scheme' | 'platform-scheme' | 'pseudo-scheme'>(
     value: unknown,
-    encrypted: boolean,
+    issue: Issue,
   ):
-    | { readonly issue: 'pseudo-scheme'; readonly ok: false }
+    | { readonly issue: Issue; readonly ok: false }
     | { readonly ok: true; readonly scheme: 'http' | 'https' } {
-    if (value === undefined) return { ok: true, scheme: encrypted ? 'https' : 'http' };
-    if (typeof value !== 'string') return { issue: 'pseudo-scheme', ok: false };
-    if (equalsAsciiCaseInsensitive(value, 'http')) return { ok: true, scheme: 'http' };
-    if (equalsAsciiCaseInsensitive(value, 'https')) return { ok: true, scheme: 'https' };
-    return { issue: 'pseudo-scheme', ok: false };
+    return value === 'http' || value === 'https'
+      ? { ok: true, scheme: value }
+      : { issue, ok: false };
   }
 
   function trimOws(value: string, initialStart: number, initialEnd: number): string {
@@ -225,6 +345,26 @@ export function createRequestIngressClassifier(
     let result = '';
     for (let index = start; index < end; index += 1) result += value[index];
     return result;
+  }
+
+  function contains(value: string, expected: string): boolean {
+    for (let index = 0; index < value.length; index += 1)
+      if (value[index] === expected) return true;
+    return false;
+  }
+
+  function containsEncodedPathControl(value: string): boolean {
+    for (let index = 0; index + 2 < value.length; index += 1) {
+      if (value[index] === '?') return false;
+      if (value[index] !== '%') continue;
+      const first = value[index + 1];
+      const second = value[index + 2];
+      if (first === '2' && (second === 'e' || second === 'E' || second === 'f' || second === 'F')) {
+        return true;
+      }
+      if (first === '5' && (second === 'c' || second === 'C')) return true;
+    }
+    return false;
   }
 
   function equalsAsciiCaseInsensitive(value: string, lower: string): boolean {
@@ -264,5 +404,5 @@ export function createRequestIngressClassifier(
     return true;
   }
 
-  return { classifyAuthority, classifyMethod, classifyNode, classifyPlatformFetch };
+  return { classify, classifyMethod };
 }

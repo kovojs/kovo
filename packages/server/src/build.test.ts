@@ -71,6 +71,17 @@ interface NodeAdapterModule {
     },
     response?: ServerResponse,
   ): Request;
+  prepareNodeRequestIngress(
+    request: IncomingMessage,
+    options?: { origin?: string; trustedProxy?: boolean },
+  ): object;
+  prepareVercelRequestIngress(request: IncomingMessage): object;
+  preparedNodeRequestToWebRequest(prepared: object, response?: ServerResponse): Request;
+  preparedNodeRequestTransportMetadata(prepared: object): {
+    httpVersion: string;
+    method: string;
+    target: string;
+  };
   rejectInvalidNodeRequestAuthority(request: IncomingMessage, response: ServerResponse): boolean;
   rejectInvalidNodeRequestIngress(
     request: IncomingMessage,
@@ -86,6 +97,26 @@ interface NodeAdapterModule {
     method?: string,
     options?: { httpVersion?: string },
   ): Promise<void>;
+}
+
+interface PreparedNodeIngressTestView {
+  readonly decision: object;
+  readonly options: object;
+  readonly request: {
+    readonly headers: Readonly<Record<string, string | readonly string[] | undefined>>;
+  };
+}
+
+function expectPreparedNodeIngressFrozen(prepared: object): void {
+  const view = prepared as PreparedNodeIngressTestView;
+  expect(Object.isFrozen(prepared)).toBe(true);
+  expect(Object.isFrozen(view.decision)).toBe(true);
+  expect(Object.isFrozen(view.options)).toBe(true);
+  expect(Object.isFrozen(view.request)).toBe(true);
+  expect(Object.isFrozen(view.request.headers)).toBe(true);
+  for (const value of Object.values(view.request.headers)) {
+    if (Array.isArray(value)) expect(Object.isFrozen(value)).toBe(true);
+  }
 }
 
 function presetEngine(token: object): KovoBuildPreset {
@@ -1820,6 +1851,9 @@ export default async function handler(request) {
       expect(nodeServer).not.toContain("from './node-adapter.mjs';");
       const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(nodeAdapter).toContain('export function prepareNodeRequestIngress');
+      expect(nodeAdapter).toContain('export function rejectPreparedNodeRequestIngress');
+      expect(nodeAdapter).toContain('export function preparedNodeRequestToWebRequest');
       expect(nodeAdapter).toContain('export function rejectInvalidNodeRequestAuthority');
       expect(nodeAdapter).toContain('export function rejectInvalidNodeRequestIngress');
       expect(nodeAdapter).toContain('export function rejectInvalidNodeRequestMethod');
@@ -1854,14 +1888,21 @@ export default async function handler(request) {
       expect(nodeServer).toContain('const createNodeDiagnosticRecord = (');
       expect(nodeServer).toContain("await import('./server/handler.mjs')");
       expect(nodeServer).not.toContain('sanitizeDiagnosticUrl.toString');
+      expect(nodeServer).toContain(
+        'const prepared = prepareNodeRequestIngress(nodeRequest, options)',
+      );
+      expect(nodeServer).toContain(
+        'if (rejectPreparedNodeRequestIngress(prepared, nodeResponse)) return',
+      );
+      expect(nodeServer).toContain('const { httpVersion, method, target } =');
       expect(
-        nodeServer.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
-      ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
+        nodeServer.indexOf('const prepared = prepareNodeRequestIngress(nodeRequest, options)'),
+      ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(target, method, nodeResponse)'));
+      expect(nodeServer.indexOf('prepareNodeRequestIngress(nodeRequest, options)')).toBeLessThan(
+        nodeServer.indexOf('await loadHandler()'),
+      );
       expect(
-        nodeServer.indexOf('rejectInvalidNodeRequestIngress(nodeRequest, nodeResponse, options)'),
-      ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(rawTarget, method, nodeResponse)'));
-      expect(
-        nodeServer.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
+        nodeServer.indexOf('preparedNodeRequestToWebRequest(prepared, nodeResponse)'),
       ).toBeLessThan(nodeServer.indexOf('await loadHandler()'));
 
       const emittedNodeAdapter = (await import(
@@ -1887,8 +1928,8 @@ export default async function handler(request) {
             baseUrl,
             rawMutationRequest(target, 'EMITTED_NODE_ALIAS_CREDENTIAL'),
           );
-          expect(aliasResponse).toContain('HTTP/1.1 404');
-          expect(aliasResponse).toContain('Not Found');
+          expect(aliasResponse).toContain('HTTP/1.1 400');
+          expect(aliasResponse).toContain('Bad Request');
           expect(aliasResponse).not.toContain('EMITTED_NODE_ALIAS_CREDENTIAL');
         }
         const canonicalMutationPath = await rawHttpExchange(
@@ -1931,8 +1972,16 @@ export default async function handler(request) {
           baseUrl,
           'GET /assets/cart.css HTTP/1.0\r\nConnection: close\r\n\r\n',
         );
-        expect(missingHttp10Host).toContain('HTTP/1.1 200');
-        expect(missingHttp10Host).toContain('body { color: navy; }');
+        expect(missingHttp10Host).toContain('HTTP/1.1 400');
+        expect(missingHttp10Host).not.toContain('body { color: navy; }');
+
+        const generatedAuthority = new URL(baseUrl).host;
+        const canonicalAbsoluteStatic = await rawHttpExchange(
+          baseUrl,
+          `GET http://${generatedAuthority}/assets/cart.css HTTP/1.1\r\nHost: ${generatedAuthority}\r\nConnection: close\r\n\r\n`,
+        );
+        expect(canonicalAbsoluteStatic).toContain('HTTP/1.1 200');
+        expect(canonicalAbsoluteStatic).toContain('body { color: navy; }');
 
         const fetchedAsset = await fetch(`${baseUrl}/assets/cart.css`);
         await expect(fetchedAsset.text()).resolves.toBe('body { color: navy; }');
@@ -3408,6 +3457,9 @@ export default async function handler(request) {
         'utf8',
       );
       expect(vercelAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(vercelAdapter).toContain('export function prepareVercelRequestIngress');
+      expect(vercelAdapter).toContain('export function rejectPreparedNodeRequestIngress');
+      expect(vercelAdapter).toContain('export function preparedNodeRequestToWebRequest');
       expect(vercelAdapter).toContain('export function rejectInvalidNodeRequestAuthority');
       expect(vercelAdapter).toContain('export function rejectInvalidNodeRequestMethod');
       expect(vercelAdapter).toContain('export function rejectNodeRequestTargetLimit');
@@ -3433,15 +3485,17 @@ export default async function handler(request) {
       expect(vercelFunction).not.toContain('function nodeRequestToWebRequest');
       expect(vercelFunction).not.toContain('function responseHeadersToNodeHeaders');
       expect(vercelFunction).toContain('nodeResponse.destroy()');
-      expect(vercelFunction).toContain('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)');
+      expect(vercelFunction).toContain('const prepared = prepareVercelRequestIngress(nodeRequest)');
       expect(vercelFunction).toContain(
-        'rejectInvalidNodeRequestAuthority(nodeRequest, nodeResponse)',
+        'if (rejectPreparedNodeRequestIngress(prepared, nodeResponse)) return',
       );
-      expect(vercelFunction).toContain('rejectInvalidNodeRequestMethod(nodeRequest, nodeResponse)');
-      expect(vercelFunction).toContain('rejectUnsafeNodeMutationTarget(nodeRequest, nodeResponse)');
-      expect(
-        vercelFunction.indexOf('rejectNodeRequestTargetLimit(nodeRequest, nodeResponse)'),
-      ).toBeLessThan(vercelFunction.indexOf('await loadHandler()'));
+      expect(vercelFunction).toContain(
+        'const request = preparedNodeRequestToWebRequest(prepared, nodeResponse)',
+      );
+      expect(vercelFunction.match(/prepareVercelRequestIngress\(nodeRequest\)/gu)).toHaveLength(1);
+      expect(vercelFunction.indexOf('prepareVercelRequestIngress(nodeRequest)')).toBeLessThan(
+        vercelFunction.indexOf('await loadHandler()'),
+      );
       await expect(
         readJson(join(vercelOutDir, 'functions/kovo.func/.vc-config.json')),
       ).resolves.toEqual({
@@ -3454,6 +3508,12 @@ export default async function handler(request) {
       });
       await expect(readJson(join(vercelOutDir, 'config.json'))).resolves.toEqual({
         routes: [
+          {
+            continue: true,
+            middlewarePath: 'kovo-ingress',
+            middlewareRawSrc: ['/(.*)'],
+            src: '/(.*)',
+          },
           {
             continue: true,
             headers: {
@@ -3512,6 +3572,29 @@ export default async function handler(request) {
         staticFiles: ['assets/cart.css', 'c/__v/cart-v1/cart.client.js'],
       });
 
+      const middlewareResponses = runGeneratedVercelIngressMiddleware(
+        join(vercelOutDir, 'functions/kovo-ingress.func/index.js'),
+        [
+          { url: 'https://deployment.example/hello?x=1' },
+          { url: 'javascript:alert(1)' },
+          { url: 'mailto:security@example.test' },
+          { url: `https://deployment.example/${'a'.repeat(MAX_REQUEST_URL_CHARACTERS)}` },
+          {
+            url: `https://deployment.example/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`,
+          },
+        ],
+      );
+      const acceptedMiddlewareResponse = middlewareResponses[0]!;
+      const rejectedMiddlewareResponses = middlewareResponses.slice(1);
+      expect(acceptedMiddlewareResponse.status).toBe(200);
+      expect(acceptedMiddlewareResponse.headers.get('x-middleware-next')).toBe('1');
+      expect(rejectedMiddlewareResponses).toHaveLength(4);
+      for (let index = 0; index < rejectedMiddlewareResponses.length; index += 1) {
+        const response = rejectedMiddlewareResponses[index]!;
+        expect(response.status).toBe(index < 2 ? 400 : 414);
+        expect(response.headers.get('x-middleware-next')).toBeNull();
+      }
+
       const emittedVercelAdapter = (await import(
         `${pathToFileURL(join(vercelOutDir, 'functions/kovo.func/node-adapter.mjs')).href}?t=${Date.now()}`
       )) as NodeAdapterModule;
@@ -3527,10 +3610,10 @@ export default async function handler(request) {
           baseUrl,
           rawMutationRequest('/_m/a/%2e/b', 'VERCEL_ALIAS_CREDENTIAL'),
         );
-        expect(aliasResponse).toContain('HTTP/1.1 404');
-        expect(aliasResponse).toContain('Not Found');
+        expect(aliasResponse).toContain('HTTP/1.1 400');
+        expect(aliasResponse).toContain('Bad Request');
         expect(aliasResponse).not.toContain('VERCEL_ALIAS_CREDENTIAL');
-        const invalidPlatformScheme = await rawHttpExchange(
+        const spoofedPlatformScheme = await rawHttpExchange(
           baseUrl,
           'GET /hello HTTP/1.1\r\n' +
             'Host: 127.0.0.1\r\n' +
@@ -3538,9 +3621,8 @@ export default async function handler(request) {
             'X-Forwarded-Proto: http\r\n' +
             'Connection: close\r\n\r\n',
         );
-        expect(invalidPlatformScheme).toContain('HTTP/1.1 500');
-        expect(invalidPlatformScheme).toContain('Internal Server Error');
-        expect(invalidPlatformScheme).not.toContain('vercel:/hello:');
+        expect(spoofedPlatformScheme).toContain('HTTP/1.1 200');
+        expect(spoofedPlatformScheme).toContain('vercel:/hello:');
         const canonicalMutationPath = await rawHttpExchange(
           baseUrl,
           rawMutationRequest('/_m/a/b', 'VERCEL_CANONICAL_CREDENTIAL'),
@@ -3596,10 +3678,10 @@ export default async function handler(request) {
         readNeutral: () => build,
       });
       const functionSource = await readFile(join(outDir, 'functions/kovo.func/index.cjs'), 'utf8');
-      expect(functionSource).toContain('vercelRequestToWebRequest(nodeRequest, nodeResponse)');
-      expect(
-        functionSource.indexOf('vercelRequestToWebRequest(nodeRequest, nodeResponse)'),
-      ).toBeLessThan(functionSource.indexOf('await loadHandler()'));
+      expect(functionSource).toContain('prepareVercelRequestIngress(nodeRequest)');
+      expect(functionSource.indexOf('prepareVercelRequestIngress(nodeRequest)')).toBeLessThan(
+        functionSource.indexOf('await loadHandler()'),
+      );
       const adapter = (await import(
         `${pathToFileURL(join(outDir, 'functions/kovo.func/node-adapter.mjs')).href}?authority=${Date.now()}`
       )) as NodeAdapterModule;
@@ -3642,6 +3724,45 @@ export default async function handler(request) {
       expect((await handler(vercelRequest('203.0.113.11'))).status).toBe(200);
       expect((await handler(vercelRequest('203.0.113.10'))).status).toBe(429);
 
+      const preparedVercelCarrier = platformBridgeRequest({
+        headers: {
+          'x-forwarded-proto': 'https',
+          'x-vercel-forwarded-for': '203.0.113.12',
+        },
+        url: '/prepared-vercel?before=1',
+      });
+      preparedVercelCarrier.headers['x-snapshot-values'] = ['one', 'two'];
+      const preparedVercel = adapter.prepareVercelRequestIngress(preparedVercelCarrier);
+      expectPreparedNodeIngressFrozen(preparedVercel);
+      preparedVercelCarrier.method = 'POST';
+      preparedVercelCarrier.url = 'javascript:after-prepare';
+      preparedVercelCarrier.headers.host = 'evil.example';
+      preparedVercelCarrier.headers['x-forwarded-proto'] = 'http';
+      preparedVercelCarrier.headers['x-vercel-forwarded-for'] = '198.51.100.90';
+      preparedVercelCarrier.rawHeaders = ['Host', 'evil.example'];
+      expect(adapter.preparedNodeRequestTransportMetadata(preparedVercel)).toEqual({
+        httpVersion: '1.1',
+        method: 'GET',
+        target: '/prepared-vercel?before=1',
+      });
+      const preparedVercelRequest = adapter.preparedNodeRequestToWebRequest(preparedVercel);
+      expect(preparedVercelRequest.url).toBe('https://shop.example.test/prepared-vercel?before=1');
+      expect(resolveRequestClientIp(app, preparedVercelRequest)).toBe('203.0.113.12');
+
+      const preparedNodeCarrier = platformBridgeRequest({
+        headers: {},
+        url: '/prepared-node?before=1',
+      });
+      const preparedNode = adapter.prepareNodeRequestIngress(preparedNodeCarrier);
+      expectPreparedNodeIngressFrozen(preparedNode);
+      preparedNodeCarrier.method = 'POST';
+      preparedNodeCarrier.url = 'authority.example:443';
+      preparedNodeCarrier.headers.host = 'evil.example';
+      preparedNodeCarrier.rawHeaders = ['Host', 'evil.example'];
+      expect(adapter.preparedNodeRequestToWebRequest(preparedNode).url).toBe(
+        'http://shop.example.test/prepared-node?before=1',
+      );
+
       const secureMutation = vercelRequest('203.0.113.12', {
         method: 'POST',
         origin: 'https://shop.example.test',
@@ -3656,7 +3777,7 @@ export default async function handler(request) {
             origin: 'https://shop.example.test',
             scheme,
           }),
-        ).toThrow('Kovo Vercel adapter requires one canonical x-forwarded-proto value.');
+        ).toThrow('Kovo platform request scheme must be http or https.');
       }
 
       const genericNodeRequest = adapter.nodeRequestToWebRequest(
@@ -3673,10 +3794,21 @@ export default async function handler(request) {
       expect(genericNodeRequest.url).toBe('http://shop.example.test/_q/adapter/vercel-client-ip');
       expect(resolveRequestClientIp(app, genericNodeRequest)).toBe('127.0.0.1');
 
-      const ambiguousClient = vercelRequest('203.0.113.20, 198.51.100.2');
-      expect(resolveRequestClientIp(app, ambiguousClient)).toBe('vercel:unresolved-client');
-      expect((await handler(ambiguousClient)).status).toBe(200);
-      expect((await handler(vercelRequest('unknown, client'))).status).toBe(429);
+      for (const clientIp of ['203.0.113.20, 198.51.100.2', 'unknown, client', '203.0.113.020']) {
+        expect(() => vercelRequest(clientIp)).toThrow(
+          'Kovo platform client provenance is absent or ambiguous.',
+        );
+      }
+      for (const headers of [
+        { 'x-forwarded-proto': 'https' },
+        { 'x-vercel-forwarded-for': '203.0.113.21' },
+      ]) {
+        expect(() =>
+          adapter.vercelRequestToWebRequest(
+            platformBridgeRequest({ headers, url: '/_q/adapter/vercel-client-ip' }),
+          ),
+        ).toThrow(/platform (?:client provenance|request scheme)/u);
+      }
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -3750,6 +3882,12 @@ export default async function handler(request) {
       ).rejects.toThrow();
       await expect(readJson(join(vercelOutDir, 'config.json'))).resolves.toEqual({
         routes: [
+          {
+            continue: true,
+            middlewarePath: 'kovo-ingress',
+            middlewareRawSrc: ['/(.*)'],
+            src: '/(.*)',
+          },
           {
             continue: true,
             headers: {
@@ -3941,6 +4079,12 @@ export default async function handler(request) {
       ).resolves.toContain('kovoVercelFunction');
       await expect(readJson(join(vercelOutDir, 'config.json'))).resolves.toEqual({
         routes: [
+          {
+            continue: true,
+            middlewarePath: 'kovo-ingress',
+            middlewareRawSrc: ['/(.*)'],
+            src: '/(.*)',
+          },
           {
             continue: true,
             headers: {
@@ -4244,11 +4388,11 @@ export default async function handler(request) {
       const workerPath = join(cloudflareOutDir, 'worker.mjs');
       const workerSource = await readFile(workerPath, 'utf8');
       expect(workerSource).toContain('const requestIngressClassifier = (');
-      expect(workerSource).toContain('requestIngressClassifier.classifyPlatformFetch');
-      expect(workerSource.indexOf('requestIngressClassifier.classifyPlatformFetch')).toBeLessThan(
+      expect(workerSource).toContain('requestIngressClassifier.classify({');
+      expect(workerSource.indexOf('requestIngressClassifier.classify({')).toBeLessThan(
         workerSource.indexOf("ownDataValue(env, 'ASSETS')"),
       );
-      expect(workerSource.indexOf('requestIngressClassifier.classifyPlatformFetch')).toBeLessThan(
+      expect(workerSource.indexOf('requestIngressClassifier.classify({')).toBeLessThan(
         workerSource.indexOf('await loadHandler()'),
       );
 
@@ -4979,9 +5123,7 @@ function withNoStylesheetCallerFile<T>(callback: () => T): T {
 async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<void> {
   const untrustedLiveRequest = liveNodeRequestToWebRequest(adapterParityRequest());
   const untrustedEmittedRequest = adapter.nodeRequestToWebRequest(adapterParityRequest());
-  // SPEC §9.5 / RFC 9113 §8.3.1: a peer controls `:scheme`; neither the live nor generated
-  // adapter may treat `https` on cleartext HTTP/2 as proof without trusted-proxy posture.
-  expect(untrustedLiveRequest.url).toBe('http://h2.example.test/from-url?x=1');
+  expect(untrustedLiveRequest.url).toBe('http://h1.example.test/from-url?x=1');
   expect(untrustedEmittedRequest.url).toBe(untrustedLiveRequest.url);
 
   for (const method of ['get', 'Get', 'post', 'PoSt', 'TRACE', 'bad method']) {
@@ -5034,7 +5176,7 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   const emittedAppendedForwardingChain = adapter.nodeRequestToWebRequest(appendedForwardingChain, {
     trustedProxy: true,
   });
-  expect(emittedAppendedForwardingChain.url).toBe('https://h2.example.test/from-url?x=1');
+  expect(emittedAppendedForwardingChain.url).toBe('https://h1.example.test/from-url?x=1');
 
   const duplicateForwardingHeaders = adapterParityRequest();
   duplicateForwardingHeaders.headers['x-forwarded-proto'] = ['https', 'http'];
@@ -5042,12 +5184,12 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     duplicateForwardingHeaders,
     { trustedProxy: true },
   );
-  expect(emittedDuplicateForwardingHeaders.url).toBe('http://h2.example.test/from-url?x=1');
+  expect(emittedDuplicateForwardingHeaders.url).toBe('http://h1.example.test/from-url?x=1');
 
   const forwardingOws = adapterParityRequest();
   forwardingOws.headers['x-forwarded-proto'] = 'attacker-value, \t https \t';
   expect(adapter.nodeRequestToWebRequest(forwardingOws, { trustedProxy: true }).url).toBe(
-    'https://h2.example.test/from-url?x=1',
+    'https://h1.example.test/from-url?x=1',
   );
 
   for (const invalid of ['', 'https, ', 'https, ftp', []] as const) {
@@ -5084,31 +5226,33 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   });
 
   for (const invalid of ['', 'javascript', 'https, http', ['https']] as const) {
-    const liveInvalidPseudo = adapterParityRequest();
+    const liveInvalidPseudo = adapterParityHttp2Request();
     liveInvalidPseudo.headers[':scheme'] = invalid;
     expect(() => liveNodeRequestToWebRequest(liveInvalidPseudo, { trustedProxy: true })).toThrow(
-      'Trusted HTTP/2 :scheme must identify one http or https scheme.',
+      'HTTP/2 :scheme must be exact lowercase http or https and match its selected posture.',
     );
 
-    const emittedInvalidPseudo = adapterParityRequest();
+    const emittedInvalidPseudo = adapterParityHttp2Request();
     emittedInvalidPseudo.headers[':scheme'] = invalid;
     expect(() =>
       adapter.nodeRequestToWebRequest(emittedInvalidPseudo, { trustedProxy: true }),
-    ).toThrow('Trusted HTTP/2 :scheme must identify one http or https scheme.');
+    ).toThrow(
+      'HTTP/2 :scheme must be exact lowercase http or https and match its selected posture.',
+    );
   }
 
-  const forwardedSchemePrecedence = adapterParityRequest();
+  const forwardedSchemePrecedence = adapterParityHttp2Request();
   forwardedSchemePrecedence.headers[':scheme'] = 'javascript';
   forwardedSchemePrecedence.headers['x-forwarded-proto'] = 'https';
-  expect(
-    adapter.nodeRequestToWebRequest(forwardedSchemePrecedence, { trustedProxy: true }).url,
-  ).toBe('https://h2.example.test/from-url?x=1');
+  expect(() =>
+    adapter.nodeRequestToWebRequest(forwardedSchemePrecedence, { trustedProxy: true }),
+  ).toThrow('Kovo Node adapter request carrier does not match one supported transport posture.');
 
-  const uppercasePseudoScheme = adapterParityRequest();
+  const uppercasePseudoScheme = adapterParityHttp2Request();
   uppercasePseudoScheme.headers[':scheme'] = 'HTTPS';
-  expect(adapter.nodeRequestToWebRequest(uppercasePseudoScheme, { trustedProxy: true }).url).toBe(
-    'https://h2.example.test/from-url?x=1',
-  );
+  expect(() =>
+    adapter.nodeRequestToWebRequest(uppercasePseudoScheme, { trustedProxy: true }),
+  ).toThrow('HTTP/2 :scheme must be exact lowercase http or https and match its selected posture.');
 
   for (const authority of [
     '',
@@ -5127,22 +5271,21 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     '[2001:0db8::1]:8080',
   ]) {
     const liveInvalidAuthority = adapterParityRequest();
-    delete liveInvalidAuthority.headers[':authority'];
     liveInvalidAuthority.headers.host = authority;
+    liveInvalidAuthority.rawHeaders = ['Host', authority];
     expect(() => liveNodeRequestToWebRequest(liveInvalidAuthority)).toThrow(
       'Kovo Node adapter request authority must be one valid host[:port].',
     );
 
     const emittedInvalidAuthority = adapterParityRequest();
-    delete emittedInvalidAuthority.headers[':authority'];
     emittedInvalidAuthority.headers.host = authority;
+    emittedInvalidAuthority.rawHeaders = ['Host', authority];
     expect(() => adapter.nodeRequestToWebRequest(emittedInvalidAuthority)).toThrow(
       'Kovo Node adapter request authority must be one valid host[:port].',
     );
   }
 
   const duplicateHost = adapterParityRequest();
-  delete duplicateHost.headers[':authority'];
   duplicateHost.headers.host = 'victim.example';
   duplicateHost.rawHeaders = ['Host', 'victim.example', 'Host', 'evil.example'];
   let authorityBody = '';
@@ -5179,20 +5322,20 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   missingHttp10Authority.headers = {};
   missingHttp10Authority.httpVersion = '1.0';
   missingHttp10Authority.rawHeaders = [];
-  expect(liveNodeRequestToWebRequest(missingHttp10Authority).url).toBe(
-    'http://127.0.0.1/from-url?x=1',
+  expect(() => liveNodeRequestToWebRequest(missingHttp10Authority)).toThrow(
+    'Kovo Node adapter request authority must be one valid host[:port].',
   );
-  expect(adapter.nodeRequestToWebRequest(missingHttp10Authority).url).toBe(
-    'http://127.0.0.1/from-url?x=1',
+  expect(() => adapter.nodeRequestToWebRequest(missingHttp10Authority)).toThrow(
+    'Kovo Node adapter request authority must be one valid host[:port].',
   );
 
   const customCarrierWithoutRawHeaders = adapterParityRequest();
   customCarrierWithoutRawHeaders.headers = {};
-  expect(liveNodeRequestToWebRequest(customCarrierWithoutRawHeaders).url).toBe(
-    'http://127.0.0.1/from-url?x=1',
+  expect(() => liveNodeRequestToWebRequest(customCarrierWithoutRawHeaders)).toThrow(
+    'Kovo Node adapter request authority must be one valid host[:port].',
   );
-  expect(adapter.nodeRequestToWebRequest(customCarrierWithoutRawHeaders).url).toBe(
-    'http://127.0.0.1/from-url?x=1',
+  expect(() => adapter.nodeRequestToWebRequest(customCarrierWithoutRawHeaders)).toThrow(
+    'Kovo Node adapter request authority must be one valid host[:port].',
   );
 
   for (const convert of [
@@ -5225,14 +5368,16 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
   expect(incompleteRequest.signal.aborted).toBe(true);
 
   const validIpv6Authority = adapterParityRequest();
-  delete validIpv6Authority.headers[':authority'];
   validIpv6Authority.headers.host = '[2001:db8::1]:8080';
+  validIpv6Authority.rawHeaders = ['Host', '[2001:db8::1]:8080'];
   expect(adapter.nodeRequestToWebRequest(validIpv6Authority).url).toBe(
     'http://[2001:db8::1]:8080/from-url?x=1',
   );
 
-  const liveRequest = liveNodeRequestToWebRequest(adapterParityRequest(), { trustedProxy: true });
-  const emittedRequest = adapter.nodeRequestToWebRequest(adapterParityRequest(), {
+  const liveRequest = liveNodeRequestToWebRequest(adapterParityHttp2Request(), {
+    trustedProxy: true,
+  });
+  const emittedRequest = adapter.nodeRequestToWebRequest(adapterParityHttp2Request(), {
     trustedProxy: true,
   });
 
@@ -5294,7 +5439,7 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     unsafeMutationRequest.method = 'POST';
     unsafeMutationRequest.url = target;
     expect(() => adapter.nodeRequestToWebRequest(unsafeMutationRequest)).toThrow(
-      'Reserved mutation request targets must use their canonical raw path.',
+      'Kovo Node adapter request target must be one canonical origin-form or matching HTTP(S) absolute-form target.',
     );
   }
 
@@ -5306,10 +5451,12 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
       adapter.nodeRequestToWebRequest(invalidAbsoluteRequest, {
         origin() {
           invalidTargetOriginCalls += 1;
-          return 'https://h2.example.test';
+          return 'https://h1.example.test';
         },
       }),
-    ).toThrow('Reserved mutation request targets must use their canonical raw path.');
+    ).toThrow(
+      'Kovo Node adapter request target must be one canonical origin-form or matching HTTP(S) absolute-form target.',
+    );
   }
   expect(invalidTargetOriginCalls).toBe(0);
 
@@ -5328,29 +5475,30 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
       'http://attacker.test/_m/a/b',
     ]) {
       const unsafeMutationRequest = adapterParityRequest();
-      unsafeMutationRequest.headers = { host: 'h2.example.test', 'x-from-test': 'yes' };
+      unsafeMutationRequest.headers = { host: 'h1.example.test', 'x-from-test': 'yes' };
       unsafeMutationRequest.method = 'POST';
       unsafeMutationRequest.url = target;
       expect(() => adapter.nodeRequestToWebRequest(unsafeMutationRequest)).toThrow(
-        'Reserved mutation request targets must use their canonical raw path.',
+        'Kovo Node adapter request target must be one canonical origin-form or matching HTTP(S) absolute-form target.',
       );
     }
 
     const canonicalUnderPoison = adapterParityRequest();
-    canonicalUnderPoison.headers = { host: 'h2.example.test', 'x-from-test': 'yes' };
+    canonicalUnderPoison.headers = { host: 'h1.example.test', 'x-from-test': 'yes' };
     canonicalUnderPoison.url = '/_m/a/b';
     expect(
       adapter.nodeRequestToWebRequest(canonicalUnderPoison, {
-        origin: 'https://h2.example.test',
+        origin: 'https://h1.example.test',
       }).url,
-    ).toBe('https://h2.example.test/_m/a/b');
+    ).toBe('https://h1.example.test/_m/a/b');
   } finally {
     String.prototype.includes = originalIncludes;
     RegExp.prototype.test = originalRegExpTest;
     Math.min = originalMin;
   }
 
-  const canonicalMutationRequest = adapterParityRequest();
+  const canonicalMutationRequest = adapterParityHttp2Request();
+  canonicalMutationRequest.headers[':scheme'] = 'https';
   canonicalMutationRequest.url = '/_m/a/b';
   expect(
     adapter.nodeRequestToWebRequest(canonicalMutationRequest, { trustedProxy: true }).url,
@@ -5401,15 +5549,36 @@ function adapterParityRequest(): IncomingMessage {
     remoteAddress: '203.0.113.9',
   }) as Socket & { encrypted?: boolean };
   return Object.assign(new EventEmitter(), {
+    __kovoRequestIngressSource: 'node-http1',
+    headers: {
+      host: 'h1.example.test',
+      'x-from-test': ['one', 'two'],
+    },
+    httpVersion: '1.1',
+    method: 'GET',
+    rawHeaders: ['Host', 'h1.example.test', 'X-From-Test', 'one', 'X-From-Test', 'two'],
+    socket,
+    url: '/from-url?x=1',
+  }) as IncomingMessage;
+}
+
+function adapterParityHttp2Request(): IncomingMessage {
+  const socket = Object.assign(new EventEmitter(), {
+    encrypted: false,
+    remoteAddress: '203.0.113.9',
+  }) as Socket & { encrypted?: boolean };
+  return Object.assign(new EventEmitter(), {
+    __kovoRequestIngressSource: 'node-http2',
     headers: {
       ':authority': 'h2.example.test',
       ':method': 'GET',
       ':path': '/from-pseudo',
-      ':scheme': 'https',
-      host: 'attacker.example.test',
+      ':scheme': 'http',
       'x-from-test': ['one', 'two'],
     },
+    httpVersion: '2.0',
     method: 'GET',
+    rawHeaders: [],
     socket,
     url: '/from-url?x=1',
   }) as IncomingMessage;
@@ -5421,6 +5590,7 @@ function adapterParityBodyRequest(): IncomingMessage {
     remoteAddress: '203.0.113.9',
   }) as Socket & { encrypted?: boolean };
   return Object.assign(Readable.from([Buffer.from('abc')], { autoDestroy: false }), {
+    __kovoRequestIngressSource: 'node-http1',
     complete: true,
     headers: { 'content-length': '3', host: 'app.example' },
     httpVersion: '1.1',
@@ -5442,9 +5612,11 @@ function platformBridgeRequest(options: {
     remoteAddress: options.peerAddress ?? '127.0.0.1',
   }) as Socket & { encrypted?: boolean };
   return Object.assign(Readable.from([]), {
+    __kovoRequestIngressSource: 'node-http1',
     headers: { host: 'shop.example.test', ...options.headers },
     httpVersion: '1.1',
     method: options.method ?? 'GET',
+    rawHeaders: ['Host', 'shop.example.test'],
     socket,
     url: options.url,
   }) as IncomingMessage;
@@ -5573,6 +5745,11 @@ interface GeneratedWorkerRequest {
 interface GeneratedWorkerResult {
   readonly assetCalls: number;
   readonly response: Response;
+}
+
+interface GeneratedVercelIngressRequest {
+  readonly method?: string;
+  readonly url: string;
 }
 
 // Generated entries eagerly and irreversibly lock their request-safe realm (SPEC §6.6). Exercise
@@ -5705,7 +5882,13 @@ async function startGeneratedVercelServer(entryPath: string): Promise<GeneratedS
 import { createServer } from 'node:http';
 const imported = await import(${JSON.stringify(pathToFileURL(entryPath).href)});
 const handler = imported.default ?? imported;
-const server = createServer((request, response) => handler(request, response));
+const server = createServer((request, response) => {
+  // This local bridge explicitly models the two edge-overwritten facts documented by Vercel.
+  // The generated function intentionally has no fallback when either fact is absent.
+  request.headers['x-forwarded-proto'] = 'https';
+  request.headers['x-vercel-forwarded-for'] = request.socket.remoteAddress;
+  handler(request, response);
+});
 server.listen(0, '127.0.0.1', () => {
   console.log('KOVO_GENERATED_TEST_SERVER:' + server.address().port);
 });
@@ -5853,6 +6036,49 @@ process.stdout.write(JSON.stringify(results));
   }));
 }
 
+function runGeneratedVercelIngressMiddleware(
+  middlewarePath: string,
+  requests: readonly GeneratedVercelIngressRequest[],
+): readonly Response[] {
+  const encodedInput = Buffer.from(JSON.stringify(requests)).toString('base64');
+  const source = `
+const requests = JSON.parse(Buffer.from(process.env.KOVO_BUILD_TEST_PROBE, 'base64').toString());
+delete process.env.KOVO_BUILD_TEST_PROBE;
+const middleware = (await import(${JSON.stringify(pathToFileURL(middlewarePath).href)})).default;
+const results = [];
+for (const probe of requests) {
+  const response = await middleware(new Request(probe.url, { method: probe.method }));
+  results.push({
+    body: await response.text(),
+    headers: [...response.headers.entries()],
+    status: response.status,
+  });
+}
+process.stdout.write(JSON.stringify(results));
+`;
+  const stdout = execFileSync(
+    process.execPath,
+    ['--disable-warning=ExperimentalWarning', '--input-type=module', '--eval', source],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, KOVO_BUILD_TEST_PROBE: encodedInput },
+      timeout: 20_000,
+    },
+  );
+  const results = JSON.parse(stdout) as readonly {
+    readonly body: string;
+    readonly headers: readonly [string, string][];
+    readonly status: number;
+  }[];
+  return results.map(
+    (result) =>
+      new Response(result.body, {
+        headers: result.headers.map(([name, value]): [string, string] => [name, value]),
+        status: result.status,
+      }),
+  );
+}
+
 async function readJson(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, 'utf8'));
 }
@@ -5871,11 +6097,7 @@ async function assertVercelBuildOutput(
     staticFiles: readonly string[];
   },
 ): Promise<void> {
-  expect(await sortedDirNames(outDir)).toEqual(
-    expected.function === false
-      ? ['config.json', 'static']
-      : ['config.json', 'functions', 'static'],
-  );
+  expect(await sortedDirNames(outDir)).toEqual(['config.json', 'functions', 'static']);
 
   const config = await readJson(join(outDir, 'config.json'));
   expectVercelConfig(config);
@@ -5887,8 +6109,23 @@ async function assertVercelBuildOutput(
     expect(file.isFile(), filePath).toBe(true);
   }
 
+  const middlewareDir = join(outDir, 'functions', 'kovo-ingress.func');
+  await expect(readJson(join(middlewareDir, '.vc-config.json'))).resolves.toEqual({
+    entrypoint: 'index.js',
+    runtime: 'edge',
+  });
+  const middlewareSource = await readFile(join(middlewareDir, 'index.js'), 'utf8');
+  expect(middlewareSource).toContain("source: 'platform-fetch'");
+  expect(middlewareSource).toContain("'x-middleware-next': '1'");
+  await expect(
+    readJson(join(middlewareDir, 'kovo-artifact-integrity.json')),
+  ).resolves.toMatchObject({
+    algorithm: 'sha256',
+    files: { 'index.js': expect.stringMatching(/^[a-f0-9]{64}$/u) },
+  });
+
   if (expected.function === false) {
-    await expect(stat(join(outDir, 'functions'))).rejects.toThrow();
+    await expect(stat(join(outDir, 'functions', 'kovo.func'))).rejects.toThrow();
     return;
   }
 
@@ -5911,6 +6148,12 @@ function expectVercelConfig(config: unknown): void {
   expect(config).toMatchObject({ version: 3 });
   if (!isRecord(config) || config.routes === undefined) return;
   expect(Array.isArray(config.routes)).toBe(true);
+  expect(config.routes[0]).toEqual({
+    continue: true,
+    middlewarePath: 'kovo-ingress',
+    middlewareRawSrc: ['/(.*)'],
+    src: '/(.*)',
+  });
   for (const routeEntry of config.routes as unknown[]) {
     expect(isRecord(routeEntry), JSON.stringify(routeEntry)).toBe(true);
     const hasSource = typeof (routeEntry as Record<string, unknown>).src === 'string';
