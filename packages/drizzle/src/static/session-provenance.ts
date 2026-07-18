@@ -28,7 +28,6 @@ import {
   type SessionProvenanceContext,
 } from '../static.js';
 import { expressionResolvesToFrameworkExport, frameworkExport } from './framework-identity.js';
-import { isDrizzleDatabaseTypeAnnotation } from './schema.js';
 
 /** @internal */ export function emptySessionProvenanceContext(): SessionProvenanceContext {
   return { aliases: new Map(), helpers: new Map(), opaqueAliases: new Map() };
@@ -130,6 +129,11 @@ function exactLocalPrivateScopeHelperProvenance(
 
   const privateScopeIndex = segments.path.findIndex(isPrivateScopeKind);
   if (privateScopeIndex < 0) return undefined;
+  const prefix = segments.path.slice(0, privateScopeIndex);
+  // The parameter is already the enrolled request/context carrier. Only a direct private member
+  // or its exact `.request` projection can precede guard/session/tenant; arbitrary wrappers such
+  // as `context.input.guard` are attacker-controlled data, not principal provenance.
+  if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) return undefined;
   const kind = segments.path[privateScopeIndex];
   if (!isPrivateScopeKind(kind)) return undefined;
   return {
@@ -153,16 +157,54 @@ function exactLocalFunctionDeclaration(
   if (declarations?.length !== 1) return undefined;
 
   let declaration: Node | undefined = declarations[0];
-  if (Node.isVariableDeclaration(declaration) || Node.isPropertyAssignment(declaration)) {
+  if (Node.isVariableDeclaration(declaration)) {
+    if (!isConstVariableBindingDeclaration(declaration)) return undefined;
+    declaration = declaration.getInitializer();
+  } else if (Node.isPropertyAssignment(declaration)) {
     declaration = declaration.getInitializer();
   }
-  return declaration &&
+  const helper = declaration &&
     (Node.isArrowFunction(declaration) ||
       Node.isFunctionDeclaration(declaration) ||
       Node.isFunctionExpression(declaration) ||
       Node.isMethodDeclaration(declaration))
     ? declaration
     : undefined;
+  const symbolKey = resolvedSymbolKey(symbol);
+  return helper && symbolKey && !sourceFileMutatesSymbol(sourceFile, symbolKey)
+    ? helper
+    : undefined;
+}
+
+function sourceFileMutatesSymbol(sourceFile: SourceFile, symbolKey: string): boolean {
+  for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    if (nodeContainsSymbolKey(assignment.getLeft(), symbolKey)) return true;
+  }
+  for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+    if (nodeContainsSymbolKey(deletion.getExpression(), symbolKey)) return true;
+  }
+  for (const unary of sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression)) {
+    const operator = unary.getOperatorToken();
+    if (operator !== SyntaxKind.PlusPlusToken && operator !== SyntaxKind.MinusMinusToken) continue;
+    if (nodeContainsSymbolKey(unary.getOperand(), symbolKey)) return true;
+  }
+  for (const unary of sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression)) {
+    const operator = unary.getOperatorToken();
+    if (operator !== SyntaxKind.PlusPlusToken && operator !== SyntaxKind.MinusMinusToken) continue;
+    if (nodeContainsSymbolKey(unary.getOperand(), symbolKey)) return true;
+  }
+  return false;
+}
+
+function nodeContainsSymbolKey(node: Node, symbolKey: string): boolean {
+  return [node, ...node.getDescendants()].some((candidate) => {
+    const symbol = Node.isIdentifier(candidate)
+      ? symbolForIdentifierReference(candidate) ?? candidate.getSymbol()
+      : candidate.getSymbol();
+    return resolvedSymbolKey(symbol) === symbolKey;
+  });
 }
 
 function exactSingleReturnExpression(helper: ExactLocalFunction): Node | undefined {
@@ -543,19 +585,12 @@ function privateScopeHelperCarrierBindingIsProven(carrier: Node): boolean {
   const index = callableParameters.indexOf(parameter);
   if (index < 0) return false;
 
-  // Legacy/static Drizzle extraction callbacks place the managed DB receiver between
-  // validated input and private request context. An allowed-name parameter before that
-  // receiver is still attacker input even if the author calls it `request` or `ctx`.
-  const receiverIndex = callableParameters.findIndex(isDrizzleDatabaseTypeAnnotation);
-  if (receiverIndex >= 0) return index > receiverIndex;
-
   const frameworkRole = exactFrameworkPrivateScopeCarrierRole(callable, index);
   if (frameworkRole !== undefined) return frameworkRole;
 
-  // Outside an exact framework callback, a leading parameter has no structural role
-  // proving it is anything other than input. A later request/context parameter remains
-  // compatible with the framework's `(input, context)` callback convention.
-  return index > 0;
+  // Positional order, a DB-shaped sibling parameter, types, and a request-like name do not prove
+  // that an arbitrary exported/nested callable receives framework private authority.
+  return false;
 }
 
 function exactFrameworkPrivateScopeCarrierRole(

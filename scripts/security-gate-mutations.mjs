@@ -735,9 +735,30 @@ const analyzerSummaryCallCarrierBranch = [
 ].join('\n');
 const weakenedAnalyzerSummaryCallCarrierBranch =
   '    return helperSummaryForCallCallee(callee, context.helpers);';
-const analyzerSummaryDbReceiverOrderingBranch =
-  '  if (receiverIndex >= 0) return index > receiverIndex;';
-const weakenedAnalyzerSummaryDbReceiverOrderingBranch = '  if (receiverIndex >= 0) return true;';
+const analyzerSummaryUnenrolledCarrierClosureBranch = [
+  '  // Positional order, a DB-shaped sibling parameter, types, and a request-like name do not prove',
+  '  // that an arbitrary exported/nested callable receives framework private authority.',
+  '  return false;',
+].join('\n');
+const weakenedAnalyzerSummaryUnenrolledCarrierClosureBranch = [
+  '  // Positional order, a DB-shaped sibling parameter, types, and a request-like name do not prove',
+  '  // that an arbitrary exported/nested callable receives framework private authority.',
+  '  return index > 0;',
+].join('\n');
+const analyzerSummaryPrivatePathPrefixBranch =
+  "  if (prefix.length > 1 || (prefix.length === 1 && prefix[0] !== 'request')) return undefined;";
+const weakenedAnalyzerSummaryPrivatePathPrefixBranch =
+  '  if (false && prefix.length > 1) return undefined;';
+const analyzerSummaryImmutableBindingBranch = [
+  '  return helper && symbolKey && !sourceFileMutatesSymbol(sourceFile, symbolKey)',
+  '    ? helper',
+  '    : undefined;',
+].join('\n');
+const weakenedAnalyzerSummaryImmutableBindingBranch = [
+  '  return helper && symbolKey',
+  '    ? helper',
+  '    : undefined;',
+].join('\n');
 const analyzerSummaryThisCarrierClosureBranch = [
   '  const root = unwrappedStaticExpressionNode(carrier);',
   '  // SPEC §6.6/§10.3 admits only a structurally enrolled request/context parameter. `this` is the',
@@ -810,14 +831,34 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertAnalyzerSummaryCallCarrierIsPinned,
   },
   {
-    description: 'Lets a client-input parameter renamed request pass as private context.',
-    expectedKiller: 'private helper calls must retain receiver-relative parameter-role proof',
+    description: 'Lets an unenrolled positional parameter pass as private context.',
+    expectedKiller: 'private helper calls must reject positional/name/type carrier guesses',
     name: 'drizzle-analyzer-summary/trust-renamed-input-carrier',
-    replacement: weakenedAnalyzerSummaryDbReceiverOrderingBranch,
-    search: analyzerSummaryDbReceiverOrderingBranch,
+    replacement: weakenedAnalyzerSummaryUnenrolledCarrierClosureBranch,
+    search: analyzerSummaryUnenrolledCarrierClosureBranch,
     sourceFile: drizzleSessionProvenancePath,
     sourceOnly: true,
-    test: assertAnalyzerSummaryDbReceiverOrderingIsPinned,
+    test: assertAnalyzerSummaryUnenrolledCarrierClosureIsPinned,
+  },
+  {
+    description: 'Lets an arbitrary wrapper prefix before guard/session/tenant mint private scope.',
+    expectedKiller: 'private summary paths must allow only direct or exact request prefixes',
+    name: 'drizzle-analyzer-summary/allow-arbitrary-private-path-prefix',
+    replacement: weakenedAnalyzerSummaryPrivatePathPrefixBranch,
+    search: analyzerSummaryPrivatePathPrefixBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryPrivatePathPrefixIsPinned,
+  },
+  {
+    description: 'Keeps a summary trusted after its callable binding is reassigned.',
+    expectedKiller: 'private summary helpers must retain immutable callable identity',
+    name: 'drizzle-analyzer-summary/allow-mutated-helper-binding',
+    replacement: weakenedAnalyzerSummaryImmutableBindingBranch,
+    search: analyzerSummaryImmutableBindingBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    sourceOnly: true,
+    test: assertAnalyzerSummaryImmutableBindingIsPinned,
   },
   {
     description: 'Lets a caller-controlled `this` receiver mint private context provenance.',
@@ -1795,9 +1836,24 @@ async function assertAnalyzerSummaryCallCarrierIsPinned(_moduleUnderTest, { sour
   }
 }
 
-async function assertAnalyzerSummaryDbReceiverOrderingIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryDbReceiverOrderingBranch)) {
-    throw new Error('private helper calls no longer prove the carrier role relative to the DB');
+async function assertAnalyzerSummaryUnenrolledCarrierClosureIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(analyzerSummaryUnenrolledCarrierClosureBranch)) {
+    throw new Error('private helper calls no longer reject positional/name/type carrier guesses');
+  }
+}
+
+async function assertAnalyzerSummaryPrivatePathPrefixIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryPrivatePathPrefixBranch)) {
+    throw new Error('private summary paths no longer reject arbitrary carrier prefixes');
+  }
+}
+
+async function assertAnalyzerSummaryImmutableBindingIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(analyzerSummaryImmutableBindingBranch)) {
+    throw new Error('private summary helpers no longer require immutable callable identity');
   }
 }
 

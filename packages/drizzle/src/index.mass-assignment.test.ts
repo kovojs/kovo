@@ -254,7 +254,12 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
       ].join('\n'),
     );
     expect(result).toMatchObject([
-      { column: 'ownerId', name: 'updateAccount', provenance: 'input', via: 'set' },
+      {
+        column: 'ownerId',
+        name: 'nestedWrite',
+        provenance: 'unknown',
+        via: 'set',
+      },
     ]);
   });
 
