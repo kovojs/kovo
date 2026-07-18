@@ -661,6 +661,7 @@ const rewriteGeneratedRuntimeImports = (
           imported === 'handler' ||
           imported === 'installKovoLoader' ||
           imported === 'kovoEscapeHtml' ||
+          imported === 'securityHandler' ||
           imported === 'runQueryUpdatePlan'
         );
       });

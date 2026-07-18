@@ -38,6 +38,7 @@ import { derive } from '../dist/browser/src/index.mjs';
 import {
   applyDeferredStreamResponseToRuntime,
   kovoEscapeHtml,
+  securityHandler,
 } from '../dist/browser/src/generated.mjs';
 import { refetchQueries, kovoLoaderSource } from '../dist/browser/src/internal/inline-loader.mjs';
 import { DomMorphTarget, morphStructuralTree } from '../dist/browser/src/internal/morph.mjs';
@@ -71,7 +72,10 @@ import {
   compilerUpdateCoverageFacts,
   compilerValidationBehaviorFact,
 } from '../packages/conformance-fixtures/src/compiler-fixtures.ts';
-import { viteLoweredEventDiagnosticFact } from '../packages/conformance-fixtures/src/diagnostic-output-fixtures.ts';
+import {
+  viteDiagnosticMessageFactsFromOutput,
+  viteLoweredEventDiagnosticFact,
+} from '../packages/conformance-fixtures/src/diagnostic-output-fixtures.ts';
 import {
   kovoExplainComponentAssertionFact,
   kovoExplainEndpointAssertionFact,
@@ -235,6 +239,7 @@ const generatedModuleRuntime = {
   handler: (callback) => (event, ctx) => callback(event, ctx),
   installKovoLoader,
   kovoEscapeHtml,
+  securityHandler,
 };
 
 const defaultDelegatedEvents = [
@@ -1428,8 +1433,28 @@ export const DiagnosticCard = component({
 `;
   const assertRedTransformMessage = (message) => {
     const diagnosticFact = viteLoweredEventDiagnosticFact(message);
+    const diagnostics = viteDiagnosticMessageFactsFromOutput(message).diagnostics;
 
-    assert.equal(diagnosticFact.summary, 'Kovo Vite transform failed with 1 error diagnostic.');
+    assert.equal(diagnosticFact.summary, 'Kovo Vite transform failed with 2 error diagnostics.');
+    assert.deepEqual(
+      diagnostics.map(({ code, location, message: diagnosticMessage }) => ({
+        code,
+        location,
+        message: diagnosticMessage,
+      })),
+      [
+        {
+          code: 'KV201',
+          location: `${fileName}:5:25`,
+          message: diagnosticDefinitions.KV201.message,
+        },
+        {
+          code: 'KV449',
+          location: `${fileName}:5:40`,
+          message: `${diagnosticDefinitions.KV449.message} browser capability call window.alert is outside the finite handler IR.`,
+        },
+      ],
+    );
     assert.deepEqual(diagnosticFact.diagnostic, {
       code: 'KV201',
       location: `${fileName}:5:25`,
@@ -1633,6 +1658,7 @@ document.querySelector('#app')!.textContent = 'D10 build green';
     [
       { code: 'KV210', severity: 'lint' },
       { code: 'KV201', severity: 'error' },
+      { code: 'KV449', severity: 'error' },
     ],
   );
 
@@ -1674,6 +1700,7 @@ document.querySelector('#app')!.textContent = 'D10 build green';
       diagnostics: [
         { code: 'KV210', severity: 'lint' },
         { code: 'KV201', severity: 'error' },
+        { code: 'KV449', severity: 'error' },
       ],
       id: 'd10-stdio-0',
       ok: false,
