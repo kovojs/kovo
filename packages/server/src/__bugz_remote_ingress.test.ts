@@ -92,4 +92,76 @@ describe('remote ingress adversarial proofs', () => {
     expect(observedMethods).toEqual(['POST']);
     expect(writes).toBe(1);
   });
+
+  // @kovo-security-classifier-corpus node-fetch-authority-identity-closed
+  it('rejects HTTP/2 authorities that URL would normalize before app policy', async () => {
+    const observed: Array<{ host: string | null; url: string }> = [];
+    const adapted = toNodeHandler((request) => {
+      observed.push({ host: request.headers.get('host'), url: request.url });
+      return Response.json(observed.at(-1));
+    });
+    const server = createHttp2Server(((request, response) =>
+      adapted(request as never, response as never)) as never);
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        }),
+    );
+
+    const address = server.address() as AddressInfo;
+    const client = connectHttp2(`http://127.0.0.1:${address.port}`);
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve) => {
+          client.once('close', resolve);
+          client.close();
+        }),
+    );
+
+    const request = (authority: string) =>
+      new Promise<{ body: string; status: number }>((resolve, reject) => {
+        const stream = client.request({
+          ':authority': authority,
+          ':method': 'GET',
+          ':path': '/authority',
+        });
+        let body = '';
+        let status = 0;
+        stream.setEncoding('utf8');
+        stream.on('response', (headers) => {
+          status = Number(headers[':status']);
+        });
+        stream.on('data', (chunk) => {
+          body += chunk;
+        });
+        stream.once('error', reject);
+        stream.once('end', () => resolve({ body, status }));
+        stream.end();
+      });
+
+    await expect(request('%65xample.com')).resolves.toEqual({
+      body: 'Bad Request',
+      status: 400,
+    });
+    await expect(request('app.example:8443')).resolves.toEqual({
+      body: JSON.stringify({
+        host: 'app.example:8443',
+        url: 'http://app.example:8443/authority',
+      }),
+      status: 200,
+    });
+    await expect(request('[2001:db8::1]:8443')).resolves.toEqual({
+      body: JSON.stringify({
+        host: '[2001:db8::1]:8443',
+        url: 'http://[2001:db8::1]:8443/authority',
+      }),
+      status: 200,
+    });
+    expect(observed).toHaveLength(2);
+  });
 });
