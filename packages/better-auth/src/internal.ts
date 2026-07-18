@@ -27,7 +27,7 @@ import {
   type BetterAuthOperationContract,
   type BetterAuthOperationTableTouch,
   type BetterAuthPluginTableDegradation,
-  type BetterAuthRequestLike,
+  type BetterAuthBindingRequest,
   type BetterAuthResponseLike,
   type BetterAuthSchemaBridge,
   type BetterAuthSchemaBridgeAnnotation,
@@ -112,20 +112,13 @@ import {
   betterAuthTrim,
 } from './internal/intrinsics.js';
 
-// Public symbols are authored in honestly named source files (`session.ts`, `mount.ts`,
-// `mutations.ts`, `guards.ts`, and `postgres.ts`) and explicitly curated by the package root.
-// The legacy shared symbols below are also re-exported here so the `./internal` subpath — and
-// colocated tests that import from it — keep resolving the same names; the `@internal` machinery
-// below stays authored in this file.
+// Shared contracts used by repo-internal conformance tooling remain available here. Raw session
+// and credential helper functions deliberately do not: only the private fixed-binding
+// construction path may receive a Better Auth object (SPEC §6.6).
 export type * from './internal/contracts.js';
 export { authed, role } from './guards.js';
 export { mount } from './mount.js';
 export type { BetterAuthMountAdapter } from './mount-adapter.js';
-export {
-  betterAuthSignInEmailMutation,
-  betterAuthSignOutMutation,
-  betterAuthSignUpEmailMutation,
-} from './mutations.js';
 export type {
   BetterAuthSafeField,
   BetterAuthSanitizedRecord,
@@ -134,7 +127,6 @@ export type {
   BetterAuthSessionMapper,
   BetterAuthSessionPayload,
 } from './session.js';
-export { betterAuthSession } from './session.js';
 export {
   betterAuthAuthDomain,
   betterAuthCredentialMutationApis,
@@ -395,7 +387,7 @@ function deriveBetterAuthCredentialMutationTouches(
 /** @internal Shared mutation definition facts for a Better Auth credential operation. */
 export function credentialMutationDefinitionOptions<
   Key extends string,
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   GuardedRequest extends Request,
 >(
   api: BetterAuthCredentialMutationApi,

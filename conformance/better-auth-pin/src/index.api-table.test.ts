@@ -1,13 +1,7 @@
 import { getAuthTables } from 'better-auth';
 import { admin, organization } from 'better-auth/plugins';
-import { describe, expect, expectTypeOf, it } from 'vitest';
-
-import {
-  betterAuthSession,
-  betterAuthSignInEmailMutation,
-  betterAuthSignOutMutation,
-  betterAuthSignUpEmailMutation,
-} from '@kovojs/better-auth';
+import { describe, expect, it } from 'vitest';
+import * as publicBetterAuthApi from '@kovojs/better-auth';
 import {
   betterAuthSchemaBridge,
   validateBetterAuthSchemaBridge,
@@ -16,6 +10,15 @@ import {
 import { createRealAuth, requireAuthTable } from './real-auth-fixtures.js';
 
 describe('Better Auth pinned conformance', () => {
+  it('exposes fixed binding construction, never raw Better Auth consumers', () => {
+    expect(publicBetterAuthApi).not.toHaveProperty('betterAuthSession');
+    expect(publicBetterAuthApi).not.toHaveProperty('betterAuthSignInEmailMutation');
+    expect(publicBetterAuthApi).not.toHaveProperty('betterAuthSignOutMutation');
+    expect(publicBetterAuthApi).not.toHaveProperty('betterAuthSignUpEmailMutation');
+    expect(publicBetterAuthApi.createBetterAuthPostgresBindings).toBeTypeOf('function');
+    expect(publicBetterAuthApi.createBetterAuthSqliteBindings).toBeTypeOf('function');
+  });
+
   it('pins the real better-auth server API shape consumed by the adapter', () => {
     const { auth } = createRealAuth();
 
@@ -24,11 +27,6 @@ describe('Better Auth pinned conformance', () => {
     expect(typeof auth.api.signOut).toBe('function');
     expect(typeof auth.api.signUpEmail).toBe('function');
     expect(typeof auth.handler).toBe('function');
-
-    expectTypeOf(auth).toMatchTypeOf<Parameters<typeof betterAuthSession>[0]>();
-    expectTypeOf(auth).toMatchTypeOf<Parameters<typeof betterAuthSignInEmailMutation>[0]>();
-    expectTypeOf(auth).toMatchTypeOf<Parameters<typeof betterAuthSignOutMutation>[0]>();
-    expectTypeOf(auth).toMatchTypeOf<Parameters<typeof betterAuthSignUpEmailMutation>[0]>();
   });
 
   it('pins Better Auth table metadata used by the schema bridge', () => {

@@ -20,7 +20,7 @@ import type {
 } from './credential-options.js';
 import type {
   BetterAuthCredentialMutationValue,
-  BetterAuthRequestLike,
+  BetterAuthBindingRequest,
   BetterAuthResponseLike,
   BetterAuthSignInEmailLike,
   BetterAuthSignOutLike,
@@ -47,7 +47,10 @@ function betterAuthCredentialBoundaryFailure(): Error {
 }
 
 /**
- * Builds a typed Kovo mutation that signs a user in via Better Auth email/password.
+ * @internal Builds the fixed binding's typed email/password sign-in mutation. This function is
+ * deliberately absent from package exports; the exact `auth` object must already be privately
+ * registered by the SQLite/Postgres constructor (SPEC §6.6).
+ *
  * Routes a synthetic `/sign-in/email` POST through the captured Better Auth handler so its
  * configured rate-limit storage/rules execute, then treats the result as success only
  * on POSITIVE evidence of an established session (2xx, no two-factor-pending body, and a
@@ -58,7 +61,7 @@ function betterAuthCredentialBoundaryFailure(): Error {
  */
 export function betterAuthSignInEmailMutation<
   const Key extends string = 'auth/sign-in',
-  Request extends BetterAuthRequestLike = BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest = BetterAuthBindingRequest,
   GuardedRequest extends Request = Request,
 >(
   auth: BetterAuthSignInEmailLike,
@@ -135,7 +138,10 @@ export function betterAuthSignInEmailMutation<
 }
 
 /**
- * Builds a typed Kovo mutation that registers a user via Better Auth email/password.
+ * @internal Builds the fixed binding's typed email/password sign-up mutation. This function is
+ * deliberately absent from package exports; the exact `auth` object must already be privately
+ * registered by a Kovo-owned constructor (SPEC §6.6).
+ *
  * Routes a synthetic `/sign-up/email` POST through the captured Better Auth handler, applies the same
  * positive-session-evidence success check as sign-in, forwards the session cookie, and
  * returns the declared `INVALID_CREDENTIALS` failure otherwise. Defaults the mutation key
@@ -143,7 +149,7 @@ export function betterAuthSignInEmailMutation<
  */
 export function betterAuthSignUpEmailMutation<
   const Key extends string = 'auth/sign-up',
-  Request extends BetterAuthRequestLike = BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest = BetterAuthBindingRequest,
   GuardedRequest extends Request = Request,
 >(
   auth: BetterAuthSignUpEmailLike,
@@ -218,7 +224,9 @@ export function betterAuthSignUpEmailMutation<
 }
 
 /**
- * Builds a typed Kovo mutation that signs a user out via Better Auth. Calls
+ * @internal Builds the fixed binding's typed sign-out mutation. This function is deliberately
+ * absent from package exports; the exact `auth` object must already be privately registered by the
+ * SQLite/Postgres constructor (SPEC §6.6). Calls
  * `auth.api.signOut` with `asResponse: true`, forwards the session-clearing `Set-Cookie`
  * headers into the mutation response, and redirects to `defaultRedirectTo` (default
  * `/login`). Defaults the mutation key to `auth/sign-out`. Typically guarded so only an
@@ -226,7 +234,7 @@ export function betterAuthSignUpEmailMutation<
  */
 export function betterAuthSignOutMutation<
   const Key extends string = 'auth/sign-out',
-  Request extends BetterAuthRequestLike = BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest = BetterAuthBindingRequest,
   GuardedRequest extends Request = Request,
 >(
   auth: BetterAuthSignOutLike,

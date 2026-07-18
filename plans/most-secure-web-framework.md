@@ -103,8 +103,8 @@ This is where Kovo's secure-default bias (technical-preview: prefer security-imp
       Evidence: `packages/server/src/cookies.ts` defaults classless app-data cookies to `SameSite=Lax` and
       applies the credential floor to session/auth-shaped names. `pnpm exec vitest
 packages/server/src/cookies.test.ts packages/server/src/mutation.test.ts packages/server/src/response.test.ts
-packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and `pnpm --filter
-@kovojs/conformance-better-auth-pin test -- index.session-credentials.test.ts` passed.
+packages/server/src/node.test.ts packages/server/src/endpoint.test.ts --run` and `pnpm exec vitest
+packages/better-auth/src/sqlite.seed-session.test.ts --run` passed through the fixed binding.
 
 - [x] **OPP-18 — Bound the rate-limiter key cardinality.** runtime-DiD · lev 6 · S · non-breaking.
       `app-load-shed.ts` uses unbounded `Map<string,RateBucket>` keyed per-request (global + perIp); an

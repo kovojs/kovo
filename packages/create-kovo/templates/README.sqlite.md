@@ -64,7 +64,7 @@ shape.
 `kovo build ./src/app.tsx` reruns TypeScript and Kovo graph verification, then
 emits a self-contained server under `dist/server` using the preset in
 `kovo.config.ts` (Node by default; uncomment Vercel or Cloudflare). Set
-`BETTER_AUTH_URL` to the app's canonical public HTTPS origin in production (for
+`BETTER_AUTH_URL` to the app's canonical public HTTPS origin for every non-loopback deployment (for
 example, `https://app.example.com`). When the generated standalone Node server
 runs behind TLS termination, also set `KOVO_NODE_ORIGIN` to that exact origin.
 This fixed posture ignores forwarded authority. As an alternative, set

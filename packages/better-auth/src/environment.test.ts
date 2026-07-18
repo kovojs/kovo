@@ -393,6 +393,28 @@ process.stdout.write(JSON.stringify({
       developmentSeed: false,
       production: false,
     });
+    for (const baseURL of [
+      'http://localhost:4173',
+      'http://127.0.0.1:4173',
+      'http://127.255.255.254:4173',
+      'http://[::1]:4173',
+    ]) {
+      expect(resolveEnvironmentInChild([`BETTER_AUTH_URL=${baseURL}`])).toEqual({
+        baseURL,
+        developmentSeed: false,
+        production: false,
+      });
+    }
+    for (const baseURL of [
+      'http://app.example.test',
+      'http://localhost.example.test',
+      'http://127.0.0.1.example.test',
+      'http://[::2]:4173',
+    ]) {
+      expect(resolveEnvironmentInChild([`BETTER_AUTH_URL=${baseURL}`])).toEqual({
+        error: expect.stringMatching(/must use HTTPS except for exact loopback origins/u),
+      });
+    }
     expect(
       resolveEnvironmentInChild([
         'BETTER_AUTH_URL=https://auth.operator.example',
@@ -413,6 +435,9 @@ process.stdout.write(JSON.stringify({
         'BETTER_AUTH_URL=http://auth.operator.example',
         'NODE_ENV=production',
       ]),
+    ).toEqual({ error: expect.stringMatching(/must use HTTPS in production/u) });
+    expect(
+      resolveEnvironmentInChild(['BETTER_AUTH_URL=http://localhost:4173', 'NODE_ENV=production']),
     ).toEqual({ error: expect.stringMatching(/must use HTTPS in production/u) });
     for (const malformedUrl of [
       'https://auth.operator.example/',

@@ -382,6 +382,7 @@ async function exercisePostgres(dataDir: string): Promise<IntrinsicExerciseResul
       headers: new Headers({
         cookie: `better-auth.session_token=not-a-session.${invalidSignature}`,
       }),
+      url: 'http://localhost:5173/intrinsic-session-probe',
     });
     return {
       passwordIsArgon2id:
@@ -442,6 +443,7 @@ async function exerciseSqlite(): Promise<IntrinsicExerciseResult['sqlite']> {
       headers: new Headers({
         cookie: `better-auth.session_token=not-a-session.${invalidSignature}`,
       }),
+      url: 'http://localhost:5173/intrinsic-session-probe',
     });
     return {
       passwordIsArgon2id:

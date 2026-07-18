@@ -37,11 +37,9 @@ export interface BetterAuthGetSessionWithHeadersResult<Session, User> {
  * The subset of the Better Auth server `api` the session provider depends on: a
  * `getSession` method. part-3 I2: the adapter calls it with `returnHeaders: true` so it
  * CAN forward session-refresh `Set-Cookie` headers when the instance honors that option
- * and returns the `{ response, headers }` envelope. The consumed signature stays
- * BACKWARD-COMPATIBLE — it also admits an instance whose `getSession` ignores
- * `returnHeaders` and returns the bare session payload (as the example apps and a
- * non-overloaded instance do). The provider detects the shape at runtime
- * ({@link betterAuthSession}); a real overloaded Better Auth instance satisfies it too.
+ * and returns the `{ response, headers }` envelope. The private fixed-binding adapter also accepts
+ * a bare session payload from a pinned dependency version so it can fail safely if overload
+ * behavior differs; this flexibility is not a public raw-auth construction path.
  */
 export interface BetterAuthApi<Session, User> {
   getSession(
@@ -60,25 +58,26 @@ export interface BetterAuthApi<Session, User> {
 }
 
 /**
- * Structural shape of a Better Auth instance accepted by `betterAuthSession`: it
- * just needs an `api` exposing `getSession`. Apps pass their real Better Auth object,
- * which satisfies this without an explicit cast (SPEC.md §6.5).
+ * @internal Necessary shape consumed after a fixed binding privately registers the exact Better
+ * Auth object. Structural compatibility and `$context` are not authority; arbitrary caller-created
+ * Better Auth instances are unsupported and fail before `getSession` (SPEC §6.6).
  */
 export interface BetterAuthLike<Session, User> {
+  $context: PromiseLike<unknown>;
   api: BetterAuthApi<Session, User>;
 }
 
 /**
- * Minimal request shape the credential mutations and session provider read from: an
- * object carrying the incoming `Headers`. Apps extend this with their own session and
- * CSRF fields; it is the default `Request` type parameter across this adapter's helpers.
+ * Public request carrier accepted by the fixed SQLite/Postgres binding constructors. Apps extend
+ * it with their own session and CSRF fields; the absolute URL lets the binding enforce its pinned
+ * origin before session, credential, cookie, or database work (SPEC §6.6).
  */
-export interface BetterAuthRequestLike {
+export interface BetterAuthBindingRequest {
   /** Framework-resolved client IP attached by Kovo's request lifecycle (SPEC.md §9.5). */
   clientIp?: string;
   headers: Headers;
   /** Absolute incoming request URL, available on native Request-backed Kovo lifecycle carriers. */
-  url?: string;
+  url: string;
 }
 
 /**
@@ -163,11 +162,9 @@ export interface BetterAuthCredentialHandlerLike {
 }
 
 /**
- * Structural shape accepted by `betterAuthSignInEmailMutation`: a Better Auth instance exposing
- * both its routed handler and `signInEmail` API metadata. The mutation invokes the handler so
- * Better Auth's configured rate-limit storage and rules remain authoritative. Caller-owned auth
- * instances must choose shared durable storage when requests can run in multiple workers; Kovo's
- * SQLite/Postgres binding constructors configure Better Auth's database storage automatically.
+ * @internal Necessary shape consumed only after a fixed binding privately registers the exact
+ * Better Auth object. The mutation invokes the handler so Better Auth's configured rate-limit
+ * storage and rules remain authoritative. Structural compatibility is not construction authority.
  */
 export interface BetterAuthSignInEmailLike {
   $context: PromiseLike<unknown>;
@@ -176,8 +173,8 @@ export interface BetterAuthSignInEmailLike {
 }
 
 /**
- * Structural shape accepted by `betterAuthSignUpEmailMutation`: a Better Auth instance exposing
- * its routed handler and `signUpEmail` API metadata. There is intentionally no API-only fallback.
+ * @internal Necessary shape consumed only after a fixed binding privately registers the exact
+ * Better Auth object. There is intentionally no API-only fallback.
  */
 export interface BetterAuthSignUpEmailLike {
   $context: PromiseLike<unknown>;
@@ -186,10 +183,11 @@ export interface BetterAuthSignUpEmailLike {
 }
 
 /**
- * Structural shape accepted by `betterAuthSignOutMutation`: a Better Auth instance
- * whose `api` exposes `signOut`.
+ * @internal Necessary shape consumed only after a fixed binding privately registers the exact
+ * Better Auth object. `$context` remains a type-level guardrail, not the registration proof.
  */
 export interface BetterAuthSignOutLike {
+  $context: PromiseLike<unknown>;
   api: BetterAuthSignOutApi;
 }
 

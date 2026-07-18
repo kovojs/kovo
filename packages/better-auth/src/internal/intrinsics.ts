@@ -6,6 +6,7 @@ import { types as nodeUtilTypes } from 'node:util';
 
 const NativeArray = globalThis.Array;
 const NativeDate = globalThis.Date;
+const NativeHeaders = globalThis.Headers;
 const NativeJSON = globalThis.JSON;
 const NativeMap = globalThis.Map;
 const NativeNumber = globalThis.Number;
@@ -36,6 +37,9 @@ const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescript
 const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeObjectKeys = NativeObject.keys;
 const nativeReflectApply = NativeReflect.apply;
+const nativeHeadersAppend = getMethod(NativeHeaders.prototype, 'append');
+const nativeHeadersGet = getMethod(NativeHeaders.prototype, 'get');
+const nativeHeadersSet = getMethod(NativeHeaders.prototype, 'set');
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeRegExpGlobalGetter = getGetter(NativeRegExp.prototype, 'global');
 const nativeResponseClone = getMethod(NativeResponse.prototype, 'clone');
@@ -56,6 +60,7 @@ const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringToUpperCase = NativeString.prototype.toUpperCase;
 const nativeStringTrim = NativeString.prototype.trim;
 const nativeUrlHashGetter = getGetter(NativeURL.prototype, 'hash');
+const nativeUrlHostnameGetter = getGetter(NativeURL.prototype, 'hostname');
 const nativeUrlOriginGetter = getGetter(NativeURL.prototype, 'origin');
 const nativeUrlPasswordGetter = getGetter(NativeURL.prototype, 'password');
 const nativeUrlPathnameGetter = getGetter(NativeURL.prototype, 'pathname');
@@ -109,6 +114,8 @@ function capturedControlsAreSound(): boolean {
       headers: { 'content-type': 'application/json' },
       status: 201,
     });
+    const headers = new NativeHeaders();
+    if (nativeHeadersSet !== undefined) apply(nativeHeadersSet, headers, ['location', '/safe']);
     const map = new NativeMap<string, string>();
     apply(nativeMapSet, map, ['safe', 'value']);
     const set = new NativeSet<string>();
@@ -169,6 +176,8 @@ function capturedControlsAreSound(): boolean {
       apply(nativeNumberIsSafeInteger, NativeNumber, [1]) === true &&
       apply(nativeNumberIsSafeInteger, NativeNumber, [1.5]) === false &&
       readNativeUrlProtocol(new NativeURL('https://kovo.example/path')) === 'https:' &&
+      readNativeUrlPart(nativeUrlHostnameGetter, new NativeURL('https://kovo.example/path')) ===
+        'kovo.example' &&
       readNativeUrlPart(nativeUrlOriginGetter, new NativeURL('https://kovo.example/path')) ===
         'https://kovo.example' &&
       readNativeUrlPart(nativeUrlPathnameGetter, new NativeURL('https://kovo.example/path')) ===
@@ -177,6 +186,10 @@ function capturedControlsAreSound(): boolean {
       nativeUtilIsProxy(new Proxy({}, {})) === true &&
       readNativeResponseStatus(response) === 201 &&
       readNativeResponseHeaders(response) !== undefined &&
+      nativeHeadersAppend !== undefined &&
+      nativeHeadersGet !== undefined &&
+      nativeHeadersSet !== undefined &&
+      apply(nativeHeadersGet, headers, ['location']) === '/safe' &&
       nativeResponseClone !== undefined &&
       nativeResponseJson !== undefined
     );
@@ -251,8 +264,12 @@ export function betterAuthUrlProtocol(value: string): string {
 }
 
 /** @internal Parse an absolute URL into boot-captured security-relevant components. */
-export function betterAuthUrlSnapshot(value: string): {
+export function betterAuthUrlSnapshot(
+  value: string,
+  base?: string,
+): {
   hash: string;
+  hostname: string;
   origin: string;
   password: string;
   pathname: string;
@@ -261,8 +278,9 @@ export function betterAuthUrlSnapshot(value: string): {
   username: string;
 } {
   assertBetterAuthIntrinsics();
-  const url = new NativeURL(value);
+  const url = base === undefined ? new NativeURL(value) : new NativeURL(value, base);
   const hash = readNativeUrlPart(nativeUrlHashGetter, url);
+  const hostname = readNativeUrlPart(nativeUrlHostnameGetter, url);
   const origin = readNativeUrlPart(nativeUrlOriginGetter, url);
   const password = readNativeUrlPart(nativeUrlPasswordGetter, url);
   const pathname = readNativeUrlPart(nativeUrlPathnameGetter, url);
@@ -271,6 +289,7 @@ export function betterAuthUrlSnapshot(value: string): {
   const username = readNativeUrlPart(nativeUrlUsernameGetter, url);
   if (
     hash === undefined ||
+    hostname === undefined ||
     origin === undefined ||
     password === undefined ||
     pathname === undefined ||
@@ -280,7 +299,7 @@ export function betterAuthUrlSnapshot(value: string): {
   ) {
     throw new NativeTypeError('Kovo Better Auth URL controls are unavailable.');
   }
-  return { hash, origin, password, pathname, protocol, search, username };
+  return { hash, hostname, origin, password, pathname, protocol, search, username };
 }
 
 export function betterAuthGetOwnPropertyDescriptor(
@@ -657,6 +676,39 @@ export function betterAuthRegExpMatches(
 export function betterAuthJsonParse(value: string): unknown {
   assertBetterAuthIntrinsics();
   return apply(nativeJsonParse, NativeJSON, [value]);
+}
+
+/** @internal Read a genuine native header through the boot-captured brand-checked method. */
+export function betterAuthHeadersGet(headers: Headers, name: string): string | null {
+  assertBetterAuthIntrinsics();
+  if (nativeHeadersGet === undefined) {
+    throw new NativeTypeError('Kovo Better Auth header controls are unavailable.');
+  }
+  const value = apply<unknown>(nativeHeadersGet, headers, [name]);
+  return typeof value === 'string' ? value : null;
+}
+
+/** @internal Emit an empty redirect with only reviewed headers from the fixed mount boundary. */
+export function betterAuthCreateRedirectResponse(
+  status: 301 | 302 | 303 | 307 | 308,
+  location: string,
+  setCookies: readonly string[],
+): Response {
+  assertBetterAuthIntrinsics();
+  if (nativeHeadersAppend === undefined || nativeHeadersSet === undefined) {
+    throw new NativeTypeError('Kovo Better Auth header controls are unavailable.');
+  }
+  const headers = new NativeHeaders();
+  apply(nativeHeadersSet, headers, ['cache-control', 'no-store']);
+  apply(nativeHeadersSet, headers, ['location', location]);
+  for (let index = 0; index < setCookies.length; index += 1) {
+    const cookie = setCookies[index];
+    if (typeof cookie !== 'string') {
+      throw new NativeTypeError('Kovo Better Auth redirect cookies must be strings.');
+    }
+    apply(nativeHeadersAppend, headers, ['set-cookie', cookie]);
+  }
+  return new NativeResponse(null, { headers, status });
 }
 
 export function betterAuthResponseHeaders(value: object): Headers | undefined {

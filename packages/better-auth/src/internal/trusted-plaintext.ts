@@ -3,7 +3,7 @@ import type {
   BetterAuthCredentialHandlerLike,
   BetterAuthGetSessionWithHeadersResult,
   BetterAuthLike,
-  BetterAuthRequestLike,
+  BetterAuthBindingRequest,
   BetterAuthResponseLike,
   BetterAuthSignInEmailBody,
   BetterAuthSignInEmailLike,
@@ -342,7 +342,8 @@ export function pinBetterAuthSignUpEmail(
 }
 
 /** @internal Pin the exact Better Auth sign-out sink and its API receiver at declaration time. */
-export interface PinnedBetterAuthSignOut extends BetterAuthSignOutLike {
+export interface PinnedBetterAuthSignOut {
+  readonly api: BetterAuthSignOutLike['api'];
   readonly canonicalOrigin: PinnedBetterAuthCanonicalOrigin;
 }
 
@@ -364,10 +365,8 @@ export function pinBetterAuthSignOut(auth: BetterAuthSignOutLike): PinnedBetterA
 }
 
 /** @internal Pin the exact Better Auth session sink and its API receiver at declaration time. */
-export interface PinnedBetterAuthGetSession<AuthSession, AuthUser> extends BetterAuthLike<
-  AuthSession,
-  AuthUser
-> {
+export interface PinnedBetterAuthGetSession<AuthSession, AuthUser> {
+  readonly api: BetterAuthLike<AuthSession, AuthUser>['api'];
   readonly canonicalOrigin: PinnedBetterAuthCanonicalOrigin;
 }
 
@@ -406,7 +405,7 @@ export async function callBetterAuthCredentialHandler(
   auth: PinnedBetterAuthCredentialHandler,
   body: BetterAuthSignInEmailBody | BetterAuthSignUpEmailBody,
   headers: Headers,
-  request: BetterAuthRequestLike,
+  request: BetterAuthBindingRequest,
 ): Promise<BetterAuthResponseLike> {
   if (auth.operation === 'signInEmail') {
     assertBetterAuthRequestSecretPath('better-auth.sign-in.submitted-password');
@@ -578,7 +577,7 @@ export function callBetterAuthSignUpEmail(
 /** @internal Pass the request cookie material only to Better Auth's revocation sink. */
 export async function callBetterAuthSignOut(
   auth: PinnedBetterAuthSignOut,
-  request: BetterAuthRequestLike,
+  request: BetterAuthBindingRequest,
 ): Promise<BetterAuthResponseLike> {
   await assertBetterAuthCanonicalRequestOrigin(
     auth.canonicalOrigin,
@@ -595,7 +594,7 @@ export async function callBetterAuthSignOut(
 /** @internal Pass request cookies only to Better Auth's session lookup sink. */
 export async function callBetterAuthGetSession<AuthSession, AuthUser>(
   auth: PinnedBetterAuthGetSession<AuthSession, AuthUser>,
-  request: BetterAuthRequestLike,
+  request: BetterAuthBindingRequest,
 ): Promise<
   | BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>
   | BetterAuthBareSessionPayload<AuthSession, AuthUser>

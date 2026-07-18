@@ -8,6 +8,7 @@ import {
   betterAuthObjectKeys,
   betterAuthOwnDataOption,
   betterAuthOwnDataValue,
+  betterAuthRegExpExec,
   betterAuthUrlSnapshot,
 } from './internal/intrinsics.js';
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
@@ -220,8 +221,20 @@ export function validateBetterAuthBaseUrl(value: string, production: boolean): s
   ) {
     throw new NativeTypeError('BETTER_AUTH_URL must be a canonical absolute HTTP(S) origin.');
   }
-  if (production && snapshot.protocol !== 'https:') {
-    throw new NativeTypeError('BETTER_AUTH_URL must use HTTPS in production.');
+  if (snapshot.protocol === 'http:') {
+    if (production) {
+      throw new NativeTypeError('BETTER_AUTH_URL must use HTTPS in production.');
+    }
+    if (!betterAuthHostnameIsExactLoopback(snapshot.hostname)) {
+      throw new NativeTypeError(
+        'BETTER_AUTH_URL must use HTTPS except for exact loopback origins in local development.',
+      );
+    }
   }
   return snapshot.origin;
+}
+
+function betterAuthHostnameIsExactLoopback(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '[::1]') return true;
+  return betterAuthRegExpExec(/^127\.(?:\d{1,3}\.){2}\d{1,3}$/u, hostname) !== null;
 }

@@ -1,7 +1,7 @@
 import type { AccessDecision, CsrfOptions, Guard } from '@kovojs/server';
 import type { MutationRegistry } from '@kovojs/server/internal/execution';
 
-import type { BetterAuthRequestLike } from './internal/contracts.js';
+import type { BetterAuthBindingRequest } from './internal/contracts.js';
 
 /**
  * Public options for Better Auth credential mutations. Sign-in/sign-up may pass
@@ -10,7 +10,7 @@ import type { BetterAuthRequestLike } from './internal/contracts.js';
  */
 export interface BetterAuthCredentialMutationOptions<
   Key extends string,
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   GuardedRequest extends Request,
 > {
   access?: AccessDecision;
@@ -28,7 +28,7 @@ export interface BetterAuthCredentialMutationOptions<
 /** @internal Implementation-only extension for registry and transaction wiring. */
 export interface BetterAuthCredentialMutationInternalOptions<
   Key extends string,
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   GuardedRequest extends Request,
 > extends BetterAuthCredentialMutationOptions<Key, Request, GuardedRequest> {
   registry?: MutationRegistry;

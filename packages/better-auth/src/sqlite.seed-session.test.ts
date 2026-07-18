@@ -455,7 +455,7 @@ describe('Better Auth development seed session posture', () => {
     ]);
   });
 
-  it('does not allocate rate-limit rows for GETs or adversarial mount suffixes', async () => {
+  it('rejects non-redirect GETs and adversarial mount suffixes without limiter writes', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
     runtimes.push(runtime);
@@ -496,15 +496,21 @@ describe('Better Auth development seed session posture', () => {
       ...Array.from({ length: 64 }, (_, index) => `/unknown-${index}`),
     ];
 
-    const responses = await Promise.all(
+    const responses = await Promise.allSettled(
       suffixes.map((suffix) =>
         runEndpoint(endpoint, new Request(`http://localhost:5173/api/auth${suffix}`)),
       ),
     );
 
-    expect(responses.map((response) => response.status)).toEqual(
-      Array.from({ length: suffixes.length }, () => 404),
-    );
+    expect(responses).toHaveLength(suffixes.length);
+    for (const response of responses) {
+      expect(response.status).toBe('rejected');
+      if (response.status === 'rejected') {
+        expect(response.reason).toMatchObject({
+          message: 'Better Auth mounted handler failed inside the trusted plaintext boundary.',
+        });
+      }
+    }
     expect(useSqliteSystemDb(systemDb, (db) => db.select().from(rateLimit).all())).toEqual([]);
   });
 });

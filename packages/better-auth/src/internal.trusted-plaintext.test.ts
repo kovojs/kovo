@@ -421,9 +421,15 @@ describe('Better Auth trusted plaintext zone', () => {
     });
 
     expect(new Set(matches.map((match) => match.slice(0, match.indexOf(':'))))).toEqual(
-      new Set(['internal/credential.ts', 'internal/trusted-plaintext.ts', 'session.ts']),
+      new Set([
+        'internal/credential.ts',
+        'internal/trusted-plaintext.ts',
+        'mount-adapter.ts',
+        'session.ts',
+      ]),
     );
     expect(sourceText('internal/credential.ts')).toContain('forward(cookie,');
+    expect(sourceText('mount-adapter.ts')).toContain('betterAuthCreateRedirectResponse(');
     expect(sourceText('session.ts')).toContain('setCookies.length > 0 ? { setCookies, value }');
   });
 });

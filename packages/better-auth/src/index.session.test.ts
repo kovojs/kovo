@@ -13,19 +13,24 @@ vi.mock('./internal/runtime-lock.js', () => ({
   assertBetterAuthRuntimeRealmLocked: vi.fn(),
 }));
 
-import { betterAuthSession, mount, type BetterAuthLike } from './index.js';
+import { mount } from './index.js';
 import * as packageInternalServerMountAdapterApi from '@kovojs/better-auth/internal/server-mount-adapter';
 import { betterAuthMountOperationContract } from './internal.js';
+import { betterAuthFixedCookieSecurity } from './internal/cookie-security.js';
+import type { BetterAuthLike } from './internal/contracts.js';
 import { registerFixedBetterAuthCanonicalOrigin } from './internal/request-origin.js';
 import { createBetterAuthMountAdapter } from './mount-adapter.js';
+import { betterAuthSession } from './session.js';
 import {
   type AppSession,
   type AuthSession,
   type AuthUser,
+  fakeBetterAuthContext,
   FakeBetterAuth,
   FakeMountedAuth,
   type RequestWithHeaders,
   mapSession,
+  registerFakeBetterAuth,
 } from './test-fakes.js';
 
 type RemovedPublishedBetterAuthMountAdapterMint =
@@ -54,6 +59,10 @@ const mappedAppSession: AppSession = {
   },
 };
 
+function sessionRequest(headers = new Headers()): RequestWithHeaders {
+  return { headers, url: 'https://example.test/account' };
+}
+
 describe('betterAuthSession', () => {
   it('maps a Better Auth-like session into the app session provider seam', async () => {
     const auth = new FakeBetterAuth();
@@ -64,7 +73,7 @@ describe('betterAuthSession', () => {
     // Better Auth wrote no refresh Set-Cookie (the common case), and only to the additive
     // `{ value, setCookies }` envelope when there ARE cookies to forward — keeping existing
     // SessionProvider consumers (and apps whose getSession ignores returnHeaders) unchanged.
-    await expect(provider({ headers })).resolves.toEqual(mappedAppSession);
+    await expect(provider(sessionRequest(headers))).resolves.toEqual(mappedAppSession);
     expect(auth.lastHeaders).toBe(headers);
   });
 
@@ -95,7 +104,7 @@ describe('betterAuthSession', () => {
     const auth = new FakeBetterAuth();
     const provider = betterAuthSession(auth, mapSession);
 
-    await expect(provider({ headers: new Headers() })).resolves.toBeNull();
+    await expect(provider(sessionRequest())).resolves.toBeNull();
   });
 
   it('pins getSession before a late API swap can forge an admin session', async () => {
@@ -123,7 +132,7 @@ describe('betterAuthSession', () => {
     };
 
     await expect(
-      provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) }),
+      provider(sessionRequest(new Headers({ cookie: 'kovo_session=s1' }))),
     ).resolves.toEqual(mappedAppSession);
     expect(poisonCalls).toBe(0);
   });
@@ -145,7 +154,8 @@ describe('betterAuthSession', () => {
   });
 
   it('does not reinterpret a bare session through inherited envelope properties', async () => {
-    const auth = {
+    const auth = registerFakeBetterAuth({
+      $context: fakeBetterAuthContext(),
       api: {
         getSession: () => ({
           session: { activeOrganizationId: 'org-1', id: 'session-1' },
@@ -156,7 +166,7 @@ describe('betterAuthSession', () => {
           },
         }),
       },
-    };
+    });
     const attackerPayload = {
       session: { activeOrganizationId: null, id: 'attacker-session' },
       user: { email: 'evil@example.com', id: 'attacker', roles: ['admin'] as const },
@@ -172,7 +182,7 @@ describe('betterAuthSession', () => {
         configurable: true,
         value: attackerHeaders,
       });
-      await expect(provider({ headers: new Headers() })).resolves.toEqual(mappedAppSession);
+      await expect(provider(sessionRequest())).resolves.toEqual(mappedAppSession);
     } finally {
       delete (Object.prototype as { response?: unknown }).response;
       delete (Object.prototype as { headers?: unknown }).headers;
@@ -183,7 +193,8 @@ describe('betterAuthSession', () => {
     // SPEC §10.3 C9: Better Auth's real session payload contains the live bearer `token`.
     // The app-authored mapper is not a trusted plaintext sink, so it may receive only a
     // reconstructed projection with credential-shaped fields removed.
-    const auth = {
+    const auth = registerFakeBetterAuth({
+      $context: fakeBetterAuthContext(),
       api: {
         getSession: () => ({
           session: {
@@ -200,7 +211,7 @@ describe('betterAuthSession', () => {
           },
         }),
       },
-    };
+    });
     let mapperPayload: unknown;
     const provider = betterAuthSession(auth, (value) => {
       if (false) {
@@ -213,7 +224,7 @@ describe('betterAuthSession', () => {
       return value;
     });
 
-    await provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) });
+    await provider(sessionRequest(new Headers({ cookie: 'kovo_session=s1' })));
 
     expect(mapperPayload).toEqual({
       session: {
@@ -247,7 +258,10 @@ describe('betterAuthSession', () => {
         },
       },
     };
-    const auth = { api: { getSession: () => providerPayload } };
+    const auth = registerFakeBetterAuth({
+      $context: fakeBetterAuthContext(),
+      api: { getSession: () => providerPayload },
+    });
     const observations: unknown[] = [];
     const provider = betterAuthSession(auth, (value) => {
       if (false) {
@@ -265,8 +279,8 @@ describe('betterAuthSession', () => {
       return value;
     });
 
-    await provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) });
-    await provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) });
+    await provider(sessionRequest(new Headers({ cookie: 'kovo_session=s1' })));
+    await provider(sessionRequest(new Headers({ cookie: 'kovo_session=s1' })));
 
     expect(providerPayload.user.profile).toEqual({
       apiToken: 'NESTED_PLUGIN_BEARER',
@@ -295,42 +309,45 @@ describe('betterAuthSession', () => {
   it('rejects cyclic provider values before they can reach session serialization', async () => {
     const profile: Record<string, unknown> = { displayName: 'Ada' };
     profile.self = profile;
-    const auth = {
+    const auth = registerFakeBetterAuth({
+      $context: fakeBetterAuthContext(),
       api: {
         getSession: () => ({
           session: { id: 'session-1' },
           user: { id: 'user-1', profile },
         }),
       },
-    };
+    });
     const provider = betterAuthSession(auth, (value) => value);
 
-    await expect(provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) })).rejects.toThrow(
-      'Better Auth session provider failed inside the trusted plaintext boundary.',
-    );
+    await expect(
+      provider(sessionRequest(new Headers({ cookie: 'kovo_session=s1' }))),
+    ).rejects.toThrow('Better Auth session provider failed inside the trusted plaintext boundary.');
   });
 
   it('bounds hostile session JSON depth before recursive projection exhausts the stack', async () => {
     let profile: Record<string, unknown> = { displayName: 'Ada' };
     for (let depth = 0; depth < 256; depth += 1) profile = { child: profile };
-    const auth = {
+    const auth = registerFakeBetterAuth({
+      $context: fakeBetterAuthContext(),
       api: {
         getSession: () => ({
           session: { id: 'session-1' },
           user: { id: 'user-1', profile },
         }),
       },
-    };
+    });
     const provider = betterAuthSession(auth, (value) => value);
 
-    await expect(provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) })).rejects.toThrow(
-      'Better Auth session provider failed inside the trusted plaintext boundary.',
-    );
+    await expect(
+      provider(sessionRequest(new Headers({ cookie: 'kovo_session=s1' }))),
+    ).rejects.toThrow('Better Auth session provider failed inside the trusted plaintext boundary.');
   });
 
   it('does not let deferred session-header failures carry secrets out of the boundary', async () => {
     const secret = 'LIVE_REFRESH_COOKIE_MUST_NOT_ESCAPE';
-    const auth = {
+    const auth = registerFakeBetterAuth({
+      $context: fakeBetterAuthContext(),
       api: {
         getSession: () => ({
           headers: {
@@ -344,9 +361,9 @@ describe('betterAuthSession', () => {
           },
         }),
       },
-    };
+    });
     const provider = betterAuthSession(auth, (value) => value);
-    const result = await provider({ headers: new Headers({ cookie: 'kovo_session=s1' }) });
+    const result = await provider(sessionRequest(new Headers({ cookie: 'kovo_session=s1' })));
 
     expect(result).toEqual({
       session: { id: 'session-1' },
@@ -367,7 +384,7 @@ describe('betterAuthSession', () => {
 
     const forwarded: string[] = [];
     const lifecycleRequest = await resolveLifecycleRequest<RequestWithHeaders, AppSession>(
-      { headers: new Headers({ cookie: 'kovo_session=s1' }) },
+      sessionRequest(new Headers({ cookie: 'kovo_session=s1' })),
       {
         onSessionSetCookie: (cookie) => forwarded.push(cookie),
         sessionProvider: provider,
@@ -388,7 +405,7 @@ describe('betterAuthSession', () => {
 
     const forwarded: string[] = [];
     await resolveLifecycleRequest<RequestWithHeaders, AppSession>(
-      { headers: new Headers({ cookie: 'kovo_session=s1' }) },
+      sessionRequest(new Headers({ cookie: 'kovo_session=s1' })),
       {
         onSessionSetCookie: (cookie) => forwarded.push(cookie),
         sessionProvider: provider,
@@ -480,31 +497,176 @@ describe('browser redirect protocol mount', () => {
     });
     const response = await runEndpoint(authEndpoint, request);
 
-    await expect(response.text()).resolves.toBe('/auth/callback/github');
+    await expect(response.text()).resolves.toBe('');
     expect(response.status).toBe(302);
     expect(auth.lastRequest).toBeDefined();
     expect(auth.sawSession).toBe(false);
   });
 
-  it('preserves the official Better Auth handler flow behind the opaque adapter', async () => {
+  it('rejects real authenticated Better Auth session JSON before its bearer can leave', async () => {
     const auth = betterAuth({
-      advanced: { disableCSRFCheck: true },
+      advanced: {
+        ...betterAuthFixedCookieSecurity('https://example.test/auth'),
+        disableCSRFCheck: true,
+        disableOriginCheck: true,
+      },
       baseURL: 'https://example.test/auth',
       database: memoryAdapter({ account: [], session: [], user: [], verification: [] }),
       emailAndPassword: { enabled: true },
       secret: '0123456789abcdef0123456789abcdef',
     });
+    const signedUp = await auth.api.signUpEmail({
+      asResponse: true,
+      body: {
+        email: 'mount-token@example.test',
+        name: 'Mount Token',
+        password: 'correct horse battery staple',
+      },
+    });
+    const sessionSetCookie = signedUp.headers
+      .getSetCookie()
+      .find((cookie) => cookie.startsWith('__Host-better-auth.session_token='));
+    if (sessionSetCookie === undefined) throw new Error('expected real Better Auth session cookie');
+    const sessionCookie = sessionSetCookie.split(';', 1)[0] ?? '';
+    const bearer = sessionCookie.split('=', 2)[1] ?? '';
+    const liveSessionToken = decodeURIComponent(bearer).split('.', 1)[0] ?? '';
+    const sessionRequest = () =>
+      new Request('https://example.test/auth/get-session', {
+        headers: { Cookie: sessionCookie, Origin: 'https://example.test' },
+      });
+    const rawResponse = await auth.handler(sessionRequest());
+    expect(rawResponse.status).toBe(200);
+    await expect(rawResponse.text()).resolves.toContain(liveSessionToken);
+
+    registerFakeBetterAuth(auth, 'https://example.test/auth');
     const endpoint = mount('/auth', createBetterAuthMountAdapter(auth, 'https://example.test'));
+    let thrown: unknown;
+    try {
+      await runEndpoint(endpoint, sessionRequest());
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe(
+      'Better Auth mounted handler failed inside the trusted plaintext boundary.',
+    );
+    expect(`${String((thrown as Error).stack)} ${JSON.stringify(thrown)}`).not.toContain(
+      liveSessionToken,
+    );
+  });
+
+  it('allows only canonical same-origin redirects and reconstructs an empty response', async () => {
+    const endpoint = mount(
+      '/auth',
+      createBetterAuthMountAdapter(
+        registerFakeBetterAuth({
+          handler() {
+            return new Response('UPSTREAM_BODY_SECRET', {
+              headers: {
+                Location: 'https://example.test:443/complete?code=ok#done',
+                'Set-Cookie':
+                  '__Host-better-auth.state=opaque; Path=/; Secure; HttpOnly; SameSite=Lax',
+                'X-Upstream-Secret': 'must-not-forward',
+              },
+              status: 303,
+            });
+          },
+        }),
+        'https://example.test',
+      ),
+    );
 
     const response = await runEndpoint(
       endpoint,
-      new Request('https://example.test/auth/get-session', {
-        headers: { Origin: 'https://example.test' },
-      }),
+      new Request('https://example.test/auth/callback/provider'),
+    );
+    expect(response.status).toBe(303);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('location')).toBe('/complete?code=ok#done');
+    expect(response.headers.get('set-cookie')).toContain('__Host-better-auth.state=opaque');
+    expect(response.headers.get('x-upstream-secret')).toBeNull();
+    await expect(response.text()).resolves.toBe('');
+  });
+
+  it.each(['verify-email?token=invalid', 'reset-password/invalid'])(
+    'rejects real Better Auth %s external callback redirects',
+    async (suffix) => {
+      const auth = betterAuth({
+        advanced: {
+          ...betterAuthFixedCookieSecurity('https://example.test/auth'),
+          disableCSRFCheck: true,
+          disableOriginCheck: true,
+        },
+        baseURL: 'https://example.test/auth',
+        database: memoryAdapter({ account: [], session: [], user: [], verification: [] }),
+        emailAndPassword: { enabled: true },
+        secret: '0123456789abcdef0123456789abcdef',
+      });
+      const separator = suffix.includes('?') ? '&' : '?';
+      const requestURL = `https://example.test/auth/${suffix}${separator}callbackURL=${encodeURIComponent(
+        'https://evil.example/phish',
+      )}`;
+      const raw = await auth.handler(new Request(requestURL));
+      expect(raw.status).toBe(302);
+      expect(raw.headers.get('location')).toMatch(/^https:\/\/evil\.example\/phish/u);
+
+      registerFakeBetterAuth(auth, 'https://example.test/auth');
+      const endpoint = mount('/auth', createBetterAuthMountAdapter(auth, 'https://example.test'));
+      await expect(runEndpoint(endpoint, new Request(requestURL))).rejects.toThrow(
+        'Better Auth mounted handler failed inside the trusted plaintext boundary.',
+      );
+    },
+  );
+
+  it.each([
+    { label: '200 JSON', location: '/complete', status: 200 },
+    { label: '204 empty', location: '/complete', status: 204 },
+    { label: '304 cache control', location: '/complete', status: 304 },
+    { label: 'missing Location', location: undefined, status: 302 },
+    { label: 'off-origin', location: 'https://evil.example/phish', status: 302 },
+    { label: 'protocol-relative', location: '//evil.example/phish', status: 302 },
+    { label: 'non-HTTP scheme', location: 'javascript:alert(1)', status: 302 },
+    { label: 'userinfo', location: 'https://user@example.test/complete', status: 302 },
+    { label: 'nondefault port', location: 'https://example.test:8443/complete', status: 302 },
+  ])('rejects mounted $label responses opaquely', async ({ location, status }) => {
+    const headers = new Headers();
+    if (location !== undefined) headers.set('location', location);
+    const endpoint = mount(
+      '/auth',
+      createBetterAuthMountAdapter(
+        registerFakeBetterAuth({
+          handler() {
+            return new Response(status === 204 || status === 304 ? null : 'UPSTREAM_SECRET', {
+              headers,
+              status,
+            });
+          },
+        }),
+        'https://example.test',
+      ),
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('null');
+    await expect(
+      runEndpoint(endpoint, new Request('https://example.test/auth/callback/provider')),
+    ).rejects.toThrow('Better Auth mounted handler failed inside the trusted plaintext boundary.');
+  });
+
+  it('rejects coalesced duplicate Location values', async () => {
+    const headers = new Headers([
+      ['Location', '/one'],
+      ['Location', '/two'],
+    ]);
+    const endpoint = mount(
+      '/auth',
+      createBetterAuthMountAdapter(
+        registerFakeBetterAuth({ handler: () => new Response(null, { headers, status: 302 }) }),
+        'https://example.test',
+      ),
+    );
+
+    await expect(
+      runEndpoint(endpoint, new Request('https://example.test/auth/callback/provider')),
+    ).rejects.toThrow('Better Auth mounted handler failed inside the trusted plaintext boundary.');
   });
 
   it('rejects bare, structural, and directly forged mount authority before witness minting', () => {
@@ -530,12 +692,26 @@ describe('browser redirect protocol mount', () => {
     expect(handlerCalls).toBe(0);
   });
 
+  it('rejects an unregistered real-looking mount source before its handler runs', async () => {
+    const handler = vi.fn(() => new Response('must not run'));
+    const source = { handler };
+    const endpoint = mount(
+      '/auth',
+      createBetterAuthMountAdapter(source, 'https://example.test/api/auth'),
+    );
+
+    await expect(
+      runEndpoint(endpoint, new Request('https://example.test/auth/callback/provider')),
+    ).rejects.toThrow('Better Auth mounted handler failed inside the trusted plaintext boundary.');
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('delegates browser credentials only through the pinned Better Auth mount', async () => {
     let received:
       | { authorization: string | null; cookie: string | null; session: boolean }
       | undefined;
     const adapter = createBetterAuthMountAdapter(
-      {
+      registerFakeBetterAuth({
         handler(request: Request) {
           received = {
             authorization: request.headers.get('authorization'),
@@ -552,7 +728,7 @@ describe('browser redirect protocol mount', () => {
             status: 302,
           });
         },
-      },
+      }),
       'https://example.test',
     );
     const authEndpoint = mount('/auth', adapter);
@@ -590,6 +766,7 @@ describe('browser redirect protocol mount', () => {
         });
       },
     };
+    registerFakeBetterAuth(source, 'https://BÜCHER.example:443/api/auth');
     const accepted = mount(
       '/auth',
       createBetterAuthMountAdapter(source, 'https://BÜCHER.example:443/api/auth'),
@@ -617,9 +794,13 @@ describe('browser redirect protocol mount', () => {
       handled: false,
       handler(this: { handled: boolean }, request: Request) {
         this.handled = true;
-        return new Response(new URL(request.url).pathname);
+        return new Response('UPSTREAM_BODY_SECRET', {
+          headers: { Location: new URL(request.url).pathname },
+          status: 302,
+        });
       },
     };
+    registerFakeBetterAuth(auth, 'https://example.test');
     const adapter = createBetterAuthMountAdapter(auth, 'https://example.test');
     const endpoint = mount('/auth', adapter);
     auth.handler = () => {
@@ -631,7 +812,7 @@ describe('browser redirect protocol mount', () => {
       endpoint,
       new Request('https://example.test/auth/callback/provider'),
     );
-    await expect(response.text()).resolves.toBe('/auth/callback/provider');
+    await expect(response.text()).resolves.toBe('');
     expect(auth.handled).toBe(true);
     expect(poisonCalls).toBe(0);
 
@@ -652,13 +833,13 @@ describe('browser redirect protocol mount', () => {
     const endpoint = mount(
       '/auth',
       createBetterAuthMountAdapter(
-        {
+        registerFakeBetterAuth({
           async handler(request: Request) {
             throw new Error(
               `provider callback failed for ${secret}: ${request.headers.get('cookie')}`,
             );
           },
-        },
+        }),
         'https://example.test',
       ),
     );

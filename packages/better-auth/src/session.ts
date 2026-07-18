@@ -5,7 +5,7 @@ import {
   isBetterAuthCredentialShapedColumn,
   type BetterAuthGetSessionWithHeadersResult,
   type BetterAuthLike,
-  type BetterAuthRequestLike,
+  type BetterAuthBindingRequest,
 } from './internal.js';
 import { callBetterAuthGetSession, pinBetterAuthGetSession } from './internal/trusted-plaintext.js';
 import {
@@ -165,16 +165,20 @@ export interface BetterAuthSanitizedSessionPayload<Session, User> {
 }
 
 /**
- * Function the app supplies to `betterAuthSession` to project Better Auth's
- * `{ session, user }` payload into the app's own session value. Called once per
- * authenticated request (SPEC.md §6.5).
+ * Function the app supplies to a fixed SQLite/Postgres binding constructor to project Better
+ * Auth's `{ session, user }` payload into the app's own session value. Called once per authenticated
+ * request (SPEC §6.5/§6.6).
  */
 export type BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue> = (
   value: BetterAuthSanitizedSessionPayload<AuthSession, AuthUser>,
 ) => SessionValue;
 
 /**
- * Builds a Kovo `SessionProvider` backed by Better Auth: it calls
+ * @internal Build the fixed binding's Kovo `SessionProvider`. This function is deliberately absent
+ * from package exports; the exact `auth` object must already be privately registered by the
+ * SQLite/Postgres constructor (SPEC §6.6).
+ *
+ * It calls
  * `auth.api.getSession({ headers, returnHeaders: true })` for each request and projects the
  * result through `map` into the app's session value, returning `null` when there is no
  * session. Wire the returned provider into `session(...)` so guards and pages see the
@@ -189,13 +193,13 @@ export type BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue> = (
  * (`returnHeaders: true`) and forwards every refresh `Set-Cookie` through the additive
  * `SessionProviderResult.setCookies` channel so the framework re-emits them on the GET
  * response. The provider still resolves to a plain mapped value when there are no refresh
- * cookies, so the contract stays backward compatible.
+ * cookies.
  */
 export function betterAuthSession<
   AuthSession,
   AuthUser,
   SessionValue,
-  Request extends BetterAuthRequestLike = BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest = BetterAuthBindingRequest,
 >(
   auth: BetterAuthLike<AuthSession, AuthUser>,
   map: BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue>,

@@ -1,11 +1,13 @@
-import type { BetterAuthRequestLike } from './contracts.js';
+/* oxlint-disable typescript/unbound-method -- Native Request getter is boot-captured and invoked through pinned Reflect.apply. */
+
+import type { BetterAuthBindingRequest } from './contracts.js';
 import {
   betterAuthApply,
   betterAuthCreateMap,
+  betterAuthFreezeOwn,
   betterAuthGetOwnPropertyDescriptor,
   betterAuthMapGet,
   betterAuthMapSet,
-  betterAuthOwnDataOption,
   betterAuthUrlSnapshot,
 } from './intrinsics.js';
 
@@ -17,13 +19,23 @@ const fixedBetterAuthCanonicalOrigins = betterAuthCreateMap<
   PinnedBetterAuthCanonicalOrigin
 >();
 
-/** Boot-pinned canonical origin read from a real Better Auth `$context`. @internal */
-export type PinnedBetterAuthCanonicalOrigin = Promise<string | undefined>;
+type BetterAuthCanonicalOriginState =
+  | { readonly origin: string; readonly valid: true }
+  | { readonly valid: false };
+
+/** Privately registered, boot-pinned canonical origin for a Kovo-owned Better Auth instance. */
+export type PinnedBetterAuthCanonicalOrigin = Promise<Readonly<BetterAuthCanonicalOriginState>>;
+
+const invalidRealBetterAuthOrigin = betterAuthFreezeOwn(
+  { valid: false as const },
+  'invalid real Better Auth origin',
+);
 
 /**
- * Snapshot the canonical origin that controls Better Auth's cookie name and security attributes.
- * Structural test doubles without a `$context` have no configured cookie authority to bind; real
- * Better Auth instances and Kovo's fixed bindings always expose the boot-owned context.
+ * Resolve only an exact Better Auth object privately registered by a Kovo fixed binding. A real or
+ * structural Better Auth object is deliberately insufficient: dependency context and cookie
+ * configuration are caller-controlled data, not proof that Kovo constructed the complete security
+ * posture. Identity registration keeps the authority private and fail-closed.
  *
  * SPEC §6.5/§6.6 and C13: origin matching is a superset floor over the existing CSRF, cookie, and
  * provider-state checks. It runs before any session cookie is parsed or minted.
@@ -32,20 +44,11 @@ export type PinnedBetterAuthCanonicalOrigin = Promise<string | undefined>;
  */
 export function pinBetterAuthCanonicalOrigin(
   auth: object,
-  label: string,
+  _label: string,
 ): PinnedBetterAuthCanonicalOrigin {
   const fixedOrigin = betterAuthMapGet(fixedBetterAuthCanonicalOrigins, auth);
   if (fixedOrigin !== undefined) return fixedOrigin;
-  const context = betterAuthGetOwnPropertyDescriptor(auth, '$context');
-  if (context === undefined) return Promise.resolve(undefined);
-  if (
-    !('value' in context) ||
-    (typeof context.value !== 'object' && typeof context.value !== 'function') ||
-    context.value === null
-  ) {
-    throw new NativeTypeError(`${label}.$context must be a stable own-data PromiseLike.`);
-  }
-  return snapshotBetterAuthCanonicalOrigin(context.value as PromiseLike<unknown>, label);
+  return Promise.resolve(invalidRealBetterAuthOrigin);
 }
 
 /** Register the validated origin owned by a fixed Kovo binding before helpers are constructed. */
@@ -66,7 +69,12 @@ export function pinFixedBetterAuthCanonicalOrigin(
   baseURL: string,
   label: string,
 ): PinnedBetterAuthCanonicalOrigin {
-  return Promise.resolve(canonicalBetterAuthOrigin(baseURL, label));
+  return Promise.resolve(
+    betterAuthFreezeOwn(
+      { origin: canonicalBetterAuthOrigin(baseURL, label), valid: true },
+      `${label} fixed canonical origin`,
+    ),
+  );
 }
 
 /**
@@ -78,11 +86,16 @@ export function pinFixedBetterAuthCanonicalOrigin(
  */
 export async function assertBetterAuthCanonicalRequestOrigin(
   pinnedOrigin: PinnedBetterAuthCanonicalOrigin,
-  request: BetterAuthRequestLike | Request,
+  request: BetterAuthBindingRequest | Request,
   label: string,
 ): Promise<void> {
-  const expectedOrigin = await pinnedOrigin;
-  if (expectedOrigin === undefined) return;
+  const state = await pinnedOrigin;
+  if (!state.valid) {
+    throw new NativeTypeError(
+      `${label} requires the exact Better Auth instance returned by a Kovo fixed binding constructor.`,
+    );
+  }
+  const expectedOrigin = state.origin;
   const requestUrl = readBetterAuthRequestUrl(request);
   if (requestUrl === undefined) {
     throw new NativeTypeError(`${label} requires a native or stable absolute request URL.`);
@@ -98,22 +111,6 @@ export async function assertBetterAuthCanonicalRequestOrigin(
       `${label} request origin must exactly match the configured Better Auth origin.`,
     );
   }
-}
-
-async function snapshotBetterAuthCanonicalOrigin(
-  contextPromise: PromiseLike<unknown>,
-  label: string,
-): Promise<string | undefined> {
-  const context = await contextPromise;
-  if (typeof context !== 'object' || context === null) {
-    throw new NativeTypeError(`${label}.$context must resolve to an object.`);
-  }
-  const baseURL = betterAuthOwnDataOption<string>(context, 'baseURL', `${label} context baseURL`);
-  if (baseURL === undefined || baseURL === '') return undefined;
-  if (typeof baseURL !== 'string') {
-    throw new NativeTypeError(`${label} context baseURL must be a string when present.`);
-  }
-  return canonicalBetterAuthOrigin(baseURL, `${label} context baseURL`);
 }
 
 function canonicalBetterAuthOrigin(value: string, label: string): string {
@@ -134,7 +131,7 @@ function canonicalBetterAuthOrigin(value: string, label: string): string {
   return snapshot.origin;
 }
 
-function readBetterAuthRequestUrl(request: BetterAuthRequestLike | Request): string | undefined {
+function readBetterAuthRequestUrl(request: BetterAuthBindingRequest | Request): string | undefined {
   if (typeof nativeRequestUrl === 'function') {
     try {
       return betterAuthApply<string>(nativeRequestUrl, request, []);

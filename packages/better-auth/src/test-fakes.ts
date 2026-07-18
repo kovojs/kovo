@@ -1,4 +1,5 @@
 import { type BetterAuthLike, type BetterAuthResponseLike } from './internal.js';
+import { registerFixedBetterAuthCanonicalOrigin } from './internal/request-origin.js';
 
 export type AuthSession = {
   activeOrganizationId: null | string;
@@ -23,6 +24,7 @@ export type AppSession = {
 
 export type RequestWithHeaders = {
   headers: Headers;
+  url: string;
 };
 
 export type AppRequest = {
@@ -35,6 +37,8 @@ export class FakeBetterAuth implements BetterAuthLike<AuthSession, AuthUser> {
   // Set to a raw Set-Cookie string to simulate a rolling-session / cookie-cache refresh
   // header that Better Auth writes on `updateAge`/`cookieCache`.
   refreshSetCookie: string | undefined;
+
+  readonly $context = fakeBetterAuthContext();
 
   readonly api = {
     getSession: (options: { headers: Headers; returnHeaders: true }) => {
@@ -64,6 +68,10 @@ export class FakeBetterAuth implements BetterAuthLike<AuthSession, AuthUser> {
   };
 
   lastHeaders: Headers | undefined;
+
+  constructor() {
+    registerFakeBetterAuth(this);
+  }
 }
 
 export class AuthApiError extends Error {
@@ -76,13 +84,7 @@ export class AuthApiError extends Error {
 }
 
 export class FakeCredentialAuth {
-  readonly $context = Promise.resolve({
-    baseURL: 'https://example.test/api/auth',
-    options: {
-      advanced: { ipAddress: { ipAddressHeaders: ['x-forwarded-for'] } },
-      basePath: '/api/auth',
-    },
-  });
+  readonly $context = fakeBetterAuthContext();
 
   readonly api = {
     signInEmail: async (options: {
@@ -138,6 +140,10 @@ export class FakeCredentialAuth {
         headers: Headers;
       }
     | undefined;
+
+  constructor() {
+    registerFakeBetterAuth(this);
+  }
 }
 
 export function fakeRoutedCredentialAuth<
@@ -157,16 +163,43 @@ export function fakeRoutedCredentialAuth<
       ? {}
       : { signUpEmail: (...args: any[]) => Reflect.apply(signUpEmail, api, args) }),
   };
+  return registerFakeBetterAuth(
+    {
+      $context: fakeBetterAuthContext(baseURL),
+      api,
+      handler: (request: Request) => routeFakeCredentialApi(handlerApi, request),
+    },
+    baseURL,
+  );
+}
+
+/** Test-only stand-in for the package-private registration performed by fixed bindings. */
+export function registerFakeBetterAuth<Auth extends object>(
+  auth: Auth,
+  baseURL = 'https://example.test/api/auth',
+): Auth {
+  registerFixedBetterAuthCanonicalOrigin(auth, baseURL, 'registered Better Auth test double');
+  return auth;
+}
+
+export function fakeBetterAuthContext(baseURL = 'https://example.test/api/auth') {
+  return Promise.resolve({
+    authCookies: fakeAuthCookies(baseURL),
+    baseURL,
+    options: {
+      advanced: { ipAddress: { ipAddressHeaders: ['x-forwarded-for'] } },
+      basePath: '/api/auth',
+    },
+  });
+}
+
+function fakeAuthCookies(baseURL: string) {
+  const secure = new URL(baseURL).protocol === 'https:';
   return {
-    $context: Promise.resolve({
-      baseURL,
-      options: {
-        advanced: { ipAddress: { ipAddressHeaders: ['x-forwarded-for'] } },
-        basePath: '/api/auth',
-      },
-    }),
-    api,
-    handler: (request: Request) => routeFakeCredentialApi(handlerApi, request),
+    sessionToken: {
+      attributes: { httpOnly: true, path: '/', secure },
+      name: secure ? '__Host-better-auth.session_token' : 'better-auth.session_token',
+    },
   };
 }
 
@@ -204,6 +237,10 @@ export class FakeMountedAuth {
       status: 302,
     });
   };
+
+  constructor() {
+    registerFakeBetterAuth(this, 'https://example.test');
+  }
 }
 
 export function mapSession(value: { session: AuthSession; user: AuthUser }): AppSession {

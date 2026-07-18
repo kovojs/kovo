@@ -14,7 +14,7 @@ import type { BetterAuthCredentialMutationInternalOptions } from '../credential-
 import type {
   BetterAuthCredentialMutationApi,
   BetterAuthCredentialMutationTouchGraphOptions,
-  BetterAuthRequestLike,
+  BetterAuthBindingRequest,
   BetterAuthResponseLike,
 } from './contracts.js';
 import {
@@ -366,7 +366,7 @@ export function redirectPath(value: string | undefined, fallback: string): strin
 /** @internal Build the shared `access`/`csrf`/`guard`/`registry`/`transaction` options for the credential mutations. */
 export function credentialMutationDefinitionOptions<
   Key extends string,
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   GuardedRequest extends Request,
 >(
   options: BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,

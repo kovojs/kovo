@@ -18,6 +18,7 @@ export interface AppSession {
 export interface AppRequest {
   db: AppDb;
   headers: Headers;
+  url: string;
   authCsrfId?: string | null;
   session?: AppSession | null;
 }

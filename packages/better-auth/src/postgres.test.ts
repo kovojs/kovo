@@ -78,6 +78,7 @@ vi.mock('./internal/runtime-lock.js', () => ({
 
 interface TestRequest {
   headers: Headers;
+  url: string;
 }
 
 interface TestSession {
@@ -156,6 +157,20 @@ describe('Better Auth Postgres bindings', () => {
 
     expect(() => createBetterAuthPostgresBindings(options)).toThrow(
       'Better Auth Postgres bindings require schema.rateLimit for durable credential throttling.',
+    );
+    expect(authMocks.betterAuth).not.toHaveBeenCalled();
+    expect(authMocks.drizzleAdapter).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-loopback plaintext before opening a database or constructing Better Auth', () => {
+    const options = bindingOptions(
+      {} as KovoPostgresSystemDb,
+      betterAuthPostgresSecret(strongSecretText),
+      { baseURL: 'http://app.example.test' },
+    );
+
+    expect(() => createBetterAuthPostgresBindings(options)).toThrow(
+      'BETTER_AUTH_URL must use HTTPS except for exact loopback origins in local development.',
     );
     expect(authMocks.betterAuth).not.toHaveBeenCalled();
     expect(authMocks.drizzleAdapter).not.toHaveBeenCalled();

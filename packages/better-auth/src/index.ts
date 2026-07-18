@@ -29,38 +29,13 @@ export {
   createBetterAuthSqliteBindings,
   createBetterAuthSqliteBindingsFromEnvironment,
 } from './sqlite.js';
-export type { BetterAuthCredentialMutationOptions } from './credential-options.js';
 export { mount } from './mount.js';
 export type { BetterAuthMountAdapter } from './mount-adapter.js';
-export type {
-  BetterAuthApi,
-  BetterAuthCredentialMutationValue,
-  BetterAuthGetSessionOptions,
-  BetterAuthGetSessionWithHeadersOptions,
-  BetterAuthGetSessionWithHeadersResult,
-  BetterAuthLike,
-  BetterAuthRequestLike,
-  BetterAuthResponseLike,
-  BetterAuthSignInEmailApi,
-  BetterAuthSignInEmailBody,
-  BetterAuthSignInEmailLike,
-  BetterAuthSignOutApi,
-  BetterAuthSignOutLike,
-  BetterAuthSignUpEmailApi,
-  BetterAuthSignUpEmailBody,
-  BetterAuthSignUpEmailLike,
-} from './internal.js';
-export {
-  betterAuthSignInEmailMutation,
-  betterAuthSignOutMutation,
-  betterAuthSignUpEmailMutation,
-} from './mutations.js';
+export type { BetterAuthBindingRequest, BetterAuthCredentialMutationValue } from './internal.js';
 export type {
   BetterAuthSafeField,
   BetterAuthSanitizedRecord,
   BetterAuthSanitizedSessionPayload,
   BetterAuthSanitizedValue,
   BetterAuthSessionMapper,
-  BetterAuthSessionPayload,
 } from './session.js';
-export { betterAuthSession } from './session.js';

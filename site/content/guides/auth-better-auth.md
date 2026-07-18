@@ -133,8 +133,10 @@ BETTER_AUTH_SECRET=<at-least-32-characters-of-random-material>
 KOVO_NODE_ORIGIN=https://app.example.com
 ```
 
-`BETTER_AUTH_URL` is required in production. It must be a canonical HTTPS origin: no path, query,
-fragment, credentials, or trailing slash. For the generated standalone Node server,
+`BETTER_AUTH_URL` is required in production. Every non-loopback deployment must use a canonical
+HTTPS origin: no path, query, fragment, credentials, or trailing slash. Plaintext is admitted only
+for exact loopback origins (`localhost`, IPv4 `127/8`, or `[::1]`) in non-production local
+development; its bare cookies have no sibling-domain protection. For the generated standalone Node server,
 `KOVO_NODE_ORIGIN` should be the same exact origin so internal HTTP behind a TLS terminator cannot
 downgrade the request authority seen by auth. The fixed origin ignores forwarded authority. If your
 immediate trusted proxy replaces `X-Forwarded-Proto` and preserves the external `Host`, you may set
@@ -148,6 +150,11 @@ Do not set `BETTER_AUTH_SECRETS` or `BETTER_AUTH_TRUSTED_ORIGINS`. Kovo rejects 
 override variables because they would create a second authority outside the reviewed constructor.
 The integration also pins secure-cookie posture, disables Better Auth telemetry, and routes password
 hashing and verification through Kovo's pinned Argon2 implementation.
+
+The opaque Better Auth mount is not a generic proxy. It accepts only the provider redirect statuses
+with a single same-origin `Location`, canonicalizes that location, and returns an empty response with
+only reviewed callback cookies and Kovo's `no-store` cache floor. Session JSON, HTML/error bodies,
+arbitrary headers, ambiguous locations, and external redirects fail inside the auth boundary.
 
 ### Start custom runners lock-first
 

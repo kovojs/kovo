@@ -1,20 +1,31 @@
 import {
   betterAuthApply,
   betterAuthCaptureOwnMethod,
+  betterAuthCharacterCodeAt,
+  betterAuthCreateRedirectResponse,
   betterAuthCreateMap,
   betterAuthCreateNullRecord,
   betterAuthFreezeOwn,
+  betterAuthHeadersGet,
+  betterAuthIncludes,
   betterAuthMapGet,
   betterAuthMapHas,
   betterAuthMapSet,
+  betterAuthResponseHeaders,
+  betterAuthResponseStatus,
+  betterAuthStartsWith,
+  betterAuthTrim,
+  betterAuthUrlSnapshot,
 } from './internal/intrinsics.js';
 import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
 import {
   assertBetterAuthCanonicalRequestOrigin,
+  pinBetterAuthCanonicalOrigin,
   pinFixedBetterAuthCanonicalOrigin,
   type PinnedBetterAuthCanonicalOrigin,
 } from './internal/request-origin.js';
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
+import { getBetterAuthSetCookie } from './internal/trusted-plaintext.js';
 
 const NativeError = globalThis.Error;
 const NativeTypeError = globalThis.TypeError;
@@ -33,8 +44,9 @@ export interface BetterAuthMountAdapter {
 }
 
 interface CapturedBetterAuthMountAdapter {
-  readonly canonicalOrigin: PinnedBetterAuthCanonicalOrigin;
+  readonly declaredOrigin: PinnedBetterAuthCanonicalOrigin;
   readonly handler: Function;
+  readonly registeredOrigin: PinnedBetterAuthCanonicalOrigin;
   readonly receiver: object;
 }
 
@@ -62,8 +74,9 @@ export function createBetterAuthMountAdapter(
     'Kovo Better Auth mount adapter',
   );
   betterAuthMapSet(capturedBetterAuthMountAdapters, token, {
-    canonicalOrigin: pinFixedBetterAuthCanonicalOrigin(baseURL, 'Kovo Better Auth mount'),
+    declaredOrigin: pinFixedBetterAuthCanonicalOrigin(baseURL, 'Kovo Better Auth mount'),
     handler: captured.method,
+    registeredOrigin: pinBetterAuthCanonicalOrigin(auth, 'Kovo Better Auth mount'),
     receiver: captured.receiver,
   });
   return token as unknown as BetterAuthMountAdapter;
@@ -100,17 +113,88 @@ export async function invokeBetterAuthMountAdapter(
   }
   try {
     await assertBetterAuthCanonicalRequestOrigin(
-      captured.canonicalOrigin,
+      captured.registeredOrigin,
+      request,
+      'Kovo Better Auth mount',
+    );
+    await assertBetterAuthCanonicalRequestOrigin(
+      captured.declaredOrigin,
       request,
       'Kovo Better Auth mount',
     );
     assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
-    return await betterAuthApply<Promise<Response> | Response>(
+    const upstream = await betterAuthApply<Promise<Response> | Response>(
       captured.handler,
       captured.receiver,
       [request],
     );
+    if (typeof upstream !== 'object' || upstream === null) {
+      throw new NativeTypeError('Better Auth mount returned no response.');
+    }
+    const status = redirectStatus(betterAuthResponseStatus(upstream));
+    const headers = betterAuthResponseHeaders(upstream);
+    if (status === undefined || headers === undefined) {
+      throw new NativeTypeError('Better Auth mount returned a non-redirect response.');
+    }
+    const location = betterAuthHeadersGet(headers, 'location');
+    const declaredOrigin = await captured.declaredOrigin;
+    if (!declaredOrigin.valid) {
+      throw new NativeTypeError('Better Auth mount origin authority is unavailable.');
+    }
+    const canonicalLocation = canonicalSameOriginRedirect(location, declaredOrigin.origin);
+    // Exact private registration means these values came from the fixed Better Auth instance whose
+    // constructor owns the `__Host-better-auth`/loopback cookie prefix. The server endpoint's raw
+    // Set-Cookie sink then independently applies Kovo's credential-cookie floor before emission.
+    return betterAuthCreateRedirectResponse(
+      status,
+      canonicalLocation,
+      getBetterAuthSetCookie(headers),
+    );
   } catch {
     throw new NativeError(betterAuthMountBoundaryFailureMessage);
   }
+}
+
+function redirectStatus(value: number | undefined): 301 | 302 | 303 | 307 | 308 | undefined {
+  switch (value) {
+    case 301:
+    case 302:
+    case 303:
+    case 307:
+    case 308:
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function canonicalSameOriginRedirect(location: string | null, origin: string): string {
+  if (location === null) {
+    throw new NativeTypeError('Better Auth mount redirect requires Location.');
+  }
+  const normalized = betterAuthTrim(location);
+  if (
+    normalized === '' ||
+    betterAuthIncludes(normalized, ',') ||
+    betterAuthIncludes(normalized, '\\') ||
+    betterAuthStartsWith(normalized, '//')
+  ) {
+    throw new NativeTypeError('Better Auth mount redirect Location is ambiguous.');
+  }
+  for (let index = 0; index < normalized.length; index += 1) {
+    const code = betterAuthCharacterCodeAt(normalized, index);
+    if (code <= 0x1f || code === 0x7f) {
+      throw new NativeTypeError('Better Auth mount redirect Location contains control text.');
+    }
+  }
+  const snapshot = betterAuthUrlSnapshot(normalized, `${origin}/`);
+  if (
+    (snapshot.protocol !== 'http:' && snapshot.protocol !== 'https:') ||
+    snapshot.origin !== origin ||
+    snapshot.username !== '' ||
+    snapshot.password !== ''
+  ) {
+    throw new NativeTypeError('Better Auth mount redirect must remain on the pinned origin.');
+  }
+  return `${snapshot.pathname}${snapshot.search}${snapshot.hash}`;
 }

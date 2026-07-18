@@ -77,7 +77,7 @@ emits a Node server under `dist/server` using the preset in `kovo.config.ts`
 `start` scripts set `NODE_ENV=production`; keep that posture in your process
 manager so production blocks private-network egress by default, emits `Secure`
 host-bound CSRF cookies, and refuses weak signing secrets. Production also
-requires `BETTER_AUTH_URL` to be the app's canonical public HTTPS origin (for
+requires every non-loopback `BETTER_AUTH_URL` to be the app's canonical public HTTPS origin (for
 example, `https://app.example.com`). When the generated standalone Node server
 runs behind TLS termination, also set `KOVO_NODE_ORIGIN` to that exact origin.
 This fixed posture ignores forwarded authority. As an alternative, set

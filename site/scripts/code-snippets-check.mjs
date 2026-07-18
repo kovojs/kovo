@@ -721,10 +721,6 @@ declare global {
   var auditLog: any;
   var betterAuth: any;
   var betterAuthHandler: any;
-  var betterAuthSession: any;
-  var betterAuthSignInEmailMutation: any;
-  var betterAuthSignOutMutation: any;
-  var betterAuthSignUpEmailMutation: any;
   var broadcastCartUpdate: any;
   var cart: any;
   var cartDomain: any;
@@ -734,7 +730,6 @@ declare global {
   var cartCsrf: any;
   var cartSummary: any;
   var checkoutGuard: any;
-  var commerceBetterAuth: any;
   var commerceCartRoute: any;
   var commerceCsrf: any;
   var commerceHomeRoute: any;
@@ -934,29 +929,12 @@ export type KovoTestTouchGraph = any;
 export type PGliteOptions = any;
 export type PgliteDatabase<TSchema = any> = any;
 export type Results = any;
-export type BetterAuthSessionPayload<Session = any, User = any> = {
-  session: Session;
-  user: User;
-};
-export type BetterAuthLike<Session = any, User = any> = {
-  api: {
-    getSession(options: any): BetterAuthSessionPayload<Session, User> | null | Promise<BetterAuthSessionPayload<Session, User> | null>;
-  };
-};
-export type BetterAuthMountLike = {
-  handler(request: any): any;
-};
-
 export const KovoDevtool: any;
 export const PGlite: any;
 export const assertMutationError: any;
 export const authed: <Request = any>() => any;
 export const betterAuth: any;
 export const betterAuthCsrfFromEnvironment: <Request = any>(options: { field: string }) => any;
-export const betterAuthSession: any;
-export const betterAuthSignInEmailMutation: any;
-export const betterAuthSignOutMutation: any;
-export const betterAuthSignUpEmailMutation: any;
 export const betterSqlite3: any;
 export const buildBundle: any;
 export const createDevtoolApp: any;

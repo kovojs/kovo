@@ -192,7 +192,7 @@ instance-specific — the same image runs behind a load balancer unchanged.
 | `DATABASE_URL`                     | Your `db` provider | The app opens a remote database connection.                                          |
 | `KOVO_CSRF_SECRET`                 | Kovo CSRF          | Strong fallback signing secret; at least 32 characters in generated auth apps.       |
 | `BETTER_AUTH_SECRET`               | Better Auth        | Strong signing secret; at least 32 characters when set.                              |
-| `BETTER_AUTH_URL`                  | Better Auth        | Required in production; a canonical HTTPS origin such as `https://app.example.com`.  |
+| `BETTER_AUTH_URL`                  | Better Auth        | Canonical HTTPS origin; plaintext is local-dev-only on exact loopback.               |
 | `KOVO_NODE_ORIGIN`                 | Node preset        | Recommended behind TLS termination; the exact canonical public origin.               |
 | `KOVO_NODE_TRUSTED_PROXY`          | Node preset        | Alternative exact value `1`; trusts the immediate proxy's forwarded scheme.          |
 | `PORT`                             | Node preset        | Optional; defaults to `3000`.                                                        |

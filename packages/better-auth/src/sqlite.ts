@@ -5,7 +5,7 @@ import type { KovoSqliteSystemDb } from '@kovojs/server/sqlite';
 import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
-import type { BetterAuthRequestLike } from './internal.js';
+import type { BetterAuthBindingRequest } from './internal.js';
 import {
   betterAuthEnvironmentIsProduction,
   resolveBetterAuthEnvironment,
@@ -58,7 +58,7 @@ export interface BetterAuthSqliteDevelopmentSeed {
 
 /** Options for the framework-owned Better Auth/SQLite construction boundary. */
 export interface BetterAuthSqliteBindingsOptions<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
 > {
   /** Absolute Better Auth base URL for this local app. */
@@ -83,7 +83,7 @@ export interface BetterAuthSqliteBindingsOptions<
 
 /** Generated-app binding options whose secrets/URL/demo seed come from boot-pinned operator env. */
 export type BetterAuthSqliteEnvironmentBindingsOptions<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
 > = Omit<
   BetterAuthSqliteBindingsOptions<Request, SessionValue>,
@@ -92,7 +92,7 @@ export type BetterAuthSqliteEnvironmentBindingsOptions<
 
 /** Sanitized bindings produced by `createBetterAuthSqliteBindings`. */
 export interface BetterAuthSqliteBindings<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 > {
@@ -101,7 +101,7 @@ export interface BetterAuthSqliteBindings<
   /** Create the configured fixed development account, or do nothing when disabled/production. */
   seedDemoUser(): Promise<void>;
   /** Runtime-sanitized Better Auth session provider. */
-  sessionProvider: SessionProvider<BetterAuthRequestLike, SessionValue>;
+  sessionProvider: SessionProvider<BetterAuthBindingRequest, SessionValue>;
   /** CSRF-protected email/password sign-in mutation. */
   signIn: ReturnType<typeof betterAuthSignInEmailMutation<'auth/sign-in', Request, Request>>;
   /** CSRF-protected sign-out mutation. */
@@ -112,7 +112,7 @@ export interface BetterAuthSqliteBindings<
 
 /** Construct SQLite bindings without exposing raw operator environment values to generated code. */
 export function createBetterAuthSqliteBindingsFromEnvironment<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
@@ -149,7 +149,7 @@ export function createBetterAuthSqliteBindingsFromEnvironment<
  * §6.6/§10.3 C9).
  */
 export function createBetterAuthSqliteBindings<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
@@ -278,7 +278,7 @@ function requireBetterAuthRateLimitSchema(schema: object): unknown {
 
 function requiredOption<Value>(
   options: object,
-  property: keyof BetterAuthSqliteBindingsOptions<BetterAuthRequestLike, unknown>,
+  property: keyof BetterAuthSqliteBindingsOptions<BetterAuthBindingRequest, unknown>,
 ): Value {
   const value = betterAuthOwnDataOption<Value>(
     options,

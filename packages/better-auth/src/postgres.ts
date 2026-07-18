@@ -9,7 +9,7 @@ import { usePostgresSystemDb } from '@kovojs/server/internal/postgres-capability
 import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
-import type { BetterAuthRequestLike } from './internal.js';
+import type { BetterAuthBindingRequest } from './internal.js';
 import {
   betterAuthEnvironmentIsProduction,
   resolveBetterAuthEnvironment,
@@ -78,7 +78,7 @@ export interface BetterAuthDevelopmentSeed {
  * session and credential-mutation bindings (SPEC §6.6 and §10.3 capability ownership/C9).
  */
 export interface BetterAuthPostgresBindingsOptions<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
 > {
   /** Absolute Better Auth base URL for this deployment. */
@@ -103,7 +103,7 @@ export interface BetterAuthPostgresBindingsOptions<
 
 /** Generated-app binding options whose secrets/URL/demo seed come from boot-pinned operator env. */
 export type BetterAuthPostgresEnvironmentBindingsOptions<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
 > = Omit<
   BetterAuthPostgresBindingsOptions<Request, SessionValue>,
@@ -116,7 +116,7 @@ export type BetterAuthPostgresEnvironmentBindingsOptions<
  * The raw Better Auth instance, Drizzle adapter, and system database never appear on this object.
  */
 export interface BetterAuthPostgresBindings<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 > {
@@ -125,7 +125,7 @@ export interface BetterAuthPostgresBindings<
   /** Create the configured fixed development account, or do nothing when disabled/production. */
   seedDemoUser(): Promise<void>;
   /** Runtime-sanitized Better Auth session provider for `session(schema).provider(...)`. */
-  sessionProvider: SessionProvider<BetterAuthRequestLike, SessionValue>;
+  sessionProvider: SessionProvider<BetterAuthBindingRequest, SessionValue>;
   /** CSRF-protected Better Auth email/password sign-in mutation. */
   signIn: ReturnType<typeof betterAuthSignInEmailMutation<'auth/sign-in', Request, Request>>;
   /** CSRF-protected Better Auth sign-out mutation. */
@@ -138,7 +138,7 @@ export interface BetterAuthPostgresBindings<
  * Construct Postgres bindings without exposing raw operator environment values to generated code.
  */
 export function createBetterAuthPostgresBindingsFromEnvironment<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
@@ -179,7 +179,7 @@ export function createBetterAuthPostgresBindingsFromEnvironment<
  * §10.3 C9).
  */
 export function createBetterAuthPostgresBindings<
-  Request extends BetterAuthRequestLike,
+  Request extends BetterAuthBindingRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
@@ -307,7 +307,7 @@ function requireBetterAuthRateLimitSchema(schema: object): unknown {
 
 function requiredOption<Value>(
   options: object,
-  property: keyof BetterAuthPostgresBindingsOptions<BetterAuthRequestLike, unknown>,
+  property: keyof BetterAuthPostgresBindingsOptions<BetterAuthBindingRequest, unknown>,
 ): Value {
   const value = betterAuthOwnDataOption<Value>(
     options,

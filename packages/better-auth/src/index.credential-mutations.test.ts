@@ -9,9 +9,6 @@ vi.mock('./internal/runtime-lock.js', () => ({
 }));
 
 import {
-  betterAuthSignInEmailMutation,
-  betterAuthSignOutMutation,
-  betterAuthSignUpEmailMutation,
   betterAuthCredentialMutationErrors,
   betterAuthCredentialMutationTouches,
   createBetterAuthCredentialMutationTouchGraph,
@@ -23,9 +20,16 @@ import {
   type BetterAuthSignUpEmailLike,
 } from './internal.js';
 import {
+  betterAuthSignInEmailMutation,
+  betterAuthSignOutMutation,
+  betterAuthSignUpEmailMutation,
+} from './mutations.js';
+import {
   AuthApiError,
+  fakeBetterAuthContext,
   fakeRoutedCredentialAuth,
   FakeCredentialAuth,
+  registerFakeBetterAuth,
   requestHeaders,
   responseWithCookies,
 } from './test-fakes.js';
@@ -383,9 +387,17 @@ describe('credential mutation helpers', () => {
   it('routes real sign-in/sign-up through Better Auth rate limiting with trusted-IP isolation', async () => {
     const auth = betterAuth({
       advanced: {
+        cookiePrefix: '__Host-better-auth',
+        defaultCookieAttributes: {
+          httpOnly: true,
+          path: '/',
+          sameSite: 'lax',
+          secure: true,
+        },
         disableCSRFCheck: true,
         disableOriginCheck: true,
         ipAddress: { ipAddressHeaders: ['x-kovo-test-ip'] },
+        useSecureCookies: false,
       },
       baseURL: 'https://example.test/api/auth',
       database: memoryAdapter({ account: [], session: [], user: [], verification: [] }),
@@ -399,6 +411,7 @@ describe('credential mutation helpers', () => {
       rateLimit: { enabled: true },
       secret: 'better-auth-real-rate-limit-test-secret-0123456789',
     });
+    registerFakeBetterAuth(auth);
     const signIn = betterAuthSignInEmailMutation(auth);
     const signUp = betterAuthSignUpEmailMutation(auth);
     const request = (clientIp: string, spoofedIp: string) => ({
@@ -628,7 +641,8 @@ describe('credential mutation helpers', () => {
   it('does not report or clear local state for a failed sign-out response', async () => {
     // SPEC §6.5/§9.1: logout success needs exact positive provider response evidence.
     // A resolved 5xx is not revocation and must not emit Clear-Site-Data or a signed-out outcome.
-    const auth: BetterAuthSignOutLike = {
+    const auth = registerFakeBetterAuth({
+      $context: fakeBetterAuthContext(),
       api: {
         signOut: () =>
           new Response('provider failed', {
@@ -636,7 +650,7 @@ describe('credential mutation helpers', () => {
             status: 500,
           }),
       },
-    };
+    }) satisfies BetterAuthSignOutLike;
     const signOut = betterAuthSignOutMutation(auth);
 
     await expect(
@@ -654,7 +668,8 @@ describe('credential mutation helpers', () => {
 
   it('does not let deferred sign-out header failures carry cookie secrets out', async () => {
     const secret = 'SIGN_OUT_COOKIE_MUST_NOT_ESCAPE';
-    const auth: BetterAuthSignOutLike = {
+    const auth = registerFakeBetterAuth({
+      $context: fakeBetterAuthContext(),
       api: {
         signOut: () => ({
           headers: {
@@ -665,7 +680,7 @@ describe('credential mutation helpers', () => {
           status: 200,
         }),
       },
-    };
+    }) satisfies BetterAuthSignOutLike;
     const result = await runProtectedCredentialMutation(
       betterAuthSignOutMutation(auth),
       {},
@@ -688,7 +703,8 @@ describe('credential mutation helpers', () => {
     async (status) => {
       // SPEC §6.5/§9.1 C9: only an exact HTTP success status is positive provider evidence.
       // NaN bypassed both range comparisons and fractional values can never be native HTTP status.
-      const auth: BetterAuthSignOutLike = {
+      const auth = registerFakeBetterAuth({
+        $context: fakeBetterAuthContext(),
         api: {
           signOut: () => ({
             headers: responseWithCookies([
@@ -697,7 +713,7 @@ describe('credential mutation helpers', () => {
             status,
           }),
         },
-      };
+      }) satisfies BetterAuthSignOutLike;
       const signOut = betterAuthSignOutMutation(auth);
 
       await expect(
@@ -757,7 +773,10 @@ describe('credential mutation helpers', () => {
 
   it('does not trust late native Response getters to forge sign-out success', async () => {
     const response = new Response('provider failed', { status: 500 });
-    const auth: BetterAuthSignOutLike = { api: { signOut: () => response } };
+    const auth = registerFakeBetterAuth({
+      $context: fakeBetterAuthContext(),
+      api: { signOut: () => response },
+    }) satisfies BetterAuthSignOutLike;
     const signOut = betterAuthSignOutMutation(auth);
     const status = Object.getOwnPropertyDescriptor(Response.prototype, 'status');
     const headers = Object.getOwnPropertyDescriptor(Response.prototype, 'headers');
@@ -842,13 +861,13 @@ describe('credential mutation helpers', () => {
       },
     };
     const routed = fakeRoutedCredentialAuth(api);
-    const auth = {
+    const auth = registerFakeBetterAuth({
       ...routed,
       handler(this: unknown, request: Request) {
         handlerReceiverCalls.push(this);
         return routed.handler(request);
       },
-    } satisfies BetterAuthSignInEmailLike & BetterAuthSignOutLike & BetterAuthSignUpEmailLike;
+    }) satisfies BetterAuthSignInEmailLike & BetterAuthSignOutLike & BetterAuthSignUpEmailLike;
     const signIn = betterAuthSignInEmailMutation(auth);
     const signUp = betterAuthSignUpEmailMutation(auth);
     const signOut = betterAuthSignOutMutation(auth);
@@ -1569,7 +1588,12 @@ describe('credential success is positively classified', () => {
   it('rethrows a real routed custom-storage failure so replay can abort', async () => {
     const storageFailure = new Error('private database failure');
     const auth = betterAuth({
-      advanced: { ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] } },
+      advanced: {
+        cookiePrefix: '__Host-better-auth',
+        defaultCookieAttributes: { httpOnly: true, path: '/', secure: true },
+        ipAddress: { ipAddressHeaders: ['x-kovo-client-ip'] },
+        useSecureCookies: false,
+      },
       baseURL: 'https://example.test/api/auth',
       database: memoryAdapter({ account: [], session: [], user: [], verification: [] }),
       emailAndPassword: { enabled: true },
@@ -1593,6 +1617,7 @@ describe('credential success is positively classified', () => {
       },
       secret: 'better-auth-storage-failure-test-secret-0123456789',
     });
+    registerFakeBetterAuth(auth);
 
     await expect(
       runProtectedCredentialMutation(
