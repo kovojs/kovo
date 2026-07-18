@@ -92,9 +92,11 @@ Measurements are versioned and reproducible:
 - [ ] Run `pnpm run test:authz-paranoid` against a real external Postgres toolchain and record
       which cases executed or skipped. A green run containing skipped required Postgres cases is
       not acceptance evidence.
-- [ ] Reproduce or close every unintegrated ordinary-threat finding at the baseline, including the
+- [x] Reproduce or close every unintegrated ordinary-threat finding at the baseline, including the
       HTTP/2 method-case differential currently carried by test-only commit `6abd0f36b`, and
       route confirmed findings through the threat matrix before architectural work proceeds.
+  - Evidence: `1a943de8d` closes M34 across real HTTP/2, live/generated Node, and Vercel; SPEC §9.5,
+    `plans/bugz-33.md`, and `docs/security-threat-matrix.md` record the rule and proof.
 - [ ] Restore the exact baseline to green local gates and `origin/main` CI/Pages, integrating the
       already-verified fixture/runtime checkpoints without weakening production classifiers.
 - [ ] Consolidate completed security plans through an explicit security-ledger index. Update the
@@ -262,7 +264,7 @@ Measurements are versioned and reproducible:
 
 ## Convergence table
 
-| Week | Baseline SHA | R (root causes / fixed charter) | M (canary recall / mutation kill) | P (enumerative obligations) | G (green corpus / cost) | C13 anchors (informational) | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-07-17 | uncontrolled historical sample | 29 raw findings; not comparable | — | — | — | — | Seed audit only; not a convergence baseline |
-| 2026-07-18 | pending Phase 0 | pending | pending | pending | pending | pending | First exact-SHA comparable baseline |
+| Week       | Baseline SHA                   | R (root causes / fixed charter) | M (canary recall / mutation kill) | P (enumerative obligations) | G (green corpus / cost) | C13 anchors (informational) | Notes                                       |
+| ---------- | ------------------------------ | ------------------------------- | --------------------------------- | --------------------------- | ----------------------- | --------------------------- | ------------------------------------------- |
+| 2026-07-17 | uncontrolled historical sample | 29 raw findings; not comparable | —                                 | —                           | —                       | —                           | Seed audit only; not a convergence baseline |
+| 2026-07-18 | pending Phase 0                | pending                         | pending                           | pending                     | pending                 | pending                     | First exact-SHA comparable baseline         |

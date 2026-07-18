@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-17
 
-**Status:** Remediation complete through M33; final exact-tip verification and publication pending
+**Status:** Remediation complete through M34; final exact-tip verification and publication pending
 **Baseline:** `4403ce7401760725836332aedb3031e1c0833cfe`
 
 **Scope:** Fresh remotely reachable and framework-authority findings after `bugz-32`. Deliberate
@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    0 |     23 |
-| Medium   |    0 |     33 |
+| Medium   |    0 |     34 |
 | Low      |    0 |      5 |
 
 ## High
@@ -695,6 +695,17 @@ rendering, Better Auth, and managed SQL.
   - **Evidence:** the integrated seven-file response-lifecycle matrix passes 342/342, including
     exact same-Request bodies/abort propagation, new-Request controls, and every early-return path.
 
+- [x] **M34 - HTTP/2 method case changes crossed the Node-to-Fetch boundary as a different method.**
+  - Node preserved raw `:method: post` or `PoSt`, but the Fetch `Request` constructor canonicalized
+    either token to `POST`. A method identity the peer did not send could therefore reach static or
+    app dispatch and execute an exact-`POST` mutation when its other security requirements passed.
+  - **Fixed:** `1a943de8d` validates the raw RFC 9110 token before Request construction, rejects
+    standard-method case changes and Fetch-forbidden methods with 400, confirms the constructed
+    Request retained the exact identity, and shares the rule across live Node, emitted Node, and
+    Vercel adapters. SPEC §9.5 now makes byte-for-byte adapter method identity normative.
+  - **Evidence:** real HTTP/2 lower/mixed/exact-case regression plus live/generated adapter parity
+    pass 4/4; the C13 corpus requires `node-fetch-method-identity-closed`.
+
 ## Low
 
 - [x] **L4 - Stored upload filenames could preserve Unicode bidi spoofing into WebKit downloads.**
@@ -766,5 +777,8 @@ rendering, Better Auth, and managed SQL.
 - Windows environment/database-driver CLI matrix: 162/162; all 16 exact-tip C13 corpora passed.
 - Response-lifecycle exact-request integration matrix: 342/342; VP, imports, wire-output, TCB,
   security-guarantee, API-surface, and diff gates passed.
+- HTTP method-identity live/generated matrix: 4/4; wire-output boundary and focused C13 performance
+  control passed. The broad C13 run passed 2,427/2,428 under concurrent load; its sole CPU-budget
+  miss passed alone and remains pending an uncontended exact-tip rerun.
 - Publication remains pending until the exact-tip broad gates, `origin/main` push, GitHub
   Actions/Pages monitoring, and post-green no-find pass complete.
