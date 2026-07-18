@@ -62,12 +62,34 @@ The two lists do different jobs. Naming an origin does not reopen private IP ran
 destination resolves to loopback, RFC1918, link-local, unique-local, or metadata space, the
 private-network floor still applies.
 
+## Declare a NAT64 prefix
+
+Do this when your deployment uses DNS64/NAT64 with a Network-Specific Prefix. Copy the Pref64
+from the network configuration into the app posture:
+
+```text
+createApp({
+  egress: {
+    nat64Prefixes: ['2001:db8:64::/96'],
+  },
+});
+```
+
+Kovo can now decode the IPv4 destination inside each synthesized IPv6 answer. A synthesized
+metadata or private address stays blocked at every transport door.
+
+Do not list `64:ff9b::/96`; Kovo already recognizes that well-known prefix. `nat64Prefixes`
+accepts the six RFC 6052 layouts: `/32`, `/40`, `/48`, `/56`, `/64`, and `/96`. Kovo refuses to
+boot on malformed, overlapping, or non-network CIDRs. It does not discover Pref64 automatically,
+because a best-effort DNS answer is not stable process-wide policy.
+
 ## Add the production shape
 
 Keep the posture tight:
 
 - Prefer exact `https://host` entries in `allowDestinations`.
 - Prefer exact `host:port` entries in `allowInternal`.
+- Declare every deployment-specific DNS64/NAT64 Pref64 in `nat64Prefixes`.
 - Do not try to allowlist cloud metadata. Kovo rejects that configuration with
   `EgressConfigError`.
 - Remember that omitted `allowDestinations` means framework-owned HTTP stays blocked, even for

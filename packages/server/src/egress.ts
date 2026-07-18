@@ -56,6 +56,7 @@ import {
 } from './egress-intrinsics.js';
 import {
   createWitnessWeakMap,
+  witnessFreeze,
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
@@ -256,6 +257,17 @@ interface AzureIdentityEndpoint {
 }
 
 const azureIdentityEndpointPolicy: unique symbol = Symbol('kovo.azure-identity-endpoint-policy');
+const nat64PrefixPolicy: unique symbol = Symbol('kovo.nat64-prefix-policy');
+
+type Rfc6052PrefixLength = 32 | 40 | 48 | 56 | 64 | 96;
+
+interface ResolvedNat64Prefix {
+  /** Canonical network CIDR used for policy equality and diagnostics. */
+  readonly cidr: string;
+  /** Immutable 16-byte network address. */
+  readonly bytes: readonly number[];
+  readonly length: Rfc6052PrefixLength;
+}
 
 /** Resolved egress policy after normalizing operator config. */
 export interface EgressPolicy {
@@ -267,8 +279,12 @@ export interface EgressPolicy {
   readonly allowDestinations: ReadonlySet<string>;
   /** Broad-CIDR entries the operator passed (flagged + warned, honored as a fallback). */
   readonly allowInternalCidrs: readonly string[];
+  /** Canonical configured RFC 6052 Network-Specific Pref64 CIDRs. */
+  readonly nat64Prefixes: readonly string[];
   /** Module-private metadata authority; the symbol survives internal object-spread policy clones. */
   readonly [azureIdentityEndpointPolicy]?: AzureIdentityEndpoint;
+  /** Parsed Pref64 authority; the symbol survives internal object-spread policy clones. */
+  readonly [nat64PrefixPolicy]?: readonly ResolvedNat64Prefix[];
   /**
    * Internal dev-only posture: keep the floor installed and metadata blocked, but permit
    * non-metadata private/loopback/link-local destinations so local sidecars do not brick.
@@ -303,6 +319,14 @@ export interface EgressOptions {
    * `allowInternal` because destination intent does not prove the resolved IP is safe.
    */
   allowDestinations?: readonly string[];
+  /**
+   * RFC 6052 Network-Specific Prefixes used by this deployment's DNS64/NAT64 translator.
+   * Kovo already recognizes the well-known `64:ff9b::/96` prefix. List every additional
+   * Pref64 as an IPv6 CIDR with one of RFC 6052's legal lengths: `/32`, `/40`, `/48`, `/56`,
+   * `/64`, or `/96`. Prefixes are validated and snapshotted at boot; malformed, host-bit-set,
+   * duplicate, or overlapping entries refuse boot instead of being ignored.
+   */
+  nat64Prefixes?: readonly string[];
   /**
    * Optional same-process tamper hardening for the transport monkeypatches.
    *
@@ -351,6 +375,7 @@ export function resolveEgressPolicy(
   const azureIdentityEndpoint = resolveAzureIdentityEndpoint(
     policyOptions.identityEndpoint ?? runtimeEnvironmentValue('IDENTITY_ENDPOINT'),
   );
+  const nat64Prefixes = resolveNat64Prefixes(options?.nat64Prefixes);
   const allowInternal = egressCreateSet<string>();
   const allowDatabaseEndpoints = egressCreateSet<string>();
   const allowDestinations = egressCreateSet<string>();
@@ -392,7 +417,7 @@ export function resolveEgressPolicy(
       throw new EgressConfigError(METADATA_ALLOWLIST_REJECT, entry);
     }
     // A metadata-IP allowlist entry is rejected loudly — it must never re-open the path.
-    const cls = classifyIp(parsed.host);
+    const cls = classifyIpWithNat64Prefixes(parsed.host, nat64Prefixes);
     if (cls === 'metadata') {
       throw new EgressConfigError(METADATA_ALLOWLIST_REJECT, entry);
     }
@@ -417,12 +442,146 @@ export function resolveEgressPolicy(
     allowDatabaseEndpoints,
     allowDestinations,
     allowInternalCidrs,
+    nat64Prefixes: witnessFreeze(egressArrayMap(nat64Prefixes, (prefix) => prefix.cidr)),
     allowPrivateNetwork: policyOptions.allowPrivateNetwork === true,
+    [nat64PrefixPolicy]: nat64Prefixes,
     ...(azureIdentityEndpoint === undefined
       ? {}
       : { [azureIdentityEndpointPolicy]: azureIdentityEndpoint }),
   };
   return policy;
+}
+
+function resolveNat64Prefixes(
+  inputs: readonly string[] | undefined,
+): readonly ResolvedNat64Prefix[] {
+  if (inputs === undefined) {
+    const empty: ResolvedNat64Prefix[] = [];
+    return witnessFreeze(empty);
+  }
+  if (!egressArrayIsArray(inputs)) {
+    throw new EgressConfigError(
+      'egress.nat64Prefixes must be a dense array of RFC 6052 IPv6 CIDRs.',
+      '<nat64Prefixes>',
+    );
+  }
+
+  const resolved: ResolvedNat64Prefix[] = [];
+  for (let index = 0; index < inputs.length; index += 1) {
+    const raw = inputs[index];
+    if (typeof raw !== 'string') {
+      throw new EgressConfigError(
+        'Every egress.nat64Prefixes entry must be an RFC 6052 IPv6 CIDR string.',
+        '<non-string Pref64 entry>',
+      );
+    }
+    const candidate = parseNat64Prefix(raw);
+    if (nat64PrefixOverlapsWellKnownPrefix(candidate)) {
+      throw new EgressConfigError(
+        `egress.nat64Prefixes entry "${candidate.cidr}" overlaps the RFC 6052 well-known ` +
+          '`64:ff9b::/96` decoder that Kovo always applies. Remove the redundant/ambiguous ' +
+          'entry and configure only Network-Specific prefixes.',
+        raw,
+      );
+    }
+    for (let existingIndex = 0; existingIndex < resolved.length; existingIndex += 1) {
+      const existing = resolved[existingIndex]!;
+      if (nat64PrefixesOverlap(candidate, existing)) {
+        throw new EgressConfigError(
+          `egress.nat64Prefixes entries "${candidate.cidr}" and "${existing.cidr}" overlap. ` +
+            'One translated IPv6 address could decode to two different IPv4 destinations; ' +
+            'declare one unambiguous Pref64 only.',
+          raw,
+        );
+      }
+    }
+
+    // Prefix order has no policy meaning once overlap is rejected. Store a canonical lexical
+    // order so equivalent operator input produces the same process-global posture.
+    let insertionIndex = resolved.length;
+    for (let existingIndex = 0; existingIndex < resolved.length; existingIndex += 1) {
+      if (candidate.cidr < resolved[existingIndex]!.cidr) {
+        insertionIndex = existingIndex;
+        break;
+      }
+    }
+    egressArraySplice(resolved, insertionIndex, 0, candidate);
+  }
+  return witnessFreeze(resolved);
+}
+
+function parseNat64Prefix(entry: string): ResolvedNat64Prefix {
+  const parts = egressStringSplit(entry, '/');
+  const address = parts[0];
+  const length = rfc6052PrefixLength(parts[1]);
+  if (parts.length !== 2 || address === undefined || address === '' || length === null) {
+    throw invalidNat64Prefix(entry);
+  }
+  const parsed = parseIpv6Bytes(address);
+  if (parsed === null) throw invalidNat64Prefix(entry);
+
+  const prefixBytes = length / 8;
+  for (let index = prefixBytes; index < parsed.bytes.length; index += 1) {
+    if (parsed.bytes[index] !== 0) {
+      throw new EgressConfigError(
+        `egress.nat64Prefixes entry "${entry}" is not a canonical /${length} network ` +
+          'address because host bits are set.',
+        entry,
+      );
+    }
+  }
+  // RFC 6052 §2.2 reserves the u octet at bits 64..71. With /96 it belongs to the prefix
+  // itself, so prefix selection must make it zero; shorter layouts validate the address byte
+  // at the egress sink after the IPv4 bits have been inserted.
+  if (length === 96 && parsed.bytes[8] !== 0) {
+    throw new EgressConfigError(
+      `egress.nat64Prefixes entry "${entry}" has a non-zero RFC 6052 u octet ` +
+        '(bits 64..71). Select a /96 prefix whose u octet is zero.',
+      entry,
+    );
+  }
+
+  const bytes = witnessFreeze(egressArraySlice(parsed.bytes));
+  return witnessFreeze({
+    bytes,
+    cidr: `${canonicalizeIpv6Bytes({ bytes })}/${length}`,
+    length,
+  });
+}
+
+function rfc6052PrefixLength(input: string | undefined): Rfc6052PrefixLength | null {
+  if (input === '32') return 32;
+  if (input === '40') return 40;
+  if (input === '48') return 48;
+  if (input === '56') return 56;
+  if (input === '64') return 64;
+  if (input === '96') return 96;
+  return null;
+}
+
+function invalidNat64Prefix(entry: string): EgressConfigError {
+  return new EgressConfigError(
+    `egress.nat64Prefixes entry "${entry}" must be an IPv6 network CIDR with ` +
+      'an RFC 6052 prefix length (/32, /40, /48, /56, /64, or /96).',
+    entry,
+  );
+}
+
+function nat64PrefixesOverlap(left: ResolvedNat64Prefix, right: ResolvedNat64Prefix): boolean {
+  const sharedBytes = (left.length < right.length ? left.length : right.length) / 8;
+  for (let index = 0; index < sharedBytes; index += 1) {
+    if (left.bytes[index] !== right.bytes[index]) return false;
+  }
+  return true;
+}
+
+function nat64PrefixOverlapsWellKnownPrefix(prefix: ResolvedNat64Prefix): boolean {
+  const wellKnownPrefix = [0x00, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0];
+  const sharedBytes = prefix.length / 8;
+  for (let index = 0; index < sharedBytes; index += 1) {
+    if (prefix.bytes[index] !== wellKnownPrefix[index]) return false;
+  }
+  return true;
 }
 
 /** @internal Normalize Postgres URLs into exact DB host:port socket capabilities. */
@@ -957,6 +1116,70 @@ export function classifyIp(host: string): PrivateAddressClass {
   return 'special-use';
 }
 
+/**
+ * Apply deployment topology before the context-free registry classifier. A Network-Specific
+ * Pref64 is ordinary IPv6 on the public Internet; only the operator can assert that this process
+ * reaches an RFC 6052 translator at that prefix. Keep {@link classifyIp} topology-free and route
+ * the configured fact only through the resolved egress policy.
+ */
+function classifyIpForPolicy(host: string, policy: EgressPolicy): PrivateAddressClass {
+  return classifyIpWithNat64Prefixes(host, policy[nat64PrefixPolicy] ?? []);
+}
+
+function classifyIpWithNat64Prefixes(
+  host: string,
+  prefixes: readonly ResolvedNat64Prefix[],
+): PrivateAddressClass {
+  const normalized = normalizeIpLiteral(host);
+  if (normalized === null) return 'special-use';
+  const contextFree = classifyIp(normalized);
+  const ipv6 = parseIpv6Bytes(normalized);
+  if (ipv6 !== null) {
+    const translated = classifyConfiguredNat64Address(ipv6.bytes, prefixes);
+    if (translated !== null) {
+      // Metadata is the strongest verdict because it cannot be reopened through allowInternal.
+      // Other context-free special ranges may deliberately carry a configured translator (for
+      // example RFC 8215's 64:ff9b:1::/48 local-use prefix), so the explicit topology is allowed
+      // to expose their embedded public IPv4 destination.
+      if (contextFree === 'metadata' || translated === 'metadata') return 'metadata';
+      return translated;
+    }
+  }
+  return contextFree;
+}
+
+function classifyConfiguredNat64Address(
+  bytes: readonly number[],
+  prefixes: readonly ResolvedNat64Prefix[],
+): PrivateAddressClass | null {
+  for (let prefixIndex = 0; prefixIndex < prefixes.length; prefixIndex += 1) {
+    const prefix = prefixes[prefixIndex]!;
+    const prefixBytes = prefix.length / 8;
+    let matches = true;
+    for (let byteIndex = 0; byteIndex < prefixBytes; byteIndex += 1) {
+      if (bytes[byteIndex] !== prefix.bytes[byteIndex]) {
+        matches = false;
+        break;
+      }
+    }
+    if (!matches) continue;
+
+    // RFC 6052 Table 1 inserts the reserved u octet at bits 64..71 for every prefix shorter
+    // than /96. It must be zero; an invalid carrier is not confidently public and fails closed.
+    if (prefix.length < 96 && bytes[8] !== 0) return 'special-use';
+
+    const ipv4: number[] = [];
+    let byteIndex = prefixBytes;
+    while (ipv4.length < 4) {
+      if (byteIndex === 8) byteIndex = 9; // skip RFC 6052's reserved u octet
+      egressArrayPush(ipv4, bytes[byteIndex] ?? 0);
+      byteIndex += 1;
+    }
+    return classifyIpv4(`${ipv4[0]}.${ipv4[1]}.${ipv4[2]}.${ipv4[3]}`);
+  }
+  return null;
+}
+
 type Ipv4SpecialPurposePrefix = readonly [cidr: string, classification: PrivateAddressClass];
 
 /**
@@ -1381,7 +1604,7 @@ function evaluateEgressDecision(
       metadata: true,
     });
   }
-  const cls = classifyIp(resolvedIp);
+  const cls = classifyIpForPolicy(resolvedIp, policy);
   if (cls === 'public') return null;
 
   if (cls === 'metadata') {
@@ -1435,7 +1658,7 @@ function evaluateDestinationAllowlist(args: {
     return new EgressBlockedError({
       destination: `${host}:${port}`,
       resolvedIp,
-      classification: classifyIp(resolvedIp),
+      classification: classifyIpForPolicy(resolvedIp, policy),
       reason: 'destination-allowlist',
     });
   }
@@ -1444,7 +1667,7 @@ function evaluateDestinationAllowlist(args: {
   return new EgressBlockedError({
     destination: origin,
     resolvedIp,
-    classification: classifyIp(resolvedIp),
+    classification: classifyIpForPolicy(resolvedIp, policy),
     reason: 'destination-allowlist',
   });
 }

@@ -274,9 +274,11 @@ export interface CreateAppOptions<
    * this option to install the floor by default: production uses an empty internal allowlist,
    * while development keeps localhost/private sidecars reachable except cloud metadata. List a
    * specific internal destination by `host:port` in `allowInternal` to use exact allowlist
-   * semantics in any mode. Cloud instance-metadata is reachable only from a `kovo` credential
-   * factory, never via `allowInternal`. Disable only with an audited `{ enabled: false,
-   * justification }` opt-out; production refuses a missing/partial or unaudited-disabled floor.
+   * semantics in any mode. Deployments using an RFC 6052 Network-Specific NAT64 prefix must list
+   * it in `nat64Prefixes` so the floor classifies the embedded IPv4 destination. Cloud
+   * instance-metadata is reachable only from a `kovo` credential factory, never via
+   * `allowInternal`. Disable only with an audited `{ enabled: false, justification }` opt-out;
+   * production refuses a missing/partial or unaudited-disabled floor.
    */
   egress?: AppEgressOptions;
   /**

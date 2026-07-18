@@ -178,6 +178,30 @@ describe('undici egress floor (layer a): gates every fetch incl. pooled reuse', 
     }
   });
 
+  it('denies a mixed DNS answer containing metadata under an operator Pref64', async () => {
+    dnsLookupMock.mockReset();
+    dnsLookupMock.mockResolvedValue([
+      { address: '8.8.8.8', family: 4 },
+      { address: '2606:4700:1234:5678::a9fe:a9fe', family: 6 },
+    ]);
+    const connector = vi.fn((_options: unknown, callback: (error: Error, socket: null) => void) => {
+      callback(new Error('synthetic connector stop'), null);
+    });
+    const dispatcher = new EgressGatingDispatcher(
+      resolveEgressPolicy({ nat64Prefixes: ['2606:4700:1234:5678::/96'] }, () => {}),
+      { connect: connector },
+    );
+
+    try {
+      await expect(
+        dispatcher.request({ method: 'GET', origin: 'http://dns64-mixed.test', path: '/' }),
+      ).rejects.toMatchObject({ classification: 'metadata' });
+      expect(connector).not.toHaveBeenCalled();
+    } finally {
+      await dispatcher.close();
+    }
+  });
+
   it('binds the checked literal host to native URL bytes after late String.replace poisoning', async () => {
     uninstall = await installUndiciFloor(resolveEgressPolicy(undefined, () => {}));
     const originalReplace = String.prototype.replace;

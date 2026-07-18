@@ -179,7 +179,8 @@ function sameEgressFloorPolicy(left: EgressPolicy, right: EgressPolicy): boolean
     sameEgressStringSet(left.allowInternal, right.allowInternal) &&
     sameEgressStringSet(left.allowDatabaseEndpoints, right.allowDatabaseEndpoints) &&
     sameEgressStringSet(left.allowDestinations, right.allowDestinations) &&
-    sameEgressStringArray(left.allowInternalCidrs, right.allowInternalCidrs)
+    sameEgressStringArray(left.allowInternalCidrs, right.allowInternalCidrs) &&
+    sameEgressStringArray(left.nat64Prefixes, right.nat64Prefixes)
   );
 }
 

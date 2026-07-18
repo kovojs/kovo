@@ -441,6 +441,7 @@ function snapshotAppEgressOptions(
   const allowDestinations = appEgressOwnDataValue(value, 'allowDestinations');
   const allowInternal = appEgressOwnDataValue(value, 'allowInternal');
   const hardening = appEgressOwnDataValue(value, 'hardening');
+  const nat64Prefixes = appEgressOwnDataValue(value, 'nat64Prefixes');
   if (
     hardening !== undefined &&
     hardening !== 'off' &&
@@ -463,6 +464,11 @@ function snapshotAppEgressOptions(
       ? {}
       : {
           allowInternal: snapshotAppDocumentStringArray(allowInternal, 'egress.allowInternal'),
+        }),
+    ...(nat64Prefixes === undefined
+      ? {}
+      : {
+          nat64Prefixes: snapshotAppDocumentStringArray(nat64Prefixes, 'egress.nat64Prefixes'),
         }),
     ...(snapshottedHardening === undefined ? {} : { hardening: snapshottedHardening }),
   });
