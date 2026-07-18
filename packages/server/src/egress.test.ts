@@ -163,6 +163,88 @@ function mockDnsLookup(addresses: { address: string; family: number }[]): void {
 
 // @kovo-security-classifier-corpus egress-ip
 describe('IPv6 classifier corpus (SPEC §6.6 decision rule)', () => {
+  it('denies the complete 2025-10-09 IANA special-purpose registry snapshot', () => {
+    // Registry parent prefixes only: nested records inherit the same closed boundary. IPv4-mapped
+    // and NAT64 /96 carriers are intentionally classified by their embedded IPv4 destination per
+    // SPEC §6.6's explicit normalization rule, so they are covered by the mapped corpus below.
+    const specialPurpose: ReadonlyArray<
+      readonly [address: string, classification: ReturnType<typeof classifyIp>]
+    > = [
+      ['0.1.2.3', 'unspecified'],
+      ['10.1.2.3', 'private-rfc1918'],
+      ['100.64.0.1', 'carrier-nat'],
+      ['127.0.0.1', 'loopback'],
+      ['169.254.1.1', 'link-local'],
+      ['172.16.0.1', 'private-rfc1918'],
+      ['192.0.0.1', 'special-use'],
+      ['192.0.2.1', 'special-use'],
+      ['192.31.196.1', 'special-use'], // AS112-v4
+      ['192.52.193.1', 'special-use'], // AMT
+      ['192.88.99.1', 'special-use'],
+      ['192.168.0.1', 'private-rfc1918'],
+      ['192.175.48.1', 'special-use'], // Direct Delegation AS112
+      ['198.18.0.1', 'special-use'],
+      ['198.51.100.1', 'special-use'],
+      ['203.0.113.1', 'special-use'],
+      ['240.0.0.1', 'special-use'],
+      ['::', 'unspecified'],
+      ['::1', 'loopback'],
+      ['64:ff9b:1::1', 'special-use'],
+      ['100::1', 'special-use'],
+      ['100:0:0:1::1', 'special-use'],
+      ['2001:100::1', 'special-use'],
+      ['2002::1', 'special-use'],
+      ['2620:4f:8000::1', 'special-use'], // Direct Delegation AS112
+      ['3fff::1', 'special-use'],
+      ['5f00::1', 'special-use'],
+      ['fc00::1', 'unique-local'],
+      ['fe80::1', 'link-local'],
+    ];
+
+    for (const [resolvedIp, classification] of specialPurpose) {
+      expect(classifyIp(resolvedIp), resolvedIp).toBe(classification);
+      expect(
+        evaluateEgress({ host: resolvedIp, port: 443, resolvedIp, policy: emptyPolicy() }),
+        resolvedIp,
+      ).toMatchObject({ classification });
+    }
+  });
+
+  it('denies omitted IANA globally-reachable ranges and mapped forms but not adjacent public IPs', () => {
+    const omittedSpecialPurpose = [
+      '192.31.196.1',
+      '192.52.193.1',
+      '192.175.48.1',
+      '2620:4f:8000::1',
+      '::ffff:192.31.196.1',
+    ];
+    const adjacentPublic = [
+      '192.31.195.255',
+      '192.31.197.0',
+      '192.52.192.255',
+      '192.52.194.0',
+      '192.175.47.255',
+      '192.175.49.0',
+      '2620:4f:7fff:ffff:ffff:ffff:ffff:ffff',
+      '2620:4f:8001::',
+    ];
+
+    for (const resolvedIp of omittedSpecialPurpose) {
+      expect(classifyIp(resolvedIp), resolvedIp).toBe('special-use');
+      expect(
+        evaluateEgress({ host: resolvedIp, port: 443, resolvedIp, policy: emptyPolicy() }),
+        resolvedIp,
+      ).toMatchObject({ classification: 'special-use', reason: 'private-network' });
+    }
+    for (const resolvedIp of adjacentPublic) {
+      expect(classifyIp(resolvedIp), resolvedIp).toBe('public');
+      expect(
+        evaluateEgress({ host: resolvedIp, port: 443, resolvedIp, policy: emptyPolicy() }),
+        resolvedIp,
+      ).toBeNull();
+    }
+  });
+
   it('classifies acceptance IPv6 edge forms fail-closed before public', () => {
     expect(classifyIp('0:0:0:0:0:ffff:169.254.169.254')).toBe('metadata');
     expect(classifyIp('0000:0000:0000:0000:0000:FFFF:A9FE:A9FE')).toBe('metadata');
@@ -960,6 +1042,46 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
         classification: 'loopback',
       },
     );
+  });
+
+  it('frameworkEgressFetch blocks IANA-special DNS answers before native fetch', async () => {
+    installFrameworkFetchFloor(
+      resolveEgressPolicy(
+        {
+          allowDestinations: [
+            'https://iana-special.test',
+            'https://iana-adjacent-public.test',
+          ],
+        },
+        () => {},
+      ),
+    );
+    vi.spyOn(dns, 'lookup').mockImplementation(((hostname, options, callback) => {
+      const cb = (typeof options === 'function' ? options : callback) as (
+        error: Error | null,
+        addresses: { address: string; family: number }[],
+      ) => void;
+      const address =
+        hostname === 'iana-special.test' ? '192.31.196.1' : '192.31.195.255';
+      cb(null, [{ address, family: 4 }]);
+    }) as typeof dns.lookup);
+
+    await expect(
+      frameworkEgressFetch('https://iana-special.test/path', {
+        signal: AbortSignal.abort(),
+      }),
+    ).rejects.toMatchObject({
+      classification: 'special-use',
+      name: EGRESS_BLOCKED_ERROR_NAME,
+    });
+
+    // The adjacent public control reaches native fetch, where the already-aborted request stops
+    // before any network dial. A classifier rejection would be EgressBlockedError instead.
+    await expect(
+      frameworkEgressFetch('https://iana-adjacent-public.test/path', {
+        signal: AbortSignal.abort(),
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('frameworkEgressFetch keeps an allowlisted private literal blocked after late Array.some poisoning', async () => {

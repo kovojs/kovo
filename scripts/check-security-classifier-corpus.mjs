@@ -177,6 +177,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: ["'2001:2::1'", "'2001:100::1'", "'3fff::1'", "classification: 'special-use'"],
       },
       {
+        id: 'iana-special-purpose-registry-completeness-regression',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'complete 2025-10-09 IANA special-purpose registry snapshot',
+          "'192.31.196.1'",
+          "'192.52.193.1'",
+          "'192.175.48.1'",
+          "'2620:4f:8000::1'",
+          "'::ffff:192.31.196.1'",
+          "'2620:4f:8001::'",
+        ],
+      },
+      {
         id: 'azure-identity-endpoint-provider-separation',
         file: 'packages/server/src/egress.test.ts',
         snippets: [
