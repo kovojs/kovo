@@ -235,6 +235,7 @@ describe('@kovojs/test markdown fixture seam', () => {
           '| Command | Commit | Result |',
           '| --- | --- | --- |',
           '| pnpm run acceptance | abc1234 | passed |',
+          '| pnpm run test:authz-paranoid | def5678 | passed |',
           '| pnpm run acceptance | TBD at freeze run | pending |',
           '## Dated Ledger Audit',
           '| Area | Status |',
@@ -284,6 +285,7 @@ describe('@kovojs/test markdown fixture seam', () => {
       pendingFreezeRunCount: 1,
       runFacts: [
         { command: 'pnpm run acceptance', commit: 'abc1234', result: 'passed' },
+        { command: 'pnpm run test:authz-paranoid', commit: 'def5678', result: 'passed' },
         { command: 'pnpm run acceptance', commit: 'TBD at freeze run', result: 'pending' },
       ],
       ruleGateCriteria: ['16.1 Framework', '16.2 Legibility', 'Pre-launch'],

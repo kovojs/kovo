@@ -675,6 +675,7 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
     { command: 'pnpm run acceptance', commit: '5e693a7', result: 'passed' },
     { command: 'pnpm run acceptance', commit: '036e494', result: 'passed' },
     { command: 'pnpm run acceptance', commit: 'ec876f5', result: 'passed' },
+    { command: 'pnpm run test:authz-paranoid', commit: 'a6dae7223', result: 'passed' },
     { command: 'pnpm run acceptance', commit: 'TBD at freeze run', result: 'pending' },
   ]);
   assert.deepEqual(
@@ -690,7 +691,7 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
     },
   );
   assert.ok(fact.runFacts.length >= 4);
-  assert.equal(fact.passedAcceptanceRunCount, fact.runFacts.length - 1);
+  assert.equal(fact.passedAcceptanceRunCount, 3);
   assert.equal(fact.pendingFreezeRunCount, 1);
   assert.equal(
     fact.localAcceptanceAuditRunCount,
@@ -708,6 +709,7 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
     'the pending final clean-checkout run is not claimed as a dated audit row',
   );
   assert.deepEqual(fact.cleanCheckoutStatuses, [
+    'pending',
     'pending',
     'pending',
     'pending',

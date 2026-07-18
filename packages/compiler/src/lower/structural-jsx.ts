@@ -2050,9 +2050,12 @@ function mutationDocumentExpressionIsReviewedUiRender(
   const expression = unwrapMutationComponentExpression(node.expression);
   if (!ts.isCallExpression(expression) || expression.arguments.length !== 1) return false;
   if (!ts.isPropertyAccessExpression(expression.expression)) return false;
-  if (expression.expression.name.text !== 'render') return false;
+  if (mutationDocumentPropertyName(expression.expression.name) !== 'render') return false;
   const definition = expression.expression.expression;
-  if (!ts.isPropertyAccessExpression(definition) || definition.name.text !== 'definition') {
+  if (
+    !ts.isPropertyAccessExpression(definition) ||
+    mutationDocumentPropertyName(definition.name) !== 'definition'
+  ) {
     return false;
   }
   if (!ts.isIdentifier(definition.expression)) return false;
@@ -2494,7 +2497,7 @@ function mutationComponentBodyFromInitializer(
     const property = properties[index]!;
     if (
       !ts.isPropertyAssignment(property) ||
-      property.name.getText(source.model.sourceFile) !== 'render'
+      mutationDocumentPropertyName(property.name) !== 'render'
     ) {
       continue;
     }

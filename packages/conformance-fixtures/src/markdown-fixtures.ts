@@ -370,7 +370,9 @@ export function v1AcceptanceLedgerGateFact(options: {
       (row) => markdownRequiredTableCell(row, 'Status') === 'passed local run',
     ).length,
     passedAcceptanceRunCount: acceptanceRunRows.filter(
-      (row) => markdownRequiredTableCell(row, 'Result') === 'passed',
+      (row) =>
+        markdownRequiredTableCell(row, 'Command') === 'pnpm run acceptance' &&
+        markdownRequiredTableCell(row, 'Result') === 'passed',
     ).length,
     pendingFreezeRunCount: acceptanceRunRows.filter(
       (row) =>
