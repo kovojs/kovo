@@ -120,6 +120,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         const adminUrl = cluster.url(database, adminRole);
         const runtimeUrl = cluster.url(database, runtimeRole);
         const systemUrl = cluster.url(database, 'kovo_system');
+        const publicOrigin = `https://127.0.0.1:${port}`;
 
         const generateOutput = execKovo(root, [
           'db',
@@ -160,10 +161,11 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
           detached: process.platform !== 'win32',
           env: {
             ...withRepoBinOnPath(),
-            BETTER_AUTH_URL: `https://127.0.0.1:${port}`,
+            BETTER_AUTH_URL: publicOrigin,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
             KOVO_DB_SYSTEM_URL: systemUrl,
+            KOVO_NODE_ORIGIN: publicOrigin,
             KOVO_PARANOID: '1',
             NODE_ENV: 'production',
             PORT: String(port),
@@ -173,12 +175,13 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         const origin = `http://127.0.0.1:${port}`;
         const marker = `phase5-pg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-        await signInDemoUser(root, origin, jar, output);
+        await signInDemoUser(root, origin, jar, output, publicOrigin);
         await expectPostgresEndpoint(origin, output);
+        await expectPostgresUnknownRelationBoundary(origin, output);
         await expectPostgresReferenceMemberships(origin);
         await expectPostgresReadonlyStatus(origin);
-        await expectPostgresWriteBoundary(origin, jar);
-        await expectPostgresTaskAndWebhook(origin, jar, marker, output);
+        await expectPostgresWriteBoundary(origin, jar, publicOrigin);
+        await expectPostgresTaskAndWebhook(origin, jar, marker, output, publicOrigin);
 
         expect(output()).not.toContain('Kovo SQLite starter is experimental');
         expect(output()).not.toContain('phase5-pg-secret');
@@ -329,6 +332,7 @@ describeIfPostgres(
         const adminUrl = cluster.url(database, adminRole);
         const runtimeUrl = cluster.url(database, runtimeRole);
         const systemUrl = cluster.url(database, 'kovo_system');
+        const publicOrigin = `https://127.0.0.1:${port}`;
 
         const provisionOutput = execKovo(root, [
           'db',
@@ -361,10 +365,11 @@ describeIfPostgres(
           detached: process.platform !== 'win32',
           env: {
             ...withRepoBinOnPath(),
-            BETTER_AUTH_URL: `https://127.0.0.1:${port}`,
+            BETTER_AUTH_URL: publicOrigin,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
             KOVO_DB_SYSTEM_URL: systemUrl,
+            KOVO_NODE_ORIGIN: publicOrigin,
             KOVO_PARANOID: '1',
             NODE_ENV: 'production',
             PORT: String(port),
@@ -424,6 +429,8 @@ describeIfPostgres(
         'check',
         '--schema',
         '.kovo/external-postgres-schema.mjs',
+        '--admin-database-url',
+        adminUrl,
         '--database-url',
         runtimeUrl,
       ]);
@@ -446,7 +453,6 @@ async function expectPostgresEndpoint(origin: string, output: () => string): Pro
     rows: { id: string; label: string }[];
     subqueryRows: { id: string; label: string }[];
     unionRows: { id: string; label: string }[];
-    viewRows: { id: string; label: string }[];
   };
 
   expect(result.rows).toEqual([{ id: 'phase5-pg-demo', label: 'owner-visible' }]);
@@ -455,10 +461,21 @@ async function expectPostgresEndpoint(origin: string, output: () => string): Pro
   expect(result.rawRows).toEqual(result.rows);
   expect(result.subqueryRows).toEqual(result.rows);
   expect(result.unionRows).toEqual(result.rows);
-  expect(result.viewRows).toEqual(result.rows);
   expect(result.childRows).toEqual([{ id: 'phase5-pg-item-demo', label: 'owner-item' }]);
   expect(body).not.toContain('cross-owner-hidden');
   expect(body).not.toContain('other-item');
+  expect(body).not.toContain('phase5-pg-secret');
+}
+
+async function expectPostgresUnknownRelationBoundary(
+  origin: string,
+  output: () => string,
+): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-pg-unknown-relation`);
+  const body = await response.text();
+  expect(response.status, `${body}\n${output()}`).toBe(500);
+  expect(body).not.toContain('owner-visible');
+  expect(body).not.toContain('cross-owner-hidden');
   expect(body).not.toContain('phase5-pg-secret');
 }
 
@@ -502,6 +519,7 @@ async function expectPostgresReadonlyStatus(origin: string): Promise<void> {
 async function expectPostgresWriteBoundary(
   origin: string,
   jar: Map<string, string>,
+  requestOrigin = origin,
 ): Promise<void> {
   const mutationKey = 'paranoid-phase5-postgres-proof/phase5-pg-cross-owner-order-write-proof';
   const fields = await fetchMutationFields(origin, jar, mutationKey);
@@ -514,7 +532,7 @@ async function expectPostgresWriteBoundary(
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       cookie: cookieHeader(jar),
-      origin,
+      origin: requestOrigin,
     },
     method: 'POST',
     redirect: 'manual',
@@ -537,6 +555,7 @@ async function expectPostgresTaskAndWebhook(
   jar: Map<string, string>,
   marker: string,
   output: () => string,
+  requestOrigin = origin,
 ): Promise<void> {
   const mutationKey = 'paranoid-phase5-postgres-proof/phase5-pg-schedule-task';
   const fields = await fetchMutationFields(origin, jar, mutationKey);
@@ -545,7 +564,7 @@ async function expectPostgresTaskAndWebhook(
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       cookie: cookieHeader(jar),
-      origin,
+      origin: requestOrigin,
     },
     method: 'POST',
     redirect: 'manual',

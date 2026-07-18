@@ -4279,10 +4279,19 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '    const rawRows = await db.rawRead<AuthzRow>(trustedSql(sql.raw("select id, label from phase5_pg_orders order by id"), { justification: "phase 5 postgres endpoint raw SQL RLS proof" }), { reads: ["phase5_pg_orders"] });',
       '    const subqueryRows = await db.rawRead<AuthzRow>(trustedSql(sql.raw("select id, label from (select id, label from phase5_pg_orders) scoped order by id"), { justification: "phase 5 postgres endpoint subquery RLS proof" }), { reads: ["phase5_pg_orders"] });',
       '    const unionRows = await db.rawRead<AuthzRow>(trustedSql(sql.raw("select id, label from phase5_pg_orders where id = \'phase5-pg-demo\' union all select id, label from phase5_pg_orders where id = \'phase5-pg-other\' order by id"), { justification: "phase 5 postgres endpoint union RLS proof" }), { reads: ["phase5_pg_orders"] });',
-      '    const viewRows = await db.select({ id: phase5PgOrderView.id, label: phase5PgOrderView.label }).from(phase5PgOrderView);',
-      '    return Response.json({ aliasRows, childRows, dbQueryRows, rawRows, rows, subqueryRows, unionRows, viewRows }, { headers: { "Cache-Control": "no-store" } });',
+      '    return Response.json({ aliasRows, childRows, dbQueryRows, rawRows, rows, subqueryRows, unionRows }, { headers: { "Cache-Control": "no-store" } });',
       '  },',
       "  method: 'GET', reason: 'phase 5 postgres endpoint proof', response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+      '});',
+      '',
+      "export const phase5PgUnknownRelationEndpoint = endpoint('/api/phase5-pg-unknown-relation', {",
+      '  access: publicProof, auth: { justification: "public phase 5 postgres unknown-relation proof", kind: "none" }, csrf: false, csrfJustification: "read-only phase 5 postgres unknown-relation proof", db: true,',
+      '  async handler(_request, context: EndpointDbContext<AppDb>) {',
+      '    const scoped = await context.actAs("demo-user");',
+      '    const viewRows = await scoped.db.read.select({ id: phase5PgOrderView.id, label: phase5PgOrderView.label }).from(phase5PgOrderView);',
+      '    return Response.json({ viewRows }, { headers: { "Cache-Control": "no-store" } });',
+      '  },',
+      "  method: 'GET', reason: 'phase 5 postgres unknown-relation proof', response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
       '});',
       '',
       "export const phase5PgWriteBoundaryEndpoint = endpoint('/api/phase5-pg-write-boundary', {",
@@ -4366,7 +4375,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   let app = readFileSync(appPath, 'utf8');
   const importLine =
-    "import { phase5PgAliasQuery, phase5PgBuilderQuery, phase5PgCrossOwnerOrderWriteProof, phase5PgDbQueryQuery, phase5PgEndpoint, phase5PgOwnerViaQuery, phase5PgOwnOrderWriteProof, phase5PgRawQuery, phase5PgReadTask, phase5PgScheduleTask, phase5PgStatusEndpoint, phase5PgSubqueryQuery, phase5PgUnionQuery, phase5PgViewQuery, phase5PgWebhook, phase5PgWriteBoundaryEndpoint } from './paranoid-phase5-postgres-proof.js';";
+    "import { phase5PgAliasQuery, phase5PgBuilderQuery, phase5PgCrossOwnerOrderWriteProof, phase5PgDbQueryQuery, phase5PgEndpoint, phase5PgOwnerViaQuery, phase5PgOwnOrderWriteProof, phase5PgRawQuery, phase5PgReadTask, phase5PgScheduleTask, phase5PgStatusEndpoint, phase5PgSubqueryQuery, phase5PgUnionQuery, phase5PgUnknownRelationEndpoint, phase5PgViewQuery, phase5PgWebhook, phase5PgWriteBoundaryEndpoint } from './paranoid-phase5-postgres-proof.js';";
   app = replaceRequired(
     app,
     "import { appTheme } from './theme.js';",
@@ -4386,6 +4395,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
   for (const endpointEntry of [
     'phase5PgEndpoint',
     'phase5PgStatusEndpoint',
+    'phase5PgUnknownRelationEndpoint',
     'phase5PgWebhook',
     'phase5PgWriteBoundaryEndpoint',
   ]) {
@@ -4487,8 +4497,8 @@ export function addPostgresParanoidFollowup8Shapes(root: string): void {
   let app = readFileSync(appPath, 'utf8');
   app = replaceRequired(
     app,
-    "import { phase5PgAliasQuery, phase5PgBuilderQuery, phase5PgCrossOwnerOrderWriteProof, phase5PgDbQueryQuery, phase5PgEndpoint, phase5PgOwnerViaQuery, phase5PgOwnOrderWriteProof, phase5PgRawQuery, phase5PgReadTask, phase5PgScheduleTask, phase5PgStatusEndpoint, phase5PgSubqueryQuery, phase5PgUnionQuery, phase5PgViewQuery, phase5PgWebhook, phase5PgWriteBoundaryEndpoint } from './paranoid-phase5-postgres-proof.js';",
-    "import { phase5PgAliasQuery, phase5PgBuilderQuery, phase5PgCrossOwnerOrderWriteProof, phase5PgDbQueryQuery, phase5PgEndpoint, phase5PgOwnerViaQuery, phase5PgOwnOrderWriteProof, phase5PgRawQuery, phase5PgReadTask, phase5PgReferenceMembershipEndpoint, phase5PgScheduleTask, phase5PgStatusEndpoint, phase5PgSubqueryQuery, phase5PgUnionQuery, phase5PgViewQuery, phase5PgWebhook, phase5PgWriteBoundaryEndpoint } from './paranoid-phase5-postgres-proof.js';",
+    "import { phase5PgAliasQuery, phase5PgBuilderQuery, phase5PgCrossOwnerOrderWriteProof, phase5PgDbQueryQuery, phase5PgEndpoint, phase5PgOwnerViaQuery, phase5PgOwnOrderWriteProof, phase5PgRawQuery, phase5PgReadTask, phase5PgScheduleTask, phase5PgStatusEndpoint, phase5PgSubqueryQuery, phase5PgUnionQuery, phase5PgUnknownRelationEndpoint, phase5PgViewQuery, phase5PgWebhook, phase5PgWriteBoundaryEndpoint } from './paranoid-phase5-postgres-proof.js';",
+    "import { phase5PgAliasQuery, phase5PgBuilderQuery, phase5PgCrossOwnerOrderWriteProof, phase5PgDbQueryQuery, phase5PgEndpoint, phase5PgOwnerViaQuery, phase5PgOwnOrderWriteProof, phase5PgRawQuery, phase5PgReadTask, phase5PgReferenceMembershipEndpoint, phase5PgScheduleTask, phase5PgStatusEndpoint, phase5PgSubqueryQuery, phase5PgUnionQuery, phase5PgUnknownRelationEndpoint, phase5PgViewQuery, phase5PgWebhook, phase5PgWriteBoundaryEndpoint } from './paranoid-phase5-postgres-proof.js';",
     'phase 5 postgres followup 8 app import',
   );
   app = appendArrayEntry(app, 'endpoints', 'phase5PgReferenceMembershipEndpoint');
@@ -4500,6 +4510,7 @@ export async function signInDemoUser(
   origin: string,
   jar: Map<string, string>,
   output: () => string,
+  requestOrigin = origin,
 ): Promise<void> {
   await fetchTextWhenReady(`${origin}/login`, output);
   const loginResponse = await fetch(`${origin}/login`);
@@ -4525,7 +4536,7 @@ export async function signInDemoUser(
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       cookie: cookieHeader(jar),
-      origin,
+      origin: requestOrigin,
     },
     method: 'POST',
     redirect: 'manual',
