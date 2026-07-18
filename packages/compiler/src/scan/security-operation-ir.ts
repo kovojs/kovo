@@ -105,6 +105,14 @@ type ServerValueProvenance =
 
 const REDIRECT_IDENTITY = frameworkExport('@kovojs/server', 'redirect');
 const TRUSTED_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'trustedSql');
+const KOVO_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'sql');
+const DECLARE_SECRET_READ_CAPABILITY_IDENTITY = frameworkExport(
+  '@kovojs/server',
+  'declareSecretReadCapability',
+);
+const SECRET_IDENTITY = frameworkExport('@kovojs/core', 'secret');
+const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core', 'trustedReveal');
+const DRIZZLE_ALIAS_IDENTITY = frameworkExport('drizzle-orm', 'alias');
 const TRUSTED_HTML_IDENTITIES = [
   frameworkExport('@kovojs/browser', 'trustedHtml'),
   frameworkExport('@kovojs/server', 'trustedHtml'),
@@ -203,9 +211,11 @@ const serverPureConstructors = finiteStringSet(['Error']);
 const serverPureGlobalMemberCalls = finiteStringSet(['crypto.randomUUID']);
 const serverReviewedDatabaseBuilderMethods = finiteStringSet([
   'from',
+  'innerJoin',
   'limit',
   'orderBy',
   'set',
+  'union',
   'values',
   'where',
 ]);
@@ -2964,6 +2974,41 @@ function classifyServerCall(
     );
     return;
   }
+  if (serverCallIsExactTrustedSqlRaw(sourceFile, call)) {
+    // SPEC §6.6: the raw constructor is plain reviewed SQL data only as argument zero of the
+    // exact trustedSql(static sql.raw literal, { justification }) door. A free-standing,
+    // dynamic, computed, aliased, or mutable raw constructor falls through to KV449.
+    return;
+  }
+  if (serverCallIsExactDeclaredSecretReadCapability(sourceFile, call, aliases)) {
+    // The Drizzle request analyzer independently proves declaration-before-one-execution and the
+    // runtime validates the private statement witness. Finite IR admits only the same exact
+    // public constructor and immutable trustedSql statement shape.
+    return;
+  }
+  if (serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {
+    // trustedReveal is an audited value projection, not capability authority. Its strict options
+    // and direct import shape mirror the confidentiality analyzer's reviewed escape.
+    return;
+  }
+  if (serverCallIsExactSecretBox(sourceFile, call, aliases)) {
+    // secret() boxes one plain value. It may not receive a server capability or travel through a
+    // renamed, aliased, mutable, computed, or foreign callable.
+    return;
+  }
+  if (serverCallIsExactDrizzleTableAlias(sourceFile, call, aliases)) {
+    // A schema alias is reviewed data only for an exact Drizzle alias(table, staticName) call over
+    // an independently proven project table declaration.
+    return;
+  }
+  if (serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {
+    // SPEC §6.6: one declaration-before-one-execution sequence is the finite read form for a
+    // runtime-validated secret SQL witness. The declaration, statement binding, and managed DB
+    // receiver must all remain direct and linear; aliases, extra references, and late declarations
+    // stay on the generic execute-as-write path below.
+    appendOperation('server.database.read', call, nodeName(callee));
+    return;
+  }
   if (frameworkIdentityIn(frameworkIdentity, SERVER_REVIEWED_DATA_HELPER_IDENTITIES)) {
     // These exact framework exports construct plain validation/query-expression data. They do not
     // receive a capability or own a runtime sink; aliases and same-spelled app/import exports do
@@ -3187,6 +3232,406 @@ function classifyServerCall(
     'computed-security-operation',
     `unresolved, imported, aliased, or foreign server helper ${target} is outside the finite server IR`,
   );
+}
+
+function serverCallIsExactTrustedSqlRaw(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  const member = staticMember(callee);
+  if (
+    !ts.isPropertyAccessExpression(callee) ||
+    !member ||
+    member.name !== 'raw' ||
+    call.arguments.length !== 1 ||
+    !serverExpressionIsNonEmptyStaticString(call.arguments[0]!) ||
+    !frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        unwrapExpression(member.receiver),
+      ),
+      KOVO_SQL_IDENTITY,
+    ) ||
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, member.receiver) ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, call)
+  ) {
+    return false;
+  }
+
+  const parent = call.parent;
+  if (
+    !ts.isCallExpression(parent) ||
+    parent.arguments[0] !== call ||
+    parent.arguments.length !== 2
+  ) {
+    return false;
+  }
+  const trustedSqlCallee = unwrapExpression(parent.expression);
+  return !!(
+    frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        trustedSqlCallee,
+      ),
+      TRUSTED_SQL_IDENTITY,
+    ) &&
+    securityIrExpressionUsesDirectImportBinding(sourceFile, trustedSqlCallee) &&
+    securityIrMemberCallableIsStable(sourceFile, trustedSqlCallee, parent) &&
+    serverExpressionIsExactJustificationOptions(parent.arguments[1]!)
+  );
+}
+
+function serverCallIsExactDeclaredSecretReadCapability(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  if (
+    !serverCallUsesExactNamedFrameworkImport(
+      sourceFile,
+      call,
+      callee,
+      'declareSecretReadCapability',
+      DECLARE_SECRET_READ_CAPABILITY_IDENTITY,
+    ) ||
+    call.arguments.length !== 2 ||
+    serverArgumentsContainAuthority(call.arguments, aliases) ||
+    serverArgumentsContainForeignExecutable(call.arguments, aliases) ||
+    !serverExpressionIsExactSecretReadDeclaration(call.arguments[1]!)
+  ) {
+    return false;
+  }
+
+  const statement = unwrapExpression(call.arguments[0]!);
+  if (!ts.isIdentifier(statement)) return false;
+  const initializer = securityIrImmutableBindingInitializer(sourceFile, statement);
+  if (!initializer) return false;
+  const trustedSqlCall = unwrapExpression(initializer);
+  if (!ts.isCallExpression(trustedSqlCall) || trustedSqlCall.arguments.length !== 2) return false;
+  const trustedSqlCallee = unwrapExpression(trustedSqlCall.expression);
+  if (
+    !frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        trustedSqlCallee,
+      ),
+      TRUSTED_SQL_IDENTITY,
+    ) ||
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, trustedSqlCallee) ||
+    !securityIrMemberCallableIsStable(sourceFile, trustedSqlCallee, trustedSqlCall) ||
+    !serverExpressionIsExactJustificationOptions(trustedSqlCall.arguments[1]!)
+  ) {
+    return false;
+  }
+  const raw = unwrapExpression(trustedSqlCall.arguments[0]!);
+  return ts.isCallExpression(raw) && serverCallIsExactTrustedSqlRaw(sourceFile, raw);
+}
+
+function serverCallIsExactTrustedReveal(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  return !!(
+    serverCallUsesExactNamedFrameworkImport(
+      sourceFile,
+      call,
+      callee,
+      'trustedReveal',
+      TRUSTED_REVEAL_IDENTITY,
+    ) &&
+    call.arguments.length === 2 &&
+    !serverArgumentsContainAuthority(call.arguments, aliases) &&
+    !serverArgumentsContainForeignExecutable(call.arguments, aliases) &&
+    serverExpressionIsExactTrustedRevealOptions(call.arguments[1]!)
+  );
+}
+
+function serverCallIsExactSecretBox(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  return !!(
+    serverCallUsesExactNamedFrameworkImport(sourceFile, call, callee, 'secret', SECRET_IDENTITY) &&
+    call.arguments.length === 1 &&
+    !serverArgumentsContainAuthority(call.arguments, aliases) &&
+    !serverArgumentsContainForeignExecutable(call.arguments, aliases)
+  );
+}
+
+function serverCallIsExactDrizzleTableAlias(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  return !!(
+    serverCallUsesExactNamedFrameworkImport(
+      sourceFile,
+      call,
+      callee,
+      'alias',
+      DRIZZLE_ALIAS_IDENTITY,
+    ) &&
+    call.arguments.length === 2 &&
+    !serverArgumentsContainAuthority(call.arguments, aliases) &&
+    serverExpressionIsReviewedDatabaseTable(sourceFile, call.arguments[0]!) &&
+    serverExpressionIsNonEmptyStaticString(call.arguments[1]!)
+  );
+}
+
+function serverCallIsExactDeclaredSecretReadExecution(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  if (
+    !ts.isPropertyAccessExpression(callee) ||
+    callee.name.text !== 'execute' ||
+    call.arguments.length !== 1 ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, call)
+  ) {
+    return false;
+  }
+  const receiverProvenance = serverExpressionProvenance(callee.expression, aliases);
+  if (receiverProvenance !== 'database' && receiverProvenance !== 'database-read-namespace') {
+    return false;
+  }
+
+  const statementUse = unwrapExpression(call.arguments[0]!);
+  if (!ts.isIdentifier(statementUse)) return false;
+  const initializer = securityIrImmutableBindingInitializer(sourceFile, statementUse);
+  if (!initializer) return false;
+  const trustedSqlCall = unwrapExpression(initializer);
+  if (!ts.isCallExpression(trustedSqlCall) || trustedSqlCall.arguments.length !== 2) return false;
+  const raw = unwrapExpression(trustedSqlCall.arguments[0]!);
+  if (!ts.isCallExpression(raw) || !serverCallIsExactTrustedSqlRaw(sourceFile, raw)) return false;
+
+  const declaration = serverExactVariableDeclarationForInitializer(initializer, statementUse.text);
+  const declarationLocation = declaration ? serverDirectStatementLocation(declaration) : undefined;
+  const executionLocation = serverDirectStatementLocation(call);
+  if (
+    !declaration ||
+    !declarationLocation ||
+    !executionLocation ||
+    declarationLocation.block !== executionLocation.block ||
+    declarationLocation.index >= executionLocation.index
+  ) {
+    return false;
+  }
+
+  let capabilityDeclaration: ts.CallExpression | undefined;
+  let capabilityDeclarationCount = 0;
+  const visit = (node: ts.Node): void => {
+    if (node !== executionLocation.block && isSecurityIrFunctionScope(node)) return;
+    if (ts.isCallExpression(node)) {
+      const argument = node.arguments.length > 0 ? unwrapExpression(node.arguments[0]!) : undefined;
+      if (
+        argument &&
+        ts.isIdentifier(argument) &&
+        argument.text === statementUse.text &&
+        serverCallIsExactDeclaredSecretReadCapability(sourceFile, node, aliases)
+      ) {
+        capabilityDeclarationCount += 1;
+        if (capabilityDeclarationCount === 1) capabilityDeclaration = node;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(executionLocation.block);
+  if (capabilityDeclarationCount !== 1 || !capabilityDeclaration) return false;
+
+  const capabilityLocation = serverDirectStatementLocation(capabilityDeclaration);
+  if (
+    !capabilityLocation ||
+    capabilityLocation.block !== executionLocation.block ||
+    capabilityLocation.index <= declarationLocation.index ||
+    capabilityLocation.index >= executionLocation.index
+  ) {
+    return false;
+  }
+
+  const declarationArgument = unwrapExpression(capabilityDeclaration.arguments[0]!);
+  if (!ts.isIdentifier(declarationArgument)) return false;
+  const allowedReferences = compilerCreateSet<ts.Identifier>();
+  compilerSetAdd(allowedReferences, declaration.name as ts.Identifier);
+  compilerSetAdd(allowedReferences, declarationArgument);
+  compilerSetAdd(allowedReferences, statementUse);
+  let escaped = false;
+  const findEscape = (node: ts.Node): void => {
+    if (escaped) return;
+    if (
+      ts.isIdentifier(node) &&
+      node.text === statementUse.text &&
+      !compilerSetHas(allowedReferences, node)
+    ) {
+      escaped = true;
+      return;
+    }
+    ts.forEachChild(node, findEscape);
+  };
+  findEscape(executionLocation.block);
+  return !escaped;
+}
+
+function serverExactVariableDeclarationForInitializer(
+  initializer: ts.Expression,
+  name: string,
+): ts.VariableDeclaration | undefined {
+  let cursor: ts.Node = initializer;
+  while (cursor.parent && !ts.isVariableDeclaration(cursor.parent)) {
+    if (ts.isStatement(cursor.parent) || isSecurityIrFunctionScope(cursor.parent)) return undefined;
+    cursor = cursor.parent;
+  }
+  const declaration = cursor.parent;
+  return declaration &&
+    ts.isVariableDeclaration(declaration) &&
+    ts.isIdentifier(declaration.name) &&
+    declaration.name.text === name &&
+    isConstVariableDeclaration(declaration)
+    ? declaration
+    : undefined;
+}
+
+interface ServerDirectStatementLocation {
+  readonly block: ts.Block;
+  readonly index: number;
+}
+
+function serverDirectStatementLocation(node: ts.Node): ServerDirectStatementLocation | undefined {
+  let cursor: ts.Node = node;
+  while (cursor.parent) {
+    const parent = cursor.parent;
+    if (ts.isBlock(parent) && ts.isStatement(cursor)) {
+      const statements = compilerSnapshotDenseArray(
+        parent.statements,
+        'Finite declared secret-read statements',
+      );
+      const index = statements.indexOf(cursor);
+      return index >= 0 ? { block: parent, index } : undefined;
+    }
+    if (isSecurityIrFunctionScope(parent)) return undefined;
+    cursor = parent;
+  }
+  return undefined;
+}
+
+function serverCallUsesExactNamedFrameworkImport(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  callee: ts.Expression,
+  exportName: string,
+  identity: FrameworkExportIdentity,
+): boolean {
+  return !!(
+    ts.isIdentifier(callee) &&
+    callee.text === exportName &&
+    frameworkExportEquals(
+      canonicalFrameworkExportForExpression(ts as FrameworkIdentityTypeScript, sourceFile, callee),
+      identity,
+    ) &&
+    securityIrExpressionUsesDirectImportBinding(sourceFile, callee) &&
+    securityIrMemberCallableIsStable(sourceFile, callee, call)
+  );
+}
+
+function serverExpressionIsExactJustificationOptions(expression: ts.Expression): boolean {
+  const options = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 1) return false;
+  const property = options.properties[0]!;
+  return !!(
+    ts.isPropertyAssignment(property) &&
+    !ts.isComputedPropertyName(property.name) &&
+    staticPropertyName(property.name) === 'justification' &&
+    serverExpressionIsNonEmptyStaticString(property.initializer)
+  );
+}
+
+function serverExpressionIsExactSecretReadDeclaration(expression: ts.Expression): boolean {
+  const options = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 4) return false;
+  const expected = finiteStringSet(['columns', 'justification', 'source', 'table']);
+  const seen = compilerCreateSet<string>();
+  const properties = compilerSnapshotDenseArray(
+    options.properties,
+    'Finite declared secret-read options',
+  );
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name))
+      return false;
+    const name = staticPropertyName(property.name);
+    if (!name || !compilerSetHas(expected, name) || compilerSetHas(seen, name)) return false;
+    compilerSetAdd(seen, name);
+    if (name === 'columns') {
+      const columns = unwrapExpression(property.initializer);
+      if (!ts.isArrayLiteralExpression(columns) || columns.elements.length === 0) return false;
+      const elements = compilerSnapshotDenseArray(columns.elements, 'Finite secret-read columns');
+      for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+        const element = elements[elementIndex]!;
+        if (
+          ts.isSpreadElement(element) ||
+          !serverExpressionIsNonEmptyStaticString(element as ts.Expression)
+        ) {
+          return false;
+        }
+      }
+    } else if (!serverExpressionIsNonEmptyStaticString(property.initializer)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function serverExpressionIsExactTrustedRevealOptions(expression: ts.Expression): boolean {
+  const options = unwrapExpression(expression);
+  if (
+    !ts.isObjectLiteralExpression(options) ||
+    options.properties.length < 1 ||
+    options.properties.length > 3
+  ) {
+    return false;
+  }
+  const expectedOrder = ['justification', 'method', 'source'] as const;
+  let lastIndex = -1;
+  let sawJustification = false;
+  const properties = compilerSnapshotDenseArray(options.properties, 'Finite trustedReveal options');
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name))
+      return false;
+    const name = staticPropertyName(property.name);
+    const optionIndex = name ? expectedOrder.indexOf(name as (typeof expectedOrder)[number]) : -1;
+    if (optionIndex <= lastIndex || optionIndex < 0) return false;
+    lastIndex = optionIndex;
+    const value = unwrapExpression(property.initializer);
+    if (!serverExpressionIsNonEmptyStaticString(value)) return false;
+    if (name === 'justification') {
+      sawJustification = true;
+    } else if (
+      name === 'method' &&
+      ts.isStringLiteralLike(value) &&
+      value.text !== 'arbitrary-fn' &&
+      value.text !== 'server-projection'
+    ) {
+      return false;
+    }
+  }
+  return sawJustification;
+}
+
+function serverExpressionIsNonEmptyStaticString(expression: ts.Expression): boolean {
+  const value = unwrapExpression(expression);
+  return ts.isStringLiteralLike(value) && compilerStringTrim(value.text).length > 0;
 }
 
 function serverCallDescendsFromReviewedDatabaseOperation(

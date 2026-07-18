@@ -241,7 +241,17 @@ appendCatalogEntry(catalogEntries, serverApp('createApp'));
 
 appendCatalogFactories(
   catalogEntries,
-  ['domain', 'mutation', 'query', 'Reader', 's', 'tag', 'task', 'write'],
+  [
+    'declareSecretReadCapability',
+    'domain',
+    'mutation',
+    'query',
+    'Reader',
+    's',
+    'tag',
+    'task',
+    'write',
+  ],
   serverData,
 );
 appendCatalogFactories(
@@ -287,7 +297,7 @@ appendCatalogFactories(
 );
 appendCatalogFactories(
   catalogEntries,
-  ['component', 'declareOffWire', 'publishToClient', 'trustedReveal'],
+  ['component', 'declareOffWire', 'publishToClient', 'secret', 'trustedReveal'],
   coreAuthoring,
 );
 for (let index = 0; index < generatedHeadlessClientExecutableIdentities.length; index += 1) {
@@ -351,6 +361,8 @@ appendCatalogFactories(
 );
 appendCatalogEntry(catalogEntries, drizzleOrmSchema('pgTable', 'drizzle-orm/pg-core'));
 appendCatalogEntry(catalogEntries, drizzleOrmSchema('sqliteTable', 'drizzle-orm/sqlite-core'));
+appendCatalogEntry(catalogEntries, drizzleOrmSchema('alias', 'drizzle-orm/pg-core'));
+appendCatalogEntry(catalogEntries, drizzleOrmSchema('alias', 'drizzle-orm/sqlite-core'));
 
 /** @internal Shared manifest-backed export catalog for TS and ts-morph identity adapters. */
 export const frameworkIdentityCatalog: readonly FrameworkIdentityCatalogEntry[] =

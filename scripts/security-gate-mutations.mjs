@@ -1173,6 +1173,33 @@ const reviewedStorageStatBranch =
   "    if (member === 'get' || member === 'list' || member === 'signUrl' || member === 'stat') {";
 const removedReviewedStorageStatBranch =
   "    if (member === 'get' || member === 'list' || member === 'signUrl') {";
+const reviewedTrustedSqlRawDoorBranch = '  if (serverCallIsExactTrustedSqlRaw(sourceFile, call)) {';
+const removedReviewedTrustedSqlRawDoorBranch =
+  '  if (false && serverCallIsExactTrustedSqlRaw(sourceFile, call)) {';
+const reviewedDeclaredSecretReadDoorBranch =
+  '  if (serverCallIsExactDeclaredSecretReadCapability(sourceFile, call, aliases)) {';
+const removedReviewedDeclaredSecretReadDoorBranch =
+  '  if (false && serverCallIsExactDeclaredSecretReadCapability(sourceFile, call, aliases)) {';
+const reviewedDeclaredSecretReadExecutionBranch =
+  '  if (serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {';
+const removedReviewedDeclaredSecretReadExecutionBranch =
+  '  if (false && serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {';
+const reviewedTrustedRevealDoorBranch =
+  '  if (serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {';
+const removedReviewedTrustedRevealDoorBranch =
+  '  if (false && serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {';
+const reviewedSecretBoxDoorBranch =
+  '  if (serverCallIsExactSecretBox(sourceFile, call, aliases)) {';
+const removedReviewedSecretBoxDoorBranch =
+  '  if (false && serverCallIsExactSecretBox(sourceFile, call, aliases)) {';
+const reviewedDrizzleAliasDoorBranch =
+  '  if (serverCallIsExactDrizzleTableAlias(sourceFile, call, aliases)) {';
+const removedReviewedDrizzleAliasDoorBranch =
+  '  if (false && serverCallIsExactDrizzleTableAlias(sourceFile, call, aliases)) {';
+const reviewedInnerJoinContinuationBranch = "  'innerJoin',";
+const removedReviewedInnerJoinContinuationBranch = "  // 'innerJoin',";
+const reviewedUnionContinuationBranch = "  'union',";
+const removedReviewedUnionContinuationBranch = "  // 'union',";
 
 const threatMatrixMissingSinkDenominatorBranch = [
   '  const missing = [...expectedSinks.keys()].filter((sink) => !seen.has(sink));',
@@ -1590,6 +1617,86 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: compilerSecuritySemanticGraphPath,
     sourceOnly: true,
     test: assertReviewedStorageStatIsPinned,
+  },
+  {
+    description: 'Deletes exact static sql.raw composition from the trustedSql reviewed door.',
+    expectedKiller: 'finite IR must retain exact trustedSql(sql.raw(static literal)) admission',
+    name: 'compiler-finite-ir/drop-trusted-sql-raw-door',
+    replacement: removedReviewedTrustedSqlRawDoorBranch,
+    search: reviewedTrustedSqlRawDoorBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedTrustedSqlRawDoorIsPinned,
+  },
+  {
+    description: 'Deletes the exact public declared secret-read capability door.',
+    expectedKiller: 'finite IR must retain exact declared secret-read capability admission',
+    name: 'compiler-finite-ir/drop-declared-secret-read-door',
+    replacement: removedReviewedDeclaredSecretReadDoorBranch,
+    search: reviewedDeclaredSecretReadDoorBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedDeclaredSecretReadDoorIsPinned,
+  },
+  {
+    description: 'Deletes the exact declaration-before-one-execution secret-read door.',
+    expectedKiller: 'finite IR must retain exact declared secret-read execution admission',
+    name: 'compiler-finite-ir/drop-declared-secret-read-execution-door',
+    replacement: removedReviewedDeclaredSecretReadExecutionBranch,
+    search: reviewedDeclaredSecretReadExecutionBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedDeclaredSecretReadExecutionIsPinned,
+  },
+  {
+    description: 'Deletes the exact audited trustedReveal data door.',
+    expectedKiller: 'finite IR must retain exact trustedReveal admission',
+    name: 'compiler-finite-ir/drop-trusted-reveal-door',
+    replacement: removedReviewedTrustedRevealDoorBranch,
+    search: reviewedTrustedRevealDoorBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedTrustedRevealDoorIsPinned,
+  },
+  {
+    description: 'Deletes the exact framework secret boxing data door.',
+    expectedKiller: 'finite IR must retain exact secret(value) admission',
+    name: 'compiler-finite-ir/drop-secret-box-door',
+    replacement: removedReviewedSecretBoxDoorBranch,
+    search: reviewedSecretBoxDoorBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedSecretBoxDoorIsPinned,
+  },
+  {
+    description: 'Deletes exact Drizzle table alias construction from reviewed data.',
+    expectedKiller: 'finite IR must retain exact alias(table, static name) admission',
+    name: 'compiler-finite-ir/drop-drizzle-table-alias-door',
+    replacement: removedReviewedDrizzleAliasDoorBranch,
+    search: reviewedDrizzleAliasDoorBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedDrizzleAliasDoorIsPinned,
+  },
+  {
+    description: 'Deletes innerJoin from the finite managed-read continuation vocabulary.',
+    expectedKiller: 'finite IR must retain inline managed innerJoin continuation admission',
+    name: 'compiler-finite-ir/drop-inner-join-continuation',
+    replacement: removedReviewedInnerJoinContinuationBranch,
+    search: reviewedInnerJoinContinuationBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedInnerJoinContinuationIsPinned,
+  },
+  {
+    description: 'Deletes union from the finite managed-read continuation vocabulary.',
+    expectedKiller: 'finite IR must retain inline managed union continuation admission',
+    name: 'compiler-finite-ir/drop-union-continuation',
+    replacement: removedReviewedUnionContinuationBranch,
+    search: reviewedUnionContinuationBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertReviewedUnionContinuationIsPinned,
   },
   {
     description: 'Deletes normalized helper-cycle absorption.',
@@ -3012,6 +3119,54 @@ async function assertReviewedModuleStorageFactoryIsPinned(_moduleUnderTest, { so
 async function assertReviewedStorageStatIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(reviewedStorageStatBranch)) {
     throw new Error('finite IR no longer classifies storage.stat as a reviewed read');
+  }
+}
+
+async function assertReviewedTrustedSqlRawDoorIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedTrustedSqlRawDoorBranch)) {
+    throw new Error('finite IR no longer admits exact trustedSql(sql.raw(static literal))');
+  }
+}
+
+async function assertReviewedDeclaredSecretReadDoorIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedDeclaredSecretReadDoorBranch)) {
+    throw new Error('finite IR no longer admits the exact declared secret-read capability');
+  }
+}
+
+async function assertReviewedDeclaredSecretReadExecutionIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedDeclaredSecretReadExecutionBranch)) {
+    throw new Error('finite IR no longer admits exact declared secret-read execution');
+  }
+}
+
+async function assertReviewedTrustedRevealDoorIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedTrustedRevealDoorBranch)) {
+    throw new Error('finite IR no longer admits exact audited trustedReveal');
+  }
+}
+
+async function assertReviewedSecretBoxDoorIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedSecretBoxDoorBranch)) {
+    throw new Error('finite IR no longer admits exact framework secret boxing');
+  }
+}
+
+async function assertReviewedDrizzleAliasDoorIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedDrizzleAliasDoorBranch)) {
+    throw new Error('finite IR no longer admits exact Drizzle table aliases');
+  }
+}
+
+async function assertReviewedInnerJoinContinuationIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedInnerJoinContinuationBranch)) {
+    throw new Error('finite IR no longer admits inline managed innerJoin continuations');
+  }
+}
+
+async function assertReviewedUnionContinuationIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(reviewedUnionContinuationBranch)) {
+    throw new Error('finite IR no longer admits inline managed union continuations');
   }
 }
 
