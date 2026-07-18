@@ -258,8 +258,9 @@ Measurements are versioned and reproducible:
     `pnpm run check:security-classifier-corpus` passes all 20 enrolled corpora.
 - [x] Prove realistic form state, focus, dialog, scroll, selection, and event workflows remain
       expressible through reviewed operations across all supported browsers.
-  - Evidence: the focused Vitest browser run over `security-operation-workflows.browser.test.ts`
-    and `mutation-response-dom.browser.test.ts` passes 30/30 across Chromium, Firefox, and WebKit.
+  - Evidence: `pnpm run test:browser` passes 753/753 across Chromium, Firefox, and WebKit plus the
+    three-test complexity oracle in each engine, including the finite-IR workflow and real DOM
+    focus/selection/scroll preservation suites.
 
 ### 3C. Reachability: retire per-shape TASK B logic
 
