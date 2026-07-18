@@ -643,6 +643,9 @@ function runPackedSqliteBoundaryChild(distRoot: string, betterAuthEntry: string)
       requireFromServerTest.resolve('drizzle-orm/sqlite-core'),
     ).href,
     '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
+    '@kovojs/server/internal/better-auth': pathToFileURL(
+      join(distRoot, 'internal/better-auth.mjs'),
+    ).href,
     '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
     '@kovojs/server/internal/execution': pathToFileURL(join(distRoot, 'internal/execution.mjs'))
       .href,
@@ -677,26 +680,32 @@ const server = await import(${JSON.stringify(entries['@kovojs/server'])});
 const execution = await import(${JSON.stringify(entries['@kovojs/server/internal/execution'])});
 const sqlite = await import(${JSON.stringify(entries['@kovojs/server/sqlite'])});
 const betterAuth = await import(${JSON.stringify(betterAuthUrl)});
-const { sqliteTable, text } = await import('drizzle-orm/sqlite-core');
+const { integer, sqliteTable, text } = await import('drizzle-orm/sqlite-core');
 const proof = sqliteTable('kovo_packed_provider_proof', {
   id: text('id').primaryKey(),
   value: text('value').notNull(),
 });
+const rateLimit = sqliteTable('rateLimit', {
+  count: integer('count').notNull(),
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  lastRequest: integer('last_request').notNull(),
+});
 const runtime = sqlite.createSqliteAppRuntime({
   seed: [{ rows: [{ id: 'p1', value: 'packed-seed-visible' }], table: proof }],
-  tables: [proof],
+  tables: [proof, rateLimit],
 });
 try {
   const appCsrf = betterAuth.betterAuthCsrfFromEnvironment({ field: 'csrf' });
   const csrfRequest = await execution.resolveLifecycleRequest({}, {
-    sessionProvider: () => ({ id: 'packed-session' }),
+    sessionProvider: () => ({ id: 'packed-session', user: { id: 'packed-user' } }),
   });
   const packedCsrfToken = server.csrfToken(csrfRequest, appCsrf, { audience: 'auth/sign-in' });
   const bindings = betterAuth.createBetterAuthSqliteBindings({
     baseURL: 'http://localhost:5173',
     csrf: { secret: 'packed-csrf-secret-0123456789abcdef', sessionId: () => undefined },
     mapSession: ({ session, user }) => ({ id: session.id, user: { id: user.id } }),
-    schema: { proof },
+    schema: { proof, rateLimit },
     secret: betterAuth.betterAuthSqliteSecret('packed-auth-secret-0123456789abcdef'),
     signInAccess: server.publicAccess('packed Better Auth sign-in proof'),
     signOutAccess: server.publicAccess('packed Better Auth sign-out proof'),
@@ -765,6 +774,9 @@ function runPackedBetterAuthPreloadChild(
   const secret = 'SUBPATH-WITNESS-SECRET-0123456789abcdef-RAW';
   const entries = {
     '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
+    '@kovojs/server/internal/better-auth': pathToFileURL(
+      join(distRoot, 'internal/better-auth.mjs'),
+    ).href,
     '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
     '@kovojs/server/internal/execution': pathToFileURL(join(distRoot, 'internal/execution.mjs'))
       .href,
@@ -863,6 +875,9 @@ function runPackedPostgresBoundaryChild(distRoot: string, betterAuthEntry: strin
   const entries = {
     'drizzle-orm/pg-core': pathToFileURL(requireFromServerTest.resolve('drizzle-orm/pg-core')).href,
     '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
+    '@kovojs/server/internal/better-auth': pathToFileURL(
+      join(distRoot, 'internal/better-auth.mjs'),
+    ).href,
     '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
     '@kovojs/server/internal/keyring': pathToFileURL(join(distRoot, 'internal/keyring.mjs')).href,
     '@kovojs/server/internal/postgres-capability': pathToFileURL(
@@ -893,17 +908,27 @@ registerHooks({
 await import(${JSON.stringify(bootstrapEntry)});
 const server = await import(${JSON.stringify(entries['@kovojs/server'])});
 const betterAuth = await import(${JSON.stringify(betterAuthUrl)});
-const { pgTable, text } = await import('drizzle-orm/pg-core');
+const { bigint, integer, pgTable, text } = await import('drizzle-orm/pg-core');
 const proof = pgTable('kovo_packed_postgres_capability_proof', {
   id: text('id').primaryKey(),
 });
+const rateLimit = pgTable('rateLimit', {
+  count: integer('count').notNull(),
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
+  lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+});
 const dataDir = mkdtempSync(join(tmpdir(), 'kovo-packed-postgres-capability-'));
-const runtime = server.createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema: { proof } });
+const runtime = server.createPostgresAppRuntimeDb({
+  dataDir,
+  driver: 'pglite',
+  schema: { proof, rateLimit },
+});
 const bindingOptions = (systemDb) => ({
   baseURL: 'http://localhost:5173',
   csrf: { field: 'csrf', secret: 'packed-csrf-secret-0123456789abcdef', sessionId: () => undefined },
   mapSession: ({ session, user }) => ({ id: session.id, user: { id: user.id } }),
-  schema: { proof },
+  schema: { proof, rateLimit },
   secret: betterAuth.betterAuthPostgresSecret('packed-auth-secret-0123456789abcdef'),
   signInAccess: server.publicAccess('packed Better Auth sign-in proof'),
   signOutAccess: server.publicAccess('packed Better Auth sign-out proof'),
