@@ -380,6 +380,29 @@ export const report = endpoint('/report', {
     });
   });
 
+  it('keeps authority-returning assertion helpers outside the normalized helper subset', () => {
+    const diagnostics = kv449(`
+import { query } from '@kovojs/server';
+function requireDb(context) {
+  if (!context.db) throw new Error('missing managed db');
+  return context.db;
+}
+export const catalog = query('catalog/read', {
+  load(_input, context) {
+    const db = requireDb(context);
+    return db.select();
+  },
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(
+      diagnostics.some((diagnostic) =>
+        diagnostic.message.includes('server capability cannot escape a structured handler outcome'),
+      ),
+    ).toBe(true);
+  });
+
   it('discharges multi-hop helper edges through bottom-up normalized summaries', () => {
     const result = compile(`
 import { endpoint } from '@kovojs/server';
@@ -775,19 +798,35 @@ ${declaration}
   });
 
   it('rejects managed database writes from an enrolled query root', () => {
-    const diagnostics = kv449(`
+    const result = compile(`
 import { query } from '@kovojs/server';
 export const root = query('catalog/read', {
   async load(_input, ctx) {
     await ctx.db.insert('catalog');
+    await ctx.db.write('catalog', { refreshed: true });
     return null;
   },
 });
 `);
+    const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
 
     expect(diagnostics).not.toEqual([]);
     expect(diagnostics[0]?.message).toContain(
       'query loaders cannot perform a managed database write',
+    );
+    expect(result.componentGraphFacts[0]?.securityOperations).toEqual(
+      expect.arrayContaining([
+        {
+          door: 'managed-db',
+          kind: 'server.database.write',
+          target: 'ctx.db.insert',
+        },
+        {
+          door: 'managed-db',
+          kind: 'server.database.write',
+          target: 'ctx.db.write',
+        },
+      ]),
     );
   });
 
@@ -847,6 +886,7 @@ import { endpoint, mutation } from '@kovojs/server';
 export const save = mutation('save', {
   handler(_input, request, context) {
     const found = request.db.products.get('p1');
+    request.db.read('products', 'p1');
     request.db.write('products', { ...found, stock: 1 });
     context.invalidate(products);
     return found;
@@ -869,6 +909,55 @@ export const report = endpoint('/report', {
     expect(serverSource).toContain('"kind":"server.database.read"');
     expect(serverSource).toContain('"kind":"server.database.write"');
     expect(serverSource).toContain('"kind":"server.task.compose"');
+  });
+
+  it('classifies exact static managed relational reads through direct and scoped read handles', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  db: true,
+  async handler(_request, context) {
+    const direct = await context.db.query.accounts.findFirst({
+      columns: { id: true },
+    });
+    const scope = await context.actAs('owner-1');
+    const reader = scope.db.read;
+    const rows = await reader.query.orders.findMany({
+      columns: { id: true },
+    });
+    return Response.json({ direct, rows });
+  },
+});
+`);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(serverSource).toContain('"kind":"server.database.read"');
+    expect(serverSource).toContain('"target":"context.db.query.accounts.findFirst"');
+    expect(serverSource).toContain('"target":"reader.query.orders.findMany"');
+  });
+
+  it.each([
+    ['computed relational table', 'await ctx.db.query[table].findMany()'],
+    ['computed relational terminal', 'await ctx.db.query.accounts[method]()'],
+    ['unknown relational terminal', 'await ctx.db.query.accounts.removeEverything()'],
+    ['extra relational namespace', 'await ctx.db.query.schema.accounts.findMany()'],
+    ['unknown managed namespace chain', 'await ctx.db.schema.accounts.findMany()'],
+    ['computed read-namespace terminal', 'await ctx.db.read[operation]()'],
+    ['extra read namespace', 'await ctx.db.read.schema.accounts.findMany()'],
+    ['extra write namespace', 'await ctx.db.write.schema.insert()'],
+  ])('rejects %s instead of widening managed relational reads', (_label, operation) => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(_input, ctx) {
+    ${operation};
+    return Response.json({ ok: true });
+  },
+});
+`),
+    ).not.toEqual([]);
   });
 
   it.each([

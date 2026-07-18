@@ -70,6 +70,11 @@ type BrowserValueProvenance =
 type ServerValueProvenance =
   | 'context'
   | 'database'
+  | 'database-read-namespace'
+  | 'database-relational-query-namespace'
+  | 'database-relational-table-namespace'
+  | 'database-table-namespace'
+  | 'database-write-namespace'
   | 'headers'
   | 'local'
   | 'respond'
@@ -1730,6 +1735,21 @@ function classifyServerProvenanceCall(
     appendOperation('server.authority.scope', call, target);
     return true;
   }
+  if (provenance === 'database-read-namespace') {
+    appendOperation('server.database.read', call, target);
+    return true;
+  }
+  if (provenance === 'database-write-namespace') {
+    appendOperation('server.database.write', call, target);
+    if (surface === 'query') {
+      appendViolation(
+        call,
+        'raw-capability-operation',
+        'query loaders cannot perform a managed database write',
+      );
+    }
+    return true;
+  }
   if (!compilerStringStartsWith(provenance, 'operation:')) {
     if (serverProvenanceCarriesAuthority(provenance)) {
       appendViolation(
@@ -1743,6 +1763,7 @@ function classifyServerProvenanceCall(
   }
   const kind = compilerStringSlice(provenance, 'operation:'.length) as ServerSecurityOperationKind;
   if (surface === 'query' && kind === 'server.database.write') {
+    appendOperation(kind, call, target);
     appendViolation(
       call,
       'raw-capability-operation',
@@ -1930,17 +1951,6 @@ function serverMemberProvenance(
   member: string,
 ): ServerValueProvenance {
   if (receiver === 'unknown-authority') return receiver;
-  if (
-    receiver === serverOperationProvenance('server.database.read') ||
-    receiver === serverOperationProvenance('server.database.write')
-  ) {
-    // Managed principal scopes expose exact `db.read.select` / `db.write.insert` namespaces. Keep
-    // only a terminal whose reviewed DB kind agrees with the namespace; Function-prototype
-    // laundering (`bind`/`call`/`apply`) and arbitrary members remain opaque.
-    return databaseOperationKind(member) === compilerStringSlice(receiver, 'operation:'.length)
-      ? receiver
-      : 'unknown-authority';
-  }
   // Every other finite operation is an exact callable sink, not a first-class capability object.
   if (compilerStringStartsWith(receiver, 'operation:')) return 'unknown-authority';
   if (receiver === 'context') {
@@ -1982,15 +1992,42 @@ function serverMemberProvenance(
     return 'local';
   }
   if (receiver === 'database') {
+    if (member === 'read') return 'database-read-namespace';
+    if (member === 'write') return 'database-write-namespace';
+    if (member === 'query') return 'database-relational-query-namespace';
     const kind = databaseOperationKind(member);
     if (kind) return serverOperationProvenance(kind);
     if (isRawDatabaseCapabilityMember(member)) {
       return 'unknown-authority';
     }
-    // Managed handles can expose schema/table namespaces before the terminal reviewed method.
-    // A call while provenance is still `database` closes below; mere static member traversal does
-    // not erase the managed capability.
-    return 'database';
+    // Managed request handles support one exact static table namespace before a reviewed terminal
+    // (`request.db.products.get`). Further unknown namespace traversal closes below.
+    return 'database-table-namespace';
+  }
+  if (receiver === 'database-read-namespace') {
+    if (member === 'query') return 'database-relational-query-namespace';
+    return databaseOperationKind(member) === 'server.database.read'
+      ? serverOperationProvenance('server.database.read')
+      : 'unknown-authority';
+  }
+  if (receiver === 'database-write-namespace') {
+    return databaseOperationKind(member) === 'server.database.write'
+      ? serverOperationProvenance('server.database.write')
+      : 'unknown-authority';
+  }
+  if (receiver === 'database-table-namespace') {
+    const kind = databaseOperationKind(member);
+    return kind ? serverOperationProvenance(kind) : 'unknown-authority';
+  }
+  if (receiver === 'database-relational-query-namespace') {
+    // Drizzle relational queries admit one exact static table member. Computed members never reach
+    // this transition because `staticMember` rejects them into absorbing unknown authority.
+    return 'database-relational-table-namespace';
+  }
+  if (receiver === 'database-relational-table-namespace') {
+    return member === 'findFirst' || member === 'findMany'
+      ? serverOperationProvenance('server.database.read')
+      : 'unknown-authority';
   }
   if (receiver === 'headers') {
     if (member === 'append' || member === 'delete' || member === 'set') {
