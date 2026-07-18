@@ -22,7 +22,7 @@ import {
   snapshotAppRoute,
   snapshotLiveTargetRenderers,
 } from './app-snapshot.js';
-import { normalizeAppRequestLimits } from './app-load-shed.js';
+import { copyRequestServerBindings, normalizeAppRequestLimits } from './app-load-shed.js';
 import { createAppTaskRuntime, registerAppTaskRuntime } from './task-runtime.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import { takeRegisteredGeneratedLiveTargetRenderers } from './live-target-registry.js';
@@ -58,6 +58,14 @@ import {
 import { resolveBootMode, validateAppEnv } from './env.js';
 import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
 import { isDurableMutationReplayStore } from './replay.js';
+import {
+  cloneRequestForAuthorityNeutralization,
+  requestForAuthorityNeutralMetadata,
+} from './request-carrier.js';
+import {
+  hasExactResponseLifecycleReceipt,
+  runWithoutResponseLifecycleContext,
+} from './response-lifecycle-context.js';
 export type {
   AppEgressOptions,
   AppEgressOptOut,
@@ -785,14 +793,35 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
   const taskRuntime = createAppTaskRuntime(app);
   registerAppTaskRuntime(app, taskRuntime);
 
-  return async (request) => {
-    const urlLimitResponse = appRequestUrlLimitResponse(request);
-    if (urlLimitResponse) return urlLimitResponse;
-    void taskRuntime?.ensureStarted(request).catch((error: unknown) => {
-      reportAppStartupError(app, request, error);
+  return (request) =>
+    runWithoutResponseLifecycleContext(async () => {
+      const dispatchRequest = isolateNestedResponseDispatchRequest(request);
+      const urlLimitResponse = appRequestUrlLimitResponse(dispatchRequest);
+      if (urlLimitResponse) return urlLimitResponse;
+      void taskRuntime?.ensureStarted(dispatchRequest).catch((error: unknown) => {
+        reportAppStartupError(app, dispatchRequest, error);
+      });
+      return handleAppRequest(app, dispatchRequest);
     });
-    return handleAppRequest(app, request);
-  };
+}
+
+/**
+ * Give a nested handler invocation its own exact Web Request identity before it can open or
+ * finalize a response lifecycle (SPEC §6.6/§9.1). `createRequestHandler()` has already cleared the
+ * ambient response frame; reusing the outer handler's retained object would still make an inner
+ * success or early-return finalizer seal the caller's pending CSRF-cookie channel.
+ *
+ * Clone only when the exact object already has a private lifecycle receipt. A normal nested call
+ * with `new Request(...)` stays untouched. Reconstruction starts from the authority-neutral
+ * metadata source, so lifecycle-only session/guard properties do not become fresh ingress
+ * authority; only adapter-owned peer/DB bindings are copied explicitly.
+ */
+function isolateNestedResponseDispatchRequest(request: Request): Request {
+  if (!hasExactResponseLifecycleReceipt(request)) return request;
+  const source = requestForAuthorityNeutralMetadata(request);
+  const isolated = cloneRequestForAuthorityNeutralization(source);
+  copyRequestServerBindings(source, isolated);
+  return isolated;
 }
 
 function appAuthoringContext<AppRequest>(): AppAuthoringContext<AppRequest> {

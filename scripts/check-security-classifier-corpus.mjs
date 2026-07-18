@@ -1604,6 +1604,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'same-exact-request-nested-dispatch-isolation',
+        file: 'packages/server/src/anonymous-csrf-cache-security.test.tsx',
+        snippets: [
+          'clears ambient response authority before a new-Request nested dispatch runs preflight',
+          'isolates a successful nested endpoint dispatch that reuses the exact handler Request',
+          'preserves body bytes and abort propagation when rekeying a same-request nested dispatch',
+          'keeps same-request nested auth denial from sealing the outer lifecycle',
+          'keeps same-request nested access denial from sealing the outer lifecycle',
+          'keeps same-request nested CSRF denial from sealing the outer lifecycle',
+          'expect(innerRequest).not.toBe(outerRequest)',
+        ],
+      },
+      {
         id: 'standalone-late-and-detached-rejection',
         file: 'packages/server/src/anonymous-csrf-cache-security.test.tsx',
         snippets: [

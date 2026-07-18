@@ -102,7 +102,11 @@ Sealing precedes the snapshot, so queued work
 either completes before that single boundary and is included or observes committed headers and
 fails closed. An exact retained request context takes precedence over an ambient outer lifecycle;
 nested dispatches MUST NOT cross-bind canonical authority, personalization witnesses, pending
-cookies, or seal state.
+cookies, or seal state. Each `createRequestHandler()` call is a distinct response boundary and MUST
+clear an ambient caller lifecycle before pre-dispatch callbacks run. If a nested handler receives
+the caller's exact retained `Request`, it MUST first reconstruct a detached native ingress carrier;
+the inner success path and every auth, CSRF, access, error, or method early return therefore cannot
+seal or consume the outer response's cookie channel.
 
 Endpoint dispatch MUST combine raw-response posture verification and an immediate fresh header
 snapshot in one synchronous choke. App code may continue producing an authorized body stream, but

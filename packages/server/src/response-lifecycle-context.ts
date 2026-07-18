@@ -26,7 +26,9 @@ interface ResponseLifecycleContext {
   readonly pendingSetCookies: Set<string>;
 }
 
-const responseLifecycleStorage = formHelperCreateAsyncLocalStorage<ResponseLifecycleContext>();
+const responseLifecycleStorage = formHelperCreateAsyncLocalStorage<
+  ResponseLifecycleContext | undefined
+>();
 const responseLifecycleContexts = createWitnessWeakMap<object, ResponseLifecycleContext>();
 const sealedResponseLifecycleContexts = createWitnessWeakSet<object>();
 
@@ -102,6 +104,20 @@ export function runWithResponseLifecycleRequest<Value>(
   return result;
 }
 
+/**
+ * Run a distinct request-handler dispatch without inheriting its caller's ambient response frame.
+ * The nested handler opens its own managed lifecycle only after its pre-dispatch gates succeed.
+ *
+ * Exact retained requests must additionally be cloned at handler ingress because exact identity
+ * intentionally outranks ambient context everywhere else. AsyncLocalStorage's explicit undefined
+ * store keeps unrelated `new Request(...)` nested dispatches out of the caller's frame too.
+ *
+ * @internal App request-handler response boundary; not exported from a package entrypoint.
+ */
+export function runWithoutResponseLifecycleContext<Value>(callback: () => Value): Value {
+  return formHelperAsyncLocalRun(responseLifecycleStorage, undefined, callback);
+}
+
 /** @internal Resolve the response-owned state key for a helper call in the current async frame. */
 export function responseLifecycleStateRoot(request: object): object {
   return responseLifecycleContextForRequest(request)?.key ?? request;
@@ -147,6 +163,25 @@ export function retainCurrentResponseLifecycleRequest(request: object): void {
 /** @internal Whether a first anonymous response mint has a cookie-delivery lifecycle receipt. */
 export function hasResponseLifecycleReceipt(request: unknown): boolean {
   return responseLifecycleContextForRequest(request) !== undefined;
+}
+
+/**
+ * Whether this exact request identity is already retained by a response lifecycle.
+ *
+ * A nested `createRequestHandler()` invocation can receive the same Web `Request` object as its
+ * caller. That new response must be rekeyed before dispatch: otherwise its finalizer would resolve
+ * the exact identity back to the caller's context and could seal or consume the outer response.
+ * Ambient context alone is deliberately not enough here; an ordinary new/derived Request already
+ * receives its own lifecycle when the nested dispatcher reaches its response surface.
+ *
+ * @internal Request-handler ingress isolation bridge; not exported from a package entrypoint.
+ */
+export function hasExactResponseLifecycleReceipt(request: unknown): boolean {
+  return (
+    (typeof request === 'object' || typeof request === 'function') &&
+    request !== null &&
+    witnessWeakMapGet(responseLifecycleContexts, request as object) !== undefined
+  );
 }
 
 /** @internal Mark the retained response frame whose headers can no longer change. */

@@ -1787,6 +1787,387 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     ).toBe(true);
   });
 
+  it('clears ambient response authority before a new-Request nested dispatch runs preflight', async () => {
+    let preflightError: unknown;
+    const innerRoute = route('/nested-preflight-isolation', {
+      page: () => <p>inner</p>,
+    });
+    const innerHandler = createRequestHandler(
+      createApp({
+        egress: {
+          enabled: false,
+          justification: 'nested preflight isolation fixture performs no outbound I/O',
+        },
+        routes: [innerRoute],
+        sessionProvider(request) {
+          try {
+            mintCsrfToken(request, csrf, { audience: 'endpoint:/nested-preflight-inner' });
+          } catch (error) {
+            preflightError = error;
+          }
+          return null;
+        },
+      }),
+    );
+    const audience = 'endpoint:/nested-preflight-outer-submit';
+    const outerEndpoint = endpoint('/nested-preflight-outer', {
+      auth: {
+        kind: 'custom',
+        name: 'nested-preflight-outer-allow',
+        verify: customVerifier('nested-preflight-outer-allow', () => true),
+      },
+      async handler(request) {
+        const innerResponse = await innerHandler(
+          new Request('https://shop.example.test/nested-preflight-isolation'),
+        );
+        const token = mintCsrfToken(request, csrf, { audience }).token;
+        return Response.json({ innerStatus: innerResponse.status, token });
+      },
+      method: 'GET',
+      reason: 'nested preflight outer lifecycle isolation fixture',
+      response: publicJsonResponse,
+    });
+    const outerHandler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: {
+          enabled: false,
+          justification: 'nested preflight outer fixture performs no outbound I/O',
+        },
+        endpoints: [outerEndpoint],
+      }),
+    );
+
+    const response = await outerHandler(
+      new Request('https://shop.example.test/nested-preflight-outer'),
+    );
+    await expect(response.json()).resolves.toMatchObject({ innerStatus: 200 });
+    expect(preflightError).toBeInstanceOf(Error);
+    expect((preflightError as Error).message).toMatch(/without a framework response lifecycle/u);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+  });
+
+  it('isolates a successful nested endpoint dispatch that reuses the exact handler Request', async () => {
+    let outerRequest: Request | undefined;
+    let innerRequest: Request | undefined;
+    const innerEndpoint = endpoint('/nested-same-success', {
+      auth: { kind: 'none', justification: 'nested same-request success control' },
+      handler(request) {
+        innerRequest = request;
+        return Response.json({ inner: true });
+      },
+      method: 'GET',
+      reason: 'nested same-request success lifecycle isolation fixture',
+      response: publicJsonResponse,
+    });
+    const innerHandler = createRequestHandler(
+      createApp({
+        egress: {
+          enabled: false,
+          justification: 'nested same-request success fixture performs no outbound I/O',
+        },
+        endpoints: [innerEndpoint],
+      }),
+    );
+    const audience = 'endpoint:/nested-same-success-submit';
+    const outerEndpoint = endpoint('/nested-same-success', {
+      auth: {
+        kind: 'custom',
+        name: 'nested-same-success-allow',
+        verify: customVerifier('nested-same-success-allow', () => true),
+      },
+      async handler(request) {
+        outerRequest = request;
+        const innerResponse = await innerHandler(request);
+        const token = mintCsrfToken(request, csrf, { audience }).token;
+        return Response.json({ innerStatus: innerResponse.status, token });
+      },
+      method: 'GET',
+      reason: 'nested same-request outer success lifecycle fixture',
+      response: publicJsonResponse,
+    });
+    const outerHandler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: {
+          enabled: false,
+          justification: 'nested same-request outer fixture performs no outbound I/O',
+        },
+        endpoints: [outerEndpoint],
+      }),
+    );
+
+    const response = await outerHandler(
+      new Request('https://shop.example.test/nested-same-success'),
+    );
+    const body = (await response.json()) as { innerStatus: number; token: string };
+    expect(body.innerStatus).toBe(200);
+    expect(innerRequest).not.toBe(outerRequest);
+    const setCookies = response.headers.getSetCookie();
+    expect(setCookies).toHaveLength(1);
+    expect(
+      validateCsrfToken(
+        { 'kovo-csrf': body.token },
+        new Request('https://shop.example.test/_m/nested-same-success-submit', {
+          headers: {
+            cookie: setCookies[0]!.split(';', 1)[0]!,
+            origin: 'https://shop.example.test',
+          },
+          method: 'POST',
+        }),
+        csrf,
+        { audience },
+      ),
+    ).toBe(true);
+  });
+
+  it('preserves body bytes and abort propagation when rekeying a same-request nested dispatch', async () => {
+    let markInnerEntered!: () => void;
+    const innerEntered = new Promise<void>((resolve) => {
+      markInnerEntered = resolve;
+    });
+    let releaseInner!: () => void;
+    const innerGate = new Promise<void>((resolve) => {
+      releaseInner = resolve;
+    });
+    const innerEndpoint = endpoint('/nested-same-body', {
+      auth: { kind: 'none', justification: 'nested body/abort isolation control' },
+      csrf: false,
+      csrfJustification: 'nested fixture reads a machine JSON carrier',
+      async handler(request) {
+        markInnerEntered();
+        await innerGate;
+        return Response.json({
+          aborted: request.signal.aborted,
+          body: await request.text(),
+        });
+      },
+      method: 'POST',
+      reason: 'nested same-request body and abort lifecycle fixture',
+      response: publicJsonResponse,
+    });
+    const innerHandler = createRequestHandler(
+      createApp({
+        egress: {
+          enabled: false,
+          justification: 'nested same-request body fixture performs no outbound I/O',
+        },
+        endpoints: [innerEndpoint],
+      }),
+    );
+    const controller = new AbortController();
+    const outerEndpoint = endpoint('/nested-same-body', {
+      auth: {
+        kind: 'custom',
+        name: 'nested-same-body-allow',
+        verify: customVerifier('nested-same-body-allow', () => true),
+      },
+      csrf: false,
+      csrfJustification: 'outer fixture delegates a verified machine JSON carrier',
+      async handler(request) {
+        const innerResponsePromise = innerHandler(request);
+        await innerEntered;
+        controller.abort();
+        releaseInner();
+        const innerResponse = await innerResponsePromise;
+        const innerBody = (await innerResponse.json()) as { aborted: boolean; body: string };
+        const token = mintCsrfToken(request, csrf, {
+          audience: 'endpoint:/nested-same-body-submit',
+        }).token;
+        return Response.json({ innerBody, innerStatus: innerResponse.status, token });
+      },
+      method: 'POST',
+      reason: 'nested same-request outer body and abort fixture',
+      response: publicJsonResponse,
+    });
+    const outerHandler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: {
+          enabled: false,
+          justification: 'nested same-request outer body fixture performs no outbound I/O',
+        },
+        endpoints: [outerEndpoint],
+      }),
+    );
+
+    const response = await outerHandler(
+      new Request('https://shop.example.test/nested-same-body', {
+        body: '{"scope":"exact"}',
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        signal: controller.signal,
+      }),
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      innerBody: { aborted: true, body: '{"scope":"exact"}' },
+      innerStatus: 200,
+    });
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+  });
+
+  it('keeps same-request nested auth denial from sealing the outer lifecycle', async () => {
+    const denied = endpoint('/nested-same-auth', {
+      auth: {
+        kind: 'custom',
+        name: 'nested-same-auth-deny',
+        verify: customVerifier('nested-same-auth-deny', () => false),
+      },
+      handler: () => new Response('unreachable'),
+      method: 'GET',
+      reason: 'nested same-request auth-denial lifecycle fixture',
+      response: publicHtmlResponse,
+    });
+    const innerHandler = createRequestHandler(
+      createApp({
+        egress: {
+          enabled: false,
+          justification: 'nested same-request auth fixture performs no outbound I/O',
+        },
+        endpoints: [denied],
+      }),
+    );
+    const outerEndpoint = endpoint('/nested-same-auth', {
+      auth: {
+        kind: 'custom',
+        name: 'nested-same-auth-allow',
+        verify: customVerifier('nested-same-auth-allow', () => true),
+      },
+      async handler(request) {
+        const innerResponse = await innerHandler(request);
+        const token = mintCsrfToken(request, csrf, {
+          audience: 'endpoint:/nested-same-auth-submit',
+        }).token;
+        return Response.json({ innerStatus: innerResponse.status, token });
+      },
+      method: 'GET',
+      reason: 'nested same-request outer auth fixture',
+      response: publicJsonResponse,
+    });
+    const outerHandler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: {
+          enabled: false,
+          justification: 'nested same-request outer auth fixture performs no outbound I/O',
+        },
+        endpoints: [outerEndpoint],
+      }),
+    );
+
+    const response = await outerHandler(new Request('https://shop.example.test/nested-same-auth'));
+    await expect(response.json()).resolves.toMatchObject({ innerStatus: 401 });
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+  });
+
+  it('keeps same-request nested access denial from sealing the outer lifecycle', async () => {
+    const denied = endpoint('/nested-same-access', {
+      access: [guard('nested-same-access-deny', () => ({ kind: 'forbidden' as const }))],
+      auth: { kind: 'none', justification: 'nested same-request access-denial control' },
+      handler: () => new Response('unreachable'),
+      method: 'GET',
+      reason: 'nested same-request access-denial lifecycle fixture',
+      response: publicHtmlResponse,
+    });
+    const innerHandler = createRequestHandler(
+      createApp({
+        egress: {
+          enabled: false,
+          justification: 'nested same-request access fixture performs no outbound I/O',
+        },
+        endpoints: [denied],
+      }),
+    );
+    const outerEndpoint = endpoint('/nested-same-access', {
+      auth: {
+        kind: 'custom',
+        name: 'nested-same-access-allow',
+        verify: customVerifier('nested-same-access-allow', () => true),
+      },
+      async handler(request) {
+        const innerResponse = await innerHandler(request);
+        const token = mintCsrfToken(request, csrf, {
+          audience: 'endpoint:/nested-same-access-submit',
+        }).token;
+        return Response.json({ innerStatus: innerResponse.status, token });
+      },
+      method: 'GET',
+      reason: 'nested same-request outer access fixture',
+      response: publicJsonResponse,
+    });
+    const outerHandler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: {
+          enabled: false,
+          justification: 'nested same-request outer access fixture performs no outbound I/O',
+        },
+        endpoints: [outerEndpoint],
+      }),
+    );
+
+    const response = await outerHandler(
+      new Request('https://shop.example.test/nested-same-access'),
+    );
+    await expect(response.json()).resolves.toMatchObject({ innerStatus: 403 });
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+  });
+
+  it('keeps same-request nested CSRF denial from sealing the outer lifecycle', async () => {
+    const denied = endpoint('/nested-same-csrf', {
+      auth: { kind: 'none', justification: 'nested same-request CSRF-denial control' },
+      handler: () => new Response('unreachable'),
+      method: 'POST',
+      reason: 'nested same-request CSRF-denial lifecycle fixture',
+      response: publicHtmlResponse,
+    });
+    const innerHandler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: {
+          enabled: false,
+          justification: 'nested same-request CSRF fixture performs no outbound I/O',
+        },
+        endpoints: [denied],
+      }),
+    );
+    const outerEndpoint = endpoint('/nested-same-csrf', {
+      auth: {
+        kind: 'custom',
+        name: 'nested-same-csrf-allow',
+        verify: customVerifier('nested-same-csrf-allow', () => true),
+      },
+      csrf: false,
+      csrfJustification: 'outer fixture delegates the inner default-CSRF denial',
+      async handler(request) {
+        const innerResponse = await innerHandler(request);
+        const token = mintCsrfToken(request, csrf, {
+          audience: 'endpoint:/nested-same-csrf-submit',
+        }).token;
+        return Response.json({ innerStatus: innerResponse.status, token });
+      },
+      method: 'POST',
+      reason: 'nested same-request outer CSRF fixture',
+      response: publicJsonResponse,
+    });
+    const outerHandler = createRequestHandler(
+      createApp({
+        csrf,
+        egress: {
+          enabled: false,
+          justification: 'nested same-request outer CSRF fixture performs no outbound I/O',
+        },
+        endpoints: [outerEndpoint],
+      }),
+    );
+
+    const response = await outerHandler(
+      new Request('https://shop.example.test/nested-same-csrf', { method: 'POST' }),
+    );
+    await expect(response.json()).resolves.toMatchObject({ innerStatus: 422 });
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+  });
+
   it('rejects an authored plain-name alias of a captured prefixed CSRF cookie', async () => {
     const bootstrap = pinEndpointBrowserCredentialDelegation(
       endpoint('/conflicting-csrf-cookie-alias', {

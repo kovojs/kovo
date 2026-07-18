@@ -247,11 +247,15 @@ derived `Request` values resolve browser/session authority from the canonical li
 share its binding/posture state and response-header commit boundary. An exact framework-retained
 request can identify that lifecycle after async context is lost. That exact retained context takes
 precedence over any ambient outer lifecycle: nested dispatches cannot cross-bind canonical
-authority, personalization witnesses, pending cookies, or seal state. An arbitrary detached derivative
-cannot. A first-anonymous mint therefore requires an active lifecycle or an exact retained lifecycle
-receipt. The lifecycle privately records the exact standalone `Set-Cookie`; finalization atomically
-seals and snapshots that record before delivering it through the route/document sink or an
-endpoint response authorized to emit browser state. An exact authored duplicate is emitted once;
+authority, personalization witnesses, pending cookies, or seal state. Every
+`createRequestHandler()` invocation is a distinct response boundary: it clears an ambient caller
+frame before pre-dispatch callbacks run and, when passed the caller's exact retained `Request`,
+reconstructs a detached native ingress carrier before the nested dispatcher can finalize anything.
+An arbitrary detached derivative cannot identify a lifecycle. A first-anonymous mint therefore
+requires an active lifecycle or an exact retained lifecycle receipt. The lifecycle privately records
+the exact standalone `Set-Cookie`; finalization atomically seals and snapshots that record before
+delivering it through the route/document sink or an endpoint response authorized to emit browser
+state. An exact authored duplicate is emitted once;
 a non-identical plain/`__Host-`/`__Secure-` alias under the same logical name fails closed. Direct
 `runEndpoint()` and direct internal `renderRoutePageResponse()` have no managed cookie sink and
 reject a first-anonymous mint, while a truly late
