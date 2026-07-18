@@ -450,7 +450,7 @@ describe('@kovojs/test command fixtures', () => {
         navigationCount: 100,
         paintEntry: 'first-contentful-paint',
         prerenderTimingField: 'activationStart',
-        ttiMetric: 'ttiMinusFcpMs',
+        ttiMetric: 'listenerEnrollmentBeforeContentfulPaint',
       },
       ciWorkflowSource: [
         'steps:',
@@ -489,7 +489,7 @@ describe('@kovojs/test command fixtures', () => {
         navigationCount: 100,
         paintEntry: 'first-contentful-paint',
         prerenderTimingField: 'activationStart',
-        ttiMetric: 'ttiMinusFcpMs',
+        ttiMetric: 'listenerEnrollmentBeforeContentfulPaint',
       },
       inputFacts: [
         { auto: true },
@@ -583,7 +583,7 @@ describe('@kovojs/test command fixtures', () => {
           '  navigationCount: 100,',
           "  paintEntry: 'first-contentful-paint',",
           "  prerenderTimingField: 'activationStart',",
-          "  ttiMetric: 'ttiMinusFcpMs',",
+          "  ttiMetric: 'listenerEnrollmentBeforeContentfulPaint',",
           '};',
           'export function runP10PerfAcceptance() {}',
         ].join('\n'),
@@ -597,7 +597,7 @@ describe('@kovojs/test command fixtures', () => {
           navigationCount: 100,
           paintEntry: 'first-contentful-paint',
           prerenderTimingField: 'activationStart',
-          ttiMetric: 'ttiMinusFcpMs',
+          ttiMetric: 'listenerEnrollmentBeforeContentfulPaint',
         },
         inputFacts: [
           { auto: true },

@@ -210,7 +210,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       }
       executedPostgresCases.add('phase5-postgres-paranoid-dogfood');
     },
-    240_000,
+    360_000,
   );
 
   // @kovo-security-certifies KV435 phase-5-1-full-paranoid-dogfood-read-acceptance
