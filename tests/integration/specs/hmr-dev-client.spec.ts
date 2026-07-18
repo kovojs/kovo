@@ -92,52 +92,43 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
   const server = await serveHmrFixture(app);
 
   try {
-    await page.goto(`${server.origin}/`);
-    await page.waitForFunction(
-      () =>
-        typeof (window as typeof window & { __kovoHot?: Record<string, unknown> }).__kovoHot?.[
-          'kovo:component-render'
-        ] === 'function',
-    );
+    await navigateToReadyHmrFixture(page, server.origin, 'kovo:component-render');
 
     await expect(page.locator('#hmr-output')).toHaveText('Version 1');
     await page.locator('#hmr-input').focus();
     await page.locator('#hmr-input').fill('user draft');
 
     renderVersion = 2;
-    await expect(async () => {
-      const refreshRequest = page.waitForRequest(
-        (request) => {
-          if (!request.url().includes('/@kovo/hmr/refresh/live-targets')) {
-            return false;
-          }
-          const headers = request.headers();
-          return (
-            headers['kovo-live-targets']?.includes('hmr-card#hmr/Card@') === true &&
-            headers['kovo-live-targets']?.includes(':{"id":"one"}') === true &&
-            headers['kovo-targets']?.includes('hmr-card=hmr') === true
-          );
-        },
-        { timeout: 5_000 },
-      );
-      const refreshResponse = page.waitForResponse(
-        (response) =>
-          response.url().includes('/@kovo/hmr/refresh/live-targets') && response.status() === 200,
-        { timeout: 5_000 },
-      );
+    const refreshRequest = page.waitForRequest(
+      (request) => {
+        if (!request.url().includes('/@kovo/hmr/refresh/live-targets')) {
+          return false;
+        }
+        const headers = request.headers();
+        return (
+          headers['kovo-live-targets']?.includes('hmr-card#hmr/Card@') === true &&
+          headers['kovo-live-targets']?.includes(':{"id":"one"}') === true &&
+          headers['kovo-targets']?.includes('hmr-card=hmr') === true
+        );
+      },
+      { timeout: 5_000 },
+    );
+    const refreshResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/@kovo/hmr/refresh/live-targets') && response.status() === 200,
+      { timeout: 5_000 },
+    );
 
-      await page.evaluate(() => {
-        const hot = (
-          window as typeof window & {
-            __kovoHot?: Record<string, (event?: unknown) => void>;
-          }
-        ).__kovoHot;
-        hot?.['kovo:component-render']?.({ oldFactHash: 'old' });
-      });
-      await refreshRequest;
-      await refreshResponse;
-      await expect(page.locator('#hmr-output')).toHaveText('Version 2', { timeout: 5_000 });
-    }).toPass({ timeout: 20_000 });
+    await page.evaluate(() => {
+      const hot = (
+        window as typeof window & {
+          __kovoHot?: Record<string, (event?: unknown) => void>;
+        }
+      ).__kovoHot;
+      hot?.['kovo:component-render']?.({ oldFactHash: 'old' });
+    });
+    await Promise.all([refreshRequest, refreshResponse]);
+    await expect(page.locator('#hmr-output')).toHaveText('Version 2');
     await expect(page.locator('#hmr-input')).toHaveValue('user draft');
     await expect(page.locator('#hmr-input')).toBeFocused();
     expect(page.url()).toBe(`${server.origin}/`);
@@ -215,13 +206,7 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
   const server = await serveHmrFixture(app);
 
   try {
-    await page.goto(`${server.origin}/`);
-    await page.waitForFunction(
-      () =>
-        typeof (window as typeof window & { __kovoHot?: Record<string, unknown> }).__kovoHot?.[
-          'kovo:component-render'
-        ] === 'function',
-    );
+    await navigateToReadyHmrFixture(page, server.origin, 'kovo:component-render');
 
     await expect(page.locator('#product-stock')).toHaveText('7');
     await page.locator('#product-note').focus();
@@ -278,13 +263,7 @@ test('dev HMR client replaces the document with server diagnostics', async ({ pa
   const server = await serveHmrFixture(app, { devDiagnostics: diagnostics });
 
   try {
-    await page.goto(`${server.origin}/`);
-    await page.waitForFunction(
-      () =>
-        typeof (window as typeof window & { __kovoHot?: Record<string, unknown> }).__kovoHot?.[
-          'kovo:diagnostics'
-        ] === 'function',
-    );
+    await navigateToReadyHmrFixture(page, server.origin, 'kovo:diagnostics');
     await expect(page.locator('main')).toContainText('Healthy route');
 
     diagnostics.recordModuleDiagnostics({
@@ -338,13 +317,7 @@ test('dev HMR client full reloads for route-shell changes', async ({ page }) => 
   const server = await serveHmrFixture(app);
 
   try {
-    await page.goto(`${server.origin}/`);
-    await page.waitForFunction(
-      () =>
-        typeof (window as typeof window & { __kovoHot?: Record<string, unknown> }).__kovoHot?.[
-          'kovo:route-shell'
-        ] === 'function',
-    );
+    await navigateToReadyHmrFixture(page, server.origin, 'kovo:route-shell');
     await expect(page.locator('#route-version')).toHaveText('before');
 
     routeVersion = 'after';
@@ -561,6 +534,30 @@ function expectKovoSourceEditEvent(
   return event!.data;
 }
 
+async function navigateToReadyHmrFixture(
+  page: Page,
+  origin: string,
+  eventName: string,
+): Promise<void> {
+  // The fixture only needs the Kovo client hooks, not every browser load-tail event. Waiting for
+  // `load` can consume the whole test budget when Chromium retains a subresource under CI pressure.
+  // Commit the navigation, then poll the exact runtime readiness contract with a bounded deadline.
+  await page.goto(`${origin}/`, { waitUntil: 'commit' });
+  await page.waitForFunction(
+    (event) => {
+      const global = window as typeof window & {
+        __kovo_a?: unknown;
+        __kovoHot?: Record<string, unknown>;
+      };
+      return (
+        typeof global.__kovo_a === 'function' && typeof global.__kovoHot?.[event] === 'function'
+      );
+    },
+    eventName,
+    { polling: 25, timeout: 10_000 },
+  );
+}
+
 async function serveHmrFixture(app: ReturnType<typeof createApp>): Promise<{
   close(): Promise<void>;
   origin: string;
@@ -637,6 +634,9 @@ async function serveHmrFixture(
     close() {
       return new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
+        // The Playwright page outlives this test-local server. Close browser-held keep-alive
+        // connections after stopping acceptance so teardown cannot consume the 60 s test budget.
+        server.closeAllConnections();
       });
     },
     origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
