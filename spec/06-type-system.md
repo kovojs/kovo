@@ -293,7 +293,9 @@ version, security-relevant manifest fingerprint, requested subpath, imported exp
 conditional-export arm set. Kovo packages and explicitly reviewed framework companions use a
 compiler-owned, version-pinned verdict. Other packages use the committed
 `kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
-independently and may classify exports only as pure or raw. An absent, stale, duplicate,
+independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
+`<module>` entry and MUST classify package initialization explicitly rather than relying on an empty
+export list. An absent, stale, duplicate,
 contradictory, malformed, export-incomplete, condition-incomplete, or unresolved verdict fails
 closed with KV448. `kovo explain --capabilities` prints the root census, reviewed doors, exact
 package-summary versions/fingerprints, and every closed fact with the same provenance used by the

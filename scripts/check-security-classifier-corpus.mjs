@@ -1624,6 +1624,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'wrappers, re-exports, literal dynamic import, and require',
           'callback-transfer:definePage(caller.ts callback/container)@wrapper.ts',
+          'follows callback parameters through nested local wrapper factories',
           'dynamic-import target is not a compile-visible string literal',
         ],
       },
@@ -1635,6 +1636,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'has no reviewed exact-version capability summary',
           'summary covers 1.2.2, installed package is 1.2.3',
           '2 contradictory summaries',
+          'requires package summaries to classify side-effect module initialization explicitly',
           'only the compiler-owned Kovo registry',
         ],
       },

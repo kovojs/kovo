@@ -153,6 +153,7 @@ function collectStaticImportsAndExports(
       if (clause?.isTypeOnly) continue;
       const specifier = statement.moduleSpecifier.text;
       const importedNames: string[] = [];
+      if (clause === undefined) importedNames.push('<module>');
       if (clause?.name) {
         importedNames.push('default');
         bindings.push({ imported: 'default', local: clause.name.text, specifier });
@@ -167,6 +168,7 @@ function collectStaticImportsAndExports(
           specifier,
         });
       } else if (namedBindings && ts.isNamedImports(namedBindings)) {
+        if (namedBindings.elements.length === 0) importedNames.push('<module>');
         for (const element of namedBindings.elements) {
           if (element.isTypeOnly) continue;
           const imported = element.propertyName?.text ?? element.name.text;
@@ -192,6 +194,7 @@ function collectStaticImportsAndExports(
           : undefined;
       const importedNames: string[] = [];
       if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+        if (statement.exportClause.elements.length === 0) importedNames.push('<module>');
         for (const element of statement.exportClause.elements) {
           if (element.isTypeOnly) continue;
           const imported = element.propertyName?.text ?? element.name.text;
@@ -544,6 +547,17 @@ function callbackCarrierNames(
       if (ts.isFunctionDeclaration(node) && node.name && !carriers.has(node.name.text)) {
         carriers.add(node.name.text);
         changed = true;
+      }
+      if (ts.isFunctionLike(node)) {
+        for (const parameter of node.parameters) {
+          const names = new Set<string>();
+          collectBindingNames(parameter.name, names);
+          for (const name of names) {
+            if (carriers.has(name)) continue;
+            carriers.add(name);
+            changed = true;
+          }
+        }
       }
       ts.forEachChild(node, visit);
     };

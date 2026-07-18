@@ -178,6 +178,40 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics[0]!.message).toContain('global process@callback.ts');
   });
 
+  it('follows callback parameters through nested local wrapper factories', () => {
+    const files = [
+      {
+        fileName: 'inner.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          export function inner(config) { return route('/nested', config); }
+        `,
+      },
+      {
+        fileName: 'outer.ts',
+        source: `
+          import { inner } from './inner.js';
+          export function outer(config) { return inner(config); }
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { outer } from './outer.js';
+          export const page = outer({ render() { return process.env.SECRET; } });
+        `,
+      },
+    ];
+    const result = analyze(files);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.message).toContain(
+      'callback-transfer:inner(outer.ts callback/container)@inner.ts',
+    );
+    expect(result.diagnostics[0]!.message).toContain(
+      'callback-transfer:outer(app.ts callback/container)@outer.ts',
+    );
+  });
+
   it('resolves root factories through namespace aliases', () => {
     const files = [
       {
@@ -338,6 +372,55 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       packageSummaries: [summary, { ...summary, summaryVersion: 'safe-parser-review/2' }],
     });
     expect(contradictory.diagnostics[0]!.message).toContain('2 contradictory summaries');
+  });
+
+  it('requires package summaries to classify side-effect module initialization explicitly', () => {
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import 'safe-parser';
+          export const page = route('/side-effect', { render() { return null; } });
+        `,
+      },
+    ];
+    const packageFact = resolved('safe-parser');
+    const baseSummary: PackageCapabilitySummary = {
+      entries: [
+        {
+          conditions: packageFact.conditions,
+          exports: [],
+          subpath: '.',
+        },
+      ],
+      manifestFingerprint: packageFact.manifestFingerprint,
+      packageName: packageFact.packageName,
+      packageVersion: packageFact.packageVersion,
+      schema: packageCapabilitySummarySchema,
+      source: 'kovo.capabilities.json',
+      summaryVersion: 'safe-parser/side-effects-1',
+    };
+    const packages = [resolved('@kovojs/server'), packageFact];
+
+    const omitted = analyze(files, { packages, packageSummaries: [baseSummary] });
+    expect(omitted.diagnostics[0]!.message).toContain('does not classify export <module>');
+
+    const reviewed = analyze(files, {
+      packages,
+      packageSummaries: [
+        {
+          ...baseSummary,
+          entries: [
+            {
+              ...baseSummary.entries[0]!,
+              exports: [{ capabilities: [], disposition: 'pure', name: '<module>' }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(reviewed.diagnostics).toEqual([]);
   });
 
   it('rejects raw authority and forged framework-door disposition in third-party summaries', () => {
