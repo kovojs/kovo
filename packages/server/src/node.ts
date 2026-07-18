@@ -206,6 +206,7 @@ const nativePipeline = pipeline;
 const nativeCreateBrotliCompress = createBrotliCompress;
 const nativeCreateGzip = createGzip;
 const nativeUrlHashGetter = requiredGetter(NativeURL.prototype, 'hash');
+const nativeUrlHostGetter = requiredGetter(NativeURL.prototype, 'host');
 const nativeUrlHrefGetter = requiredGetter(NativeURL.prototype, 'href');
 const nativeUrlOriginGetter = requiredGetter(NativeURL.prototype, 'origin');
 const nativeUrlPathnameGetter = requiredGetter(NativeURL.prototype, 'pathname');
@@ -1286,6 +1287,10 @@ function urlHash(url: URL): string {
   return witnessReflectApply(nativeUrlHashGetter, url, []);
 }
 
+function urlHost(url: URL): string {
+  return witnessReflectApply(nativeUrlHostGetter, url, []);
+}
+
 function urlHref(url: URL): string {
   return witnessReflectApply(nativeUrlHrefGetter, url, []);
 }
@@ -1636,12 +1641,20 @@ function validNodeRequestAuthority(request: PinnedNodeRequest): boolean {
   }
 
   try {
-    const parsed = new NativeURL(`http://${authority}`);
+    // SPEC §9.5: one remote authority must retain one byte identity across either possible
+    // adapter scheme and the Web URL/Headers boundary. Parsing under both schemes also rejects
+    // explicit default ports (:80/:443), whose serialization otherwise depends on trusted
+    // transport posture.
+    const parsedHttp = new NativeURL(`http://${authority}`);
+    const parsedHttps = new NativeURL(`https://${authority}`);
     return (
-      urlOrigin(parsed) !== 'null' &&
-      urlPathname(parsed) === '/' &&
-      urlSearch(parsed) === '' &&
-      urlHash(parsed) === ''
+      urlOrigin(parsedHttp) !== 'null' &&
+      urlOrigin(parsedHttps) !== 'null' &&
+      urlHost(parsedHttp) === authority &&
+      urlHost(parsedHttps) === authority &&
+      urlPathname(parsedHttp) === '/' &&
+      urlSearch(parsedHttp) === '' &&
+      urlHash(parsedHttp) === ''
     );
   } catch {
     return false;

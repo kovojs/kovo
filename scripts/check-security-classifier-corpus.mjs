@@ -1510,6 +1510,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'node-fetch-authority-identity-closed',
+        file: 'packages/server/src/__bugz_remote_ingress.test.ts',
+        snippets: [
+          'node-fetch-authority-identity-closed',
+          "request('%65xample.com')",
+          "request('app.example:8443')",
+          "request('[2001:db8::1]:8443')",
+          'expect(observed).toHaveLength(2)',
+        ],
+      },
+      {
         id: 'alias-wrapper-and-host-spread-closed',
         file: 'packages/compiler/src/client-handler-import-policy.test.ts',
         snippets: [

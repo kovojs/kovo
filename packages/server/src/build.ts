@@ -1060,6 +1060,7 @@ const nativeServerResponseWrite = stablePrototypeFunction(ServerResponse.prototy
 const nativeServerResponseWriteEarlyHints = stablePrototypeFunction(ServerResponse.prototype, 'writeEarlyHints');
 const nativeServerResponseWriteHead = stablePrototypeFunction(ServerResponse.prototype, 'writeHead');
 const nativeUrlHashGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hash').get;
+const nativeUrlHostGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'host').get;
 const nativeUrlHrefGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'href').get;
 const nativeUrlOriginGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'origin').get;
 const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'pathname').get;
@@ -1788,6 +1789,7 @@ function pinNodeResponseMethod(nodeResponse, property, value) {
 }
 
 function urlHash(url) { return apply(nativeUrlHashGetter, url, []); }
+function urlHost(url) { return apply(nativeUrlHostGetter, url, []); }
 function urlHref(url) { return apply(nativeUrlHrefGetter, url, []); }
 function urlOrigin(url) { return apply(nativeUrlOriginGetter, url, []); }
 function urlPathname(url) { return apply(nativeUrlPathnameGetter, url, []); }
@@ -1816,9 +1818,14 @@ function validNodeRequestAuthority(nodeRequest) {
     }
   }
   try {
-    const parsed = new NativeURL('http://' + authority);
-    return urlOrigin(parsed) !== 'null' && urlPathname(parsed) === '/' &&
-      urlSearch(parsed) === '' && urlHash(parsed) === '';
+    // SPEC §9.5: preserve one canonical authority byte identity for either adapter scheme.
+    // Parsing both schemes rejects normalization and scheme-dependent default ports.
+    const parsedHttp = new NativeURL('http://' + authority);
+    const parsedHttps = new NativeURL('https://' + authority);
+    return urlOrigin(parsedHttp) !== 'null' && urlOrigin(parsedHttps) !== 'null' &&
+      urlHost(parsedHttp) === authority && urlHost(parsedHttps) === authority &&
+      urlPathname(parsedHttp) === '/' && urlSearch(parsedHttp) === '' &&
+      urlHash(parsedHttp) === '';
   } catch {
     return false;
   }

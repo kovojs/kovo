@@ -5001,6 +5001,12 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     'victim.example#ignored',
     'victim.example, evil.example',
     'victim.example:99999',
+    '%65xample.com',
+    'EXAMPLE.com',
+    'example.com:80',
+    'example.com:443',
+    '127.000.000.001',
+    '[2001:0db8::1]:8080',
   ]) {
     const liveInvalidAuthority = adapterParityRequest();
     delete liveInvalidAuthority.headers[':authority'];
