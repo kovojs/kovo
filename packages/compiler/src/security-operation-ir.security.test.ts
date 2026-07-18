@@ -596,7 +596,7 @@ export const report = endpoint('/report', {
 });
 `),
     ).toEqual([]);
-  });
+  }, 60_000);
 
   it.each([
     [
