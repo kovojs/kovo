@@ -102,9 +102,21 @@ export default defineConfig({
                       (0, eval)('(' + data.source + ')(globalThis.__kovoSandboxImport);');
                     }
                     const form = document.querySelector('form');
+                    let submitPrevented;
+                    form.addEventListener('submit', (event) => {
+                      // Kovo's capture listener has already made its decision by the target phase.
+                      // Snapshot that verdict, then cancel only the fixture's native navigation.
+                      submitPrevented = event.defaultPrevented;
+                      event.preventDefault();
+                    }, { once: true });
                     const submit = new SubmitEvent('submit', { bubbles: true, cancelable: true });
                     form.dispatchEvent(submit);
                     const anchor = document.querySelector('#account');
+                    let clickPrevented;
+                    anchor.addEventListener('click', (event) => {
+                      clickPrevented = event.defaultPrevented;
+                      event.preventDefault();
+                    }, { once: true });
                     const click = new MouseEvent('click', { bubbles: true, cancelable: true });
                     anchor.dispatchEvent(click);
                     if (data.mode !== 'paint') {
@@ -114,13 +126,13 @@ export default defineConfig({
                     }
                     setTimeout(() => {
                       parent.postMessage({
-                        clickPrevented: click.defaultPrevented,
+                        clickPrevented,
                         effectiveOrigin: globalThis.origin,
                         fetchCalls,
                         id: data.id,
                         importCalls,
                         locationOrigin: location.origin,
-                        submitPrevented: submit.defaultPrevented,
+                        submitPrevented,
                         type: 'kovo:sandbox-origin-result',
                       }, '*');
                     }, 0);
