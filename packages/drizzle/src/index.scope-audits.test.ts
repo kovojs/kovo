@@ -511,8 +511,10 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
   // OPP-28 write-side DATA proof: the shared predicate normalizer treats only
   // `inArray(ownerColumn, [same session/principal])` as equality-equivalent for
   // writes too. Non-singleton, mutable, computed, client, or wrong-column forms
-  // stay outside the proof subset and fail closed.
-  it('OPP-28: proves only singleton inArray owner-column principal write predicates', () => {
+  // stay outside the proof subset and fail closed. Summary-driven cases use exact
+  // mutation handlers so the predicate grammar, rather than positional trust,
+  // decides their verdict.
+  it('OPP-28: proves only singleton inArray owner-column principals from enrolled carriers', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -523,7 +525,9 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { inArray } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { mutation, s } from "@kovojs/server";',
               '',
+              'interface AppRequest { db: PgAsyncDatabase<any, any>; guard: { userId: string } }',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
@@ -551,10 +555,13 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, principal.userIds));',
               '}',
               '',
-              'export async function closeGuardReadonlyObjectTuple(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
-              '  const principal = { userIds: [currentGuardUser(ctx)] as const } as const;',
-              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, principal.userIds));',
-              '}',
+              'export const closeGuardReadonlyObjectTuple = mutation("closeGuardReadonlyObjectTuple", {',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    const principal = { userIds: [currentGuardUser(request)] as const } as const;',
+              '    await request.db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, principal.userIds));',
+              '  },',
+              '});',
               '',
               'export async function closeMineMutableObjectTuple(db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
               '  let principal = { userIds: [req.session.userId] as const };',
@@ -612,9 +619,12 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, req.session.userIds));',
               '}',
               '',
-              'export async function closeGuardMine(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, [currentGuardUser(ctx)]));',
-              '}',
+              'export const closeGuardMine = mutation("closeGuardMine", {',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, [currentGuardUser(request)]));',
+              '  },',
+              '});',
               '',
               'export async function closeMineMulti(db: PgAsyncDatabase<any, any>, req: { session: { userId: string; otherUserId: string } }) {',
               '  await db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, [req.session.userId, req.session.otherUserId]));',
@@ -740,7 +750,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
   });
 
-  it('OPP-28: proves only same-principal disjunctive owner-column write predicates', () => {
+  it('OPP-28: proves only same-principal disjunctions from enrolled write carriers', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -751,7 +761,9 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { and, eq, inArray, or } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { mutation, s } from "@kovojs/server";',
               '',
+              'interface AppRequest { db: PgAsyncDatabase<any, any>; guard: { userId: string; actorId: string } }',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'function currentGuardUser(ctx: { guard: { userId: string; actorId: string } }) { return ctx.guard.userId; }',
@@ -767,9 +779,12 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), inArray(orders.userId, [req.session.userId])));',
               '}',
               '',
-              'export async function closeGuardByStatusDisjunction(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(or(and(eq(orders.userId, currentGuardUser(ctx)), eq(orders.status, "open")), and(eq(orders.userId, currentGuardUser(ctx)), eq(orders.status, "draft"))));',
-              '}',
+              'export const closeGuardByStatusDisjunction = mutation("closeGuardByStatusDisjunction", {',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(or(and(eq(orders.userId, currentGuardUser(request)), eq(orders.status, "open")), and(eq(orders.userId, currentGuardUser(request)), eq(orders.status, "draft"))));',
+              '  },',
+              '});',
               '',
               'export async function closeMixedClientBranch(db: PgAsyncDatabase<any, any>, input: { userId: string }, req: { session: { userId: string } }) {',
               '  await db.update(orders).set({ status: "closed" }).where(or(eq(orders.userId, req.session.userId), eq(orders.userId, input.userId)));',
@@ -1121,7 +1136,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a write guarded by a summarized principal on the owner-column predicate', () => {
+  it('accepts a summarized principal inside an exact mutation handler owner predicate', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -1132,15 +1147,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { mutation, s } from "@kovojs/server";',
               '',
+              'interface AppRequest { db: PgAsyncDatabase<any, any>; guard: { userId: string } }',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
               'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
-              'export async function cancelMine(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
-              '  await db.update(orders).set({ status: "cancelled" }).where(eq(orders.userId, currentGuardUser(ctx)));',
-              '}',
+              'export const cancelMine = mutation({',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "cancelled" }).where(eq(orders.userId, currentGuardUser(request)));',
+              '  },',
+              '});',
             ].join('\n'),
           },
         ],
@@ -2547,7 +2567,10 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts an explicitly summarized guard principal on the owner-column predicate', () => {
+  // SPEC §6.6/§10.3: positive summary fixtures below use an exact imported framework root and
+  // its framework-owned carrier position; the dedicated boundary test keeps unenrolled positions
+  // closed instead of treating parameter names, types, or ordering as private authority.
+  it('accepts an explicitly summarized guard principal from an exact query context', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -2560,17 +2583,18 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'function currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; }',
               'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const guardUserId = currentGuardUser(ctx);',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
               '  },',
               '});',
             ].join('\n'),
@@ -2671,7 +2695,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('adversarial review rejects unproven positional, prefixed, and reassigned summary carriers', () => {
+  it('keeps summary calls unknown outside exact carrier positions or after helper reassignment', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -2745,7 +2769,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts awaited summarized guard principals on the owner-column predicate only', () => {
+  it('accepts awaited summarized guard principals from exact query contexts only', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -2758,32 +2782,33 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'async function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
-              'async function unsummarizedGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'async function currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; }',
+              'async function unsummarizedGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; }',
               'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForAwaitedGuard = query("ordersForAwaitedGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, await currentGuardUser(ctx)));',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, await currentGuardUser(ctx)));',
               '  },',
               '});',
               '',
               'export const ordersForAwaitedGuardAlias = query("ordersForAwaitedGuardAlias", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const guardUserId = await currentGuardUser(ctx);',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
               '  },',
               '});',
               '',
               'export const ordersForUnsummarizedAwaitedGuard = query("ordersForUnsummarizedAwaitedGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, await unsummarizedGuardUser(ctx)));',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, await unsummarizedGuardUser(ctx)));',
               '  },',
               '});',
             ].join('\n'),
@@ -2824,7 +2849,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts an explicitly summarized property-call guard principal on the owner-column predicate', () => {
+  it('accepts a summarized property-call guard principal from an exact query context', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -2837,18 +2862,19 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardFns.currentGuardUser(ctx)));',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardFns.currentGuardUser(ctx)));',
               '  },',
               '});',
             ].join('\n'),
@@ -2869,7 +2895,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a local alias to a summarized property-call guard principal', () => {
+  it('accepts a local summarized property-call alias from an exact query context', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -2882,19 +2908,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               'const guardUser = guardFns.currentGuardUser;',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUser(ctx)));',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUser(ctx)));',
               '  },',
               '});',
             ].join('\n'),
@@ -2915,7 +2942,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a conditional guard principal when both branches prove the same owner symbol', () => {
+  it('accepts an exact-query conditional when both branches prove the same guard principal', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -2928,19 +2955,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }, preferPrimary: boolean) {',
-              '    const guardUserId = preferPrimary ? guardFns.currentGuardUser(ctx) : guardFns.currentGuardUser(ctx);',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
+              '  async load(input: { preferPrimary: boolean }, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
+              '    const guardUserId = input.preferPrimary ? guardFns.currentGuardUser(ctx) : guardFns.currentGuardUser(ctx);',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
               '  },',
               '});',
             ].join('\n'),
@@ -3009,7 +3037,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a static property read from an explicitly summarized guard object', () => {
+  it('accepts a static property read from a summarized guard object in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -3022,17 +3050,18 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'function currentPrincipal(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard; }',
               'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
               '',
               'export const ordersForPrincipal = query("ordersForPrincipal", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const principal = currentPrincipal(ctx);',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal.userId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal.userId));',
               '  },',
               '});',
             ].join('\n'),
@@ -3053,7 +3082,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a nested readonly wrapper around an explicitly summarized guard object', () => {
+  it('accepts a nested readonly summarized guard wrapper in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -3066,17 +3095,18 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'function currentPrincipal(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard; }',
               'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
               '',
               'export const ordersForPrincipal = query("ordersForPrincipal", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const wrapper: Readonly<{ principal: Readonly<{ userId: string }> }> = { principal: currentPrincipal(ctx) };',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
               '  },',
               '});',
             ].join('\n'),
@@ -3097,7 +3127,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a const alias to a readonly nested guard-object wrapper', () => {
+  it('accepts a const summarized guard-object wrapper alias in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -3110,18 +3140,19 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'function currentPrincipal(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard; }',
               'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
               '',
               'export const ordersForPrincipal = query("ordersForPrincipal", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const principal = { userId: currentPrincipal(ctx).userId } as const;',
               '    const wrapper = { principal } as const;',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
               '  },',
               '});',
             ].join('\n'),
@@ -3280,7 +3311,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     }
   });
 
-  it('accepts an Object.freeze wrapper around an explicitly summarized guard object', () => {
+  it('accepts an Object.freeze summarized guard wrapper in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -3293,17 +3324,18 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'function currentPrincipal(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard; }',
               'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
               '',
               'export const ordersForPrincipal = query("ordersForPrincipal", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const wrapper = Object.freeze({ principal: currentPrincipal(ctx) });',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
               '  },',
               '});',
             ].join('\n'),
@@ -3561,7 +3593,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a literal element read from an explicitly summarized guard object', () => {
+  it('accepts a literal summarized guard-object element read in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -3574,17 +3606,18 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'function currentPrincipal(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard; }',
               'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
               '',
               'export const ordersForPrincipal = query("ordersForPrincipal", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const principal = currentPrincipal(ctx);',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal["userId"]));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal["userId"]));',
               '  },',
               '});',
             ].join('\n'),
@@ -3650,7 +3683,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a nested readonly tuple wrapper around a summarized guard principal', () => {
+  it('accepts a nested readonly summarized guard tuple in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -3663,19 +3696,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const wrapper = { principal: [guardFns.currentGuardUser(ctx)] } as const;',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal[0]));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal[0]));',
               '  },',
               '});',
             ].join('\n'),
@@ -3696,7 +3730,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts const aliases to a summarized guard principal inside a readonly object wrapper', () => {
+  it('accepts const summarized guard aliases in exact-query readonly wrappers', () => {
     const cases = [
       [
         'const guardUserId = guardFns.currentGuardUser(ctx);',
@@ -3721,19 +3755,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
                 'import { eq } from "drizzle-orm";',
                 'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
                 'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+                'import { query, s } from "@kovojs/server";',
                 '',
                 'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
                 '',
                 'const guardFns = {',
-                '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+                '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
                 '};',
                 'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
                 '',
                 'export const ordersForGuard = query("ordersForGuard", {',
                 '  output: s.object({ id: s.string() }),',
-                '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+                '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
                 ...wrapperLines.map((line) => `    ${line}`),
-                '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
+                '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.principal.userId));',
                 '  },',
                 '});',
               ].join('\n'),
@@ -3905,7 +3940,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a prefixed property read from an explicitly summarized guard object', () => {
+  it('accepts a nested declared guard path from an exact query context', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -3918,17 +3953,18 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), "profile.userId": text("profile_user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: "profile.userId" }));',
               '',
-              'function currentProfile(ctx: { guard: { profile: { userId: string } } }) { return ctx.guard.profile; }',
+              'function currentProfile(ctx: { request: { guard: { profile: { userId: string } } } }) { return ctx.request.guard.profile; }',
               'kovoAnalyzerSummary(currentProfile, { returns: { kind: "guard", path: "profile" } });',
               '',
               'export const ordersForProfile = query("ordersForProfile", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { profile: { userId: string } } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { profile: { userId: string } } } }) {',
               '    const profile = currentProfile(ctx);',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders["profile.userId"], profile.userId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders["profile.userId"], profile.userId));',
               '  },',
               '});',
             ].join('\n'),
@@ -4152,7 +4188,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a readonly object wrapper around a summarized property-call guard principal', () => {
+  it('accepts a readonly summarized property-call wrapper in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -4165,19 +4201,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const principal: Readonly<{ userId: string }> = { userId: guardFns.currentGuardUser(ctx) };',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal.userId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal.userId));',
               '  },',
               '});',
             ].join('\n'),
@@ -4198,7 +4235,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a literal element read from a const object wrapper around a summarized guard principal', () => {
+  it('accepts a literal summarized wrapper element read in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -4211,19 +4248,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const principal = { userId: guardFns.currentGuardUser(ctx) };',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal["userId"]));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal["userId"]));',
               '  },',
               '});',
             ].join('\n'),
@@ -4244,7 +4282,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts an Object.freeze scalar alias of a summarized guard principal', () => {
+  it('accepts an Object.freeze summarized scalar alias in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -4257,18 +4295,19 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'function currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; }',
               'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const guardUserId = currentGuardUser(ctx);',
               '    const principal = Object.freeze(guardUserId);',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal));',
               '  },',
               '});',
             ].join('\n'),
@@ -4359,7 +4398,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     }
   });
 
-  it('accepts an Object.freeze object wrapper around a summarized guard scalar alias', () => {
+  it('accepts an Object.freeze summarized scalar wrapper in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -4372,18 +4411,19 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'function currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; }',
               'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const guardUserId = currentGuardUser(ctx);',
               '    const wrapper = Object.freeze({ userId: guardUserId });',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.userId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, wrapper.userId));',
               '  },',
               '});',
             ].join('\n'),
@@ -4504,7 +4544,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     }
   });
 
-  it('accepts a const tuple alias of a summarized guard principal', () => {
+  it('accepts a const summarized guard tuple alias in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -4517,19 +4557,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const principal = [guardFns.currentGuardUser(ctx)] as const;',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal[0]));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, principal[0]));',
               '  },',
               '});',
             ].join('\n'),
@@ -4550,7 +4591,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a const tuple destructuring alias of a summarized guard principal', () => {
+  it('accepts a const summarized guard tuple destructure in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -4563,19 +4604,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const [guardUserId] = [guardFns.currentGuardUser(ctx)] as const;',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
               '  },',
               '});',
             ].join('\n'),
@@ -4596,7 +4638,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a const object destructuring alias of a summarized guard principal', () => {
+  it('accepts a const summarized guard object destructure in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -4609,19 +4651,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const { userId: guardUserId } = { userId: guardFns.currentGuardUser(ctx) } as const;',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
               '  },',
               '});',
             ].join('\n'),
@@ -4642,7 +4685,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('accepts a nested const object destructuring alias of a summarized guard object', () => {
+  it('accepts a nested summarized guard-object destructure in an exact query', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -4655,18 +4698,19 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
-              'function currentPrincipal(ctx: { guard: { userId: string } }) { return ctx.guard; }',
+              'function currentPrincipal(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard; }',
               'kovoAnalyzerSummary(currentPrincipal, { returns: { kind: "guard", path: "" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
+              '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const wrapper = { principal: currentPrincipal(ctx) } as const;',
               '    const { principal: { userId: guardUserId } } = wrapper;',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, guardUserId));',
               '  },',
               '});',
             ].join('\n'),
@@ -4777,7 +4821,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     }
   });
 
-  it('accepts nullish and logical expressions when both sides prove the same guard principal', () => {
+  it('accepts exact-query nullish/logical transfers when both sides prove one guard principal', () => {
     const expressions = [
       'guardFns.currentGuardUser(ctx) ?? guardFns.fallbackGuardUser(ctx)',
       'guardFns.currentGuardUser(ctx) || guardFns.fallbackGuardUser(ctx)',
@@ -4797,20 +4841,21 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
                 'import { eq } from "drizzle-orm";',
                 'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
                 'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+                'import { query, s } from "@kovojs/server";',
                 '',
                 'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
                 '',
                 'const guardFns = {',
-                '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
-                '  fallbackGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+                '  currentGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
+                '  fallbackGuardUser(ctx: { request: { guard: { userId: string } } }) { return ctx.request.guard.userId; },',
                 '};',
                 'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
                 'kovoAnalyzerSummary(guardFns.fallbackGuardUser, { returns: { kind: "guard", path: "userId" } });',
                 '',
                 'export const ordersForGuard = query("ordersForGuard", {',
                 '  output: s.object({ id: s.string() }),',
-                '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }) {',
-                `    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ${expression}));`,
+                '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
+                `    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ${expression}));`,
                 '  },',
                 '});',
               ].join('\n'),
@@ -5573,7 +5618,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('OPP-28: proves summarized guard helpers invoked from static callable containers on reads', () => {
+  it('OPP-28: proves static callable-container summaries from enrolled query.load contexts', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -5586,13 +5631,15 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { query, s } from "@kovojs/server";',
               '',
+              'type LoadContext = { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string; actorId: string } } };',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'const guardFns = {',
-              '  currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
-              '  currentActor(ctx: { guard: { actorId: string } }) { return ctx.guard.actorId; },',
-              '  unsummarized(ctx: { guard: { userId: string } }) { return ctx.guard.userId; },',
+              '  currentGuardUser(ctx: LoadContext) { return ctx.request.guard.userId; },',
+              '  currentActor(ctx: LoadContext) { return ctx.request.guard.actorId; },',
+              '  unsummarized(ctx: LoadContext) { return ctx.request.guard.userId; },',
               '};',
               'kovoAnalyzerSummary(guardFns.currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               'kovoAnalyzerSummary(guardFns.currentActor, { returns: { kind: "guard", path: "actorId" } });',
@@ -5610,69 +5657,69 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '',
               'export const ordersForObject = query("ordersForObject", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperObject.current(ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperObject.current(ctx)));',
               '  },',
               '});',
               'export const ordersForTuple = query("ordersForTuple", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperTuple[0](ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperTuple[0](ctx)));',
               '  },',
               '});',
               'export const ordersForFrozenObject = query("ordersForFrozenObject", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, frozenObject.current(ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, frozenObject.current(ctx)));',
               '  },',
               '});',
               'export const ordersForFrozenTupleAlias = query("ordersForFrozenTupleAlias", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
+              '  async load(_input: unknown, ctx: LoadContext) {',
               '    const currentGuardUser = frozenTuple[0];',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, currentGuardUser(ctx)));',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, currentGuardUser(ctx)));',
               '  },',
               '});',
               'export const ordersForAlias = query("ordersForAlias", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperAlias(ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperAlias(ctx)));',
               '  },',
               '});',
               'export const ordersForOptionalParenthesized = query("ordersForOptionalParenthesized", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, (helperObject.current)?.(ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, (helperObject.current)?.(ctx)));',
               '  },',
               '});',
               'export const ordersForActor = query("ordersForActor", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, actorObject.current(ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, actorObject.current(ctx)));',
               '  },',
               '});',
               'export const ordersForUnsummarized = query("ordersForUnsummarized", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, unsummarizedObject.current(ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, unsummarizedObject.current(ctx)));',
               '  },',
               '});',
               'export const ordersForMutable = query("ordersForMutable", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, mutableObject.current(ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, mutableObject.current(ctx)));',
               '  },',
               '});',
               'export const ordersForSpread = query("ordersForSpread", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, spreadObject.current(ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, spreadObject.current(ctx)));',
               '  },',
               '});',
               'export const ordersForComputed = query("ordersForComputed", {',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperObject[computedKey](ctx)));',
+              '  async load(_input: unknown, ctx: LoadContext) {',
+              '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperObject[computedKey](ctx)));',
               '  },',
               '});',
             ].join('\n'),
@@ -5700,18 +5747,20 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('OPP-28: proves summarized guard helpers invoked from static callable containers on writes', () => {
+  it('OPP-28: proves static callable-container summaries from enrolled mutation.handler requests', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
           pgDatabaseTypes(WRITE_DB_METHODS),
           {
-            fileName: 'order.queries.ts',
+            fileName: 'order.mutations.ts',
             source: [
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'import { mutation, s } from "@kovojs/server";',
               '',
+              'interface AppRequest { db: PgAsyncDatabase<any, any>; guard: { userId: string; actorId: string } }',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
               '',
               'function currentGuardUser(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
@@ -5729,30 +5778,54 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'const spreadTuple = [...helperTuple] as const;',
               'const computedIndex = 0;',
               '',
-              'export async function closeByObject(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperObject.current(ctx)));',
-              '}',
-              'export async function closeByTuple(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperTuple[0](ctx)));',
-              '}',
-              'export async function closeByAlias(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperAlias(ctx)));',
-              '}',
-              'export async function closeByActor(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, actorObject.current(ctx)));',
-              '}',
-              'export async function closeByUnsummarized(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, unsummarizedTuple[0](ctx)));',
-              '}',
-              'export async function closeByMutable(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, mutableTuple[0](ctx)));',
-              '}',
-              'export async function closeBySpread(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, spreadTuple[0](ctx)));',
-              '}',
-              'export async function closeByComputed(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string; actorId: string } }) {',
-              '  await db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperTuple[computedIndex](ctx)));',
-              '}',
+              'export const closeByObject = mutation({',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperObject.current(request)));',
+              '  },',
+              '});',
+              'export const closeByTuple = mutation({',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperTuple[0](request)));',
+              '  },',
+              '});',
+              'export const closeByAlias = mutation({',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperAlias(request)));',
+              '  },',
+              '});',
+              'export const closeByActor = mutation({',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(eq(orders.userId, actorObject.current(request)));',
+              '  },',
+              '});',
+              'export const closeByUnsummarized = mutation({',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(eq(orders.userId, unsummarizedTuple[0](request)));',
+              '  },',
+              '});',
+              'export const closeByMutable = mutation({',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(eq(orders.userId, mutableTuple[0](request)));',
+              '  },',
+              '});',
+              'export const closeBySpread = mutation({',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(eq(orders.userId, spreadTuple[0](request)));',
+              '  },',
+              '});',
+              'export const closeByComputed = mutation({',
+              '  input: s.object({}),',
+              '  async handler(_input: unknown, request: AppRequest) {',
+              '    await request.db.update(orders).set({ status: "closed" }).where(eq(orders.userId, helperTuple[computedIndex](request)));',
+              '  },',
+              '});',
             ].join('\n'),
           },
         ],
@@ -5764,14 +5837,14 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
         .map((a) => ({ kind: a.kind, name: a.name, scope: a.scope }))
         .sort((left, right) => left.name.localeCompare(right.name)),
     ).toEqual([
-      { kind: 'write', name: 'closeByActor', scope: 'unknown' },
-      { kind: 'write', name: 'closeByAlias', scope: 'session' },
-      { kind: 'write', name: 'closeByComputed', scope: 'unknown' },
-      { kind: 'write', name: 'closeByMutable', scope: 'unknown' },
-      { kind: 'write', name: 'closeByObject', scope: 'session' },
-      { kind: 'write', name: 'closeBySpread', scope: 'unknown' },
-      { kind: 'write', name: 'closeByTuple', scope: 'session' },
-      { kind: 'write', name: 'closeByUnsummarized', scope: 'unknown' },
+      { kind: 'write', name: 'order.mutations/close-by-actor', scope: 'unknown' },
+      { kind: 'write', name: 'order.mutations/close-by-alias', scope: 'session' },
+      { kind: 'write', name: 'order.mutations/close-by-computed', scope: 'unknown' },
+      { kind: 'write', name: 'order.mutations/close-by-mutable', scope: 'unknown' },
+      { kind: 'write', name: 'order.mutations/close-by-object', scope: 'session' },
+      { kind: 'write', name: 'order.mutations/close-by-spread', scope: 'unknown' },
+      { kind: 'write', name: 'order.mutations/close-by-tuple', scope: 'session' },
+      { kind: 'write', name: 'order.mutations/close-by-unsummarized', scope: 'unknown' },
     ]);
   });
 
