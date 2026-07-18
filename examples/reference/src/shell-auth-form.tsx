@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { FormError } from '@kovojs/core';
 
-import { referenceSignIn } from './app.js';
+import { signIn as referenceSignIn } from './auth.js';
 
 export function ReferenceShellLoginForm({
   next = '/account',

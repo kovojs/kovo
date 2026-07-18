@@ -7,15 +7,12 @@
     "build": "kovo build ./src/app.tsx --preset node",
     "build:demo": "node ../../scripts/lib/secure-vite-build.mjs",
     "dev": "kovo dev ./src/app.tsx",
-    "start": "node dist/server/server.mjs",
     "serve:demo": "pnpm run build:demo && node scripts/demo-serve.mjs",
     "serve:dev": "node scripts/serve.mjs",
-    "serve:prod": "pnpm run build && node dist/server/server.mjs",
     "test": "vp test"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
-    "@kovojs/better-auth": "workspace:*",
     "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/drizzle": "workspace:*",

@@ -13,16 +13,12 @@ import {
   htmlElementCount,
   htmlElementFacts,
   htmlFormActions,
+  htmlFormFacts,
   htmlFormFields,
 } from '@kovojs/test/html-fragment';
 
-import {
-  addToCart,
-  commerceAuthCsrf,
-  commerceCsrf,
-  commerceSignIn,
-  commerceSignOut,
-} from './domain.js';
+import { addToCart } from './domain.js';
+import { commerceAuthCsrf } from './auth.js';
 import { createCommerceTestApp } from './app-test-helpers.js';
 import { routeValueToHtml } from './app.js';
 
@@ -131,13 +127,8 @@ describe('commerce app HTTP entry', () => {
 
   it('dispatches enhanced and no-JS cart mutations through the shared app over HTTP', async () => {
     const shell = createCommerceTestApp();
-    const sessionCookie = await signInCookie(shell.db);
-    const sessionRequest = {
-      db: shell.db,
-      headers: new Headers({ cookie: sessionCookie }),
-      session: { id: 'session-u1', user: { id: 'u1' } },
-    };
-
+    const signedIn = await signInSession(shell);
+    const sessionCookie = signedIn.cookie;
     server = createServer(shell.nodeHandler);
     await listen(server);
     const origin = serverOrigin(server);
@@ -145,7 +136,11 @@ describe('commerce app HTTP entry', () => {
     const enhancedForm = new URLSearchParams();
     enhancedForm.set('productId', 'p1');
     enhancedForm.set('quantity', '2');
-    enhancedForm.set('csrf', csrfToken(sessionRequest, commerceCsrf, { mutation: addToCart }));
+    const enhancedSource = await fetch(`${origin}/cart`, { headers: { cookie: sessionCookie } });
+    enhancedForm.set(
+      'csrf',
+      productMutationCsrf(await enhancedSource.text(), '/_m/domain/add-to-cart', 'p1'),
+    );
     const enhanced = await fetch(`${origin}/_m/domain/add-to-cart`, {
       body: enhancedForm,
       headers: {
@@ -170,7 +165,11 @@ describe('commerce app HTTP entry', () => {
     const noJsForm = new URLSearchParams();
     noJsForm.set('productId', 'p2');
     noJsForm.set('quantity', '1');
-    noJsForm.set('csrf', csrfToken(sessionRequest, commerceCsrf, { mutation: addToCart }));
+    const noJsSource = await fetch(`${origin}/cart`, { headers: { cookie: sessionCookie } });
+    noJsForm.set(
+      'csrf',
+      productMutationCsrf(await noJsSource.text(), '/_m/domain/add-to-cart', 'p2'),
+    );
     const noJs = await fetch(`${origin}/_m/domain/add-to-cart`, {
       body: noJsForm,
       headers: {
@@ -200,11 +199,9 @@ describe('commerce app HTTP entry', () => {
     await listen(server);
     const origin = serverOrigin(server);
 
+    const failedSource = await authFormSource(origin, '/cart');
     const failedForm = new URLSearchParams();
-    failedForm.set(
-      'csrf',
-      csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf, { mutation: commerceSignIn }),
-    );
+    failedForm.set('csrf', failedSource.csrf);
     failedForm.set('email', 'ada@example.com');
     failedForm.set('password', 'wrong');
     failedForm.set('next', '/cart');
@@ -213,9 +210,10 @@ describe('commerce app HTTP entry', () => {
       // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: failedSource.cookie,
         Origin: origin,
         referer: `${origin}/login?next=%2Fcart`,
-        'x-forwarded-for': '203.0.113.31',
+        'x-forwarded-for': '127.0.0.31',
       },
       method: 'POST',
       redirect: 'manual',
@@ -231,11 +229,9 @@ describe('commerce app HTTP entry', () => {
     ).toHaveLength(1);
     expect(htmlFormFields(failedBody, 'next')).toMatchObject([{ name: 'next', value: '/cart' }]);
 
+    const loginSource = await authFormSource(origin, '/cart');
     const loginForm = new URLSearchParams();
-    loginForm.set(
-      'csrf',
-      csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf, { mutation: commerceSignIn }),
-    );
+    loginForm.set('csrf', loginSource.csrf);
     loginForm.set('email', 'ada@example.com');
     loginForm.set('password', 'correct');
     loginForm.set('next', '/cart');
@@ -244,8 +240,9 @@ describe('commerce app HTTP entry', () => {
       // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: loginSource.cookie,
         Origin: origin,
-        'x-forwarded-for': '203.0.113.33',
+        'x-forwarded-for': '127.0.0.33',
       },
       method: 'POST',
       redirect: 'manual',
@@ -254,22 +251,11 @@ describe('commerce app HTTP entry', () => {
 
     expect(login.status).toBe(303);
     expect(login.headers.get('location')).toBe('/cart');
-    expect(sessionCookie).toBe('kovo_commerce_session=session-u1');
+    expect(sessionCookie).toMatch(/^kovo_commerce_session=[0-9a-f-]+$/u);
 
-    const logoutForm = new URLSearchParams();
-    logoutForm.set(
-      'csrf',
-      csrfToken(
-        {
-          authCsrfId: 'commerce-shell-login',
-          db: shell.db,
-          headers: new Headers({ cookie: sessionCookie }),
-          session: { id: 'session-u1', user: { id: 'u1' } },
-        },
-        commerceAuthCsrf,
-        { mutation: commerceSignOut },
-      ),
-    );
+    const cartPage = await fetch(`${origin}/cart`, { headers: { cookie: sessionCookie } });
+    const logoutCsrf = mutationFormCsrf(await cartPage.text(), '/_m/auth/sign-out');
+    const logoutForm = new URLSearchParams({ csrf: logoutCsrf });
     const logout = await fetch(`${origin}/_m/auth/sign-out`, {
       body: logoutForm,
       headers: {
@@ -292,18 +278,19 @@ function expectCommerceShellDocument(html: string): void {
   expect(htmlFormActions(html)).not.toContain('/_m/domain/add-to-cart');
 }
 
-async function signInCookie(db: ReturnType<typeof createCommerceTestApp>['db']): Promise<string> {
+async function signInSession(shell: ReturnType<typeof createCommerceTestApp>) {
   const request = {
     authCsrfId: 'commerce-shell-login',
-    clientIp: '203.0.113.34',
-    db,
+    clientIp: '127.0.0.34',
+    db: shell.db,
     // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
-    headers: new Headers({ 'x-forwarded-for': '203.0.113.34' }),
+    headers: new Headers({ 'x-forwarded-for': '127.0.0.34' }),
+    url: 'http://localhost/commerce-auth-test',
   };
   const result = await runMutation(
-    commerceSignIn,
+    shell.auth.signIn,
     {
-      csrf: csrfToken(request, commerceAuthCsrf, { mutation: commerceSignIn }),
+      csrf: csrfToken(request, commerceAuthCsrf, { mutation: shell.auth.signIn }),
       email: 'ada@example.com',
       password: 'correct',
     },
@@ -312,18 +299,43 @@ async function signInCookie(db: ReturnType<typeof createCommerceTestApp>['db']):
   );
   if (!result.ok) throw new Error(`commerce sign-in failed: ${result.error.code}`);
 
-  const sessionCookie = firstSetCookiePair(result.responseHeaders);
-  if (!sessionCookie) throw new Error('commerce sign-in did not set a cookie');
-
-  return sessionCookie;
+  const cookie = firstSetCookiePair(result.responseHeaders);
+  if (!cookie) throw new Error('commerce sign-in did not set a cookie');
+  const resolved = await shell.auth.sessionProvider({
+    headers: new Headers({ cookie }),
+    url: request.url,
+  } as Parameters<typeof shell.auth.sessionProvider>[0]);
+  const session =
+    resolved && typeof resolved === 'object' && 'value' in resolved ? resolved.value : resolved;
+  if (!session) throw new Error('commerce sign-in did not resolve a session');
+  return { cookie, session };
 }
 
-function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceTestApp>['db']) {
+async function authFormSource(origin: string, next: string) {
+  const response = await fetch(`${origin}/login?next=${encodeURIComponent(next)}`);
+  const html = await response.text();
   return {
-    authCsrfId: 'commerce-shell-login',
-    db,
-    headers: new Headers(),
+    cookie: cookiePair(response.headers.get('set-cookie') ?? ''),
+    csrf: mutationFormCsrf(html, '/_m/auth/sign-in'),
   };
+}
+
+function mutationFormCsrf(html: string, action: string): string {
+  const form = htmlFormFacts(html).find((candidate) => candidate.action === action);
+  const csrf = form?.fields.find((field) => field.name === 'csrf')?.value;
+  if (!csrf) throw new Error(`Expected ${action} form CSRF field.`);
+  return csrf;
+}
+
+function productMutationCsrf(html: string, action: string, productId: string): string {
+  const form = htmlFormFacts(html).find(
+    (candidate) =>
+      candidate.action === action &&
+      candidate.fields.some((field) => field.name === 'productId' && field.value === productId),
+  );
+  const csrf = form?.fields.find((field) => field.name === 'csrf')?.value;
+  if (!csrf) throw new Error(`Expected ${action} ${productId} form CSRF field.`);
+  return csrf;
 }
 
 function listen(target: Server): Promise<void> {

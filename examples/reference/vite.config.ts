@@ -1,7 +1,8 @@
 import { defineConfig } from 'vite-plus';
+import { exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
 
 export default defineConfig({
-  plugins: [referenceAppShellDevPlugin()],
+  plugins: [exampleKovoCompilerPlugin({ include: ['src'] }), referenceAppShellDevPlugin()],
   run: {
     tasks: {
       export: {

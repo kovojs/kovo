@@ -20,7 +20,7 @@ describe('commerce authored live-target artifacts', () => {
 
   it('renders live-target query chunks for enhanced addToCart success', async () => {
     const client = createCommerceScenarioClient(createCommerceTestApp());
-    const login = await client.signIn({ remoteAddress: '203.0.113.171' });
+    const login = await client.signIn({ remoteAddress: '127.0.0.171' });
     expect(login.status).toBe(303);
 
     const first = await client.addToCartEnhanced({ productId: 'p1', quantity: 2 });
@@ -48,7 +48,7 @@ describe('commerce authored live-target artifacts', () => {
 
   it('renders live-target failure fragments with form helpers', async () => {
     const client = createCommerceScenarioClient(createCommerceTestApp());
-    const login = await client.signIn({ remoteAddress: '203.0.113.174' });
+    const login = await client.signIn({ remoteAddress: '127.0.0.174' });
     expect(login.status).toBe(303);
 
     const response = await client.addToCartEnhanced(

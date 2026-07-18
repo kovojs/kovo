@@ -156,9 +156,6 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.1
         version: 0.5.1
-      '@kovojs/better-auth':
-        specifier: workspace:*
-        version: link:../../packages/better-auth
       '@kovojs/browser':
         specifier: workspace:*
         version: link:../../packages/browser
@@ -337,9 +334,6 @@ importers:
 
   examples/reference:
     dependencies:
-      '@kovojs/better-auth':
-        specifier: workspace:*
-        version: link:../../packages/better-auth
       '@kovojs/browser':
         specifier: workspace:*
         version: link:../../packages/browser
@@ -350,9 +344,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/server
     devDependencies:
-      better-auth:
-        specifier: 1.6.17
-        version: 1.6.17(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(kysely@0.29.2)(pg@8.22.0))(pg@8.22.0)(vitest@4.1.8)
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0))

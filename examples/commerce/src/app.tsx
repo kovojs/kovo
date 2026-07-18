@@ -15,18 +15,15 @@ import {
   addToCart,
   cartQuery,
   commerceMessages,
-  commerceSessionProvider,
-  commerceSignIn,
-  commerceSignOut,
   createCommerceDb,
   orderHistoryQuery,
   productGridQuery,
-  type CommerceAuthRequest,
   type CommerceDb,
   type CommerceSession,
 } from './domain.js';
+import { createCommerceAuth, type CommerceAuthBindings, type CommerceAuthRequest } from './auth.js';
 import * as style from '@kovojs/style';
-import { LoginForm } from './components/auth-forms.js';
+import { LoginForm, LogoutForm } from './components/auth-forms.js';
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
 import { renderOrderHistory } from './components/order-history-view.js';
@@ -36,12 +33,14 @@ import { commerceTheme } from './theme.js';
 export type CommerceRouteRequest = Request & CommerceAuthRequest;
 
 export interface CommerceAppOptions {
+  authFixture?: Parameters<typeof createCommerceAuth>[1];
   db?: CommerceDb;
   onError?: ServerErrorHandler;
 }
 
 export interface CommerceApplication {
   app: KovoApp<CommerceSession>;
+  auth: CommerceAuthBindings;
   db: CommerceDb;
 }
 
@@ -84,6 +83,7 @@ function CommerceCartPage({ request }: { request: CommerceRouteRequest }): strin
         {request.session?.user?.id ? <ProductGrid /> : <GuestProductGrid />}
       </ErrorBoundary>
       {request.session?.user?.id ? <OrderHistory /> : renderOrderHistory({ items: [] })}
+      {request.session?.user?.id ? <LogoutForm /> : null}
     </section>
   );
 }
@@ -141,22 +141,23 @@ export const commerceLoginRoute = route('/login', {
 });
 
 export function createCommerceApplication(options: CommerceAppOptions = {}): CommerceApplication {
-  const db = options.db ?? createCommerceDb();
+  const auth = createCommerceAuth(options.db ?? createCommerceDb(), options.authFixture);
+  const db = auth.db;
   const app: KovoApp<CommerceSession> = createApp<CommerceSession, CommerceDb>({
     db: () => db,
     document: { lang: 'en-US' },
-    mutations: [addToCart, commerceSignIn, commerceSignOut],
+    mutations: [addToCart, auth.signIn, auth.signOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
     renderRoute(value) {
       return routeValueToHtml(value);
     },
     routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
-    sessionProvider: commerceSessionProvider as NonNullable<
+    sessionProvider: auth.sessionProvider as NonNullable<
       KovoApp<CommerceSession>['sessionProvider']
     >,
   });
-  return { app, db };
+  return { app, auth, db };
 }
 
 export function routeValueToHtml(value: unknown): string {

@@ -2,7 +2,7 @@
 import { FormError } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
-import { commerceSignIn, commerceSignOut } from '../domain.js';
+import { signIn as commerceSignIn, signOut as commerceSignOut } from '../auth.js';
 
 const authFormStyles = style.create({
   errorText: {

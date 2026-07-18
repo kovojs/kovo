@@ -4,13 +4,11 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@kovojs/better-auth": "workspace:*",
     "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
-    "better-auth": "1.6.17",
     "vitest": "4.1.8"
   }
 }

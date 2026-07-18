@@ -1,20 +1,5 @@
 import { form, type FormInput } from '@kovojs/core';
-import {
-  guards,
-  i18n,
-  metaFromQuery,
-  mutation,
-  publicAccess,
-  s,
-  serverValue,
-  session,
-} from '@kovojs/server';
-import {
-  authed as betterAuthAuthed,
-  betterAuthSession,
-  betterAuthSignInEmailMutation,
-  betterAuthSignOutMutation,
-} from '@kovojs/better-auth';
+import { guards, i18n, metaFromQuery, mutation, s, serverValue, session } from '@kovojs/server';
 import { count, eq, sql } from 'drizzle-orm';
 
 import type { CommerceDb } from './db.js';
@@ -47,29 +32,6 @@ export interface CommerceRequest {
   session?: CommerceSession | null;
 }
 
-export interface CommerceAuthRequest extends CommerceRequest {
-  authCsrfId?: string | null;
-  clientIp?: string;
-  headers: Headers;
-}
-
-export interface CommerceBetterAuthSession {
-  id: string;
-}
-
-export interface CommerceBetterAuthUser {
-  email: string;
-  id: string;
-  roles: readonly CommerceRole[];
-}
-
-interface CommerceBetterAuthResponse {
-  headers: Headers;
-  status: number;
-}
-
-export type CommerceBetterAuth = ReturnType<typeof createCommerceBetterAuth>;
-
 export const commerceSession = session(
   s.object({
     id: s.string(),
@@ -80,7 +42,6 @@ export const commerceSession = session(
 );
 
 export const EXAMPLE_ONLY_COMMERCE_CSRF_SECRET = 'EXAMPLE_ONLY_COMMERCE_CSRF_SECRET';
-export const EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET = 'EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET';
 
 export const commerceCsrf = {
   field: 'csrf',
@@ -89,166 +50,6 @@ export const commerceCsrf = {
     return request.session?.id;
   },
 };
-
-export const commerceAuthCsrf = {
-  field: 'csrf',
-  secret: exampleDeploymentSecret(
-    'KOVO_COMMERCE_AUTH_CSRF_SECRET',
-    EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
-  ),
-  sessionId(request: CommerceAuthRequest) {
-    return request.session?.id ?? request.authCsrfId ?? 'commerce-shell-login';
-  },
-};
-
-const commerceAuthCookieName = 'kovo_commerce_session';
-
-const commerceAuthUsers = new Map<
-  string,
-  CommerceBetterAuthUser & { name: string; password: string }
->([
-  [
-    'ada@example.com',
-    {
-      email: 'ada@example.com',
-      id: 'u1',
-      name: 'Ada Lovelace',
-      password: 'correct',
-      roles: ['admin', 'member'],
-    },
-  ],
-  [
-    'grace@example.com',
-    {
-      email: 'grace@example.com',
-      id: 'u2',
-      name: 'Grace Hopper',
-      password: 'correct',
-      roles: ['member'],
-    },
-  ],
-]);
-
-export function createCommerceBetterAuth() {
-  const sessionUserIds = new Map<string, string>();
-
-  const api = {
-    getSession(options: { headers: Headers }) {
-      const token = readCookie(options.headers, commerceAuthCookieName);
-      const userId = token ? sessionUserIds.get(token) : undefined;
-      const user = userId
-        ? [...commerceAuthUsers.values()].find((candidate) => candidate.id === userId)
-        : undefined;
-
-      if (!token || !user) return null;
-
-      return {
-        session: { id: token },
-        user: {
-          email: user.email,
-          id: user.id,
-          roles: user.roles,
-        },
-      };
-    },
-    signInEmail(options: {
-      asResponse: true;
-      body: { email: string; password: string };
-      headers: Headers;
-    }) {
-      const user = commerceAuthUsers.get(options.body.email);
-      if (!user || user.password !== options.body.password) {
-        return commerceAuthResponse([], 401);
-      }
-
-      const token = `session-${user.id}`;
-      sessionUserIds.set(token, user.id);
-
-      return commerceAuthResponse([
-        `${commerceAuthCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax`,
-      ]);
-    },
-    signOut(options: { asResponse: true; headers: Headers }) {
-      const token = readCookie(options.headers, commerceAuthCookieName);
-      if (token) sessionUserIds.delete(token);
-
-      return commerceAuthResponse([
-        `${commerceAuthCookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
-      ]);
-    },
-  };
-
-  return {
-    api,
-    $context: Promise.resolve({
-      baseURL: 'https://commerce.test/api/auth',
-      options: { basePath: '/api/auth' },
-    }),
-    async handler(request: Request): Promise<Response> {
-      const url = new URL(request.url);
-      if (request.method !== 'POST' || url.pathname !== '/api/auth/sign-in/email') {
-        return new Response(null, { status: 404 });
-      }
-
-      const body: unknown = await request.json();
-      if (
-        typeof body !== 'object' ||
-        body === null ||
-        !('email' in body) ||
-        typeof body.email !== 'string' ||
-        !('password' in body) ||
-        typeof body.password !== 'string'
-      ) {
-        return new Response(null, { status: 400 });
-      }
-
-      const response = api.signInEmail({
-        asResponse: true,
-        body: { email: body.email, password: body.password },
-        headers: request.headers,
-      });
-      return new Response(null, { headers: response.headers, status: response.status });
-    },
-  };
-}
-
-export const commerceBetterAuth = createCommerceBetterAuth();
-
-export const commerceSessionProvider = commerceSession.provider(
-  betterAuthSession<
-    CommerceBetterAuthSession,
-    CommerceBetterAuthUser,
-    CommerceSession,
-    CommerceAuthRequest
-  >(commerceBetterAuth, ({ session: authSession, user }) => ({
-    id: authSession.id,
-    user: {
-      id: user.id,
-      roles: user.roles,
-    },
-  })),
-);
-
-export const commerceSignIn = betterAuthSignInEmailMutation<'auth/sign-in', CommerceAuthRequest>(
-  commerceBetterAuth,
-  {
-    // Sign-in runs before authentication, so its KV436 access decision is public
-    // (SPEC §10.2); CSRF still applies.
-    access: publicAccess('sign-in runs before authentication'),
-    csrf: commerceAuthCsrf,
-    defaultRedirectTo: '/cart',
-  },
-);
-
-export const commerceSignOut = betterAuthSignOutMutation<
-  'auth/sign-out',
-  CommerceAuthRequest,
-  CommerceAuthRequest & { session: CommerceSession }
->(commerceBetterAuth, {
-  csrf: commerceAuthCsrf,
-  defaultRedirectTo: '/login',
-  guard: betterAuthAuthed<CommerceAuthRequest>(),
-});
 
 export { cart, order, product, cartQuery, orderHistoryQuery, productGridQuery };
 
@@ -263,7 +64,7 @@ export const addToCart = mutation({
     quantity: s.number().int().min(1).default(1),
   }),
   guard: guards.all(
-    betterAuthAuthed<CommerceRequest>(),
+    guards.authed<CommerceRequest>(),
     guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),
   ),
   transaction(request: CommerceRequest, run) {
@@ -334,28 +135,6 @@ export const commerceMessageCatalog = {
 export const commerceMessages = i18n('en-US', commerceMessageCatalog);
 
 export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
-
-function readCookie(headers: Headers, name: string): string | undefined {
-  const cookie = headers.get('cookie');
-  if (!cookie) return undefined;
-
-  for (const part of cookie.split(';')) {
-    const [rawName, ...rawValue] = part.trim().split('=');
-    if (rawName === name) return rawValue.join('=');
-  }
-
-  return undefined;
-}
-
-function commerceAuthResponse(
-  cookies: readonly string[],
-  status = 204,
-): CommerceBetterAuthResponse {
-  const headers = new Headers();
-  for (const cookie of cookies) headers.append('set-cookie', cookie);
-
-  return { headers, status };
-}
 
 function exampleDeploymentSecret(envName: string, fallback: string): string {
   const secret = process.env[envName];

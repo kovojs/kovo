@@ -5,14 +5,13 @@ import { describe, expect, it } from 'vitest';
 import {
   addToCart,
   cartQuery,
-  commerceAuthCsrf,
   commerceCsrf,
   createCommerceDb,
-  EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
   EXAMPLE_ONLY_COMMERCE_CSRF_SECRET,
   orderHistoryQuery,
   productGridQuery,
 } from './domain.js';
+import { commerceAuthCsrf, EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET } from './auth.js';
 import {
   loadOrderHistory,
   loadProductGrid,

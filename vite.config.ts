@@ -25,11 +25,13 @@ export default defineConfig({
     exampleKovoCompilerPlugin({
       include: [
         'examples/commerce/src/components',
+        'examples/commerce/src/auth.ts',
         'examples/commerce/src/domain.ts',
         'examples/commerce/src/queries.ts',
       ],
       registryFacts: commerceRegistryFacts,
     }),
+    exampleKovoCompilerPlugin({ include: ['examples/reference/src/auth.ts'] }),
     exampleDrizzleRegistryPlugin({
       appEntries: ['examples/crm/src/app-shell.ts', 'examples/crm/src/interactive-app.tsx'],
       sourceRoot: 'examples/crm/src',

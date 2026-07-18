@@ -14,7 +14,7 @@ import {
   accountRoute,
   adminRoute,
   createReferenceAuth,
-  createReferenceBetterAuth,
+  createReferenceAuthFixture,
   type ReferenceAuthBindings,
   type ReferenceRequest,
 } from './app.js';
@@ -90,9 +90,10 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
 }
 
 export function createReferenceApplication(options: ReferenceAppShellOptions = {}) {
-  const auth = options.auth ?? createReferenceAuth(createReferenceBetterAuth());
+  const auth = options.auth ?? createReferenceAuth(createReferenceAuthFixture());
   const app = createApp({
     appId: '1f067065-c40a-4579-b35a-7fbcf928e32c',
+    db: () => auth.db,
     document: { lang: 'en-US' },
     mutations: [auth.signIn, auth.signOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),

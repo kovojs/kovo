@@ -1,13 +1,11 @@
 import { enhancedMutationHeaders, headerValues, setCookieValues } from '@kovojs/test/headers';
-import { csrfToken, readonlyDb, toNodeHandler } from '@kovojs/server';
+import { readonlyDb, toNodeHandler } from '@kovojs/server';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 import { runWithCommerceGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';
 import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
 import { eq } from 'drizzle-orm';
 
 import {
-  commerceAuthCsrf,
-  commerceSignOut,
   createCommerceDb,
   type AddToCartInput,
   type CommerceDb,
@@ -21,6 +19,7 @@ import {
 import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from './queries.js';
+import { createCommerceAuth, type CommerceAuthBindings } from './auth.js';
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };
 export type CartItemRow = { productId: string; qty: number; unitPrice: number };
@@ -136,16 +135,28 @@ export async function loadOrderHistory(
   return orderHistoryQuery.load(undefined, { db: readonlyDb(db), request: { session }, session });
 }
 
-export function commerceAuthRequest(cookie?: string, db = createCommerceDb()) {
+export function commerceAuthRequest(
+  cookie?: string,
+  auth: CommerceAuthBindings = createCommerceAuth(createCommerceDb()),
+  url = 'http://localhost/commerce-auth-test',
+) {
   const headers = new Headers({ 'user-agent': 'commerce-auth-test' });
   if (cookie) headers.set('cookie', cookie);
 
   return {
     authCsrfId: 'login-csrf',
-    clientIp: '203.0.113.10',
-    db,
+    clientIp: nextCommerceTestIp(),
+    db: auth.db,
     headers,
+    url,
   };
+}
+
+let commerceTestRequestCount = 0;
+
+function nextCommerceTestIp(): string {
+  commerceTestRequestCount = (commerceTestRequestCount % 250) + 1;
+  return `127.0.0.${commerceTestRequestCount}`;
 }
 
 export function setCookieHeaders(response: {
@@ -203,13 +214,14 @@ export interface CommerceScenarioClient {
 
 export interface CommerceScenarioRequestOptions {
   headers?: HeadersInit;
+  peerAddress?: string;
 }
 
 export interface CommerceScenarioEnhancedOptions extends CommerceScenarioRequestOptions {
   target?: 'cart-page' | 'form';
 }
 
-const commerceOrigin = 'https://commerce.test';
+const commerceOrigin = 'https://localhost';
 export interface CommerceTestApp extends CommerceApplication {
   nodeHandler: ReturnType<typeof toNodeHandler>;
   requestHandler: ReturnType<typeof createExampleTestRequestHandler>;
@@ -247,6 +259,9 @@ export function createCommerceScenarioClient(
       ...init,
       headers,
       redirect: 'manual',
+    });
+    Object.defineProperty(request, '__kovoPeerAddress', {
+      value: options.peerAddress ?? '127.0.0.1',
     });
     const response = await shell.requestHandler(request);
     rememberSetCookies(cookies, response);
@@ -292,26 +307,17 @@ export function createCommerceScenarioClient(
       {
         headers: {
           referer: `${commerceOrigin}/login?next=${encodeURIComponent(next)}`,
-          'x-forwarded-for': options.remoteAddress ?? '203.0.113.60',
         },
+        peerAddress: options.remoteAddress ?? '127.0.0.60',
       },
     );
   }
 
   async function signOut(): Promise<Response> {
+    const cartPage = await get('/cart');
+    const csrf = await formFieldValue(cartPage, '/_m/auth/sign-out', 'csrf');
     return postForm('/_m/auth/sign-out', {
-      // SPEC §6.5/§9.1 (audit trap #3): bind the hand-minted logout token to the sign-out mutation
-      // so its audience matches the `{ audience: 'auth/sign-out' }` dispatch validates against.
-      csrf: csrfToken(
-        {
-          authCsrfId: 'commerce-shell-login',
-          db: shell.db,
-          headers: new Headers({ cookie: cookieHeader(cookies) }),
-          session: { id: 'session-u1', user: { id: 'u1' } },
-        },
-        commerceAuthCsrf,
-        { mutation: commerceSignOut },
-      ),
+      csrf,
     });
   }
 

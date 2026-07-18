@@ -41,7 +41,7 @@ describe('commerce example', () => {
     ).toBe(false);
     expect(html).toContain('/login?next=%2Fcart');
 
-    const login = await client.signIn({ remoteAddress: '203.0.113.69' });
+    const login = await client.signIn({ remoteAddress: '127.0.0.69' });
     expect(login.status).toBe(303);
 
     const authedPage = await client.get('/cart');
@@ -53,7 +53,7 @@ describe('commerce example', () => {
 
   it('handles no-JS addToCart success as POST-redirect-GET', async () => {
     const client = createCommerceScenarioClient();
-    const login = await client.signIn({ remoteAddress: '203.0.113.70' });
+    const login = await client.signIn({ remoteAddress: '127.0.0.70' });
     expect(login.status).toBe(303);
 
     const response = await client.addToCartNoJs({ productId: 'p1', quantity: 2 });
@@ -80,7 +80,7 @@ describe('commerce example', () => {
       return transaction(run);
     };
 
-    const login = await client.signIn({ remoteAddress: '203.0.113.71' });
+    const login = await client.signIn({ remoteAddress: '127.0.0.71' });
     expect(login.status).toBe(303);
 
     const first = await client.addToCartEnhanced({ productId: 'p1', quantity: 2 });
@@ -105,7 +105,7 @@ describe('commerce example', () => {
     expect(firstHtml).not.toContain('href="/products?after=');
     expect(firstHtml).not.toContain('>More<');
 
-    const login = await client.signIn({ remoteAddress: '203.0.113.72' });
+    const login = await client.signIn({ remoteAddress: '127.0.0.72' });
     expect(login.status).toBe(303);
 
     const authedPage = await client.get('/cart');
@@ -117,7 +117,7 @@ describe('commerce example', () => {
 
   it('handles no-JS addToCart failures as a full 422 page with the form rerendered', async () => {
     const client = createCommerceScenarioClient();
-    const login = await client.signIn({ remoteAddress: '203.0.113.73' });
+    const login = await client.signIn({ remoteAddress: '127.0.0.73' });
     expect(login.status).toBe(303);
 
     const response = await client.addToCartNoJs({ productId: 'p2', quantity: 3 });

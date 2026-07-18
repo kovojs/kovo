@@ -253,7 +253,7 @@ describe('reference app shell HTTP entry', () => {
 
     expect(login.status).toBe(303);
     expect(login.headers.get('location')).toBe('/admin');
-    expect(sessionCookie).toBe('kovo_reference_session=session-u1');
+    expect(sessionCookie).toMatch(/^kovo_reference_session=[0-9a-f-]+$/u);
 
     const account = await fetch(`${origin}/account`, {
       headers: { cookie: sessionCookie },
