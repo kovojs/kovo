@@ -2180,6 +2180,14 @@ export default {
         statusText: 'Bad Request',
       });
     }
+    const dispatchRequest = cloudflareRequestForDispatch(request, ingress);
+    if (dispatchRequest === undefined) {
+      return new NativeResponse(null, {
+        headers: { 'cache-control': 'no-store' },
+        status: 403,
+        statusText: 'Forbidden',
+      });
+    }
     const pathname = apply(nativeUrlPathnameGetter, url, []);
     const assets = ownDataValue(env, 'ASSETS');
     // Cloudflare consumes _headers as host configuration, and Kovo's static manifest is build
@@ -2212,14 +2220,6 @@ export default {
       }
     }
 
-    const dispatchRequest = cloudflareRequestForDispatch(request, ingress);
-    if (dispatchRequest === undefined) {
-      return new NativeResponse(null, {
-        headers: { 'cache-control': 'no-store' },
-        status: 403,
-        statusText: 'Forbidden',
-      });
-    }
     const handler = await loadHandler();
     return handler(dispatchRequest);
   },

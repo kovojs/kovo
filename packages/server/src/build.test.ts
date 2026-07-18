@@ -4419,6 +4419,9 @@ export default async function handler(request) {
         workerSource.indexOf("ownDataValue(env, 'ASSETS')"),
       );
       expect(workerSource.indexOf('cloudflareRequestForDispatch(request, ingress)')).toBeLessThan(
+        workerSource.indexOf("ownDataValue(env, 'ASSETS')"),
+      );
+      expect(workerSource.indexOf('cloudflareRequestForDispatch(request, ingress)')).toBeLessThan(
         workerSource.indexOf('await loadHandler()'),
       );
 
@@ -4445,6 +4448,7 @@ export default async function handler(request) {
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: {
             'cf-connecting-ip': '203.0.113.20',
             // Cloudflare does not promise to strip a direct caller's CF-Worker header. Presence
@@ -4458,6 +4462,7 @@ export default async function handler(request) {
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: {
             'cf-connecting-ip': '198.51.100.30',
             'x-real-ip': '198.51.100.30',
@@ -4465,6 +4470,7 @@ export default async function handler(request) {
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: {
             'cf-connecting-ip': '198.51.100.99',
             'x-real-ip': '198.51.100.99',
@@ -4472,18 +4478,25 @@ export default async function handler(request) {
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: { 'cf-connecting-ip': '2a06:98c0:3600::103' },
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: { 'cf-connecting-ip': '203.0.113.40, 203.0.113.41' },
           url: 'https://worker.test/rate',
         },
         {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
           headers: { 'cf-connecting-ip': 'not-an-ip' },
           url: 'https://worker.test/rate',
         },
-        { cloudflareClientIp: false, url: 'https://worker.test/rate' },
+        {
+          asset: { body: 'REJECTED_INGRESS_ASSET_MUST_NOT_RUN' },
+          cloudflareClientIp: false,
+          url: 'https://worker.test/rate',
+        },
         {
           headers: { 'cf-connecting-ip': '2001:0db8:0000:0000:0000:0000:0000:0001' },
           url: 'https://worker.test/rate',
@@ -4510,6 +4523,7 @@ export default async function handler(request) {
         nonIpLiteral,
         missing,
       ]) {
+        expect(rejected!.assetCalls).toBe(0);
         expect(rejected!.response.status).toBe(403);
         expect(rejected!.response.headers.get('cache-control')).toBe('no-store');
         await expect(rejected!.response.text()).resolves.toBe('');
