@@ -695,9 +695,9 @@ function privateScopeCarrierBindingIsStableAtUse(
 }
 
 function exactPrivateScopeProjectionCall(call: CallExpression, parameterKey: string): boolean {
-  const args = call.getArguments();
-  if (args.length !== 1) return false;
-  const argument = unwrappedStaticExpressionNode(args[0]);
+  const [firstArgument, ...remainingArguments] = call.getArguments();
+  if (!firstArgument || remainingArguments.length !== 0) return false;
+  const argument = unwrappedStaticExpressionNode(firstArgument);
   if (!Node.isIdentifier(argument)) return false;
   const argumentKey = resolvedSymbolKey(
     symbolForIdentifierReference(argument) ?? argument.getSymbol(),
