@@ -15,7 +15,7 @@ rendering, Better Auth, and managed SQL.
 | Severity | Open | Closed |
 | -------- | ---: | -----: |
 | High     |    2 |     20 |
-| Medium   |    2 |     23 |
+| Medium   |    3 |     23 |
 | Low      |    0 |      5 |
 
 ## High
@@ -594,6 +594,19 @@ rendering, Better Auth, and managed SQL.
     mounted GET shapes, and Kovo currently preserves it.
   - **Open:** the redirect-only mount gate must resolve `Location` against the request and require
     the exact pinned scheme, host, and effective port before emitting an empty redirect response.
+
+- [ ] **M26 - Shared caches could replay an anonymous form bound to another browser's CSRF
+      cookie.**
+  - When a public GET rendered a mutation form with an already-present anonymous CSRF cookie, the
+    emitted token was cookie-specific but the response carried neither `private, no-store` nor
+    `Vary: Cookie`. A remote client could prime a shared cache with its form; a victim then received
+    that cached token and every ordinary same-origin submit failed 422 before the handler.
+  - **Evidence:** the real `createRequestHandler` path reproduces attacker-cookie A → cached HTML →
+    victim-cookie B rejection, while the first no-cookie render is correctly private because it
+    mints browser state.
+  - **Open:** carry a precise CSRF-personalization witness from token rendering to final response
+    posture and force private/no-store plus Cookie variance on every live/generated adapter without
+    de-caching unrelated public HTML.
 
 ## Low
 
