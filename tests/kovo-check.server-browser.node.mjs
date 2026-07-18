@@ -39,6 +39,7 @@ import { derive } from '../dist/browser/src/index.mjs';
 import {
   applyDeferredStreamResponseToRuntime,
   kovoEscapeHtml,
+  securityHandler,
 } from '../dist/browser/src/generated.mjs';
 import { refetchQueries, kovoLoaderSource } from '../dist/browser/src/internal/inline-loader.mjs';
 import { DomMorphTarget, morphStructuralTree } from '../dist/browser/src/internal/morph.mjs';
@@ -228,6 +229,7 @@ const generatedModuleRuntime = {
   handler: (callback) => (event, ctx) => callback(event, ctx),
   installKovoLoader,
   kovoEscapeHtml,
+  securityHandler,
   runQueryUpdatePlan(root, queryName, value, plan = {}, options = {}) {
     return applyCompiledQueryUpdatePlan(root, queryName, value, plan, options);
   },
@@ -1243,7 +1245,9 @@ void test('typecheck-examples watches every tsx-bearing example source tree', as
 
   for (const tsconfigPath of exampleTsconfigs) {
     const tsconfig = JSON.parse(await readProjectFile(tsconfigPath));
-    const hasTsx = (tsconfig.include ?? []).includes('src/**/*.tsx');
+    const hasTsx = (tsconfig.include ?? []).some(
+      (pattern) => pattern === 'src/**/*.tsx' || pattern === 'src/**/*',
+    );
     const sourceBase = tsconfigPath.replace(/\/tsconfig\.json$/, '');
     assert.ok(typecheckInputs.includes(`${sourceBase}/src/**/*.ts`));
     assert.equal(typecheckInputs.includes(`${sourceBase}/src/**/*.tsx`), hasTsx);

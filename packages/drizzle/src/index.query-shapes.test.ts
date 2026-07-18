@@ -572,6 +572,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { query } from "@kovojs/server";',
             '',
             'export const questions = pgTable("questions", {',
             '  sessionId: text("session_id").notNull(),',
@@ -580,10 +581,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
             'export const questionDetail = query("questionDetail", {',
-            '  load(input: { id: string }, db: PgAsyncDatabase<any, any>, context: { request?: { session?: { id?: string } | null } }) {',
-            '    const sessionId = context.request?.session?.id;',
-            '    if (!sessionId) throw new Error("auth required");',
-            '    return db.select({ title: questions.title }).from(questions).where(and(eq(questions.sessionId, sessionId), eq(questions.id, input.id)));',
+            '  load(input: { id: string }, context: { db: PgAsyncDatabase<any, any>; request: { session: { id: string } } }) {',
+            '    return context.db.select({ title: questions.title }).from(questions).where(and(eq(questions.sessionId, context.request.session.id), eq(questions.id, input.id)));',
             '  },',
             '});',
           ].join('\n'),
@@ -604,7 +603,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         shape: {
           title: 'string',
         },
-        site: 'question.queries.ts:10',
+        site: 'question.queries.ts:11',
       },
     ]);
   });

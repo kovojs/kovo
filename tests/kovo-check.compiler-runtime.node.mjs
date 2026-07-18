@@ -1451,7 +1451,7 @@ export const DiagnosticCard = component({
         {
           code: 'KV449',
           location: `${fileName}:5:40`,
-          message: `${diagnosticDefinitions.KV449.message} browser capability call window.alert is outside the finite handler IR.`,
+          message: `${diagnosticDefinitions.KV449.message} semantic root=serialized-browser-handler:onClick@110; transfers=<direct>; sink=browser capability call window.alert is outside the finite handler IR; verdict=closed:opaque-transfer.`,
         },
       ],
     );
