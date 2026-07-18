@@ -2671,6 +2671,80 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('adversarial review rejects unproven positional, prefixed, and reassigned summary carriers', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+            'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+          ]),
+          {
+            fileName: 'summary-adversarial.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'function exactGuard(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'kovoAnalyzerSummary(exactGuard, { returns: { kind: "guard", path: "userId" } });',
+              'export async function positionalCarrier(db: PgAsyncDatabase<any, any>, _padding: unknown, request: { guard: { userId: string } }) {',
+              '  await db.update(orders).set({}).where(eq(orders.userId, exactGuard(request)));',
+              '}',
+              'function prefixedGuard(ctx: { input: { guard: { userId: string } } }) { return ctx.input.guard.userId; }',
+              'kovoAnalyzerSummary(prefixedGuard, { returns: { kind: "guard", path: "userId" } });',
+              'export async function prefixedCarrier(db: PgAsyncDatabase<any, any>, ctx: { input: { guard: { userId: string } } }) {',
+              '  await db.update(orders).set({}).where(eq(orders.userId, prefixedGuard(ctx)));',
+              '}',
+              '',
+              'function mutableGuard(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'kovoAnalyzerSummary(mutableGuard, { returns: { kind: "guard", path: "userId" } });',
+              'export async function reassignedHelper(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }, targetId: string) {',
+              '  mutableGuard = () => targetId;',
+              '  await db.update(orders).set({}).where(eq(orders.userId, mutableGuard(ctx)));',
+              '}',
+              'function aliasGuard(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+              'kovoAnalyzerSummary(aliasGuard, { returns: { kind: "guard", path: "userId" } });',
+              'export async function reassignedAlias(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }, targetId: string) {',
+              '  aliasGuard = () => targetId;',
+              '  const capturedAfterMutation = aliasGuard;',
+              '  await db.update(orders).set({}).where(eq(orders.userId, capturedAfterMutation(ctx)));',
+              '}',
+              'const guardFns = { current(ctx: { guard: { userId: string } }) { return ctx.guard.userId; } };',
+              'kovoAnalyzerSummary(guardFns.current, { returns: { kind: "guard", path: "userId" } });',
+              'export async function reassignedProperty(db: PgAsyncDatabase<any, any>, ctx: { guard: { userId: string } }, targetId: string) {',
+              '  guardFns.current = () => targetId;',
+              '  await db.update(orders).set({}).where(eq(orders.userId, guardFns.current(ctx)));',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .filter((entry) =>
+          [
+            'positionalCarrier',
+            'prefixedCarrier',
+            'reassignedAlias',
+            'reassignedHelper',
+            'reassignedProperty',
+          ].includes(entry.name),
+        )
+        .map((entry) => ({ name: entry.name, scope: entry.scope }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      { name: 'positionalCarrier', scope: 'unknown' },
+      { name: 'prefixedCarrier', scope: 'unknown' },
+      { name: 'reassignedAlias', scope: 'unknown' },
+      { name: 'reassignedHelper', scope: 'unknown' },
+      { name: 'reassignedProperty', scope: 'unknown' },
+    ]);
+  });
+
   it('accepts awaited summarized guard principals on the owner-column predicate only', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({

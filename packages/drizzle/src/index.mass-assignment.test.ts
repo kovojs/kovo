@@ -235,6 +235,29 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
   });
 
+  it('adversarial review rejects nested mutation input laundered through a summary', () => {
+    const result = facts(
+      [
+        HEADER,
+        'import { mutation, s } from "@kovojs/server";',
+        'function exactGuard(ctx: { guard: { userId: string } }) { return ctx.guard.userId; }',
+        'kovoAnalyzerSummary(exactGuard, { returns: { kind: "guard", path: "userId" } });',
+        'export const updateAccount = mutation({',
+        '  input: s.object({ id: s.string(), guard: s.object({ userId: s.string() }) }),',
+        '  async handler(input, context) {',
+        '    async function nestedWrite(db: PgAsyncDatabase<any, any>, request: { guard: { userId: string } }) {',
+        '      await db.update(accounts).set({ ownerId: serverValue(exactGuard(request), "claimed private owner") }).where(eq(accounts.id, input.id));',
+        '    }',
+        '    await nestedWrite(context.db, input);',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      { column: 'ownerId', name: 'updateAccount', provenance: 'input', via: 'set' },
+    ]);
+  });
+
   it('rejects serverValue with no value argument', () => {
     const result = facts(
       handler(
