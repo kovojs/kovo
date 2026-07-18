@@ -39,8 +39,11 @@ import { MAX_REQUEST_QUERY_ENTRIES, MAX_REQUEST_URL_CHARACTERS } from './request
 
 function nodeRequest(url: string): IncomingMessage {
   const request = new EventEmitter() as IncomingMessage;
+  Object.assign(request, { __kovoRequestIngressSource: 'node-http1' });
   request.headers = { host: 'internal.example' };
+  request.httpVersion = '1.1';
   request.method = 'GET';
+  request.rawHeaders = ['Host', 'internal.example'];
   request.socket = new EventEmitter() as Socket;
   request.url = url;
   return request;
@@ -72,8 +75,11 @@ describe('server node adapter', () => {
         method === 'GET'
           ? nodeRequest('/method-identity')
           : (Object.assign(Readable.from([]), {
+              __kovoRequestIngressSource: 'node-http1',
               headers: { host: 'internal.example' },
+              httpVersion: '1.1',
               method,
+              rawHeaders: ['Host', 'internal.example'],
               socket: new EventEmitter() as Socket,
               url: '/method-identity',
             }) as IncomingMessage);
@@ -96,21 +102,30 @@ describe('server node adapter', () => {
     expect(origin).not.toHaveBeenCalled();
   });
 
-  it('uses a pinned origin for absolute-form and protocol-relative request targets', () => {
-    const absolute = nodeRequestToWebRequest(nodeRequest('http://evil.example/admin?next=1'), {
+  it('uses a pinned origin only after an absolute-form target agrees with selected ingress', () => {
+    const absolute = nodeRequestToWebRequest(nodeRequest('http://internal.example/admin?next=1'), {
       origin: 'https://app.example',
     });
-    const protocolRelative = nodeRequestToWebRequest(nodeRequest('//evil.example/admin?next=1'), {
-      origin: 'https://app.example',
-    });
-    const absoluteDoubleSlashPath = nodeRequestToWebRequest(
-      nodeRequest('http://evil.example//other.example/admin?next=1'),
-      { origin: 'https://app.example' },
-    );
-
     expect(absolute.url).toBe('https://app.example/admin?next=1');
-    expect(protocolRelative.url).toBe('https://app.example/evil.example/admin?next=1');
-    expect(absoluteDoubleSlashPath.url).toBe('https://app.example//other.example/admin?next=1');
+
+    for (const target of [
+      'http://evil.example/admin?next=1',
+      '//evil.example/admin?next=1',
+      'javascript:alert(1)',
+      'mailto:user@example.com',
+      'authority.example:443',
+    ]) {
+      expect(() =>
+        nodeRequestToWebRequest(nodeRequest(target), {
+          origin: 'https://app.example',
+        }),
+      ).toThrow(/canonical origin-form or matching HTTP\(S\) absolute-form/u);
+    }
+    expect(() =>
+      nodeRequestToWebRequest(nodeRequest('http://internal.example//other.example/admin?next=1'), {
+        origin: 'https://app.example',
+      }),
+    ).not.toThrow();
   });
 
   it('requires one syntactically valid request authority even with a pinned origin', () => {
@@ -132,6 +147,7 @@ describe('server node adapter', () => {
     ]) {
       const request = nodeRequest('/authority');
       request.headers = { host: authority };
+      request.rawHeaders = ['Host', authority];
       expect(() =>
         nodeRequestToWebRequest(request, { origin: 'https://canonical.example' }),
       ).toThrow('Kovo Node adapter request authority must be one valid host[:port].');
@@ -156,25 +172,35 @@ describe('server node adapter', () => {
     missingHttp10Host.headers = {};
     missingHttp10Host.httpVersion = '1.0';
     missingHttp10Host.rawHeaders = [];
-    expect(nodeRequestToWebRequest(missingHttp10Host).url).toBe('http://127.0.0.1/authority');
+    expect(() => nodeRequestToWebRequest(missingHttp10Host)).toThrow(
+      'Kovo Node adapter request authority must be one valid host[:port].',
+    );
 
     const customCarrierWithoutRawHeaders = nodeRequest('/authority');
     customCarrierWithoutRawHeaders.headers = {};
-    expect(nodeRequestToWebRequest(customCarrierWithoutRawHeaders).url).toBe(
-      'http://127.0.0.1/authority',
+    expect(() => nodeRequestToWebRequest(customCarrierWithoutRawHeaders)).toThrow(
+      /request authority must be one valid host\[:port\]/u,
     );
+
+    const pinnedOrigin = nodeRequest('/authority');
+    pinnedOrigin.headers = { host: 'remote.example' };
+    pinnedOrigin.rawHeaders = ['Host', 'remote.example'];
+    const reconstructed = nodeRequestToWebRequest(pinnedOrigin, {
+      origin: 'https://canonical.example:8443',
+    });
+    expect(reconstructed.url).toBe('https://canonical.example:8443/authority');
+    expect(reconstructed.headers.get('host')).toBe('canonical.example:8443');
 
     const invalidPseudoAuthority = nodeRequest('/authority');
     invalidPseudoAuthority.headers = {
       ':authority': 'victim.example@evil.example',
       host: 'canonical.example',
     };
-    expect(() => nodeRequestToWebRequest(invalidPseudoAuthority)).toThrow(
-      'Kovo Node adapter request authority must be one valid host[:port].',
-    );
+    expect(() => nodeRequestToWebRequest(invalidPseudoAuthority)).toThrow(/transport posture/u);
 
     const ipv6 = nodeRequest('/authority');
     ipv6.headers = { host: '[2001:db8::1]:8080' };
+    ipv6.rawHeaders = ['Host', '[2001:db8::1]:8080'];
     expect(nodeRequestToWebRequest(ipv6).url).toBe('http://[2001:db8::1]:8080/authority');
   });
 
@@ -203,7 +229,7 @@ describe('server node adapter', () => {
         origin: 'https://app.example',
       });
       expect(converted.url).toBe('https://app.example/captured?ok=1');
-      expect(converted.headers.get('host')).toBe('internal.example');
+      expect(converted.headers.get('host')).toBe('app.example');
     } finally {
       globalThis.Headers = OriginalHeaders;
       globalThis.Request = OriginalRequest;
@@ -217,6 +243,7 @@ describe('server node adapter', () => {
       host: 'app.example',
       'x-forwarded-proto': 'https',
     };
+    request.rawHeaders = ['Host', 'app.example', 'X-Forwarded-Proto', 'https'];
     (request.socket as Socket & { encrypted?: boolean }).encrypted = false;
 
     expect(nodeRequestToWebRequest(request).url).toBe('http://app.example/account');
@@ -225,23 +252,29 @@ describe('server node adapter', () => {
     );
 
     const cleartextHttp2 = nodeRequest('/h2-cleartext');
+    Object.assign(cleartextHttp2, { __kovoRequestIngressSource: 'node-http2' });
     cleartextHttp2.headers = {
       ':authority': 'app.example',
       ':scheme': 'https',
     };
+    cleartextHttp2.httpVersion = '2.0';
+    cleartextHttp2.rawHeaders = [];
     (cleartextHttp2.socket as Socket & { encrypted?: boolean }).encrypted = false;
-    expect(nodeRequestToWebRequest(cleartextHttp2).url).toBe('http://app.example/h2-cleartext');
+    expect(() => nodeRequestToWebRequest(cleartextHttp2)).toThrow(/HTTP\/2 :scheme/u);
     expect(nodeRequestToWebRequest(cleartextHttp2, { trustedProxy: true }).url).toBe(
       'https://app.example/h2-cleartext',
     );
 
     const encryptedHttp2 = nodeRequest('/h2-encrypted');
+    Object.assign(encryptedHttp2, { __kovoRequestIngressSource: 'node-http2' });
     encryptedHttp2.headers = {
       ':authority': 'app.example',
       ':scheme': 'http',
     };
+    encryptedHttp2.httpVersion = '2.0';
+    encryptedHttp2.rawHeaders = [];
     (encryptedHttp2.socket as Socket & { encrypted?: boolean }).encrypted = true;
-    expect(nodeRequestToWebRequest(encryptedHttp2).url).toBe('https://app.example/h2-encrypted');
+    expect(() => nodeRequestToWebRequest(encryptedHttp2)).toThrow(/HTTP\/2 :scheme/u);
     expect(nodeRequestToWebRequest(encryptedHttp2, { trustedProxy: true }).url).toBe(
       'http://app.example/h2-encrypted',
     );
@@ -251,6 +284,12 @@ describe('server node adapter', () => {
       host: 'app.example',
       'x-forwarded-proto': 'http, https',
     };
+    appendedForwardingChain.rawHeaders = [
+      'Host',
+      'app.example',
+      'X-Forwarded-Proto',
+      'http, https',
+    ];
     expect(nodeRequestToWebRequest(appendedForwardingChain, { trustedProxy: true }).url).toBe(
       'https://app.example/proxy-chain',
     );
@@ -260,6 +299,14 @@ describe('server node adapter', () => {
       host: 'app.example',
       'x-forwarded-proto': ['https', 'http'],
     };
+    duplicateForwardingHeaders.rawHeaders = [
+      'Host',
+      'app.example',
+      'X-Forwarded-Proto',
+      'https',
+      'X-Forwarded-Proto',
+      'http',
+    ];
     expect(nodeRequestToWebRequest(duplicateForwardingHeaders, { trustedProxy: true }).url).toBe(
       'http://app.example/proxy-duplicates',
     );
@@ -269,6 +316,12 @@ describe('server node adapter', () => {
       host: 'app.example',
       'x-forwarded-proto': 'attacker-value, \t https \t',
     };
+    forwardingOws.rawHeaders = [
+      'Host',
+      'app.example',
+      'X-Forwarded-Proto',
+      'attacker-value, \t https \t',
+    ];
     expect(nodeRequestToWebRequest(forwardingOws, { trustedProxy: true }).url).toBe(
       'https://app.example/proxy-ows',
     );
@@ -276,10 +329,10 @@ describe('server node adapter', () => {
     for (const invalid of ['', 'https, ', 'https, ftp', []] as const) {
       const invalidForwarding = nodeRequest('/proxy-invalid');
       invalidForwarding.headers = {
-        ':authority': 'app.example',
-        ':scheme': 'https',
+        host: 'app.example',
         'x-forwarded-proto': invalid,
       };
+      invalidForwarding.rawHeaders = ['Host', 'app.example'];
       (invalidForwarding.socket as Socket & { encrypted?: boolean }).encrypted = true;
       expect(() => nodeRequestToWebRequest(invalidForwarding, { trustedProxy: true })).toThrow(
         /must end in http or https|must end in an own string/u,
@@ -288,30 +341,39 @@ describe('server node adapter', () => {
 
     for (const invalid of ['', 'javascript', 'https, http', ['https']] as const) {
       const invalidPseudoScheme = nodeRequest('/pseudo-invalid');
+      Object.assign(invalidPseudoScheme, { __kovoRequestIngressSource: 'node-http2' });
       invalidPseudoScheme.headers = {
         ':authority': 'app.example',
         ':scheme': invalid,
       };
+      invalidPseudoScheme.httpVersion = '2.0';
+      invalidPseudoScheme.rawHeaders = [];
       (invalidPseudoScheme.socket as Socket & { encrypted?: boolean }).encrypted = true;
       expect(() => nodeRequestToWebRequest(invalidPseudoScheme, { trustedProxy: true })).toThrow(
-        'Trusted HTTP/2 :scheme must identify one http or https scheme.',
+        /HTTP\/2 :scheme/u,
       );
     }
 
     const forwardedPrecedence = nodeRequest('/forwarded-precedence');
+    Object.assign(forwardedPrecedence, { __kovoRequestIngressSource: 'node-http2' });
     forwardedPrecedence.headers = {
       ':authority': 'app.example',
       ':scheme': 'javascript',
       'x-forwarded-proto': 'https',
     };
-    expect(nodeRequestToWebRequest(forwardedPrecedence, { trustedProxy: true }).url).toBe(
-      'https://app.example/forwarded-precedence',
+    forwardedPrecedence.httpVersion = '2.0';
+    forwardedPrecedence.rawHeaders = [];
+    expect(() => nodeRequestToWebRequest(forwardedPrecedence, { trustedProxy: true })).toThrow(
+      /transport posture/u,
     );
 
     const uppercasePseudoScheme = nodeRequest('/pseudo-uppercase');
+    Object.assign(uppercasePseudoScheme, { __kovoRequestIngressSource: 'node-http2' });
     uppercasePseudoScheme.headers = { ':authority': 'app.example', ':scheme': 'HTTPS' };
-    expect(nodeRequestToWebRequest(uppercasePseudoScheme, { trustedProxy: true }).url).toBe(
-      'https://app.example/pseudo-uppercase',
+    uppercasePseudoScheme.httpVersion = '2.0';
+    uppercasePseudoScheme.rawHeaders = [];
+    expect(() => nodeRequestToWebRequest(uppercasePseudoScheme, { trustedProxy: true })).toThrow(
+      /HTTP\/2 :scheme/u,
     );
   });
 
@@ -441,9 +503,9 @@ describe('server node adapter', () => {
         origin,
         'GET /authority HTTP/1.0\r\nConnection: close\r\n\r\n',
       );
-      expect(missingHttp10Host).toContain('HTTP/1.1 200');
-      expect(missingHttp10Host).toContain('http://127.0.0.1/authority');
-      expect(handler).toHaveBeenCalledTimes(1);
+      expect(missingHttp10Host).toContain('HTTP/1.1 400');
+      expect(missingHttp10Host).toContain('Bad Request');
+      expect(handler).not.toHaveBeenCalled();
     } finally {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
@@ -467,8 +529,11 @@ describe('server node adapter', () => {
     );
     const makeRequest = (remoteAddress: string) => {
       const request = Object.assign(Readable.from([]) as IncomingMessage, {
+        __kovoRequestIngressSource: 'node-http1',
         headers: { host: 'app.example' },
+        httpVersion: '1.1',
         method: 'GET',
+        rawHeaders: ['Host', 'app.example'],
         socket: Object.assign(new EventEmitter() as Socket, { remoteAddress }),
         url: '/_q/cart/node-peer-rate-limit',
       });
@@ -578,8 +643,11 @@ describe('server node adapter', () => {
     const app = createApp({});
     const makeRequest = () => {
       const request = Object.assign(Readable.from([]) as IncomingMessage, {
+        __kovoRequestIngressSource: 'node-http1',
         headers: { cookie: 'sid=victim', host: 'app.example' },
+        httpVersion: '1.1',
         method: 'POST',
+        rawHeaders: ['Host', 'app.example'],
         socket: Object.assign(new EventEmitter() as Socket, {
           remoteAddress: '203.0.113.42',
         }),
@@ -1328,8 +1396,8 @@ describe('toNodeHandler incomplete request transport closure', () => {
           server.origin,
           mutationWireRequest(target, credential),
         );
-        expect(wireResponse).toContain('HTTP/1.1 404');
-        expect(wireResponse).toContain('Not Found');
+        expect(wireResponse).toContain('HTTP/1.1 400');
+        expect(wireResponse).toContain('Bad Request');
         expect(wireResponse).toMatch(/cache-control: no-store/i);
         expect(wireResponse).not.toContain(target);
         expect(wireResponse).not.toContain(credential);
@@ -1373,7 +1441,7 @@ describe('toNodeHandler incomplete request transport closure', () => {
       const request = nodeRequest(target);
       request.method = 'POST';
       expect(() => nodeRequestToWebRequest(request)).toThrow(
-        'Reserved mutation request targets must use their canonical raw path.',
+        /canonical origin-form or matching HTTP\(S\) absolute-form/u,
       );
     }
 
@@ -1386,7 +1454,7 @@ describe('toNodeHandler incomplete request transport closure', () => {
     const origin = vi.fn(() => 'https://internal.example');
     for (const target of ['http://[::1', 'https://attacker.test:99999/_m/a/b', 'foo://[']) {
       expect(() => nodeRequestToWebRequest(nodeRequest(target), { origin })).toThrow(
-        'Reserved mutation request targets must use their canonical raw path.',
+        /canonical origin-form or matching HTTP\(S\) absolute-form/u,
       );
     }
     expect(origin).not.toHaveBeenCalled();
@@ -1412,7 +1480,7 @@ describe('toNodeHandler incomplete request transport closure', () => {
         const request = nodeRequest(target);
         request.method = 'POST';
         expect(() => nodeRequestToWebRequest(request)).toThrow(
-          'Reserved mutation request targets must use their canonical raw path.',
+          'Kovo Node adapter request target must be one canonical origin-form or matching HTTP(S) absolute-form target.',
         );
       }
 
@@ -1770,9 +1838,6 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
   });
 
   it('uses HTTP/2 :authority for both the Web URL and app-visible Host header', async () => {
-    // RFC 9113 §8.3.1 forbids using a divergent regular Host as request-target authority.
-    // Keeping it here would let a remotely supplied second authority poison absolute URLs or
-    // any application security decision that reads the Web Request's URL/Host after H2 routing.
     const nodeHandler = toNodeHandler(async (request) => {
       return Response.json({
         host: request.headers.get('host'),
@@ -1793,7 +1858,6 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
           ':method': 'GET',
           ':path': '/authority',
           ':scheme': 'http',
-          host: 'attacker.example',
         });
         let body = '';
         let status = 0;
@@ -1822,9 +1886,9 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
     }
   });
 
-  it('fails closed on a real unsupported trusted HTTP/2 scheme', async () => {
-    const webHandler = vi.fn(async (request: Request) => new Response(request.url));
-    const nodeHandler = toNodeHandler(webHandler, { trustedProxy: true });
+  it('rejects an ordinary Host field mixed into a real HTTP/2 source posture', async () => {
+    const webHandler = vi.fn(async () => new Response('handler reached'));
+    const nodeHandler = toNodeHandler(webHandler);
     const server = createHttp2Server((request, response) => {
       void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
     });
@@ -1837,8 +1901,9 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
         const request = client.request({
           ':authority': 'app.example',
           ':method': 'GET',
-          ':path': '/invalid-scheme',
-          ':scheme': 'javascript',
+          ':path': '/mixed-source',
+          ':scheme': 'http',
+          host: 'evil.example',
         });
         let body = '';
         let status = 0;
@@ -1854,7 +1919,7 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
         request.end();
       });
 
-      expect(outcome).toEqual({ body: 'Internal Server Error', status: 500 });
+      expect(outcome).toEqual({ body: 'Bad Request', status: 400 });
       expect(webHandler).not.toHaveBeenCalled();
     } finally {
       client.close();
@@ -1864,10 +1929,51 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
     }
   });
 
-  it('does not treat a peer-supplied HTTP/2 :scheme as transport proof', async () => {
-    // SPEC §9.5 / RFC 9113 §8.3.1: :scheme is request-target control data, not authenticated
-    // transport state. A cleartext h2 peer can spell `https` itself, so the generic adapter must
-    // derive its scheme from the socket unless the operator explicitly enables trusted-proxy input.
+  it('fails closed on a real unsupported trusted HTTP/2 scheme', async () => {
+    const webHandler = vi.fn(async (request: Request) => new Response(request.url));
+    const nodeHandler = toNodeHandler(webHandler, { trustedProxy: true });
+    const server = createHttp2Server((request, response) => {
+      void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const client = http2Connect(`http://127.0.0.1:${address.port}`);
+
+    try {
+      for (const scheme of ['javascript', 'HTTPS']) {
+        const outcome = await new Promise<{ body: string; status: number }>((resolve, reject) => {
+          const request = client.request({
+            ':authority': 'app.example',
+            ':method': 'GET',
+            ':path': '/invalid-scheme',
+            ':scheme': scheme,
+          });
+          let body = '';
+          let status = 0;
+          request.on('response', (headers) => {
+            status = Number(headers[':status'] ?? 0);
+          });
+          request.setEncoding('utf8');
+          request.on('data', (chunk: string) => {
+            body += chunk;
+          });
+          request.on('end', () => resolve({ body, status }));
+          request.on('error', reject);
+          request.end();
+        });
+
+        expect(outcome, scheme).toEqual({ body: 'Bad Request', status: 400 });
+      }
+      expect(webHandler).not.toHaveBeenCalled();
+    } finally {
+      client.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  it('rejects HTTP/2 :scheme when it conflicts with the authenticated transport', async () => {
     const nodeHandler = toNodeHandler(async (request) => new Response(request.url));
     const server = createHttp2Server((request, response) => {
       void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
@@ -1877,7 +1983,7 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
     const client = http2Connect(`http://127.0.0.1:${address.port}`);
 
     try {
-      const body = await new Promise<string>((resolve, reject) => {
+      const outcome = await new Promise<{ body: string; status: number }>((resolve, reject) => {
         const request = client.request({
           ':authority': 'app.example',
           ':method': 'GET',
@@ -1885,16 +1991,20 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
           ':scheme': 'https',
         });
         let received = '';
+        let status = 0;
+        request.on('response', (headers) => {
+          status = Number(headers[':status'] ?? 0);
+        });
         request.setEncoding('utf8');
         request.on('data', (chunk: string) => {
           received += chunk;
         });
-        request.on('end', () => resolve(received));
+        request.on('end', () => resolve({ body: received, status }));
         request.on('error', reject);
         request.end();
       });
 
-      expect(body).toBe('http://app.example/transport-proof');
+      expect(outcome).toEqual({ body: 'Bad Request', status: 400 });
     } finally {
       client.close();
       await new Promise<void>((resolve, reject) =>

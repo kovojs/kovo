@@ -7,6 +7,23 @@ export { compileComponentModuleForFramework } from './framework-compile.js';
 export type { PlatformSubstitution } from './lower/platform.js';
 export { appGraphContributionHash } from './app-graph.js';
 export { factHash } from './fact-hash.js';
+export {
+  analyzeCapabilityClosure,
+  collectCapabilityPackageRequests,
+  packageCapabilitySummarySchema,
+} from './security/capability-closure.js';
+export type {
+  AnalyzeCapabilityClosureOptions,
+  AnalyzeCapabilityClosureResult,
+  CapabilityClosureSourceFile,
+  CapabilityPackageRequest,
+  CapabilityRootKind,
+  PackageCapabilitySummary,
+  PackageCapabilitySummaryEntry,
+  PackageCapabilitySummaryExport,
+  RawCapabilityKind,
+  ResolvedCapabilityPackage,
+} from './security/capability-closure.js';
 export type {
   AttributeMergeResult,
   MergeableAttribute,

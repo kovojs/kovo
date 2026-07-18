@@ -21,11 +21,11 @@ export interface AppQueryRequest {
   session?: { user: { id: string } } | null;
 }
 
-// SPEC §9.4/§10.3 (MARQUEE): a query loader destructures the framework-owned read-only handle
-// `{ db }` (typed `Reader<AppDb>` — the write verbs are removed at the type level and throw
-// `KovoReadonlyHandleError` at runtime). The loader no longer brings its own db; the framework
-// threads the SQL-safe, read-only managed handle as `context.db`. A write in a loader is a `tsc`
-// error AND a runtime throw AND a KV433 static-gate error.
+// SPEC §9.4/§10.3 (MARQUEE): a query loader narrows the framework-owned read-only `context.db`
+// handle into an immutable `Reader<AppDb>` binding — the write verbs are removed at the type level
+// and throw `KovoReadonlyHandleError` at runtime. The loader no longer brings its own db; the
+// framework threads this SQL-safe managed handle. A write in a loader is a `tsc` error AND a
+// runtime throw AND a KV433 static-gate error.
 type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;
 
 // AGG(contacts) ordered by id — the full contact book. The Drizzle read is
@@ -35,7 +35,10 @@ type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;
 export const contactsQuery = query({
   access: [appAuthed],
   async load(_input: unknown, context?: AppQueryLoadContext): Promise<ContactListResult> {
-    const db = requireAppQueryDb(context);
+    const db: Reader<AppDb> | undefined = context?.db;
+    if (!db) {
+      throw new Error('contacts query requires the framework-provided context.db');
+    }
     return {
       items: await db
         .select({
@@ -49,11 +52,3 @@ export const contactsQuery = query({
     };
   },
 });
-
-function requireAppQueryDb(context?: AppQueryLoadContext): Reader<AppDb> {
-  const db = context?.db;
-  if (!db) {
-    throw new Error('contacts query requires the framework-provided context.db');
-  }
-  return db;
-}

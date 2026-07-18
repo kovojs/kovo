@@ -9,7 +9,7 @@ import {
   htmlFormFields,
   htmlTextContent,
 } from '@kovojs/test/html-fragment';
-import { csrfToken } from '@kovojs/server';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { runMutation } from '@kovojs/server/internal/execution';
 
 import { addToCart, commerceSession, createCommerceDb } from './domain.js';

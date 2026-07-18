@@ -31,6 +31,24 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
 9. **Production build preflights.** `kovo build` MUST fail before writing deploy artifacts when the app's nearest TypeScript project fails `tsc --noEmit` or when the build-derived graph fails the full `kovo check` verifier. The standalone `kovo check` command remains the stable, inspectable `kovo-check/v1` surface for CI logs and agent debugging; build reuses that verifier as a deployment gate, not a separate policy.
 10. **Post-parse decisions use typed facts, not source strings.** After parsing, the compiler's post-parse phases (`lower/**`, `validate/**`, `analyze/**`, `emit/**`, and `graph.ts`) MUST decide from typed model facts and spans, never from raw source snippets, regexes, `getText()`/`getFullText()`, or ad hoc string slicing; the scanner/parser is the sole boundary that reads source text into typed facts. Permitted source-text uses elsewhere are narrow: diagnostic source-frame rendering, span-based source-patch application by known offsets, generated-artifact body carry and `renderSource()` emission, generated-artifact verification, IR-header provenance checks (`source.startsWith(compilerIrHeader)`), binding-path grammar parsing on typed `.path` fields, URL/route parsing of an extracted literal `attribute.value`, import-specifier boundary validation for the public/generated/internal Kovo subpath rule above, and name-formatting of model-derived identifiers. A mechanical kovo-check guard enforces this.
 11. **Output safety is contextual and default-on.** The server renderer and the client update plan MUST contextually encode every interpolated query/state value for its sink — escaped text for text content, attribute-value escaping for attributes, the §9.1 script-data encoding for JSON islands — and MUST encode identically (bound by render-equivalence, rule #3). Pair-dependent HTML sinks MUST classify the browser-effective tuple from the same pinned attribute snapshot and renderer order: attribute names use HTML ASCII-case-insensitive matching, omitted values do not participate, and the first emitted duplicate owns the browser decision. In particular, `<meta>` refresh `content` is an executable navigation sink whenever the first rendered `http-equiv` attribute has the ASCII-case-insensitive value `refresh`; a later differently-cased duplicate cannot replace that decision. Plain bindings may reach only safe contexts; the unsafe output contexts and the URL-scheme allowlist are defined in §4.8 and gated by **KV236**. The only suppression is the typed trusted-HTML escape hatch (§4.8); there is no raw-string ejection. A sink renderer or any other app-authored presentation layer that consumes streamed/model output is bound by the same obligation (§9.1).
+12. **Security-critical effects lower to a finite compiler-owned IR.** The scanner derives every
+    supported browser-handler and structured-server effect as one exact
+    `kovo-security-operation-ir/v1` operation before emission (§4.3, §6.6). The same closed union
+    contains two compiler-control records: `server.handler.root` proves that each supported
+    query/mutation/endpoint/webhook/task root was enrolled, and `server.helper.call` records an exact
+    same-file authority transfer discharged by the bounded bottom-up summaries in §6.6.
+    Generated client
+    modules carry their browser subset through the compiler-only `@kovojs/browser/generated`
+    `securityHandler` ABI; generated server modules carry the corresponding immutable manifest for
+    component-graph and explain consumers. Neither manifest is caller-supplied enforcement or a
+    runtime sandbox: the pre-evaluation compiler gate owns the supported-subset decision, and the
+    C9 sink inventory owns each real runtime door and the capability-closure owner for those two
+    control records. Unknown terminal calls, raw capability/DOM
+    escapes, ambiguous receiver joins, and unreviewed authority transfer fail with **KV449** before
+    output. The generated wrapper and manifest are valid only as provenance-marked compiler IR for
+    the rule #3 fixpoint/render-equivalence gates; rule #7/#8 still forbid app-authored lowered IR or
+    generated-ABI imports. A missing, spread/computed, imported, aliased, reassigned, or otherwise
+    unresolved root is KV449; it cannot disappear by producing no manifest row.
 
 #### 5.2.1 Render-plan version token (normative)
 
@@ -54,6 +72,11 @@ kovo explain mutation cart/add     # writes → domains → invalidated queries 
 kovo explain mutation cart/add --optimistic   # transform coverage per query; derivation traces + punts (§10.5)
 kovo explain query cart            # read set, consumers, every mutation that invalidates it
 kovo explain page /products/:id    # emitted modulepreloads, per-route prefetch config, param/search schemas, query payloads
+kovo explain --capabilities        # held capabilities plus untrusted roots, reviewed doors, exact package verdicts, and closed provenance paths
 ```
+
+The capability-closure rows are the stable rendering of the pre-evaluation proof from §6.6, not a
+runtime sandbox trace. Root, door, package-summary, and closed rows are sorted independently of
+source traversal order; a closed row retains the exact root-to-terminal path also emitted by KV448.
 
 ---

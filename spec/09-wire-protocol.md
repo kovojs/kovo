@@ -35,6 +35,19 @@ Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1
 - `Kovo-Targets` is read off the live DOM (`kovo-deps` stamps), so islands patched in after page load participate. The wire format is `target=queryInstance queryInstance`; singleton targets use the derived leaf (`cart-badge=cart`), and repeated targets include their stable keyed suffix (`product-form:p2=product:p2`). The server holds **no session of what's on screen** — it answers a stateless question.
 - `Kovo-Live-Targets` is the structured reconstruction companion for server-refreshable component targets. Each entry names the live target, its generated component registry key, and the serialized props/key identity the compiler proved sufficient to reconstruct the component instance. Every entry MUST carry a server-minted attestation over that canonical descriptor, the canonical source-document URL (origin, path, and query; never the fragment), the exact §5.2.1 render-plan/build token, the CSRF session binding (including the framework-minted anonymous CSRF cookie when there is no app session), the independently resolved framework principal, and a separate app authority audience. A mutation or HMR sink MUST same-origin validate that source URL, match it to one canonical app route, rerun the route's complete layout/route guard chain, and use only the resulting authorized source-route request for response-side query and component rendering; the mutation or HMR endpoint request is never a substitute render context. A typed failure may select only the compiler-owned component renderer that both matches the submitted form target and declares the submitted mutation key. `createApp({ appId })` supplies the replica-stable app part of the audience; it MUST be a canonical UUIDv4 generated once per distinct app. A production app with live-target renderers MUST declare it, and distinct apps MUST use distinct UUIDs and signing secrets even across processes or isolates. A rendererless production app or development app that omits `appId` receives only a boot-local audience, never distributed authority. The render-plan/build token is deploy-skew identity and MUST NOT be treated as the app security principal merely because two apps can share the same render contract; both values are signed independently. Dev mode keeps the descriptor explicit and inspectable; prod may replace the JSON with a versioned token only when `kovo explain` can recover the same value. App authors never construct this header, import target constants, or route mutations to fragments by hand.
 - The synchronizer token, replay scope, and live-target attestation consume one exact CSRF binding. On a framework lifecycle request, `CsrfOptions.sessionId` MUST return an opaque non-empty string of at most 1,024 characters for a resolved session and `undefined` only for a genuinely anonymous request. A non-string, missing, empty, or oversized authenticated value, an unresolved framework session, or an anonymous framework posture paired with a defined id fails closed; it never falls back to the anonymous cookie. Standalone CSRF helper inputs without framework lifecycle posture continue to treat the callback as their declared session/anonymous authority. Session ids and anonymous-cookie secrets occupy separately labeled, canonical length-framed domains, and the framework-resolved authorization principal is independently framed into authenticated bindings, so shared or namespace-shaped rotation ids cannot validate or replay across principals. Every authorization principal and source-derived mutation identity entering that replay scope is non-empty and at most 1,024 JavaScript code units. An inbound anonymous-cookie secret is 32..1,024 base64url characters (framework minting produces 43); a present malformed or oversized cookie fails closed instead of being silently replaced.
+- The compiler's enhanced-form completeness check follows HTML successful-control semantics rather
+  than treating every matching JSX element as one simultaneous value. A single checkbox is a
+  supported scalar boolean: checked submits its string value (`on` when omitted), while absence
+  coerces to `false` only through a declared `s.boolean()` schema. Same-name radio controls are one
+  mutually exclusive scalar group, and same-name submit buttons are one mutually exclusive
+  submitter field whose selected button supplies the value. Disabled controls and
+  `button`/`input[type=button|reset]` do not participate. Repeated same-name controls that are not
+  one radio group or one submitter group remain **KV242** until an authored array/multivalue
+  primitive declares their semantics. `input[type=image]` remains KV242 because the browser derives
+  coordinate-suffixed names (`name.x`/`name.y`), and submitter `formaction`/`formmethod`/`formenctype`
+  overrides cannot replace the compiler-owned mutation transport. A control `type` that is not a
+  static string (or statically absent) is also KV242 because changing it at runtime could change
+  successful-control and submitter-override semantics after compilation.
 - `Kovo-Changes` is the sanitized wire summary of committed writes: each entry is `{domain, keys}`. It never includes mutation input, user-provided values, failure reasons, stack traces, or internal diagnostic detail; richer typed change records are internal compiler/runtime artifacts.
 - `<kovo-query>` replaces the client's query value and runs that query's update plan — bindings, named derives, stamps — across every dependent island. No runtime dependency tracking: the plan is the DOM itself (§4.8). Query JSON serialized inline MUST be encoded for the exact context it lands in so attacker-controlled JSON string content cannot end the host element early. A `<script type="application/json" kovo-query="…">` initial-page island is HTML **script-data** (entities are not decoded), so its JSON MUST escape `<` as the JSON unicode escape `\u003c` — `&lt;` would not decode there and would corrupt the value. A post-mutation `<kovo-query>{…}</kovo-query>` element has **parsed** content, so its JSON MUST HTML-escape (`<`→`&lt;`, `>`→`&gt;`, `&`→`&amp;`). Both neutralize the `</script`/`<!--`/`<script` break-out; JSON quoting alone escapes neither and is insufficient. This is a normative renderer rule with a conformance test (`tests/integration/specs/xss-escaping.spec.ts`), and it binds every transport that re-emits an island — including the §9.3 BroadcastChannel rebroadcast, which forwards already-encoded bytes and never re-serializes raw values.
 - `<kovo-fragment>` is **DOM-morphed** by default (idiomorph-class algorithm): user-agent and DOM-resident state — focus, scroll position, selection, in-flight CSS transitions, and `<details>`/media element UA state — survives. The morph carries **no serialization of island-local `kovo-state`**, so a refreshed parent re-emits any nested island at its render-time default state (§4.5 rule 3 re-renders the full subtree from declared queries ∪ stamped props); island-private local state is therefore **not** preserved across a fragment morph of an enclosing target. The compiler forbids the position that would silently lose it: an island declaring local `state` may not render inside another component's server-refreshable fragment target (**KV420**, §4.5). `mode="append"` is the explicit append vocabulary for pagination ("load more") and streams; `mode="prepend"` is its companion for "load older" feeds, inserting the patch at the **start** of the target. Both are ordered keyed inserts: a row whose `kovo-key` is already present is **deduped** (matched/skipped, never re-inserted) per §13.2, so a re-shipped page never duplicates rows. `mode="prepend"` additionally carries a **normative scroll-anchor guarantee** — the runtime treats the patched target as the scroll container and adjusts its `scrollTop` by the inserted height so previously-visible content stays fixed (no viewport jump when older content lands above). This is a framework guarantee, not an app knob. The read-side companion is a keyed-delta `<kovo-query … delta>` whose `lists.<path>` upsert merges the page into the SAME held query instance (§9.1.1) — `prepend`-flagged so new rows accumulate at the front of the held array — so "load more"/"load older" fetch only the new page and never re-ship prior rows. Patched-in islands are inert-until-touched like everything else — _a fragment update is a tiny navigation, not a different programming model._
@@ -196,13 +209,63 @@ ambiguous, or combined posture fails process boot. Authentication deployments MU
 satisfy §6.6's exact configured-origin binding, so a trusted forwarded scheme paired with the wrong
 host or port is rejected before auth state is read or changed.
 
+**Shared request-ingress decision (normative).** Transport-source selection and hostile-value
+grammar are separate steps, and the supported source set is finite. An HTTP/1 Node source MUST
+snapshot the exact method, authenticated transport encryption bit, normalized `Host`, and exact raw
+`Host` count/value; it admits exactly one raw occurrence whose value is byte-identical to the
+normalized field and rejects pseudo-headers. An HTTP/2 Node source MUST snapshot the exact method,
+transport bit, `:authority`, and `:scheme`; it rejects ordinary `Host`, `X-Forwarded-Proto`, raw
+HTTP/1 `Host` evidence, or a non-HTTP/2 version. `:scheme` is exact lowercase `http` or `https` and,
+outside an explicit trusted-proxy posture, MUST match the authenticated transport bit. A generated
+Vercel Node source is a distinct HTTP/1 posture: one exact raw/normalized `Host` plus mandatory,
+canonical edge-overwritten `X-Forwarded-Proto` and `X-Vercel-Forwarded-For`; missing, ambiguous, or
+non-canonical platform provenance has no fallback identity. Synthetic/custom carriers MUST declare
+which enrolled source they emulate; a coincidental bag of fields is not source provenance.
+
+A Fetch-native platform source instead consumes the exact method and canonical URL
+scheme/authority selected by the named platform-owned HTTP-to-Fetch bridge; it cannot recover or
+make claims about raw bytes that the platform normalized or discarded. Cloudflare's public edge
+bridge is the supported Worker source; unauthenticated HTTP Service Binding ingress remains
+unsupported. Unknown and mixed source postures fail closed before static serving or app import.
+
+After source selection, live and emitted adapters MUST invoke the same finite classifier for method
+token, authority, and scheme grammar. An absent verdict, unknown source posture, ambiguous value, or
+lossy spelling is closed. The accepted verdict is immutable reconstruction input: one final target
+object supplies the Web URL authority and app-visible `Host`, including when an operator-pinned
+origin replaces the validated remote authority. No later sink may reread raw `Host`, `:authority`,
+or forwarding fields to make a second decision, and a future adapter MUST enroll its source posture
+and generated/source parity in the request-ingress C13 corpus before dispatching static or app code.
+
+**Adapter request-target identity (normative).** The same classifier admits only (1) canonical
+origin-form `path[?query]` beginning with exactly one `/`, or (2) a canonical absolute-form HTTP(S)
+URL whose scheme and authority exactly match the selected ingress verdict. The accepted value is
+reconstructed as canonical origin form before routing. Scheme-relative, authority-form,
+non-HTTP(S) scheme-like (`javascript:`, `mailto:`), backslash, fragment, encoded dot/separator,
+WHATWG-normalizing, mismatched-origin, and otherwise lossy targets MUST fail closed. Kovo assigns no
+server-wide semantics to asterisk-form: `OPTIONS *` is explicitly unsupported and returns 400
+before static or app dispatch. The 65,536-character and 10,000-query-entry ceilings apply before
+target parsing on raw Node sources and on the platform-preserved absolute URL for Fetch-native
+sources.
+
+**Vercel pre-filesystem ingress (normative).** Every generated Vercel Build Output API v3 artifact,
+including a static-only build, MUST route all paths through Kovo's generated Edge Routing
+Middleware before `handle: filesystem`. That middleware applies the shared platform-Fetch
+method/URL/target classifier and target ceiling, returns a closed 400/414 response on failure, and
+uses `x-middleware-next: 1` only after acceptance. A mixed build then enters the Vercel Node
+function's distinct platform-provenance posture. The function MUST prepare one immutable request
+snapshot and accepted verdict before static/app dispatch, and both its pre-static metadata and final
+Web `Request` MUST consume that same prepared value; carrier mutation after preparation cannot
+trigger a second source, scheme, authority, method, or target decision.
+
 **Adapter method identity (normative).** HTTP method tokens are case-sensitive (RFC 9110 §9.1),
 while the Fetch `Request` constructor canonicalizes its standard methods and rejects several
-others. A Node or platform adapter MUST reject before static serving or app dispatch whenever its
-raw method token is invalid or cannot cross the Web `Request` boundary byte-for-byte unchanged.
+others. A raw-capable adapter MUST reject before static serving or app dispatch whenever its raw
+method token is invalid or cannot cross the Web `Request` boundary byte-for-byte unchanged. A
+Fetch-native adapter applies the same verdict to the platform-preserved method and relies on the
+named platform bridge—not Kovo—to preserve or reject the pre-Fetch raw token.
 Thus raw `post` and `PoSt` are distinct unsupported methods and MUST NOT become `POST`; exact
 `POST` remains valid, and a syntactically valid extension method is admitted only when Fetch
-preserves that exact case-sensitive identity. Live and generated adapters MUST share this rule.
+preserves that exact case-sensitive identity. Live and generated adapters MUST share one classifier.
 
 **Adapter authority identity (normative).** A Node or platform adapter MUST accept an inbound
 `Host` or HTTP/2 `:authority` only when it is one canonical serialized `host[:port]` identity that
@@ -212,7 +275,9 @@ bracketed IPv6, explicit default-port (`:80`/`:443`), user-info, path/query/frag
 otherwise ambiguous spellings MUST be rejected before static serving or app dispatch. Canonical
 lower-case DNS names, non-default decimal ports, and canonical bracketed IPv6 remain valid. The Web
 URL authority and app-visible `Host` MUST therefore expose the same one remote identity. Live and
-generated Node/Vercel adapters MUST share this rule.
+generated Node/Vercel adapters MUST share this rule. A Fetch-native Worker validates the canonical
+serialized URL authority delivered by its named platform bridge and reconstructs app-visible
+`Host` from that verdict; this is not evidence about a raw authority the platform already erased.
 
 **Pre-dispatch load shed (normative).** Because there is no user middleware chain, the request shell/adapter itself owns a coarse limiter that runs **ahead of** replay lookup, schema parse/coercion, and the guard chain (§10.3) — guard combinators such as `rateLimit({ per: 'session' })` shed load only after CSRF, replay, and parse have already paid out, and `per: 'session'` cannot distinguish a flood of null-session attackers, so they are insufficient as the only chokepoint. Before any `/_m/`, `/_q/`, `endpoint()`, or route dispatch the shell MUST enforce: (1) a maximum request/body size — a request exceeding it is rejected with **413** before the body is parsed; streamed bodies additionally have a hard 4,096-chunk budget and exceeding it is the same 413-class body-limit failure even when the byte count remains below the configured maximum, so adversarial transfer fragmentation cannot turn the byte limit into unbounded per-chunk work; (2) a serialized request-target ceiling of 65,536 JavaScript string code units and a 10,000-entry URL-query ceiling — Node/Vite/generated adapters MUST scan the raw target before constructing a Web `Request`, `URL`, or `URLSearchParams`, and a direct Web handler MUST scan `Request.url` before constructing `URL`/`URLSearchParams`; either target violation is rejected with **414**, including for static and not-found paths; (3) URL-encoded body segments and multipart parts share the same default KV430 breadth ceiling of 10,000 entries, counted before record reconstruction, split, or part adoption, so a compact separator-heavy carrier cannot amplify into an unbounded parser graph; and (4) a coarse per-IP and global request-rate budget — a request over budget is rejected with **429** carrying `Retry-After`, before replay+parse. `createApp({ requestLimits })`, its body-size gate, and every base or per-surface rate budget are mandatory finite postures and MUST NOT accept `false`; author-supplied maxima are bounded to 67,108,864 body bytes, 100,000 query/list result items, 1,000,000 requests per rate window, 100,000 retained rate keys, and an 86,400,000 ms rate window. These limits are normative defaults configured on `createApp()` (per-IP and global `/_m/` and `/_q/` request rates, max body size, and a bound on fragment-targets reconstructed per response, §9.1); the coarse limiter is identity-blind on purpose so it survives the anonymous flood the session-scoped limiter cannot. This pre-dispatch posture is enrolled in and printed by the `--endpoints` audit. The fine-grained `rateLimit` guard combinator still runs in the guard chain for per-principal policy. It admits a `per: 'ip'` (and global) dimension in addition to `per: 'session'`, so an anonymous or per-IP budget can also be expressed at the guard layer; the coarse shell limiter and the guard combinator compose rather than replace each other.
 

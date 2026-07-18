@@ -123,6 +123,16 @@ function serverBrowserRenderingReExport(exportName: string): FrameworkIdentityCa
   };
 }
 
+function serverCsrfAuthoring(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/server',
+    packageSourceFiles: ['csrf', 'index'],
+    scopes: ['authoring', 'rendering', 'routing'],
+    specifiers: ['@kovojs/server'],
+  };
+}
+
 function serverInternalRendering(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
@@ -246,6 +256,11 @@ appendCatalogEntry(catalogEntries, serverRendering('trustedHtml', '@kovojs/brows
 appendCatalogEntry(catalogEntries, serverRendering('trustedUrl', '@kovojs/browser'));
 appendCatalogEntry(catalogEntries, serverBrowserRenderingReExport('trustedHtml'));
 appendCatalogEntry(catalogEntries, serverBrowserRenderingReExport('trustedUrl'));
+appendCatalogFactories(
+  catalogEntries,
+  ['csrfField', 'csrfToken', 'mintCsrfField', 'mintCsrfToken'],
+  serverCsrfAuthoring,
+);
 appendCatalogEntry(catalogEntries, serverInternalRendering('renderedHtml'));
 appendCatalogEntry(catalogEntries, serverWriteGovernance('trustedAssign'));
 appendCatalogEntry(catalogEntries, serverData('encryptAtRest'));

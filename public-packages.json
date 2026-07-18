@@ -28,6 +28,7 @@
           "./internal/render-plan-token",
           "./internal/route-pattern",
           "./internal/security-markers",
+          "./internal/security-operation-ir",
           "./internal/security-url",
           "./internal/semantic-attributes",
           "./internal/sink-policy",

@@ -35,6 +35,7 @@ describe('source/sink inventory', () => {
       'html.dom.output',
       'http.header.cookie',
       'ingress.endpoint.webhook',
+      'network.egress',
       'sql.executable',
       'transport.query.live.broadcast',
       'url.navigation.selector',
@@ -188,6 +189,7 @@ describe('source/sink inventory', () => {
       'html.dom.output',
       'http.header.cookie',
       'ingress.endpoint.webhook',
+      'network.egress',
       'transport.query.live.broadcast',
       'url.navigation.selector',
     ];
@@ -434,7 +436,7 @@ describe('source/sink inventory', () => {
   it('exposes the same inventory through kovo check', () => {
     expect(kovoCheck({}, { family: 'sources-sinks' })).toMatchObject({
       exitCode: 0,
-      output: expect.stringContaining('CHECK families=11 entries=11 drift-tokens=17'),
+      output: expect.stringContaining('CHECK families=12 entries=12 drift-tokens=17'),
     });
   });
 

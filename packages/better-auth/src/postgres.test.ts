@@ -4,10 +4,10 @@ import { join } from 'node:path';
 
 import {
   createPostgresAppRuntimeDb,
-  csrfToken,
   type KovoPostgresAppRuntimeDb,
   type KovoPostgresSystemDb,
 } from '@kovojs/server';
+import { csrfToken } from '@kovojs/server/internal/csrf';
 import { runEndpoint } from '@kovojs/server/internal/execution';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

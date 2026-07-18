@@ -22,10 +22,31 @@ export interface LinearRegexProgram {
   readonly source: string;
 }
 
+/** Versioned deterministic work model for the bounded Pike VM (SPEC §6.6/§9.5; KV434). */
+export const LINEAR_REGEX_WORK_BOUND_VERSION = 'kovo.linear-regex-work/v1' as const;
+
+/** Exact work report returned by the security property oracle entrypoint. */
+export interface LinearRegexWorkReport {
+  readonly bound: number;
+  readonly matched: boolean;
+  readonly operations: number;
+  readonly version: typeof LINEAR_REGEX_WORK_BOUND_VERSION;
+}
+
 export class LinearRegexError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'LinearRegexError';
+  }
+}
+
+/** Fail-closed signal for an implementation that exceeds the reviewed deterministic work bound. */
+export class LinearRegexWorkLimitError extends LinearRegexError {
+  constructor() {
+    super(
+      `pattern(): matcher exceeded ${LINEAR_REGEX_WORK_BOUND_VERSION}; use unsafeRegex(...) only with an audited justification`,
+    );
+    this.name = 'LinearRegexWorkLimitError';
   }
 }
 
@@ -76,30 +97,95 @@ export function compileLinearRegex(
 }
 
 export function linearRegexMatch(program: LinearRegexProgram, input: string): boolean {
-  const instructions = program.instructions;
-  let current = createStateSet(instructions.length);
-  let next = createStateSet(instructions.length);
+  return linearRegexMatchWithWork(program, input).matched;
+}
 
-  addState(program, input, current, 0, 0);
-  if (current.matched) return true;
+/**
+ * Execute the same matcher used by `pattern()` and report deterministic work units.
+ *
+ * The bound counts the maximum instruction/state/range work for one epsilon-closure pass per input
+ * position. It is deliberately independent of wall-clock speed and is enforced by the production
+ * matcher, so a future refactor cannot silently replace the linear runtime with backtracking while
+ * leaving a timing-only test green on a fast machine.
+ *
+ * @internal Security property-oracle surface; not exported from the package root.
+ */
+export function linearRegexMatchWithWork(
+  program: LinearRegexProgram,
+  input: string,
+): LinearRegexWorkReport {
+  const instructions = program.instructions;
+  const work = createWorkMeter(linearRegexWorkBound(program, input.length));
+  let current = createStateSet(instructions.length, work);
+  let next = createStateSet(instructions.length, work);
+
+  addState(program, input, current, 0, 0, work);
+  if (current.matched) return workReport(true, work);
 
   for (let index = 0; index < input.length; index += 1) {
-    resetStateSet(next);
+    resetStateSet(next, work);
     const charCode = securityStringCharCodeAt(input, index);
     for (let stateIndex = 0; stateIndex < current.count; stateIndex += 1) {
+      consumeWork(work, 1);
       const instruction = instructions[current.states[stateIndex] ?? 0];
       if (instruction?.type !== 'char') continue;
-      if (matchesChar(instruction.matcher, charCode, program.flags)) {
-        addState(program, input, next, instruction.out, index + 1);
+      if (matchesChar(instruction.matcher, charCode, program.flags, work)) {
+        addState(program, input, next, instruction.out, index + 1, work);
       }
     }
     const swap = current;
     current = next;
     next = swap;
-    if (current.matched) return true;
+    if (current.matched) return workReport(true, work);
   }
 
-  return current.matched;
+  return workReport(current.matched, work);
+}
+
+/** Reviewed v1 upper bound: `(8 * instructions + class ranges + 16) * (input + 1)`. */
+export function linearRegexWorkBound(program: LinearRegexProgram, inputLength: number): number {
+  if (!Number.isSafeInteger(inputLength) || inputLength < 0) {
+    throw new LinearRegexWorkLimitError();
+  }
+  let classRanges = 0;
+  for (let index = 0; index < program.instructions.length; index += 1) {
+    const instruction = program.instructions[index];
+    if (instruction?.type === 'char' && instruction.matcher.kind === 'class') {
+      classRanges += instruction.matcher.ranges.length;
+      if (!Number.isSafeInteger(classRanges)) throw new LinearRegexWorkLimitError();
+    }
+  }
+  const width = program.instructions.length * 8 + classRanges + 16;
+  const positions = inputLength + 1;
+  if (!Number.isSafeInteger(width) || width > Math.floor(Number.MAX_SAFE_INTEGER / positions)) {
+    throw new LinearRegexWorkLimitError();
+  }
+  return width * positions;
+}
+
+interface LinearRegexWorkMeter {
+  readonly bound: number;
+  operations: number;
+}
+
+function createWorkMeter(bound: number): LinearRegexWorkMeter {
+  return { bound, operations: 0 };
+}
+
+function consumeWork(work: LinearRegexWorkMeter, amount: number): void {
+  if (amount < 0 || amount > work.bound - work.operations) {
+    throw new LinearRegexWorkLimitError();
+  }
+  work.operations += amount;
+}
+
+function workReport(matched: boolean, work: LinearRegexWorkMeter): LinearRegexWorkReport {
+  return {
+    bound: work.bound,
+    matched,
+    operations: work.operations,
+    version: LINEAR_REGEX_WORK_BOUND_VERSION,
+  };
 }
 
 class Parser {
@@ -478,13 +564,15 @@ interface StateSet {
   readonly states: number[];
 }
 
-function createStateSet(size: number): StateSet {
+function createStateSet(size: number, work: LinearRegexWorkMeter): StateSet {
+  consumeWork(work, size * 2 + 2);
   const states: number[] = [];
   for (let index = 0; index < size; index += 1) securityArrayPush(states, 0);
   return { count: 0, matched: false, seen: securityCreateUint8Array(size), states };
 }
 
-function resetStateSet(set: StateSet): void {
+function resetStateSet(set: StateSet, work: LinearRegexWorkMeter): void {
+  consumeWork(work, set.seen.length + 2);
   set.count = 0;
   set.matched = false;
   securityUint8ArrayFill(set.seen, 0);
@@ -496,9 +584,11 @@ function addState(
   set: StateSet,
   startPc: number,
   position: number,
+  work: LinearRegexWorkMeter,
 ): void {
   const stack = [startPc];
   while (stack.length > 0) {
+    consumeWork(work, 1);
     const pc = stack[stack.length - 1] ?? 0;
     stack.length -= 1;
     if (pc < 0 || set.seen[pc]) continue;
@@ -506,6 +596,7 @@ function addState(
     const instruction = program.instructions[pc];
     if (!instruction) continue;
     if (instruction.type === 'split') {
+      consumeWork(work, 1);
       securityArrayPush(stack, instruction.out1);
       securityArrayPush(stack, instruction.out);
     } else if (instruction.type === 'jmp') {
@@ -547,7 +638,12 @@ function assertionPasses(
   return anchor === 'word-boundary' ? boundary : !boundary;
 }
 
-function matchesChar(matcher: CharMatcher, charCode: number, flags: LinearRegexFlags): boolean {
+function matchesChar(
+  matcher: CharMatcher,
+  charCode: number,
+  flags: LinearRegexFlags,
+  work: LinearRegexWorkMeter,
+): boolean {
   if (matcher.kind === 'any') return true;
   if (matcher.kind === 'dot')
     return (
@@ -557,6 +653,7 @@ function matchesChar(matcher: CharMatcher, charCode: number, flags: LinearRegexF
   const normalized = normalizeCode(charCode, flags);
   let found = false;
   for (let index = 0; index < matcher.ranges.length; index += 1) {
+    consumeWork(work, 1);
     const range = matcher.ranges[index]!;
     if (codeInClassRange(charCode, normalized, range, flags)) {
       found = true;

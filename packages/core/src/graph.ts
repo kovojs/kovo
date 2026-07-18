@@ -1,4 +1,8 @@
 import type { DerivationStatus } from './derivation.js';
+import type {
+  SecurityOperationIr,
+  SecuritySemanticGraph,
+} from './internal/security-operation-ir.js';
 
 import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
 import { snapshotAuditText } from './internal/audit-text.js';
@@ -74,6 +78,7 @@ export interface KovoCheckInput {
   access?: readonly AccessExplainFact[];
   authPosture?: readonly AuthPostureFact[];
   capabilities?: readonly CapabilityExplain[];
+  capabilityClosure?: readonly CapabilityClosureExplainFact[];
   components?: readonly ComponentExplain[];
   cookieDowngrades?: readonly CookieDowngradeExplain[];
   derivedMutations?: readonly DerivedMutationDomainSet[];
@@ -255,6 +260,8 @@ export interface ComponentExplain {
   mutableLocalState?: boolean;
   platformSubstitutions?: readonly PlatformSubstitutionExplain[];
   queries?: readonly string[];
+  securitySemanticGraph?: SecuritySemanticGraph;
+  securityOperations?: readonly SecurityOperationIr[];
   styleRules?: readonly StyleRuleExplain[];
   triggers?: readonly TriggerExplain[];
 }
@@ -663,6 +670,50 @@ export interface CapabilityExplain {
   target?: string;
   /** The source span of the escape. */
   site: string;
+}
+
+/**
+ * One stable row in the capability-closed module graph audit (SPEC §6.6).
+ *
+ * `root` rows census every untrusted-data surface. `summary` rows pin the exact installed package
+ * verdict. `door` rows show a reviewed framework capability reached from a root, and `closed` rows
+ * preserve the KV448 provenance that stopped the build. The path is ordered root → transfers →
+ * terminal module/package so `kovo explain --capabilities` and diagnostics share one proof object.
+ *
+ * @internal
+ */
+export interface CapabilityClosureExplainFact {
+  capability?:
+    | 'database-driver'
+    | 'dynamic-loader'
+    | 'filesystem'
+    | 'network'
+    | 'process'
+    | 'vm'
+    | 'worker';
+  conditions?: readonly string[];
+  kind: 'closed' | 'door' | 'root' | 'summary';
+  manifestFingerprint?: string;
+  module?: string;
+  name?: string;
+  packageName?: string;
+  packageVersion?: string;
+  path?: readonly string[];
+  reason?: string;
+  rootKind?:
+    | 'agent-tool-callback'
+    | 'durable-task'
+    | 'endpoint'
+    | 'layout'
+    | 'mutation'
+    | 'query'
+    | 'route'
+    | 'scheduled-task'
+    | 'serialized-browser-handler'
+    | 'webhook';
+  site: string;
+  status?: 'absent' | 'contradictory' | 'stale' | 'unresolved' | 'valid';
+  summaryVersion?: string;
 }
 
 /**
@@ -1768,6 +1819,7 @@ const arrayFields = [
   'access',
   'authPosture',
   'capabilities',
+  'capabilityClosure',
   'components',
   'cookieDowngrades',
   'derivedMutations',

@@ -59,6 +59,11 @@ import {
   validateDeclaredClockReadsInRender,
   validateUntrackedClockReadsInDerives,
 } from './temporal.js';
+import {
+  validateCompleteMutationFormSecurityFields,
+  validateFiniteBrowserSecurityOperations,
+  validateFiniteServerSecurityOperations,
+} from './security-operation-ir.js';
 
 interface ValidatorContext {
   componentName: string;
@@ -171,6 +176,17 @@ const compilerValidators: readonly CompilerValidator[] = [
   // constructor/prototype/timer paths remain outside the finite generated-handler ABI.
   mappedValidator(({ diagnostics, model }) =>
     validateClientHandlerExecutionPolicy(diagnostics, model),
+  ),
+  // SPEC §4.3/§5.2/§6.6: security-relevant effects are compiler-owned finite operations. Browser
+  // facts run after primitive lowering; server and mutation-form facts remain authored-source facts.
+  mappedValidator(({ diagnostics, model }) =>
+    validateFiniteBrowserSecurityOperations(diagnostics, model),
+  ),
+  originalValidator(({ diagnostics, model }) =>
+    validateFiniteServerSecurityOperations(diagnostics, model),
+  ),
+  originalValidator(({ diagnostics, model }) =>
+    validateCompleteMutationFormSecurityFields(diagnostics, model),
   ),
   // SPEC §6.6/§9.5 + secure-framework Phase 6 (Tier 3): KV434 fires on the authored source so the
   // diagnostic site is the real `s.string().pattern(<non-literal>)` call — the compile-time half of

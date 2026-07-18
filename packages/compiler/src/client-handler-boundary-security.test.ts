@@ -500,12 +500,13 @@ describe('client-handler dynamic-code boundary', () => {
 
   it('allows global timers only with a syntactically proven callback function', () => {
     for (const handlerBody of [
-      `return setTimeout(() => { globalThis.__callback_ran__ = true; }, 0);`,
-      `return globalThis.setInterval(function () { globalThis.__callback_ran__ = true; }, 10);`,
+      `return setTimeout(() => { state.callbackRan = true; }, 0);`,
+      `return globalThis.setInterval(function () { state.callbackRan = true; }, 10);`,
     ]) {
       const result = compile(`
         import { component } from '@kovojs/core';
         export const Page = component({
+          state: () => ({ callbackRan: false }),
           render: () => <button onClick={() => { ${handlerBody} }}>Go</button>,
         });
       `);

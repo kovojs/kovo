@@ -14,12 +14,15 @@ import { pathToFileURL } from 'node:url';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import * as authorizationMatrixGate from './check-authorization-matrix.mjs';
 import * as sinkPolicyGate from './check-sink-policy-gate.mjs';
 import * as fundamentalFixesCensusGate from './fundamental-fixes-census-gate.mjs';
 import * as securityTestBuildGate from './security-test-build-gate.mjs';
+import * as requestIngressPolicy from '../packages/server/src/request-ingress-policy.ts';
 
 const repoRoot = findRepoRoot();
 const scriptsDir = path.join(repoRoot, 'scripts');
+const authorizationMatrixPath = path.join(repoRoot, 'security/authorization-matrix.json');
 const sinkPolicyGatePath = path.join(scriptsDir, 'check-sink-policy-gate.mjs');
 const fundamentalFixesCensusGatePath = path.join(scriptsDir, 'fundamental-fixes-census-gate.mjs');
 const fundamentalFixesCensusManifestPath = path.join(
@@ -34,12 +37,155 @@ const coreFrameworkIdentityPath = path.join(
 );
 const compilerCompilePath = path.join(repoRoot, 'packages/compiler/src/compile.ts');
 const compilerVitePath = path.join(repoRoot, 'packages/compiler/src/vite.ts');
+const compilerSecuritySemanticGraphPath = path.join(
+  repoRoot,
+  'packages/compiler/src/scan/security-operation-ir.ts',
+);
 const trustedHtmlProvenancePath = path.join(
   repoRoot,
   'packages/compiler/src/validate/trusted-html-provenance.ts',
 );
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
+const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
+const taskRunnerPath = path.join(repoRoot, 'packages/server/src/task-runner.ts');
+const webhookPath = path.join(repoRoot, 'packages/server/src/webhook.ts');
+const betterAuthCredentialRuntimeGatePath = path.join(
+  repoRoot,
+  'packages/better-auth/src/internal/credential-runtime-gate.ts',
+);
+const requestIngressPolicyPath = path.join(
+  repoRoot,
+  'packages/server/src/request-ingress-policy.ts',
+);
+const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
+
+const canonicalPostMethodBranch =
+  "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
+const weakenedCanonicalPostMethodBranch =
+  "    if (equalsAsciiCaseInsensitive(method, 'post')) return true;";
+
+const dualSchemeAuthorityIdentityBranch = [
+  '      http.host === value &&',
+  '      https.host === value &&',
+].join('\n');
+const weakenedDualSchemeAuthorityIdentityBranch = [
+  '      http.host === value &&',
+  '      true &&',
+].join('\n');
+
+const rawHttp1HostEvidenceBranch =
+  '    if (input.rawHostHeaderCount !== 1 || input.rawHostHeaderValue !== input.host) return undefined;';
+const weakenedRawHttp1HostEvidenceBranch =
+  '    if (input.rawHostHeaderCount !== 1) return undefined;';
+
+const exactIngressSchemeBranch = "    return value === 'http' || value === 'https'";
+const weakenedExactIngressSchemeBranch = [
+  "    if (value === 'HTTPS') return { ok: true, scheme: 'https' };",
+  "    return value === 'http' || value === 'https'",
+].join('\n');
+
+const encodedIngressTargetBranch = [
+  "        contains(rawTarget, '#') ||",
+  '        containsEncodedPathControl(rawTarget)',
+].join('\n');
+const weakenedEncodedIngressTargetBranch = [
+  "        contains(rawTarget, '#') ||",
+  '        false',
+].join('\n');
+
+const h2IncompatibleSourceBranch = [
+  "        input.httpVersion[0] !== '2' ||",
+  '        input.host !== undefined ||',
+  '        input.forwardedProto !== undefined ||',
+].join('\n');
+const weakenedH2IncompatibleSourceBranch = [
+  "        input.httpVersion[0] !== '2' ||",
+  '        input.forwardedProto !== undefined ||',
+].join('\n');
+
+const canonicalVercelClientBranch =
+  '      if (clientIp === undefined || clientIp !== input.platformClientIp) {';
+const weakenedCanonicalVercelClientBranch =
+  '      if (false && (clientIp === undefined || clientIp !== input.platformClientIp)) {';
+
+const preparedVercelIngressBranch = [
+  '    const prepared = prepareVercelRequestIngress(nodeRequest);',
+  '    if (rejectPreparedNodeRequestIngress(prepared, nodeResponse)) return;',
+  '    const transport = preparedNodeRequestTransportMetadata(prepared);',
+].join('\n');
+const weakenedPreparedVercelIngressBranch = [
+  '    const prepared = prepareVercelRequestIngress(nodeRequest);',
+  '    if (rejectPreparedNodeRequestIngress(prepared, nodeResponse)) return;',
+  '    const transport = preparedNodeRequestTransportMetadata(prepareVercelRequestIngress(nodeRequest));',
+].join('\n');
+
+const ownerReadCanary = [
+  '      "id": "endpoint-builder-act-as-owner",',
+  '      "principal": ["act-as-owner"],',
+  '      "ownership": ["own", "other"],',
+  '      "operation": "read",',
+  '      "queryFamily": ["builder"],',
+  '      "surface": "endpoint",',
+  '      "expected": "allow-own-only"',
+].join('\n');
+const weakenedOwnerReadCanary = ownerReadCanary.replace(
+  '"expected": "allow-own-only"',
+  '"expected": "allow"',
+);
+
+const rawWriteCanary = [
+  '      "id": "mutation-raw-cross-owner",',
+  '      "principal": ["session-owner"],',
+  '      "ownership": ["other"],',
+  '      "operation": "insert",',
+  '      "queryFamily": ["raw-sql"],',
+  '      "surface": "mutation",',
+  '      "expected": "deny"',
+].join('\n');
+const weakenedRawWriteCanary = rawWriteCanary.replace('"expected": "deny"', '"expected": "allow"');
+
+const provisionRoleCanary = [
+  '      "id": "runtime-provision-role-assumption-denied",',
+  '      "principal": ["runtime-login"],',
+  '      "ownership": ["not-applicable"],',
+  '      "operation": "boot",',
+  '      "queryFamily": ["none"],',
+  '      "surface": "closure-audit",',
+  '      "expected": "deny"',
+].join('\n');
+const weakenedProvisionRoleCanary = provisionRoleCanary.replace(
+  '"expected": "deny"',
+  '"expected": "allow"',
+);
+
+const definerFunctionCanary = [
+  '      "id": "closure-cross-schema-definer-function-refusal",',
+  '      "principal": ["runtime-login"],',
+  '      "ownership": ["other", "unclassified"],',
+  '      "operation": "boot",',
+  '      "queryFamily": ["function"],',
+  '      "surface": "closure-audit",',
+  '      "expected": "boot-refuse"',
+].join('\n');
+const weakenedDefinerFunctionCanary = definerFunctionCanary.replace(
+  '"expected": "boot-refuse"',
+  '"expected": "allow"',
+);
+
+const durableTaskCanary = [
+  '      "id": "durable-task-act-as-owner",',
+  '      "principal": ["act-as-owner"],',
+  '      "ownership": ["own", "other"],',
+  '      "operation": "schedule",',
+  '      "queryFamily": ["builder"],',
+  '      "surface": "durable-task",',
+  '      "expected": "allow-own-only"',
+].join('\n');
+const weakenedDurableTaskCanary = durableTaskCanary.replace(
+  '"expected": "allow-own-only"',
+  '"expected": "deny"',
+);
 
 const missingRealBuildProofBranch = [
   '      if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
@@ -326,6 +472,16 @@ const queryWireHtmlEscapeBranch = '${escapeHtml(stringifyKovoWireValue(options.v
 
 const removedQueryWireHtmlEscapeBranch = '${stringifyKovoWireValue(options.value)}';
 
+const betterAuthCredentialResultIdentityBranch =
+  '  if (registered === undefined || registered.consumer !== consumer) {';
+
+const removedBetterAuthCredentialResultIdentityBranch =
+  '  if (registered === undefined || false) {';
+
+const betterAuthCredentialSourceIdentityBranch = '  if (contract.source !== source) {';
+
+const removedBetterAuthCredentialSourceIdentityBranch = '  if (false) {';
+
 const m5ForbiddenStatusBranch = [
   '  } else if (FORBIDDEN_STATUS_PATTERN.test(row.status)) {',
   '    violations.push(`${label}: M5 forbids status ${JSON.stringify(row.status)}`);',
@@ -485,7 +641,250 @@ const weakenedViteJsToTsSiblingCandidatesBranch = [
   '        return [basePath];',
 ].join('\n');
 
+const frameworkEgressOriginCheck =
+  '  const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });';
+const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
+const frameworkEgressDispatcherPin =
+  '  request = egressRequestWithDispatcher(request, dispatcher);';
+const removedFrameworkEgressDispatcherPin = '  request = request;';
+const taskEgressCapabilitySeal =
+  "    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);";
+const removedTaskEgressCapabilitySeal = '    return context;';
+const webhookEgressCapabilitySeal = [
+  "  witnessDefineProperty(context, 'fetch', {",
+  '    configurable: false,',
+  '    enumerable: true,',
+  '    value: frameworkEgressFetch,',
+  '    writable: false,',
+  '  });',
+].join('\n');
+const removedWebhookEgressCapabilitySeal = '';
+
+const semanticCycleClosureBranch =
+  '  if (signature !== undefined && compilerSetHas(state.active, signature)) {';
+const removedSemanticCycleClosureBranch =
+  '  if (false && signature !== undefined && compilerSetHas(state.active, signature)) {';
+const semanticDepthClosureBranch =
+  '          if (depth + 1 > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) {';
+const removedSemanticDepthClosureBranch =
+  '          if (false && depth + 1 > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) {';
+const semanticNodeBudgetClosureBranch = '    if (state.nodes > SECURITY_SEMANTIC_NODE_BUDGET) {';
+const removedSemanticNodeBudgetClosureBranch =
+  '    if (false && state.nodes > SECURITY_SEMANTIC_NODE_BUDGET) {';
+const semanticOperationBudgetClosureBranch =
+  '      if (state.operations > SECURITY_SEMANTIC_OPERATION_BUDGET) {';
+const removedSemanticOperationBudgetClosureBranch =
+  '      if (false && state.operations > SECURITY_SEMANTIC_OPERATION_BUDGET) {';
+const semanticSummaryBudgetClosureBranch =
+  '    if (state.summaries > SECURITY_SEMANTIC_SUMMARY_BUDGET) {';
+const removedSemanticSummaryBudgetClosureBranch =
+  '    if (false && state.summaries > SECURITY_SEMANTIC_SUMMARY_BUDGET) {';
+const semanticSurfacePropagationBranch = [
+  '            state,',
+  '            surface,',
+  '            transfers: nextTransfers,',
+].join('\n');
+const weakenedSemanticSurfacePropagationBranch = [
+  '            state,',
+  "            surface: 'endpoint',",
+  '            transfers: nextTransfers,',
+].join('\n');
+const semanticOperationMemberClosureBranch =
+  "  if (compilerStringStartsWith(receiver, 'operation:')) return 'unknown-authority';";
+const weakenedSemanticOperationMemberClosureBranch =
+  "  if (compilerStringStartsWith(receiver, 'operation:')) return receiver;";
+const semanticMemberMutationClosureBranch =
+  '      if (!ts.isIdentifier(left) && serverExpressionCarriesAuthority(left, aliases)) {';
+const removedSemanticMemberMutationClosureBranch =
+  '      if (false && !ts.isIdentifier(left) && serverExpressionCarriesAuthority(left, aliases)) {';
+const semanticArgumentsClosureBranch =
+  '  if (authorityInputs.length > 0 && semanticBodyUsesArguments(callable.body)) {';
+const removedSemanticArgumentsClosureBranch =
+  '  if (false && authorityInputs.length > 0 && semanticBodyUsesArguments(callable.body)) {';
+const semanticNestedCaptureClosureBranch =
+  '      if (nestedServerFunctionCapturesAuthority(node, aliases)) {';
+const removedSemanticNestedCaptureClosureBranch =
+  '      if (false && nestedServerFunctionCapturesAuthority(node, aliases)) {';
+const semanticOpaqueContainerClosureBranch =
+  "      if (initializerProvenance === 'unknown-authority') {";
+const removedSemanticOpaqueContainerClosureBranch =
+  "      if (false && initializerProvenance === 'unknown-authority') {";
+const semanticRestArgumentClosureBranch =
+  '      } else if (restParameterIndex !== undefined && index >= restParameterIndex) {';
+const removedSemanticRestArgumentClosureBranch =
+  '      } else if (false && restParameterIndex !== undefined && index >= restParameterIndex) {';
+
 export const SECURITY_GATE_MUTANTS = [
+  {
+    description: 'Deletes normalized helper-cycle absorption.',
+    expectedKiller: 'recursive helper summaries must retain the helper-cycle closed verdict',
+    name: 'compiler-semantic-graph/drop-helper-cycle-closure',
+    replacement: removedSemanticCycleClosureBranch,
+    search: semanticCycleClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticCycleClosureIsPinned,
+  },
+  {
+    description: 'Deletes the normalized helper call-depth ceiling.',
+    expectedKiller: 'helper summary paths must retain deterministic call-depth closure',
+    name: 'compiler-semantic-graph/drop-call-depth-closure',
+    replacement: removedSemanticDepthClosureBranch,
+    search: semanticDepthClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticDepthClosureIsPinned,
+  },
+  {
+    description: 'Deletes the normalized interpreted-node ceiling.',
+    expectedKiller: 'semantic roots must retain deterministic AST-node budget closure',
+    name: 'compiler-semantic-graph/drop-node-budget-closure',
+    replacement: removedSemanticNodeBudgetClosureBranch,
+    search: semanticNodeBudgetClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticNodeBudgetClosureIsPinned,
+  },
+  {
+    description: 'Deletes the normalized finite-operation ceiling.',
+    expectedKiller: 'semantic roots must retain deterministic operation budget closure',
+    name: 'compiler-semantic-graph/drop-operation-budget-closure',
+    replacement: removedSemanticOperationBudgetClosureBranch,
+    search: semanticOperationBudgetClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticOperationBudgetClosureIsPinned,
+  },
+  {
+    description: 'Deletes the normalized helper-summary ceiling.',
+    expectedKiller: 'semantic roots must retain deterministic summary budget closure',
+    name: 'compiler-semantic-graph/drop-summary-budget-closure',
+    replacement: removedSemanticSummaryBudgetClosureBranch,
+    search: semanticSummaryBudgetClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticSummaryBudgetClosureIsPinned,
+  },
+  {
+    description: 'Forgets the query/task/mutation root posture when entering a helper summary.',
+    expectedKiller: 'helper summaries must preserve the originating security surface',
+    name: 'compiler-semantic-graph/drop-root-surface-propagation',
+    replacement: weakenedSemanticSurfacePropagationBranch,
+    search: semanticSurfacePropagationBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticSurfacePropagationIsPinned,
+  },
+  {
+    description: 'Treats members of an exact operation function as the same reviewed sink.',
+    expectedKiller: 'operation-function call/apply/bind laundering must remain opaque',
+    name: 'compiler-semantic-graph/allow-operation-member-laundering',
+    replacement: weakenedSemanticOperationMemberClosureBranch,
+    search: semanticOperationMemberClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticOperationMemberClosureIsPinned,
+  },
+  {
+    description: 'Deletes capability-member mutation closure from normalized semantics.',
+    expectedKiller: 'authority-bearing members must remain immutable in the semantic lattice',
+    name: 'compiler-semantic-graph/drop-member-mutation-closure',
+    replacement: removedSemanticMemberMutationClosureBranch,
+    search: semanticMemberMutationClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticMemberMutationClosureIsPinned,
+  },
+  {
+    description: 'Allows authority recovery through a helper arguments object.',
+    expectedKiller: 'arguments-object recovery must remain outside finite helper summaries',
+    name: 'compiler-semantic-graph/allow-arguments-authority-recovery',
+    replacement: removedSemanticArgumentsClosureBranch,
+    search: semanticArgumentsClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticArgumentsClosureIsPinned,
+  },
+  {
+    description: 'Allows authority capture by an unsummarized nested callable.',
+    expectedKiller: 'nested callable captures must remain absorbing semantic closure',
+    name: 'compiler-semantic-graph/allow-nested-authority-capture',
+    replacement: removedSemanticNestedCaptureClosureBranch,
+    search: semanticNestedCaptureClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticNestedCaptureClosureIsPinned,
+  },
+  {
+    description: 'Allows authority to move through an opaque container or join.',
+    expectedKiller: 'opaque authority containers must remain closed',
+    name: 'compiler-semantic-graph/allow-opaque-authority-container',
+    replacement: removedSemanticOpaqueContainerClosureBranch,
+    search: semanticOpaqueContainerClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticOpaqueContainerClosureIsPinned,
+  },
+  {
+    description: 'Allows authority to enter a helper rest-parameter mapping.',
+    expectedKiller: 'authority-bearing rest arguments must remain outside finite summaries',
+    name: 'compiler-semantic-graph/allow-rest-authority-mapping',
+    replacement: removedSemanticRestArgumentClosureBranch,
+    search: semanticRestArgumentClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceOnly: true,
+    test: assertSemanticRestArgumentClosureIsPinned,
+  },
+  {
+    description: 'Weakens the session-owner builder cell to allow cross-owner reads.',
+    expectedKiller: 'authorization matrix owner-read canary must retain allow-own-only',
+    name: 'authorization-matrix/allow-cross-owner-builder-read',
+    replacement: weakenedOwnerReadCanary,
+    search: ownerReadCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
+  {
+    description: 'Weakens the raw-SQL mutation cell to allow a cross-owner insert.',
+    expectedKiller: 'authorization matrix raw-write canary must retain engine denial',
+    name: 'authorization-matrix/allow-cross-owner-raw-write',
+    replacement: weakenedRawWriteCanary,
+    search: rawWriteCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
+  {
+    description: 'Lets the ordinary runtime assume the provision role.',
+    expectedKiller: 'authorization matrix must deny provision-role assumption',
+    name: 'authorization-matrix/allow-provision-role-assumption',
+    replacement: weakenedProvisionRoleCanary,
+    search: provisionRoleCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
+  {
+    description: 'Allows a reader-reachable cross-schema SECURITY DEFINER function.',
+    expectedKiller: 'authorization matrix closure audit must refuse the definer function',
+    name: 'authorization-matrix/allow-cross-schema-definer-function',
+    replacement: weakenedDefinerFunctionCanary,
+    search: definerFunctionCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
+  {
+    description: 'Turns the durable-task act-as owner path into a surviving denial.',
+    expectedKiller: 'authorization matrix durable-task canary must retain its owner-only success',
+    name: 'authorization-matrix/deny-durable-task-owner-read',
+    replacement: weakenedDurableTaskCanary,
+    search: durableTaskCanary,
+    sourceFile: authorizationMatrixPath,
+    sourceOnly: true,
+    test: assertAuthorizationMatrixDocumentIsClosed,
+  },
   {
     baseModule: securityTestBuildGate,
     description:
@@ -770,6 +1169,111 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertQueryWireHtmlBodyEscapingIsCaught,
   },
   {
+    description:
+      'Deletes exact same-consumer identity from the Better Auth credential result refusal.',
+    expectedKiller:
+      'M2 Better Auth runtime results must be opened only by the exact consumer that minted them',
+    name: 'better-auth-credential-gate/drop-result-consumer-identity',
+    replacement: removedBetterAuthCredentialResultIdentityBranch,
+    search: betterAuthCredentialResultIdentityBranch,
+    sourceFile: betterAuthCredentialRuntimeGatePath,
+    sourceOnly: true,
+    test: assertBetterAuthCredentialResultIdentityIsPinned,
+  },
+  {
+    description: 'Lets any Better Auth consumer token invoke a different raw credential source.',
+    expectedKiller:
+      'M2 Better Auth raw callables must require a contract whose exact source matches the invocation',
+    name: 'better-auth-credential-gate/drop-source-identity',
+    replacement: removedBetterAuthCredentialSourceIdentityBranch,
+    search: betterAuthCredentialSourceIdentityBranch,
+    sourceFile: betterAuthCredentialRuntimeGatePath,
+    sourceOnly: true,
+    test: assertBetterAuthCredentialSourceIsPinned,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Allows Fetch to canonicalize a lower-case standard POST method before dispatch.',
+    expectedKiller: 'request-ingress method identity must reject lower-case standard methods',
+    name: 'request-ingress/allow-lowercase-standard-post',
+    replacement: weakenedCanonicalPostMethodBranch,
+    search: canonicalPostMethodBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressMethodIdentityIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description:
+      'Drops the HTTPS serialization half of canonical authority identity and admits :443.',
+    expectedKiller:
+      'request-ingress authority identity must stay byte-identical under both HTTP schemes',
+    name: 'request-ingress/drop-https-authority-identity',
+    replacement: weakenedDualSchemeAuthorityIdentityBranch,
+    search: dualSchemeAuthorityIdentityBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressDualSchemeAuthorityIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Lets normalized Host disagree with the exact raw HTTP/1 Host evidence.',
+    expectedKiller: 'request-ingress HTTP/1 authority must bind raw and normalized Host exactly',
+    name: 'request-ingress/drop-raw-host-value-identity',
+    replacement: weakenedRawHttp1HostEvidenceBranch,
+    search: rawHttp1HostEvidenceBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressRawHostIdentityIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Admits an uppercase HTTP/2 pseudo-scheme that the finite grammar closes.',
+    expectedKiller: 'request-ingress schemes must remain exact lowercase http or https',
+    name: 'request-ingress/allow-uppercase-h2-scheme',
+    replacement: weakenedExactIngressSchemeBranch,
+    search: exactIngressSchemeBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressExactSchemeIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Drops encoded dot and separator refusal from the request-target grammar.',
+    expectedKiller: 'request-ingress targets must close encoded path aliases',
+    name: 'request-ingress/drop-encoded-target-controls',
+    replacement: weakenedEncodedIngressTargetBranch,
+    search: encodedIngressTargetBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressEncodedTargetIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Lets an HTTP/2 posture borrow the incompatible ordinary Host field.',
+    expectedKiller: 'request-ingress HTTP/2 posture must reject ordinary Host evidence',
+    name: 'request-ingress/allow-h2-host-field',
+    replacement: weakenedH2IncompatibleSourceBranch,
+    search: h2IncompatibleSourceBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressH2SourceIsClosed,
+  },
+  {
+    baseModule: requestIngressPolicy,
+    description: 'Lets non-canonical Vercel client provenance survive platform classification.',
+    expectedKiller: 'request-ingress Vercel client provenance must be canonical and exact',
+    name: 'request-ingress/drop-vercel-client-canonical-identity',
+    replacement: weakenedCanonicalVercelClientBranch,
+    search: canonicalVercelClientBranch,
+    sourceFile: requestIngressPolicyPath,
+    test: assertRequestIngressVercelClientIsClosed,
+  },
+  {
+    description: 'Recomputes Vercel request ingress after the accepted prepared snapshot.',
+    expectedKiller: 'generated Vercel dispatch must consume exactly one prepared ingress verdict',
+    name: 'request-ingress/recompute-vercel-prepared-verdict',
+    replacement: weakenedPreparedVercelIngressBranch,
+    search: preparedVercelIngressBranch,
+    sourceFile: serverBuildPath,
+    sourceOnly: true,
+    test: assertGeneratedVercelPreparedIngressIsSingle,
+  },
+  {
     baseModule: fundamentalFixesCensusGate,
     description: 'Deletes the M5 forbidden-status census enforcement branch.',
     expectedKiller: 'M5 census statuses such as future must stay forbidden, not merely unsupported',
@@ -899,6 +1403,46 @@ export const SECURITY_GATE_MUTANTS = [
     sourceOnly: true,
     test: assertViteSourceKeepsJsToTsSiblingCandidates,
   },
+  {
+    description: 'Deletes the positive origin decision before framework-owned DNS resolution.',
+    expectedKiller: 'framework egress must reject an undeclared origin before DNS',
+    name: 'server-egress/drop-origin-before-dns',
+    replacement: removedFrameworkEgressOriginCheck,
+    search: frameworkEgressOriginCheck,
+    sourceFile: serverEgressPath,
+    sourceOnly: true,
+    test: assertFrameworkEgressSourceKeepsPositiveCapability,
+  },
+  {
+    description: "Deletes rebinding of Request private state to Kovo's installed dispatcher.",
+    expectedKiller: 'framework egress must replace application dispatcher authority',
+    name: 'server-egress/drop-dispatcher-pin',
+    replacement: removedFrameworkEgressDispatcherPin,
+    search: frameworkEgressDispatcherPin,
+    sourceFile: serverEgressPath,
+    sourceOnly: true,
+    test: assertFrameworkEgressSourceKeepsPositiveCapability,
+  },
+  {
+    description: 'Makes the durable-task contextual fetch capability replaceable after delivery.',
+    expectedKiller: 'task ctx.fetch must be an exact non-replaceable own capability',
+    name: 'server-egress/drop-task-context-fetch-seal',
+    replacement: removedTaskEgressCapabilitySeal,
+    search: taskEgressCapabilitySeal,
+    sourceFile: taskRunnerPath,
+    sourceOnly: true,
+    test: assertTaskEgressContextKeepsCapabilitySeal,
+  },
+  {
+    description: 'Makes the webhook contextual fetch capability replaceable after verification.',
+    expectedKiller: 'webhook ctx.fetch must be an exact non-replaceable own capability',
+    name: 'server-egress/drop-webhook-context-fetch-seal',
+    replacement: removedWebhookEgressCapabilitySeal,
+    search: webhookEgressCapabilitySeal,
+    sourceFile: webhookPath,
+    sourceOnly: true,
+    test: assertWebhookEgressContextKeepsCapabilitySeal,
+  },
 ];
 
 export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_MUTANTS } = {}) {
@@ -1001,6 +1545,257 @@ function installMutantScriptLib(tempRoot) {
     readFileSync(path.join(scriptsDir, 'check-security-brands.mjs'), 'utf8'),
     'utf8',
   );
+}
+
+async function assertSemanticCycleClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticCycleClosureBranch)) {
+    throw new Error('normalized semantic graph no longer absorbs an active helper-summary cycle');
+  }
+}
+
+async function assertSemanticDepthClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticDepthClosureBranch)) {
+    throw new Error('normalized semantic graph no longer closes exhausted helper depth');
+  }
+}
+
+async function assertSemanticNodeBudgetClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticNodeBudgetClosureBranch)) {
+    throw new Error('normalized semantic graph no longer closes exhausted node budgets');
+  }
+}
+
+async function assertSemanticOperationBudgetClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticOperationBudgetClosureBranch)) {
+    throw new Error('normalized semantic graph no longer closes exhausted operation budgets');
+  }
+}
+
+async function assertSemanticSummaryBudgetClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticSummaryBudgetClosureBranch)) {
+    throw new Error('normalized semantic graph no longer closes exhausted summary budgets');
+  }
+}
+
+async function assertSemanticSurfacePropagationIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticSurfacePropagationBranch)) {
+    throw new Error('normalized helper summary no longer inherits its originating surface');
+  }
+}
+
+async function assertSemanticOperationMemberClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticOperationMemberClosureBranch)) {
+    throw new Error('normalized operation members no longer become absorbing unknown authority');
+  }
+}
+
+async function assertSemanticMemberMutationClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticMemberMutationClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects capability-member mutation');
+  }
+}
+
+async function assertSemanticArgumentsClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticArgumentsClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects arguments-object recovery');
+  }
+}
+
+async function assertSemanticNestedCaptureClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticNestedCaptureClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects nested authority capture');
+  }
+}
+
+async function assertSemanticOpaqueContainerClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticOpaqueContainerClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects opaque authority containers');
+  }
+}
+
+async function assertSemanticRestArgumentClosureIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(semanticRestArgumentClosureBranch)) {
+    throw new Error('normalized semantic graph no longer rejects authority-bearing rest mappings');
+  }
+}
+
+async function assertAuthorizationMatrixDocumentIsClosed(_moduleUnderTest, { sourceText }) {
+  const check = authorizationMatrixGate.validateAuthorizationMatrixDocument(JSON.parse(sourceText));
+  if (check.ok) return;
+  throw new Error(check.findings.join('\n'));
+}
+
+function requestIngressClassifier(moduleUnderTest) {
+  return moduleUnderTest.createRequestIngressClassifier({
+    canonicalClientIp(value) {
+      return value === '203.0.113.020' ? '203.0.113.20' : value;
+    },
+    charCodeAt: (value, index) => value.charCodeAt(index),
+    isArray: Array.isArray,
+    parseAuthority(authority, scheme) {
+      try {
+        const parsed = new URL(`${scheme}://${authority}`);
+        return {
+          hash: parsed.hash,
+          host: parsed.host,
+          origin: parsed.origin,
+          password: parsed.password,
+          pathname: parsed.pathname,
+          search: parsed.search,
+          username: parsed.username,
+        };
+      } catch {
+        return undefined;
+      }
+    },
+    parseTarget(target, base) {
+      try {
+        const parsed = base === undefined ? new URL(target) : new URL(target, base);
+        return {
+          hash: parsed.hash,
+          host: parsed.host,
+          href: parsed.href,
+          origin: parsed.origin,
+          password: parsed.password,
+          pathname: parsed.pathname,
+          protocol: parsed.protocol,
+          search: parsed.search,
+          username: parsed.username,
+        };
+      } catch {
+        return undefined;
+      }
+    },
+  });
+}
+
+function requestIngressHttp1(overrides = {}) {
+  return {
+    encrypted: false,
+    forwardedProto: undefined,
+    host: 'app.example',
+    httpVersion: '1.1',
+    method: 'GET',
+    pseudoAuthority: undefined,
+    pseudoScheme: undefined,
+    rawHostHeaderCount: 1,
+    rawHostHeaderValue: 'app.example',
+    rawTarget: '/',
+    source: 'node-http1',
+    trustedProxy: false,
+    ...overrides,
+  };
+}
+
+function requestIngressHttp2(overrides = {}) {
+  return {
+    encrypted: false,
+    forwardedProto: undefined,
+    host: undefined,
+    httpVersion: '2.0',
+    method: 'GET',
+    pseudoAuthority: 'h2.example',
+    pseudoScheme: 'http',
+    rawHostHeaderCount: 0,
+    rawHostHeaderValue: undefined,
+    rawTarget: '/',
+    source: 'node-http2',
+    trustedProxy: false,
+    ...overrides,
+  };
+}
+
+async function assertRequestIngressMethodIdentityIsClosed(moduleUnderTest) {
+  const classifier = requestIngressClassifier(moduleUnderTest);
+  if (classifier.classifyMethod('post') || !classifier.classifyMethod('POST')) {
+    throw new Error('request-ingress classifier no longer preserves exact POST identity');
+  }
+}
+
+async function assertRequestIngressDualSchemeAuthorityIsClosed(moduleUnderTest) {
+  const classifier = requestIngressClassifier(moduleUnderTest);
+  for (const authority of ['app.example:80', 'app.example:443']) {
+    const decision = classifier.classify(
+      requestIngressHttp1({
+        host: authority,
+        rawHostHeaderValue: authority,
+      }),
+    );
+    if (decision.ok) {
+      throw new Error(
+        `request-ingress classifier admitted scheme-relative default port ${authority}`,
+      );
+    }
+  }
+}
+
+async function assertRequestIngressRawHostIdentityIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify(
+    requestIngressHttp1({ rawHostHeaderValue: 'evil.example' }),
+  );
+  if (decision.ok) {
+    throw new Error('request-ingress classifier admitted a normalized/raw Host mismatch');
+  }
+}
+
+async function assertRequestIngressExactSchemeIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify(
+    requestIngressHttp2({ pseudoScheme: 'HTTPS', trustedProxy: true }),
+  );
+  if (decision.ok) {
+    throw new Error('request-ingress classifier admitted uppercase HTTP/2 :scheme');
+  }
+}
+
+async function assertRequestIngressEncodedTargetIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify(
+    requestIngressHttp1({ rawTarget: '/_m/a/%2f/b' }),
+  );
+  if (decision.ok) {
+    throw new Error('request-ingress classifier admitted an encoded path separator');
+  }
+}
+
+async function assertRequestIngressH2SourceIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify(
+    requestIngressHttp2({ host: 'h1.example' }),
+  );
+  if (decision.ok) {
+    throw new Error('request-ingress classifier let HTTP/2 borrow ordinary Host');
+  }
+}
+
+async function assertRequestIngressVercelClientIsClosed(moduleUnderTest) {
+  const decision = requestIngressClassifier(moduleUnderTest).classify({
+    host: 'app.example',
+    httpVersion: '1.1',
+    method: 'GET',
+    platformClientIp: '203.0.113.020',
+    platformScheme: 'https',
+    pseudoAuthority: undefined,
+    pseudoScheme: undefined,
+    rawHostHeaderCount: 1,
+    rawHostHeaderValue: 'app.example',
+    rawTarget: '/',
+    source: 'vercel-node',
+  });
+  if (decision.ok) {
+    throw new Error('request-ingress classifier admitted non-canonical Vercel client provenance');
+  }
+}
+
+async function assertGeneratedVercelPreparedIngressIsSingle(_moduleUnderTest, { sourceText }) {
+  const start = sourceText.indexOf('function vercelFunctionSource(): string {');
+  const end = sourceText.indexOf('function vercelIngressMiddlewareSource(): string {', start);
+  if (start < 0 || end < 0) throw new Error('generated Vercel function source boundary is absent');
+  const vercelSource = sourceText.slice(start, end);
+  const matches = vercelSource.match(/prepareVercelRequestIngress\(nodeRequest\)/gu) ?? [];
+  if (matches.length !== 1) {
+    throw new Error(`generated Vercel dispatch has ${matches.length} prepared-ingress evaluations`);
+  }
+  if (!vercelSource.includes(preparedVercelIngressBranch)) {
+    throw new Error('generated Vercel dispatch no longer routes one prepared verdict to rejection');
+  }
 }
 
 export function applyExactMutation(sourceText, mutant) {
@@ -1617,6 +2412,25 @@ async function assertQueryWireHtmlBodyEscapingIsCaught(_moduleUnderTest, { sourc
   }
 }
 
+async function assertBetterAuthCredentialResultIdentityIsPinned(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (!sourceText?.includes(betterAuthCredentialResultIdentityBranch)) {
+    throw new Error(
+      'Better Auth credential results no longer require exact same-consumer registry identity',
+    );
+  }
+}
+
+async function assertBetterAuthCredentialSourceIsPinned(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(betterAuthCredentialSourceIdentityBranch)) {
+    throw new Error(
+      'Better Auth raw callables no longer require the exact consumer/source contract',
+    );
+  }
+}
+
 async function assertM5ForbiddenStatusIsCaught(moduleUnderTest) {
   const { manifest, planText } = loadDefaultCensusFixture();
   manifest.rows[0].status = 'future';
@@ -1743,6 +2557,41 @@ async function assertCompilerSourceKeepsSiblingRegistration(_moduleUnderTest, { 
 async function assertViteSourceKeepsJsToTsSiblingCandidates(_moduleUnderTest, { sourceText } = {}) {
   if (!sourceText?.includes(viteJsToTsSiblingCandidatesBranch)) {
     throw new Error('Vite sibling discovery no longer maps .js specifiers to .ts/.tsx candidates');
+  }
+}
+
+async function assertFrameworkEgressSourceKeepsPositiveCapability(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  const fetchStart = sourceText?.indexOf('export const frameworkEgressFetch') ?? -1;
+  const dispatcherPin = sourceText?.indexOf(frameworkEgressDispatcherPin, fetchStart) ?? -1;
+  const originCheck = sourceText?.indexOf(frameworkEgressOriginCheck, fetchStart) ?? -1;
+  const dnsLookup = sourceText?.indexOf('lookupAllAddresses(host)', fetchStart) ?? -1;
+  if (
+    fetchStart < 0 ||
+    dispatcherPin < fetchStart ||
+    originCheck < dispatcherPin ||
+    dnsLookup < originCheck
+  ) {
+    throw new Error(
+      'framework egress no longer pins its dispatcher and rejects undeclared origins before DNS',
+    );
+  }
+}
+
+async function assertTaskEgressContextKeepsCapabilitySeal(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(taskEgressCapabilitySeal)) {
+    throw new Error('durable-task ctx.fetch is no longer an exact non-replaceable own property');
+  }
+}
+
+async function assertWebhookEgressContextKeepsCapabilitySeal(
+  _moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (!sourceText?.includes(webhookEgressCapabilitySeal)) {
+    throw new Error('webhook ctx.fetch is no longer an exact non-replaceable own property');
   }
 }
 

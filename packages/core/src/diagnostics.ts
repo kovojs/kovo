@@ -97,7 +97,9 @@ export type DiagnosticCode =
   | 'KV439'
   | 'KV445'
   | 'KV446'
-  | 'KV447';
+  | 'KV447'
+  | 'KV448'
+  | 'KV449';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -257,6 +259,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV318: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
+  KV449: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
 
 /** The frozen registry of every `KV###` diagnostic: code → definition (message, severity, help). */
@@ -1170,6 +1173,29 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'warn',
     message: 'SQLite owner annotations are advisory only in the experimental SQLite runtime.',
+  },
+  KV448: {
+    code: 'KV448',
+    help: [
+      'Would lower to: an untrusted-data root whose complete module/callback closure contains only ordinary pure modules and reviewed Kovo capability doors.',
+      'Blocked reason: the provenance path reaches raw network, filesystem, process, VM, worker, database-driver, or unresolved loading authority; alternatively an external package summary is absent, stale, contradictory, or incomplete for the installed version and conditional exports.',
+      'Fixes: route the operation through the named Kovo capability, remove the raw authority from the reachable module graph, make a dynamic import/require target literal, or add/update an exact-version reviewed pure-package summary. The diagnostic path names the root and every transfer edge.',
+      'SPEC §6.6 capability-closed module graph: this is a static supported-subset gate, not a JavaScript process sandbox; deliberately hostile same-realm app/package code remains outside the app-level proof.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Untrusted-data-reachable module graph acquires raw or unresolved authority.',
+  },
+  KV449: {
+    code: 'KV449',
+    help: [
+      'Would lower to: a compiler-owned kovo-security-operation-ir/v1 operation with an exact reviewed door plus a kovo-security-semantic-graph/v1 root-to-transfer-to-sink trace.',
+      'Blocked reason: the handler uses an unknown/computed raw DOM or capability operation, an unreviewed executable call, an unjustified exceptional door, an unsupported/recursive/budget-exhausted helper transfer, or a hand-written mutation form that cannot carry the complete server-stamped CSRF plus Kovo-Idem field set.',
+      'Fixes: use typed <form mutation={definition}> (or the exact mutationFormAttributes(definition) JSX spread); use component state, delegated event reads, reviewed focus/dialog/form operations, managed DB/egress/response APIs, or a named trustedSql/trustedHtml/raw-response door with its required justification.',
+      'SPEC §4.3, §5.2, §6.6, and §9.1 make the finite compiler-owned operation set and its bounded helper summaries fail closed. Server diagnostics name root, ordered transfers, sink, and the exact closed reason. There is no general raw-DOM/capability or hand-authored lowered-IR escape; only the named exceptional doors documented by their owning sink are accepted.',
+      'Escape: trustedSql, trustedHtml, and endpoint/webhook raw Response are the only exceptional IR operations, and each remains visible in kovo explain with its justification/posture.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Security-critical operation is outside the compiler-owned finite IR.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;
 

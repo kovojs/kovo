@@ -156,6 +156,15 @@ CSRF field, idempotency token, and submitted-form target. The string-keyed `form
 survives for sites that cannot import the value, but author TSX should not hard-code mutation URLs.
 An end-to-end add-to-cart walkthrough lives in `docs/worked-example-add-to-cart.md`.
 
+The typed `mutation={definition}` path is the **sole complete public mutation-form bundle**: the
+framework emits the mutation-audience CSRF field and canonical `Kovo-Idem` field together, from one
+proven definition, before authored controls. An exact compiler-recognized
+`{...mutationFormAttributes(definition)}` JSX spread is an equivalent typed spelling and receives
+the same generated field bundle. Standalone CSRF token/field construction is not a mutation-form
+authoring API because it cannot establish the idempotency half of the protocol. TypeScript prevents
+the ordinary partial call shape, while compiler provenance and the runtime request lifecycle remain
+the enforcement boundaries.
+
 Enhanced form failures use the same render function as the no-JS full-page path. Expected failures
 are typed mutation results: schema validation maps to `<FieldError name="...">`, declared
 application codes map to `<FormError code="...">`, and both helpers are compiler-bound to the
@@ -264,6 +273,14 @@ already-present anonymous cookie do not mint a cookie and remain valid. CSRF val
 resolution always use the exact supplied ingress request and never inherit response-generation
 authority.
 
+The public `mintCsrfToken` and `mintCsrfField` helpers serve only a verified raw endpoint protocol
+with an explicit custom audience. They reject mutation targeting. The lower-level
+`csrfToken` and `csrfField` helpers are internal/test-only; exposing either at the package root would
+make an incomplete handwritten mutation form look supported while omitting canonical `Kovo-Idem`.
+The closed mint/deliver/validate/rotate/replay surface and its proof anchors are recorded in
+`security/csrf-mint-delivery.json`; adding a response or bootstrap surface requires adding a closed
+matrix row before release.
+
 Every independently resolved authorization principal entering a CSRF or replay identity, and every
 source-derived mutation identity, MUST likewise be a non-empty string of at most 1,024 JavaScript
 code units. An inbound anonymous-CSRF cookie secret is accepted only when it is 32..1,024 base64url
@@ -275,6 +292,121 @@ fails closed and is never replaced by an anonymous fallback within that request.
 **Security soundness (normative).** The Prime Principle (§2) rests on the same sound-subset discipline, bounded by six rules. (1) **The compiler performs no TypeScript type inference of its own** — security classification is carried by AST symbol-identity provenance, sink classification, and fail-closed runtime checks; a branded type (`Secret<T>`, a `public()` brand, and the like) is `tsc`-time ergonomics and defense-in-depth, never the enforcement. (2) **Runtime taint is unsound** — JS string operations and template literals produce fresh primitives with no surviving metadata, so request-derived provenance for confidentiality, write-eligibility, and input shape is proven _statically_ at the AST (where the path is still code), never by runtime value-tracking; runtime contributes only _sink validation_ (checking a final value's grammar, shape, or resolved IP, which survives transforms). (3) **By-construction and defense-in-depth are distinguished and labeled.** Where static analysis can prove the unsafe state inexpressible, the guarantee is by-construction (output-safety §5.2 rule 10, the confidentiality boundary, default-deny authorization, write-provenance). Where it cannot — outbound egress, a read-only-handle runtime proxy, Content-Security-Policy / Trusted Types, log redaction — the control is a fail-closed runtime floor: sound at its sink but bypassable by privileged same-process code, and it MUST be documented as defense-in-depth rather than a proof. (4) **Advanced TypeScript types are preferred when they narrow author mistakes without becoming the trust boundary.** Validated branded constructors are appropriate for strong signing material; module-private `unique symbol` brands are appropriate for framework-owned sentinels; branded escaped/trusted/rendered HTML values are appropriate for UI composition; exact header-bag and discriminated-union types are appropriate for preserving multi-value headers and explicit posture choices. Public structural brands, casts, and type-only assertions MUST NOT be accepted as security evidence unless a runtime constructor, AST/provenance gate, or fail-closed sink also enforces the invariant. (5) **Boundary decisions over caller-owned carriers must classify-and-pin or reconstruct.** Once a runtime boundary classifies, normalizes, or validates a caller-owned value, the sink MUST consume either an immutable framework-owned pinned carrier for that exact classified value or a reconstructed fixed output; the sink MUST NOT re-read mutable caller bytes after classification and still claim the earlier decision. Browser sinks MUST classify platform behavior that depends on a tuple of attributes from the same pinned element snapshot, not validate each string in isolation; hidden `_charset_` substitution is the canonical HTML example (§13.2). Spec §10.3 C15 names the concrete sink obligations. (6) **Authority-bearing controls have a framework-owned bootstrap trust root.** Every supported Kovo compiler, dev, build, export, generated-server, worker, and test runner MUST evaluate the framework security bootstrap before any authored app module, Vite/plugin module, generated module, or other caller-controlled dependency in that realm. The bootstrap eagerly captures the exact compiler/runtime controls later used by security decisions; late mutation can therefore only replace unused public bindings, not the pinned controls. Function source text, names/arity, native-looking descriptors, and finite positive/negative probe corpora are health diagnostics only and MUST NOT be accepted as provenance for a control captured after caller code ran. A host preload (`NODE_OPTIONS`, embedding code, loader hook, VM setup, or equivalent) that executes before the supported Kovo entry is privileged same-process host compromise and outside the app-level framework claim; a platform that cannot guarantee bootstrap order MUST move authority computation into a genuinely pristine isolate with a fail-closed typed RPC boundary. Tests for import-order mutation MUST enter through the same bootstrap-first runner and poison controls only after that boundary, including the first entropy/hash/command use rather than relying on second-use detection. **Agent/LLM honesty:** Kovo does not claim prompt-injection immunity (OWASP LLM01-class attacks remain possible when an app lets a model read adversarial text or call tools). The framework claim is narrower: default-deny guards, the outbound-egress deny floor, structured sinks, and future capability-bounded tool adapters reduce the blast radius of a compromised model action, but they do not make malicious prompts or retrieved content harmless.
 
 **Trusted application-code boundary (normative).** Kovo does not sandbox app-authored server modules or third-party packages that execute in the server realm. The public-import and provenance rules in §5.2 prevent unsupported or accidental authority use inside the supported authoring subset; they are not a claim that deliberately hostile same-realm code cannot recover ambient JavaScript authority through `Function`, dynamic loading, reflection, native addons, or equivalent language/host facilities. Such code is privileged application compromise, not a remote-input framework boundary. Deployments that execute mutually untrusted plugins or generated server code MUST place that code in a separate process or genuinely isolated realm and expose only a fail-closed typed RPC capability surface. Finite syntax deny-lists and intrinsic pinning may remain defense-in-depth, but MUST NOT be described or tested as a sandbox proof.
+
+**Capability-closed untrusted roots (normative, supported-subset static gate).** Before evaluating
+authored app modules, `kovo build` MUST scan the immutable app-source snapshot and census every
+route, layout, query, mutation, endpoint, webhook, durable or scheduled task, serialized browser
+handler, and supported agent/tool callback as an untrusted-data root. For each root, Kovo computes a
+transitive module/callback graph across eager imports, re-exports, local aliases and wrappers,
+literal `import()`/`require()` edges, conditional local targets, and callbacks or callback-bearing
+containers transferred through a local wrapper. A non-literal loader, unresolved local target, or
+reachable raw filesystem, network, process, worker, VM/dynamic-loader, or database-driver capability
+fails the pre-evaluation build gate with **KV448** and a root-to-terminal provenance path. Reviewed
+framework APIs are the only nodes that may terminate such a path as a capability door; app or
+package metadata cannot mint a framework door.
+
+Reachable package code requires a least-authority verdict for the exact installed package name,
+version, security-relevant manifest fingerprint, requested subpath, imported export, and complete
+conditional-export arm set. Kovo packages and explicitly reviewed framework companions use a
+compiler-owned, version-pinned verdict. Other packages use the committed
+`kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
+independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
+`<module>` entry and MUST classify package initialization explicitly rather than relying on an empty
+export list. An absent, stale, duplicate,
+contradictory, malformed, export-incomplete, condition-incomplete, or unresolved verdict fails
+closed with KV448. `kovo explain --capabilities` prints the root census, reviewed doors, exact
+package-summary versions/fingerprints, and every closed fact with the same provenance used by the
+diagnostic. This is a conservative proof about accidental authority in Kovo's supported static
+authoring subset; consistent with the trusted application-code boundary above, it is not a
+same-realm JavaScript sandbox or a claim about deliberately hostile dependencies.
+
+**Finite operation closure (normative, supported-subset static gate).** Capability closure answers
+which code and reviewed doors are reachable; the finite security-operation IR answers which
+security-relevant effects a supported handler can perform. Its browser vocabulary is closed in
+§4.3. Its structured-server vocabulary is exactly: principal-scope acquisition; managed database
+read/write; justified trusted SQL; framework egress; justified trusted HTML; cookie/header/outcome,
+raw-response, and redirect response effects; storage read/write; task composition; plus the
+compiler-control records `server.handler.root` and `server.helper.call`. The root record enrolls each
+supported query, mutation, endpoint, webhook, and task body even when it has no terminal effects.
+The helper-call record names an exact immutable same-file callable that received authority and
+carries the source-derived handler root on the edge. The normalized interpreter below MUST
+discharge that edge before the build can treat the root as closed. The inventory in
+`securityOperationKinds` is the canonical union. C9 assigns terminal effects to one real boundary
+owner and the two control records to capability closure. Adding a kind without exactly one owner, or
+an inventory row that names an unknown/duplicate kind, fails `check:c9-sink-inventory`.
+
+Classification follows symbol identity and monotone receiver provenance, not variable spelling.
+Endpoint/query/task context is the declared context parameter; a mutation's request and context are
+the second and third parameters respectively. Context, principal scope, database, headers, storage,
+`Response`, and their destructured method aliases retain authority through direct immutable aliases.
+An ambiguous/mutable join, computed terminal method, raw database client member, authority-bearing
+container or constructor, or return of authority is unsupported and MUST fail closed with
+**KV449**. Authority may pass to an exact immutable same-file function only by emitting a
+`server.helper.call` edge with its local identity. Imported, foreign, computed, aliased, reassigned,
+or unresolved helpers remain KV449. The finite edge enrollment itself does not guess about the
+helper body; the normalized interpreter MUST produce an explicit bottom-up summary before Kovo can
+claim cross-helper effect closure. A helper may always consume plain data returned by a reviewed
+operation, or the capability-closed module graph may terminate at an exact reviewed framework door.
+Namespace and named imports of the three exceptional operations preserve exact
+framework identity: `trustedSql` and `trustedHtml` require a static justification, and raw
+`Response` use is admitted only where the declared endpoint posture supplies the compiler-owned
+justification. App spelling, a same-named local, a cast, or a generated manifest cannot mint a door.
+
+This layer deliberately does not claim general JavaScript interpretation or same-realm isolation.
+The emitted operation lists are immutable, inspectable audit evidence consumed by component graphs
+and `kovo explain`; they are not an opcode sandbox and do not replace the actual C9 sink checks.
+Every supported factory root MUST resolve from an inline definition object to either an inline
+function or one exact immutable same-file function. Definition spreads/computed root keys, missing
+roots, imported/aliased/reassigned roots, and dynamic definition carriers are KV449. This includes
+`query({ load })`: query roots appear in the emitted manifest even when the loader is effect-free,
+and a directly reached managed DB write from a query remains KV449. Value-flow beyond the closed
+alias/receiver and explicit local-call-edge rules above belongs only to the normalized abstract
+interpreter defined next; the edge preserves that obligation rather than guessing its downstream
+verdict.
+
+**Normalized helper provenance (normative, narrow abstract interpreter).** The compiler MUST
+discharge every `server.helper.call` over `kovo-security-semantic-graph/v1`, a normalized graph whose
+nodes are enrolled handler roots, exact same-file callables, finite operations, and explicit closed
+verdicts. This is not a JavaScript evaluator, SSA optimizer, or type-inference engine. Its complete
+value lattice is: plain local data; request/context authority; managed database, structured-header,
+storage, response-constructor, response-outcome, and principal-scope authority; one exact
+`operation:<securityOperationKind>` terminal; and absorbing unknown authority. The scanner is the
+only raw-syntax boundary; validation, emission, graph, and explain consumers decide from these
+typed facts (SPEC §5.2 rule 10).
+
+Transfer semantics are finite. An exact immutable alias preserves its lattice value. Static object
+destructuring applies the reviewed member transition one property at a time. Results of finite
+operations are plain data, except the explicit principal-scope acquisition that returns a scoped
+context. Passing authority to an exact immutable same-file helper maps each positional argument to
+that helper's parameter binding and computes a context-sensitive summary keyed by the complete
+authority-input vector. Summaries are computed callee-first and merged back into the caller; nested
+helper operations retain the source root and ordered transfer path. Returning or throwing
+authority, placing it in an opaque container, mutating an authority alias/member, using a mutable or
+ambiguous join, capturing it in an unsummarized nested callable, recovering it through `arguments`
+or a rest/spread mapping, invoking an operation through `call`/`apply`/`bind`, or using an imported,
+computed, aliased, reassigned, unresolved, or otherwise foreign callable is unsupported and MUST
+remain KV449. A query root's no-managed-write posture propagates unchanged through every summary.
+
+The resource contract is deterministic and has no app-authored widening knob: at most 16 helper
+edges on one path, 50,000 interpreted AST nodes, 4,096 finite operations, and 256 helper summaries
+per root. A repeated active summary key is a recursion cycle, not a fixpoint guess. The only closed
+reasons are `helper-cycle`, `opaque-transfer`, `unknown-operation`,
+`unsupported-authority-use`, and the four named `budget-*` reasons. A cycle, unsupported construct,
+or exhausted call-depth/node/operation/summary budget MUST produce KV449 before output, with
+`root`, ordered `transfers`, `sink`, and `verdict=closed:<reason>` in the diagnostic. Successful
+generated server manifests and `kovo explain` expose the same root-to-transfer-to-sink trace and
+bottom-up summaries. These artifacts are audit evidence; they neither grant runtime authority nor
+replace the C9 sink owner.
+
+**Authorization-gates-DATA scope (normative honesty boundary).** The normalized substrate may
+contribute to OPP-28 only when the data analyzer has an exact private principal symbol, an exact
+owner-column identity, and an equality-equivalent predicate (`eq` or singleton membership) whose
+accepted guard principal is the same symbol. That structurally proven subset may be reported as
+owner-scoped. Arbitrary JavaScript guard correctness, semantic equivalence between general
+predicates, multi-principal policy composition, database policy correctness, and whether an opaque
+helper actually enforces the intended business rule are not proved by this interpreter. They remain
+an explicit database-engine/runtime-policy and audit responsibility; unknown correspondence stays
+`scope: unknown` and MUST NOT be promoted by naming, types, or a permissive helper summary.
 
 **Build-preset capability boundary (normative).** `KovoPreset` is an opaque, framework-owned
 selection token, not a public structural deployment descriptor. `node()`, `vercel()`, and
@@ -313,6 +445,30 @@ an exact loopback origin (`localhost`, IPv4 `127/8`, or `[::1]`) in non-producti
 those bare development cookies have no sibling-domain security guarantee. Production and every
 non-loopback origin require HTTPS unconditionally.
 
+**Better Auth credential-consumer non-egress door (normative).** Every supported fixed-binding
+consumer of Better Auth signing material, submitted or stored credentials, request/session
+cookies, password hash/verify values, session records, and dependency results MUST be enumerated
+in one complete package-private contract census and invoked through the same runtime gate. Each
+contract binds a stable consumer id to the M2 secret paths it may receive and the only result shape
+that may reach its reviewed next sink. The gate MUST admit only an exact runtime-registered
+consumer token, validate the result, seal it, and permit exactly one consume by that same token;
+structural forgeries, unknown consumers, cross-consumer swaps, replayed results, invalid result
+shapes, and dependency-thrown secret-bearing errors fail closed. Only an exact dependency
+400/401/403 verdict from a credential operation may become Kovo's opaque invalid-credential
+outcome, and that verdict is itself one-shot. A module-private `unique symbol` or validated secret
+brand is author-time ergonomics only: the runtime registry, complete path/consumer and source-use
+censuses, and hostile-value/sink tests own enforcement. The static census proves coverage but is
+not itself runtime authority (SPEC §10.3 C9-C10).
+
+Every captured external Better Auth credential source—including handler/API callables, constructors,
+password functions, rate-limit construction, and cookie extraction—MUST be invoked inside that
+runtime gate after exact consumer/source validation. Passing an owner-supplied callback through a
+generic gate while the callback itself retains raw dependency call authority is not the sole-door
+construction; generic callbacks are limited to package-owned transforms such as sanitized session
+reconstruction. The package source-use census MUST resolve aliases, destructuring, literal computed
+access, `.call`/`.apply`, and local imports/re-exports by symbol/value flow; printed callee spelling
+or a fixed method-name regex is not coverage evidence.
+
 **Better Auth redirect mount response boundary (normative).** The opaque Better Auth mount is a
 redirect-protocol adapter, not a public proxy for the dependency router. After the exact request
 origin check, Kovo MUST admit only status `301`, `302`, `303`, `307`, or `308` with exactly one
@@ -325,7 +481,9 @@ body, status text, content headers, or arbitrary headers. In particular, depende
 `get-session` and error pages MUST fail closed rather than exposing session JSON, bearer material,
 or HTML through the mount (SPEC §6.6/§9.1).
 
-**Outbound egress: the private-network deny floor (normative, runtime defense-in-depth — NOT a proof).** The threat is the **SSRF network position**: a reflected or forged inbound request coaxes the server into making an _outbound_ request to an address it must never reach — cloud instance-metadata (`169.254.169.254` and the AWS ECS/EKS variants `169.254.170.2`/`169.254.170.23`, the AWS IMDSv6 `fd00:ec2::254`, Azure's IMDS plus its `IDENTITY_ENDPOINT` loopback, GCP's `metadata.google.internal`), localhost sidecars, or internal-only services on RFC1918 / link-local / unique-local / CGNAT ranges. The payoff is managed-identity credential theft off the metadata endpoint, or an internal-service pivot. Kovo installs the floor at `createApp()` by default and accepts explicit operator config through `createApp({ egress: { allowInternal: ['otel:4318', '10.0.5.2:6379'] } })` with the following normative behavior. **All public/external egress is UNRESTRICTED** — this floor does **not** stop data exfiltration to an attacker host (that needs a _positive_ destination allowlist, a separate app-specific control, declared here as an explicit non-goal). **Private / loopback / link-local / unique-local / CGNAT / IANA-special destinations are DENIED by default in production and whenever an explicit `egress` object is supplied**, reachable only when the exact `host:port` is in the operator's narrow `allowInternal` allowlist (broad CIDR entries are flagged and warned). In development, an omitted `egress` option still installs both enforcement layers and still denies cloud metadata, but permits non-metadata private-network destinations so localhost DB/Redis/OTel/Ollama sidecars do not brick ordinary local boot; pass `egress: { allowInternal: [] }` in development to exercise production empty-allowlist semantics. A blocked connection throws a typed 502-class `EgressBlockedError` naming the destination and the remediation. **The cloud instance-metadata endpoint is DENIED by default and is NEVER reachable via `allowInternal`** — it is reachable only inside a module-private `metadataAllowed` `AsyncLocalStorage` frame entered ONLY by the per-cloud credential factories `awsCredential()` / `gcpCredential()` / `azureCredential()`, which wrap the cloud SDK's credential provider so a token _refresh_ re-enters the frame. There is deliberately no generic `withMetadataAccess` helper. A reflected SSRF never calls a factory, so it never enters the frame, so metadata stays denied at the very same IP — provenance-as-current-frame, unforgeable by SSRF (it survives the `await`/timer boundaries that destroy stack frames) yet still runtime-DiD, not a proof. **DNS64/NAT64 topology is explicit operator authority.** Kovo always decodes RFC 6052's well-known `64:ff9b::/96` carrier. A deployment using any Network-Specific Prefix MUST list every active translator prefix in `egress.nat64Prefixes`; automatic RFC 7050 discovery or A/AAAA correlation is not accepted as the policy root. Only `/32`, `/40`, `/48`, `/56`, `/64`, and `/96` are valid. Boot MUST reject malformed CIDRs, set host bits, a non-zero `/96` u octet, duplicate/overlapping configured prefixes, and any configured prefix that overlaps the implicit well-known decoder. The framework snapshots and canonicalizes the resulting prefix set as process-global posture. At the sink, a matching configured prefix is decoded using RFC 6052 Table 1 before the context-free IPv6 registry verdict: the u octet MUST be zero for layouts shorter than `/96`, suffix bits are ignored, and the embedded IPv4 destination is classified normally. This explicit topology may expose public IPv4 through RFC 8215's local-use `64:ff9b:1::/48`, but embedded metadata remains metadata and can never be reopened by `allowInternal`. The decision rule runs **per request and per redirect hop, at BOTH enforcement layers**: resolve the host → normalize (IPv4-mapped `::ffff:`, decimal/octal/hex, well-known NAT64, and configured Network-Specific Pref64) → pin the exact validated IP → public IP allow; metadata IP allow iff the `metadataAllowed` frame is active; other non-public IP allow iff the development omitted-config posture permits it or `host:port ∈ allowInternal`; anything not confidently classified as public fails **closed**. Enforcement is **dual-layer because a single layer fails open**: (a) a custom undici dispatcher at the per-request `dispatch()` level — pooled-socket reuse skips the per-connection hook, so a connect-only check would pass the _second_ request to an origin; and (b) the `node:http`/`node:https` + `net.Socket.prototype.connect` layer — AWS IMDS via `@smithy` uses raw `node:http` and bypasses undici entirely — which also injects a pinning `lookup` so a TOCTOU DNS-rebind cannot swap a public answer for a private one between check and dial. Bootstrap installs both layers at the `createApp` chokepoint and runs a **loud startup self-probe** that warns unmissably when the floor is not installed; production refuses boot when the floor is missing, partial, tampered, or disabled without an audited non-empty opt-out justification. Because monkeypatches do not cross `Worker`/`child_process` boundaries, every worker/child bootstrap that serves requests MUST re-install (the self-probe is the safety net). Prototype-freezing is **opt-in / off by default** (it breaks Datadog/OTel/nock). This control is **labeled everywhere as a fail-closed runtime defense-in-depth floor, never a by-construction proof**. Residual fail-open holes (enumerated, by design): same-process app code can re-patch `net.Socket.prototype.connect` or call `setGlobalDispatcher` after the floor; `Worker`/`child_process`/native-socket paths the JS layer never sees; a per-`fetch(url, { dispatcher })` option that bypasses the global dispatcher (the `net.connect` layer still catches its _first_ dial); and provider-shape drift in a future undici/node internal. The floor is **redundant on Lambda/PaaS/Workload-Identity-Federation** where IMDSv2 / hop-limits already close the metadata path; it earns its keep on long-lived managed-identity VMs and against the internal-service pivot.
+**Outbound egress: the positive framework capability (normative).** Untrusted-data-reachable framework code MUST have one supported positive HTTP network door: the exact framework-owned `ctx.fetch` supplied to durable/scheduled tasks, verified webhooks, and any supported agent-tool callback. A runner or app MUST NOT replace that function. Raw `fetch`, `node:http`, `node:https`, `net`, datagram, proxy-agent, database-driver, worker, process, native-socket, or dynamically loaded network authority remains unavailable from that graph unless a separately reviewed framework door explicitly owns it. `egress.allowDestinations` MUST be a dense list of exact HTTP(S) origins. Boot MUST reject an empty, malformed, credential-bearing, path/query/fragment-bearing, non-HTTP(S), or non-string entry instead of warning and widening or silently narrowing posture. Boot canonicalizes scheme, URL-normalized hostname (including Unicode, legacy IPv4, IPv6, case, and a DNS trailing dot), and effective port into one origin identity. The initial request and every redirect or pooled-request origin MUST match that canonical set **before DNS, proxy selection, pool reuse, or dial**. Every admitted hostname request/hop MUST resolve all candidate addresses and classify all of them; any closed answer closes the whole request. Every new TCP dial MUST classify the exact resolver result that Node may select and pin that immutable result into the dial, so DNS rotation is admitted only when the origin remains declared and every new answer remains safe. A declared private origin additionally needs the ambient `allowInternal` posture below. A framework-created database socket is a separate, module-private exact-endpoint capability: it may follow DNS rotation for its registered Postgres host/port without opening that endpoint to unrelated sockets. Arbitrary application proxy/dispatcher configuration is unsupported and MUST fail boot or be stripped from `ctx.fetch`; an operator-controlled transparent proxy remains deployment authority outside this application-level origin proof and does not turn the private-network floor into a sandbox. Future agent-tool APIs MUST supply this same contextual door before they are supported. Same-process deliberately malicious code or intrinsic poisoning is outside this construction proof, as stated by the capability-closure boundary above.
+
+**Outbound egress: the private-network deny floor (normative, runtime defense-in-depth — NOT a proof).** The threat is the **SSRF network position**: a reflected or forged inbound request coaxes the server into making an _outbound_ request to an address it must never reach — cloud instance-metadata (`169.254.169.254` and the AWS ECS/EKS variants `169.254.170.2`/`169.254.170.23`, the AWS IMDSv6 `fd00:ec2::254`, Azure's IMDS plus its `IDENTITY_ENDPOINT` loopback, GCP's `metadata.google.internal`), localhost sidecars, or internal-only services on RFC1918 / link-local / unique-local / CGNAT ranges. The payoff is managed-identity credential theft off the metadata endpoint, or an internal-service pivot. Kovo installs the floor at `createApp()` by default and accepts explicit operator config through `createApp({ egress: { allowInternal: ['otel:4318', '10.0.5.2:6379'] } })` with the following normative behavior. **All public/external egress is UNRESTRICTED at this ambient process floor** — the positive framework capability above is the separate control that closes public destinations reached through `ctx.fetch`. **Private / loopback / link-local / unique-local / CGNAT / IANA-special destinations are DENIED by default in production and whenever an explicit `egress` object is supplied**, reachable only when the exact `host:port` is in the operator's narrow `allowInternal` allowlist (broad CIDR entries are flagged and warned). In development, an omitted `egress` option still installs both enforcement layers and still denies cloud metadata, but permits non-metadata private-network destinations so localhost DB/Redis/OTel/Ollama sidecars do not brick ordinary local boot; pass `egress: { allowInternal: [] }` in development to exercise production empty-allowlist semantics. A blocked connection throws a typed 502-class `EgressBlockedError` naming the destination and the remediation. **The cloud instance-metadata endpoint is DENIED by default and is NEVER reachable via `allowInternal`** — it is reachable only inside a module-private `metadataAllowed` `AsyncLocalStorage` frame entered ONLY by the per-cloud credential factories `awsCredential()` / `gcpCredential()` / `azureCredential()`, which wrap the cloud SDK's credential provider so a token _refresh_ re-enters the frame. There is deliberately no generic `withMetadataAccess` helper. A reflected SSRF never calls a factory, so it never enters the frame, so metadata stays denied at the very same IP — provenance-as-current-frame, unforgeable by SSRF (it survives the `await`/timer boundaries that destroy stack frames) yet still runtime-DiD, not a proof. **DNS64/NAT64 topology is explicit operator authority.** Kovo always decodes RFC 6052's well-known `64:ff9b::/96` carrier. A deployment using any Network-Specific Prefix MUST list every active translator prefix in `egress.nat64Prefixes`; automatic RFC 7050 discovery or A/AAAA correlation is not accepted as the policy root. Only `/32`, `/40`, `/48`, `/56`, `/64`, and `/96` are valid. Boot MUST reject malformed CIDRs, set host bits, a non-zero `/96` u octet, duplicate/overlapping configured prefixes, and any configured prefix that overlaps the implicit well-known decoder. The framework snapshots and canonicalizes the resulting prefix set as process-global posture. At the sink, a matching configured prefix is decoded using RFC 6052 Table 1 before the context-free IPv6 registry verdict: the u octet MUST be zero for layouts shorter than `/96`, suffix bits are ignored, and the embedded IPv4 destination is classified normally. This explicit topology may expose public IPv4 through RFC 8215's local-use `64:ff9b:1::/48`, but embedded metadata remains metadata and can never be reopened by `allowInternal`. The decision rule runs **per request and per redirect hop, at BOTH enforcement layers**: resolve the host → normalize (IPv4-mapped `::ffff:`, decimal/octal/hex, well-known NAT64, and configured Network-Specific Pref64) → pin the exact validated resolver result from which Node may select a dial address → public IP allow; metadata IP allow iff the `metadataAllowed` frame is active; other non-public IP allow iff the development omitted-config posture permits it or `host:port ∈ allowInternal`; anything not confidently classified as public fails **closed**. Enforcement is **dual-layer because a single layer fails open**: (a) a custom undici dispatcher at the per-request `dispatch()` level — pooled-socket reuse skips the per-connection hook, so a connect-only check would pass the _second_ request to an origin; and (b) the `node:http`/`node:https` + `net.Socket.prototype.connect` layer — AWS IMDS via `@smithy` uses raw `node:http` and bypasses undici entirely — which also injects a pinning `lookup` so a TOCTOU DNS-rebind cannot swap a public answer for a private one between check and dial. Bootstrap installs both layers at the `createApp` chokepoint and runs a **loud startup self-probe** that warns unmissably when the floor is not installed; production refuses boot when the floor is missing, partial, tampered, or disabled without an audited non-empty opt-out justification. Because monkeypatches do not cross `Worker`/`child_process` boundaries, every worker/child bootstrap that serves requests MUST re-install (the self-probe is the safety net). Prototype-freezing is **opt-in / off by default** (it breaks Datadog/OTel/nock). This control is **labeled everywhere as a fail-closed runtime defense-in-depth floor, never a by-construction proof**. Residual fail-open holes (enumerated, by design): same-process app code can re-patch `net.Socket.prototype.connect` or call `setGlobalDispatcher` after the floor; `Worker`/`child_process`/native-socket paths the JS layer never sees; arbitrary raw per-call dispatchers/proxy agents outside the supported capability graph; and provider-shape drift in a future undici/node internal. The floor is **redundant on Lambda/PaaS/Workload-Identity-Federation** where IMDSv2 / hop-limits already close the metadata path; it earns its keep on long-lived managed-identity VMs and against the internal-service pivot.
 
 **Capability URLs for storage downloads (normative, by-construction at the verify sink).** A download URL for a stored object is signed, short-lived, and scope-bound so the object is _un-dereferenceable without a valid token_. `signCapability` mints a token over the canonical, length-prefixed tuple `(version, signing-key-id, method, key, expiry, scope, one-time, nonce)` (canonicalize-before-sign, so no field-confusion collision or unsigned replay/key-selection field) using the framework signing secret; the framework-owned download route MUST `verifyCapability` — re-canonicalizing the key/method/scope it derives _from the request_ and comparing the HMAC in constant time — **before any storage read**. Because the route supplies the expected claims rather than trusting the token's, a token for object `a` cannot authorize reading object `b` even with a valid signature. Verification is fail-closed and ordered (parse → constant-time signature → expiry → claim match → one-time burn); rejection reasons are never leaked to the client. This is **by-construction at the verify sink** (an object cannot be read without a verifying token), with one honestly-labeled limit: the URL is a **bearer credential** whose _leakage_ via `Referer`/logs/CDN is mitigated (short expiry by default, narrow scope, and an optional one-time token posture) but **not proven**. The framework storage **download route** that hosts the sink is **shipped**: `createStorageDownloadEndpoint` builds a prefix-mounted GET/HEAD `endpoint()` whose handler re-derives the expected key/method/scope from the request and runs `verifyCapability` before any storage read (a generic, reason-free 404 on any failure), and `ctx.signUrl({ key, method?, scope?, expiresIn?, oneTime? })` mints a URL pointing at that route (canonicalize-before-sign; short-expiry default). Capability signing and verification MUST reject before unbounded decode, parsing, canonicalization, or audit retention: keys are limited to 4,096 code units, scopes and audiences to 1,024 each, decoded payloads to 12,000 bytes, complete wire tokens to 16,384 code units, and TTL to at most one hour. Production MUST refuse a missing, custom, or volatile download replay store and accept only the opaque durable store exposed by `createPostgresAppRuntimeDb().capabilityReplayStore`, even when the app currently mints only ordinary tokens; this keeps one-time posture from becoming a deployment-time footgun and makes replica/restart truth mandatory before the sink can serve. Production signing, verification, signer construction, and download-route construction MUST also refuse caller-injected clocks, so expiry is measured only against the framework-owned wall clock (and durable one-time insertion is additionally guarded by the database clock). Every mint records a capability fact surfaced by `kovo explain --capabilities`.
 

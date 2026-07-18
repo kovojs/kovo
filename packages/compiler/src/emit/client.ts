@@ -465,7 +465,46 @@ const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
   return applied;
 };`,
   derive: `const derive = (inputs, fn) => ({ inputs, run: fn });`,
-  handler: `const handler = (fn) => fn;`,
+  securityHandler: `const securityHandler = (operations, fn) => {
+  if (!Array.isArray(operations) || operations.length > 256 || typeof fn !== 'function') {
+    throw new TypeError('KV449: invalid generated browser security-operation manifest.');
+  }
+  const doors = {
+    'browser.dialog.close': 'platform-invoker',
+    'browser.dialog.open': 'platform-invoker',
+    'browser.dom.focus': 'compiler-dom-focus',
+    'browser.event.control': 'delegated-event',
+    'browser.event.read': 'delegated-event',
+    'browser.form.reset': 'compiler-form',
+    'browser.form.submit': 'compiler-form',
+    'browser.framework.call': 'reviewed-client-export',
+    'browser.state.read': 'compiler-state',
+    'browser.state.write': 'compiler-state',
+    'browser.timer.cancel': 'framework-timer',
+    'browser.timer.schedule': 'framework-timer',
+  };
+  for (let index = 0; index < operations.length; index += 1) {
+    const entry = Object.getOwnPropertyDescriptor(operations, String(index));
+    const operation = entry && Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : undefined;
+    if (!operation || typeof operation !== 'object') {
+      throw new TypeError('KV449: invalid generated browser security operation.');
+    }
+    const keys = Object.keys(operation);
+    if (keys.some((key) => key !== 'door' && key !== 'kind' && key !== 'target')) {
+      throw new TypeError('KV449: invalid generated browser security operation.');
+    }
+    const kindEntry = Object.getOwnPropertyDescriptor(operation, 'kind');
+    const doorEntry = Object.getOwnPropertyDescriptor(operation, 'door');
+    const targetEntry = Object.getOwnPropertyDescriptor(operation, 'target');
+    const kind = kindEntry && Object.prototype.hasOwnProperty.call(kindEntry, 'value') ? kindEntry.value : undefined;
+    const door = doorEntry && Object.prototype.hasOwnProperty.call(doorEntry, 'value') ? doorEntry.value : undefined;
+    const target = targetEntry && Object.prototype.hasOwnProperty.call(targetEntry, 'value') ? targetEntry.value : undefined;
+    if (doors[kind] !== door || (targetEntry && typeof target !== 'string')) {
+      throw new TypeError('KV449: invalid generated browser security operation.');
+    }
+  }
+  return fn;
+};`,
   installClockUpdatePlans: `const installClockUpdatePlans = (root, plans, context = {}) => {
   const intervals = [];
   const intervalMs = (value) => typeof value === 'number' ? value : String(value ?? '').endsWith('s') ? Number(String(value).slice(0, -1)) * 1000 : Number(value);
@@ -785,7 +824,7 @@ function runtimeGeneratedImportNames(
   if (hasStyleProperty)
     appendClientValue(names, runtimeOutputHelpers.styleProperty, 'Client runtime import names');
   if (compilerArrayLength(handlers, 'Client handlers') > 0)
-    appendClientValue(names, 'handler', 'Client runtime import names');
+    appendClientValue(names, 'securityHandler', 'Client runtime import names');
   if (compilerArrayLength(clockUpdatePlans, 'Client clock update plans') > 0)
     appendClientValue(names, 'installClockUpdatePlans', 'Client runtime import names');
   return uniqueSorted(names);
@@ -915,7 +954,7 @@ function emitHandlerExport(handler: HandlerLowering): string {
   const eventParam = compilerRegExpTest(/\bevent\b/, body) ? 'event' : '_event';
   const contextParam = compilerRegExpTest(/\bctx\b/, body) ? 'ctx' : '_ctx';
 
-  return `export const ${handler.exportName} = handler((${eventParam}, ${contextParam}) => {\n${indent(body)}\n});`;
+  return `export const ${handler.exportName} = securityHandler(${compilerJsonSource(handler.securityOperations, 'Browser security operations')}, (${eventParam}, ${contextParam}) => {\n${indent(body)}\n});`;
 }
 
 function emitHandlerBody(handler: HandlerLowering): string {

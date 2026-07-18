@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { accessLine, capabilityLine } from './graph-explain-format.js';
+import { accessLine, capabilityClosureLine, capabilityLine } from './graph-explain-format.js';
 
 describe('graph explain formatters', () => {
   it('keeps access fact output stable', () => {
@@ -30,6 +30,24 @@ describe('graph explain formatters', () => {
       }),
     ).toBe(
       'CAPABILITY kind=downloadUrl site=app/files.ts:8:10 module=@app/files target=reports justification="operator download"',
+    );
+  });
+
+  it('prints capability-closure provenance without hiding the failing edge', () => {
+    expect(
+      capabilityClosureLine({
+        capability: 'network',
+        kind: 'closed',
+        module: 'src/routes/webhook.ts',
+        name: 'billing',
+        path: ['webhook:billing', 'src/lib/send.ts', 'package:raw-http'],
+        reason: 'package summary is absent',
+        rootKind: 'webhook',
+        site: 'src/lib/send.ts:4:1',
+        status: 'unresolved',
+      }),
+    ).toBe(
+      'CLOSED root=webhook:"billing" capability=network module=src/routes/webhook.ts site=src/lib/send.ts:4:1 path="webhook:billing -> src/lib/send.ts -> package:raw-http" reason="package summary is absent"',
     );
   });
 });

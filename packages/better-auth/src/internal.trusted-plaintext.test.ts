@@ -12,10 +12,19 @@ import {
   proveBetterAuthPlaintextApiConfinement,
   proveBetterAuthRequestSecretNonEgress,
   proveBetterAuthRequestExportConfinement,
-  type BetterAuthApiUsage,
   type BetterAuthRequestSecretPath,
   type BetterAuthRequestReachableExport,
 } from './internal/non-egress-proof.js';
+import {
+  betterAuthCredentialConsumerContracts,
+  betterAuthCredentialConsumers,
+  consumeBetterAuthCredentialResult,
+  isBetterAuthCredentialGateFailure,
+  runBetterAuthCredentialConsumer,
+  runBetterAuthCredentialSourceCallable,
+  runBetterAuthCredentialSourceCallableAsync,
+} from './internal/credential-runtime-gate.js';
+import { censusBetterAuthCredentialSources } from './internal/credential-source-census.test-helper.js';
 
 const srcDir = new URL('.', import.meta.url).pathname;
 const trustedPlaintextModule = 'internal/trusted-plaintext.ts';
@@ -26,7 +35,13 @@ function sourceFiles(dir: string): string[] {
     const stat = statSync(path);
     if (stat.isDirectory()) return sourceFiles(path);
     if (!entry.endsWith('.ts')) return [];
-    if (entry.endsWith('.test.ts') || basename(entry) === 'test-fakes.ts') return [];
+    if (
+      entry.endsWith('.test.ts') ||
+      entry.endsWith('.test-helper.ts') ||
+      basename(entry) === 'test-fakes.ts'
+    ) {
+      return [];
+    }
     return [path];
   });
 }
@@ -157,6 +172,9 @@ describe('Better Auth trusted plaintext zone', () => {
       'better-auth.adapter.sign-in.account-password',
       'better-auth.adapter.session-token-lookup',
       'better-auth.mount.handler-delegation',
+      'better-auth.mount.set-cookie-forwarding',
+      'better-auth.binding.signing-secret',
+      'better-auth.rate-limit.signing-secret',
     ]);
 
     expect(
@@ -313,64 +331,389 @@ describe('Better Auth trusted plaintext zone', () => {
     ]);
   });
 
-  it('binds request-reachable plaintext assertions to the enumerated secret path manifest', () => {
-    const assertionCall = /\bassertBetterAuthRequestSecretPath\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-    const asserted = sourceFiles(srcDir).flatMap((path) => {
-      const rel = relative(srcDir, path);
-      return [...sourceWithoutComments(rel).matchAll(assertionCall)].map((match) => match[1]);
-    });
+  it('binds every M2 secret path to at least one exact runtime consumer', () => {
+    const asserted = betterAuthCredentialConsumerContracts.flatMap((contract) => contract.paths);
     const manifestIds = new Set(betterAuthRequestSecretPaths.map((path) => path.id));
     const assertedIds = new Set(asserted);
 
     expect([...assertedIds].sort()).toEqual([...manifestIds].sort());
     expect(asserted.every((id) => manifestIds.has(id))).toBe(true);
+    const consumerTokens = Object.values(betterAuthCredentialConsumers);
+    expect(consumerTokens).toHaveLength(betterAuthCredentialConsumerContracts.length);
+    expect(new Set(consumerTokens).size).toBe(consumerTokens.length);
+    expect(Object.keys(betterAuthCredentialConsumers).sort()).toEqual(
+      betterAuthCredentialConsumerContracts.map((contract) => contract.token).sort(),
+    );
   });
 
-  // SPEC §10.1 C10 / §6.6 (papercuts-36 P1): confinement is a FAIL-CLOSED enumeration whose
-  // completeness is checked against the actual `auth.api.*` surface Kovo calls, not a hardcoded
-  // 4-name regex. A new plaintext-reading endpoint used outside the trusted module — or any
-  // unclassified `auth.api.*` usage — turns the proof RED until it is classified.
-  function scanBetterAuthApiUsages(): BetterAuthApiUsage[] {
-    const apiCall = /\bauth\.api\.([A-Za-z0-9_$]+)\s*\(/g;
-    return sourceFiles(srcDir).flatMap((path) => {
-      const rel = relative(srcDir, path).split('\\').join('/');
-      return [...sourceWithoutComments(rel).matchAll(apiCall)].map((match) => ({
-        method: match[1] as string,
-        file: rel,
-      }));
-    });
-  }
+  it('routes every declared runtime consumer through its sole registered owner', () => {
+    // SPEC §6.6/§10.3 C9-C10: the unique-symbol type is ergonomics only. This source census binds
+    // every actual token use to the contract owner, while runtime registry tests below prove that
+    // structural forgeries cannot enter or leave the door.
+    const gateModule = 'internal/credential-runtime-gate.ts';
+    const consumerUse = /\bbetterAuthCredentialConsumers\.([A-Za-z0-9_$]+)/g;
+    const uses = sourceFiles(srcDir)
+      .filter((path) => relative(srcDir, path).split('\\').join('/') !== gateModule)
+      .flatMap((path) => {
+        const file = relative(srcDir, path).split('\\').join('/');
+        return [...sourceWithoutComments(file).matchAll(consumerUse)].map((match) => ({
+          file,
+          name: match[1],
+        }));
+      });
 
-  it('confines the enumerated Better Auth plaintext API surface to the trusted module', () => {
-    const usages = scanBetterAuthApiUsages();
-
-    // The real framework surface is fully classified and confined (proof is GREEN).
-    expect(proveBetterAuthPlaintextApiConfinement(usages)).toEqual([]);
-
-    // Every `auth.api.*` Kovo calls today reads plaintext and lives in the trusted module.
-    expect(new Set(usages.map((usage) => usage.file))).toEqual(
-      new Set([betterAuthTrustedPlaintextModule]),
+    expect(uses).toHaveLength(16);
+    expect(uses).toEqual(
+      expect.arrayContaining([
+        { file: 'internal/password.ts', name: 'passwordHash' },
+        { file: 'internal/password.ts', name: 'passwordVerify' },
+        { file: 'internal/trusted-plaintext.ts', name: 'credentialHandlerSignInEmail' },
+        { file: 'internal/trusted-plaintext.ts', name: 'credentialHandlerSignUpEmail' },
+        { file: 'internal/trusted-plaintext.ts', name: 'seedSignUpEmail' },
+        { file: 'internal/trusted-plaintext.ts', name: 'signOut' },
+        { file: 'internal/trusted-plaintext.ts', name: 'getSession' },
+        { file: 'internal/trusted-plaintext.ts', name: 'credentialCookieForwarding' },
+        { file: 'internal/trusted-plaintext.ts', name: 'sessionCookieForwarding' },
+        { file: 'internal/trusted-plaintext.ts', name: 'mountCookieForwarding' },
+        { file: 'mount-adapter.ts', name: 'mountHandler' },
+        { file: 'postgres.ts', name: 'postgresRateLimit' },
+        { file: 'postgres.ts', name: 'postgresAdapter' },
+        { file: 'session.ts', name: 'sessionProjection' },
+        { file: 'sqlite.ts', name: 'sqliteRateLimit' },
+        { file: 'sqlite.ts', name: 'sqliteAdapter' },
+      ]),
     );
-    expect([...new Set(usages.map((usage) => usage.method))].sort()).toEqual([
-      'getSession',
-      'signInEmail',
-      'signOut',
-      'signUpEmail',
+  });
+
+  it('keeps the symbol-flow Better Auth credential denominator equal to the reviewed census', () => {
+    // SPEC §6.6/§10.3 C9-C10: this is the complete source-use closure, not a printed-name regex.
+    // Every raw dependency/secret transform is dominated by the exact gate callback, and its
+    // consumer token, owner module, and raw-source class agree with the runtime contract ledger.
+    const census = censusBetterAuthCredentialSources(
+      sourceFiles(srcDir).map((path) => {
+        const file = relative(srcDir, path).split('\\').join('/');
+        return { file, source: sourceText(file) };
+      }),
+    );
+    expect(census.issues).toEqual([]);
+
+    const contractsByToken = new Map(
+      betterAuthCredentialConsumerContracts.map((contract) => [contract.token, contract]),
+    );
+    const observed = new Set(
+      census.invocations.flatMap((invocation) =>
+        invocation.consumers.map((token) => {
+          const contract = contractsByToken.get(token);
+          if (contract === undefined) {
+            return `UNREGISTERED:${invocation.file}:${token}:${invocation.source}`;
+          }
+          return `${invocation.file}:${contract.id}:${invocation.source}`;
+        }),
+      ),
+    );
+    const expected = new Set(
+      betterAuthCredentialConsumerContracts.map(
+        (contract) => `${contract.owner}:${contract.id}:${contract.source}`,
+      ),
+    );
+    expect([...observed].sort()).toEqual([...expected].sort());
+  });
+
+  it('fails red on aliased, destructured, computed, call/apply, and imported raw consumers', () => {
+    const census = censusBetterAuthCredentialSources([
+      {
+        file: 'raw-authority.ts',
+        source: `
+          declare const auth: unknown;
+          export const apiAlias = (auth as any)['api'];
+          export const handlerAlias = (auth as any)['handler'];
+        `,
+      },
+      {
+        file: 'bypass.ts',
+        source: `
+          import { hashPassword as importedHashAlias } from '@kovojs/server';
+          import { apiAlias as importedApi, handlerAlias as importedHandler } from './raw-authority.js';
+          const { ['getSession']: destructuredSession } = importedApi;
+          destructuredSession.call(importedApi, { headers: new Headers() });
+          Reflect.apply(importedHandler, null, [new Request('https://app.example/')]);
+          importedHashAlias('M2_RAW_PASSWORD');
+        `,
+      },
     ]);
+
+    expect(census.invocations).toEqual([]);
+    expect(census.issues).toHaveLength(3);
+    expect(census.issues).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('raw Better Auth credential source better-auth.callable'),
+        expect.stringContaining('raw Better Auth credential source password.hash'),
+      ]),
+    );
+  });
+
+  it('accepts gate/token aliases only when symbol flow still resolves the exact owner', () => {
+    const census = censusBetterAuthCredentialSources([
+      {
+        file: 'internal/credential-runtime-gate.ts',
+        source:
+          'export declare const betterAuthCredentialConsumers: unknown; export declare function runBetterAuthCredentialSourceCallableAsync(...args: unknown[]): unknown;',
+      },
+      {
+        file: 'owned.ts',
+        source: `
+          import { hashPassword as importedHashAlias } from '@kovojs/server';
+          import {
+            betterAuthCredentialConsumers as tokenRegistryAlias,
+            runBetterAuthCredentialSourceCallableAsync as runGateAlias,
+          } from './internal/credential-runtime-gate.js';
+          const { ['passwordHash']: exactOwnerAlias } = tokenRegistryAlias as any;
+          runGateAlias(
+            exactOwnerAlias,
+            'password.hash',
+            importedHashAlias,
+            undefined,
+            ['M2_REVIEWED_PASSWORD'],
+          );
+        `,
+      },
+    ]);
+
+    expect(census.issues).toEqual([]);
+    expect(census.invocations).toEqual([
+      expect.objectContaining({
+        consumers: ['passwordHash'],
+        file: 'owned.ts',
+        source: 'password.hash',
+      }),
+    ]);
+  });
+
+  it('rejects forged, cross-consumer, and replayed runtime results', () => {
+    let invoked = false;
+    expect(() =>
+      runBetterAuthCredentialConsumer({} as never, () => {
+        invoked = true;
+        return true;
+      }),
+    ).toThrow('KV439: unregistered Better Auth credential consumer');
+    expect(invoked).toBe(false);
+
+    let externalCallbackInvoked = false;
+    expect(() =>
+      runBetterAuthCredentialConsumer(betterAuthCredentialConsumers.passwordVerify, () => {
+        externalCallbackInvoked = true;
+        return true;
+      }),
+    ).toThrow('cannot execute an owner callback');
+    expect(externalCallbackInvoked).toBe(false);
+
+    const projection = betterAuthCredentialConsumers.sessionProjection;
+    const result = runBetterAuthCredentialConsumer(projection, () => ({
+      session: {},
+      user: {},
+    }));
+    expect(() =>
+      consumeBetterAuthCredentialResult(
+        betterAuthCredentialConsumers.getSession as never,
+        result as never,
+      ),
+    ).toThrow('KV439: mismatched Better Auth credential consumer result');
+    expect(consumeBetterAuthCredentialResult(projection, result)).toEqual({
+      session: {},
+      user: {},
+    });
+    expect(() => consumeBetterAuthCredentialResult(projection, result)).toThrow(
+      'KV439: mismatched Better Auth credential consumer result',
+    );
+  });
+
+  it('keeps raw Better Auth callables inside the exact runtime door', async () => {
+    const consumer = betterAuthCredentialConsumers.credentialHandlerSignInEmail;
+    const receiver = Object.freeze({ id: 'exact-better-auth-receiver' });
+    let seenReceiver: unknown;
+    let seenArgument: unknown;
+    const sealed = await runBetterAuthCredentialSourceCallableAsync<Response>(
+      consumer,
+      'better-auth.callable',
+      function (this: unknown, argument: unknown) {
+        seenReceiver = this;
+        seenArgument = argument;
+        return new Response(null, { status: 204 });
+      },
+      receiver,
+      ['M2_REVIEWED_ARGUMENT'],
+    );
+    expect(seenReceiver).toBe(receiver);
+    expect(seenArgument).toBe('M2_REVIEWED_ARGUMENT');
+    expect(consumeBetterAuthCredentialResult(consumer, sealed).status).toBe(204);
+
+    let wrongSourceInvoked = false;
+    await expect(
+      runBetterAuthCredentialSourceCallableAsync(
+        betterAuthCredentialConsumers.passwordHash,
+        'better-auth.callable',
+        () => {
+          wrongSourceInvoked = true;
+          return new Response();
+        },
+        receiver,
+        [],
+      ),
+    ).rejects.toThrow('cannot invoke raw source better-auth.callable');
+    expect(wrongSourceInvoked).toBe(false);
+
+    let proxyInvoked = false;
+    const proxyMethod = new Proxy(() => {
+      proxyInvoked = true;
+      return new Response();
+    }, {});
+    await expect(
+      runBetterAuthCredentialSourceCallableAsync(
+        consumer,
+        'better-auth.callable',
+        proxyMethod,
+        receiver,
+        [],
+      ),
+    ).rejects.toThrow('received an invalid callable');
+    expect(proxyInvoked).toBe(false);
+
+    const password = 'M2_CALLABLE_ERROR_MUST_NOT_EGRESS';
+    let caught: unknown;
+    try {
+      await runBetterAuthCredentialSourceCallableAsync(
+        consumer,
+        'better-auth.callable',
+        () => {
+          throw Object.assign(new Error(password), { status: 401 });
+        },
+        receiver,
+        [],
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(String(caught)).not.toContain(password);
+    expect(isBetterAuthCredentialGateFailure(caught)).toBe(true);
+    expect(isBetterAuthCredentialGateFailure(caught)).toBe(false);
+  });
+
+  it('validates hostile consumer results and redacts provider errors at runtime', async () => {
+    const password = 'M2_PASSWORD_MUST_NOT_LEAVE_THE_GATE';
+    await expect(
+      runBetterAuthCredentialSourceCallableAsync<string>(
+        betterAuthCredentialConsumers.passwordHash,
+        'password.hash',
+        async () => password,
+        undefined,
+        [],
+      ),
+    ).rejects.toThrow('returned a non-Argon2id hash');
+
+    let resultTrapRan = false;
+    const proxyResult = new Proxy([] as string[], {
+      getOwnPropertyDescriptor() {
+        resultTrapRan = true;
+        throw new Error(`proxy result reflected ${password}`);
+      },
+    });
+    expect(() =>
+      runBetterAuthCredentialSourceCallable<string[]>(
+        betterAuthCredentialConsumers.credentialCookieForwarding,
+        'cookie.snapshot',
+        () => proxyResult,
+        undefined,
+        [],
+      ),
+    ).toThrow('returned a Proxy');
+    expect(resultTrapRan).toBe(false);
+
+    const providerError = Object.assign(new Error(`provider reflected ${password}`), {
+      status: 401,
+    });
+    let caught: unknown;
+    try {
+      await runBetterAuthCredentialSourceCallableAsync(
+        betterAuthCredentialConsumers.credentialHandlerSignInEmail,
+        'better-auth.callable',
+        async () => {
+          throw providerError;
+        },
+        Object.freeze({}),
+        [],
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect(String(caught)).not.toContain(password);
+    expect(isBetterAuthCredentialGateFailure(caught)).toBe(true);
+    expect(isBetterAuthCredentialGateFailure(caught)).toBe(false);
+
+    let getterRan = false;
+    const accessorError = new Error(`provider reflected ${password}`);
+    Object.defineProperty(accessorError, 'status', {
+      get() {
+        getterRan = true;
+        return 401;
+      },
+    });
+    let accessorCaught: unknown;
+    try {
+      await runBetterAuthCredentialSourceCallableAsync(
+        betterAuthCredentialConsumers.credentialHandlerSignInEmail,
+        'better-auth.callable',
+        async () => {
+          throw accessorError;
+        },
+        Object.freeze({}),
+        [],
+      );
+    } catch (error) {
+      accessorCaught = error;
+    }
+    expect(getterRan).toBe(false);
+    expect(String(accessorCaught)).not.toContain(password);
+    expect(isBetterAuthCredentialGateFailure(accessorCaught)).toBe(false);
+
+    const proxyError = new Proxy(Object.create(null), {
+      getOwnPropertyDescriptor() {
+        throw new Error(`proxy trap reflected ${password}`);
+      },
+    });
+    let proxyCaught: unknown;
+    try {
+      await runBetterAuthCredentialSourceCallableAsync(
+        betterAuthCredentialConsumers.credentialHandlerSignInEmail,
+        'better-auth.callable',
+        async () => {
+          throw proxyError;
+        },
+        Object.freeze({}),
+        [],
+      );
+    } catch (error) {
+      proxyCaught = error;
+    }
+    expect(String(proxyCaught)).not.toContain(password);
+    expect(isBetterAuthCredentialGateFailure(proxyCaught)).toBe(false);
+  });
+
+  // SPEC §10.1 C10 / §6.6: raw `auth.api.*` call syntax has been eliminated. The symbol-flow
+  // census above now owns completeness across aliases and invocation forms; this classifier keeps
+  // the closed verdict vocabulary for any future reviewed API operation.
+  it('keeps raw Better Auth API calls absent behind captured gate-owned callables', () => {
+    expect(proveBetterAuthPlaintextApiConfinement([])).toEqual([]);
     for (const method of ['getSession', 'signInEmail', 'signOut', 'signUpEmail']) {
       expect(betterAuthPlaintextReadingApiMethods).toContain(method);
     }
   });
 
   it('fails red when a new plaintext-reading auth.api.* usage escapes the trusted module', () => {
-    const usages = scanBetterAuthApiUsages();
-
     // A known plaintext endpoint (resetPassword) invoked outside the trusted module is MISPLACED.
     expect(
-      proveBetterAuthPlaintextApiConfinement([
-        ...usages,
-        { method: 'resetPassword', file: 'mutations.ts' },
-      ]),
+      proveBetterAuthPlaintextApiConfinement([{ method: 'resetPassword', file: 'mutations.ts' }]),
     ).toEqual([
       `KV439: plaintext-reading Better Auth API auth.api.resetPassword used outside ` +
         `${betterAuthTrustedPlaintextModule} in mutations.ts`,
@@ -378,12 +721,9 @@ describe('Better Auth trusted plaintext zone', () => {
   });
 
   it('fails red when an unclassified auth.api.* method appears in framework source', () => {
-    const usages = scanBetterAuthApiUsages();
-
     // A brand-new endpoint Kovo has never classified fails closed until it is enumerated.
     expect(
       proveBetterAuthPlaintextApiConfinement([
-        ...usages,
         { method: 'signInWithFutureCredential', file: 'session.ts' },
       ]),
     ).toEqual([
@@ -421,15 +761,10 @@ describe('Better Auth trusted plaintext zone', () => {
     });
 
     expect(new Set(matches.map((match) => match.slice(0, match.indexOf(':'))))).toEqual(
-      new Set([
-        'internal/credential.ts',
-        'internal/trusted-plaintext.ts',
-        'mount-adapter.ts',
-        'session.ts',
-      ]),
+      new Set(['internal/credential.ts', 'internal/trusted-plaintext.ts']),
     );
     expect(sourceText('internal/credential.ts')).toContain('forward(cookie,');
-    expect(sourceText('mount-adapter.ts')).toContain('betterAuthCreateRedirectResponse(');
+    expect(sourceText('mount-adapter.ts')).toContain('getBetterAuthMountSetCookie(headers)');
     expect(sourceText('session.ts')).toContain('setCookies.length > 0 ? { setCookies, value }');
   });
 });

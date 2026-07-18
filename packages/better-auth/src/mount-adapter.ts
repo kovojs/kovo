@@ -1,5 +1,4 @@
 import {
-  betterAuthApply,
   betterAuthCaptureOwnMethod,
   betterAuthCharacterCodeAt,
   betterAuthCreateRedirectResponse,
@@ -17,7 +16,11 @@ import {
   betterAuthTrim,
   betterAuthUrlSnapshot,
 } from './internal/intrinsics.js';
-import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
+import {
+  betterAuthCredentialConsumers,
+  consumeBetterAuthCredentialResult,
+  runBetterAuthCredentialSourceCallableAsync,
+} from './internal/credential-runtime-gate.js';
 import {
   assertBetterAuthCanonicalRequestOrigin,
   pinBetterAuthCanonicalOrigin,
@@ -25,7 +28,7 @@ import {
   type PinnedBetterAuthCanonicalOrigin,
 } from './internal/request-origin.js';
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
-import { getBetterAuthSetCookie } from './internal/trusted-plaintext.js';
+import { getBetterAuthMountSetCookie } from './internal/trusted-plaintext.js';
 
 const NativeError = globalThis.Error;
 const NativeTypeError = globalThis.TypeError;
@@ -122,12 +125,15 @@ export async function invokeBetterAuthMountAdapter(
       request,
       'Kovo Better Auth mount',
     );
-    assertBetterAuthRequestSecretPath('better-auth.mount.handler-delegation');
-    const upstream = await betterAuthApply<Promise<Response> | Response>(
+    const consumer = betterAuthCredentialConsumers.mountHandler;
+    const sealed = await runBetterAuthCredentialSourceCallableAsync<Response>(
+      consumer,
+      'better-auth.callable',
       captured.handler,
       captured.receiver,
       [request],
     );
+    const upstream = consumeBetterAuthCredentialResult(consumer, sealed);
     if (typeof upstream !== 'object' || upstream === null) {
       throw new NativeTypeError('Better Auth mount returned no response.');
     }
@@ -148,7 +154,7 @@ export async function invokeBetterAuthMountAdapter(
     return betterAuthCreateRedirectResponse(
       status,
       canonicalLocation,
-      getBetterAuthSetCookie(headers),
+      getBetterAuthMountSetCookie(headers),
     );
   } catch {
     throw new NativeError(betterAuthMountBoundaryFailureMessage);

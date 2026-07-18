@@ -124,7 +124,11 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'redos',
     marker: '@kovo-security-classifier-corpus redos',
-    testFiles: ['packages/server/src/redos.test.ts', 'packages/compiler/src/redos-pattern.test.ts'],
+    testFiles: [
+      'packages/server/src/redos.test.ts',
+      'packages/server/src/redos-work-bound-oracle.test.ts',
+      'packages/compiler/src/redos-pattern.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'nested-quantifier-regression',
@@ -169,6 +173,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/compiler/src/redos-pattern.test.ts',
         snippets: ['((a|a))+', "toContain('KV434')"],
       },
+      {
+        id: 'versioned-deterministic-work-bound-oracle',
+        file: 'packages/server/src/redos-work-bound-oracle.test.ts',
+        snippets: [
+          'versioned deterministic ReDoS work-bound oracle',
+          'kovo.linear-regex-work/v1',
+          'covers every hostile regression family at the full runtime input ceiling with a fixed seed',
+        ],
+      },
     ],
   },
   {
@@ -177,12 +190,105 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: [
       'packages/cli/src/commands/security-disposition.test.ts',
       'packages/cli/src/index.kovo-db.test.ts',
+      'packages/server/src/egress-bootstrap.test.ts',
       'packages/server/src/egress-nat64-nsp.test.ts',
+      'packages/server/src/egress-property-oracle.test.ts',
+      'packages/server/src/egress-undici.test.ts',
       'packages/server/src/egress.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
       'packages/server/src/runtime-environment-authority.test.ts',
+      'packages/server/src/task-runner.test.ts',
+      'packages/server/src/webhook.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'destination-origin-boot-canonicalization',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'canonicalizes framework-owned destination origins and refuses malformed boot input',
+          "'https://API.EXAMPLE.COM.'",
+          "'http://[2001:db8::1]:80'",
+          'toThrow(EgressConfigError)',
+        ],
+      },
+      {
+        id: 'undeclared-origin-before-dns-dial',
+        file: 'packages/server/src/egress-property-oracle.test.ts',
+        snippets: [
+          'rejects generated undeclared origin spellings before DNS',
+          'undeclared-origin-before-dns-dial',
+          'expect(lookup).not.toHaveBeenCalled()',
+        ],
+      },
+      {
+        id: 'redirect-hop-before-dns-dial',
+        file: 'packages/server/src/egress-undici.test.ts',
+        snippets: [
+          'rejects an undeclared redirect origin before DNS or dial',
+          'undeclared-hop.invalid',
+          'expect(dnsLookupMock).not.toHaveBeenCalled()',
+        ],
+      },
+      {
+        id: 'declared-origin-dns-rotation',
+        file: 'packages/server/src/egress-undici.test.ts',
+        snippets: [
+          're-resolves a declared framework origin on every request while keeping the origin closed',
+          "{ address: '::1', family: 6 }",
+          'expect(initialLookup).toBe(4)',
+          "reason: 'destination-allowlist'",
+        ],
+      },
+      {
+        id: 'database-endpoint-dns-rotation',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'keeps an exact framework database endpoint usable across pinned DNS rotation',
+          'db-rotation.test',
+          'createDatabaseEgressSocket(databaseUrl)',
+          'unrelatedError',
+        ],
+      },
+      {
+        id: 'application-proxy-dispatcher-closed',
+        file: 'packages/server/src/egress-property-oracle.test.ts',
+        snippets: [
+          'strips an application-supplied dispatcher from the sole supported fetch door',
+          'application dispatcher gained egress authority',
+          'expect(attackerDispatches).toBe(0)',
+        ],
+      },
+      {
+        id: 'proxy-config-refuses-boot',
+        file: 'packages/server/src/egress-bootstrap.test.ts',
+        snippets: [
+          'refuses application proxy/dispatcher configuration instead of bypassing the capability',
+          "proxy: 'http://proxy.internal:8080'",
+          'unsupported property dispatcher',
+        ],
+      },
+      {
+        id: 'task-context-fetch-nonreplaceable',
+        file: 'packages/server/src/task-runner.test.ts',
+        snippets: [
+          'pins the queue identity and never accepts a replaceable egress hook',
+          "Object.getOwnPropertyDescriptor(observedContext!, 'fetch')",
+          'configurable: false',
+          'writable: false',
+          'toThrow(TypeError)',
+        ],
+      },
+      {
+        id: 'webhook-context-fetch-nonreplaceable',
+        file: 'packages/server/src/webhook.test.ts',
+        snippets: [
+          'exposes exactly the framework-owned egress capability to verified handlers',
+          "Object.getOwnPropertyDescriptor(observedContext!, 'fetch')",
+          'configurable: false',
+          'writable: false',
+          'toThrow(TypeError)',
+        ],
+      },
       {
         id: 'octal-ip-regression',
         file: 'packages/server/src/egress.test.ts',
@@ -415,10 +521,54 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'better-auth-credentials',
     marker: '@kovo-security-classifier-corpus better-auth-credentials',
     testFiles: [
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
       'packages/better-auth/src/index.schema-bridge.test.ts',
       'packages/better-auth/src/index.schema-materialize.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'credential-runtime-gate-identity-and-replay',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'rejects forged, cross-consumer, and replayed runtime results',
+          'KV439: unregistered Better Auth credential consumer',
+          'KV439: mismatched Better Auth credential consumer result',
+        ],
+      },
+      {
+        id: 'credential-runtime-gate-complete-consumer-denominator',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'keeps the symbol-flow Better Auth credential denominator equal to the reviewed census',
+          'censusBetterAuthCredentialSources(',
+          'fails red on aliased, destructured, computed, call/apply, and imported raw consumers',
+          'Reflect.apply(importedHandler',
+          'accepts gate/token aliases only when symbol flow still resolves the exact owner',
+        ],
+      },
+      {
+        id: 'credential-runtime-gate-source-ownership',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'keeps raw Better Auth callables inside the exact runtime door',
+          'runBetterAuthCredentialSourceCallableAsync<Response>',
+          'cannot invoke raw source better-auth.callable',
+          'cannot execute an owner callback',
+          'received an invalid callable',
+          'M2_CALLABLE_ERROR_MUST_NOT_EGRESS',
+        ],
+      },
+      {
+        id: 'credential-runtime-gate-result-and-error',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'validates hostile consumer results and redacts provider errors at runtime',
+          'returned a non-Argon2id hash',
+          'expect(resultTrapRan).toBe(false)',
+          'expect(String(caught)).not.toContain(password)',
+          'expect(String(proxyCaught)).not.toContain(password)',
+        ],
+      },
       {
         id: 'apikey-secret-classification',
         file: 'packages/better-auth/src/index.schema-bridge.test.ts',
@@ -679,6 +829,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/node.test.ts',
       'packages/server/src/build.test.ts',
       'packages/server/src/static-export-headers.test.ts',
+      'packages/server/src/http-header-roundtrip-property-oracle.test.ts',
     ],
     verdictAnchors: [
       {
@@ -731,6 +882,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'static-export-transport-policy',
         file: 'packages/server/src/static-export-headers.test.ts',
         snippets: ['rejects transport-owned framing and hop-by-hop static metadata with KV415'],
+      },
+      {
+        id: 'real-http-header-reconstruction-oracle',
+        file: 'packages/server/src/http-header-roundtrip-property-oracle.test.ts',
+        snippets: [
+          'real HTTP header reconstruction property oracle',
+          'keeps live and generated Node reconstruction identical for hostile header families',
+          'Web Headers owns raw control rejection before Kovo receives a Response',
+        ],
       },
     ],
   },
@@ -1621,6 +1781,200 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'capability-closure',
+    marker: '@kovo-security-classifier-corpus capability-closure',
+    testFiles: [
+      'packages/compiler/src/capability-closure.security.test.ts',
+      'packages/cli/src/capability-closure-packages.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'complete-root-census',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'censuses every supported untrusted-data root kind',
+          "'scheduled-task'",
+          "'serialized-browser-handler'",
+          "'webhook'",
+        ],
+      },
+      {
+        id: 'transitive-module-and-callback-closure',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'wrappers, re-exports, literal dynamic import, and require',
+          'callback-transfer:definePage(caller.ts callback/container)@wrapper.ts',
+          'follows callback parameters through nested local wrapper factories',
+          'dynamic-import target is not a compile-visible string literal',
+        ],
+      },
+      {
+        id: 'global-and-package-authority-closed',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'keeps shadowed globals and require open while closing global aliases',
+          'closes platform loaders, Web execution, service workers, and Cloudflare sockets',
+          'has no reviewed exact-version capability summary',
+          'summary covers 1.2.2, installed package is 1.2.3',
+          '2 contradictory summaries',
+          'requires package summaries to classify side-effect module initialization explicitly',
+          'only the compiler-owned Kovo registry',
+        ],
+      },
+      {
+        id: 'reviewed-positive-controls',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'keeps supported framework network, filesystem, process, and database doors open',
+          'classifies public testing and Vite subpaths as reviewed capability doors',
+          'preserves raw driver closure while allowing reviewed Drizzle schema/query construction',
+        ],
+      },
+      {
+        id: 'exact-package-identity-and-export-arms',
+        file: 'packages/cli/src/capability-closure-packages.test.ts',
+        snippets: [
+          'pins package version, manifest fingerprint, and every conditional export arm',
+          'marks absent conditional subpaths unresolved instead of inheriting a root verdict',
+          'loads an exact summary ledger and fails closed on unknown or malformed authority fields',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'finite-security-operation-ir',
+    marker: '@kovo-security-classifier-corpus finite-security-operation-ir',
+    testFiles: ['packages/compiler/src/security-operation-ir.security.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'exact-emitted-browser-and-server-operation-manifests',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'carries exact compiler-derived operations in emitted browser and server artifacts',
+          'securityHandler([',
+          '__kovoSecurityOperationManifest_v1',
+          'kovo-security-operation-ir/v1',
+        ],
+      },
+      {
+        id: 'realistic-reviewed-browser-operations',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'accepts realistic state, delegated-event, reviewed primitive, focus, form, and timer effects',
+          'tabsTriggerClick',
+          "Object(next)['focus']?.call(next)",
+          'requestSubmit',
+        ],
+      },
+      {
+        id: 'unknown-and-raw-browser-operations-close',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'raw DOM property assignment',
+          'never-listed DOM method',
+          'computed DOM method',
+          'raw browser-global method',
+          'raw storage capability',
+        ],
+      },
+      {
+        id: 'browser-authority-alias-and-container-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'closes %s across browser authority aliases and containers',
+          'destructured DOM method alias',
+          'mutable DOM receiver transfer',
+          'container-carried DOM receiver',
+          'constructor-carried DOM receiver',
+          'local helper authority transfer',
+          'Reflect.set',
+        ],
+      },
+      {
+        id: 'structured-server-and-exception-doors',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'accepts exact structured server operations and named justified exceptional doors',
+          'unknown managed database method',
+          'computed managed database method',
+          'raw Response from mutation',
+          'requires static justifications on the trustedSql and trustedHtml exceptional doors',
+        ],
+      },
+      {
+        id: 'server-authority-alias-helper-and-transfer-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'closes structured server authority across receiver, scope, and destructured-call aliases',
+          'fails closed when %s',
+          'authority passed to an imported helper',
+          'authority carried through an object container',
+          'enrolls exact same-file authority helpers as reviewed local call edges',
+          'server.helper.call',
+          'keeps reviewed operation results as plain helper data rather than capabilities',
+        ],
+      },
+      {
+        id: 'normalized-helper-summary-provenance',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'discharges multi-hop helper edges through bottom-up normalized summaries',
+          'kovo-security-semantic-graph/v1',
+          'local:consume[arg0=context]',
+          'local:dial[arg0=operation:server.egress.request]',
+          'shows root, transfers, sink, and closed reason for helper alias mutation',
+          'keeps helper summaries context-sensitive to exact authority inputs',
+        ],
+      },
+      {
+        id: 'normalized-helper-cycle-budget-and-posture-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'fails closed on recursive helper cycles with an explicit normalized verdict',
+          'helper-cycle',
+          'propagates query no-write posture through summarized helpers',
+          'closes arguments-object recovery and deterministic call-depth exhaustion',
+          'budget-call-depth',
+          'fails closed for %s in normalized server semantics',
+          'operation-function member laundering',
+          'nested callable authority capture',
+        ],
+      },
+      {
+        id: 'server-root-census-and-query-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'enrolls inline and same-file referenced server roots in emitted manifests',
+          'server.handler.root',
+          'query:catalog/read',
+          'fails closed instead of silently dropping an %s root',
+          'rejects managed database writes from an enrolled query root',
+        ],
+      },
+      {
+        id: 'server-framework-identity-and-principal-scope-operations',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'preserves exact framework identity through namespace exceptional-door imports',
+          'classifies managed mutation-request and explicit principal-scope database operations',
+          'server.authority.scope',
+          'server.database.read',
+          'server.database.write',
+          'server.task.compose',
+        ],
+      },
+      {
+        id: 'complete-mutation-form-security-fields',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'rejects standalone CSRF helpers targeting mutations but not same-named local lookalikes',
+          "import { csrfField as field, mutation } from '@kovojs/server'",
+          'function csrfField(_context, _options)',
+        ],
+      },
+    ],
+  },
+  {
     id: 'csrf-principal-binding',
     marker: '@kovo-security-classifier-corpus csrf-principal-binding',
     testFiles: [
@@ -1634,9 +1988,42 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/replay.test.ts',
       'packages/server/src/mutation/replay-policy.test.ts',
       'packages/server/src/mutation.test.ts',
+      'packages/server/src/build.test.ts',
+      'packages/server/src/csrf-lifecycle-property-oracle.test.tsx',
       'packages/better-auth/src/environment.test.ts',
+      'scripts/check-csrf-mint-delivery.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'csrf-mint-delivery-matrix',
+        file: 'scripts/check-csrf-mint-delivery.test.mjs',
+        snippets: [
+          'closes every lifecycle surface over live proof anchors',
+          'kills a lifecycle-receipt deletion mutant',
+          'kills a partial public mutation-helper mutant',
+          'kills header-seal and cache-posture mutants',
+          'kills rotation and replay-order mutants',
+          'rejects denominator shrinkage, missing canaries, and stale proof anchors',
+        ],
+      },
+      {
+        id: 'csrf-lifecycle-state-model-oracle',
+        file: 'packages/server/src/csrf-lifecycle-property-oracle.test.tsx',
+        snippets: [
+          'CSRF lifecycle state-model property oracle',
+          'models anonymous mint, cookie delivery, validation, rotation, and exact replay',
+          'rejects a rotated authenticated session token before replay lookup and requires a new mint',
+        ],
+      },
+      {
+        id: 'packed-node-vercel-csrf-delivery-parity',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells',
+          'packed-csrf-stream-response',
+          'packed-csrf-stream-immediate-response',
+        ],
+      },
       {
         id: 'standalone-response-lifecycle-receipt-and-sharing',
         file: 'packages/server/src/standalone-csrf-mint-security.test.ts',
@@ -1875,6 +2262,80 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "label: 'X-Forwarded-For IPv6 port'",
           "label: 'X-Real-IP IPv4 port'",
           "label: 'X-Real-IP IPv6 port'",
+        ],
+      },
+    ],
+  },
+  {
+    id: 'request-ingress',
+    marker: '@kovo-security-classifier-corpus request-ingress',
+    testFiles: [
+      'packages/server/src/request-ingress-policy.test.ts',
+      'packages/server/src/request-ingress-c13.test.ts',
+      'packages/server/src/__bugz_remote_ingress.test.ts',
+      'packages/server/src/node.test.ts',
+      'packages/server/src/build.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'method-source-authority-scheme-target-superset',
+        file: 'packages/server/src/request-ingress-c13.test.ts',
+        snippets: [
+          'preserves the complete closed method-identity verdict before Fetch construction',
+          "'PoSt'",
+          "'CONNECT'",
+          'preserves explicit HTTP/1 and HTTP/2 source postures with exact authority evidence',
+          "'%65xample.com'",
+          "'example.com:443'",
+          'selects only the explicitly trusted exact transport scheme before reconstruction',
+          "'https, ftp'",
+          "'HTTPS'",
+          'admits only canonical origin or matching absolute targets and closes aliases',
+          "'authority.example:443'",
+          "'javascript:alert(1)'",
+          "'mailto:security@example.test'",
+          "target === '*' ? 'OPTIONS' : 'GET'",
+        ],
+      },
+      {
+        id: 'finite-classifier-source-selection',
+        file: 'packages/server/src/request-ingress-policy.test.ts',
+        snippets: [
+          'finite request-ingress classifier',
+          'admits exactly canonical standard methods plus byte-stable extension tokens',
+          'binds HTTP/1 to exactly one raw Host and never borrows HTTP/2 evidence',
+          'binds HTTP/2 to exact pseudo authority/scheme and rejects incompatible fields',
+          'classifies request-target form before URL or route dispatch',
+          'requires Vercel edge-owned scheme and canonical client provenance',
+          'applies the same finite target ceiling to a platform-owned Fetch bridge',
+        ],
+      },
+      {
+        id: 'real-http2-method-authority-closure',
+        file: 'packages/server/src/__bugz_remote_ingress.test.ts',
+        snippets: [
+          'rejects HTTP/2 method identities that Fetch would canonicalize before dispatch',
+          "request('PoSt')",
+          'rejects HTTP/2 authorities that URL would normalize before app policy',
+          "request('%65xample.com')",
+        ],
+      },
+      {
+        id: 'generated-node-vercel-worker-parity',
+        file: 'packages/server/src/build.test.ts',
+        snippets: [
+          'const requestIngressClassifier = (',
+          'nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority)',
+          'const prepared = prepareNodeRequestIngress(nodeRequest, options)',
+          'preparedNodeRequestToWebRequest(prepared, nodeResponse)',
+          'invalidStaticScheme',
+          "'X-Forwarded-Proto: https, ftp\\r\\n'",
+          'requestIngressClassifier.classify({',
+          'const prepared = prepareVercelRequestIngress(nodeRequest)',
+          "middlewarePath: 'kovo-ingress'",
+          "'x-middleware-next': '1'",
+          'INVALID_SCHEME_ASSET_MUST_NOT_RUN',
+          'EXTENSION_METHOD_ASSET_MUST_NOT_RUN',
         ],
       },
     ],

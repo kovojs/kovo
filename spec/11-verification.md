@@ -80,9 +80,19 @@ Because instrumentation under-approximates (executed branches only), passing dev
 **C9 sink-proof inventory (normative).** The verification surface MUST keep a single reviewed
 inventory for the required boundary-crossing sinks named in §10.3 C9. Each row names: the sink, its
 mechanism (`reconstruct`, `box`, or framework-`own`), the sole door, at least one lint/check/build
-proof, and at least one hostile-value test file or command. The inventory is a proof index, not a
-runtime policy source: if a sink exists without an inventory row, or a row has no hostile-value
-evidence, the verification surface is incomplete even if the implementation happens to be sound.
+proof, at least one hostile-value test file or command, and the stable owner responsible for a gap.
+The machine gate MUST compare its covered-family union with the complete source/sink census and
+fail on a missing or unknown family, duplicate sink row, missing owner, absent root proof command,
+or stale evidence path. The inventory is a proof index, not a runtime policy source: if a sink
+exists without an inventory row, or a row has no hostile-value evidence, the verification surface
+is incomplete even if the implementation happens to be sound.
+It MUST also compare the exact runtime `securityOperationKinds` union with every row's
+`operationKinds`, requiring one and only one C9 owner per finite compiler operation and rejecting
+missing, unknown, or duplicate kinds. Terminal-effect rows name their real sink owner; the
+`server.handler.root` and `server.helper.call` control rows name capability closure and remain
+explicitly non-semantic until the latter receives a Phase 2C call summary. Component graph facts and `kovo explain component` render the
+compiler-derived operation rows in stable order so a review can connect authored handlers to those
+owners without reading generated files.
 For engine-door claims the inventory row points at the engine-closure audit; for wire/file/task/log
 surfaces it points at the single framework-owned choke or box, never at a proxy-only wrapper.
 
@@ -91,8 +101,8 @@ surfaces it points at the single framework-owned choke or box, never at a proxy-
 For a Kovo app, the following are checkable **without executing a browser**:
 
 1. TypeScript static checking — all wiring (handlers, routes & links, forms, targets, bindings, IDREFs, transforms, guards).
-2. `kovo check` — touch-graph consistency, optimistic exhaustiveness (KV310), update coverage (KV311), fixpoint + render-equivalence invariants, unguarded and unscoped audits.
-3. Graph queries over `kovo explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs.
+2. `kovo check` — touch-graph consistency, optimistic exhaustiveness (KV310), update coverage (KV311), fixpoint + render-equivalence invariants, capability closure (KV448), unguarded and unscoped audits.
+3. Graph queries over `kovo explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs, including each component's finite operation rows and the `--capabilities` root/door/package/closed provenance ledger from §6.6.
 4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms and derivation soundness (commuting diagrams).
 5. HTTP-level integration tests — mutations as request/response assertions against pglite (real Postgres semantics, in-memory, no container).
 

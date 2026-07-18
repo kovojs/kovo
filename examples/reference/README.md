@@ -10,8 +10,8 @@ sessions, CSRF, guards, and the scope-audit graph — is easy to read in full.
   exercise login/logout without database bootstrap. It is deliberately nonproduction; deployable
   apps use `@kovojs/better-auth`'s fixed SQLite/Postgres binding constructors described in the
   Better Auth guide.
-- **CSRF protection**: `csrfField` / `csrfToken` with a per-session
-  `CsrfOptions`, threaded through the login and logout forms.
+- **CSRF protection**: typed `mutation={definition}` forms emit the mutation-bound CSRF and
+  canonical `Kovo-Idem` fields together from a per-session `CsrfOptions` declaration.
 - **Route guards**: `guards.authed<...>()` on `/account` and `guards.role<...>('admin')` on
   `/admin`, so authorization is checked at the route boundary.
 - **Reference shell tests** exercise the same auth and scope behavior through

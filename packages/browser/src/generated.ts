@@ -4,7 +4,7 @@ export type {
   AppliedDeferredStreamResponseWithRoot,
   ApplyDeferredStreamResponseToRuntimeOptions,
 } from './apply-deferred-stream.js';
-export { handler } from './handlers.js';
+export { handler, securityHandler } from './handlers.js';
 export type { ClientHandler, ImportHandlerModule } from './handlers.js';
 export { installClockUpdatePlans } from './clock-tick-bus.js';
 export type { ClockUpdateContext, ClockUpdatePlan, ClockUpdateSpec } from './clock-tick-bus.js';

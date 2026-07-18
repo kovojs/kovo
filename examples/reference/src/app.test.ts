@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { runMutation } from '@kovojs/server/internal/execution';
 import { renderRoutePageResponse } from '@kovojs/server/internal/route';
 
@@ -9,7 +10,6 @@ import {
   referenceAuth,
   referenceAuthCsrf,
   referenceAuthRequest,
-  referenceAuthToken,
   referenceSessionProvider,
   referenceSignIn,
   renderReferenceLoginForm,
@@ -17,6 +17,10 @@ import {
   type ReferenceAuthBindings,
   type ReferenceRequest,
 } from './app.js';
+
+function referenceAuthToken(request: ReferenceRequest, definition: { key: string }): string {
+  return csrfToken(request, referenceAuthCsrf, { mutation: definition });
+}
 
 function headerValues(headers: Record<string, string | string[]>, name: string): string[] {
   const values = headers[name];
@@ -49,7 +53,7 @@ async function submitReferenceSignInNoJs(
     }
 
     return {
-      body: renderReferenceLoginForm(request, formOptions),
+      body: String(renderReferenceLoginForm(request, formOptions)),
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: result.status,
     };
@@ -132,17 +136,22 @@ describe('reference auth adoption', () => {
   it('ships no-JS login and logout forms backed by Kovo credential mutations', () => {
     const request = referenceAuthRequest();
 
-    expect(renderReferenceLoginForm(request, { next: '/admin' })).toContain(
+    expect(String(renderReferenceLoginForm(request, { next: '/admin' }))).toContain(
       'data-mutation="auth/sign-in"',
     );
+    expect(String(renderReferenceLoginForm(request, { next: '/admin' }))).toContain(
+      'name="Kovo-Idem"',
+    );
     expect(
-      renderReferenceLogoutForm({
-        ...request,
-        session: {
-          id: 'session-u1',
-          user: { email: 'ada@example.com', id: 'u1', name: 'Ada Lovelace', roles: ['admin'] },
-        },
-      }),
+      String(
+        renderReferenceLogoutForm({
+          ...request,
+          session: {
+            id: 'session-u1',
+            user: { email: 'ada@example.com', id: 'u1', name: 'Ada Lovelace', roles: ['admin'] },
+          },
+        }),
+      ),
     ).toContain('data-mutation="auth/sign-out"');
   });
 

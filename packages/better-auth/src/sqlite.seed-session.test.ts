@@ -1,4 +1,4 @@
-import { csrfToken } from '@kovojs/server';
+import { csrfToken } from '@kovojs/server/internal/csrf';
 import { runEndpoint } from '@kovojs/server/internal/execution';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 import { createSqliteAppRuntime, type KovoSqliteAppRuntime } from '@kovojs/server/sqlite';

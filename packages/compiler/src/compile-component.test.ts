@@ -210,7 +210,7 @@ export const Evil = component({
     ]);
     expect(client?.source).toContain('export const CartBadge$button_click');
     expect(client?.source).toContain('return removeItem(ctx.state, ctx.params.id);');
-    expect(client?.source).toContain('import { handler, runQueryUpdatePlan }');
+    expect(client?.source).toContain('import { runQueryUpdatePlan, securityHandler }');
     expect(client?.source).toContain('export const CartBadge$queryUpdatePlans');
     expectHandlerRef(
       server?.source ?? '',

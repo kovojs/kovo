@@ -1,0 +1,347 @@
+{
+  "schema": "kovo.authorization-matrix/v1",
+  "seed": "kovo-authz-matrix:2026-07-18:v1",
+  "replay": {
+    "command": "KOVO_AUTHZ_MATRIX_SEED=kovo-authz-matrix:2026-07-18:v1 pnpm run test:authz-paranoid",
+    "failureDirectory": ".kovo/security-failures/authorization-matrix"
+  },
+  "dimensions": {
+    "principal": [
+      "anonymous",
+      "session-owner",
+      "act-as-owner",
+      "act-as-other",
+      "ambient-reader",
+      "runtime-login"
+    ],
+    "ownership": ["own", "other", "owner-via", "reference", "unclassified", "not-applicable"],
+    "operation": ["read", "insert", "schedule", "invoke", "boot"],
+    "queryFamily": [
+      "builder",
+      "relational",
+      "raw-sql",
+      "subquery-in-from",
+      "union",
+      "cte",
+      "alias",
+      "join",
+      "view",
+      "function",
+      "none"
+    ],
+    "surface": ["readonlyAppDb", "endpoint", "mutation", "durable-task", "webhook", "closure-audit"]
+  },
+  "cases": [
+    {
+      "id": "endpoint-builder-act-as-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["builder"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "endpoint-relational-act-as-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["relational"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "endpoint-raw-sql-act-as-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["raw-sql"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "endpoint-subquery-act-as-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["subquery-in-from"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "endpoint-union-act-as-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["union"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "endpoint-cte-act-as-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["cte"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "endpoint-alias-act-as-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["alias"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "endpoint-join-act-as-owner-via",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other", "owner-via"],
+      "operation": "read",
+      "queryFamily": ["join"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "endpoint-view-fail-closed",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["view"],
+      "surface": "endpoint",
+      "expected": "deny"
+    },
+    {
+      "id": "endpoint-function-fail-closed",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["function"],
+      "surface": "endpoint",
+      "expected": "deny"
+    },
+    {
+      "id": "readonly-anonymous-empty",
+      "principal": ["anonymous"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["builder"],
+      "surface": "readonlyAppDb",
+      "expected": "deny"
+    },
+    {
+      "id": "readonly-no-principal-empty",
+      "principal": ["ambient-reader"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["builder"],
+      "surface": "readonlyAppDb",
+      "expected": "deny"
+    },
+    {
+      "id": "readonly-secret-denied",
+      "principal": ["ambient-reader"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["builder", "raw-sql"],
+      "surface": "readonlyAppDb",
+      "expected": "deny"
+    },
+    {
+      "id": "endpoint-act-as-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "read",
+      "queryFamily": ["builder", "relational", "raw-sql", "subquery-in-from", "union"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "endpoint-act-as-other",
+      "principal": ["act-as-other"],
+      "ownership": ["own", "other", "unclassified"],
+      "operation": "read",
+      "queryFamily": ["builder", "raw-sql"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "reference-membership-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other", "reference"],
+      "operation": "read",
+      "queryFamily": ["builder"],
+      "surface": "endpoint",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "mutation-builder-own",
+      "principal": ["session-owner"],
+      "ownership": ["own"],
+      "operation": "insert",
+      "queryFamily": ["builder"],
+      "surface": "mutation",
+      "expected": "allow"
+    },
+    {
+      "id": "mutation-builder-cross-owner",
+      "principal": ["session-owner"],
+      "ownership": ["other"],
+      "operation": "insert",
+      "queryFamily": ["builder"],
+      "surface": "mutation",
+      "expected": "deny"
+    },
+    {
+      "id": "mutation-raw-cross-owner",
+      "principal": ["session-owner"],
+      "ownership": ["other"],
+      "operation": "insert",
+      "queryFamily": ["raw-sql"],
+      "surface": "mutation",
+      "expected": "deny"
+    },
+    {
+      "id": "durable-task-act-as-owner",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "schedule",
+      "queryFamily": ["builder"],
+      "surface": "durable-task",
+      "expected": "allow-own-only"
+    },
+    {
+      "id": "webhook-act-as-owner-replay",
+      "principal": ["act-as-owner"],
+      "ownership": ["own", "other"],
+      "operation": "invoke",
+      "queryFamily": ["builder"],
+      "surface": "webhook",
+      "expected": "idempotent"
+    },
+    {
+      "id": "runtime-role-attributes",
+      "principal": ["runtime-login"],
+      "ownership": ["not-applicable"],
+      "operation": "boot",
+      "queryFamily": ["none"],
+      "surface": "closure-audit",
+      "expected": "least-privilege"
+    },
+    {
+      "id": "runtime-provision-role-assumption-denied",
+      "principal": ["runtime-login"],
+      "ownership": ["not-applicable"],
+      "operation": "boot",
+      "queryFamily": ["none"],
+      "surface": "closure-audit",
+      "expected": "deny"
+    },
+    {
+      "id": "closure-safe-boot",
+      "principal": ["runtime-login"],
+      "ownership": ["own", "owner-via", "reference"],
+      "operation": "boot",
+      "queryFamily": ["builder", "view"],
+      "surface": "closure-audit",
+      "expected": "allow"
+    },
+    {
+      "id": "closure-matview-refusal",
+      "principal": ["runtime-login"],
+      "ownership": ["unclassified"],
+      "operation": "boot",
+      "queryFamily": ["view"],
+      "surface": "closure-audit",
+      "expected": "boot-refuse"
+    },
+    {
+      "id": "closure-public-table-refusal",
+      "principal": ["runtime-login"],
+      "ownership": ["unclassified"],
+      "operation": "boot",
+      "queryFamily": ["builder"],
+      "surface": "closure-audit",
+      "expected": "boot-refuse"
+    },
+    {
+      "id": "closure-definer-view-refusal",
+      "principal": ["runtime-login"],
+      "ownership": ["other", "unclassified"],
+      "operation": "boot",
+      "queryFamily": ["view"],
+      "surface": "closure-audit",
+      "expected": "boot-refuse"
+    },
+    {
+      "id": "closure-cross-schema-definer-function-refusal",
+      "principal": ["runtime-login"],
+      "ownership": ["other", "unclassified"],
+      "operation": "boot",
+      "queryFamily": ["function"],
+      "surface": "closure-audit",
+      "expected": "boot-refuse"
+    }
+  ],
+  "canaries": [
+    {
+      "id": "owner-read-filter",
+      "mutation": "authorization-matrix/allow-cross-owner-builder-read",
+      "caseId": "endpoint-builder-act-as-owner"
+    },
+    {
+      "id": "raw-write-rls",
+      "mutation": "authorization-matrix/allow-cross-owner-raw-write",
+      "caseId": "mutation-raw-cross-owner"
+    },
+    {
+      "id": "least-privilege-role",
+      "mutation": "authorization-matrix/allow-provision-role-assumption",
+      "caseId": "runtime-provision-role-assumption-denied"
+    },
+    {
+      "id": "closure-definer-function",
+      "mutation": "authorization-matrix/allow-cross-schema-definer-function",
+      "caseId": "closure-cross-schema-definer-function-refusal"
+    },
+    {
+      "id": "durable-task-principal",
+      "mutation": "authorization-matrix/deny-durable-task-owner-read",
+      "caseId": "durable-task-act-as-owner"
+    }
+  ],
+  "regressionSeeds": [
+    {
+      "id": "owner-read-filter",
+      "seed": "kovo-authz-matrix:2026-07-18:v1",
+      "caseId": "endpoint-builder-act-as-owner",
+      "minimizedRepro": "endpoint actAs demo-user reads phase5_pg_orders; only demo-user row may be returned"
+    },
+    {
+      "id": "raw-write-rls",
+      "seed": "kovo-authz-matrix:2026-07-18:v1",
+      "caseId": "mutation-raw-cross-owner",
+      "minimizedRepro": "session demo-user executes one parameterized raw INSERT owned by other-user; engine must deny"
+    },
+    {
+      "id": "least-privilege-role",
+      "seed": "kovo-authz-matrix:2026-07-18:v1",
+      "caseId": "runtime-provision-role-assumption-denied",
+      "minimizedRepro": "runtime login executes SET ROLE to the provision role; PostgreSQL must reject"
+    },
+    {
+      "id": "closure-definer-function",
+      "seed": "kovo-authz-matrix:2026-07-18:v1",
+      "caseId": "closure-cross-schema-definer-function-refusal",
+      "minimizedRepro": "reader-executable SECURITY DEFINER function in a non-app schema makes kovo db check refuse"
+    },
+    {
+      "id": "durable-task-principal",
+      "seed": "kovo-authz-matrix:2026-07-18:v1",
+      "caseId": "durable-task-act-as-owner",
+      "minimizedRepro": "task actAs demo-user executes the owner query and records exactly one public event"
+    }
+  ]
+}

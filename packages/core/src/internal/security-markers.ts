@@ -502,6 +502,15 @@ export const SECURITY_CODE_REGISTRY = {
     property: 'Client query wire shapes use intentional projections instead of whole DB rows.',
     propertyDependsOn: 'build-artifact',
   },
+  KV449: {
+    buildOnlyRationale:
+      'The finite operation verdict is derived from compiler-owned handler/server effect facts before generated modules execute; runtime sinks remain independent floors.',
+    code: 'KV449',
+    enforcement: 'build-only',
+    property:
+      'Security-critical browser and structured server effects lower only through the finite compiler-owned IR or a named justified exceptional door.',
+    propertyDependsOn: 'build-artifact',
+  },
 } as const satisfies Readonly<Record<string, SecurityCodeRegistryEntry>>;
 
 const securityCodeRegistryKeys = securityObjectKeys(SECURITY_CODE_REGISTRY);

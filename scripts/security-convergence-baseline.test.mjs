@@ -27,9 +27,9 @@ describe('security convergence baseline', () => {
       measurements: { c13: '17 corpora / 143 anchors', p: 5956 },
     });
     expect(baseline.currentSnapshot).toMatchObject({
-      measuredCodeSha: 'ffd7c978696709ad8abd5fa613f2eb311c7eb4e9',
+      measuredCodeSha: 'dbbfe94d436f2ad772670d2df56e18ee747e8329',
       snapshot: {
-        c13: { anchorCount: 145, corpusCount: 17 },
+        c13: { anchorCount: 156, corpusCount: 19 },
         p: { total: 5971 },
       },
     });

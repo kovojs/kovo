@@ -7,8 +7,10 @@ coverage/
 .release/
 .kovo/cache/
 .kovo/sources-sinks.json
+.kovo/security-failures/
 **/.kovo/cache/
 **/.kovo/sources-sinks.json
+**/.kovo/security-failures/
 *.tsbuildinfo
 test-results/
 .playwright/

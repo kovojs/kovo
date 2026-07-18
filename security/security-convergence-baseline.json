@@ -20,8 +20,8 @@
     }
   ],
   "currentSnapshot": {
-    "measuredCodeSha": "ffd7c978696709ad8abd5fa613f2eb311c7eb4e9",
-    "reason": "Post-main-restoration structural refresh; the immutable comparable audit remains the e5 historical row.",
+    "measuredCodeSha": "dbbfe94d436f2ad772670d2df56e18ee747e8329",
+    "reason": "Post-authorization-matrix, restored-main, request-ingress-corpus, and CSRF-matrix structural refresh; the immutable comparable audit remains the e5 historical row.",
     "snapshot": {
       "schema": "kovo-security-convergence-baseline/v1",
       "charter": {
@@ -30,8 +30,14 @@
         "version": 1
       },
       "m": {
-        "mutantCount": 37,
+        "mutantCount": 43,
         "mutantNames": [
+          "authorization-matrix/allow-cross-owner-builder-read",
+          "authorization-matrix/allow-cross-owner-raw-write",
+          "authorization-matrix/allow-cross-schema-definer-function",
+          "authorization-matrix/allow-provision-role-assumption",
+          "authorization-matrix/deny-durable-task-owner-read",
+          "better-auth-credential-gate/drop-result-consumer-identity",
           "check-sink-policy-gate/drop-managed-db-throw-invariant",
           "check-sink-policy-gate/drop-response-fragment-trustedhtml-route-count",
           "check-sink-policy-gate/drop-sql-guard-env-detector",
@@ -140,9 +146,9 @@
         "unexpectedClosedVerdicts": 0
       },
       "c13": {
-        "anchorCount": 145,
-        "corpusCount": 17,
-        "testFileCount": 57
+        "anchorCount": 156,
+        "corpusCount": 19,
+        "testFileCount": 62
       },
       "informational": {
         "egressLoc": 2299,

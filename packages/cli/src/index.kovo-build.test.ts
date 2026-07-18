@@ -24,7 +24,8 @@ import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createApp, csrfToken, route } from '@kovojs/server';
+import { createApp, route } from '@kovojs/server';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
@@ -713,6 +714,51 @@ export default createApp({
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
       expect(errorOutput).toContain('ERROR KV436 PAGE /missing-access');
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails KV448 with root provenance before evaluating raw authority reachable from a route', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-capability-closure-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(
+        appPath,
+        `
+import { createApp, publicAccess, route } from '@kovojs/server';
+import { readFile } from 'node:fs/promises';
+
+export const page = route('/closed-files', {
+  access: publicAccess('capability closure fixture'),
+  page: () => String(readFile),
+});
+
+throw new Error('capability closure fixture must not be evaluated');
+export default createApp({ routes: [page] });
+`,
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toContain('ERROR KV448');
+      expect(errorOutput).toContain('root=route:/closed-files');
+      expect(errorOutput).toContain('raw filesystem authority (raw module node:fs/promises)');
+      expect(errorOutput).toContain('root:route:/closed-files@app.mjs');
+      expect(errorOutput).not.toContain('capability closure fixture must not be evaluated');
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();

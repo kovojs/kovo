@@ -736,6 +736,8 @@ export function componentGraphFact(
   mutationForms: readonly CoreGraph.MutationFormExplain[] = [],
   component: ComponentModel | null = firstComponentModel(model),
   sourceFileName?: string,
+  securityOperations: NonNullable<CoreGraph.ComponentExplain['securityOperations']> = [],
+  securitySemanticGraph?: CoreGraph.ComponentExplain['securitySemanticGraph'],
 ): ComponentGraphFact {
   const queries = component
     ? componentQueryNames(component, model, sourceFileName)
@@ -769,6 +771,8 @@ export function componentGraphFact(
         : {}),
     name: componentName,
     ...(queries.length === 0 ? {} : { queries }),
+    ...(securitySemanticGraph === undefined ? {} : { securitySemanticGraph }),
+    ...(securityOperations.length === 0 ? {} : { securityOperations }),
     ...(styleRules.length === 0 ? {} : { styleRules }),
   };
 }

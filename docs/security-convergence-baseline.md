@@ -42,10 +42,11 @@ LOC does not contribute to P.
 ## Current structural snapshot
 
 The immutable comparable row above remains measured at `e5f613be9` with R=1 and 143 C13 anchors.
-After M35's regression anchor and bounded-diamond performance repair landed, the deterministic
-structural snapshot was refreshed from parent `497f6eee65919910d7c832660224e4aa29c74571`: M
-remains 37 catalogued mutants, P is 5,958, G remains 18 fixture rows, and C13 is 17 corpora / 144
-anchors. This refresh is not a new audit round and does not manufacture a new R value.
+After M35's regression anchor, the bounded-diamond performance repair, and the Phase 1
+authorization-matrix forcing gate landed, the deterministic structural snapshot was refreshed from
+`969e6fc22492c80e4f99f2528837455fc7e8317c`: M is now 42 catalogued mutants, including five
+authorization-matrix canaries; P is 5,958, G remains 18 fixture rows, and C13 remains 17 corpora /
+144 anchors. This refresh is not a new audit round and does not manufacture a new R value.
 
 Run `pnpm run check:security-convergence-baseline` to detect deterministic catalog/count drift.
 Run it with `-- --live` to rerun all exported mutants and remeasure the green corpus. Timing and RSS

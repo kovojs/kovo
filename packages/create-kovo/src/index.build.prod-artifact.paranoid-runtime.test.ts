@@ -38,7 +38,28 @@ import {
 import {
   assertParanoidPostgresCasesExecuted,
   requireParanoidPostgresToolchain,
+  runParanoidAuthorizationMatrix,
+  type ParanoidAuthorizationMatrixCase,
 } from './index.build.prod-artifact.paranoid-runtime-gate.js';
+
+interface AuthorizationMatrixManifest {
+  readonly cases: readonly ParanoidAuthorizationMatrixCase[];
+  readonly replay: { readonly command: string; readonly failureDirectory: string };
+  readonly schema: string;
+  readonly seed: string;
+}
+
+const authorizationMatrix = JSON.parse(
+  readFileSync(new URL('../../../security/authorization-matrix.json', import.meta.url), 'utf8'),
+) as AuthorizationMatrixManifest;
+if (authorizationMatrix.schema !== 'kovo.authorization-matrix/v1') {
+  throw new Error('Unsupported authorization matrix schema.');
+}
+const authorizationMatrixSeed = process.env.KOVO_AUTHZ_MATRIX_SEED ?? authorizationMatrix.seed;
+const authorizationMatrixCases = new Map(
+  authorizationMatrix.cases.map((testCase) => [testCase.id, testCase]),
+);
+const executedAuthorizationMatrixCases = new Set<string>();
 
 const blockedReadCases = [
   'queries/sqlite-secret-alias-query',
@@ -189,15 +210,65 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         });
         const output = collectOutput(server);
         const origin = `http://127.0.0.1:${port}`;
-        const marker = `phase5-pg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const marker = `phase1-authz-${authorizationMatrixSeed.replace(/[^a-z0-9]+/giu, '-').slice(0, 48)}`;
 
         await signInDemoUser(root, origin, jar, output, publicOrigin);
-        await expectPostgresEndpoint(origin, output);
-        await expectPostgresUnknownRelationBoundary(origin, output);
-        await expectPostgresReferenceMemberships(origin);
-        await expectPostgresReadonlyStatus(origin);
-        await expectPostgresWriteBoundary(origin, jar, publicOrigin);
-        await expectPostgresTaskAndWebhook(origin, jar, marker, output, publicOrigin);
+        await runAuthorizationMatrixCells({
+          'endpoint-act-as-other': async () =>
+            expectPostgresWriteBoundaryStatus(origin, {
+              crossOwnerDenied: true,
+              ownWriteVisible: false,
+              rawCrossOwnerDenied: true,
+              verificationDenied: true,
+            }),
+          'endpoint-act-as-owner': async () => expectPostgresEndpoint(origin, output),
+          'endpoint-alias-act-as-owner': async () =>
+            expectPostgresEndpointFamily(origin, output, 'alias', 'owner-visible'),
+          'endpoint-builder-act-as-owner': async () =>
+            expectPostgresEndpointFamily(origin, output, 'builder', 'owner-visible'),
+          'endpoint-cte-act-as-owner': async () =>
+            expectPostgresEndpointFamily(origin, output, 'cte', 'owner-visible'),
+          'endpoint-function-fail-closed': async () =>
+            expectPostgresFunctionBoundary(origin, output),
+          'endpoint-join-act-as-owner-via': async () =>
+            expectPostgresEndpointFamily(origin, output, 'join', 'owner-item'),
+          'endpoint-raw-sql-act-as-owner': async () =>
+            expectPostgresEndpointFamily(origin, output, 'raw-sql', 'owner-visible'),
+          'endpoint-relational-act-as-owner': async () =>
+            expectPostgresEndpointFamily(origin, output, 'relational', 'owner-visible'),
+          'endpoint-subquery-act-as-owner': async () =>
+            expectPostgresEndpointFamily(origin, output, 'subquery-in-from', 'owner-visible'),
+          'endpoint-union-act-as-owner': async () =>
+            expectPostgresEndpointFamily(origin, output, 'union', 'owner-visible'),
+          'endpoint-view-fail-closed': async () =>
+            expectPostgresUnknownRelationBoundary(origin, output),
+          'readonly-anonymous-empty': async () => expectPostgresReadonlyRowsEmpty(origin),
+          'readonly-no-principal-empty': async () => expectPostgresReadonlyRowsEmpty(origin),
+          'readonly-secret-denied': async () => expectPostgresReadonlySecretsDenied(origin),
+          'reference-membership-owner': async () => expectPostgresReferenceMemberships(origin),
+          'runtime-provision-role-assumption-denied': async () =>
+            expectProvisionRoleAssumptionDenied(runtimeUrl, adminRole),
+          'runtime-role-attributes': async () =>
+            expectRuntimeRoleAttributes(runtimeUrl, runtimeRole, adminRole),
+        });
+        await runAuthorizationMatrixCells({
+          'durable-task-act-as-owner': async () =>
+            expectPostgresTask(origin, jar, marker, output, publicOrigin),
+        });
+        await runAuthorizationMatrixCells({
+          'webhook-act-as-owner-replay': async () => expectPostgresWebhook(origin, marker, output),
+        });
+        await runAuthorizationMatrixCells({
+          'mutation-builder-own': async () => expectPostgresOwnWrite(origin, jar, publicOrigin),
+        });
+        await runAuthorizationMatrixCells({
+          'mutation-builder-cross-owner': async () =>
+            expectPostgresCrossOwnerWrite(origin, jar, output, publicOrigin),
+        });
+        await runAuthorizationMatrixCells({
+          'mutation-raw-cross-owner': async () =>
+            expectPostgresRawCrossOwnerWrite(origin, jar, output, publicOrigin),
+        });
 
         expect(output()).not.toContain('Kovo SQLite starter is experimental');
         expect(output()).not.toContain('phase5-pg-secret');
@@ -394,7 +465,11 @@ describeIfPostgres(
         });
         const output = collectOutput(server);
         const loginHtml = await fetchTextWhenReady(`http://127.0.0.1:${port}/login`, output);
-        expect(loginHtml).toContain('Sign in');
+        await runAuthorizationMatrixCells({
+          'closure-safe-boot': async () => {
+            expect(loginHtml).toContain('Sign in');
+          },
+        });
       } finally {
         await stopProcess(server);
       }
@@ -452,8 +527,20 @@ describeIfPostgres(
         '--database-url',
         runtimeUrl,
       ]);
-      expect(failure).toMatch(/kovo_paranoid_user_mv/u);
-      expect(failure).toMatch(/kovo_public_leak/u);
+      await runAuthorizationMatrixCells({
+        'closure-cross-schema-definer-function-refusal': async () => {
+          expect(failure).toMatch(/kovo_paranoid_extra\.kovo_paranoid_definer_function/u);
+        },
+        'closure-definer-view-refusal': async () => {
+          expect(failure).toMatch(/kovo_paranoid_definer_view/u);
+        },
+        'closure-matview-refusal': async () => {
+          expect(failure).toMatch(/kovo_paranoid_user_mv/u);
+        },
+        'closure-public-table-refusal': async () => {
+          expect(failure).toMatch(/kovo_public_leak/u);
+        },
+      });
       if (createdForeignLeak) expect(failure).toMatch(/kovo_foreign_leak/u);
       executedPostgresCases.add('paranoid-external-leak-refusal');
     }, 240_000);
@@ -466,32 +553,66 @@ afterAll(() => {
     executedPostgresCases,
     requirePostgresAcceptance,
   );
+  assertParanoidPostgresCasesExecuted(
+    authorizationMatrix.cases.map((testCase) => testCase.id),
+    executedAuthorizationMatrixCases,
+    requirePostgresAcceptance,
+  );
 });
 
-async function expectPostgresEndpoint(origin: string, output: () => string): Promise<void> {
-  const response = await fetch(`${origin}/api/phase5-pg-endpoint`);
+async function runAuthorizationMatrixCells(
+  executors: Readonly<Record<string, () => Promise<void>>>,
+): Promise<void> {
+  const cases = Object.keys(executors).map((caseId) => {
+    const testCase = authorizationMatrixCases.get(caseId);
+    if (!testCase) throw new Error(`Unknown authorization matrix cell: ${caseId}`);
+    return testCase;
+  });
+  await runParanoidAuthorizationMatrix({
+    cases,
+    executors,
+    failureDirectory: join(process.cwd(), authorizationMatrix.replay.failureDirectory),
+    onExecuted: (caseId) => executedAuthorizationMatrixCases.add(caseId),
+    replayCommand: authorizationMatrix.replay.command,
+    seed: authorizationMatrixSeed,
+  });
+}
+
+interface PostgresEndpointResult {
+  rows: { id: string; label: string }[];
+}
+
+async function fetchPostgresEndpoint(
+  origin: string,
+  output: () => string,
+  family?: string,
+): Promise<{ body: string; result: PostgresEndpointResult }> {
+  const query = family === undefined ? '' : `?family=${encodeURIComponent(family)}`;
+  const response = await fetch(`${origin}/api/phase5-pg-endpoint${query}`);
   const body = await response.text();
   expect(response.status, `${body}\n${output()}`).toBe(200);
-  const result = JSON.parse(body) as {
-    aliasRows: { id: string; label: string }[];
-    childRows: { id: string; label: string }[];
-    dbQueryRows: { id: string; label: string }[];
-    rawRows: { id: string; label: string }[];
-    rows: { id: string; label: string }[];
-    subqueryRows: { id: string; label: string }[];
-    unionRows: { id: string; label: string }[];
-  };
+  return { body, result: JSON.parse(body) as PostgresEndpointResult };
+}
 
+async function expectPostgresEndpoint(origin: string, output: () => string): Promise<void> {
+  const { body, result } = await fetchPostgresEndpoint(origin, output);
   expect(result.rows).toEqual([{ id: 'phase5-pg-demo', label: 'owner-visible' }]);
-  expect(result.aliasRows).toEqual(result.rows);
-  expect(result.dbQueryRows).toEqual(result.rows);
-  expect(result.rawRows).toEqual(result.rows);
-  expect(result.subqueryRows).toEqual(result.rows);
-  expect(result.unionRows).toEqual(result.rows);
-  expect(result.childRows).toEqual([{ id: 'phase5-pg-item-demo', label: 'owner-item' }]);
   expect(body).not.toContain('cross-owner-hidden');
   expect(body).not.toContain('other-item');
   expect(body).not.toContain('phase5-pg-secret');
+}
+
+async function expectPostgresEndpointFamily(
+  origin: string,
+  output: () => string,
+  family: string,
+  allowedWitness: string,
+): Promise<void> {
+  const { result } = await fetchPostgresEndpoint(origin, output, family);
+  const rows = result.rows;
+  expect(rows).toContainEqual(expect.objectContaining({ label: allowedWitness }));
+  expect(rows).not.toContainEqual(expect.objectContaining({ label: 'cross-owner-hidden' }));
+  expect(rows).not.toContainEqual(expect.objectContaining({ label: 'other-item' }));
 }
 
 async function expectPostgresUnknownRelationBoundary(
@@ -499,6 +620,15 @@ async function expectPostgresUnknownRelationBoundary(
   output: () => string,
 ): Promise<void> {
   const response = await fetch(`${origin}/api/phase5-pg-unknown-relation`);
+  const body = await response.text();
+  expect(response.status, `${body}\n${output()}`).toBe(500);
+  expect(body).not.toContain('owner-visible');
+  expect(body).not.toContain('cross-owner-hidden');
+  expect(body).not.toContain('phase5-pg-secret');
+}
+
+async function expectPostgresFunctionBoundary(origin: string, output: () => string): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-pg-function-boundary`);
   const body = await response.text();
   expect(response.status, `${body}\n${output()}`).toBe(500);
   expect(body).not.toContain('owner-visible');
@@ -524,37 +654,112 @@ async function expectPostgresReferenceMemberships(origin: string): Promise<void>
   ]);
 }
 
-async function expectPostgresReadonlyStatus(origin: string): Promise<void> {
+async function expectRuntimeRoleAttributes(
+  databaseUrl: string,
+  runtimeRole: string,
+  provisionRole: string,
+): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    const result = await pool.query<{
+      can_assume_provision: boolean;
+      current_user: string;
+      rolbypassrls: boolean;
+      rolcreaterole: boolean;
+      rolsuper: boolean;
+    }>(
+      [
+        'SELECT current_user, role.rolsuper, role.rolbypassrls, role.rolcreaterole,',
+        "pg_has_role(current_user, $1, 'MEMBER') AS can_assume_provision",
+        'FROM pg_roles AS role WHERE role.rolname = current_user',
+      ].join(' '),
+      [provisionRole],
+    );
+    expect(result.rows).toEqual([
+      {
+        can_assume_provision: false,
+        current_user: runtimeRole,
+        rolbypassrls: false,
+        rolcreaterole: false,
+        rolsuper: false,
+      },
+    ]);
+  });
+}
+
+async function expectProvisionRoleAssumptionDenied(
+  databaseUrl: string,
+  provisionRole: string,
+): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    let denied = false;
+    try {
+      await pool.query(`SET ROLE ${quoteIdent(provisionRole)}`);
+    } catch {
+      denied = true;
+    } finally {
+      await pool.query('RESET ROLE');
+    }
+    expect(denied).toBe(true);
+  });
+}
+
+interface PostgresParanoidStatus {
+  builderSecretReadBlocked: boolean;
+  events: { id: string; label: string }[];
+  readonlyRows: { id: string; label: string }[];
+  secretReadBlocked: boolean;
+  verificationDenied: boolean;
+}
+
+async function postgresParanoidStatus(origin: string): Promise<PostgresParanoidStatus> {
   const response = await fetch(`${origin}/api/phase5-pg-status`);
   const body = await response.text();
   expect(response.status, body).toBe(200);
-  const status = JSON.parse(body) as {
-    builderSecretReadBlocked: boolean;
-    events: { id: string; label: string }[];
-    readonlyRows: { id: string; label: string }[];
-    secretReadBlocked: boolean;
-    verificationDenied: boolean;
-  };
+  return JSON.parse(body) as PostgresParanoidStatus;
+}
 
+async function expectPostgresReadonlyRowsEmpty(origin: string): Promise<void> {
+  const status = await postgresParanoidStatus(origin);
   expect(status.readonlyRows).toEqual([]);
-  expect(status.events).toEqual([]);
+}
+
+async function expectPostgresReadonlySecretsDenied(origin: string): Promise<void> {
+  const status = await postgresParanoidStatus(origin);
   expect(status.builderSecretReadBlocked).toBe(true);
   expect(status.secretReadBlocked).toBe(true);
   expect(status.verificationDenied).toBe(true);
 }
 
-async function expectPostgresWriteBoundary(
+interface PostgresWriteBoundaryStatus {
+  crossOwnerDenied: boolean;
+  ownWriteVisible: boolean;
+  rawCrossOwnerDenied: boolean;
+  verificationDenied: boolean;
+}
+
+async function expectPostgresWriteBoundaryStatus(
+  origin: string,
+  expected: PostgresWriteBoundaryStatus,
+): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-pg-write-boundary`);
+  const body = await response.text();
+  expect(response.status, body).toBe(200);
+  expect(JSON.parse(body)).toEqual(expected);
+}
+
+async function postPostgresMutation(
   origin: string,
   jar: Map<string, string>,
+  mutationKey: string,
+  marker: string,
   requestOrigin = origin,
-): Promise<void> {
-  const mutationKey = 'paranoid-phase5-postgres-proof/phase5-pg-cross-owner-order-write-proof';
+): Promise<{ body: string; status: number }> {
   const fields = await fetchMutationFields(origin, jar, mutationKey);
-  const crossOwnerWrite = await fetch(`${origin}/_m/${mutationKey}`, {
+  const response = await fetch(`${origin}/_m/${mutationKey}`, {
     body: new URLSearchParams({
       csrf: fields.csrf,
       'Kovo-Idem': fields.idem,
-      marker: 'phase5-pg-cross',
+      marker,
     }),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
@@ -564,43 +769,110 @@ async function expectPostgresWriteBoundary(
     method: 'POST',
     redirect: 'manual',
   });
-  const crossOwnerBody = await crossOwnerWrite.text();
-  expect([303, 500], crossOwnerBody).toContain(crossOwnerWrite.status);
-  expect(crossOwnerBody).not.toContain('cross-owner-write');
+  return { body: await response.text(), status: response.status };
+}
 
-  const response = await fetch(`${origin}/api/phase5-pg-write-boundary`);
-  const body = await response.text();
-  expect(response.status, body).toBe(200);
-  expect(JSON.parse(body)).toEqual({
+async function expectPostgresOwnWrite(
+  origin: string,
+  jar: Map<string, string>,
+  requestOrigin = origin,
+): Promise<void> {
+  const result = await postPostgresMutation(
+    origin,
+    jar,
+    'paranoid-phase5-postgres-proof/phase5-pg-own-order-write-proof',
+    'phase5-pg-own',
+    requestOrigin,
+  );
+  expect(result.status, result.body).toBe(303);
+  await expectPostgresWriteBoundaryStatus(origin, {
     crossOwnerDenied: true,
+    ownWriteVisible: true,
+    rawCrossOwnerDenied: true,
     verificationDenied: true,
   });
 }
 
-async function expectPostgresTaskAndWebhook(
+async function expectPostgresCrossOwnerWrite(
+  origin: string,
+  jar: Map<string, string>,
+  output: () => string,
+  requestOrigin = origin,
+): Promise<void> {
+  const outputOffset = output().length;
+  const result = await postPostgresMutation(
+    origin,
+    jar,
+    'paranoid-phase5-postgres-proof/phase5-pg-cross-owner-order-write-proof',
+    'phase5-pg-cross',
+    requestOrigin,
+  );
+  expect(result.status, result.body).toBe(500);
+  expect(result.body).not.toContain('cross-owner-write');
+  const denialOutput = output().slice(outputOffset);
+  expect(denialOutput).toContain('DrizzleQueryError: Failed query: insert into "phase5_pg_orders"');
+  expect(denialOutput).not.toContain('TypeError');
+  await expectPostgresWriteBoundaryStatus(origin, {
+    crossOwnerDenied: true,
+    ownWriteVisible: true,
+    rawCrossOwnerDenied: true,
+    verificationDenied: true,
+  });
+}
+
+async function expectPostgresRawCrossOwnerWrite(
+  origin: string,
+  jar: Map<string, string>,
+  output: () => string,
+  requestOrigin = origin,
+): Promise<void> {
+  const outputOffset = output().length;
+  const result = await postPostgresMutation(
+    origin,
+    jar,
+    'paranoid-phase5-postgres-proof/phase5-pg-raw-cross-owner-order-write-proof',
+    'phase5-pg-raw-cross',
+    requestOrigin,
+  );
+  expect(result.status, result.body).toBe(500);
+  expect(result.body).not.toContain('blocked-raw-cross-owner');
+  const denialOutput = output().slice(outputOffset);
+  expect(denialOutput).toContain('DrizzleQueryError: Failed query: insert into "phase5_pg_orders"');
+  expect(denialOutput).toContain("'other-user'");
+  expect(denialOutput).not.toContain('TypeError');
+  await expectPostgresWriteBoundaryStatus(origin, {
+    crossOwnerDenied: true,
+    ownWriteVisible: true,
+    rawCrossOwnerDenied: true,
+    verificationDenied: true,
+  });
+}
+
+async function expectPostgresTask(
   origin: string,
   jar: Map<string, string>,
   marker: string,
   output: () => string,
   requestOrigin = origin,
 ): Promise<void> {
-  const mutationKey = 'paranoid-phase5-postgres-proof/phase5-pg-schedule-task';
-  const fields = await fetchMutationFields(origin, jar, mutationKey);
-  const taskResponse = await fetch(`${origin}/_m/${mutationKey}`, {
-    body: new URLSearchParams({ csrf: fields.csrf, 'Kovo-Idem': fields.idem, marker }),
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      cookie: cookieHeader(jar),
-      origin: requestOrigin,
-    },
-    method: 'POST',
-    redirect: 'manual',
-  });
-  const taskBody = await taskResponse.text();
-  expect(taskResponse.status, `${taskBody}\n${output()}`).toBe(303);
+  const result = await postPostgresMutation(
+    origin,
+    jar,
+    'paranoid-phase5-postgres-proof/phase5-pg-schedule-task',
+    marker,
+    requestOrigin,
+  );
+  expect(result.status, `${result.body}\n${output()}`).toBe(303);
+  await expectEventuallyPostgresEventCount(origin, 1, output);
+}
 
+async function expectPostgresWebhook(
+  origin: string,
+  marker: string,
+  output: () => string,
+): Promise<void> {
   const webhookId = `${marker}-webhook`;
-  const webhookOccurredAtMs = Date.now();
+  const webhookOccurredAtMs = 1_784_355_600_000;
   const webhookRequest = () =>
     fetch(`${origin}/webhooks/phase5-pg-read`, {
       body: JSON.stringify({ id: webhookId, occurredAtMs: webhookOccurredAtMs }),
@@ -1165,6 +1437,17 @@ async function installPhase5PostgresParanoidFixtures(
       'CREATE VIEW phase5_pg_order_view WITH (security_invoker=true) AS SELECT id, user_id, label FROM phase5_pg_orders',
     );
     await pool.query('GRANT SELECT ON phase5_pg_order_view TO kovo_reader');
+    await pool.query('DROP FUNCTION IF EXISTS phase5_pg_order_function()');
+    await pool.query(
+      [
+        'CREATE FUNCTION phase5_pg_order_function()',
+        'RETURNS TABLE(id text, label text)',
+        'LANGUAGE sql SECURITY INVOKER STABLE',
+        'AS $$ SELECT id, label FROM phase5_pg_orders ORDER BY id $$',
+      ].join(' '),
+    );
+    await pool.query('REVOKE ALL ON FUNCTION phase5_pg_order_function() FROM PUBLIC');
+    await pool.query('GRANT EXECUTE ON FUNCTION phase5_pg_order_function() TO kovo_reader');
   });
 }
 
@@ -1225,13 +1508,33 @@ async function grantRuntimeDataRoles(databaseUrl: string, runtimeRole: string): 
 async function createUnsafeReachableObjects(databaseUrl: string): Promise<void> {
   await withPool(databaseUrl, async (pool) => {
     await pool.query('DROP MATERIALIZED VIEW IF EXISTS kovo_paranoid_user_mv');
+    await pool.query('DROP VIEW IF EXISTS kovo_paranoid_definer_view');
     await pool.query('DROP TABLE IF EXISTS kovo_public_leak');
+    await pool.query('DROP SCHEMA IF EXISTS kovo_paranoid_extra CASCADE');
     await pool.query(
       'CREATE MATERIALIZED VIEW kovo_paranoid_user_mv AS SELECT id, email FROM "user"',
     );
     await pool.query('GRANT SELECT ON kovo_paranoid_user_mv TO kovo_reader');
     await pool.query('CREATE TABLE kovo_public_leak AS SELECT id, email FROM "user" WITH NO DATA');
     await pool.query('GRANT SELECT ON kovo_public_leak TO PUBLIC');
+    await pool.query('CREATE VIEW kovo_paranoid_definer_view AS SELECT id, email FROM "user"');
+    await pool.query('GRANT SELECT ON kovo_paranoid_definer_view TO kovo_reader');
+    await pool.query('CREATE SCHEMA kovo_paranoid_extra');
+    await pool.query(
+      [
+        'CREATE FUNCTION kovo_paranoid_extra.kovo_paranoid_definer_function()',
+        'RETURNS TABLE(id text, email text)',
+        'LANGUAGE sql SECURITY DEFINER STABLE',
+        'AS $$ SELECT id, email FROM public."user" ORDER BY id $$',
+      ].join(' '),
+    );
+    await pool.query(
+      'REVOKE ALL ON FUNCTION kovo_paranoid_extra.kovo_paranoid_definer_function() FROM PUBLIC',
+    );
+    await pool.query('GRANT USAGE ON SCHEMA kovo_paranoid_extra TO kovo_reader');
+    await pool.query(
+      'GRANT EXECUTE ON FUNCTION kovo_paranoid_extra.kovo_paranoid_definer_function() TO kovo_reader',
+    );
   });
 }
 

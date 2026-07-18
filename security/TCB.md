@@ -47,8 +47,8 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
   "schema": "kovo.security.tcb/v1",
   "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1; plans/fundamental-fixes-followup-7b.md DEC-A; plans/fundamental-fixes-followup-12.md DEC-D1",
   "budgets": {
-    "entryMaxLines": 150,
-    "totalTcbMaxLines": 1350
+    "entryMaxLines": 310,
+    "totalTcbMaxLines": 2000
   },
   "trustedDependencySurfaces": [
     {
@@ -102,8 +102,8 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "dependency": "undici",
       "packageJson": "packages/server/package.json",
       "pinnedVersion": "7.28.0",
-      "guarantee": "While Kovo's egress floor is installed, framework-owned and ambient Undici fetch traffic is routed through its dispatcher, whose custom connector resolves and validates destination IPs before dialing the pinned address; the bootstrap integrity check detects a later global-dispatcher replacement according to the configured hardening posture.",
-      "reviewTrigger": "Any bump of undici must re-confirm Agent custom-connect and global-dispatcher semantics, redirect dispatch through the installed policy, DNS/IP validation before socket creation, abort/error propagation, and the egress bootstrap/runtime adversarial suites."
+      "guarantee": "While Kovo's egress floor is installed, framework-owned and ambient Undici fetch traffic is routed through Kovo's per-request dispatcher. The dispatcher validates every request and pooled redirect hop; the net layer validates and pins every address Node may select for a new dial. The bootstrap integrity check detects a later global-dispatcher replacement according to the configured hardening posture.",
+      "reviewTrigger": "Any bump of undici must re-confirm Agent dispatch and global-dispatcher semantics, redirect and pooled-request dispatch through the installed policy, the net-layer DNS/IP pin before socket selection, abort/error propagation, and the egress bootstrap/runtime adversarial suites."
     },
     {
       "id": "dep.better-auth.password-hashing",
@@ -395,6 +395,15 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "lineBudget": 80
     },
     {
+      "id": "server.request-ingress.classifier",
+      "file": "packages/server/src/request-ingress-policy.ts",
+      "name": "createRequestIngressClassifier",
+      "kind": "finite-request-source-method-authority-scheme-target-provenance-refusal",
+      "classification": "tcb",
+      "proof": "packages/server/src/request-ingress-policy.test.ts; packages/server/src/request-ingress-c13.test.ts; packages/server/src/__bugz_remote_ingress.test.ts; packages/server/src/node.test.ts; packages/server/src/build.test.ts",
+      "lineBudget": 310
+    },
+    {
       "id": "better-auth.request-secret-surface.manifest",
       "file": "packages/better-auth/src/internal/non-egress-proof.ts",
       "name": "betterAuthRequestSecretPaths",
@@ -411,7 +420,10 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
         "better-auth.session-refresh.set-cookie",
         "better-auth.adapter.sign-in.account-password",
         "better-auth.adapter.session-token-lookup",
-        "better-auth.mount.handler-delegation"
+        "better-auth.mount.handler-delegation",
+        "better-auth.mount.set-cookie-forwarding",
+        "better-auth.binding.signing-secret",
+        "better-auth.rate-limit.signing-secret"
       ]
     },
     {
@@ -422,6 +434,184 @@ review remains manual and is the point of the `reviewTrigger`. See `rules/depend
       "classification": "tcb",
       "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
       "lineBudget": 45
+    },
+    {
+      "id": "better-auth.credential-consumer.contracts",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "betterAuthCredentialConsumerContracts",
+      "kind": "better-auth-credential-consumer-census",
+      "classification": "inventory-classifier",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts"
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.census-validation",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "validateCredentialConsumerCensus",
+      "kind": "better-auth-credential-consumer-census-closure",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 55
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.contract-validation",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "validateConsumerContract",
+      "kind": "better-auth-credential-consumer-contract-refusal",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 55
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.constructor",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "createBetterAuthCredentialConsumer",
+      "kind": "better-auth-exact-consumer-constructor",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 30
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.contract-selection",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "contractById",
+      "kind": "better-auth-exact-consumer-contract-selection",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 20
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.consumers",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "betterAuthCredentialConsumers",
+      "kind": "better-auth-exact-consumer-token-inventory",
+      "classification": "inventory-classifier",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts"
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.run-sync",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "runBetterAuthCredentialConsumer",
+      "kind": "better-auth-credential-non-egress-door",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 30
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.source-callable-sync",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "runBetterAuthCredentialSourceCallable",
+      "kind": "better-auth-exact-source-callable-door",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 35
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.source-callable-async",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "runBetterAuthCredentialSourceCallableAsync",
+      "kind": "better-auth-exact-source-callable-door",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 35
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.source-callable-preparation",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "prepareCredentialSourceCallable",
+      "kind": "better-auth-exact-source-callable-refusal",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 65
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.transform-refusal",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "requirePackageOwnedTransform",
+      "kind": "better-auth-owner-callback-refusal",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 15
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.source-normalization",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "normalizeCredentialSourceResult",
+      "kind": "better-auth-source-result-normalization",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 45
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.consumer-refusal",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "requireConsumer",
+      "kind": "better-auth-exact-consumer-refusal",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 35
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.result-validation",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "validateConsumerResult",
+      "kind": "better-auth-credential-result-validator",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 85
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.consume",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "consumeBetterAuthCredentialResult",
+      "kind": "better-auth-credential-result-refusal",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 35
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.result-registration",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "registerResult",
+      "kind": "better-auth-credential-result-registration",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 20
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.error-redaction",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "sanitizedConsumerFailure",
+      "kind": "better-auth-credential-error-redaction",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 25
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.failure-status",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "credentialFailureStatus",
+      "kind": "better-auth-opaque-credential-failure-classifier",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 20
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.failure-field",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "hasCredentialFailureStatus",
+      "kind": "better-auth-own-data-credential-failure-field",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 15
+    },
+    {
+      "id": "better-auth.credential-runtime-gate.failure-consume",
+      "file": "packages/better-auth/src/internal/credential-runtime-gate.ts",
+      "name": "isBetterAuthCredentialGateFailure",
+      "kind": "better-auth-one-shot-credential-failure-verdict",
+      "classification": "tcb",
+      "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
+      "lineBudget": 10
     },
     {
       "id": "better-auth.rate-limit.storage",

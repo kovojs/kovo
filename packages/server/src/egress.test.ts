@@ -882,15 +882,33 @@ describe('resolveEgressPolicy config validation', () => {
     expect(policy.allowInternal.has('10.0.0.1:0')).toBe(false);
   });
 
-  it('normalizes framework-owned destination allowlist origins and ignores malformed entries', () => {
-    const warnings: string[] = [];
+  it('canonicalizes framework-owned destination origins and refuses malformed boot input', () => {
     const policy = resolveEgressPolicy(
-      { allowDestinations: ['https://api.example.com', 'http://localhost:8080', '/relative'] },
-      (m) => warnings.push(m),
+      {
+        allowDestinations: [
+          'https://API.EXAMPLE.COM.',
+          'http://localhost:8080',
+          'http://[2001:0db8:0:0:0:0:0:1]',
+          'https://bücher.example',
+        ],
+      },
+      () => {},
     );
     expect(policy.allowDestinations.has('https://api.example.com:443')).toBe(true);
     expect(policy.allowDestinations.has('http://localhost:8080')).toBe(true);
-    expect(warnings.join('\\n')).toContain('allowDestinations entry');
+    expect(policy.allowDestinations.has('http://[2001:db8::1]:80')).toBe(true);
+    expect(policy.allowDestinations.has('https://xn--bcher-kva.example:443')).toBe(true);
+
+    for (const entry of [
+      '',
+      '/relative',
+      'ftp://api.example.com',
+      'https://user@api.example.com',
+    ]) {
+      expect(() => resolveEgressPolicy({ allowDestinations: [entry] }, () => {})).toThrow(
+        EgressConfigError,
+      );
+    }
   });
 });
 
@@ -941,10 +959,14 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     });
 
     installFrameworkFetchFloor(resolveEgressPolicy({ allowDestinations: [] }, () => {}));
+    const lookup = vi.spyOn(dns, 'lookup').mockImplementation((() => {
+      throw new Error('undeclared origin reached DNS');
+    }) as typeof dns.lookup);
     await expect(frameworkEgressFetch('https://api.example.com/v1')).rejects.toMatchObject({
       name: EGRESS_BLOCKED_ERROR_NAME,
       reason: 'destination-allowlist',
     });
+    expect(lookup).not.toHaveBeenCalled();
   });
 
   it('binds the Undici floor witness before late resolver hooks can forge it', () => {
@@ -1206,6 +1228,72 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
       databaseSocket.connect(port, '127.0.0.1', resolve);
     });
     databaseSocket.destroy();
+  });
+
+  // @kovo-security-property-oracle egress-positive-capability
+  it('keeps an exact framework database endpoint usable across pinned DNS rotation', async () => {
+    const databaseServer = net.createServer();
+    await new Promise<void>((resolve) => databaseServer.listen(0, '::', resolve));
+    const databasePort = (databaseServer.address() as AddressInfo).port;
+    const databaseUrl = `postgres://app@db-rotation.test:${databasePort}/kovo`;
+    uninstall = installNetConnectFloor(
+      resolveEgressPolicy({ allowInternal: [] }, () => {}, { databaseUrls: [databaseUrl] }),
+    );
+
+    try {
+      const addresses = [
+        { address: '127.0.0.1', family: 4 },
+        { address: '::1', family: 6 },
+      ] as const;
+      for (const selected of addresses) {
+        const databaseSocket = createDatabaseEgressSocket(databaseUrl);
+        await new Promise<void>((resolve, reject) => {
+          databaseSocket.once('error', reject);
+          databaseSocket.connect(
+            {
+              host: 'db-rotation.test',
+              lookup(_hostname, options, callback) {
+                const cb = (typeof options === 'function' ? options : callback) as (
+                  error: Error | null,
+                  address: string | { address: string; family: number }[],
+                  family?: number,
+                ) => void;
+                if (typeof options !== 'function' && options.all) cb(null, [selected]);
+                else cb(null, selected.address, selected.family);
+              },
+              port: databasePort,
+            },
+            resolve,
+          );
+        });
+        databaseSocket.destroy();
+      }
+
+      const unrelatedSocket = new net.Socket();
+      const unrelatedError = await new Promise<Error>((resolve) => {
+        unrelatedSocket.once('error', resolve);
+        unrelatedSocket.connect({
+          host: 'db-rotation.test',
+          lookup(_hostname, options, callback) {
+            const cb = (typeof options === 'function' ? options : callback) as (
+              error: Error | null,
+              address: string | { address: string; family: number }[],
+              family?: number,
+            ) => void;
+            if (typeof options !== 'function' && options.all) {
+              cb(null, [{ address: '127.0.0.1', family: 4 }]);
+            } else cb(null, '127.0.0.1', 4);
+          },
+          port: databasePort,
+        });
+      });
+      unrelatedSocket.destroy();
+      expect(unrelatedError).toBeInstanceOf(EgressBlockedError);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        databaseServer.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 
   it('keeps a validated Postgres Unix path on the exact framework-created socket', async () => {

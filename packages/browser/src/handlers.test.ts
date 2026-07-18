@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import * as runtime from './client.js';
-import { dispatchDelegatedEvent } from './handlers.js';
+import { dispatchDelegatedEvent, securityHandler } from './handlers.js';
 import {
   FakeElement,
   FakeStatefulBindingElement,
@@ -21,6 +21,63 @@ const restoreClientModuleManifest = installTestClientModuleManifest([
   '/c/pass.client.js',
 ]);
 afterAll(restoreClientModuleManifest);
+
+describe('generated finite security-operation manifest', () => {
+  const invokeGeneratedHandler = (operations: unknown) =>
+    Reflect.apply(securityHandler, undefined, [operations, vi.fn()]);
+
+  it('accepts an exact compiler-owned browser operation and preserves handler identity', () => {
+    const implementation = vi.fn();
+    const operation = Object.freeze({
+      door: 'compiler-state' as const,
+      kind: 'browser.state.write' as const,
+      target: 'state.count',
+    });
+
+    expect(securityHandler(Object.freeze([operation]), implementation)).toBe(implementation);
+  });
+
+  it('fails closed for unknown/server operations and mismatched reviewed doors', () => {
+    for (const operation of [
+      { door: 'compiler-state', kind: 'browser.unknown' },
+      { door: 'managed-db', kind: 'server.database.write' },
+      { door: 'delegated-event', kind: 'browser.state.write' },
+    ]) {
+      expect(() => invokeGeneratedHandler([operation])).toThrow(
+        'KV449: generated browser security operation 0 is invalid.',
+      );
+    }
+  });
+
+  it('rejects sparse, accessor, extra-key, and oversized generated manifests', () => {
+    expect(() => invokeGeneratedHandler(new Array(1))).toThrow(
+      'KV449: generated browser security operation 0 is not own data.',
+    );
+
+    const getter = vi.fn(() => 'browser.state.write');
+    const accessorOperation = { door: 'compiler-state' };
+    Object.defineProperty(accessorOperation, 'kind', { enumerable: true, get: getter });
+    expect(() => invokeGeneratedHandler([accessorOperation])).toThrow(
+      'KV449: generated browser security operation kind must be own data.',
+    );
+    expect(getter).not.toHaveBeenCalled();
+
+    expect(() =>
+      invokeGeneratedHandler([
+        { door: 'compiler-state', extra: true, kind: 'browser.state.write' },
+      ]),
+    ).toThrow('KV449: generated browser security operation 0 has extra data.');
+
+    expect(() =>
+      invokeGeneratedHandler(
+        Array.from({ length: 257 }, () => ({
+          door: 'compiler-state',
+          kind: 'browser.state.write',
+        })),
+      ),
+    ).toThrow('KV449: invalid generated browser security-operation manifest.');
+  });
+});
 
 describe('delegated handler reference dispatch', () => {
   it('keeps handler ref selection pinned after string and regexp prototype poisoning', async () => {

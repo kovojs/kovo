@@ -192,12 +192,12 @@ describe('create-kovo starter (build integration: adversarial production artifac
     240_000,
   );
 
-  it('M1:secret-wire fixture fails closed when the scaffold query helper anchor drifts', () => {
+  it('M1:secret-wire fixture fails closed when the scaffold query insertion anchor drifts', () => {
     withProject('create-kovo-m1-secret-value-flow-drift-', undefined, (root) => {
       const queriesPath = join(root, 'src/queries.ts');
       const queries = readFileSync(queriesPath, 'utf8').replace(
-        'function requireAppQueryDb(context?: AppQueryLoadContext): Reader<AppDb> {',
-        'function renamedAppQueryDb(context?: AppQueryLoadContext): Reader<AppDb> {',
+        'export const contactsQuery = query({',
+        'export const renamedContactsQuery = query({',
       );
       writeFileSync(queriesPath, queries, 'utf8');
 

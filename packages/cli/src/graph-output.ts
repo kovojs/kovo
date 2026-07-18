@@ -10,8 +10,10 @@ import {
   accessKv436Line,
   accessLine,
   accessSummary,
+  capabilityClosureLine,
   capabilityLine,
   collectCapabilityFacts,
+  compareCapabilityClosureFact,
   compareCookieDowngrade,
   compareEndpointExplain,
   compareRevealExplain,
@@ -305,6 +307,21 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
       lines.push(capabilityLine(capability));
     }
 
+    const closure = [...(graph.capabilityClosure ?? [])].sort(compareCapabilityClosureFact);
+    if (closure.length > 0) {
+      lines.push('CAPABILITY-CLOSURE');
+      for (const fact of closure) lines.push(capabilityClosureLine(fact));
+      lines.push(
+        [
+          'CLOSURE-SUMMARY',
+          `roots=${closure.filter((fact) => fact.kind === 'root').length}`,
+          `doors=${closure.filter((fact) => fact.kind === 'door').length}`,
+          `packages=${closure.filter((fact) => fact.kind === 'summary').length}`,
+          `closed=${closure.filter((fact) => fact.kind === 'closed').length}`,
+        ].join(' '),
+      );
+    }
+
     lines.push(`SUMMARY total=${capabilities.length}`);
     return ok(lines);
   }
@@ -375,6 +392,48 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
           `substitution=${handler.substitution ?? '-'}`,
         ].join(' '),
       );
+    }
+
+    for (const operation of component.securityOperations ?? []) {
+      lines.push(
+        [
+          `OPERATION ${operation.kind}`,
+          `door=${operation.door}`,
+          `root=${operation.root ?? '-'}`,
+          `target=${operation.target ?? '-'}`,
+          `justification=${operation.justification ?? '-'}`,
+        ].join(' '),
+      );
+    }
+
+    for (const semanticRoot of component.securitySemanticGraph?.roots ?? []) {
+      for (const summary of semanticRoot.summaries) {
+        lines.push(
+          [
+            'SEMANTIC-SUMMARY',
+            `root=${semanticRoot.root}`,
+            `callable=${summary.callable}`,
+            `authority-inputs=${list(summary.authorityInputs)}`,
+            `effects=${list(summary.operationKinds)}`,
+            `verdict=${summary.verdict}`,
+          ].join(' '),
+        );
+      }
+      for (const trace of semanticRoot.traces) {
+        const sink =
+          trace.verdict === 'proved'
+            ? `${trace.sink.kind}:${trace.sink.target ?? trace.sink.door}`
+            : trace.sink;
+        lines.push(
+          [
+            'SEMANTIC-TRACE',
+            `root=${trace.root}`,
+            `transfers=${list(trace.transfers)}`,
+            `sink=${sink}`,
+            `verdict=${trace.verdict === 'closed' ? `closed:${trace.reason}` : 'proved'}`,
+          ].join(' '),
+        );
+      }
     }
 
     for (const substitution of component.platformSubstitutions ?? []) {

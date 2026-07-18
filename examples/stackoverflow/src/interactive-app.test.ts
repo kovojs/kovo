@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { and, asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { csrfToken } from '@kovojs/server';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 
 import {
