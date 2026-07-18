@@ -2034,6 +2034,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'private-summary-finite-call-grammar',
+        file: 'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 private-summary-sole-carrier-argument',
+          'a strict-TS widened direct alias with side-effecting extra argument evaluation',
+          'current(context, ...noArguments)',
+          '@kovo-security-certifies C13 private-summary-one-direct-alias',
+          'keeps a two-hop private helper alias chain outside OPP-28 proof',
+          'emits KV438 for a widened private helper alias with extra argument evaluation',
+          'emits KV438 for a two-hop private helper alias chain',
+        ],
+      },
+      {
         id: 'exact-mutation-private-scope-transfer-and-write-effects',
         file: 'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
         snippets: [

@@ -700,4 +700,84 @@ describe('Phase 2C exact-tip adversarial review', () => {
       expect(result.check.output).toContain('KV438');
     },
   );
+
+  // @kovo-security-certifies C13 private-summary-sole-carrier-argument
+  it.each([
+    [
+      'a strict-TS widened direct alias with side-effecting extra argument evaluation',
+      [
+        'function poison(guard: Context["request"]["guard"], value: string) { guard.userId = value; }',
+        'const widened: (context: Context, ...ignored: unknown[]) => string = current;',
+      ],
+      'widened(context, poison(context.request.guard, input.userId))',
+    ],
+    [
+      'a strict-TS empty tuple spread',
+      ['const noArguments: [] = [];'],
+      'current(context, ...noArguments)',
+    ],
+  ])('keeps a summarized principal unknown through %s', (_label, declarations, principal) => {
+    const result = ownerVerdict(
+      ownerSource([
+        ...declarations,
+        'export const list = query("list", {',
+        '  args: s.object({ userId: s.string() }),',
+        '  async load(input: { userId: string }, context: Context) {',
+        `    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, ${principal})) };`,
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).toBe('unknown');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  // @kovo-security-certifies C13 private-summary-one-direct-alias
+  it('keeps a two-hop private helper alias chain outside OPP-28 proof', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'const first = current;',
+        'const second = first;',
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  async load(_input: unknown, context: Context) {',
+        '    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, second(context))) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).toBe('unknown');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('emits KV438 for a widened private helper alias with extra argument evaluation', () => {
+    const result = massVerdict(
+      [
+        'function poison(guard: Context["request"]["guard"], value: string) { guard.userId = value; }',
+        'const widened: (context: Context, ...ignored: unknown[]) => string = current;',
+        'await context.db.update(accounts).set({ ownerId: serverValue(widened(context, poison(context.request.guard, input.ownerId)), "private owner") }).where(eq(accounts.id, input.id));',
+      ],
+      { input: 's.object({ id: s.string(), ownerId: s.string() })' },
+    );
+    expect(result.analysis.massAssignmentFacts).toMatchObject([
+      { column: 'ownerId', provenance: 'unknown', via: 'set' },
+    ]);
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV438');
+  });
+
+  it('emits KV438 for a two-hop private helper alias chain', () => {
+    const result = massVerdict([
+      'const first = current;',
+      'const second = first;',
+      'await context.db.update(accounts).set({ ownerId: serverValue(second(context), "private owner") }).where(eq(accounts.id, input.id));',
+    ]);
+    expect(result.analysis.massAssignmentFacts).toMatchObject([
+      { column: 'ownerId', provenance: 'unknown', via: 'set' },
+    ]);
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV438');
+  });
 });
