@@ -23,7 +23,7 @@ the reproduction; remediation and matrix routing remain separate work.
   because the runtime exposed no enforceable per-audit token meter.
 - **M:** the two controlled historical ingress canaries were both identified. The live harness
   imported all 37 entries from `SECURITY_GATE_MUTANTS`; all 37 were killed and none survived.
-- **P:** 5,899 complete-file `trust-escapes-static.ts` syntax/name obligations, eight imperative-DOM
+- **Historical P:** 5,899 complete-file `trust-escapes-static.ts` syntax/name obligations, eight imperative-DOM
   sink names, and 49 egress obligations (37 range-table entries, five exact metadata addresses,
   and seven allow paths). The trust-static vector is 2,508 `Node.is*` sites, 827 `SyntaxKind`
   sites, 674 entries in 62 named inventories, 1,316 direct literal-name predicates, 558 inline
@@ -42,11 +42,19 @@ LOC does not contribute to P.
 ## Current structural snapshot
 
 The immutable comparable row above remains measured at `e5f613be9` with R=1 and 143 C13 anchors.
-After M35's regression anchor, the bounded-diamond performance repair, and the Phase 1
-authorization-matrix forcing gate landed, the deterministic structural snapshot was refreshed from
-`969e6fc22492c80e4f99f2528837455fc7e8317c`: M is now 42 catalogued mutants, including five
-authorization-matrix canaries; P is 5,958, G remains 18 fixture rows, and C13 remains 17 corpora /
-144 anchors. This refresh is not a new audit round and does not manufacture a new R value.
+The deterministic structural snapshot at `fa326cdfd` has M=114 catalogued mutants, G=18 fixture
+rows, and C13=21 corpora / 198 anchors. Its expanded P is 8,021: 7,964 generic static-predicate
+obligations across 13 explicitly named production files, eight imperative-DOM sink identities, and
+49 egress obligations. This refresh is not a new audit round and does not manufacture a new R value;
+because the production scope expanded, its P is not directly comparable to the historical 5,956.
+
+Current P is deliberately a **conservative lower bound**, not a complete classifier denominator. The
+generic counter covers `Node.is*` and `ts.is*` calls, `SyntaxKind.*` and `ts.SyntaxKind.*` members,
+string/numeric literal equality branches and `case` clauses, literal inline `includes` / `Set.has`
+entries, and top-level uppercase array/object/Set/Map inventories (including literal `map`/`filter`
+wrappers). The snapshot records the exact scope paths, each file's counters and source digest, plus
+scope and row digests. Moving a classifier file or changing a scoped source therefore requires an
+explicit reviewed refresh instead of silently shrinking P.
 
 Run `pnpm run check:security-convergence-baseline` to detect deterministic catalog/count drift.
 Run it with `-- --live` to rerun all exported mutants and remeasure the green corpus. Timing and RSS

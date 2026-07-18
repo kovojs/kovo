@@ -10,7 +10,8 @@ import {
   measureEgressObligations,
   measureImperativeDomSinkLexicon,
   measureLiveSecurityConvergence,
-  measureTrustStaticObligations,
+  measureProductionPredicateObligations,
+  measureStaticPredicateObligations,
   parsePeakRss,
 } from './security-convergence-baseline.mjs';
 
@@ -27,35 +28,79 @@ describe('security convergence baseline', () => {
       measurements: { c13: '17 corpora / 143 anchors', p: 5956 },
     });
     expect(baseline.currentSnapshot).toMatchObject({
-      measuredCodeSha: 'dbbfe94d436f2ad772670d2df56e18ee747e8329',
+      measuredCodeSha: 'fa326cdfdde18c027b95aee2702b82771d396fbe',
       snapshot: {
-        c13: { anchorCount: 156, corpusCount: 19 },
-        p: { total: 5971 },
+        c13: { anchorCount: 198, corpusCount: 21 },
+        p: {
+          category: 'conservative-production-predicate-lower-bound',
+          staticPredicates: { fileCount: 13, total: 7964 },
+          total: 8021,
+        },
       },
     });
   });
 
-  it('counts complete-file syntax and name obligations rather than LOC', () => {
-    const measured = measureTrustStaticObligations(`
-      const REVIEWED_NAMES = new Set(['alpha', 'beta']);
+  it('counts generic Node/TypeScript syntax and name obligations rather than LOC', () => {
+    const measured = measureStaticPredicateObligations(`
+      const REVIEWED_ARRAY = (['alpha', 'beta'] as const)!;
+      const REVIEWED_RECORD = ({ alpha: 1, beta: 2 } as const);
+      const REVIEWED_SET = new Set((['charlie', 'delta'] as const).filter(Boolean));
+      const REVIEWED_MAP = new Map(([['key', 'value']] as const).map((entry) => entry));
+      const REVIEWED_MAPPED = ((['echo', 'foxtrot'] as const).map(String)) satisfies readonly string[];
       function classify(node, name) {
         if (Node.isCallExpression(node)) return SyntaxKind.CallExpression;
+        if (ts.isIdentifier(node)) return ts.SyntaxKind.Identifier;
         if (name === 'direct') return ['one', 'two'].includes(name);
+        if (new Set((['three', 'four'] as const).map(String)).has(name)) return true;
         switch (name) { case 'switch': return true; default: return false; }
       }
     `);
     expect(measured).toMatchObject({
       directNamePredicates: 1,
-      inlineMembershipEntries: 2,
-      nameBranches: 6,
-      namedInventoryEntries: 2,
-      namedInventoryTableCount: 1,
+      inlineMembershipEntries: 4,
+      nameBranches: 15,
+      namedInventoryEntries: 9,
+      namedInventoryTableCount: 5,
       switchLiteralCases: 1,
-      syntaxBranches: 2,
-      syntaxGuardSites: 1,
-      syntaxKindSites: 1,
-      total: 8,
+      syntaxBranches: 4,
+      syntaxGuardSites: 2,
+      syntaxKindSites: 2,
+      total: 19,
     });
+  });
+
+  it('aggregates the explicit production scope into stable sorted per-file rows', () => {
+    const measured = measureProductionPredicateObligations([
+      { file: 'z-classifier.ts', source: `if (name === 'z') accept();` },
+      {
+        file: 'a-classifier.ts',
+        source: `const NAMES = ['a', 'b']; if (ts.isIdentifier(node)) accept();`,
+      },
+    ]);
+    expect(measured).toMatchObject({
+      fileCount: 2,
+      files: [
+        { file: 'a-classifier.ts', namedInventoryEntries: 2, syntaxGuardSites: 1, total: 3 },
+        { file: 'z-classifier.ts', directNamePredicates: 1, total: 1 },
+      ],
+      scopeFiles: ['a-classifier.ts', 'z-classifier.ts'],
+      total: 4,
+    });
+    expect(measured.files.every((row) => /^[0-9a-f]{64}$/u.test(row.sourceSha256))).toBe(true);
+    expect(measured.rowsSha256).toMatch(/^[0-9a-f]{64}$/u);
+    expect(measured.scopeSha256).toMatch(/^[0-9a-f]{64}$/u);
+    const sourceChanged = measureProductionPredicateObligations([
+      { file: 'a-classifier.ts', source: `const NAMES = ['a', 'changed'];` },
+      { file: 'z-classifier.ts', source: `if (name === 'z') accept();` },
+    ]);
+    expect(sourceChanged.scopeSha256).toBe(measured.scopeSha256);
+    expect(sourceChanged.rowsSha256).not.toBe(measured.rowsSha256);
+    expect(
+      measureProductionPredicateObligations([
+        { file: 'moved/a-classifier.ts', source: `const NAMES = ['a', 'b'];` },
+        { file: 'z-classifier.ts', source: `if (name === 'z') accept();` },
+      ]).scopeSha256,
+    ).not.toBe(measured.scopeSha256);
   });
 
   it('derives the imperative DOM deny lexicon from its classifier branches', () => {
