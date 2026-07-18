@@ -11,6 +11,7 @@ export const securityFuzzCampaignSchema = 'kovo.security-fuzz-campaign/v1';
 export const securityFuzzCounterexampleSchema = 'kovo.security-fuzz-counterexample/v1';
 export const defaultSecurityFuzzCampaignPath = 'security/security-fuzz-campaign.json';
 export const defaultSecurityFuzzWorkflowPath = '.github/workflows/security-nightly.yml';
+export const defaultSecurityFuzzReleaseWorkflowPath = '.github/workflows/release.yml';
 export const securityFuzzReleaseCommand = 'pnpm run test:security-fuzz-release';
 
 const expectedFamilyOrder = Object.freeze([
@@ -187,9 +188,12 @@ export function validateSecurityFuzzCampaignDocument(
     !plainObject(document.failureArtifacts) ||
     document.failureArtifacts.directory !== '.kovo/security-failures/security-fuzz-campaign' ||
     document.failureArtifacts.schema !== securityFuzzCounterexampleSchema ||
-    document.failureArtifacts.minimizationUnit !== 'one independently replayable manifest case'
+    document.failureArtifacts.minimizationUnit !== 'one independently replayable manifest case' ||
+    document.failureArtifacts.retentionDays !== 30
   ) {
-    findings.push('failureArtifacts must pin the replayable minimized-counterexample contract');
+    findings.push(
+      'failureArtifacts must pin the replayable minimized-counterexample contract and 30-day retention',
+    );
   }
 
   validateMutationHarness(document.mutationHarness, expectedMutantCount, findings);
@@ -281,6 +285,9 @@ function validateMutationHarness(value, expectedMutantCount, findings) {
       `mutationHarness.expectedMutants must equal the enrolled denominator ${expectedMutantCount}`,
     );
   }
+  if (value.requiredScorePercent !== 100) {
+    findings.push('mutationHarness.requiredScorePercent must be exactly 100');
+  }
 }
 
 function validateCoverage(family, expectedMutantCount, findings) {
@@ -292,6 +299,12 @@ function validateCoverage(family, expectedMutantCount, findings) {
   if (family.id === 'mutations') {
     if (coverage.unit !== 'mutant' || coverage.denominator !== expectedMutantCount) {
       findings.push(`${family.id}: coverage denominator must equal ${expectedMutantCount} mutants`);
+    }
+    if (
+      family.cases?.length !== 1 ||
+      !deepEqual(family.cases[0]?.covers, ['all-enrolled-mutants'])
+    ) {
+      findings.push('mutations: the sole case must cover all-enrolled-mutants');
     }
     return;
   }
@@ -392,39 +405,31 @@ function validateCases(family, seenCaseIds, findings, { rootDir, verifySources }
 
 export function validateSecurityFuzzWorkflowSource(source) {
   const findings = [];
-  const requiredFragments = [
+  const requiredLines = [
     'name: Security Fuzz Campaign',
-    'schedule:',
-    "cron: '37 8 * * *'",
-    'workflow_dispatch:',
-    'profile:',
-    '- nightly',
-    '- release',
+    '  schedule:',
+    "    - cron: '37 8 * * *'",
+    '  workflow_dispatch:',
+    '      profile:',
+    '          - nightly',
+    '          - release',
     'permissions:',
-    'contents: read',
-    'uses: ./.github/actions/kovo-setup',
-    'run: vp exec pnpm run check:security-fuzz-campaign',
-    'run: vp exec pnpm run test:security-fuzz-nightly',
-    'run: vp exec pnpm run test:security-fuzz-release',
-    'if: failure()',
-    'if-no-files-found: ignore',
-    'path: .kovo/security-failures/**',
+    '  contents: read',
+    '    timeout-minutes: 150',
+    '      - uses: ./.github/actions/kovo-setup',
+    '        run: vp exec pnpm run check:security-fuzz-campaign',
+    '        run: vp exec pnpm run test:security-fuzz-nightly',
+    '        run: vp exec pnpm run test:security-fuzz-release',
+    '        if: failure()',
+    '          if-no-files-found: ignore',
+    '          path: .kovo/security-failures/**',
+    '          retention-days: 30',
   ];
-  for (const fragment of requiredFragments) {
-    if (!source.includes(fragment)) findings.push(`workflow must include ${fragment}`);
+  for (const line of requiredLines) {
+    if (!workflowHasLine(source, line)) findings.push(`workflow must include line ${line.trim()}`);
   }
-  const actionUses = [...source.matchAll(/^\s*- uses:\s*([^\s]+)\s*$/gmu)].map((match) => match[1]);
-  for (const action of actionUses) {
-    if (action.startsWith('./')) continue;
-    if (!/@[0-9a-f]{40}$/u.test(action))
-      findings.push(`workflow action must be SHA-pinned: ${action}`);
-  }
-  for (const match of source.matchAll(/^\s*run:\s*(.+)$/gmu)) {
-    const command = match[1];
-    if (/\bpnpm\b/u.test(command) && !/^vp exec pnpm\b/u.test(command)) {
-      findings.push(`workflow pnpm command must run through vp: ${command}`);
-    }
-  }
+  validatePinnedWorkflowActions(source, findings);
+  validateWorkflowPnpmCommands(source, findings);
   if (
     !/if:\s*github\.event_name != 'workflow_dispatch' \|\| inputs\.profile == 'nightly'/u.test(
       source,
@@ -437,6 +442,63 @@ export function validateSecurityFuzzWorkflowSource(source) {
   ) {
     findings.push('workflow must reserve the release profile for explicit dispatch');
   }
+  return result(findings);
+}
+
+export function validateSecurityFuzzReleaseWorkflowSource(source) {
+  const findings = [];
+  const prepareStart = source.indexOf('\n  prepare:\n');
+  const publishStart = source.indexOf('\n  publish:\n');
+  if (prepareStart < 0 || publishStart <= prepareStart) {
+    return result(['release workflow must retain ordered prepare and publish jobs']);
+  }
+  const prepare = source.slice(prepareStart, publishStart);
+  const publish = source.slice(publishStart);
+  const requiredPrepareLines = [
+    '    timeout-minutes: 240',
+    '      - run: vp install --frozen-lockfile',
+    '      - name: Run deterministic release security fuzz campaign',
+    '        run: vp exec pnpm run test:security-fuzz-release',
+    '      - name: Archive release security fuzz counterexamples',
+    '        if: failure()',
+    '        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+    '          if-no-files-found: ignore',
+    '          name: kovo-release-security-fuzz-failures-${{ github.sha }}',
+    '          path: .kovo/security-failures/**',
+    '          retention-days: 30',
+    '        run: vp exec pnpm run check:supply-chain',
+  ];
+  for (const line of requiredPrepareLines) {
+    if (!workflowHasLine(prepare, line)) {
+      findings.push(`release prepare job must include line ${line.trim()}`);
+    }
+  }
+
+  const installIndex = prepare.indexOf('run: vp install --frozen-lockfile');
+  const fuzzIndex = prepare.indexOf('run: vp exec pnpm run test:security-fuzz-release');
+  const artifactIndex = prepare.indexOf('name: Archive release security fuzz counterexamples');
+  const supplyChainIndex = prepare.indexOf('run: vp exec pnpm run check:supply-chain');
+  if (
+    installIndex < 0 ||
+    fuzzIndex <= installIndex ||
+    artifactIndex <= fuzzIndex ||
+    supplyChainIndex <= artifactIndex
+  ) {
+    findings.push(
+      'release prepare job must install, run the exact fuzz command, preserve failures, then continue release gates',
+    );
+  }
+  if (workflowLineCount(source, '        run: vp exec pnpm run test:security-fuzz-release') !== 1) {
+    findings.push('release workflow must invoke the exact release fuzz command once');
+  }
+  if (
+    publish.includes('test:security-fuzz-release') ||
+    publish.includes('.kovo/security-failures')
+  ) {
+    findings.push('release fuzz execution and failure artifacts must stay outside the OIDC job');
+  }
+  validatePinnedWorkflowActions(source, findings);
+  validateWorkflowPnpmCommands(source, findings);
   return result(findings);
 }
 
@@ -549,11 +611,19 @@ export function validateDefaultSecurityFuzzCampaign({ rootDir = repoRoot() } = {
   const workflowCheck = validateSecurityFuzzWorkflowSource(
     readFileSync(path.join(rootDir, defaultSecurityFuzzWorkflowPath), 'utf8'),
   );
+  const releaseWorkflowCheck = validateSecurityFuzzReleaseWorkflowSource(
+    readFileSync(path.join(rootDir, defaultSecurityFuzzReleaseWorkflowPath), 'utf8'),
+  );
   const packageCheck = validateSecurityFuzzPackageScripts(
     JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8')),
   );
   return result(
-    [...campaignCheck.findings, ...workflowCheck.findings, ...packageCheck.findings],
+    [
+      ...campaignCheck.findings,
+      ...workflowCheck.findings,
+      ...releaseWorkflowCheck.findings,
+      ...packageCheck.findings,
+    ],
     campaignCheck.summary,
   );
 }
@@ -653,7 +723,8 @@ export async function runSecurityFuzzCampaign(
   if (
     mutationScore === undefined ||
     mutationScore.killed !== document.mutationHarness.expectedMutants ||
-    mutationScore.total !== document.mutationHarness.expectedMutants
+    mutationScore.total !== document.mutationHarness.expectedMutants ||
+    mutationScore.percentage !== document.mutationHarness.requiredScorePercent
   ) {
     throw new Error('security fuzz campaign did not produce its exact mutation score');
   }
@@ -700,10 +771,12 @@ async function executeCase({
     });
     if (
       mutationScore.total !== document.mutationHarness.expectedMutants ||
-      (execution.ok && mutationScore.killed !== document.mutationHarness.expectedMutants)
+      (execution.ok &&
+        (mutationScore.killed !== document.mutationHarness.expectedMutants ||
+          mutationScore.percentage !== document.mutationHarness.requiredScorePercent))
     ) {
       throw new Error(
-        `mutation score ${mutationScore.killed}/${mutationScore.total} does not equal reviewed denominator ${document.mutationHarness.expectedMutants}`,
+        `mutation score ${mutationScore.killed}/${mutationScore.total} does not equal the required ${document.mutationHarness.requiredScorePercent}% over denominator ${document.mutationHarness.expectedMutants}`,
       );
     }
     return { ...execution, mutationScore, ok: execution.ok && mutationScore.failed === 0 };
@@ -957,6 +1030,33 @@ function safeRelativePath(value) {
     !path.isAbsolute(value) &&
     !value.split(/[\\/]/u).includes('..')
   );
+}
+
+function workflowHasLine(source, expected) {
+  return source.split(/\r?\n/u).includes(expected);
+}
+
+function workflowLineCount(source, expected) {
+  return source.split(/\r?\n/u).filter((line) => line === expected).length;
+}
+
+function validatePinnedWorkflowActions(source, findings) {
+  const actionUses = [...source.matchAll(/^\s*- uses:\s*([^\s]+)\s*$/gmu)].map((match) => match[1]);
+  for (const action of actionUses) {
+    if (action.startsWith('./')) continue;
+    if (!/@[0-9a-f]{40}$/u.test(action)) {
+      findings.push(`workflow action must be SHA-pinned: ${action}`);
+    }
+  }
+}
+
+function validateWorkflowPnpmCommands(source, findings) {
+  for (const match of source.matchAll(/^\s*run:\s*(.+)$/gmu)) {
+    const command = match[1];
+    if (/\bpnpm\b/u.test(command) && !/^vp exec pnpm\b/u.test(command)) {
+      findings.push(`workflow pnpm command must run through vp: ${command}`);
+    }
+  }
 }
 
 function sameStringSet(actual, expected) {

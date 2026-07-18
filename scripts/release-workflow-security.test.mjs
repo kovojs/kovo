@@ -49,6 +49,9 @@ describe('release workflow authority', () => {
     expect(prepare).toContain('ref: ${{ github.sha }}');
     expect(prepare).toContain('persist-credentials: false');
     expect(prepare).toContain('run: vp install --frozen-lockfile');
+    expect(prepare).toContain('run: vp exec pnpm run test:security-fuzz-release');
+    expect(prepare).toContain('name: Archive release security fuzz counterexamples');
+    expect(prepare).toContain('path: .kovo/security-failures/**');
     expect(prepare).toContain('run: vp exec pnpm run check:publish');
     expect(prepare).toContain('name: Archive exact verified release payload');
     expect(prepare).toContain('uses: actions/upload-artifact@');
@@ -76,6 +79,8 @@ describe('release workflow authority', () => {
     expect(publish).not.toContain('check:publish');
     expect(publish).not.toContain('pnpm pack');
     expect(publish).not.toContain('verify-release-input.mjs');
+    expect(publish).not.toContain('test:security-fuzz-release');
+    expect(publish).not.toContain('.kovo/security-failures');
   });
 
   it('rejects build-time drift anywhere in the tracked release tree', () => {

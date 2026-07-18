@@ -27,7 +27,9 @@ env:
 jobs:
   campaign:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # The release profile owns a 120-minute internal wall budget. Keep runner margin so a
+    # timed-out case can be replayed once and its minimized counterexample can still upload.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup

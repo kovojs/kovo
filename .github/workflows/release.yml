@@ -95,6 +95,7 @@ jobs:
   prepare:
     needs: authorize
     runs-on: ubuntu-latest
+    timeout-minutes: 240
     permissions:
       checks: read
       contents: read
@@ -121,6 +122,18 @@ jobs:
           VERSION: ${{ inputs.version }}
 
       - run: vp install --frozen-lockfile
+
+      - name: Run deterministic release security fuzz campaign
+        run: vp exec pnpm run test:security-fuzz-release
+
+      - name: Archive release security fuzz counterexamples
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: ignore
+          name: kovo-release-security-fuzz-failures-${{ github.sha }}
+          path: .kovo/security-failures/**
+          retention-days: 30
 
       - name: Supply-chain policy gates
         run: vp exec pnpm run check:supply-chain

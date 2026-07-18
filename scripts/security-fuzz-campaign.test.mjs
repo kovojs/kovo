@@ -12,6 +12,7 @@ import {
   validateDefaultSecurityFuzzCampaign,
   validateSecurityFuzzCampaignDocument,
   validateSecurityFuzzPackageScripts,
+  validateSecurityFuzzReleaseWorkflowSource,
   validateSecurityFuzzWorkflowSource,
 } from './security-fuzz-campaign.mjs';
 
@@ -118,6 +119,20 @@ describe('deterministic security fuzz campaign contract', () => {
         expect.stringContaining('coverage denominator must equal'),
       ]),
     );
+
+    const scoreDrift = structuredClone(source);
+    scoreDrift.mutationHarness.requiredScorePercent = 99;
+    expect(validateSecurityFuzzCampaignDocument(scoreDrift, { rootDir }).findings).toContain(
+      'mutationHarness.requiredScorePercent must be exactly 100',
+    );
+
+    const mutationCoverageDrift = structuredClone(source);
+    mutationCoverageDrift.families.find((family) => family.id === 'mutations').cases[0].covers = [
+      'sampled-mutants',
+    ];
+    expect(
+      validateSecurityFuzzCampaignDocument(mutationCoverageDrift, { rootDir }).findings,
+    ).toContain('mutations: the sole case must cover all-enrolled-mutants');
   });
 
   it('rejects workflow schedule, pinning, vp, profile, and failure-artifact drift', () => {
@@ -145,9 +160,46 @@ describe('deterministic security fuzz campaign contract', () => {
       ],
       ['if: failure()', 'if: success()', 'if: failure()'],
       ['path: .kovo/security-failures/**', 'path: /tmp/logs', 'security-failures'],
+      ['timeout-minutes: 150', 'timeout-minutes: 120', 'timeout-minutes: 150'],
       ['- release', '- quick', '- release'],
     ]) {
       const check = validateSecurityFuzzWorkflowSource(source.replace(needle, replacement));
+      expect(check.ok, `${needle} must be load-bearing`).toBe(false);
+      expect(check.findings.join('\n')).toContain(finding);
+    }
+
+    const commentedSchedule = source.replace(
+      "    - cron: '37 8 * * *'",
+      "    # - cron: '37 8 * * *'",
+    );
+    expect(validateSecurityFuzzWorkflowSource(commentedSchedule).findings).toContain(
+      "workflow must include line - cron: '37 8 * * *'",
+    );
+  });
+
+  it('runs the exact release profile before packing and preserves failures outside OIDC', () => {
+    const source = readFileSync(path.join(rootDir, '.github/workflows/release.yml'), 'utf8');
+    expect(validateSecurityFuzzReleaseWorkflowSource(source)).toEqual({
+      findings: [],
+      ok: true,
+      summary: {},
+    });
+
+    for (const [needle, replacement, finding] of [
+      [
+        'run: vp exec pnpm run test:security-fuzz-release',
+        'run: vp exec pnpm run test:security-fuzz-nightly',
+        'release fuzz command',
+      ],
+      ['timeout-minutes: 240', 'timeout-minutes: 120', 'timeout-minutes: 240'],
+      [
+        'name: Archive release security fuzz counterexamples',
+        'name: Ignore release security fuzz counterexamples',
+        'Archive release security fuzz counterexamples',
+      ],
+      ['path: .kovo/security-failures/**', 'path: /tmp/logs', 'security-failures'],
+    ]) {
+      const check = validateSecurityFuzzReleaseWorkflowSource(source.replace(needle, replacement));
       expect(check.ok, `${needle} must be load-bearing`).toBe(false);
       expect(check.findings.join('\n')).toContain(finding);
     }

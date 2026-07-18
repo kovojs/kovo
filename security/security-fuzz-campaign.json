@@ -9,11 +9,13 @@
   "failureArtifacts": {
     "directory": ".kovo/security-failures/security-fuzz-campaign",
     "schema": "kovo.security-fuzz-counterexample/v1",
-    "minimizationUnit": "one independently replayable manifest case"
+    "minimizationUnit": "one independently replayable manifest case",
+    "retentionDays": 30
   },
   "mutationHarness": {
     "command": ["node", "scripts/security-gate-mutations.mjs"],
-    "expectedMutants": 81
+    "expectedMutants": 99,
+    "requiredScorePercent": 100
   },
   "profiles": {
     "nightly": {
@@ -303,7 +305,7 @@
         "value": "security-gate-mutants/v1",
         "version": 1
       },
-      "coverage": { "unit": "mutant", "denominator": 81 },
+      "coverage": { "unit": "mutant", "denominator": 99 },
       "cases": [
         {
           "id": "security-gate-mutations",
