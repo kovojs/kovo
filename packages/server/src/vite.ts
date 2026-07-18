@@ -10,7 +10,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
-import type { QueryShapeFact as CompilerViteQueryShapeFact } from '@kovojs/compiler/internal';
+import {
+  projectMutationRegistryFactsFromFiles,
+  type ProjectMutationRegistryFacts,
+  type QueryShapeFact as CompilerViteQueryShapeFact,
+} from '@kovojs/compiler/internal';
 import {
   isFrameworkKovoVitePluginOwnerForSourceRoot,
   kovoVitePlugin as createCompilerVitePlugin,
@@ -28,6 +32,7 @@ import {
   collectDataPlaneAnalysis as collectDataPlaneAnalysisAdapter,
   collectDataPlaneErrorDiagnostics as collectDataPlaneErrorDiagnosticsAdapter,
   collectRuntimeRegistryFacts as collectRuntimeRegistryFactsAdapter,
+  dataPlaneSourceFiles as dataPlaneSourceFilesAdapter,
   isDataPlaneSourceFile,
   type DataPlaneDiagnostic,
   type DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
@@ -231,6 +236,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   let compilerPluginValue: KovoCompilerVitePlugin | undefined;
   let externalCompilerPlugin: KovoCompilerVitePlugin | undefined;
   let compilerQueryShapeFacts: readonly CompilerViteQueryShapeFact[] | undefined;
+  let compilerProjectMutationFacts: ProjectMutationRegistryFacts | undefined;
   let appShellPlugin: KovoAppShellDevPlugin | undefined;
   let onModuleDiagnostics: ((report: unknown) => void) | undefined;
   // SPEC.md §9.5: `serve` is the dev disposition (teaching, never fail-closed); any other
@@ -308,6 +314,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       queryShapeFacts() {
         return compilerQueryShapeFacts;
       },
+      registryFacts() {
+        return compilerProjectMutationFacts;
+      },
     }) as KovoCompilerVitePlugin;
     return compilerPluginValue;
   };
@@ -345,6 +354,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         await collectCompilerQueryShapeFacts(root, app),
         'compiler query-shape facts',
       );
+      compilerProjectMutationFacts = collectCompilerProjectMutationFacts(root, app);
       const compiler = await compilerPlugin();
       if (externalCompilerPlugin === undefined) await compiler.configResolved?.(config);
     },
@@ -458,6 +468,13 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       // SPEC.md §9.5.1 / §11.4: an app data-plane file changed — re-run the project-level gate
       // (debounced) so dev teaching diagnostics stay current without per-keystroke analysis.
       void scheduleDevDataPlaneGate(context.file).catch(() => {});
+
+      // SPEC §5.2 rule 10 / §6.3: imported mutation-form authority comes from a whole-project
+      // source snapshot. Refresh it before the compiler handles this update so a removed or
+      // redirected export cannot retain stale positive provenance through the next HMR transform.
+      if (isDataPlaneSourceFile(context.file, root)) {
+        compilerProjectMutationFacts = collectCompilerProjectMutationFacts(root, app);
+      }
 
       const appShellResult = await appShellPlugin?.handleHotUpdate?.(context);
       if (appShellResult !== undefined) return appShellResult;
@@ -696,6 +713,14 @@ async function collectCompilerQueryShapeFacts(
       root,
     }),
   );
+}
+
+function collectCompilerProjectMutationFacts(
+  root: string,
+  app: string,
+): ProjectMutationRegistryFacts {
+  const appSourceDir = buildSecurityPathDirname(appEntryFileName(app, root));
+  return projectMutationRegistryFactsFromFiles(dataPlaneSourceFilesAdapter(appSourceDir, root));
 }
 
 function compilerViteQueryShapeFacts(

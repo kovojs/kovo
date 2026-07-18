@@ -332,14 +332,18 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
     try {
       writeKovoProject(root, { name: 'Dev Proof' });
       linkStarterBuildDependencies(root);
+      const origin = `http://127.0.0.1:${port}`;
 
       devServer = spawn(
         join(root, 'node_modules/.bin/kovo'),
         ['dev', './src/app.tsx', '--host', '127.0.0.1', '--port', String(port), '--strict-port'],
-        { cwd: root, detached: process.platform !== 'win32', env: withRepoBinOnPath() },
+        {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: { ...withRepoBinOnPath(), BETTER_AUTH_URL: origin },
+        },
       );
       const output = collectOutput(devServer);
-      const origin = `http://127.0.0.1:${port}`;
 
       const login = await fetchTextWhenReady(`${origin}/login`, output);
       expect(login).toContain('Sign in');
@@ -358,7 +362,8 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       const jar = new Map<string, string>();
       const loginResponse = await fetch(`${origin}/login`);
       mergeCookies(jar, loginResponse.headers.getSetCookie());
-      const csrf = /name="csrf"\s+value="([^"]+)"/.exec(await loginResponse.text())?.[1];
+      const loginHtml = await loginResponse.text();
+      const csrf = fieldValue(loginHtml, 'csrf');
       expect(csrf).toBeTruthy();
       const demoPassword =
         new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
@@ -367,6 +372,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       expect(demoPassword).toBeTruthy();
 
       const form = new URLSearchParams({
+        'Kovo-Idem': fieldValue(loginHtml, 'Kovo-Idem'),
         email: 'demo@example.com',
         password: demoPassword,
         next: '/',

@@ -72,6 +72,57 @@ export const CartButton = component({
     }
   });
 
+  it('threads project-proven stock Better Auth mutation forms through dev transforms', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-dev-auth-forms-'));
+    const runtimeSource = `
+import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth';
+export function createAppAuthBindings(options) {
+  return createBetterAuthPostgresBindingsFromEnvironment({ ...options });
+}
+`;
+    const authSource = `
+import { createAppAuthBindings } from './_kovo/app-runtime-db.js';
+const authBindings = createAppAuthBindings({ csrf: {}, signInAccess: {}, signOutAccess: {} });
+export const appSignIn = authBindings.signIn;
+export const appSignOut = authBindings.signOut;
+`;
+    const formsSource = `
+import { component, FormError } from '@kovojs/core';
+import { appSignIn, appSignOut } from '../auth.js';
+export const AuthForms = component({
+  mutations: { appSignIn, appSignOut },
+  render: () => <>
+    <form mutation={appSignIn}>
+      <input name="email" />
+      <input name="password" />
+      <FormError code="INVALID_CREDENTIALS" message="Invalid credentials" />
+    </form>
+    <form mutation={appSignOut}><button type="submit">Sign out</button></form>
+  </>,
+});
+`;
+
+    try {
+      await mkdir(join(root, 'src/_kovo'), { recursive: true });
+      await mkdir(join(root, 'src/components'), { recursive: true });
+      await writeFile(join(root, 'src/_kovo/app-runtime-db.ts'), runtimeSource, 'utf8');
+      await writeFile(join(root, 'src/auth.ts'), authSource, 'utf8');
+      await writeFile(join(root, 'src/components/auth-forms.tsx'), formsSource, 'utf8');
+
+      const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
+      await plugin.configResolved?.({ root });
+      const transformed = await plugin.transform?.(
+        formsSource,
+        join(root, 'src/components/auth-forms.tsx'),
+      );
+
+      expect(transformed?.code).toContain('action="/_m/auth/sign-in"');
+      expect(transformed?.code).toContain('action="/_m/auth/sign-out"');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('adopts one configured compiler owner instead of recompiling its lowered output', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-compiler-owner-'));
     const compiler = compilerKovoVitePlugin({ include: ['src'] });
