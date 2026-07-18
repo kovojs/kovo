@@ -25,6 +25,7 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
       tempPrefix: 'create-kovo-packed-build-run-',
     });
     const port = await reservePort();
+    const origin = `http://127.0.0.1:${port}`;
     let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
@@ -40,13 +41,13 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
         detached: process.platform !== 'win32',
         env: {
           ...withStarterBinOnPath(app.root),
+          BETTER_AUTH_URL: origin,
           HOST: '127.0.0.1',
           NODE_ENV: 'test',
           PORT: String(port),
         },
       });
       const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
       const login = await fetchTextWhenReady(`${origin}/login`, output);
       const stylesheetHref = /\/assets\/styles\.css/.exec(login)?.[0] ?? '';
 

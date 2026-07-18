@@ -13,6 +13,7 @@ import {
   FakeFormElement,
   FakeRoot,
   installTestClientModuleManifest,
+  serverStampedMutationIdem,
 } from './runtime-test-fakes.js';
 
 const restoreClientModuleManifest = installTestClientModuleManifest([
@@ -153,7 +154,11 @@ describe('loader lifecycle', () => {
     installDelegatedEventLifecycle({
       enhancedMutations: {
         fetch,
-        formData: () => new URLSearchParams([['sku', 'sku_1']]),
+        formData: () =>
+          new URLSearchParams([
+            ['Kovo-Idem', serverStampedMutationIdem],
+            ['sku', 'sku_1'],
+          ]),
         root: root as never,
         store: createQueryStore(),
       },

@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.mjs';
+
 import {
   balanceStarterShards,
   balanceShards,
@@ -191,6 +193,7 @@ describe('ci-shards', () => {
     expect(rootTestJob).toContain(
       '--history "$RUNNER_TEMP/kovo-common-timing/timing-history.json"',
     );
+    expect(rootTestJob).toContain('vitest --run --no-file-parallelism');
     expect(rootTestJob).not.toContain(
       'gh run download "$run_id" -n kovo-root-timing-history-${{ matrix.shard }}',
     );
@@ -324,6 +327,20 @@ describe('ci-shards', () => {
       includeVitest('packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts'),
     ).toBe(false);
     expect(includeVitest('packages/server/src/guards.test.ts')).toBe(false);
+  });
+
+  it('keeps every C13-owned classifier file out of duplicate root Vitest shards', () => {
+    const corpusFiles = [
+      ...new Set(REQUIRED_CLASSIFIER_CORPORA.flatMap((corpus) => corpus.testFiles)),
+    ];
+    expect(corpusFiles.length).toBeGreaterThan(0);
+    for (const file of corpusFiles) expect(includeVitest(file), file).toBe(false);
+    expect(
+      corpusFiles.includes(
+        'packages/drizzle/src/trust-escapes-static-temporal-final-review.test.ts',
+      ),
+    ).toBe(true);
+    expect(includeVitest('packages/drizzle/src/derive.test.ts')).toBe(true);
   });
 
   it('discovers shard inputs through the shared walker without skipped-directory escapes', async () => {

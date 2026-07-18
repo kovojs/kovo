@@ -11,6 +11,7 @@ test('replays duplicate idempotency keys without executing the write twice', asy
   await page.goto('/');
   const origin = new URL(page.url()).origin;
   const token = await page.locator('input[name="kovo-csrf"]').inputValue();
+  const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
   const target = page.locator('[kovo-fragment-target="idem-status"]');
   const liveTarget = [
     await target.getAttribute('kovo-fragment-target'),
@@ -26,7 +27,7 @@ test('replays duplicate idempotency keys without executing the write twice', asy
     form: { note: 'first', 'kovo-csrf': token },
     headers: {
       'Kovo-Fragment': 'true',
-      'Kovo-Idem': 'idem-integration-1',
+      'Kovo-Idem': idem,
       'Kovo-Current-Url': page.url(),
       'Kovo-Live-Targets': liveTarget,
       'Kovo-Targets': 'idem-status=idem',
@@ -42,7 +43,7 @@ test('replays duplicate idempotency keys without executing the write twice', asy
     form: { note: 'first', 'kovo-csrf': token },
     headers: {
       'Kovo-Fragment': 'true',
-      'Kovo-Idem': 'idem-integration-1',
+      'Kovo-Idem': idem,
       'Kovo-Current-Url': page.url(),
       'Kovo-Live-Targets': liveTarget,
       'Kovo-Targets': 'idem-status=idem',

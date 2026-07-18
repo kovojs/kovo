@@ -5710,6 +5710,22 @@ function requestRetainedConfigCallIsReviewed(
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
 ): boolean {
+  const directCallee = unwrapStaticExpression(call.getExpression());
+  const directReceiver = requestCallReceiver(directCallee);
+  if (
+    directReceiver &&
+    Node.isIdentifier(unwrapStaticExpression(directReceiver)) &&
+    ['Object', 'Reflect'].includes(unwrapStaticExpression(directReceiver).getText()) &&
+    unshadowedGlobalIdentifier(
+      unwrapStaticExpression(directReceiver),
+      unwrapStaticExpression(directReceiver).getText(),
+    )
+  ) {
+    // Retained-config authority is framework/import provenance. A direct unshadowed intrinsic
+    // namespace cannot satisfy any of those identities; its executable descriptor/proxy surface
+    // is still scanned by the ordinary protocol pass below.
+    return false;
+  }
   if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(call, session)) return true;
   if (requestCallIsExactBootOnlyGeneratedSetup(call, session)) return true;
   if (requestCallIsExactMemoryClientModuleRegistryConstructor(call, session)) return true;
@@ -11927,6 +11943,42 @@ function requestStaticFrameworkGuardIsClosed(expression: Node): boolean {
 }
 
 const REQUEST_DIRECT_IMPORTED_EXPORT_MEMO = new WeakMap<object, Map<string, boolean>>();
+const REQUEST_DIRECT_IMPORTED_BINDING_KEYS = new WeakMap<
+  SourceFile,
+  Map<string, ReadonlySet<string>>
+>();
+
+function requestDirectImportedBindingKeys(
+  sourceFile: SourceFile,
+  module: string,
+  exportName: string,
+  kind: 'named' | 'namespace',
+): ReadonlySet<string> {
+  let memo = REQUEST_DIRECT_IMPORTED_BINDING_KEYS.get(sourceFile);
+  if (!memo) {
+    memo = new Map();
+    REQUEST_DIRECT_IMPORTED_BINDING_KEYS.set(sourceFile, memo);
+  }
+  const key = `${kind}:${module}:${exportName}`;
+  const cached = memo.get(key);
+  if (cached) return cached;
+  const bindings = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== module) continue;
+    if (kind === 'namespace') {
+      const symbol = declaration.getNamespaceImport()?.getSymbol();
+      if (symbol) bindings.add(requestSymbolKey(symbol));
+      continue;
+    }
+    for (const named of declaration.getNamedImports()) {
+      if (named.getName() !== exportName) continue;
+      const symbol = (named.getAliasNode() ?? named.getNameNode()).getSymbol();
+      if (symbol) bindings.add(requestSymbolKey(symbol));
+    }
+  }
+  memo.set(key, bindings);
+  return bindings;
+}
 
 function requestExpressionIsDirectImportedExport(
   expression: Node,
@@ -11954,22 +12006,16 @@ function requestExpressionIsDirectImportedExportUncached(
   exportName: string,
 ): boolean {
   if (Node.isIdentifier(node)) {
+    const importedBindings = requestDirectImportedBindingKeys(
+      node.getSourceFile(),
+      module,
+      exportName,
+      'named',
+    );
+    if (importedBindings.size === 0) return false;
     const useSymbol = node.getSymbol();
     if (!useSymbol) return false;
-    const useKey = requestSymbolKey(useSymbol);
-    return node
-      .getSourceFile()
-      .getImportDeclarations()
-      .some(
-        (declaration) =>
-          declaration.getModuleSpecifierValue() === module &&
-          declaration.getNamedImports().some((named) => {
-            if (named.getName() !== exportName) return false;
-            const local = named.getAliasNode() ?? named.getNameNode();
-            const importSymbol = local.getSymbol();
-            return !!importSymbol && requestSymbolKey(importSymbol) === useKey;
-          }),
-      );
+    return importedBindings.has(requestSymbolKey(useSymbol));
   }
   if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
     return false;
@@ -11979,18 +12025,16 @@ function requestExpressionIsDirectImportedExportUncached(
     : staticMemberName(node.getArgumentExpression());
   const namespace = unwrapStaticExpression(node.getExpression());
   if (member !== exportName || !Node.isIdentifier(namespace)) return false;
+  const importedBindings = requestDirectImportedBindingKeys(
+    namespace.getSourceFile(),
+    module,
+    exportName,
+    'namespace',
+  );
+  if (importedBindings.size === 0) return false;
   const useSymbol = namespace.getSymbol();
   if (!useSymbol) return false;
-  const useKey = requestSymbolKey(useSymbol);
-  return namespace
-    .getSourceFile()
-    .getImportDeclarations()
-    .some((declaration) => {
-      if (declaration.getModuleSpecifierValue() !== module) return false;
-      const importedNamespace = declaration.getNamespaceImport();
-      const importSymbol = importedNamespace?.getSymbol();
-      return !!importSymbol && requestSymbolKey(importSymbol) === useKey;
-    });
+  return importedBindings.has(requestSymbolKey(useSymbol));
 }
 
 const REQUEST_EXACT_IMPORTED_CARRIER_PRISTINE_MEMO = new WeakMap<object, Map<string, boolean>>();
@@ -24060,6 +24104,33 @@ function requestCallIsKnownSafe(
 
   if (requestCallCrossesDeferredRootAuthorityBoundary(call, callable)) return false;
 
+  const directReceiver = receiver ? unwrapStaticExpression(receiver) : undefined;
+  if (
+    member &&
+    directReceiver &&
+    Node.isIdentifier(directReceiver) &&
+    ['Object', 'Reflect'].includes(directReceiver.getText()) &&
+    unshadowedGlobalIdentifier(directReceiver, directReceiver.getText())
+  ) {
+    // Direct Object/Reflect calls cannot be framework constructors, imported capabilities, or
+    // request-root methods. Dispatch them to the same reviewed-global proof before walking those
+    // unrelated identity families. scanRequestCallProtocols has already closed descriptor,
+    // accessor, proxy, and coercion execution for the arguments.
+    if (
+      !requestExpressionIsSafeGlobalNamespace(directReceiver) ||
+      !requestGlobalNamespaceMemberIsReviewed(directReceiver, member)
+    ) {
+      return false;
+    }
+    scanRequestFunctionArguments(call, context);
+    if (directReceiver.getText() === 'Reflect') {
+      return member === 'apply' || member === 'construct'
+        ? requestReflectiveTargetIsClosed(call, member, callable, context)
+        : requestReflectiveOperationIsClosed(call, member, callable, context);
+    }
+    return requestKnownCallbacksAreClosed(call, member, context);
+  }
+
   if (requestCallIsPromiseSettlement(call, callable, context)) return true;
   if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(call, context.provenance)) {
     scanRequestFunctionArguments(call, context);
@@ -28156,6 +28227,22 @@ function requestExactGlobalCarrierInstallationDependencies(
   session: RequestExactGlobalValueSession,
   depth: number,
 ): RequestExactGlobalProvenance[] {
+  const [target, propertyOrSource, valueOrDescriptor] = call.getArguments();
+  if (!target) return [];
+  const targets = requestGlobalStorageLocations(target, [], session, depth + 1);
+  const matchedLocations = targets.flatMap((targetLocation) =>
+    reads.flatMap((read) => {
+      const remainder = requestLocationRemainder(targetLocation, read);
+      return remainder ? [remainder] : [];
+    }),
+  );
+  if (matchedLocations.length === 0) return [];
+
+  // A carrier-installation call can affect this proof only after its target is shown to alias the
+  // exact storage being read. Resolve that finite storage relation before entering the mutually
+  // recursive Object/Reflect method lattice. This preserves the same closed verdicts while keeping
+  // N unrelated local mutation targets from each re-proving all M possible mutation-method aliases
+  // (SPEC §6.6 rule 6; C13 superset/performance corpus).
   const callee = unwrapStaticExpression(call.getExpression());
   const objectMethods = requestExactGlobalMutationMethods(callee, 'Object', [
     'assign',
@@ -28169,75 +28256,68 @@ function requestExactGlobalCarrierInstallationDependencies(
     'setPrototypeOf',
   ]).matches;
   if (objectMethods.length + reflectMethods.length === 0) return [];
-  const [target, propertyOrSource, valueOrDescriptor] = call.getArguments();
-  if (!target) return [];
-  const targets = requestGlobalStorageLocations(target, [], session, depth + 1);
   const dependencies: RequestExactGlobalProvenance[] = [];
-  for (const targetLocation of targets) {
-    for (const read of reads) {
-      const remainder = requestLocationRemainder(targetLocation, read);
-      if (!remainder) continue;
-      if (objectMethods.includes('assign')) {
-        for (const source of call.getArguments().slice(1)) {
-          dependencies.push(
-            requestProjectedExpressionResolvesToExactGlobalValue(
-              source,
-              remainder,
-              session,
-              depth + 1,
-            ),
-          );
-        }
-      }
-      if (objectMethods.includes('setPrototypeOf') || reflectMethods.includes('setPrototypeOf')) {
-        if (propertyOrSource) {
-          dependencies.push(
-            requestProjectedExpressionResolvesToExactGlobalValue(
-              propertyOrSource,
-              remainder,
-              session,
-              depth + 1,
-            ),
-          );
-        }
-      }
-      if (objectMethods.includes('defineProperties') && propertyOrSource) {
-        const [property, ...nested] = remainder;
+  for (const remainder of matchedLocations) {
+    if (objectMethods.includes('assign')) {
+      for (const source of call.getArguments().slice(1)) {
         dependencies.push(
-          ...requestDescriptorValueVerdicts(
-            propertyOrSource,
-            property,
-            ['value', ...nested],
+          requestProjectedExpressionResolvesToExactGlobalValue(
+            source,
+            remainder,
             session,
-            depth,
+            depth + 1,
           ),
         );
       }
-      if (
-        objectMethods.includes('defineProperty') ||
-        reflectMethods.includes('defineProperty') ||
-        reflectMethods.includes('set')
-      ) {
-        const property = requestCanonicalStaticMemberName(propertyOrSource);
-        const [expected, ...nested] = remainder;
-        if (property === undefined || expected === undefined || property !== expected) continue;
-        if (reflectMethods.includes('set') && !reflectMethods.includes('defineProperty')) {
-          if (valueOrDescriptor) {
-            dependencies.push(
-              requestProjectedExpressionResolvesToExactGlobalValue(
-                valueOrDescriptor,
-                nested,
-                session,
-                depth + 1,
-              ),
-            );
-          }
-        } else if (valueOrDescriptor) {
+    }
+    if (objectMethods.includes('setPrototypeOf') || reflectMethods.includes('setPrototypeOf')) {
+      if (propertyOrSource) {
+        dependencies.push(
+          requestProjectedExpressionResolvesToExactGlobalValue(
+            propertyOrSource,
+            remainder,
+            session,
+            depth + 1,
+          ),
+        );
+      }
+    }
+    if (objectMethods.includes('defineProperties') && propertyOrSource) {
+      const [property, ...nested] = remainder;
+      dependencies.push(
+        ...requestDescriptorValueVerdicts(
+          propertyOrSource,
+          property,
+          ['value', ...nested],
+          session,
+          depth,
+        ),
+      );
+    }
+    if (
+      objectMethods.includes('defineProperty') ||
+      reflectMethods.includes('defineProperty') ||
+      reflectMethods.includes('set')
+    ) {
+      const property = requestCanonicalStaticMemberName(propertyOrSource);
+      const [expected, ...nested] = remainder;
+      if (property === undefined || expected === undefined || property !== expected) continue;
+      if (reflectMethods.includes('set') && !reflectMethods.includes('defineProperty')) {
+        if (valueOrDescriptor) {
           dependencies.push(
-            ...requestDescriptorValueVerdicts(valueOrDescriptor, 'value', nested, session, depth),
-            ...requestDescriptorGetterVerdicts(valueOrDescriptor, nested, session, depth),
+            requestProjectedExpressionResolvesToExactGlobalValue(
+              valueOrDescriptor,
+              nested,
+              session,
+              depth + 1,
+            ),
           );
         }
+      } else if (valueOrDescriptor) {
+        dependencies.push(
+          ...requestDescriptorValueVerdicts(valueOrDescriptor, 'value', nested, session, depth),
+          ...requestDescriptorGetterVerdicts(valueOrDescriptor, nested, session, depth),
+        );
       }
     }
   }
@@ -37944,18 +38024,33 @@ function unshadowedGlobalIdentifier(node: Node, expectedName: string): boolean {
   return !requestIdentifierHasSameFileRuntimeBinding(node, expectedName);
 }
 
+const REQUEST_IDENTIFIER_RUNTIME_BINDING_MEMO = new WeakMap<Node, Map<string, boolean>>();
+
 function requestIdentifierHasSameFileRuntimeBinding(node: Node, expectedName: string): boolean {
   if (!Node.isIdentifier(node)) return false;
-  if (requestSymbolHasSameFileRuntimeBinding(node.getSymbol(), node)) return true;
+  let memo = REQUEST_IDENTIFIER_RUNTIME_BINDING_MEMO.get(node);
+  if (!memo) {
+    memo = new Map();
+    REQUEST_IDENTIFIER_RUNTIME_BINDING_MEMO.set(node, memo);
+  }
+  const cached = memo.get(expectedName);
+  if (cached !== undefined) return cached;
+
+  if (requestSymbolHasSameFileRuntimeBinding(node.getSymbol(), node)) {
+    memo.set(expectedName, true);
+    return true;
+  }
 
   // `Identifier#getSymbol()` may resolve an ambient/lib global (or be absent) for a write target
   // even when a block-local value binding owns the spelling. Ask the checker for the symbols in
   // the exact lexical scope as a second, independent recovery path. Filtering back to same-file
   // runtime declarations preserves the classifier's ambient/type-only distinction.
-  return node
+  const result = node
     .getSymbolsInScope(ts.SymbolFlags.Value)
     .filter((symbol) => symbol.getName() === expectedName)
     .some((symbol) => requestSymbolHasSameFileRuntimeBinding(symbol, node));
+  memo.set(expectedName, result);
+  return result;
 }
 
 function requestSymbolHasSameFileRuntimeBinding(

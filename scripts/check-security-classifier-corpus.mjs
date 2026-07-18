@@ -101,6 +101,12 @@ const LOAD_ISOLATED_TEST_CONFIGS = [
     freshTestNames: ['keeps 120 distinct iterable and parameter-pattern safe misses bounded'],
   },
   {
+    file: 'packages/drizzle/src/trust-escapes-static-temporal-final-review.test.ts',
+    freshTestNames: [
+      'keeps one hundred twenty unrelated safe class carriers within the provenance budget',
+    ],
+  },
+  {
     file: 'packages/server/src/build.test.ts',
     freshTestNames: [
       'shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells',
@@ -1293,6 +1299,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus kv424-request-global-member-lockdown',
     testFiles: [
       'packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts',
+      'packages/drizzle/src/trust-escapes-static-temporal-final-review.test.ts',
       'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
     ],
     verdictAnchors: [
@@ -1372,6 +1379,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'keeps 120 distinct iterable and parameter-pattern safe misses bounded',
           'indexes 400/800 distinct exact-global helper safe misses with near-linear bounded scaling',
           'retainDistinctSafeMissCalls',
+        ],
+      },
+      {
+        id: 'temporal-class-and-root-provenance-superset',
+        file: 'packages/drizzle/src/trust-escapes-static-temporal-final-review.test.ts',
+        snippets: [
+          'temporal final adversarial review',
+          'C1 rejects a Promise carrier through %s',
+          'C2 rejects a class-derived thenable through %s',
+          'C3 invalidates the root through a %s alias',
+          'keeps one hundred twenty unrelated safe class carriers within the provenance budget',
+          'performance.now() - startedAt',
+          'toBeLessThan(8_000)',
         ],
       },
       {
@@ -1916,6 +1936,27 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "label: 'X-Forwarded-For IPv6 port'",
           "label: 'X-Real-IP IPv4 port'",
           "label: 'X-Real-IP IPv6 port'",
+        ],
+      },
+    ],
+  },
+  {
+    id: 'request-ingress',
+    marker: '@kovo-security-classifier-corpus request-ingress',
+    testFiles: ['packages/server/src/request-ingress-c13.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'method-authority-scheme-superset',
+        file: 'packages/server/src/request-ingress-c13.test.ts',
+        snippets: [
+          'preserves the complete closed method-identity verdict before Fetch construction',
+          "'PoSt'",
+          "'CONNECT'",
+          'preserves the complete closed authority-identity verdict and reconstructs one Host',
+          "'%65xample.com'",
+          "'example.com:443'",
+          'selects only the explicitly trusted transport scheme before applying strict grammar',
+          "'https, ftp'",
         ],
       },
     ],
