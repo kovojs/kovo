@@ -16,6 +16,14 @@ import {
   type BetterAuthRequestSecretPath,
   type BetterAuthRequestReachableExport,
 } from './internal/non-egress-proof.js';
+import {
+  betterAuthCredentialConsumerContracts,
+  betterAuthCredentialConsumers,
+  consumeBetterAuthCredentialResult,
+  isBetterAuthCredentialGateFailure,
+  runBetterAuthCredentialConsumer,
+  runBetterAuthCredentialConsumerAsync,
+} from './internal/credential-runtime-gate.js';
 
 const srcDir = new URL('.', import.meta.url).pathname;
 const trustedPlaintextModule = 'internal/trusted-plaintext.ts';
@@ -39,6 +47,44 @@ function sourceWithoutComments(relativePath: string): string {
   return sourceText(relativePath)
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\/\/.*$/gm, '');
+}
+
+function scanBetterAuthRawCredentialConsumers(): Array<{ consumer: string; file: string }> {
+  const uses: Array<{ consumer: string; file: string }> = [];
+  for (const path of sourceFiles(srcDir)) {
+    const file = relative(srcDir, path).split('\\').join('/');
+    if (file === 'internal/credential-runtime-gate.ts') continue;
+    const sourceFile = ts.createSourceFile(file, sourceText(file), ts.ScriptTarget.Latest, true);
+    function visit(node: ts.Node): void {
+      if (ts.isCallExpression(node)) {
+        const callee = node.expression.getText(sourceFile);
+        const firstArgument = node.arguments[0]?.getText(sourceFile);
+        let consumer: string | undefined;
+        if (
+          callee === 'betterAuth' ||
+          callee === 'createBetterAuthPostgresRateLimitStorage' ||
+          callee === 'createBetterAuthSqliteRateLimitStorage' ||
+          callee === 'pinnedKovoHashPassword' ||
+          callee === 'pinnedKovoVerifyPassword' ||
+          callee === 'sanitizeBetterAuthSessionPayload' ||
+          callee === 'snapshotBetterAuthSetCookie'
+        ) {
+          consumer = callee;
+        } else if (callee === 'betterAuthApply' && firstArgument?.endsWith('.handler')) {
+          consumer = 'Better Auth handler';
+        } else {
+          const api = /\.api\.([A-Za-z0-9_$]+)$/u.exec(callee)?.[1];
+          if (api !== undefined) consumer = `auth.api.${api}`;
+        }
+        if (consumer !== undefined) uses.push({ consumer, file });
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+  }
+  return uses.sort((left, right) =>
+    `${left.file}:${left.consumer}`.localeCompare(`${right.file}:${right.consumer}`),
+  );
 }
 
 function generatedAuthRuntimeExports(source: string): BetterAuthRequestReachableExport[] {
@@ -157,6 +203,9 @@ describe('Better Auth trusted plaintext zone', () => {
       'better-auth.adapter.sign-in.account-password',
       'better-auth.adapter.session-token-lookup',
       'better-auth.mount.handler-delegation',
+      'better-auth.mount.set-cookie-forwarding',
+      'better-auth.binding.signing-secret',
+      'better-auth.rate-limit.signing-secret',
     ]);
 
     expect(
@@ -313,17 +362,193 @@ describe('Better Auth trusted plaintext zone', () => {
     ]);
   });
 
-  it('binds request-reachable plaintext assertions to the enumerated secret path manifest', () => {
-    const assertionCall = /\bassertBetterAuthRequestSecretPath\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-    const asserted = sourceFiles(srcDir).flatMap((path) => {
-      const rel = relative(srcDir, path);
-      return [...sourceWithoutComments(rel).matchAll(assertionCall)].map((match) => match[1]);
-    });
+  it('binds every M2 secret path to at least one exact runtime consumer', () => {
+    const asserted = betterAuthCredentialConsumerContracts.flatMap((contract) => contract.paths);
     const manifestIds = new Set(betterAuthRequestSecretPaths.map((path) => path.id));
     const assertedIds = new Set(asserted);
 
     expect([...assertedIds].sort()).toEqual([...manifestIds].sort());
     expect(asserted.every((id) => manifestIds.has(id))).toBe(true);
+    const consumerTokens = Object.values(betterAuthCredentialConsumers);
+    expect(consumerTokens).toHaveLength(betterAuthCredentialConsumerContracts.length);
+    expect(new Set(consumerTokens).size).toBe(consumerTokens.length);
+  });
+
+  it('routes every declared runtime consumer through its sole registered owner', () => {
+    // SPEC §6.6/§10.3 C9-C10: the unique-symbol type is ergonomics only. This source census binds
+    // every actual token use to the contract owner, while runtime registry tests below prove that
+    // structural forgeries cannot enter or leave the door.
+    const gateModule = 'internal/credential-runtime-gate.ts';
+    const consumerUse = /\bbetterAuthCredentialConsumers\.([A-Za-z0-9_$]+)/g;
+    const uses = sourceFiles(srcDir)
+      .filter((path) => relative(srcDir, path).split('\\').join('/') !== gateModule)
+      .flatMap((path) => {
+        const file = relative(srcDir, path).split('\\').join('/');
+        return [...sourceWithoutComments(file).matchAll(consumerUse)].map((match) => ({
+          file,
+          name: match[1],
+        }));
+      });
+
+    expect(uses).toHaveLength(16);
+    expect(uses).toEqual(
+      expect.arrayContaining([
+        { file: 'internal/password.ts', name: 'passwordHash' },
+        { file: 'internal/password.ts', name: 'passwordVerify' },
+        { file: 'internal/trusted-plaintext.ts', name: 'credentialHandlerSignInEmail' },
+        { file: 'internal/trusted-plaintext.ts', name: 'credentialHandlerSignUpEmail' },
+        { file: 'internal/trusted-plaintext.ts', name: 'seedSignUpEmail' },
+        { file: 'internal/trusted-plaintext.ts', name: 'signOut' },
+        { file: 'internal/trusted-plaintext.ts', name: 'getSession' },
+        { file: 'internal/trusted-plaintext.ts', name: 'credentialCookieForwarding' },
+        { file: 'internal/trusted-plaintext.ts', name: 'sessionCookieForwarding' },
+        { file: 'internal/trusted-plaintext.ts', name: 'mountCookieForwarding' },
+        { file: 'mount-adapter.ts', name: 'mountHandler' },
+        { file: 'postgres.ts', name: 'postgresRateLimit' },
+        { file: 'postgres.ts', name: 'postgresAdapter' },
+        { file: 'session.ts', name: 'sessionProjection' },
+        { file: 'sqlite.ts', name: 'sqliteRateLimit' },
+        { file: 'sqlite.ts', name: 'sqliteAdapter' },
+      ]),
+    );
+  });
+
+  it('keeps the raw Better Auth credential-consumer denominator equal to the reviewed census', () => {
+    expect(scanBetterAuthRawCredentialConsumers()).toEqual(
+      [
+        { consumer: 'pinnedKovoHashPassword', file: 'internal/password.ts' },
+        { consumer: 'pinnedKovoVerifyPassword', file: 'internal/password.ts' },
+        { consumer: 'Better Auth handler', file: 'internal/trusted-plaintext.ts' },
+        { consumer: 'auth.api.getSession', file: 'internal/trusted-plaintext.ts' },
+        { consumer: 'auth.api.signOut', file: 'internal/trusted-plaintext.ts' },
+        { consumer: 'auth.api.signUpEmail', file: 'internal/trusted-plaintext.ts' },
+        { consumer: 'snapshotBetterAuthSetCookie', file: 'internal/trusted-plaintext.ts' },
+        { consumer: 'Better Auth handler', file: 'mount-adapter.ts' },
+        { consumer: 'betterAuth', file: 'postgres.ts' },
+        {
+          consumer: 'createBetterAuthPostgresRateLimitStorage',
+          file: 'postgres.ts',
+        },
+        { consumer: 'sanitizeBetterAuthSessionPayload', file: 'session.ts' },
+        { consumer: 'betterAuth', file: 'sqlite.ts' },
+        {
+          consumer: 'createBetterAuthSqliteRateLimitStorage',
+          file: 'sqlite.ts',
+        },
+      ].sort((left, right) =>
+        `${left.file}:${left.consumer}`.localeCompare(`${right.file}:${right.consumer}`),
+      ),
+    );
+  });
+
+  it('rejects forged, cross-consumer, and replayed runtime results', () => {
+    let invoked = false;
+    expect(() =>
+      runBetterAuthCredentialConsumer({} as never, () => {
+        invoked = true;
+        return true;
+      }),
+    ).toThrow('KV439: unregistered Better Auth credential consumer');
+    expect(invoked).toBe(false);
+
+    const verify = betterAuthCredentialConsumers.passwordVerify;
+    const result = runBetterAuthCredentialConsumer(verify, () => true);
+    expect(() =>
+      consumeBetterAuthCredentialResult(
+        betterAuthCredentialConsumers.passwordHash as never,
+        result as never,
+      ),
+    ).toThrow('KV439: mismatched Better Auth credential consumer result');
+    expect(consumeBetterAuthCredentialResult(verify, result)).toBe(true);
+    expect(() => consumeBetterAuthCredentialResult(verify, result)).toThrow(
+      'KV439: mismatched Better Auth credential consumer result',
+    );
+  });
+
+  it('validates hostile consumer results and redacts provider errors at runtime', async () => {
+    const password = 'M2_PASSWORD_MUST_NOT_LEAVE_THE_GATE';
+    await expect(
+      runBetterAuthCredentialConsumerAsync(
+        betterAuthCredentialConsumers.passwordHash,
+        async () => password,
+      ),
+    ).rejects.toThrow('returned a non-Argon2id hash');
+
+    let resultTrapRan = false;
+    const proxyResult = new Proxy([] as string[], {
+      getOwnPropertyDescriptor() {
+        resultTrapRan = true;
+        throw new Error(`proxy result reflected ${password}`);
+      },
+    });
+    expect(() =>
+      runBetterAuthCredentialConsumer(
+        betterAuthCredentialConsumers.credentialCookieForwarding,
+        () => proxyResult,
+      ),
+    ).toThrow('returned a Proxy');
+    expect(resultTrapRan).toBe(false);
+
+    const providerError = Object.assign(new Error(`provider reflected ${password}`), {
+      status: 401,
+    });
+    let caught: unknown;
+    try {
+      await runBetterAuthCredentialConsumerAsync(
+        betterAuthCredentialConsumers.credentialHandlerSignInEmail,
+        async () => {
+          throw providerError;
+        },
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect(String(caught)).not.toContain(password);
+    expect(isBetterAuthCredentialGateFailure(caught)).toBe(true);
+    expect(isBetterAuthCredentialGateFailure(caught)).toBe(false);
+
+    let getterRan = false;
+    const accessorError = new Error(`provider reflected ${password}`);
+    Object.defineProperty(accessorError, 'status', {
+      get() {
+        getterRan = true;
+        return 401;
+      },
+    });
+    let accessorCaught: unknown;
+    try {
+      await runBetterAuthCredentialConsumerAsync(
+        betterAuthCredentialConsumers.credentialHandlerSignInEmail,
+        async () => {
+          throw accessorError;
+        },
+      );
+    } catch (error) {
+      accessorCaught = error;
+    }
+    expect(getterRan).toBe(false);
+    expect(String(accessorCaught)).not.toContain(password);
+    expect(isBetterAuthCredentialGateFailure(accessorCaught)).toBe(false);
+
+    const proxyError = new Proxy(Object.create(null), {
+      getOwnPropertyDescriptor() {
+        throw new Error(`proxy trap reflected ${password}`);
+      },
+    });
+    let proxyCaught: unknown;
+    try {
+      await runBetterAuthCredentialConsumerAsync(
+        betterAuthCredentialConsumers.credentialHandlerSignInEmail,
+        async () => {
+          throw proxyError;
+        },
+      );
+    } catch (error) {
+      proxyCaught = error;
+    }
+    expect(String(proxyCaught)).not.toContain(password);
+    expect(isBetterAuthCredentialGateFailure(proxyCaught)).toBe(false);
   });
 
   // SPEC §10.1 C10 / §6.6 (papercuts-36 P1): confinement is a FAIL-CLOSED enumeration whose
@@ -346,6 +571,7 @@ describe('Better Auth trusted plaintext zone', () => {
 
     // The real framework surface is fully classified and confined (proof is GREEN).
     expect(proveBetterAuthPlaintextApiConfinement(usages)).toEqual([]);
+    expect(usages).toHaveLength(3);
 
     // Every `auth.api.*` Kovo calls today reads plaintext and lives in the trusted module.
     expect(new Set(usages.map((usage) => usage.file))).toEqual(
@@ -353,7 +579,6 @@ describe('Better Auth trusted plaintext zone', () => {
     );
     expect([...new Set(usages.map((usage) => usage.method))].sort()).toEqual([
       'getSession',
-      'signInEmail',
       'signOut',
       'signUpEmail',
     ]);
@@ -421,15 +646,10 @@ describe('Better Auth trusted plaintext zone', () => {
     });
 
     expect(new Set(matches.map((match) => match.slice(0, match.indexOf(':'))))).toEqual(
-      new Set([
-        'internal/credential.ts',
-        'internal/trusted-plaintext.ts',
-        'mount-adapter.ts',
-        'session.ts',
-      ]),
+      new Set(['internal/credential.ts', 'internal/trusted-plaintext.ts']),
     );
     expect(sourceText('internal/credential.ts')).toContain('forward(cookie,');
-    expect(sourceText('mount-adapter.ts')).toContain('betterAuthCreateRedirectResponse(');
+    expect(sourceText('mount-adapter.ts')).toContain('getBetterAuthMountSetCookie(headers)');
     expect(sourceText('session.ts')).toContain('setCookies.length > 0 ? { setCookies, value }');
   });
 });

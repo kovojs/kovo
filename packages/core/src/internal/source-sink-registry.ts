@@ -345,6 +345,36 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     trust: 'principal-derived',
   },
   {
+    consumers: [
+      'better-auth-fixed-binding-constructors',
+      'better-auth-routed-credential-handlers',
+      'better-auth-session-provider',
+      'better-auth-password-hash-verify',
+      'better-auth-mount-adapter',
+      'better-auth-rate-limit-storage',
+      'better-auth-cookie-forwarders',
+    ],
+    context: 'auth.credential.secret.non-egress',
+    diagnostic: 'KV439',
+    escapeHatch: 'none',
+    firstParser: 'fixed-binding-option-validation+credential-consumer-contract-census',
+    guard: 'exact-runtime-consumer-registry+complete-M2-path-census+same-consumer-one-shot-results',
+    runtimeGuard:
+      'runBetterAuthCredentialConsumer{Async}+consumeBetterAuthCredentialResult+result-shape-validation+provider-error-redaction',
+    schema:
+      'signing-secret|submitted-password|stored-password-hash|request-cookie|session-token|session-record|Set-Cookie|dependency-result',
+    sink: 'auth.credential.non-egress',
+    source:
+      'operator-signing-material|credential-form-input|Better-Auth-systemDb|request-headers|Better-Auth-handler/API/results',
+    specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
+    testEvidence: [
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+      'packages/better-auth/src/index.credential-mutations.test.ts',
+      'packages/better-auth/src/index.session.test.ts',
+    ],
+    trust: 'secret-or-credential-bearing-framework-owned-boundary',
+  },
+  {
     consumers: ['drizzle-source-sink-plan', 'query-shape-observer'],
     context: 'sql.executable-text',
     diagnostic: 'KV406|KV410|KV422',
@@ -1103,6 +1133,28 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     sink: 'authorization principal/data access',
     soleDoor:
       'pinned request principal + least-privilege Postgres role/RLS/engine-closure boundary',
+    specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
+  },
+  {
+    censusFamilies: ['auth.credential.non-egress'],
+    hostileValueEvidence: [
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+      'packages/better-auth/src/index.credential-mutations.test.ts',
+      'packages/better-auth/src/index.session.test.ts',
+    ],
+    mechanism: 'own',
+    mechanismDetail:
+      'The package-private gate owns every supported Better Auth secret and credential consumer, admits only exact registered consumer identity, validates the contract result, and seals it for one opening by that same consumer.',
+    owner: '@kovojs/better-auth/credential-gate',
+    proofEvidence: [
+      'packages/better-auth/src/internal/credential-runtime-gate.ts',
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+      'security/TCB.md',
+    ],
+    proofGate: 'pnpm run check:security-classifier-corpus',
+    sink: 'Better Auth credential/non-egress',
+    soleDoor:
+      'runBetterAuthCredentialConsumer{Async} + consumeBetterAuthCredentialResult exact registry door',
     specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
   },
   {

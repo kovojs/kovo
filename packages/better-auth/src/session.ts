@@ -1,13 +1,16 @@
 import type { SessionProvider, SessionProviderResult } from '@kovojs/server';
 
 import {
-  getBetterAuthSetCookie,
   isBetterAuthCredentialShapedColumn,
   type BetterAuthGetSessionWithHeadersResult,
   type BetterAuthLike,
   type BetterAuthBindingRequest,
 } from './internal.js';
-import { callBetterAuthGetSession, pinBetterAuthGetSession } from './internal/trusted-plaintext.js';
+import {
+  callBetterAuthGetSession,
+  getBetterAuthSessionSetCookie,
+  pinBetterAuthGetSession,
+} from './internal/trusted-plaintext.js';
 import {
   betterAuthArrayAppend,
   betterAuthArrayIsArray,
@@ -23,7 +26,11 @@ import {
   betterAuthOwnDataValue,
   betterAuthSnapshotDenseArray,
 } from './internal/intrinsics.js';
-import { assertBetterAuthRequestSecretPath } from './internal/non-egress-proof.js';
+import {
+  betterAuthCredentialConsumers,
+  consumeBetterAuthCredentialResult,
+  runBetterAuthCredentialConsumer,
+} from './internal/credential-runtime-gate.js';
 
 const NativeError = Error;
 const betterAuthSessionBoundaryFailureMessage =
@@ -243,7 +250,7 @@ export function betterAuthSession<
         : (result as BetterAuthSessionPayload<AuthSession, AuthUser> | null | undefined);
       const value = payload ? map(sanitizeBetterAuthSessionPayload(payload)) : null;
       const headers = isEnvelope ? (headersDescriptor.value as Headers) : undefined;
-      const setCookies = getBetterAuthSetCookie(headers);
+      const setCookies = getBetterAuthSessionSetCookie(headers);
 
       // Forward refresh/cookie-cache Set-Cookie headers only when the instance actually
       // produced them; otherwise resolve to the plain mapped value so the contract is fully
@@ -261,17 +268,20 @@ function sanitizeBetterAuthSessionPayload<AuthSession, AuthUser>(
   // Better Auth's core session row includes the live bearer `token`. The app mapper is not one
   // of the trusted plaintext sinks: reconstruct both rows and omit every credential-shaped field
   // through the same positive classifier used by schema confidentiality (SPEC §10.1/§10.3 C9-C10).
-  assertBetterAuthRequestSecretPath('better-auth.get-session.response-secret-projection');
-  if (typeof payload !== 'object' || payload === null || betterAuthArrayIsArray(payload)) {
-    throw new TypeError('Better Auth session payload must be an object.');
-  }
-  const session = betterAuthOwnDataValue(payload, 'session', 'Better Auth session payload');
-  const user = betterAuthOwnDataValue(payload, 'user', 'Better Auth session payload');
-  const copies = betterAuthCreateMap<object, unknown>();
-  return {
-    session: sanitizeBetterAuthRow<AuthSession>(session, 'Better Auth session row', copies),
-    user: sanitizeBetterAuthRow<AuthUser>(user, 'Better Auth user row', copies),
-  };
+  const consumer = betterAuthCredentialConsumers.sessionProjection;
+  const result = runBetterAuthCredentialConsumer(consumer, () => {
+    if (typeof payload !== 'object' || payload === null || betterAuthArrayIsArray(payload)) {
+      throw new TypeError('Better Auth session payload must be an object.');
+    }
+    const session = betterAuthOwnDataValue(payload, 'session', 'Better Auth session payload');
+    const user = betterAuthOwnDataValue(payload, 'user', 'Better Auth session payload');
+    const copies = betterAuthCreateMap<object, unknown>();
+    return {
+      session: sanitizeBetterAuthRow<AuthSession>(session, 'Better Auth session row', copies),
+      user: sanitizeBetterAuthRow<AuthUser>(user, 'Better Auth user row', copies),
+    };
+  });
+  return consumeBetterAuthCredentialResult(consumer, result);
 }
 
 function sanitizeBetterAuthRow<Value>(

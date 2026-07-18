@@ -18,6 +18,7 @@ describe('prod artifact sink census inventory evidence', () => {
       'log/error output',
       'outbound egress request',
       'authorization principal/data access',
+      'Better Auth credential/non-egress',
       'dynamic module/process execution',
     ]);
     for (const entry of entries) {

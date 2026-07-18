@@ -415,10 +415,41 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'better-auth-credentials',
     marker: '@kovo-security-classifier-corpus better-auth-credentials',
     testFiles: [
+      'packages/better-auth/src/internal.trusted-plaintext.test.ts',
       'packages/better-auth/src/index.schema-bridge.test.ts',
       'packages/better-auth/src/index.schema-materialize.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'credential-runtime-gate-identity-and-replay',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'rejects forged, cross-consumer, and replayed runtime results',
+          'KV439: unregistered Better Auth credential consumer',
+          'KV439: mismatched Better Auth credential consumer result',
+        ],
+      },
+      {
+        id: 'credential-runtime-gate-complete-consumer-denominator',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'keeps the raw Better Auth credential-consumer denominator equal to the reviewed census',
+          'scanBetterAuthRawCredentialConsumers()',
+          "{ consumer: 'betterAuth', file: 'postgres.ts' }",
+          "{ consumer: 'betterAuth', file: 'sqlite.ts' }",
+        ],
+      },
+      {
+        id: 'credential-runtime-gate-result-and-error',
+        file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
+        snippets: [
+          'validates hostile consumer results and redacts provider errors at runtime',
+          'returned a non-Argon2id hash',
+          'expect(resultTrapRan).toBe(false)',
+          'expect(String(caught)).not.toContain(password)',
+          'expect(String(proxyCaught)).not.toContain(password)',
+        ],
+      },
       {
         id: 'apikey-secret-classification',
         file: 'packages/better-auth/src/index.schema-bridge.test.ts',

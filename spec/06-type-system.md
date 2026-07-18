@@ -357,6 +357,21 @@ an exact loopback origin (`localhost`, IPv4 `127/8`, or `[::1]`) in non-producti
 those bare development cookies have no sibling-domain security guarantee. Production and every
 non-loopback origin require HTTPS unconditionally.
 
+**Better Auth credential-consumer non-egress door (normative).** Every supported fixed-binding
+consumer of Better Auth signing material, submitted or stored credentials, request/session
+cookies, password hash/verify values, session records, and dependency results MUST be enumerated
+in one complete package-private contract census and invoked through the same runtime gate. Each
+contract binds a stable consumer id to the M2 secret paths it may receive and the only result shape
+that may reach its reviewed next sink. The gate MUST admit only an exact runtime-registered
+consumer token, validate the result, seal it, and permit exactly one consume by that same token;
+structural forgeries, unknown consumers, cross-consumer swaps, replayed results, invalid result
+shapes, and dependency-thrown secret-bearing errors fail closed. Only an exact dependency
+400/401/403 verdict from a credential operation may become Kovo's opaque invalid-credential
+outcome, and that verdict is itself one-shot. A module-private `unique symbol` or validated secret
+brand is author-time ergonomics only: the runtime registry, complete path/consumer and source-use
+censuses, and hostile-value/sink tests own enforcement. The static census proves coverage but is
+not itself runtime authority (SPEC §10.3 C9-C10).
+
 **Better Auth redirect mount response boundary (normative).** The opaque Better Auth mount is a
 redirect-protocol adapter, not a public proxy for the dependency router. After the exact request
 origin check, Kovo MUST admit only status `301`, `302`, `303`, `307`, or `308` with exactly one
