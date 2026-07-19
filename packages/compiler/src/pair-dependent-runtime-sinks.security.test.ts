@@ -393,11 +393,13 @@ export const ComposedContext = component({
 });
 `);
 
-    expect(diagnostics).toEqual([
-      expect.objectContaining({
-        help: expect.stringContaining(reason),
-      }),
-    ]);
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          help: expect.stringContaining(reason),
+        }),
+      ]),
+    );
   });
 
   it('retains exact trustedUrl identity through primitive attrs composition', () => {

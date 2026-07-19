@@ -473,14 +473,16 @@ describe('runtime output-context helpers', () => {
     expect(
       kovoBoundAttributeValue('src', '/uploads/attacker.js', { elementName: 'SCRIPT' }),
     ).toBeUndefined();
-    expect(
-      kovoBoundAttributeValue('rel', 'stylesheet', { elementName: 'LINK' }),
-    ).toBeUndefined();
-    expect(
-      kovoBoundAttributeValue('sandbox', null, { elementName: 'IFRAME' }),
-    ).toBeUndefined();
+    expect(kovoBoundAttributeValue('rel', 'stylesheet', { elementName: 'LINK' })).toBeUndefined();
+    expect(kovoBoundAttributeValue('sandbox', null, { elementName: 'IFRAME' })).toBeUndefined();
     expect(
       kovoBoundAttributeValue('src', '/uploads/attacker.html', { elementName: 'IFRAME' }),
+    ).toBeNull();
+    expect(
+      kovoBoundAttributeValue('src', '/reviewed/profile', {
+        effectiveIframeSandbox: 'allow-forms',
+        elementName: 'IFRAME',
+      }),
     ).toBeUndefined();
     expect(
       kovoBoundAttributeValue(
