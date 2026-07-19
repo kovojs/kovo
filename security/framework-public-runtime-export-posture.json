@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "3e1966844a9fa1f1dc526f19a9100234b43d2b8570e52968ee4f6fabc5bb8b32",
+      "sourceTreeSha256": "04823ac547448033969e6b769933fdeaa8f110864dcf3254c4e29a01791c9c1a",
       "manifestVariants": [
         {
           "exports": {
@@ -733,7 +733,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "753a6e3dfbde79c6430ff777ed51817bbd97c98067ba1c7e8ee1c6a6a63283ab"
+      "sourceTreeSha256": "8aa71649d07700a5680d0537b080c35f1c037f7df9eaeea5a36e2aa453794814"
     },
     {
       "manifestVariants": [
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "b2ce8b1bec969b24567410d557a64d1a47b8090aa819de5a15abed479a62e464"
+      "sourceTreeSha256": "c3190ae07725ad215468c410a76d8df49b138861b6f9ed49614a29265b7e6bff"
     },
     {
       "manifestVariants": [
@@ -1674,7 +1674,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "59f4626333ebc47bd29f44c65e84d337619dc4ca600ae930a7c56a1f846a48a7"
+      "sourceTreeSha256": "cad6c62ddf5cb2432b3661f9797052034a7ef89ecb50d1ae3e38ac66acf436c3"
     },
     {
       "manifestVariants": [
@@ -1942,7 +1942,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "9318ad7b25281e4dd076257e459a342f0aac1f63e314ff50b02f516e2f29c513"
+      "sourceTreeSha256": "6fe56f34bebc9816d70f0811096c6546d6539ea3ccc99c9b374136f8dbeb7e2c"
     },
     {
       "manifestVariants": [
@@ -9630,7 +9630,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "a2dc345c1e888eb9a60329d96dc3802f75a33cd01fbb801a7cd52c1e98feffe7"
+      "sourceTreeSha256": "8af2610d71c31f6b843c17d26cdf54904442b79954d2205d02ddf01bd3cef228"
     },
     {
       "manifestVariants": [
@@ -9977,7 +9977,7 @@
           "reason": "Raw test database constructors are test-process authority, not request-handler doors."
         }
       ],
-      "sourceTreeSha256": "a120b4a986bb24d48492ea893e734b7360a20b74e37c31fee858353520c615f1"
+      "sourceTreeSha256": "83d9fdcb005f3a9be1c0589e068da13d6c20cde1ce5be9e963245851eee33feb"
     },
     {
       "manifestVariants": [
