@@ -8,6 +8,10 @@ import {
   createRegisteredDiagnostic,
   diagnosticDefinitions,
 } from '@kovojs/core/internal/diagnostics';
+import {
+  createFrameworkWireTargetCodec,
+  FRAMEWORK_WIRE_INPUT_GRAMMAR,
+} from '@kovojs/core/internal/wire-input-grammar';
 import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
 import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
@@ -1218,12 +1222,16 @@ import { createHotContext } from "/@vite/client";
 
 const hot = createHotContext("${kovoHmrClientPath}");
 const reload = () => location.reload();
+const frameworkWireInputGrammar = ${JSON.stringify(FRAMEWORK_WIRE_INPUT_GRAMMAR)};
+const createFrameworkWireTargetCodec = ${createFrameworkWireTargetCodec.toString()};
+const frameworkWireTargetCodec = createFrameworkWireTargetCodec(frameworkWireInputGrammar);
 const qa = (root, selector) => root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
 const rd = (value) => (value || "").split(/[\s,]+/).map((dep) => dep.trim()).filter(Boolean);
 const targetIdentity = (el) => el.getAttribute("kovo-fragment-target") || el.id || el.getAttribute("kovo-c") || "";
 const liveTargetIdentity = (el) => el.getAttribute("kovo-live-component") || el.getAttribute("kovo-c") || targetIdentity(el);
-const safeHeaderToken = (value) => value && !/[\x00-\x1f\x7f\s;,#=]/.test(value);
-const safeComponent = (value) => safeHeaderToken(value) && !value.includes(":");
+const safeHeaderToken = frameworkWireTargetCodec.identityIsValid;
+const safeAttestation = frameworkWireTargetCodec.attestationIsValid;
+const safeComponent = frameworkWireTargetCodec.componentIsValid;
 const liveProps = (el) => {
   try {
     const props = JSON.parse(el.getAttribute("kovo-props") || "{}");
@@ -1240,10 +1248,14 @@ const liveTargets = () => {
     const target = targetIdentity(el);
     const component = liveTargetIdentity(el);
     const token = el.getAttribute("kovo-live-token");
-    if (!safeHeaderToken(target) || !safeComponent(component) || !safeHeaderToken(token)) continue;
+    if (!safeHeaderToken(target) || !safeComponent(component) || !safeAttestation(token)) continue;
     if (!target || seen.has(target)) continue;
     seen.add(target);
-    targets.push(target + "#" + component + "@" + token + ":" + JSON.stringify(liveProps(el)));
+    targets.push(frameworkWireTargetCodec.encodeLiveTargetHeader(
+      [{ attestation: token, component, props: liveProps(el), target }],
+      JSON.stringify,
+    ));
+    if (targets.length === frameworkWireInputGrammar.maxEntries) break;
   }
   return targets;
 };
@@ -1254,11 +1266,13 @@ const dependencyTargets = () => [
         const target = targetIdentity(el);
         const deps = rd(el.getAttribute("kovo-deps"));
         if (!safeHeaderToken(target) || !deps.every(safeHeaderToken)) return "";
-        return target && (deps.length ? target + "=" + deps.join(" ") : target);
+        return target
+          ? frameworkWireTargetCodec.encodeTargetHeader([{ deps, target }])
+          : "";
       })
       .filter(Boolean),
-  ),
-];
+  ).values(),
+].slice(0, frameworkWireInputGrammar.maxEntries);
 
 async function refreshLiveTargets(event) {
   const apply = globalThis.__kovo_a;
@@ -1276,8 +1290,8 @@ async function refreshLiveTargets(event) {
     headers: {
       "Kovo-Current-Url": currentUrl,
       "Kovo-Fragment": "true",
-      "Kovo-Live-Targets": live.join("; "),
-      "Kovo-Targets": dependencyTargets().join(";"),
+      "Kovo-Live-Targets": frameworkWireTargetCodec.encodeEntryList(live),
+      "Kovo-Targets": frameworkWireTargetCodec.encodeEntryList(dependencyTargets()),
     },
     method: "POST",
   });

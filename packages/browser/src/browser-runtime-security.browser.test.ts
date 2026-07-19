@@ -517,6 +517,7 @@ describe('browser-runtime security regressions', () => {
       currentHref: () => security.currentUrl()?.href,
       document,
       encodeAttribute: (value) => value,
+      encodeWireEntries: (values) => values.join('; '),
       fetchValue: (input, init) => security.fetchValue(input, init),
       findTarget(root, name) {
         return root.querySelector(`[kovo-fragment-target="${name}"]`) ?? undefined;
@@ -595,6 +596,7 @@ describe('browser-runtime security regressions', () => {
       currentHref: () => undefined,
       document,
       encodeAttribute: (value: string) => value,
+      encodeWireEntries: (values: readonly string[]) => values.join('; '),
       fetchValue: safeFetch,
       findTarget: () => undefined,
       liveTargets: () => [],
@@ -675,6 +677,7 @@ describe('browser-runtime security regressions', () => {
       currentHref: () => undefined,
       document,
       encodeAttribute: (value) => value,
+      encodeWireEntries: (values) => values.join('; '),
       fetchValue: async () => ({}),
       findTarget: () => undefined,
       liveTargets: () => [],
@@ -735,6 +738,7 @@ describe('browser-runtime security regressions', () => {
       currentHref: () => undefined,
       document,
       encodeAttribute: (value: string) => value,
+      encodeWireEntries: (values: readonly string[]) => values.join('; '),
       fetchValue: async () => ({}),
       findTarget: () => undefined,
       liveTargets: () => [],

@@ -19,6 +19,7 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     currentHref: () => 'https://kovo.test/account',
     document: {} as Document,
     encodeAttribute: (value) => value,
+    encodeWireEntries: (values) => values.join('; '),
     fetchValue: async () => ({ status: 200 }),
     findTarget: () => nextTarget,
     liveTargets: () => ['account#account@token:{}'],

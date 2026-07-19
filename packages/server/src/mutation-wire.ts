@@ -3,6 +3,11 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { JsonValue, Redirect, ScopedKey } from '@kovojs/core';
 import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
+  decodeFrameworkLiveTargetHeader,
+  decodeFrameworkTargetHeader,
+  FRAMEWORK_WIRE_INPUT_GRAMMAR,
+} from '@kovojs/core/internal/wire-input-grammar';
+import {
   frameworkSessionPrincipalPostureFromRequest,
   principalPostureFromRequest,
 } from './auth-principal.js';
@@ -44,9 +49,6 @@ import {
 } from './security-witness-intrinsics.js';
 import {
   securityNumberIsInteger,
-  securityStringCharCodeAt,
-  securityStringIndexOf,
-  securityStringSlice,
   securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
@@ -459,9 +461,10 @@ export function readMutationWireHeaders(headers: MutationWireHeaderSource): Muta
   const formTargetHeader = readHeader(headers, 'Kovo-Form-Target');
   const submittedFormTarget =
     formTargetHeader === undefined ? undefined : securityStringTrim(formTargetHeader);
-  const liveTargets = parseLiveTargetHeader(readHeader(headers, 'Kovo-Targets') ?? '');
-  const liveTargetDescriptors = parseLiveTargetDescriptorHeader(
+  const liveTargets = decodeFrameworkTargetHeader(readHeader(headers, 'Kovo-Targets') ?? '');
+  const liveTargetDescriptors = decodeFrameworkLiveTargetHeader(
     readHeader(headers, 'Kovo-Live-Targets') ?? '',
+    mutationWireJsonParse,
   );
   const rawTargets: string[] = [];
   for (let index = 0; index < liveTargets.length; index += 1) {
@@ -620,153 +623,15 @@ export function snapshotVerifiedLiveTargetDescriptors<Request>(
  * limit is generous relative to any real render plan (a page rarely refreshes more than
  * a handful of live regions per mutation) but bounds the worst case.
  */
-export const MAX_MUTATION_WIRE_TARGETS = 64;
+export const MAX_MUTATION_WIRE_TARGETS = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries;
 
 /**
  * @internal K2 (SPEC §9.5): total UTF-16 code-unit ceiling for each client-supplied
  * target header. The entry cap bounds fan-out; this ceiling also bounds the scan and
  * substring work for a single oversized entry before any target is accepted.
  */
-export const MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS = 64 * 1024;
-
-function parseLiveTargetHeader(value: string): MutationLiveTarget[] {
-  // K2 (SPEC §9.5): reject an oversized aggregate before scanning it, then stop the
-  // splitter at the entry cap before per-entry parse. Dedup further shrinks the set.
-  if (value.length > MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS) return [];
-  const rawEntries = splitTargetHeaderEntries(value);
-  const parsed: MutationLiveTarget[] = [];
-  for (let index = 0; index < rawEntries.length; index += 1) {
-    const entry = parseLiveTargetEntry(rawEntries[index]!);
-    if (entry !== null)
-      witnessArrayAppend(parsed, entry, 'Server packages/server/src/mutation-wire.ts collection');
-  }
-  return dedupeLiveTargets(parsed);
-}
-
-function parseLiveTargetEntry(entry: string): MutationLiveTarget | null {
-  const trimmed = securityStringTrim(entry);
-  if (!trimmed) return null;
-
-  const separator = securityStringIndexOf(trimmed, '=');
-  if (separator === -1) return { deps: [], target: trimmed };
-
-  const target = securityStringTrim(securityStringSlice(trimmed, 0, separator));
-  if (!target) return null;
-
-  return {
-    deps: readTargetDeps(securityStringSlice(trimmed, separator + 1)),
-    target,
-  };
-}
-
-function readTargetDeps(value: string): string[] {
-  const deps: string[] = [];
-  let start = 0;
-  for (let index = 0; index <= value.length; index += 1) {
-    const code = index === value.length ? 0x2c : securityStringCharCodeAt(value, index);
-    if (code !== 0x2c && !isWhitespaceCode(code)) continue;
-    if (index > start) {
-      const dep = securityStringTrim(securityStringSlice(value, start, index));
-      if (dep !== '')
-        witnessArrayAppend(deps, dep, 'Server packages/server/src/mutation-wire.ts collection');
-    }
-    start = index + 1;
-  }
-  return deps;
-}
-
-function parseLiveTargetDescriptorHeader(value: string): MutationLiveTargetDescriptor[] {
-  // K2 (SPEC §9.5): reject an oversized aggregate before scanning it, then stop the
-  // splitter at the entry cap before per-entry JSON parsing.
-  if (value.length > MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS) return [];
-  const rawEntries = splitLiveTargetDescriptorEntries(value);
-  const parsed: MutationLiveTargetDescriptor[] = [];
-  for (let index = 0; index < rawEntries.length; index += 1) {
-    const entry = parseLiveTargetDescriptorEntry(rawEntries[index]!);
-    if (entry !== null)
-      witnessArrayAppend(parsed, entry, 'Server packages/server/src/mutation-wire.ts collection');
-  }
-  return dedupeLiveTargetDescriptors(parsed);
-}
-
-function splitLiveTargetDescriptorEntries(value: string): string[] {
-  const entries: string[] = [];
-  let depth = 0;
-  let quote: '"' | undefined;
-  let start = 0;
-
-  for (let index = 0; index < value.length; index += 1) {
-    const char = value[index];
-    if (quote) {
-      if (char === '\\') {
-        index += 1;
-        continue;
-      }
-      if (char === quote) quote = undefined;
-      continue;
-    }
-    if (char === '"') {
-      quote = char;
-      continue;
-    }
-    if (char === '{' || char === '[') {
-      depth += 1;
-      continue;
-    }
-    if (char === '}' || char === ']') {
-      if (depth > 0) depth -= 1;
-      continue;
-    }
-    if (char !== ';' || depth !== 0) continue;
-    witnessArrayAppend(
-      entries,
-      securityStringSlice(value, start, index),
-      'Server packages/server/src/mutation-wire.ts collection',
-    );
-    if (entries.length === MAX_MUTATION_WIRE_TARGETS) return entries;
-    start = index + 1;
-  }
-
-  if (entries.length < MAX_MUTATION_WIRE_TARGETS) {
-    witnessArrayAppend(
-      entries,
-      securityStringSlice(value, start),
-      'Server packages/server/src/mutation-wire.ts collection',
-    );
-  }
-  return entries;
-}
-
-function parseLiveTargetDescriptorEntry(entry: string): MutationLiveTargetDescriptor | null {
-  const trimmed = securityStringTrim(entry);
-  if (!trimmed) return null;
-
-  const componentSeparator = securityStringIndexOf(trimmed, '#');
-  if (componentSeparator <= 0) return null;
-
-  const propsSeparator = securityStringIndexOf(trimmed, ':', componentSeparator + 1);
-  if (propsSeparator <= componentSeparator + 1) return null;
-
-  const target = securityStringTrim(securityStringSlice(trimmed, 0, componentSeparator));
-  const componentAndAttestation = securityStringTrim(
-    securityStringSlice(trimmed, componentSeparator + 1, propsSeparator),
-  );
-  const attestationSeparator = lastStringIndexOf(componentAndAttestation, '@');
-  if (attestationSeparator <= 0) return null;
-
-  const component = securityStringTrim(
-    securityStringSlice(componentAndAttestation, 0, attestationSeparator),
-  );
-  const attestation = securityStringTrim(
-    securityStringSlice(componentAndAttestation, attestationSeparator + 1),
-  );
-  const props = parseLiveTargetProps(
-    securityStringTrim(securityStringSlice(trimmed, propsSeparator + 1)),
-  );
-  if (!target || !component || !attestation || props === null) return null;
-
-  return { attestation, component, props, target };
-}
+export const MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS =
+  FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
 
 /** @internal Mint the server-owned live-target descriptor attestation (SPEC §9.3). */
 export function createLiveTargetAttestation<Request>(
@@ -1007,19 +872,6 @@ function digestComparableAttestation(value: string): Buffer {
   return witnessReflectApply(nativeHashDigest, hash, []);
 }
 
-function parseLiveTargetProps(value: string): Record<string, unknown> | null {
-  try {
-    const props = mutationWireJsonParse(value);
-    return isRecord(props) ? props : null;
-  } catch {
-    return null;
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !witnessIsArray(value);
-}
-
 function dedupe(values: readonly string[]): string[] {
   const seen = createWitnessSet<string>();
   const result: string[] = [];
@@ -1030,78 +882,4 @@ function dedupe(values: readonly string[]): string[] {
     witnessArrayAppend(result, value, 'Server packages/server/src/mutation-wire.ts collection');
   }
   return result;
-}
-
-function dedupeLiveTargets(values: readonly MutationLiveTarget[]): MutationLiveTarget[] {
-  const seen = createWitnessSet<string>();
-  const targets: MutationLiveTarget[] = [];
-
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index]!;
-    if (witnessSetHas(seen, value.target)) continue;
-    witnessSetAdd(seen, value.target);
-    witnessArrayAppend(targets, value, 'Server packages/server/src/mutation-wire.ts collection');
-  }
-
-  return targets;
-}
-
-function dedupeLiveTargetDescriptors(
-  values: readonly MutationLiveTargetDescriptor[],
-): MutationLiveTargetDescriptor[] {
-  const seen = createWitnessSet<string>();
-  const targets: MutationLiveTargetDescriptor[] = [];
-
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index]!;
-    if (witnessSetHas(seen, value.target)) continue;
-    witnessSetAdd(seen, value.target);
-    witnessArrayAppend(targets, value, 'Server packages/server/src/mutation-wire.ts collection');
-  }
-
-  return targets;
-}
-
-function splitTargetHeaderEntries(value: string): string[] {
-  const entries: string[] = [];
-  let start = 0;
-  for (let index = 0; index <= value.length; index += 1) {
-    const code = index === value.length ? 0x3b : securityStringCharCodeAt(value, index);
-    if (code !== 0x3b && code !== 0x2c) continue;
-    witnessArrayAppend(
-      entries,
-      securityStringSlice(value, start, index),
-      'Server packages/server/src/mutation-wire.ts collection',
-    );
-    if (entries.length === MAX_MUTATION_WIRE_TARGETS) return entries;
-    start = index + 1;
-  }
-  return entries;
-}
-
-function isWhitespaceCode(code: number): boolean {
-  return (
-    code === 0x09 ||
-    code === 0x0a ||
-    code === 0x0b ||
-    code === 0x0c ||
-    code === 0x0d ||
-    code === 0x20 ||
-    code === 0xa0 ||
-    code === 0x1680 ||
-    (code >= 0x2000 && code <= 0x200a) ||
-    code === 0x2028 ||
-    code === 0x2029 ||
-    code === 0x202f ||
-    code === 0x205f ||
-    code === 0x3000 ||
-    code === 0xfeff
-  );
-}
-
-function lastStringIndexOf(value: string, search: string): number {
-  for (let index = value.length - search.length; index >= 0; index -= 1) {
-    if (securityStringSlice(value, index, index + search.length) === search) return index;
-  }
-  return -1;
 }

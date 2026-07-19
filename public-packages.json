@@ -38,6 +38,7 @@
           "./internal/event",
           "./internal/storage",
           "./internal/verifier",
+          "./internal/wire-input-grammar",
           "./internal/wire-json"
         ]
       },

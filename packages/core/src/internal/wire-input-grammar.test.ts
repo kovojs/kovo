@@ -68,9 +68,9 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       ),
     ).toHaveLength(64);
 
-    expect(() =>
-      encodeFrameworkTargetHeader([{ deps: ['query;admin'], target: 'safe' }]),
-    ).toThrow(/wire identity/iu);
+    expect(() => encodeFrameworkTargetHeader([{ deps: ['query;admin'], target: 'safe' }])).toThrow(
+      /wire identity/iu,
+    );
     expect(() =>
       encodeFrameworkLiveTargetHeader(
         [{ attestation: 'token', component: 'bad:component', props: {}, target: 'safe' }],
