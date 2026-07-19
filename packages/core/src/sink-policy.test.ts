@@ -24,6 +24,7 @@ import {
   isRenderedFragmentHtml,
   RAW_HTML_SINK_NAMES,
   renderedFragmentHtmlContent,
+  SAFE_IFRAME_SANDBOX_TOKENS,
   sanitizeRuntimeSrcset,
   SRCSET_ATTRIBUTE_NAMES,
   runtimeSinkFamilyForAttribute,
@@ -298,6 +299,9 @@ describe('shared runtime sink policy', () => {
     ] as const) {
       expect(
         decideRuntimeAttributeWrite(name, '/uploads/attacker', {
+          ...(elementName === 'iframe' && name === 'src'
+            ? { effectiveIframeSandbox: 'allow-forms' }
+            : {}),
           elementName,
           posture: 'dynamic-binding',
         }),
@@ -352,6 +356,9 @@ describe('shared runtime sink policy', () => {
       ).toMatchObject({ acceptsTrustedUrl, staticPolicy });
       expect(
         decideRuntimeAttributeWrite(attribute, '/attacker-selected', {
+          ...(tag === 'iframe' && attribute === 'src'
+            ? { effectiveIframeSandbox: 'allow-forms' }
+            : {}),
           elementName: tag,
           posture: 'dynamic-binding',
         }).action,
@@ -360,6 +367,9 @@ describe('shared runtime sink policy', () => {
       if (acceptsTrustedUrl) {
         expect(
           decideRuntimeAttributeWrite(attribute, 'data:text/html,attacker', {
+            ...(tag === 'iframe' && attribute === 'src'
+              ? { effectiveIframeSandbox: 'allow-scripts' }
+              : {}),
             elementName: tag,
             posture: 'dynamic-binding',
             trustedUrl: true,
@@ -425,6 +435,70 @@ describe('shared runtime sink policy', () => {
       'response header',
     );
     expect(elementContextSecurityStaticValueIssue('meta', 'name', 'description')).toBeUndefined();
+  });
+
+  it('keeps iframe sources behind a finite sandbox token set and a mandatory boundary', () => {
+    expect(SAFE_IFRAME_SANDBOX_TOKENS).toEqual([
+      'allow-forms',
+      'allow-modals',
+      'allow-orientation-lock',
+      'allow-pointer-lock',
+      'allow-presentation',
+      'allow-same-origin',
+      'allow-scripts',
+    ]);
+    for (const sandbox of [
+      '',
+      'allow-forms',
+      'ALLOW-SCRIPTS',
+      'allow-same-origin\tallow-forms',
+      'allow-modals allow-pointer-lock allow-presentation',
+    ]) {
+      expect(
+        elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox),
+        sandbox,
+      ).toBeUndefined();
+    }
+    for (const sandbox of [
+      'allow-scripts allow-same-origin',
+      'allow-top-navigation',
+      'allow-top-navigation-by-user-activation',
+      'allow-top-navigation-to-custom-protocols',
+      'allow-popups',
+      'allow-popups-to-escape-sandbox',
+      'allow-storage-access-by-user-activation',
+      'allow-downloads',
+      'future-browser-capability',
+    ]) {
+      expect(
+        elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox),
+        sandbox,
+      ).toContain('isolation boundary');
+    }
+
+    expect(
+      decideRuntimeAttributeWrite('src', '/account', {
+        elementName: 'iframe',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'remove' });
+    expect(
+      decideRuntimeAttributeWrite('src', '/account', {
+        effectiveIframeSandbox: 'allow-scripts allow-same-origin',
+        elementName: 'iframe',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'remove' });
+    expect(
+      decideRuntimeAttributeWrite('src', '/account', {
+        effectiveIframeSandbox: 'allow-scripts',
+        elementName: 'iframe',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'allow' });
   });
 
   it('parses srcset and drops unsafe candidates without dropping safe candidates', () => {
