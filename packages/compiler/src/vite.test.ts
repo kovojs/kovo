@@ -74,6 +74,51 @@ describe('kovoVitePlugin', () => {
     });
   });
 
+  it('compiles SPEC-supported JSX modules instead of delegating them past Kovo diagnostics', async () => {
+    const plugin = kovoVitePlugin();
+    const source = `
+import { component } from '@kovojs/core';
+
+export const UnsafeScript = component({
+  state: () => ({ src: '/uploads/attacker.js' }),
+  render: (_queries, state) => <script src={state.src} type="module" />,
+});
+`;
+
+    await expect(plugin.transform?.(source, 'src/unsafe-script.jsx')).rejects.toThrow(
+      /KV236[\s\S]*dynamic script source/u,
+    );
+  });
+
+  it.each(['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts'])(
+    'treats .%s as authored source while leaving an ordinary client module alone',
+    async (extension) => {
+      const compileComponentModule = vi.fn(() => ({
+        diagnostics: [],
+        files: [{ kind: 'server', source: 'export const compiled = true;' }],
+      }));
+      const plugin = createKovoVitePlugin(compileComponentModule);
+      const componentSource = `
+import { component } from '@kovojs/core';
+export const ExtensionProbe = component({ render: () => undefined });
+`;
+
+      await expect(
+        plugin.transform(componentSource, `src/extension-probe.${extension}`),
+      ).resolves.toEqual({ code: 'export const compiled = true;', map: null });
+      expect(compileComponentModule).toHaveBeenCalledOnce();
+
+      compileComponentModule.mockClear();
+      expect(
+        plugin.transform(
+          'export const increment = (value) => value + 1;',
+          'src/increment.client.js',
+        ),
+      ).toBeNull();
+      expect(compileComponentModule).not.toHaveBeenCalled();
+    },
+  );
+
   it('registers local source files for framework identity during real Vite compilation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-vite-identity-'));
     const src = join(root, 'src');
@@ -300,6 +345,19 @@ export const rawUnescaped = (markup: string) => renderedHtml(markup);
         ].join('\n'),
       ].join('\n\n'),
     );
+    expect(compileComponentModule).not.toHaveBeenCalled();
+  });
+
+  it('blocks compiler JSX-runtime imports in standalone JavaScript modules', () => {
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, { include: ['src'] });
+
+    expect(() =>
+      plugin.transform(
+        `import { jsx as build } from '@kovojs/server/jsx-runtime';\nexport const node = build('script', {});`,
+        'src/runtime-helper.js',
+      ),
+    ).toThrow(/KV235[\s\S]*compiler-owned JSX runtime/u);
     expect(compileComponentModule).not.toHaveBeenCalled();
   });
 

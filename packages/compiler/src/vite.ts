@@ -959,7 +959,11 @@ function shouldTransformViteAuthoredSource(
   source: string,
   options: KovoVitePluginOptions,
 ): boolean {
-  if (!compilerRegExpTest(/\.[cm]?tsx?$/, fileName)) return false;
+  // SPEC §5.2: TSX/JSX are both app-authoring surfaces. Keep the standalone authoring gate and
+  // component compiler in front of every JavaScript/TypeScript module form Vite can resolve;
+  // otherwise a `.jsx` component falls through to Vite's automatic JSX runtime and reaches the
+  // generic server renderer without Kovo's contextual-output diagnostics.
+  if (!compilerRegExpTest(/\.[cm]?[jt]sx?$/, fileName)) return false;
   if (matchesAnyViteFilter(options.exclude, fileName, source)) return false;
   if (options.include !== undefined && !matchesAnyViteFilter(options.include, fileName, source))
     return false;

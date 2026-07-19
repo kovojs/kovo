@@ -143,6 +143,16 @@ function serverInternalRendering(exportName: string): FrameworkIdentityCatalogEn
   };
 }
 
+function serverJsxRuntime(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/server',
+    packageSourceFiles: ['jsx-runtime'],
+    scopes: ['authoring', 'rendering'],
+    specifiers: ['@kovojs/server/jsx-runtime', '@kovojs/server/jsx-dev-runtime'],
+  };
+}
+
 function serverWriteGovernance(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
@@ -284,6 +294,11 @@ appendCatalogFactories(
   serverCsrfAuthoring,
 );
 appendCatalogEntry(catalogEntries, serverInternalRendering('renderedHtml'));
+appendCatalogFactories(
+  catalogEntries,
+  ['createElement', 'jsx', 'jsxDEV', 'jsxs'],
+  serverJsxRuntime,
+);
 appendCatalogEntry(catalogEntries, serverWriteGovernance('trustedAssign'));
 appendCatalogEntry(catalogEntries, serverData('encryptAtRest'));
 appendCatalogEntry(catalogEntries, serverData('hashPassword'));

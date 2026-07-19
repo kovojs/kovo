@@ -73,6 +73,51 @@ import { type AccordionItemProps, AccordionTrigger as Trigger } from '@kovojs/ui
     ]);
   });
 
+  it('records exact JSX-runtime ABI imports and resolves aliased and namespace calls', () => {
+    const source = `
+import { jsx as build, type JSX } from '@kovojs/server/jsx-runtime';
+import * as devRuntime from '@kovojs/server/jsx-dev-runtime';
+
+build('script', { src: value });
+devRuntime.jsxDEV('link', { href: value, rel: 'stylesheet' });
+`;
+    const model = parseComponentModule('runtime-helper.ts', source);
+
+    expect(model.compilerJsxRuntimeImports).toEqual([
+      expect.objectContaining({
+        factories: ['jsx'],
+        specifier: '@kovojs/server/jsx-runtime',
+      }),
+      expect.objectContaining({
+        factories: ['*'],
+        specifier: '@kovojs/server/jsx-dev-runtime',
+      }),
+    ]);
+    expect(
+      callExpressions(model)
+        .filter((call) => call.frameworkJsxRuntimeFactory !== undefined)
+        .map((call) => [call.name, call.frameworkJsxRuntimeFactory]),
+    ).toEqual([
+      ['build', 'jsx'],
+      ['devRuntime.jsxDEV', 'jsxDEV'],
+    ]);
+  });
+
+  it('does not assign JSX-runtime identity to type-only imports or local lookalikes', () => {
+    const source = `
+import type { JSX } from '@kovojs/server/jsx-runtime';
+const jsx = (tag, props) => ({ tag, props });
+function render(jsx) { return jsx('script', {}); }
+jsx('div', {});
+`;
+    const model = parseComponentModule('local-runtime-lookalike.ts', source);
+
+    expect(model.compilerJsxRuntimeImports).toEqual([]);
+    expect(
+      callExpressions(model).filter((call) => call.frameworkJsxRuntimeFactory !== undefined),
+    ).toEqual([]);
+  });
+
   it('recognizes imported and local aliases for component factory calls', () => {
     const source = `
 import { component as defineComponent } from '@kovojs/core';

@@ -203,6 +203,8 @@ export interface CallExpressionModel {
   frameworkFactory?: 'endpoint' | 'mutation' | 'task' | 'webhook';
   /** Exact framework identity for a security helper whose call shape participates in finite IR. */
   frameworkSecurityOperation?: 'csrf-field' | 'csrf-token';
+  /** Exact compiler JSX-runtime constructor identity; app source may not call this emitted ABI. */
+  frameworkJsxRuntimeFactory?: 'createElement' | 'jsx' | 'jsxDEV' | 'jsxs';
   name: string;
   start: number;
 }
@@ -425,6 +427,14 @@ export interface ModuleSpecifierModel {
   start: number;
 }
 
+/** Parser-owned value import/re-export of the compiler JSX-runtime ABI. */
+export interface CompilerJsxRuntimeImportModel {
+  end: number;
+  factories: readonly ('createElement' | 'jsx' | 'jsxDEV' | 'jsxs' | '*')[];
+  specifier: '@kovojs/server/jsx-dev-runtime' | '@kovojs/server/jsx-runtime';
+  start: number;
+}
+
 export interface NamedImportModel {
   importedName: string;
   localName: string;
@@ -439,6 +449,7 @@ export interface ModuleScopeBindingModel {
 
 export interface ComponentModuleModel {
   calls: readonly CallExpressionModel[];
+  compilerJsxRuntimeImports: readonly CompilerJsxRuntimeImportModel[];
   componentIdentityAssignments: readonly ComponentIdentityAssignmentModel[];
   components: readonly ComponentModel[];
   endpointHandlers: readonly MutationHandlerModel[];

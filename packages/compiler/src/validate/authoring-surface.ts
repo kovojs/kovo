@@ -55,6 +55,12 @@ export function validateAuthoringSurface(
   const diagnostics: CompilerDiagnostic[] = [];
 
   if (model !== null) {
+    appendCompilerJsxRuntimeImportDiagnostics(
+      diagnostics,
+      options.fileName,
+      options.source,
+      model,
+    );
     appendAuthoredExecutableReferenceDiagnostics(
       diagnostics,
       options.fileName,
@@ -108,6 +114,11 @@ export function validateAuthoringSurface(
       }
     }
 
+    const hasCompilerJsxRuntimeImport =
+      compilerArrayLength(
+        model.compilerJsxRuntimeImports,
+        'Authoring-surface compiler JSX-runtime imports',
+      ) > 0;
     const callLength = compilerArrayLength(model.calls, 'Authoring-surface calls');
     for (let index = 0; index < callLength; index += 1) {
       const sourceCall = compilerOwnDataValue(model.calls, index, 'Authoring-surface calls') as
@@ -130,11 +141,99 @@ export function validateAuthoringSurface(
           'Authoring-surface diagnostics',
         );
       }
+      if (
+        !hasCompilerJsxRuntimeImport &&
+        sourceCall.frameworkJsxRuntimeFactory !== undefined
+      ) {
+        compilerArrayAppend(
+          diagnostics,
+          compilerJsxRuntimeCallDiagnostic({
+            factory: sourceCall.frameworkJsxRuntimeFactory,
+            fileName: options.fileName,
+            length: sourceCall.end - sourceCall.start,
+            source: options.source,
+            start: sourceCall.start,
+          }),
+          'Authoring-surface diagnostics',
+        );
+      }
     }
   }
 
   appendRenderDiagnostics(diagnostics, options.fileName, options.source, renders);
   return diagnostics;
+}
+
+function appendCompilerJsxRuntimeImportDiagnostics(
+  diagnostics: CompilerDiagnostic[],
+  fileName: string,
+  source: string,
+  model: ComponentModuleModel,
+): void {
+  const imports = model.compilerJsxRuntimeImports;
+  const length = compilerArrayLength(imports, 'Compiler JSX-runtime imports');
+  for (let index = 0; index < length; index += 1) {
+    const imported = compilerOwnDataValue(
+      imports,
+      index,
+      'Compiler JSX-runtime imports',
+    ) as ComponentModuleModel['compilerJsxRuntimeImports'][number] | undefined;
+    if (!imported) {
+      throw new TypeError(`Compiler JSX-runtime imports[${index}] must be dense.`);
+    }
+    compilerArrayAppend(
+      diagnostics,
+      {
+        ...diagnosticFor(
+          fileName,
+          'KV235',
+          source,
+          imported.start,
+          imported.end - imported.start,
+        ),
+        help: compilerArrayJoin(
+          [
+            `Blocked reason: app source imports compiler-owned JSX construction ABI ${compilerJsonStringify(imported.factories)} from \`${imported.specifier}\`.`,
+            'Fixes: author render output as TSX/JSX and let the configured JSX transform call the runtime after Kovo has validated the source.',
+            'SPEC.md §5.2 rules 3 and 7: the JSX runtime is emitted execution ABI, not a second app-authoring surface.',
+            'Escape: there is no app-authored import or call suppression for compiler JSX constructors.',
+          ],
+          '\n',
+        ),
+        message:
+          'App source imports the compiler-owned JSX runtime; author TSX/JSX instead.',
+      },
+      'Authoring-surface diagnostics',
+    );
+  }
+}
+
+function compilerJsxRuntimeCallDiagnostic({
+  factory,
+  fileName,
+  length,
+  source,
+  start,
+}: {
+  factory: NonNullable<ComponentModuleModel['calls'][number]['frameworkJsxRuntimeFactory']>;
+  fileName: string;
+  length: number;
+  source: string;
+  start: number;
+}): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'KV235', source, start, length),
+    help: compilerArrayJoin(
+      [
+        `Blocked reason: app source calls exact framework JSX constructor \`${factory}\` through an alias or reviewed re-export.`,
+        'Fixes: return TSX/JSX from the component and let Kovo lower the intrinsic element after contextual-output validation.',
+        'SPEC.md §5.2 rules 3 and 7: compiler runtime constructors are execution ABI, not authorable render IR.',
+        'Escape: local functions with the same name remain ordinary app code; the exact framework constructor has no suppression.',
+      ],
+      '\n',
+    ),
+    message: `App source calls compiler-owned JSX constructor ${factory}; author TSX/JSX instead.`,
+  };
 }
 
 /**
