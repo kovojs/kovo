@@ -227,6 +227,44 @@ describe('browser response fragment apply', () => {
     expect(link?.getAttribute('srcdoc')).toBeNull();
   });
 
+  it('preserves reviewed element-context controls during keyed morphs', () => {
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'context-controls');
+    target.setAttribute('kovo-key', 'context-controls');
+    target.innerHTML = [
+      '<script kovo-key="script" type="application/json" src="/reviewed/data.json"></script>',
+      '<link kovo-key="link-href" rel="stylesheet" href="/reviewed/app.css">',
+      '<link kovo-key="link-rel" rel="preload" href="/uploads/attacker.css">',
+      '<iframe kovo-key="frame-value" sandbox="allow-forms"></iframe>',
+      '<iframe kovo-key="frame-removal" sandbox="allow-forms"></iframe>',
+    ].join('');
+    document.body.append(target);
+
+    new DomMorphTarget(target).replaceWithHtml(
+      [
+        '<section kovo-fragment-target="context-controls" kovo-key="context-controls">',
+        '<script kovo-key="script" type="module" src="/uploads/attacker.js"></script>',
+        '<link kovo-key="link-href" rel="stylesheet" href="/uploads/attacker.css">',
+        '<link kovo-key="link-rel" rel="stylesheet" href="/uploads/attacker.css">',
+        '<iframe kovo-key="frame-value" sandbox="allow-scripts allow-same-origin"></iframe>',
+        '<iframe kovo-key="frame-removal"></iframe>',
+        '</section>',
+      ].join(''),
+    );
+
+    const script = target.querySelector('[kovo-key="script"]');
+    const linkHref = target.querySelector('[kovo-key="link-href"]');
+    const linkRel = target.querySelector('[kovo-key="link-rel"]');
+    const frameValue = target.querySelector('[kovo-key="frame-value"]');
+    const frameRemoval = target.querySelector('[kovo-key="frame-removal"]');
+    expect(script?.getAttribute('type')).toBe('application/json');
+    expect(script?.getAttribute('src')).toBe('/reviewed/data.json');
+    expect(linkHref?.getAttribute('href')).toBe('/reviewed/app.css');
+    expect(linkRel?.getAttribute('rel')).toBe('preload');
+    expect(frameValue?.getAttribute('sandbox')).toBe('allow-forms');
+    expect(frameRemoval?.getAttribute('sandbox')).toBe('allow-forms');
+  });
+
   it('sanitizes whole-node replacement fragment trees before adoption', () => {
     const target = document.createElement('section');
     target.setAttribute('kovo-fragment-target', 'promo');
