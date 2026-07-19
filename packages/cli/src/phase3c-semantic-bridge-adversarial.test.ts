@@ -76,6 +76,19 @@ function hasRequestHandlerClosure(
   }).unregisteredSinks.some((fact) => fact.sink.startsWith('request-handler.'));
 }
 
+function hasRequestProcessClosure(
+  files: readonly SourceFile[],
+  compilerSecuritySemanticSources?: readonly CompilerSecuritySemanticSource[],
+): boolean {
+  return collectStaticBuildTrustFactsFromProject({
+    ...(compilerSecuritySemanticSources ? { compilerSecuritySemanticSources } : {}),
+    files,
+  }).unregisteredSinks.some(
+    (fact) =>
+      fact.sink.startsWith('request-handler.') || fact.sink.startsWith('client-wire.request.'),
+  );
+}
+
 function assertExactCarrierDischargesOnlyTheKnownLegacyNoise(
   files: readonly SourceFile[],
   semanticSources: readonly CompilerSecuritySemanticSource[],
@@ -85,6 +98,83 @@ function assertExactCarrierDischargesOnlyTheKnownLegacyNoise(
 }
 
 describe('Phase 3C semantic carrier integrity', () => {
+  it('preserves an exact context-owned rawRead over one immutable trustedSql binding when compiler semantics are present', () => {
+    const files = [
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { kovo } from '@kovojs/drizzle';
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          export const contacts = pgTable(
+            'contacts',
+            { classified: text('classified').notNull(), id: text('id').primaryKey() },
+            kovo({ domain: 'contacts', key: 'id', readOnly: true, secret: ['classified'] }),
+          );
+        `,
+      },
+      {
+        fileName: 'queries.ts',
+        source: `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { query } from '@kovojs/server';
+          export const contactsQuery = query({
+            async load(_input, context) {
+              const db = context?.db;
+              if (!db) throw new Error('query requires framework-provided context.db');
+              const statement = trustedSql(
+                sql.raw<{ id: string }>('select id, classified from contacts'),
+                { justification: 'reviewed static contacts read' },
+              );
+              const items = await db.rawRead<{ id: string }>(
+                statement,
+                { reads: ['contacts'] },
+              );
+              return { items };
+            },
+          });
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { createApp } from '@kovojs/server';
+          import { contactsQuery } from './queries.js';
+          export default createApp({ queries: [contactsQuery], routes: [] });
+        `,
+      },
+    ];
+    const semanticSources = compilerSemanticSources(files);
+
+    expect(hasRequestProcessClosure(files)).toBe(false);
+    expect(hasRequestProcessClosure(files, semanticSources)).toBe(false);
+
+    for (const hostileSource of [
+      files[1]!.source.replace('db.rawRead', "db['rawRead']"),
+      files[1]!.source.replace(
+        'const items = await db.rawRead',
+        'const rawRead = db.rawRead; const items = await rawRead',
+      ),
+      files[1]!.source
+        .replace('const statement = trustedSql', 'let statement = trustedSql')
+        .replace(
+          'const items = await db.rawRead',
+          "statement = trustedSql(sql.raw('select id from contacts'), { justification: 'replacement' }); const items = await db.rawRead",
+        ),
+      files[1]!.source
+        .replace(
+          'const items = await db.rawRead',
+          'const escapedStatement = statement; const items = await db.rawRead',
+        )
+        .replace('                statement,', '                escapedStatement,'),
+    ]) {
+      const hostile = files.map((file) =>
+        file.fileName === 'queries.ts' ? { ...file, source: hostileSource } : file,
+      );
+      expect(hasRequestProcessClosure(hostile)).toBe(true);
+      expect(hasRequestProcessClosure(hostile, compilerSemanticSources(hostile))).toBe(true);
+    }
+  });
+
   // SPEC §5.2/§6.6: a compiler proof is bound to the exact declared root, not merely the
   // factory family. A same-source carrier relabelled from one mutation to a sibling must fall back
   // to the closed legacy verdict just like a byte/span/callable mismatch.
