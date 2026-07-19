@@ -577,24 +577,30 @@ witnessed role topology, transaction-local identity frames); this extends it alo
 **Depends on:** the real-Postgres posture suite and sole connection/transaction doors. **Produces:**
 a bounded-cost posture digest, lease state, and recovery protocol. **Blocks:** DB-posture W coverage.
 
-- [ ] Deterministic posture digest from the existing `checkRuntimeDbPosture` catalog queries (role
+- [x] Deterministic posture digest from the existing `checkRuntimeDbPosture` catalog queries (role
       attributes/memberships/assumable-role closure/policies/grants); stable across boots, changes on
       a single added grant. Use a budgeted subset — the full reachability audit is too heavy per interval.
-- [ ] Renewable lease: re-derive on a fixed interval and on 42501-class permission errors; any
+  - Evidence: `postgres-posture-lease.test.ts` proves canonical stability, one-grant sensitivity, and
+    the 2,048-fact/256-KiB bounds; `postgres-runtime.test.ts` binds the digest to bounded catalog queries.
+- [x] Renewable lease: re-derive on a fixed interval and on 42501-class permission errors; any
       divergence or renewal failure trips `app-load-shed` (KV433) fail-closed, never serve-degraded.
       Define TTL, zero-grace expiry, connection draining, operator recovery, jitter/backoff, and
       availability budget. Test: mid-run `GRANT pg_read_all_data` → requests shed until a successful
       authoritative re-witness, without an attacker-triggerable busy-loop.
-- [ ] Mechanize the pooler witness (today docs-only, `cli.md:241`): inside one transaction, round-trip
+  - Evidence: `pnpm exec vitest run packages/server/src/postgres-external-probe.test.ts` passes 10/10,
+    including real mid-run grant → shed → exact-baseline recovery; the focused lease suite proves
+    zero-grace expiry, single-flight 42501 renewal, one drain per outage, jitter, and bounded backoff.
+- [x] Mechanize the pooler witness (today docs-only, `cli.md:241`): inside one transaction, round-trip
       a `set_config` frame probe across two statements + `pg_backend_pid()` stability; fail closed on
       a shuffling pooler.
-- [ ] Restore-staleness (correction: the existing `database_instance_id` nonce is minted-once and
+  - Evidence: `postgres-runtime.test.ts` proves two-statement same-transaction framing and rejects a
+    shuffled backend; the real-Postgres probe exercises the witness under least-privilege roles.
+- [x] Restore-staleness (correction: the existing `database_instance_id` nonce is minted-once and
       survives a same-DB restore): digest a monotone freshness fact instead — the migration-ledger head
       / a posture epoch reasserted by `kovo db migrate`. Surface lease state in `kovo explain --capabilities`.
-  - Partial evidence (static explain surface only):
-    `pnpm exec vitest run packages/cli/src/index.kovo-explain.test.ts` proves the graph-only command
-    prints the bounded lease contract while labeling live status, digest, and expiry `not-observed`;
-    runtime freshness and restore evidence remain required before this item may close.
+  - Evidence: `postgres-runtime.test.ts` proves every migrate path advances the epoch and binds it to
+    the checksum-validated ledger; `index.kovo-explain.test.ts` proves static output reports the lease
+    contract while honestly labeling live status, digest, and expiry `not-observed` (SPEC §10.3).
 
 ### 4.2 Mandatory request deadline + occupancy budget
 
