@@ -12,6 +12,10 @@ import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 import { frameworkScopedKey } from '@kovojs/core/internal/storage';
 
 import {
+  createGuardArgsFileReceipt,
+  registerGuardArgsNativeFileReceipt,
+} from './guard-args-file-receipt.js';
+import {
   type UnverifiedAcceptance,
   mintStorageKey,
   sanitizeDownloadFilename,
@@ -62,6 +66,7 @@ import {
 import { revealRequestProvenanceContainer } from './request-body-provenance.js';
 import {
   assertResponseSecurityIntrinsics,
+  securityArrayBufferSlice,
   securityArrayIsArray,
   securityArrayJoin,
   securityCreateDate,
@@ -90,6 +95,7 @@ import {
   securityStringToLowerCase,
   securityStringTrim,
   securityUint8ArrayFromArrayBuffer,
+  securityUint8ArrayLength,
   securityUint8ArraySlice,
 } from './response-security-intrinsics.js';
 
@@ -1526,7 +1532,14 @@ async function parseVerifiedFileLike(
   type: string;
 }> {
   const snapshot = parseFileLikeShape(input, options);
-  const bytes = securityUint8ArrayFromArrayBuffer(await snapshot.readBytes());
+  // Commit the bytes once after the async application callback. The object that crosses into a
+  // guard/handler is a framework receipt over this exact copy, never the app-owned FileLike whose
+  // method or internal source could change after schema validation (SPEC §6.6 / §10.3 C15).
+  const committedBuffer = securityArrayBufferSlice(await snapshot.readBytes());
+  const bytes = securityUint8ArrayFromArrayBuffer(committedBuffer);
+  if (options.maxBytes !== undefined && securityUint8ArrayLength(bytes) > options.maxBytes) {
+    throw validationError(`Expected file <= ${options.maxBytes} bytes`);
+  }
   const sniffed = sniffUploadBytes(bytes);
   const accept = options.accept;
   if (isUnverifiedAcceptance(accept)) {
@@ -1537,9 +1550,17 @@ async function parseVerifiedFileLike(
     throw validationError(`Expected file type ${securityArrayJoin(accept, ', ')}`);
   }
 
+  const fileReceipt = createGuardArgsFileReceipt(committedBuffer, snapshot.name, snapshot.type);
+  // Preserve the long-standing direct `s.file().parseAsync(nativeFile)` identity contract. Native
+  // File bytes/metadata are immutable internal slots; the request runner still substitutes the
+  // separately committed receipt before a guard or handler observes parsed args. Structural
+  // FileLike objects do not have that platform guarantee and therefore return the receipt now.
+  const file = requestIsFile(snapshot.file) ? snapshot.file : fileReceipt;
+  if (file === snapshot.file) registerGuardArgsNativeFileReceipt(snapshot.file, fileReceipt);
+
   return {
     bytes,
-    file: snapshot.file,
+    file,
     name: snapshot.name,
     sniffed,
     type: snapshot.type,

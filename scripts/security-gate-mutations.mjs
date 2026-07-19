@@ -182,6 +182,8 @@ const lifecyclePrivateScopeCarrierPinBranch =
   '  return pinnedPrivateScopeRequestCarrier(lifecycleRequest) as LifecycleRequest<';
 const removedLifecyclePrivateScopeCarrierPinBranch =
   '  return lifecycleRequest as LifecycleRequest<';
+const guardArgsReceiptBranch = 'snapshotGuardArgsReceipt(args)';
+const removedGuardArgsReceiptBranch = 'args';
 const dynamicBindingControlPlaneClosureBranch = [
   "  if (options.posture === 'dynamic-binding' && isGeneratedOnlySemanticAttribute(name)) {",
   '    return blockedDecision(',
@@ -2474,6 +2476,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: lifecyclePrivateScopeCarrierPinBranch,
     sourceFile: serverGuardsPath,
     test: assertLifecyclePrivateScopeCarrierPinIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Layers app-owned parsed args directly onto the guarded request carrier.',
+    expectedKiller:
+      'withGuardArgs must reconstruct one stable receipt before guards and handlers observe args',
+    name: 'server-lifecycle/drop-guard-args-receipt',
+    replacement: removedGuardArgsReceiptBranch,
+    search: guardArgsReceiptBranch,
+    sourceFile: serverGuardsPath,
+    test: assertGuardArgsReceiptIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -5977,6 +5990,29 @@ async function assertLifecyclePrivateScopeCarrierPinIsEnforced(moduleUnderTest) 
   }
   if (reads !== 0) {
     throw new Error(`private-scope accessor executed ${String(reads)} time(s) during pinning`);
+  }
+}
+
+async function assertGuardArgsReceiptIsEnforced(moduleUnderTest) {
+  let reads = 0;
+  const parsedArgs = new Proxy(
+    { id: 'owned' },
+    {
+      get(target, property, receiver) {
+        if (property !== 'id') return Reflect.get(target, property, receiver);
+        reads += 1;
+        return reads === 1 ? 'owned' : 'victim';
+      },
+    },
+  );
+  const request = moduleUnderTest.withGuardArgs({}, parsedArgs);
+  const authorized = request.args.id;
+  await Promise.resolve();
+  const consumed = request.args.id;
+  if (authorized !== 'owned' || consumed !== 'owned' || reads !== 0) {
+    throw new Error(
+      `guard args receipt drifted: authorized=${String(authorized)} consumed=${String(consumed)} sourceReads=${String(reads)}`,
+    );
   }
 }
 

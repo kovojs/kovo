@@ -14,6 +14,7 @@ import {
   witnessMapForEach,
   witnessMapHas,
   witnessMapSet,
+  witnessObjectIs,
   witnessOwnKeys,
   witnessProxy,
   witnessReflectApply,
@@ -66,6 +67,7 @@ const intrinsicArrayPrototype = intrinsicArrayPrototypeCandidate;
 const pinnedArrayPrototypeMethods = createWitnessMap<PropertyKey, Function>();
 const pinnedLifecycleArrays = createWitnessWeakSet<object>();
 const deeplySnapshotLifecycleArrays = createWitnessWeakSet<object>();
+const deeplySnapshotDataTreeArrays = createWitnessWeakSet<object>();
 const pinnedLifecycleArrayConstructor = witnessCreateNullRecord<unknown>();
 witnessDefineProperty(pinnedLifecycleArrayConstructor, Symbol.species, {
   configurable: false,
@@ -108,7 +110,16 @@ export interface PinnedRequestProperty {
 
 interface PinnedLifecycleSnapshotState {
   readonly copies: WeakMap<object, object>;
+  readonly label: string;
   nodes: number;
+  readonly pinArraySurface: boolean;
+  readonly snapshotLeaf?: (value: object) => PinnedDataTreeLeafSnapshot | undefined;
+  readonly stableDescriptors: boolean;
+}
+
+interface PinnedDataTreeLeafSnapshot {
+  readonly handled: true;
+  readonly value: object;
 }
 
 /**
@@ -125,7 +136,42 @@ interface PinnedLifecycleSnapshotState {
 export function snapshotPinnedLifecycleValue<Value>(value: Value): Value {
   return snapshotPinnedLifecycleNode(
     value,
-    { copies: createWitnessWeakMap<object, object>(), nodes: 0 },
+    {
+      copies: createWitnessWeakMap<object, object>(),
+      label: 'Lifecycle session',
+      nodes: 0,
+      pinArraySurface: true,
+      stableDescriptors: false,
+    },
+    0,
+  ) as Value;
+}
+
+/**
+ * @internal Reconstruct a bounded own-data graph while allowing exact framework-witnessed leaves.
+ *
+ * Unlike provider/session snapshots, request-input receipts must retain a few closed runtime value
+ * classes such as `Date`, `SecretValue`, `ScopedKey`, and verified file receipts. The leaf callback
+ * is module-private framework policy; every other object still has to be a stable plain own-data
+ * record or dense array (SPEC §6.6 / §10.3 C15).
+ */
+export function snapshotPinnedDataTreeValue<Value>(
+  value: Value,
+  options: {
+    readonly label: string;
+    readonly snapshotLeaf?: (value: object) => PinnedDataTreeLeafSnapshot | undefined;
+  },
+): Value {
+  return snapshotPinnedLifecycleNode(
+    value,
+    {
+      copies: createWitnessWeakMap<object, object>(),
+      label: options.label,
+      nodes: 0,
+      pinArraySurface: false,
+      ...(options.snapshotLeaf === undefined ? {} : { snapshotLeaf: options.snapshotLeaf }),
+      stableDescriptors: true,
+    },
     0,
   ) as Value;
 }
@@ -137,27 +183,40 @@ function snapshotPinnedLifecycleNode(
 ): unknown {
   if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
   if (typeof value === 'function') {
-    throw new TypeError('Lifecycle session values cannot contain functions.');
+    throw new TypeError(`${state.label} values cannot contain functions.`);
   }
   // Session definitions own provider output before the request lifecycle owns it again. Only
   // arrays produced by a completed recursive snapshot are deep-closure receipts. Surface-pinned
   // arrays returned by methods such as map() may still contain app-owned mutable elements and
   // must flow through the recursive branch below (SPEC §6.5/§6.6 C9).
-  if (witnessIsArray(value) && witnessWeakSetHas(deeplySnapshotLifecycleArrays, value))
+  if (
+    witnessIsArray(value) &&
+    witnessWeakSetHas(
+      state.pinArraySurface ? deeplySnapshotLifecycleArrays : deeplySnapshotDataTreeArrays,
+      value,
+    )
+  ) {
     return value;
+  }
   if (depth > MAX_PINNED_LIFECYCLE_DEPTH || state.nodes >= MAX_PINNED_LIFECYCLE_NODES) {
-    throw new TypeError('Lifecycle session values exceed the bounded data-tree limit.');
+    throw new TypeError(`${state.label} values exceed the bounded data-tree limit.`);
   }
   const prior = witnessWeakMapGet(state.copies, value);
   if (prior !== undefined) return prior;
   state.nodes += 1;
 
+  const leaf = state.snapshotLeaf?.(value);
+  if (leaf?.handled === true) {
+    witnessWeakMapSet(state.copies, value, leaf.value);
+    return leaf.value;
+  }
+
   if (witnessIsArray(value)) {
     const hasFrameworkPinnedSurface = witnessWeakSetHas(pinnedLifecycleArrays, value);
-    if (witnessGetPrototypeOf(value) !== intrinsicArrayPrototype) {
-      throw new TypeError('Lifecycle session arrays must use the intrinsic array prototype.');
+    if (stablePinnedPrototype(value, state) !== intrinsicArrayPrototype) {
+      throw new TypeError(`${state.label} arrays must use the intrinsic array prototype.`);
     }
-    const lengthDescriptor = witnessGetOwnPropertyDescriptor(value, 'length');
+    const lengthDescriptor = pinnedOwnPropertyDescriptor(value, 'length', state);
     if (
       lengthDescriptor === undefined ||
       !('value' in lengthDescriptor) ||
@@ -166,14 +225,14 @@ function snapshotPinnedLifecycleNode(
       lengthDescriptor.value % 1 !== 0 ||
       lengthDescriptor.value > MAX_PINNED_LIFECYCLE_NODES
     ) {
-      throw new TypeError('Lifecycle session arrays must be bounded and dense.');
+      throw new TypeError(`${state.label} arrays must be bounded and dense.`);
     }
     const clone: unknown[] = [];
     witnessWeakMapSet(state.copies, value, clone);
     for (let index = 0; index < lengthDescriptor.value; index += 1) {
-      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      const descriptor = pinnedOwnPropertyDescriptor(value, index, state);
       if (descriptor === undefined || !('value' in descriptor)) {
-        throw new TypeError('Lifecycle session arrays must use dense own data elements.');
+        throw new TypeError(`${state.label} arrays must use dense own data elements.`);
       }
       witnessDefineProperty(clone, index, {
         configurable: true,
@@ -182,34 +241,37 @@ function snapshotPinnedLifecycleNode(
         writable: true,
       });
     }
-    const ownKeys = witnessOwnKeys(value);
+    const ownKeys = pinnedOwnKeys(value, state);
     if (!hasFrameworkPinnedSurface && ownKeys.length !== lengthDescriptor.value + 1) {
-      throw new TypeError('Lifecycle session arrays cannot carry extra properties.');
+      throw new TypeError(`${state.label} arrays cannot carry extra properties.`);
     }
-    installPinnedLifecycleArraySurface(clone);
+    if (state.pinArraySurface) installPinnedLifecycleArraySurface(clone);
     const deeplySnapshot = witnessFreeze(clone);
-    witnessWeakSetAdd(deeplySnapshotLifecycleArrays, deeplySnapshot);
+    witnessWeakSetAdd(
+      state.pinArraySurface ? deeplySnapshotLifecycleArrays : deeplySnapshotDataTreeArrays,
+      deeplySnapshot,
+    );
     return deeplySnapshot;
   }
 
-  const prototype = witnessGetPrototypeOf(value);
+  const prototype = stablePinnedPrototype(value, state);
   if (prototype !== intrinsicObjectPrototype && prototype !== null) {
-    throw new TypeError('Lifecycle session values must contain only plain own-data records.');
+    throw new TypeError(`${state.label} values must contain only plain own-data records.`);
   }
   const clone = witnessCreateNullRecord();
   witnessWeakMapSet(state.copies, value, clone);
-  const keys = witnessOwnKeys(value);
+  const keys = pinnedOwnKeys(value, state);
   if (keys.length > MAX_PINNED_LIFECYCLE_NODES - state.nodes) {
-    throw new TypeError('Lifecycle session values exceed the bounded data-tree limit.');
+    throw new TypeError(`${state.label} values exceed the bounded data-tree limit.`);
   }
   for (let index = 0; index < keys.length; index += 1) {
     const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
     if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
-      throw new TypeError('Lifecycle session record keys must remain dense.');
+      throw new TypeError(`${state.label} record keys must remain dense.`);
     }
-    const descriptor = witnessGetOwnPropertyDescriptor(value, keyDescriptor.value);
+    const descriptor = pinnedOwnPropertyDescriptor(value, keyDescriptor.value, state);
     if (descriptor === undefined || !('value' in descriptor)) {
-      throw new TypeError('Lifecycle session records cannot contain accessors.');
+      throw new TypeError(`${state.label} records cannot contain accessors.`);
     }
     witnessDefineProperty(clone, keyDescriptor.value, {
       configurable: true,
@@ -219,6 +281,70 @@ function snapshotPinnedLifecycleNode(
     });
   }
   return witnessFreeze(clone);
+}
+
+function stablePinnedPrototype(value: object, state: PinnedLifecycleSnapshotState): object | null {
+  const prototype = witnessGetPrototypeOf(value);
+  if (state.stableDescriptors && witnessGetPrototypeOf(value) !== prototype) {
+    throw new TypeError(`${state.label} values must expose a stable prototype.`);
+  }
+  return prototype;
+}
+
+function pinnedOwnKeys(value: object, state: PinnedLifecycleSnapshotState): PropertyKey[] {
+  const keys = witnessOwnKeys(value);
+  if (!state.stableDescriptors) return keys;
+  const repeated = witnessOwnKeys(value);
+  if (repeated.length !== keys.length) {
+    throw new TypeError(`${state.label} values must expose stable own keys.`);
+  }
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = witnessGetOwnPropertyDescriptor(keys, index);
+    const repeatedKey = witnessGetOwnPropertyDescriptor(repeated, index);
+    if (
+      key === undefined ||
+      !('value' in key) ||
+      repeatedKey === undefined ||
+      !('value' in repeatedKey) ||
+      !witnessObjectIs(key.value, repeatedKey.value)
+    ) {
+      throw new TypeError(`${state.label} values must expose stable own keys.`);
+    }
+  }
+  return keys;
+}
+
+function pinnedOwnPropertyDescriptor(
+  value: object,
+  property: PropertyKey,
+  state: PinnedLifecycleSnapshotState,
+): PropertyDescriptor | undefined {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (!state.stableDescriptors) return descriptor;
+  const repeated = witnessGetOwnPropertyDescriptor(value, property);
+  if (!samePinnedDescriptor(descriptor, repeated)) {
+    throw new TypeError(`${state.label} values must expose stable own data descriptors.`);
+  }
+  return descriptor;
+}
+
+function samePinnedDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  if (
+    left.configurable !== right.configurable ||
+    left.enumerable !== right.enumerable ||
+    'value' in left !== 'value' in right ||
+    'writable' in left !== 'writable' in right
+  ) {
+    return false;
+  }
+  if ('value' in left && 'value' in right) {
+    return left.writable === right.writable && witnessObjectIs(left.value, right.value);
+  }
+  return witnessObjectIs(left.get, right.get) && witnessObjectIs(left.set, right.set);
 }
 
 function installPinnedLifecycleArraySurface(array: unknown[]): void {

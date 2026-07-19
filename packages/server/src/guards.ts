@@ -5,6 +5,7 @@ import {
   type AccessDecision,
 } from './access.js';
 import { snapshotAuditText } from './audit-justification.js';
+import { snapshotGuardArgsReceipt } from './guard-args-receipt.js';
 import {
   mergeVaryHeader,
   renderErrorDocument,
@@ -1662,7 +1663,10 @@ export function withGuardArgs<Request, Args>(
   request: Request,
   args: Args,
 ): GuardArgsRequest<Request, Args> {
-  return requestWithProperty(request, 'args', args) as GuardArgsRequest<Request, Args>;
+  return requestWithProperty(request, 'args', snapshotGuardArgsReceipt(args)) as GuardArgsRequest<
+    Request,
+    Args
+  >;
 }
 
 /**

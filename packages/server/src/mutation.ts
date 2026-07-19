@@ -2,6 +2,7 @@ import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
 
 import { accessDecisionFor } from './access.js';
 import { requestPrincipalSnapshot } from './auth-principal.js';
+import { snapshotGuardArgsReceipt } from './guard-args-receipt.js';
 import {
   isExactlyOnceAdapterSettlementAmbiguousError,
   runExactlyOnceAdapter,
@@ -243,7 +244,7 @@ async function executeMutationLifecycle<
     : await parseMutationInput(definition.input, rawInput);
   if (!inputResult.ok) return { failure: inputResult.failure, kind: 'validation-failure' };
 
-  const input = inputResult.value as InferSchema<InputSchema>;
+  const input = snapshotGuardArgsReceipt(inputResult.value as InferSchema<InputSchema>);
   const lifecycleRequest = withGuardArgs(
     await resolveLifecycleRequest(
       request,
@@ -441,7 +442,7 @@ export async function runMutation<
     const inputResult = await parseMutationInput(definition.input, rawInput);
     if (!inputResult.ok) return inputResult.failure;
 
-    input = inputResult.value as InferSchema<InputSchema>;
+    input = snapshotGuardArgsReceipt(inputResult.value as InferSchema<InputSchema>);
     // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)"): merge the mutation's *validated*
     // args onto the request so an arg-aware guard (`guards.owns` reading `req.args`) and the handler
     // both see the same `s.*`-coerced values, discharging KV414 for the covered key.
@@ -465,7 +466,7 @@ export async function runMutation<
     runMutationWithTrackedInput(
       definition,
       trackedInput as InferSchema<InputSchema>,
-      withGuardArgs(lifecycleRequest, trackedInput) as Request,
+      lifecycleRequest,
       options,
     ),
   );

@@ -6,11 +6,15 @@ import {
 } from './async-context.js';
 import {
   witnessArrayAppend,
+  witnessCreateWithPrototype,
   createWitnessWeakMap,
   createWitnessWeakSet,
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
   witnessIsArray,
   witnessObjectIs,
+  witnessOwnKeys,
   witnessProxy,
   witnessRegExpTest,
   witnessReflectGet,
@@ -129,16 +133,80 @@ function trackRequestInputValue(
   const cached = witnessWeakMapGet(state.proxyCache, value);
   if (cached !== undefined) return cached;
 
-  const proxy = witnessProxy(value as Record<PropertyKey, unknown>, {
-    get(target, property, receiver) {
-      const item = witnessReflectGet(target, property, receiver);
+  // The canonical guard-args receipt is deeply frozen. Proxying that object directly would make a
+  // recursively tracked `get` violate Proxy invariants for non-configurable object-valued fields.
+  // Use a same-shape, configurable shadow solely as the Proxy target; every read still comes from
+  // the detached canonical receipt and writes remain closed (SPEC §6.6 / §11.1 KV438).
+  const proxyTarget = requestInputProvenanceProxyTarget(value);
+  let proxy: object;
+  proxy = witnessProxy(proxyTarget, {
+    defineProperty() {
+      return false;
+    },
+    deleteProperty() {
+      return false;
+    },
+    get(_target, property, receiver) {
+      const item = witnessReflectGet(value, property, receiver);
       return trackRequestInputValue(item, pathForProperty(path, property), state);
+    },
+    getOwnPropertyDescriptor(target, property) {
+      const descriptor = witnessGetOwnPropertyDescriptor(target, property);
+      if (
+        descriptor === undefined ||
+        !('value' in descriptor) ||
+        descriptor.configurable === false
+      ) {
+        return descriptor;
+      }
+      return {
+        ...descriptor,
+        value: trackRequestInputValue(descriptor.value, pathForProperty(path, property), state),
+      };
+    },
+    preventExtensions() {
+      return false;
+    },
+    set() {
+      return false;
+    },
+    setPrototypeOf() {
+      return false;
     },
   });
   witnessWeakMapSet(state.proxyCache, value, proxy);
   witnessWeakMapSet(state.objectPaths, value, path);
   witnessWeakMapSet(state.objectPaths, proxy, path);
   return proxy;
+}
+
+function requestInputProvenanceProxyTarget(value: object): object {
+  const target: object = witnessIsArray(value)
+    ? []
+    : witnessCreateWithPrototype(witnessGetPrototypeOf(value));
+  const keys = witnessOwnKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyDescriptor = witnessGetOwnPropertyDescriptor(keys, index);
+    if (keyDescriptor === undefined || !('value' in keyDescriptor)) {
+      throw new TypeError('Canonical mutation input keys must remain dense.');
+    }
+    const property = keyDescriptor.value;
+    const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Canonical mutation input must contain only own data properties.');
+    }
+    if (witnessIsArray(target) && property === 'length') {
+      witnessDefineProperty(target, 'length', { value: descriptor.value });
+      continue;
+    }
+    witnessDefineProperty(target, property, {
+      configurable: true,
+      enumerable: descriptor.enumerable ?? false,
+      value: descriptor.value,
+      writable: true,
+    });
+  }
+  return target;
 }
 
 function pathForProperty(base: string, property: PropertyKey): string {

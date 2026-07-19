@@ -8,15 +8,18 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after lifecycle private-scope closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(257);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(258);
   });
 
   it('executes the lifecycle private-scope pin mutant against a behavioral runtime oracle', () => {
-    expect(
-      SECURITY_GATE_MUTANTS.find(
-        (mutant) => mutant.name === 'server-lifecycle/drop-private-scope-carrier-pin',
-      ),
-    ).toEqual(expect.objectContaining({ behavioralTypeScript: true }));
+    const names = [
+      'server-lifecycle/drop-guard-args-receipt',
+      'server-lifecycle/drop-private-scope-carrier-pin',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(names.sort());
+    expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
   });
 
   it('enrolls behavioral request-body shape, allocation, and FormData mutants', () => {

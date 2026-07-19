@@ -2,6 +2,7 @@ import { isSecret, type JsonValue } from '@kovojs/core';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
+import { snapshotGuardArgsReceipt } from './guard-args-receipt.js';
 import {
   accessDecisionFor,
   assertUnambiguousAccessDeclaration,
@@ -525,10 +526,12 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   // `keyOf(request)` reads `undefined` and a key-ignoring predicate authorizes everyone (IDOR).
   // Only on the validated path (a declared `args` schema, parsed above); a query without args never
   // fabricates an unvalidated `req.args`. The loader/guard then see the same coerced values.
+  const input =
+    definition.args === undefined ? argsResult.value : snapshotGuardArgsReceipt(argsResult.value);
   const lifecycleRequest =
     definition.args === undefined
       ? resolvedRequest
-      : (withGuardArgs(resolvedRequest, argsResult.value) as typeof resolvedRequest);
+      : (withGuardArgs(resolvedRequest, input) as typeof resolvedRequest);
   const guardFailure = await runAccessDecisionGuards(
     accessDecisionFor(definition),
     definition.guard,
@@ -538,7 +541,6 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
     return guardFailureToResult(guardFailure);
   }
 
-  const input = argsResult.value;
   // The framework-owned managed handle is installed on `lifecycleRequest.db` by
   // `resolveLifecycleRequest` (read-only proxy for a loader). Thread it onto the loader context as
   // `context.db` so loaders destructure `{ db }` from the framework
