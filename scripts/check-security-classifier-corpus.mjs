@@ -2247,6 +2247,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'generated-query-plan-css-selector-escaping',
+        file: 'packages/compiler/src/output-context-payloads.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 generated-query-plan-css-selector-escaping',
+          'escapes generated data-bind attribute names for browser CSS selectors',
+          "attr: 'aria-label'",
+          "attr: 'data-state'",
+          "attr: 'hidden'",
+        ],
+      },
+      {
         id: 'dynamic-binding-control-plane-runtime-floor',
         file: 'packages/core/src/sink-policy.test.ts',
         snippets: [

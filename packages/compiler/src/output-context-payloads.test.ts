@@ -329,6 +329,46 @@ export const PayloadCard = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  // @kovo-security-certifies C13 generated-query-plan-css-selector-escaping
+  it('escapes generated data-bind attribute names for browser CSS selectors', () => {
+    const result = compileComponentModule({
+      fileName: 'selector-card.tsx',
+      source: `
+export const SelectorCard = component({
+  queries: { card: cardQuery },
+  render: ({ card }) => (
+    <button aria-label={card.label} data-state={card.status} hidden={card.hidden}>Card</button>
+  ),
+});
+`,
+    });
+
+    const stamps = result.queryUpdatePlans[0]?.stamps?.map(({ attr, selector }) => ({
+      attr,
+      selector,
+    }));
+    expect(stamps).toEqual([
+      {
+        attr: 'aria-label',
+        selector:
+          '[data-bind\\:aria-label="card.SelectorCard$button_aria_label_derive"]',
+      },
+      {
+        attr: 'data-state',
+        selector:
+          '[data-bind\\:data-state="card.SelectorCard$button_data_state_derive"]',
+      },
+      {
+        attr: 'hidden',
+        selector: '[data-bind\\:hidden="card.SelectorCard$button_hidden_derive"]',
+      },
+    ]);
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+    expect(clientSource).toContain('[data-bind\\\\:aria-label=');
+    expect(clientSource).toContain('[data-bind\\\\:data-state=');
+    expect(clientSource).toContain('[data-bind\\\\:hidden=');
+  });
+
   it('snapshots literal URL attributes across internal, external, and unsafe schemes', () => {
     const result = compileComponentModule({
       fileName: 'literal-url-payloads.tsx',
