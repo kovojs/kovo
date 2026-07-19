@@ -1106,7 +1106,7 @@ function privateScopeBindingIsStableAtUse(declaration: Node, name: string, use: 
   const bindingKey = nameNode
     ? resolvedSymbolKey(symbolForIdentifierReference(nameNode) ?? nameNode.getSymbol())
     : undefined;
-  if (!bindingKey) return false;
+  if (!nameNode || !bindingKey) return false;
   const bindingIsImmutableScalar = definitelyImmutablePrivateScopeScalarType(nameNode.getType());
 
   // Scan through the whole sink statement, not merely preceding statements. Query builders may
