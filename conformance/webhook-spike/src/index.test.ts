@@ -3,15 +3,23 @@ import { describe, expect, it } from 'vitest';
 
 import { hmacSignature, type HmacSecret, type HmacSignatureVerifier } from '@kovojs/core';
 import {
-  createMemoryMutationReplayStore,
+  createMemoryWebhookReplayStore,
   replayMutationWireBody,
-  type MutationReplayStore,
+  webhookReplayIdentity,
+  type WebhookReplayStore,
 } from '@kovojs/server';
 import type { MutationWireResponse } from '@kovojs/server/internal/wire';
 
-const stripePayload =
-  '{"id":"evt_payment_succeeded_001","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_123","metadata":{"orderId":"order_123"}}},"livemode":false,"pending_webhooks":1}';
-const stripeTimestamp = 1_674_087_231;
+const stripeTimestamp = Math.floor(Date.now() / 1_000);
+const stripePayload = JSON.stringify({
+  id: 'evt_payment_succeeded_001',
+  object: 'event',
+  type: 'payment_intent.succeeded',
+  created: stripeTimestamp,
+  data: { object: { id: 'pi_123', metadata: { orderId: 'order_123' } } },
+  livemode: false,
+  pending_webhooks: 1,
+});
 const stripeNow = stripeTimestamp * 1000;
 const stripeSecret = 'd0d1d2d3d4d5d6d7d8d9dadbdcdddedf';
 const currentStripeSecret = 'e0e1e2e3e4e5e6e7e8e9eaebecedeeef';
@@ -24,6 +32,7 @@ const rotatedStripeSignatureHeader = [
 ].join(',');
 
 type StripeFixtureEvent = {
+  created: number;
   data?: {
     object?: {
       id?: unknown;
@@ -49,7 +58,7 @@ type SpikeState = {
 
 type StripeSpikeOptions = {
   now?: number;
-  replayStore: MutationReplayStore;
+  replayStore: WebhookReplayStore;
   secret?: readonly string[] | string;
   state: SpikeState;
 };
@@ -62,7 +71,7 @@ type SpikeResponse = {
 
 describe('S7 Stripe-format webhook lifecycle spike', () => {
   it('captures raw bytes once, then verifies, parses, writes in a tx, records changes, and replays duplicates', async () => {
-    const replayStore = createMemoryMutationReplayStore();
+    const replayStore = createMemoryWebhookReplayStore();
     const state = createSpikeState();
     const firstRequest = countingStripeRequest(stripePayload, stripeHeader);
     const first = await runStripeWebhookSpike(firstRequest.request, {
@@ -123,7 +132,7 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
 
     await expect(
       runStripeWebhookSpike(request.request, {
-        replayStore: createMemoryMutationReplayStore(),
+        replayStore: createMemoryWebhookReplayStore(),
         state,
       }),
     ).resolves.toMatchObject({
@@ -141,7 +150,7 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
     await expect(
       runStripeWebhookSpike(countingStripeRequest(stripePayload, stripeHeader).request, {
         now: stripeNow + 301_000,
-        replayStore: createMemoryMutationReplayStore(),
+        replayStore: createMemoryWebhookReplayStore(),
         state,
       }),
     ).resolves.toMatchObject({
@@ -158,7 +167,7 @@ describe('S7 Stripe-format webhook lifecycle spike', () => {
       runStripeWebhookSpike(
         countingStripeRequest(stripePayload, rotatedStripeSignatureHeader).request,
         {
-          replayStore: createMemoryMutationReplayStore(),
+          replayStore: createMemoryWebhookReplayStore(),
           secret: [currentStripeSecret, oldStripeSecret],
           state,
         },
@@ -193,12 +202,13 @@ async function runStripeWebhookSpike(
   // replay by provider event id, then transaction/domain writes/change record.
   const event = parseStripeFixtureEvent(rawBody);
   const replayScope = 'webhook:stripe';
-  const replayed = await options.replayStore.get(replayScope, event.id);
+  const replayIdentity = webhookReplayIdentity(event.id, event.created * 1_000);
+  const replayed = await options.replayStore.get(replayScope, replayIdentity);
   if (replayed) return replayed;
 
-  const reservation = await options.replayStore.reserve(replayScope, event.id);
+  const reservation = await options.replayStore.reserve(replayScope, replayIdentity);
   if (!reservation) {
-    const pendingReplay = await options.replayStore.get(replayScope, event.id);
+    const pendingReplay = await options.replayStore.get(replayScope, replayIdentity);
     if (pendingReplay) return pendingReplay;
     return textResponse(409, 'duplicate webhook is already running');
   }
@@ -228,7 +238,7 @@ async function runStripeWebhookSpike(
       },
       status: 200 as const,
     };
-    reservation.commit(response);
+    await reservation.commit(response);
     return response;
   } catch (error) {
     tx.rollback();
@@ -241,6 +251,9 @@ function parseStripeFixtureEvent(rawBody: Uint8Array): StripeFixtureEvent {
   if (
     typeof parsed !== 'object' ||
     parsed === null ||
+    !('created' in parsed) ||
+    typeof parsed.created !== 'number' ||
+    !Number.isSafeInteger(parsed.created) ||
     !('id' in parsed) ||
     typeof parsed.id !== 'string' ||
     !('type' in parsed) ||
