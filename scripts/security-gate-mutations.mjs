@@ -15,7 +15,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { build as buildWithEsbuild } from 'esbuild';
-import { Project, SyntaxKind, ts } from 'ts-morph';
+import { Node, Project, SyntaxKind, ts } from 'ts-morph';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
@@ -1247,6 +1247,22 @@ const weakenedAnalyzerSummaryConditionalEffectClosureBranch = [
   '  return true;',
   '  for (const node of [condition, ...condition.getDescendants()]) {',
 ].join('\n');
+const analyzerSummarySummariesBehavioralInstrumentation = [
+  '',
+  'export { summarizedStaticCallablePrivateScope as __summarizedStaticCallablePrivateScope };',
+  "export { sessionProvenanceContextForNodes } from './session-provenance.js';",
+  'export function __analyzerSummaryContextForReference(expression, provenance) {',
+  '  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();',
+  '  const key = resolvedSymbolKey(symbol);',
+  "  if (!key) throw new Error('behavioral analyzer-summary fixture lost its symbol key');",
+  '  return {',
+  '    aliases: new Map(),',
+  '    helpers: new Map([[key, provenance]]),',
+  '    opaqueAliases: new Map(),',
+  '  };',
+  '}',
+  '',
+].join('\n');
 const serverValueMissingInputClosureBranch = [
   '      if (!inner) {',
   "        return { ok: false, provenance: 'unknown', detail: expression.getText() };",
@@ -1623,16 +1639,17 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertFrameworkImplementationDigestComparisonIsClosed,
   },
   {
+    behavioralTypeScript: true,
     description: 'Trusts an app analyzer declaration without proving the helper body.',
     expectedKiller: 'private analyzer summaries must retain exact same-file structural proof',
     name: 'drizzle-analyzer-summary/drop-structural-body-proof',
     replacement: weakenedAnalyzerSummaryStructuralProofBranch,
     search: analyzerSummaryStructuralProofBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryStructuralProofIsPinned,
+    test: assertAnalyzerSummaryStructuralProofIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description:
       'Lets a verified private helper receive client input instead of a context carrier.',
     expectedKiller: 'private helper calls must retain exact request/context carrier proof',
@@ -1640,8 +1657,7 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: weakenedAnalyzerSummaryCallCarrierBranch,
     search: analyzerSummaryCallCarrierBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryCallCarrierIsPinned,
+    test: assertAnalyzerSummaryCallCarrierIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -1655,22 +1671,17 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertAnalyzerSummarySoleCarrierArgumentIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets derived helper aliases become provenance for another alias hop.',
     expectedKiller: 'private helper aliases must derive only from the direct proved snapshot',
     name: 'drizzle-analyzer-summary/allow-transitive-helper-alias',
     replacement: weakenedAnalyzerSummaryDirectAliasSnapshotBranch,
     search: analyzerSummaryDirectAliasSnapshotBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryDirectAliasSnapshotIsPinned,
+    test: assertAnalyzerSummaryDirectAliasSnapshotIsEnforced,
   },
   {
-    behavioralInstrumentation: [
-      '',
-      'export { summarizedStaticCallablePrivateScope as __summarizedStaticCallablePrivateScope };',
-      "export { sessionProvenanceContextForNodes } from './session-provenance.js';",
-      '',
-    ].join('\n'),
+    behavioralInstrumentation: analyzerSummarySummariesBehavioralInstrumentation,
     behavioralTypeScript: true,
     description: 'Restores recursive const-alias expansion in the OPP private-scope consumer.',
     expectedKiller: 'OPP private helper aliases must stop after one direct alias',
@@ -1681,14 +1692,14 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertAnalyzerSummaryOppAliasChainClosureIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets an unenrolled positional parameter pass as private context.',
     expectedKiller: 'private helper calls must reject positional/name/type carrier guesses',
     name: 'drizzle-analyzer-summary/trust-renamed-input-carrier',
     replacement: weakenedAnalyzerSummaryUnenrolledCarrierClosureBranch,
     search: analyzerSummaryUnenrolledCarrierClosureBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryUnenrolledCarrierClosureIsPinned,
+    test: assertAnalyzerSummaryUnenrolledCarrierClosureIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -1701,214 +1712,219 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertAnalyzerSummaryCarrierIntegrityIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets direct guard/session/tenant reads bypass carrier integrity.',
     expectedKiller: 'direct private reads must use the same carrier-integrity proof',
     name: 'drizzle-analyzer-summary/drop-direct-carrier-integrity-proof',
     replacement: weakenedAnalyzerSummaryDirectCarrierIntegrityBranch,
     search: analyzerSummaryDirectCarrierIntegrityBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryDirectCarrierIntegrityIsPinned,
+    test: assertAnalyzerSummaryDirectCarrierIntegrityIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets a request-like validated-input name mint provenance through destructuring.',
     expectedKiller: 'destructured private aliases must retain exact carrier-role proof',
     name: 'drizzle-analyzer-summary/trust-destructured-input-carrier',
     replacement: weakenedAnalyzerSummaryDestructuredCarrierProofBranch,
     search: analyzerSummaryDestructuredCarrierProofBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryDestructuredCarrierProofIsPinned,
+    test: assertAnalyzerSummaryDestructuredCarrierProofIsEnforced,
   },
   {
+    behavioralInstrumentation: analyzerSummarySummariesBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Lets a non-null session local recover private provenance from named input.',
     expectedKiller: 'session-local recovery must retain exact carrier-role proof',
     name: 'drizzle-analyzer-summary/trust-input-session-local',
     replacement: weakenedAnalyzerSummarySessionAliasCarrierProofBranch,
     search: analyzerSummarySessionAliasCarrierProofBranch,
     sourceFile: drizzleSummariesPath,
-    sourceOnly: true,
-    test: assertAnalyzerSummarySessionAliasCarrierProofIsPinned,
+    test: assertAnalyzerSummarySessionAliasCarrierProofIsEnforced,
   },
   {
+    behavioralInstrumentation: analyzerSummarySummariesBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Lets accepted-guard dominance trust a guard path rooted in named input.',
     expectedKiller: 'accepted guard paths must retain exact carrier-role proof',
     name: 'drizzle-analyzer-summary/trust-input-accepted-guard',
     replacement: weakenedAnalyzerSummaryAcceptedGuardCarrierProofBranch,
     search: analyzerSummaryAcceptedGuardCarrierProofBranch,
     sourceFile: drizzleSummariesPath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryAcceptedGuardCarrierProofIsPinned,
+    test: assertAnalyzerSummaryAcceptedGuardCarrierProofIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets a framework carrier escape through an opaque call before private use.',
     expectedKiller: 'private carriers must close after opaque call escape',
     name: 'drizzle-analyzer-summary/allow-opaque-carrier-escape',
     replacement: weakenedAnalyzerSummaryOpaqueCarrierEscapeBranch,
     search: analyzerSummaryOpaqueCarrierEscapeBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryOpaqueCarrierEscapeIsPinned,
+    test: assertAnalyzerSummaryOpaqueCarrierEscapeIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets an arbitrary wrapper prefix before guard/session/tenant mint private scope.',
     expectedKiller: 'private summary paths must allow only direct or exact request prefixes',
     name: 'drizzle-analyzer-summary/allow-arbitrary-private-path-prefix',
     replacement: weakenedAnalyzerSummaryPrivatePathPrefixBranch,
     search: analyzerSummaryPrivatePathPrefixBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryPrivatePathPrefixIsPinned,
+    test: assertAnalyzerSummaryPrivatePathPrefixIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets a carrier-owned input.guard subtree mint direct private provenance.',
     expectedKiller: 'direct private paths must allow only direct or exact request prefixes',
     name: 'drizzle-analyzer-summary/allow-direct-carrier-input-prefix',
     replacement: weakenedAnalyzerSummaryDirectPrivatePathPrefixBranch,
     search: analyzerSummaryDirectPrivatePathPrefixBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryDirectPrivatePathPrefixIsPinned,
+    test: assertAnalyzerSummaryDirectPrivatePathPrefixIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets client-controlled destructuring defaults preserve private provenance.',
     expectedKiller: 'defaulted private destructuring must remain closed',
     name: 'drizzle-analyzer-summary/allow-private-destructuring-default',
     replacement: weakenedAnalyzerSummaryDestructuringDefaultClosureBranch,
     search: analyzerSummaryDestructuringDefaultClosureBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryDestructuringDefaultClosureIsPinned,
+    test: assertAnalyzerSummaryDestructuringDefaultClosureIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets mutable object captures pass the immutable scalar transfer rule.',
     expectedKiller: 'private carrier transfer must remain limited to immutable scalar values',
     name: 'drizzle-analyzer-summary/allow-mutable-private-scalar-transfer',
     replacement: weakenedAnalyzerSummaryMutableScalarTransferClosureBranch,
     search: analyzerSummaryMutableScalarTransferClosureBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryMutableScalarTransferClosureIsPinned,
+    test: assertAnalyzerSummaryMutableScalarTransferClosureIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Treats a bare expression call as a control-flow exit for guard dominance.',
     expectedKiller: 'private guard dominance must require an explicit return or throw',
     name: 'drizzle-analyzer-summary/allow-nonexiting-outcome-call',
     replacement: weakenedAnalyzerSummaryFiniteExitGrammarBranch,
     search: analyzerSummaryFiniteExitGrammarBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryFiniteExitGrammarIsPinned,
+    test: assertAnalyzerSummaryFiniteExitGrammarIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets a resolved lexical shadow inherit a same-text private alias.',
     expectedKiller: 'private alias consumers must bind exact lexical symbols',
     name: 'drizzle-analyzer-summary/allow-same-text-private-alias-shadow',
     replacement: weakenedAnalyzerSummaryExactAliasIdentityBranch,
     search: analyzerSummaryExactAliasIdentityBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryExactAliasIdentityIsPinned,
+    test: assertAnalyzerSummaryExactAliasIdentityIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Keeps a summary trusted after its callable binding is reassigned.',
     expectedKiller: 'private summary helpers must retain immutable callable identity',
     name: 'drizzle-analyzer-summary/allow-mutated-helper-binding',
     replacement: weakenedAnalyzerSummaryImmutableBindingBranch,
     search: analyzerSummaryImmutableBindingBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryImmutableBindingIsPinned,
+    test: assertAnalyzerSummaryImmutableBindingIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Restores mutable object properties as positive analyzer-summary callables.',
     expectedKiller: 'private summary targets must remain direct same-file callable bindings',
     name: 'drizzle-analyzer-summary/allow-object-property-callable',
     replacement: weakenedAnalyzerSummaryDirectCallableGrammarBranch,
     search: analyzerSummaryDirectCallableGrammarBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryDirectCallableGrammarIsPinned,
+    test: assertAnalyzerSummaryDirectCallableGrammarIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets a caller-controlled `this` receiver mint private context provenance.',
     expectedKiller: 'private helper calls must reject `this` as a request/context carrier',
     name: 'drizzle-analyzer-summary/trust-this-carrier',
     replacement: weakenedAnalyzerSummaryThisCarrierClosureBranch,
     search: analyzerSummaryThisCarrierClosureBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryThisCarrierClosureIsPinned,
+    test: assertAnalyzerSummaryThisCarrierClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: analyzerSummarySummariesBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Drops the call-carrier proof from the static summary consumer.',
     expectedKiller: 'every static summary consumer must retain the same call-carrier proof',
     name: 'drizzle-analyzer-summary/drop-static-call-carrier-proof',
     replacement: weakenedAnalyzerSummaryStaticCallCarrierBranch,
     search: analyzerSummaryStaticCallCarrierBranch,
     sourceFile: drizzleSummariesPath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryStaticCallCarrierIsPinned,
+    test: assertAnalyzerSummaryStaticCallCarrierIsEnforced,
   },
   {
+    behavioralInstrumentation: analyzerSummarySummariesBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Restores mutable property/container invocations as positive private summaries.',
     expectedKiller: 'private summary calls must use a direct helper or direct const alias',
     name: 'drizzle-analyzer-summary/allow-property-callable-invocation',
     replacement: weakenedAnalyzerSummaryDirectCallCalleeBranch,
     search: analyzerSummaryDirectCallCalleeBranch,
     sourceFile: drizzleSummariesPath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryDirectCallCalleeIsPinned,
+    test: assertAnalyzerSummaryDirectCallCalleeIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets a mutable local value-container cell preserve owner provenance.',
     expectedKiller: 'owner predicates must reject private provenance through local containers',
     name: 'drizzle-analyzer-summary/allow-owner-value-container',
     replacement: weakenedAnalyzerSummaryOwnerValueContainerClosureBranch,
     search: analyzerSummaryOwnerValueContainerClosureBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryOwnerValueContainerClosureIsPinned,
+    test: assertAnalyzerSummaryOwnerValueContainerClosureIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets serverValue trust a private value routed through a mutable container cell.',
     expectedKiller: 'serverValue must reject private provenance through local containers',
     name: 'drizzle-analyzer-summary/allow-server-value-container',
     replacement: weakenedAnalyzerSummaryServerValueContainerClosureBranch,
     search: analyzerSummaryServerValueContainerClosureBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryServerValueContainerClosureIsPinned,
+    test: assertAnalyzerSummaryServerValueContainerClosureIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets a reassignable local value binding preserve private provenance.',
     expectedKiller: 'private value aliases must retain immutable bindings',
     name: 'drizzle-analyzer-summary/allow-mutable-value-alias',
     replacement: weakenedAnalyzerSummaryConstValueAliasBranch,
     search: analyzerSummaryConstValueAliasBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryConstValueAliasIsPinned,
+    test: assertAnalyzerSummaryConstValueAliasIsEnforced,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets an escaped or reflectively mutated local value preserve provenance.',
     expectedKiller: 'private value aliases must close after any intervening use',
     name: 'drizzle-analyzer-summary/allow-value-alias-escape',
     replacement: weakenedAnalyzerSummaryValueAliasEscapeClosureBranch,
     search: analyzerSummaryValueAliasEscapeClosureBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryValueAliasEscapeClosureIsPinned,
+    test: assertAnalyzerSummaryValueAliasEscapeClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: analyzerSummarySummariesBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Lets side effects in a conditional rewrite private authority before capture.',
     expectedKiller: 'private-value conditional conditions must remain effect-free',
     name: 'drizzle-analyzer-summary/allow-conditional-authority-mutation',
     replacement: weakenedAnalyzerSummaryConditionalEffectClosureBranch,
     search: analyzerSummaryConditionalEffectClosureBranch,
     sourceFile: drizzleSummariesPath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryConditionalEffectClosureIsPinned,
+    test: assertAnalyzerSummaryConditionalEffectClosureIsEnforced,
   },
   {
     description: 'Lets serverValue treat a missing value as proven non-input.',
@@ -4166,15 +4182,134 @@ async function assertExactContextFetchInvocationIsPinned(_moduleUnderTest, { sou
   }
 }
 
-async function assertAnalyzerSummaryStructuralProofIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryStructuralProofBranch)) {
-    throw new Error('private analyzer declarations no longer require exact helper-body proof');
+function withAnalyzerSummaryFixture(fileName, source, callback) {
+  const project = new Project({
+    compilerOptions: {
+      jsx: ts.JsxEmit.Preserve,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noEmit: true,
+      skipLibCheck: true,
+      strict: true,
+      target: ts.ScriptTarget.ESNext,
+    },
+    skipAddingFilesFromTsConfig: true,
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile(fileName, source);
+  try {
+    return callback(sourceFile);
+  } finally {
+    sourceFile.forget();
+    project.getLanguageService().compilerObject.dispose();
   }
 }
 
-async function assertAnalyzerSummaryCallCarrierIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryCallCarrierBranch)) {
-    throw new Error('private helper calls no longer require the exact request/context carrier');
+function analyzerSummaryQueryFixtureSource(lines) {
+  return [
+    'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+    'import { query } from "@kovojs/server";',
+    'type Input = { guard: { userId: string }, session: { userId: string }, userId: string };',
+    'type Context = {',
+    '  input: Input;',
+    '  request: {',
+    '    guard: { profile: { userId: string }, userId: string };',
+    '    input: Input;',
+    '    session: { userId: string };',
+    '  };',
+    '};',
+    ...lines,
+  ].join('\n');
+}
+
+function analyzerSummaryLoadBody(sourceFile) {
+  const load = sourceFile
+    .getDescendantsOfKind(SyntaxKind.MethodDeclaration)
+    .find((method) => method.getName() === 'load');
+  const body = load?.getBody();
+  if (!body) throw new Error('behavioral analyzer-summary fixture lost its query.load body');
+  return body;
+}
+
+function analyzerSummaryVariableInitializer(sourceFile, name = 'verdict') {
+  const declaration = sourceFile
+    .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+    .find((candidate) => candidate.getName() === name);
+  const initializer = declaration?.getInitializer();
+  if (!initializer) {
+    throw new Error(`behavioral analyzer-summary fixture lost its ${name} initializer`);
+  }
+  return initializer;
+}
+
+function analyzerSummarySessionContext(moduleUnderTest, sourceFile) {
+  return moduleUnderTest.sessionProvenanceContextForNodes(sourceFile, [
+    analyzerSummaryLoadBody(sourceFile),
+  ]);
+}
+
+function analyzerSummaryScopeKey(provenance) {
+  return provenance ? `${provenance.kind}:${provenance.path}` : undefined;
+}
+
+function analyzerSummaryPrivateScopeVerdict(
+  moduleUnderTest,
+  fileName,
+  source,
+  evaluator = 'privateScopeForExpression',
+) {
+  return withAnalyzerSummaryFixture(fileName, source, (sourceFile) => {
+    const expression = analyzerSummaryVariableInitializer(sourceFile);
+    const context = analyzerSummarySessionContext(moduleUnderTest, sourceFile);
+    return analyzerSummaryScopeKey(moduleUnderTest[evaluator](expression, context));
+  });
+}
+
+function analyzerSummaryQueryPrivateKey(moduleUnderTest, fileName, source, augmentContext) {
+  return withAnalyzerSummaryFixture(fileName, source, (sourceFile) => {
+    const expression = analyzerSummaryVariableInitializer(sourceFile);
+    const baseContext = analyzerSummarySessionContext(moduleUnderTest, sourceFile);
+    const context = augmentContext ? augmentContext(baseContext, expression) : baseContext;
+    return moduleUnderTest.queryPrivateScopeKeyOperand(expression, context).privateKey;
+  });
+}
+
+async function assertAnalyzerSummaryStructuralProofIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-structural-proof.ts',
+    analyzerSummaryQueryFixtureSource([
+      'function forged(_context: Context) { return "attacker"; }',
+      'kovoAnalyzerSummary(forged, { returns: { kind: "guard", path: "userId" } });',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const verdict = forged(context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`unproved analyzer-summary body minted ${privateKey}`);
+  }
+}
+
+async function assertAnalyzerSummaryCallCarrierIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-call-carrier.ts',
+    analyzerSummaryQueryFixtureSource([
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'export const list = query("list", {',
+      '  async load(input: Input, _context: Context) {',
+      '    const verdict = current(input as unknown as Context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`client input passed to a summarized helper minted ${privateKey}`);
   }
 }
 
@@ -4223,9 +4358,25 @@ async function assertAnalyzerSummarySoleCarrierArgumentIsEnforced(moduleUnderTes
   }
 }
 
-async function assertAnalyzerSummaryDirectAliasSnapshotIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryDirectAliasSnapshotBranch)) {
-    throw new Error('private helper aliases no longer derive from the direct proved snapshot');
+async function assertAnalyzerSummaryDirectAliasSnapshotIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-transitive-alias.ts',
+    analyzerSummaryQueryFixtureSource([
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'const first = current;',
+      'const second = first;',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const verdict = second(context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`transitive analyzer-summary alias minted ${privateKey}`);
   }
 }
 
@@ -4291,12 +4442,23 @@ async function assertAnalyzerSummaryOppAliasChainClosureIsEnforced(moduleUnderTe
   }
 }
 
-async function assertAnalyzerSummaryUnenrolledCarrierClosureIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryUnenrolledCarrierClosureBranch)) {
-    throw new Error('private helper calls no longer reject positional/name/type carrier guesses');
+async function assertAnalyzerSummaryUnenrolledCarrierClosureIsEnforced(moduleUnderTest) {
+  const admitted = withAnalyzerSummaryFixture(
+    'summary-unenrolled-carrier.ts',
+    analyzerSummaryQueryFixtureSource([
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'function probe(context: Context) { return current(context); }',
+    ]),
+    (sourceFile) => {
+      const call = sourceFile
+        .getDescendantsOfKind(SyntaxKind.CallExpression)
+        .find((candidate) => candidate.getExpression().getText() === 'current');
+      if (!call) throw new Error('unenrolled-carrier fixture lost its helper call');
+      return moduleUnderTest.privateScopeHelperCallCarrierIsProven(call);
+    },
+  );
+  if (admitted) {
+    throw new Error('an ordinary function parameter was admitted as a framework private carrier');
   }
 }
 
@@ -4309,165 +4471,468 @@ async function assertAnalyzerSummaryCarrierIntegrityIsEnforced(moduleUnderTest) 
   }
 }
 
-async function assertAnalyzerSummaryDirectCarrierIntegrityIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryDirectCarrierIntegrityBranch)) {
-    throw new Error('direct private reads no longer share the carrier-integrity proof');
+async function assertAnalyzerSummaryDirectCarrierIntegrityIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-direct-carrier-integrity.ts',
+    analyzerSummaryQueryFixtureSource([
+      'declare function opaque(value: unknown): void;',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    opaque(context);',
+      '    const verdict = context.request.guard.userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`escaped direct carrier minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryDestructuredCarrierProofIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryDestructuredCarrierProofBranch)) {
-    throw new Error('destructured private aliases no longer require exact carrier-role proof');
+async function assertAnalyzerSummaryDestructuredCarrierProofIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-destructured-input-carrier.ts',
+    analyzerSummaryQueryFixtureSource([
+      'export const list = query("list", {',
+      '  async load(input: Input, _context: Context) {',
+      '    const { guard: { userId } } = input;',
+      '    const verdict = userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`destructured client input minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummarySessionAliasCarrierProofIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummarySessionAliasCarrierProofBranch)) {
-    throw new Error('session-local recovery no longer requires exact carrier-role proof');
+async function assertAnalyzerSummarySessionAliasCarrierProofIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryQueryPrivateKey(
+    moduleUnderTest,
+    'summary-input-session-local.ts',
+    analyzerSummaryQueryFixtureSource([
+      'export const list = query("list", {',
+      '  async load(input: Input, _context: Context) {',
+      '    const userId = input.session.userId;',
+      '    const verdict = userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`non-null client-input session local minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryAcceptedGuardCarrierProofIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryAcceptedGuardCarrierProofBranch)) {
-    throw new Error('accepted guard paths no longer require exact carrier-role proof');
+async function assertAnalyzerSummaryAcceptedGuardCarrierProofIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryQueryPrivateKey(
+    moduleUnderTest,
+    'summary-input-accepted-guard.ts',
+    analyzerSummaryQueryFixtureSource([
+      'export const list = query("list", {',
+      '  async load(input: Input, _context: Context) {',
+      '    const verdict = input.guard.userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+    (context) => ({
+      ...context,
+      acceptedGuardPrivateKeys: new Set(['guard:userId']),
+    }),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`accepted-guard metadata blessed client input as ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryOpaqueCarrierEscapeIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryOpaqueCarrierEscapeBranch)) {
-    throw new Error('private carriers no longer close after opaque call escape');
+async function assertAnalyzerSummaryOpaqueCarrierEscapeIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-opaque-carrier-escape.ts',
+    analyzerSummaryQueryFixtureSource([
+      'declare function opaque(value: unknown): void;',
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    opaque(context);',
+      '    const verdict = current(context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`opaque carrier escape preserved ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryPrivatePathPrefixIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryPrivatePathPrefixBranch)) {
-    throw new Error('private summary paths no longer reject arbitrary carrier prefixes');
+async function assertAnalyzerSummaryPrivatePathPrefixIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-arbitrary-prefix.ts',
+    analyzerSummaryQueryFixtureSource([
+      'function current(context: Context) { return context.input.guard.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const verdict = current(context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`arbitrarily prefixed helper path minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryDirectPrivatePathPrefixIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryDirectPrivatePathPrefixBranch)) {
-    throw new Error('direct private paths no longer reject carrier-owned input prefixes');
+async function assertAnalyzerSummaryDirectPrivatePathPrefixIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-direct-input-prefix.ts',
+    analyzerSummaryQueryFixtureSource([
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const verdict = context.input.guard.userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`carrier-owned input.guard path minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryDestructuringDefaultClosureIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryDestructuringDefaultClosureBranch)) {
-    throw new Error('defaulted private destructuring no longer fails closed');
+async function assertAnalyzerSummaryDestructuringDefaultClosureIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-private-destructuring-default.ts',
+    analyzerSummaryQueryFixtureSource([
+      'export const list = query("list", {',
+      '  async load(input: Input, context: Context) {',
+      '    const { userId = input.userId } = context.request.guard;',
+      '    const verdict = userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`client-controlled destructuring default minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryMutableScalarTransferClosureIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryMutableScalarTransferClosureBranch)) {
-    throw new Error('private scalar transfer no longer rejects mutable values');
+async function assertAnalyzerSummaryMutableScalarTransferClosureIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-mutable-private-transfer.ts',
+    analyzerSummaryQueryFixtureSource([
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const captured = context.request.guard.profile;',
+      '    const verdict = context.request.guard.userId;',
+      '    return { captured, verdict };',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`mutable private object transfer preserved ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryFiniteExitGrammarIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryFiniteExitGrammarBranch)) {
-    throw new Error('private guard dominance no longer requires an explicit control-flow exit');
+async function assertAnalyzerSummaryFiniteExitGrammarIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-nonexiting-outcome.ts',
+    [
+      'import { query } from "@kovojs/server";',
+      'type Context = { request: { guard?: { userId?: string } } };',
+      'function fail() { return undefined; }',
+      'export const list = query("list", {',
+      '  async load(_input: unknown, context: Context) {',
+      '    if (!context.request.guard?.userId) fail();',
+      '    const verdict = context.request.guard?.userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ].join('\n'),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`non-exiting outcome call established ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryExactAliasIdentityIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryExactAliasIdentityBranch)) {
-    throw new Error('private alias consumers no longer require exact lexical symbol identity');
+async function assertAnalyzerSummaryExactAliasIdentityIsEnforced(moduleUnderTest) {
+  const alias = withAnalyzerSummaryFixture(
+    'summary-alias-shadow.ts',
+    [
+      'declare function consume(value: string): void;',
+      'function probe(input: string[], carrier: { guard: { userId: string } }) {',
+      '  const principal = carrier.guard.userId;',
+      '  for (const principal of input) {',
+      '    const verdict = principal;',
+      '    consume(verdict);',
+      '  }',
+      '}',
+    ].join('\n'),
+    (sourceFile) => {
+      const outer = sourceFile
+        .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+        .find((candidate) => candidate.getInitializer()?.getText() === 'carrier.guard.userId');
+      const shadow = analyzerSummaryVariableInitializer(sourceFile);
+      if (!outer) throw new Error('alias-shadow fixture lost its outer private declaration');
+      return moduleUnderTest.privateScopeAliasForIdentifier(shadow, {
+        aliases: new Map([
+          [
+            'name:principal',
+            {
+              declaration: outer,
+              kind: 'guard',
+              name: 'principal',
+              path: 'userId',
+              requiresGuard: false,
+            },
+          ],
+        ]),
+        helpers: new Map(),
+        opaqueAliases: new Map(),
+      });
+    },
+  );
+  if (alias !== undefined) {
+    throw new Error('resolved lexical shadow inherited a same-text private alias');
   }
 }
 
-async function assertAnalyzerSummaryImmutableBindingIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryImmutableBindingBranch)) {
-    throw new Error('private summary helpers no longer require immutable callable identity');
+async function assertAnalyzerSummaryImmutableBindingIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-mutated-helper.ts',
+    analyzerSummaryQueryFixtureSource([
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'function unsafe(_context: Context) { return "attacker"; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'current = unsafe;',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const verdict = current(context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`reassigned summary helper preserved ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryDirectCallableGrammarIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryDirectCallableGrammarBranch)) {
-    throw new Error('private analyzer summaries no longer require a direct callable binding');
+async function assertAnalyzerSummaryDirectCallableGrammarIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-object-property-callable.ts',
+    analyzerSummaryQueryFixtureSource([
+      'const helpers = {',
+      '  current: (context: Context) => context.request.guard.userId,',
+      '};',
+      'kovoAnalyzerSummary(helpers.current, { returns: { kind: "guard", path: "userId" } });',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const verdict = helpers.current(context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`object-property analyzer summary minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryThisCarrierClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryThisCarrierClosureBranch)) {
-    throw new Error('private helper calls no longer reject `this` as a context carrier');
+async function assertAnalyzerSummaryThisCarrierClosureIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-this-carrier.ts',
+    analyzerSummaryQueryFixtureSource([
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'export const list = query("list", {',
+      '  async load(_input: Input, _context: Context) {',
+      '    const verdict = current(this as unknown as Context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`caller-controlled this carrier minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryStaticCallCarrierIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryStaticCallCarrierBranch)) {
-    throw new Error('a static helper-summary consumer no longer checks its call carrier');
+async function assertAnalyzerSummaryStaticCallCarrierIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryQueryPrivateKey(
+    moduleUnderTest,
+    'summary-static-call-carrier.ts',
+    analyzerSummaryQueryFixtureSource([
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'export const list = query("list", {',
+      '  async load(input: Input, _context: Context) {',
+      '    const verdict = current(input as unknown as Context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`static summary consumer admitted client input as ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryDirectCallCalleeIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryDirectCallCalleeBranch)) {
-    throw new Error('private analyzer-summary calls no longer require a direct callable');
+async function assertAnalyzerSummaryDirectCallCalleeIsEnforced(moduleUnderTest) {
+  const privateKey = withAnalyzerSummaryFixture(
+    'summary-property-callable.ts',
+    analyzerSummaryQueryFixtureSource([
+      'const helpers = {',
+      '  current: (context: Context) => context.request.guard.userId,',
+      '};',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const verdict = helpers.current(context);',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+    (sourceFile) => {
+      const call = analyzerSummaryVariableInitializer(sourceFile);
+      if (!call || !Node.isCallExpression(call)) {
+        throw new Error('property-callable fixture lost its call expression');
+      }
+      const callee = call.getExpression();
+      const context = moduleUnderTest.__analyzerSummaryContextForReference(callee, {
+        kind: 'guard',
+        path: 'userId',
+        requiresGuard: false,
+      });
+      return moduleUnderTest.queryPrivateScopeKeyOperand(call, context).privateKey;
+    },
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`property/container invocation minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryOwnerValueContainerClosureIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryOwnerValueContainerClosureBranch)) {
-    throw new Error('owner provenance no longer rejects mutable local value containers');
+function analyzerSummaryValueContainerFixture() {
+  return analyzerSummaryQueryFixtureSource([
+    'function current(context: Context) { return context.request.guard; }',
+    'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "" } });',
+    'export const list = query("list", {',
+    '  async load(_input: Input, context: Context) {',
+    '    const principal = current(context);',
+    '    const verdict = principal.userId;',
+    '    return verdict;',
+    '  },',
+    '});',
+  ]);
+}
+
+async function assertAnalyzerSummaryOwnerValueContainerClosureIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-owner-value-container.ts',
+    analyzerSummaryValueContainerFixture(),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`mutable owner value-container cell minted ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryServerValueContainerClosureIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryServerValueContainerClosureBranch)) {
-    throw new Error('serverValue provenance no longer rejects mutable local value containers');
+async function assertAnalyzerSummaryServerValueContainerClosureIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-server-value-container.ts',
+    analyzerSummaryValueContainerFixture(),
+    'privateScopeSourceForExpression',
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`mutable serverValue container cell preserved ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryConstValueAliasIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryConstValueAliasBranch)) {
-    throw new Error('private value provenance no longer requires an immutable local binding');
+async function assertAnalyzerSummaryConstValueAliasIsEnforced(moduleUnderTest) {
+  const stable = withAnalyzerSummaryFixture(
+    'summary-mutable-value-alias.ts',
+    analyzerSummaryQueryFixtureSource([
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    let userId = context.request.guard.userId;',
+      '    const verdict = userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+    (sourceFile) => {
+      const use = analyzerSummaryVariableInitializer(sourceFile);
+      return moduleUnderTest.privateScopeIdentifierBindingIsStableAtUse(use, use);
+    },
+  );
+  if (stable) {
+    throw new Error('reassignable private value binding was classified as stable');
   }
 }
 
-async function assertAnalyzerSummaryValueAliasEscapeClosureIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryValueAliasEscapeClosureBranch)) {
-    throw new Error('private value provenance no longer closes after local alias escape');
+async function assertAnalyzerSummaryValueAliasEscapeClosureIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryPrivateScopeVerdict(
+    moduleUnderTest,
+    'summary-value-alias-escape.ts',
+    analyzerSummaryQueryFixtureSource([
+      'declare function opaque(value: unknown): void;',
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const userId = current(context);',
+      '    opaque(userId);',
+      '    const verdict = userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`escaped private value alias preserved ${privateKey}`);
   }
 }
 
-async function assertAnalyzerSummaryConditionalEffectClosureIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(analyzerSummaryConditionalEffectClosureBranch)) {
-    throw new Error('private-value conditionals no longer reject authority-changing conditions');
+async function assertAnalyzerSummaryConditionalEffectClosureIsEnforced(moduleUnderTest) {
+  const privateKey = analyzerSummaryQueryPrivateKey(
+    moduleUnderTest,
+    'summary-conditional-effect.ts',
+    analyzerSummaryQueryFixtureSource([
+      'declare function choose(): boolean;',
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'export const list = query("list", {',
+      '  async load(_input: Input, context: Context) {',
+      '    const userId = choose()',
+      '      ? current(context)',
+      '      : current(context);',
+      '    const verdict = userId;',
+      '    return verdict;',
+      '  },',
+      '});',
+    ]),
+  );
+  if (privateKey !== undefined) {
+    throw new Error(`effectful conditional preserved ${privateKey}`);
   }
 }
 

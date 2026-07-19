@@ -23,9 +23,9 @@ describe('security-gate-mutations', () => {
     );
 
     expect(analyzerSummaryMutants).toHaveLength(28);
-    expect(
-      analyzerSummaryMutants.every((mutant) => mutant.behavioralTypeScript === true),
-    ).toBe(true);
+    expect(analyzerSummaryMutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(
+      true,
+    );
     expect(analyzerSummaryMutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });
 
