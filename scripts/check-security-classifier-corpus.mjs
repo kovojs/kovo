@@ -2835,6 +2835,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'method-source-authority-scheme-target-superset',
         file: 'packages/server/src/request-ingress-c13.test.ts',
         snippets: [
+          '@kovo-security-certifies C13 query-search-requires-args-schema',
+          'rejects query search input when the endpoint declares no args schema',
+          'Search input requires a declared query args schema.',
           'preserves the complete closed method-identity verdict before Fetch construction',
           "'PoSt'",
           "'CONNECT'",
