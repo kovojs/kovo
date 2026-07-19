@@ -10,9 +10,11 @@ import { createSigningKeyRing } from './keyring.js';
 const oldRoot = 'old-confidential-root-secret-at-least-32-bytes';
 const newRoot = 'new-confidential-root-secret-at-least-32-bytes';
 
-function cipherFor(ring = createSigningKeyRing({
-  keys: [{ id: 'new', secret: newRoot, state: 'active' }],
-})) {
+function cipherFor(
+  ring = createSigningKeyRing({
+    keys: [{ id: 'new', secret: newRoot, state: 'active' }],
+  }),
+) {
   return createConfidentialAtRestCipher(ring, { audience: 'profiles.ssn' });
 }
 
@@ -27,18 +29,21 @@ describe('SPEC §6.6 confidential-at-rest rotation envelope', () => {
     expect(() => decryptAtRest(envelope, cipher, { aad: 'tenant:two' })).toThrow(
       /cannot be opened/u,
     );
-    expect(() => decryptAtRest(envelope.replace('.new.', '.old.'), cipher, { aad: 'tenant:one' })).toThrow(
-      /cannot be opened/u,
-    );
+    expect(() =>
+      decryptAtRest(envelope.replace('.new.', '.old.'), cipher, { aad: 'tenant:one' }),
+    ).toThrow(/cannot be opened/u);
   });
 
   it('opens previous keys only inside the finite overlap and rejects revoked/expired keys', () => {
     const oldRing = createSigningKeyRing({
       keys: [{ id: 'old', secret: oldRoot, state: 'active' }],
     });
-    const envelope = encryptAtRest('previous-value', createConfidentialAtRestCipher(oldRing, {
-      audience: 'profiles.ssn',
-    }));
+    const envelope = encryptAtRest(
+      'previous-value',
+      createConfidentialAtRestCipher(oldRing, {
+        audience: 'profiles.ssn',
+      }),
+    );
     const rotated = createSigningKeyRing({
       keys: [
         { id: 'new', secret: newRoot, state: 'active' },
@@ -75,7 +80,9 @@ describe('SPEC §6.6 confidential-at-rest rotation envelope', () => {
     ).toThrow(/framework-minted confidential-at-rest cipher/u);
     expect(() =>
       createConfidentialAtRestCipher(
-        { currentKeyId: 'forged' } as unknown as Parameters<typeof createConfidentialAtRestCipher>[0],
+        { currentKeyId: 'forged' } as unknown as Parameters<
+          typeof createConfidentialAtRestCipher
+        >[0],
         { audience: 'profiles.ssn' },
       ),
     ).toThrow(/exact framework signing key ring/u);

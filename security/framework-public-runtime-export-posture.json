@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.5",
-  "runtimeSurfaceSha256": "2211793f10b6b4c168fedd7d184131160c89212ec6d7e4d130d82da8c36f144e",
-  "postureMemberSha256": "b68a8fab59b3cbac968e0625a218b667b95bcb62fbe73f351d71250ffd3bc0ef",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.6",
+  "runtimeSurfaceSha256": "0275585365b32e1ec414b2f068801fd7504466e710735c2af40e33c3cdeec4dc",
+  "postureMemberSha256": "cf8239d7662f653b5b551b1ca127a58381a944055078dae888763cae435a1019",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "037aa951fb2d8a37770e47a7758e7154f57365879385a2e19673bbc8e21e5b8b",
+      "sourceTreeSha256": "5cd10e8adacd3113e51f61b060680efd8bb7264fd03c997191530fd4f99315e9",
       "manifestVariants": [
         {
           "exports": {
@@ -449,7 +449,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "4736259b261c5f3ecc5620ef75b4a95bf701e4377b819c5cb5eab7cbd00ce314"
+      "sourceTreeSha256": "c22ed73efde029a8839557d9fe695bea9d3d4ebefea22bcafaccc882709e8774"
     },
     {
       "manifestVariants": [
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "9f039102d7b106079e83485d68bbdd6aefe763fb318bf134c5dc01ff269cf7b4"
+      "sourceTreeSha256": "285a53cada9f5a58d15189b5a2c6f3b803d28ed6da33226eb896bfd36da7ae7e"
     },
     {
       "manifestVariants": [
@@ -1067,9 +1067,9 @@
           "securityRole": "capability-escape"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-module-initializer-runtime-infra-bee3f9ab2f",
+          "capabilities": ["crypto-acquisition", "digest"],
+          "disposition": "framework-door",
+          "id": "framework-door-module-initializer-core-crypto-digest",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -1083,14 +1083,14 @@
             ".": ["<module>"]
           },
           "review": {
-            "basis": "@kovojs/core manifest-public initializers and eager imports in this exact authority/matrix group were reviewed separately from named members; every subpath remains an explicit member.",
+            "basis": "The @kovojs/core root eagerly pins its verify-only crypto provider and non-secret storage digest controls; module initialization is classified separately from each named export.",
             "evidence": [
               "packages/core/src/index.ts",
               "packages/core/src/secret.ts",
               "packages/core/src/storage.ts",
               "packages/core/src/verifier.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "module-initializer"
@@ -1423,9 +1423,9 @@
           "securityRole": "secret-flow"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-0b019a3b87",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-standard-webhooks-core",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -1439,22 +1439,22 @@
             ".": ["standardWebhooks"]
           },
           "review": {
-            "basis": "standardWebhooks is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "standardWebhooks constructs a fixed verify-only HMAC authority whose provider key remains private to the framework crypto door.",
             "evidence": [
               "packages/core/src/index.ts",
               "packages/core/src/secret.ts",
               "packages/core/src/storage.ts",
               "packages/core/src/verifier.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-daa340331d",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-hmac-signature-core",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -1468,14 +1468,14 @@
             ".": ["hmacSignature"]
           },
           "review": {
-            "basis": "hmacSignature is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "hmacSignature constructs a fixed verify-only HMAC authority whose provider key remains private to the framework crypto door.",
             "evidence": [
               "packages/core/src/index.ts",
               "packages/core/src/secret.ts",
               "packages/core/src/storage.ts",
               "packages/core/src/verifier.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -1626,9 +1626,9 @@
           "securityRole": "trust-escape"
         },
         {
-          "capabilities": ["filesystem"],
+          "capabilities": ["crypto-acquisition", "digest", "filesystem"],
           "disposition": "framework-door",
-          "id": "framework-door-framework-door-runtime-infra-filesystem-ecc186a93a",
+          "id": "framework-door-core-filesystem-crypto-digest",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -1642,22 +1642,22 @@
             ".": ["createFileSystemStorage"]
           },
           "review": {
-            "basis": "The exact @kovojs/core#createFileSystemStorage implementation is a constrained framework-owned filesystem boundary; no wildcard export inherits this authority.",
+            "basis": "createFileSystemStorage is a constrained filesystem door whose returned put capability also uses cryptographic UUID entropy and a fixed non-secret SHA-256 digest; no primitive or wildcard authority escapes.",
             "evidence": [
               "packages/core/src/index.ts",
               "packages/core/src/secret.ts",
               "packages/core/src/storage.ts",
               "packages/core/src/verifier.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "framework-door"
         },
         {
-          "capabilities": ["network"],
+          "capabilities": ["digest", "network"],
           "disposition": "framework-door",
-          "id": "framework-door-framework-door-runtime-infra-network-9202c78eae",
+          "id": "framework-door-core-network-digest",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -1671,20 +1671,20 @@
             ".": ["createS3CompatibleStorage"]
           },
           "review": {
-            "basis": "The exact @kovojs/core#createS3CompatibleStorage implementation is a constrained framework-owned network boundary; no wildcard export inherits this authority.",
+            "basis": "createS3CompatibleStorage is a constrained network door whose returned capability uses only fixed non-secret SHA-256 digests; no generic crypto or wildcard authority escapes.",
             "evidence": [
               "packages/core/src/index.ts",
               "packages/core/src/secret.ts",
               "packages/core/src/storage.ts",
               "packages/core/src/verifier.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "c266ca6a2bc0ae2ba95b45a26c594162e62eac2a86f84b66d28071539c85c1f0"
+      "sourceTreeSha256": "7b73c4f463439d04b5abc08eef26da926645252936b54a7a164d960842a7c3e2"
     },
     {
       "manifestVariants": [
@@ -1952,7 +1952,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "ca12fd18e254ad6b68babe49e569f8bd50407aaf26dd00b972658fcc471d7019"
+      "sourceTreeSha256": "8c8c09b9f840498fa61829aab8bbc5c9784475ff13df0f8ba6d5d9578fce9465"
     },
     {
       "manifestVariants": [
@@ -6686,9 +6686,9 @@
           "securityRole": "root-factory"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-root-factory-runtime-infra-root-endpoint-f583282f96",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-root-endpoint-storage-download",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -6702,7 +6702,7 @@
             ".": ["createStorageDownloadEndpoint"]
           },
           "review": {
-            "basis": "The exact createStorageDownloadEndpoint call creates a endpoint untrusted-data root; root status is independent from raw-capability disposition.",
+            "basis": "createStorageDownloadEndpoint creates an endpoint root whose capability-token verification is a fixed purpose-bound HMAC door; it exposes neither signing nor raw key authority.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -6712,7 +6712,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "endpoint",
           "securityRole": "root-factory"
@@ -7358,9 +7358,9 @@
           "securityRole": "security-control"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-66ebead9d3",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-verify-password",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -7374,7 +7374,7 @@
             ".": ["verifyPassword"]
           },
           "review": {
-            "basis": "verifyPassword is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "verifyPassword is the fixed Argon2id verification door; it does not expose the raw provider or arbitrary algorithm selection.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -7384,7 +7384,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -7454,9 +7454,9 @@
           "securityRole": "security-control"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-6f59d262cd",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-hash-password",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -7470,7 +7470,7 @@
             ".": ["hashPassword"]
           },
           "review": {
-            "basis": "hashPassword is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "hashPassword is the fixed Argon2id hashing door; it does not expose the raw provider or arbitrary algorithm selection.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -7480,7 +7480,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -7742,9 +7742,9 @@
           "securityRole": "security-control"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-ace5d57aef",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-mint-csrf-field",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -7758,7 +7758,7 @@
             ".": ["mintCsrfField"]
           },
           "review": {
-            "basis": "mintCsrfField is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "mintCsrfField enters the fixed CSRF purpose-bound signing door and returns only the framework CSRF field protocol value.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -7768,7 +7768,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -7871,9 +7871,9 @@
           "securityRole": "security-control"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-ba83c56a49",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-mint-csrf-token",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -7887,7 +7887,7 @@
             ".": ["mintCsrfToken"]
           },
           "review": {
-            "basis": "mintCsrfToken is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "mintCsrfToken enters the fixed CSRF purpose-bound signing door and returns only the framework CSRF token protocol value.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -7897,15 +7897,15 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-c077ed7132",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-confidential-at-rest-v2",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -7916,20 +7916,23 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["encryptAtRest"]
+            ".": [
+              "createConfidentialAtRestCipher",
+              "decryptAtRest",
+              "encryptAtRest",
+              "rewrapAtRest"
+            ]
           },
           "review": {
-            "basis": "encryptAtRest is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "The confidential-at-rest constructors and v2 envelope operations are fixed framework-owned AES-256-GCM doors; callers receive only an opaque purpose/audience-bound carrier and cannot acquire a generic primitive or raw key.",
             "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
+              "packages/server/src/confidential-at-rest.ts",
+              "packages/server/src/crypto-authority.ts",
               "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
+              "packages/server/src/keyring.ts",
+              "spec/06-type-system.md"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -7999,9 +8002,9 @@
           "securityRole": "security-control"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-db9209c0f0",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-hmac-signature-server",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -8015,7 +8018,7 @@
             ".": ["hmacSignature"]
           },
           "review": {
-            "basis": "hmacSignature is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "The server re-export preserves core's fixed verify-only HMAC authority; neither a generic signer nor provider key crosses this door.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -8025,7 +8028,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -8095,9 +8098,9 @@
           "securityRole": "security-control"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-e96f968c48",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-standard-webhooks-server",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -8111,7 +8114,7 @@
             ".": ["standardWebhooks"]
           },
           "review": {
-            "basis": "standardWebhooks is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "The server re-export preserves core's fixed verify-only Standard Webhooks HMAC authority; neither a generic signer nor provider key crosses this door.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -8121,7 +8124,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -8159,9 +8162,9 @@
           "securityRole": "security-control"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-f31c92d7d9",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-verify-credential",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -8175,7 +8178,7 @@
             ".": ["verifyCredential"]
           },
           "review": {
-            "basis": "verifyCredential is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "verifyCredential is the fixed Argon2id credential verification door; it does not expose the raw provider or arbitrary algorithm selection.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -8185,7 +8188,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -8383,9 +8386,9 @@
           "securityRole": "sink-adapter"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-sink-adapter-runtime-infra-11b67bae5c",
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-crypto-acquisition-rendered-html-sink",
           "matrix": {
             "cells": {
               "A": "c9-control",
@@ -8399,7 +8402,7 @@
             ".": ["renderRouteHtml"]
           },
           "review": {
-            "basis": "renderRouteHtml is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
+            "basis": "renderRouteHtml is a reviewed output sink whose coerced framework-rendered values are authenticated through the fixed rendered-html purpose door; the hostile-value floor remains owned by C9.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -8409,7 +8412,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "sink-adapter"
@@ -9279,9 +9282,9 @@
           "securityRole": "framework-door"
         },
         {
-          "capabilities": ["filesystem"],
+          "capabilities": ["crypto-acquisition", "digest", "filesystem"],
           "disposition": "framework-door",
-          "id": "framework-door-framework-door-runtime-infra-filesystem-e752cd2ef0",
+          "id": "framework-door-server-filesystem-crypto-digest",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -9295,7 +9298,7 @@
             ".": ["createFileSystemStorage"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#createFileSystemStorage implementation is a constrained framework-owned filesystem boundary; no wildcard export inherits this authority.",
+            "basis": "The server re-export preserves core's constrained filesystem capability, cryptographic UUID entropy, and fixed non-secret SHA-256 digest posture; no primitive or wildcard authority escapes.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9305,7 +9308,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "framework-door"
@@ -9343,9 +9346,9 @@
           "securityRole": "framework-door"
         },
         {
-          "capabilities": ["network"],
+          "capabilities": ["digest", "network"],
           "disposition": "framework-door",
-          "id": "framework-door-framework-door-runtime-infra-network-123b2c63fe",
+          "id": "framework-door-server-network-digest",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -9359,7 +9362,7 @@
             ".": ["createS3CompatibleStorage"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#createS3CompatibleStorage implementation is a constrained framework-owned network boundary; no wildcard export inherits this authority.",
+            "basis": "The server re-export preserves core's constrained network capability and fixed non-secret SHA-256 digest posture; no generic crypto or wildcard authority escapes.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9369,7 +9372,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "framework-door"
@@ -9439,9 +9442,9 @@
           "securityRole": "module-initializer"
         },
         {
-          "capabilities": ["process"],
+          "capabilities": ["crypto-acquisition", "process"],
           "disposition": "framework-door",
-          "id": "framework-door-module-initializer-runtime-infra-process-c42202dac8",
+          "id": "framework-door-module-initializer-server-crypto-process",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -9455,7 +9458,7 @@
             ".": ["<module>"]
           },
           "review": {
-            "basis": "@kovojs/server manifest-public initializers and eager imports in this exact authority/matrix group were reviewed separately from named members; every subpath remains an explicit member.",
+            "basis": "The @kovojs/server root eagerly installs the process bootstrap and pins the purpose-closed crypto authority; module initialization is classified separately from each named export.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9465,7 +9468,7 @@
               "packages/server/src/schema.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "module-initializer"
@@ -9640,7 +9643,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "d4330d9b0abc17956bf3e47ec95d434e39903c940997387cb92f59f5f6a35f4f"
+      "sourceTreeSha256": "0fc3f0be75b55e99b2056f303ffd2cb1dd1be8e628d1063c342c6f6644f58295"
     },
     {
       "manifestVariants": [
@@ -10518,5 +10521,5 @@
       "sourceTreeSha256": "a7ec04add8646fbd927e8179c163e0593d2abfa268f258845a7a3cd3dd2ec976"
     }
   ],
-  "classificationSha256": "f7869ac3bf819b0ee4087630826b94ee9d5c1b4c86f2f12b83e09a326ac55f3d"
+  "classificationSha256": "166b0355055f68c4feb4ef07e949beb64f551e35e5da28d95dc30a93c7d4dd23"
 }

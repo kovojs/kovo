@@ -13,15 +13,13 @@ export const cryptoAcquisitionLedgerFile = 'security/crypto-acquisition-doors.js
 
 const sourceRoots = ['examples', 'packages', 'scripts', 'site/src'];
 const sourcePattern = /\.(?:[cm]?[jt]sx?)$/u;
-const testPattern = /(?:^|\/)(?:__tests__|test-support|testing-fixtures)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$/u;
+const testPattern =
+  /(?:^|\/)(?:__tests__|test-support|testing-fixtures)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const excludedFiles = new Set([
   // Despite its production-looking suffix this is a generated-runtime adversarial test harness.
   'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-gate.ts',
 ]);
-const excludedPathFragments = [
-  '/conformance-fixtures/',
-  '/test/src/integration/',
-];
+const excludedPathFragments = ['/conformance-fixtures/', '/test/src/integration/'];
 const digestOperations = new Set(['createHash', 'hash']);
 const cryptoSpecifiers = new Set(['crypto', 'node:crypto', '@node-rs/argon2']);
 
@@ -57,7 +55,9 @@ export function checkCryptoBoundary(options = {}) {
     options.maximumCryptoAcquisitionFiles ?? ledger.maximumCryptoAcquisitionFiles;
   const findings = [];
   if (!Number.isInteger(maximumCryptoAcquisitionFiles) || maximumCryptoAcquisitionFiles < 0) {
-    findings.push(`${cryptoAcquisitionLedgerFile}: maximumCryptoAcquisitionFiles must be a non-negative integer`);
+    findings.push(
+      `${cryptoAcquisitionLedgerFile}: maximumCryptoAcquisitionFiles must be a non-negative integer`,
+    );
   }
 
   const discovered = [];
@@ -74,7 +74,9 @@ export function checkCryptoBoundary(options = {}) {
       continue;
     }
     if (reviewedByFile.has(entry.file)) {
-      findings.push(`${cryptoAcquisitionLedgerFile}: duplicate crypto acquisition row ${entry.file}`);
+      findings.push(
+        `${cryptoAcquisitionLedgerFile}: duplicate crypto acquisition row ${entry.file}`,
+      );
       continue;
     }
     reviewedByFile.set(entry.file, entry);
@@ -94,7 +96,9 @@ export function checkCryptoBoundary(options = {}) {
       continue;
     }
     if (reviewed.kind !== row.kind) {
-      findings.push(`${row.file}: crypto acquisition class is ${row.kind}, reviewed ${reviewed.kind}`);
+      findings.push(
+        `${row.file}: crypto acquisition class is ${row.kind}, reviewed ${reviewed.kind}`,
+      );
     }
     if (!sameStrings(reviewed.operations, row.operations)) {
       findings.push(
@@ -104,7 +108,9 @@ export function checkCryptoBoundary(options = {}) {
   }
   for (const entry of reviewedByFile.values()) {
     if (!actualByFile.has(entry.file)) {
-      findings.push(`${entry.file}: stale ratchet row must be removed after routing through the authority`);
+      findings.push(
+        `${entry.file}: stale ratchet row must be removed after routing through the authority`,
+      );
     }
   }
 
@@ -284,14 +290,15 @@ function isLedgerEntry(value) {
     (value.kind === 'crypto-acquisition' || value.kind === 'digest') &&
     Array.isArray(value.operations) &&
     value.operations.every((operation) => typeof operation === 'string') &&
-    sameStrings(value.operations, [...new Set(value.operations)].sort((a, b) => a.localeCompare(b)))
+    sameStrings(
+      value.operations,
+      [...new Set(value.operations)].sort((a, b) => a.localeCompare(b)),
+    )
   );
 }
 
 function sameStrings(left, right) {
-  return (
-    left.length === right.length && left.every((value, index) => value === right[index])
-  );
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function compareRows(left, right) {

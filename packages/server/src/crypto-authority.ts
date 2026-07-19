@@ -317,6 +317,7 @@ export function createConfidentialCryptoHandle(
   });
 }
 
+/** @internal Mint the fixed Better Auth rate-limit bucket authority. */
 export function createBetterAuthRateLimitCryptoHandle(
   secret: SigningSecret,
 ): BetterAuthRateLimitCryptoHandle {

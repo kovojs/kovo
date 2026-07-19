@@ -7,9 +7,7 @@
       "id": "crypto-door-001",
       "file": "examples/commerce/src/auth.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomUUID"
-      ],
+      "operations": ["randomUUID"],
       "tier": "example-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -17,9 +15,7 @@
       "id": "crypto-door-002",
       "file": "examples/crm/src/components/chrome.tsx",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomUUID"
-      ],
+      "operations": ["randomUUID"],
       "tier": "example-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -27,9 +23,7 @@
       "id": "crypto-door-003",
       "file": "examples/gallery/src/app-shell.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "example-runtime",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -37,9 +31,7 @@
       "id": "crypto-door-004",
       "file": "examples/reference/src/auth.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomUUID"
-      ],
+      "operations": ["randomUUID"],
       "tier": "example-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -47,9 +39,7 @@
       "id": "crypto-door-005",
       "file": "examples/stackoverflow/src/components/chrome.tsx",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomUUID"
-      ],
+      "operations": ["randomUUID"],
       "tier": "example-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -57,10 +47,7 @@
       "id": "crypto-door-007",
       "file": "packages/browser/src/inline-loader-build.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "createHash",
-        "randomUUID"
-      ],
+      "operations": ["createHash", "randomUUID"],
       "tier": "browser-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -68,10 +55,7 @@
       "id": "crypto-door-008",
       "file": "packages/browser/src/inline-loader.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "*",
-        "generated:scope.crypto"
-      ],
+      "operations": ["*", "generated:scope.crypto"],
       "tier": "generated-artifact",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -79,9 +63,7 @@
       "id": "crypto-door-009",
       "file": "packages/browser/src/mutation-idem-intrinsics.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "*"
-      ],
+      "operations": ["*"],
       "tier": "browser-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -89,9 +71,7 @@
       "id": "crypto-door-010",
       "file": "packages/browser/src/navigation-security-intrinsics.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "*"
-      ],
+      "operations": ["*"],
       "tier": "browser-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -99,9 +79,7 @@
       "id": "crypto-door-011",
       "file": "packages/cli/src/add-catalog.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -109,9 +87,7 @@
       "id": "crypto-door-012",
       "file": "packages/cli/src/artifact-provenance.ts",
       "kind": "digest",
-      "operations": [
-        "hash"
-      ],
+      "operations": ["hash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -119,9 +95,7 @@
       "id": "crypto-door-013",
       "file": "packages/cli/src/capability-closure-packages.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -129,9 +103,7 @@
       "id": "crypto-door-014",
       "file": "packages/cli/src/commands/build-export.ts",
       "kind": "digest",
-      "operations": [
-        "hash"
-      ],
+      "operations": ["hash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -139,11 +111,7 @@
       "id": "crypto-door-015",
       "file": "packages/compiler/src/compiler-security-intrinsics.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "createHash",
-        "createHmac",
-        "randomUUID"
-      ],
+      "operations": ["createHash", "createHmac", "randomUUID"],
       "tier": "build-tooling",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -151,9 +119,7 @@
       "id": "crypto-door-016",
       "file": "packages/compiler/src/security-analyzer-soundness-oracle.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -161,9 +127,7 @@
       "id": "crypto-door-017",
       "file": "packages/compiler/src/security-bootstrap.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "default"
-      ],
+      "operations": ["default"],
       "tier": "build-tooling",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -171,9 +135,7 @@
       "id": "crypto-door-018",
       "file": "packages/core/src/internal/client-module-url-intrinsics.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "server-runtime",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -181,9 +143,7 @@
       "id": "crypto-door-core-verifier-authority",
       "file": "packages/core/src/internal/crypto-authority.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "subtle"
-      ],
+      "operations": ["subtle"],
       "tier": "server-runtime",
       "review": "Environment-neutral, boot-pinned, verify-only provider HMAC authority; no secret or signing operation crosses its private witness."
     },
@@ -191,9 +151,7 @@
       "id": "crypto-door-019",
       "file": "packages/core/src/internal/filesystem-intrinsics.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomUUID"
-      ],
+      "operations": ["randomUUID"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -201,9 +159,7 @@
       "id": "crypto-door-020",
       "file": "packages/core/src/internal/render-plan-token-intrinsics.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "server-runtime",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -211,9 +167,7 @@
       "id": "crypto-door-021",
       "file": "packages/core/src/internal/request-safe-runtime-inventory.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "subtle"
-      ],
+      "operations": ["subtle"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -221,10 +175,7 @@
       "id": "crypto-door-022",
       "file": "packages/core/src/storage.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "createHash",
-        "randomUUID"
-      ],
+      "operations": ["createHash", "randomUUID"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -232,10 +183,7 @@
       "id": "crypto-door-024",
       "file": "packages/create-kovo/src/index.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomBytes",
-        "randomUUID"
-      ],
+      "operations": ["randomBytes", "randomUUID"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -243,9 +191,7 @@
       "id": "crypto-door-025",
       "file": "packages/create-kovo/templates/src/mutations.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomUUID"
-      ],
+      "operations": ["randomUUID"],
       "tier": "example-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -253,9 +199,7 @@
       "id": "crypto-door-026",
       "file": "packages/server/src/app-document.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomBytes"
-      ],
+      "operations": ["randomBytes"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -263,9 +207,7 @@
       "id": "crypto-door-027",
       "file": "packages/server/src/build-security-intrinsics.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "server-runtime",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -273,9 +215,7 @@
       "id": "crypto-door-028",
       "file": "packages/server/src/capability-intrinsics.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "*"
-      ],
+      "operations": ["*"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -283,9 +223,7 @@
       "id": "crypto-door-029",
       "file": "packages/server/src/client-module-registry-intrinsics.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "server-runtime",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -309,11 +247,7 @@
       "id": "crypto-door-032",
       "file": "packages/server/src/internal/data-plane-static-analysis-intrinsics.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "createHash",
-        "createHmac",
-        "randomUUID"
-      ],
+      "operations": ["createHash", "createHmac", "randomUUID"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -321,9 +255,7 @@
       "id": "crypto-door-034",
       "file": "packages/server/src/live-target-app-identity.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomUUID"
-      ],
+      "operations": ["randomUUID"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -331,9 +263,7 @@
       "id": "crypto-door-035",
       "file": "packages/server/src/mutation-wire.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomBytes"
-      ],
+      "operations": ["randomBytes"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -341,9 +271,7 @@
       "id": "crypto-door-036",
       "file": "packages/server/src/password.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "*"
-      ],
+      "operations": ["*"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -351,10 +279,7 @@
       "id": "crypto-door-037",
       "file": "packages/server/src/postgres-posture-lease.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "createHash",
-        "randomBytes"
-      ],
+      "operations": ["createHash", "randomBytes"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -362,10 +287,7 @@
       "id": "crypto-door-038",
       "file": "packages/server/src/postgres-runtime.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "createHash",
-        "randomBytes"
-      ],
+      "operations": ["createHash", "randomBytes"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -373,9 +295,7 @@
       "id": "crypto-door-039",
       "file": "packages/server/src/replay.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "subtle"
-      ],
+      "operations": ["subtle"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -383,10 +303,7 @@
       "id": "crypto-door-040",
       "file": "packages/server/src/response-security-intrinsics.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "createHash",
-        "randomBytes"
-      ],
+      "operations": ["createHash", "randomBytes"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -394,9 +311,7 @@
       "id": "crypto-door-041",
       "file": "packages/server/src/task-security-intrinsics.ts",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomBytes"
-      ],
+      "operations": ["randomBytes"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -404,9 +319,7 @@
       "id": "crypto-door-042",
       "file": "scripts/certificate-module-identity-probe.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -414,9 +327,7 @@
       "id": "crypto-door-043",
       "file": "scripts/check-protocol-alphabet.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -424,9 +335,7 @@
       "id": "crypto-door-044",
       "file": "scripts/check-security-guarantee.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -434,9 +343,7 @@
       "id": "crypto-door-045",
       "file": "scripts/check-spec-conformance-closure.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -444,9 +351,7 @@
       "id": "crypto-door-046",
       "file": "scripts/declassification-census-gate.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -454,9 +359,7 @@
       "id": "crypto-door-047",
       "file": "scripts/demo-session/dispatcher.mjs",
       "kind": "crypto-acquisition",
-      "operations": [
-        "randomUUID"
-      ],
+      "operations": ["randomUUID"],
       "tier": "build-tooling",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -464,9 +367,7 @@
       "id": "crypto-door-048",
       "file": "scripts/framework-export-posture-gate.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -474,10 +375,7 @@
       "id": "crypto-door-049",
       "file": "scripts/hermetic-proof-stage-worker.mjs",
       "kind": "crypto-acquisition",
-      "operations": [
-        "createHash",
-        "createHmac"
-      ],
+      "operations": ["createHash", "createHmac"],
       "tier": "build-tooling",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -485,10 +383,7 @@
       "id": "crypto-door-050",
       "file": "scripts/hermetic-proof-stage.mjs",
       "kind": "crypto-acquisition",
-      "operations": [
-        "createHmac",
-        "randomBytes"
-      ],
+      "operations": ["createHmac", "randomBytes"],
       "tier": "build-tooling",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -496,9 +391,7 @@
       "id": "crypto-door-051",
       "file": "scripts/output-staging.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -506,9 +399,7 @@
       "id": "crypto-door-052",
       "file": "scripts/pack-public-packages.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -516,9 +407,7 @@
       "id": "crypto-door-053",
       "file": "scripts/publish-packed-packages.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -526,9 +415,7 @@
       "id": "crypto-door-054",
       "file": "scripts/raw-diagnostic-channel-gate.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -536,9 +423,7 @@
       "id": "crypto-door-055",
       "file": "scripts/security-convergence-baseline.mjs",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -546,9 +431,7 @@
       "id": "crypto-door-056",
       "file": "site/src/client/modules.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
@@ -556,9 +439,7 @@
       "id": "crypto-door-057",
       "file": "site/src/gallery.ts",
       "kind": "digest",
-      "operations": [
-        "createHash"
-      ],
+      "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     }

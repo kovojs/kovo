@@ -676,10 +676,62 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         .filter((fact) => fact.kind === 'door')
         .map((fact) => fact.capability)
         .sort(),
-    ).toEqual(['database-driver', 'filesystem', 'network', 'process']);
+    ).toEqual([
+      'crypto-acquisition',
+      'database-driver',
+      'digest',
+      'filesystem',
+      'network',
+      'process',
+    ]);
     expect(result.facts.some((fact) => fact.kind === 'summary' && fact.status === 'valid')).toBe(
       true,
     );
+  });
+
+  it('keeps reviewed purpose-minimal crypto exports open and explain-visible', () => {
+    const exportsByPackage = {
+      '@kovojs/core': ['createFileSystemStorage', 'hmacSignature', 'standardWebhooks'],
+      '@kovojs/server': [
+        'createConfidentialAtRestCipher',
+        'createFileSystemStorage',
+        'createStorageDownloadEndpoint',
+        'decryptAtRest',
+        'encryptAtRest',
+        'hashPassword',
+        'hmacSignature',
+        'mintCsrfField',
+        'mintCsrfToken',
+        'renderRouteHtml',
+        'rewrapAtRest',
+        'standardWebhooks',
+        'verifyCredential',
+        'verifyPassword',
+      ],
+    } as const;
+
+    for (const [packageName, exportNames] of Object.entries(exportsByPackage)) {
+      for (const exportName of exportNames) {
+        const result = analyze([
+          {
+            fileName: 'app.ts',
+            source: `
+              import { route } from '@kovojs/server';
+              import { ${exportName} as cryptoDoor } from '${packageName}';
+              export const page = route('/crypto-door', { render() { return cryptoDoor; } });
+            `,
+          },
+        ]);
+        expect(result.diagnostics, `${packageName}#${exportName}`).toEqual([]);
+        expect(result.facts, `${packageName}#${exportName}`).toContainEqual(
+          expect.objectContaining({
+            capability: 'crypto-acquisition',
+            kind: 'door',
+            reason: expect.stringContaining(`through ${exportName}`),
+          }),
+        );
+      }
+    }
   });
 
   it('request-closes public testing and Vite tooling subpaths', () => {
@@ -762,6 +814,9 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(moduleInit.facts).toContainEqual(
       expect.objectContaining({ capability: 'process', kind: 'door' }),
     );
+    expect(moduleInit.facts).toContainEqual(
+      expect.objectContaining({ capability: 'crypto-acquisition', kind: 'door' }),
+    );
   });
 
   it('expands exact namespace and literal dynamic imports without wildcard authorization', () => {
@@ -782,8 +837,12 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         .map((fact) => fact.capability)
         .sort(),
     ).toEqual([
+      'crypto-acquisition',
+      'crypto-acquisition',
       'database-driver',
       'database-driver',
+      'digest',
+      'digest',
       'filesystem',
       'filesystem',
       'network',

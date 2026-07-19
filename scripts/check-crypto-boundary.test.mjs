@@ -50,7 +50,9 @@ describe('SPEC §6.6 crypto acquisition ratchet', () => {
       `import { hash } from '@node-rs/argon2'; export { hash };`,
     ]) {
       const result = runFixture({ 'packages/app/src/unsafe.ts': source }, [], 0);
-      expect(result.findings).toContainEqual(expect.stringContaining('unreviewed crypto-acquisition'));
+      expect(result.findings).toContainEqual(
+        expect.stringContaining('unreviewed crypto-acquisition'),
+      );
     }
   });
 
@@ -86,6 +88,8 @@ describe('SPEC §6.6 crypto acquisition ratchet', () => {
       ],
       1,
     );
-    expect(over.findings).toContainEqual(expect.stringContaining('exceeds non-increasing ceiling 1'));
+    expect(over.findings).toContainEqual(
+      expect.stringContaining('exceeds non-increasing ceiling 1'),
+    );
   });
 });
