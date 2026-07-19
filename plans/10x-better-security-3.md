@@ -682,15 +682,21 @@ near-zero present value — while §0.5's process half is nearly free and is a l
 
 ### 5.3 Inherited-auth honesty (~0.55 pm)
 
-- [ ] `lifecycle-inheritance.test.ts` characterizing the Better Auth defaults Kovo silently accepts
+- [x] `lifecycle-inheritance.test.ts` characterizing the Better Auth defaults Kovo silently accepts
       (`sqlite.ts:219-242` / `postgres.ts:253-270` declare no `session:` key at all): effective
       `expiresIn`/`updateAge`/`freshAge`/`cookieCache`, and whether the session identifier rotates
       across `signIn` with a pre-existing cookie. Narrow the peer range at
-      `packages/better-auth/package.json:46` from `^1.6.0` to `=1.6.17` with a `check:auth-provider-pin`
+      `packages/better-auth/package.json:46` from `^1.6.0` to exact `1.6.17` with a
+      `check:auth-provider-pin`
       gate.
-- [ ] Explicit non-claim in SPEC §6.6 and `kovo explain`: Kovo owns exactly **three** identity
-      transitions (signIn, signOut, dev-only seed signUp); every other lifecycle event is structurally
-      unreachable (`mount.ts:23-28` GET-only) and therefore **unsupported, not guaranteed**.
+  - Evidence: `pnpm run check:auth-provider-pin` passes 10/10 tests against Better Auth 1.6.17 and
+    binds the exact peer/development/TCB/lockfile subject across all six TCB surfaces.
+- [x] Explicit non-claim in SPEC §6.6 and `kovo explain`: Kovo directly owns exactly **three** identity
+      transitions (signIn, signOut, dev-only seed signUp). The GET-only mount makes provider lifecycle
+      requiring unsafe methods structurally unreachable; reachable dependency-defined GET callback
+      lifecycle is delegated and **unsupported, not guaranteed**.
+  - Evidence: `pnpm run check:auth-provider-pin` proves the `kovo explain --auth-lifecycle` output and
+    `spec/06-type-system.md` ownership/non-claim against the direct API census and GET-only mount.
 
 ### 5.4 Residency and erasure (needs plan-2 §3.1 ScopedKey)
 
