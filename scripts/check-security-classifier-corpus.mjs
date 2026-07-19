@@ -1933,6 +1933,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus finite-security-operation-ir',
     testFiles: [
       'packages/compiler/src/security-operation-ir.security.test.ts',
+      'packages/compiler/src/executable-reference-attributes.test.ts',
       'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
       'packages/cli/src/index.kovo-compile.test.ts',
       'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
@@ -2007,6 +2008,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'keeps typed event and execution-trigger inputs on compiler-owned lowering',
           'pins typed events to the exact runtime-installed delegation vocabulary',
           'on:dblclick',
+        ],
+      },
+      {
+        id: 'executable-reference-selector-denominator',
+        file: 'packages/compiler/src/executable-reference-attributes.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 executable-reference-selector-denominator',
+          'keeps one finite ASCII-case-normalized classifier for both compiler gates',
+          'censuses every runtime executable-selector consumer against the shared inventory',
+          'GENERATED_ONLY_SEMANTIC_ATTRIBUTES',
+          'GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES',
+          "readRuntimeElementAttribute(element, 'on:' + eventType)",
+          "bns.readAttribute(el, 'data-stream-renderer')",
+          "readModuleMarkerAttribute(marker, 'data-kovo-module-allowlist')",
         ],
       },
       {
