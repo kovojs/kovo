@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES,
+} from '@kovojs/core/internal/semantic-attributes';
+import {
   setRuntimeSinkSecurityEventHandler,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
@@ -463,6 +467,26 @@ describe('runtime output-context helpers', () => {
     // Safe attributes still work normally.
     expect(kovoBoundAttributeValue('data-value', 'hello')).toBe('hello');
     expect(kovoBoundAttributeValue('aria-label', 'Close')).toBe('Close');
+  });
+
+  // @kovo-security-certifies C13 modular-dynamic-control-plane-runtime-floor
+  it('removes compiler-generated control-plane names from modular dynamic bindings', () => {
+    const reservedNames = [
+      ...GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
+      ...GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES.map((prefix) => `${prefix}probe`),
+    ];
+
+    for (const name of reservedNames) {
+      expect(kovoBoundAttributeValue(name, '/c/attacker.client.js#run'), name).toBeNull();
+      expect(
+        kovoBoundAttributeValue(name.toUpperCase(), '/c/attacker.client.js#run'),
+        `${name} ASCII case`,
+      ).toBeNull();
+    }
+
+    expect(kovoBoundAttributeValue('aria-label', 'Ready')).toBe('Ready');
+    expect(kovoBoundAttributeValue('data-state', 'ready')).toBe('ready');
+    expect(kovoBoundAttributeValue('title', 'Ready')).toBe('Ready');
   });
 
   it('drains one redacted KV236 event per blocked browser output sink write', () => {

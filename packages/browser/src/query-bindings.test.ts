@@ -291,6 +291,56 @@ describe('query binding helpers', () => {
     expect(host.getAttribute('aria-label')).toBeNull();
   });
 
+  it('removes query- and state-selected compiler control-plane attributes', async () => {
+    const queryRoot = new FakeMorphRoot();
+    const queryTarget = new FakeQueryPlanElement({
+      'aria-label': 'old',
+      'data-bind:aria-label': 'cart.label',
+      'data-bind:data-kovo-module-allowlist': 'cart.module',
+      'data-bind:data-stream-renderer': 'cart.renderer',
+      'data-bind:on:click': 'cart.handler',
+      'data-kovo-module-allowlist': '/c/victim.client.js',
+      'data-stream-renderer': '/c/victim.client.js#render',
+      'on:click': '/c/victim.client.js#run',
+    });
+    queryRoot.planElements.push(queryTarget);
+
+    applyQueryBindings(queryRoot, 'cart', {
+      handler: '/c/attacker.client.js#run',
+      label: 'Ready',
+      module: '/c/attacker.client.js',
+      renderer: '/c/attacker.client.js#render',
+    });
+
+    expect(queryTarget.getAttribute('data-kovo-module-allowlist')).toBeNull();
+    expect(queryTarget.getAttribute('data-stream-renderer')).toBeNull();
+    expect(queryTarget.getAttribute('on:click')).toBeNull();
+    expect(queryTarget.getAttribute('aria-label')).toBe('Ready');
+
+    const stateTarget = new FakeStatefulBindingElement({
+      'data-bind:data-kovo-module-allowlist': 'state.module',
+      'data-bind:data-stream-renderer': 'state.renderer',
+      'data-bind:on:click': 'state.handler',
+      'data-bind:title': 'state.title',
+      'data-kovo-module-allowlist': '/c/victim.client.js',
+      'data-stream-renderer': '/c/victim.client.js#render',
+      'kovo-state': '{}',
+      'on:click': '/c/victim.client.js#run',
+    });
+
+    await applyStateBindings(stateTarget, {
+      handler: '/c/attacker.client.js#run',
+      module: '/c/attacker.client.js',
+      renderer: '/c/attacker.client.js#render',
+      title: 'Ready',
+    });
+
+    expect(stateTarget.getAttribute('data-kovo-module-allowlist')).toBeNull();
+    expect(stateTarget.getAttribute('data-stream-renderer')).toBeNull();
+    expect(stateTarget.getAttribute('on:click')).toBeNull();
+    expect(stateTarget.getAttribute('title')).toBe('Ready');
+  });
+
   it('applies same-island state bindings without query dependencies', async () => {
     const host = new FakeStatefulBindingElement({
       'data-bind:data-state': 'state.status',

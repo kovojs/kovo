@@ -57,6 +57,53 @@ function readSanitizedAttribute(element: Element | null, name: string): string |
 const fragmentHtml = (html: string): RenderedFragmentHtml => createRenderedFragmentHtml(html);
 
 describe('browser response fragment apply', () => {
+  // @kovo-security-certifies C13 compiler-wire-control-plane-preserved
+  it('preserves and executes compiler-emitted fragment interactivity', async () => {
+    const target = document.createElement('button');
+    target.setAttribute('kovo-fragment-target', 'interactive-fragment');
+    document.body.append(target);
+    const imports: string[] = [];
+    installInlineKovoLoader(async (url) => {
+      imports.push(url);
+      return {
+        run(event: Event) {
+          (event.target as HTMLElement | null)?.setAttribute('data-ran', 'yes');
+        },
+      };
+    });
+
+    applyHtmlResponseFragments(
+      [
+        {
+          html: fragmentHtml(
+            [
+              '<button kovo-fragment-target="interactive-fragment"',
+              ' on:click="/c/fragment.client.js#run"',
+              ' data-kovo-module-allowlist="/c/fragment.client.js"',
+              ' data-stream-renderer="/c/fragment.client.js#render">Run</button>',
+            ].join(''),
+          ),
+          target: 'interactive-fragment',
+        },
+      ],
+      (name) => document.querySelector(`[kovo-fragment-target="${name}"]`),
+    );
+
+    const button = document.querySelector<HTMLButtonElement>(
+      '[kovo-fragment-target="interactive-fragment"]',
+    );
+    expect(button?.getAttribute('on:click')).toBe('/c/fragment.client.js#run');
+    expect(button?.getAttribute('data-kovo-module-allowlist')).toBe('/c/fragment.client.js');
+    expect(button?.getAttribute('data-stream-renderer')).toBe(
+      '/c/fragment.client.js#render',
+    );
+
+    button?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(imports).toContain('/c/fragment.client.js');
+    expect(button?.getAttribute('data-ran')).toBe('yes');
+  });
+
   it('H12 inerts real SVG SMIL ancestor and href-targeted sibling XSS before Chromium click', async () => {
     const target = document.createElement('section');
     target.setAttribute('kovo-fragment-target', 'smil-target');

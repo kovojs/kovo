@@ -172,6 +172,33 @@ describe('inline loader output security', () => {
       expect(element.getAttribute('xlink:href')).toBe('#');
     });
 
+    // @kovo-security-certifies C13 inline-dynamic-control-plane-runtime-floor
+    it(`${label}: removes state-selected compiler control-plane attributes`, async () => {
+      const element = new BoundTriggerElement({
+        'aria-label': 'old',
+        'data-bind:aria-label': 'state.label',
+        'data-bind:data-kovo-module-allowlist': 'state.module',
+        'data-bind:data-stream-renderer': 'state.renderer',
+        'data-bind:on:click': 'state.handler',
+        'data-kovo-module-allowlist': '/c/client.js',
+        'data-stream-renderer': '/c/victim.client.js#render',
+        'kovo-state': '{"handler":"/c/attacker.client.js#run","label":"Ready","module":"/c/attacker.client.js","renderer":"/c/attacker.client.js#render"}',
+        'on:click': '/c/client.js#commitReserved',
+      });
+
+      await dispatchInlineDelegatedClick(
+        element,
+        async () => ({ commitReserved() {} }),
+        installSource,
+        ['/c/client.js'],
+      );
+
+      expect(element.getAttribute('data-kovo-module-allowlist')).toBeNull();
+      expect(element.getAttribute('data-stream-renderer')).toBeNull();
+      expect(element.getAttribute('on:click')).toBeNull();
+      expect(element.getAttribute('aria-label')).toBe('Ready');
+    });
+
     it(`${label}: H12 inerts SMIL target/value bindings in either transition order`, async () => {
       const payload = "javascript:(document.body.dataset.kovoSmilXss='inline',void 0)";
       for (const [index, transfer] of ['values', 'from', 'to', 'by'].entries()) {

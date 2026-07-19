@@ -395,6 +395,81 @@ export const FormSinks = component({
     );
   });
 
+  // @kovo-security-certifies C13 dynamic-generated-control-target-closes
+  it.each([
+    [
+      'module allowlist',
+      '<output data-bind:data-kovo-module-allowlist="state.module">Result</output>',
+      'data-kovo-module-allowlist',
+    ],
+    [
+      'stream renderer',
+      '<output data-bind:data-stream-renderer="state.renderer">Result</output>',
+      'data-stream-renderer',
+    ],
+    [
+      'delegated handler',
+      '<output data-derive="/c/result.client.js#derive" data-derive-attr="on:click">Result</output>',
+      'on:click',
+    ],
+  ] as const)(
+    'rejects a direct dynamic binding targeting the generated %s control plane',
+    (_label, markup, target) => {
+      const result = compileComponentModule({
+        fileName: 'dynamic-generated-control.tsx',
+        source: `export const DynamicControl = component({ render: () => (${markup}) });`,
+      });
+
+      expect(result.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'KV236',
+            message: expect.stringContaining(
+              `dynamically targets compiler-generated control-plane attribute "${target}"`,
+            ),
+          }),
+        ]),
+      );
+    },
+  );
+
+  it.each([
+    [
+      'static spread',
+      `<output {...{ 'data-bind:data-stream-renderer': 'state.renderer' }}>Result</output>`,
+      'data-stream-renderer',
+    ],
+    [
+      'static spread derive target',
+      `<output {...{ 'data-derive': '/c/result.client.js#derive', 'data-derive-attr': 'data-kovo-module-allowlist' }}>Result</output>`,
+      'data-kovo-module-allowlist',
+    ],
+    [
+      'nested primitive attrs',
+      `<Tooltip.Trigger asChild attrs={{ attrs: { 'data-bind:data-kovo-module-allowlist': 'state.module' } }}><output>Result</output></Tooltip.Trigger>`,
+      'data-kovo-module-allowlist',
+    ],
+  ] as const)(
+    'rejects a dynamic generated-control target smuggled through %s',
+    (_label, markup, target) => {
+      const result = compileComponentModule({
+        fileName: 'dynamic-generated-control-carrier.tsx',
+        source: `export const DynamicControl = component({ render: () => (${markup}) });`,
+      });
+
+      expect(result.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'KV236',
+            message: expect.stringContaining(
+              `dynamically targets compiler-generated control-plane attribute "${target}"`,
+            ),
+          }),
+        ]),
+      );
+    },
+  );
+
   // F4: ftp must be in the compiler URL-scheme allowlist (SPEC §4.8:347)
   it('allows ftp: literal URL attributes without KV236', () => {
     const result = compileComponentModule({
