@@ -89,6 +89,12 @@ export const FRAMEWORK_WIRE_INPUT_REGISTRY = Object.freeze({
     },
     {
       carrier: 'request-header',
+      grammar: 'http-field-value',
+      id: 'request-header.authorization',
+      name: 'authorization',
+    },
+    {
+      carrier: 'request-header',
       grammar: 'media-type',
       id: 'request-header.content-type',
       name: 'content-type',
@@ -173,6 +179,12 @@ export const FRAMEWORK_WIRE_INPUT_REGISTRY = Object.freeze({
     },
     {
       carrier: 'response-header',
+      grammar: 'http-field-value',
+      id: 'response-header.cache-control',
+      name: 'cache-control',
+    },
+    {
+      carrier: 'response-header',
       grammar: 'media-type',
       id: 'response-header.content-type',
       name: 'content-type',
@@ -206,6 +218,12 @@ export const FRAMEWORK_WIRE_INPUT_REGISTRY = Object.freeze({
       grammar: 'same-origin-url',
       id: 'response-header.location',
       name: 'location',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'http-field-value',
+      id: 'response-header.vary',
+      name: 'vary',
     },
     {
       carrier: 'search-param',

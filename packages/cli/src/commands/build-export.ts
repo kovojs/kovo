@@ -38,6 +38,11 @@ import {
 } from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 import { ESCAPE_CENSUS_DOORS } from '@kovojs/core/internal/graph';
+import {
+  snapshotCacheInfluenceManifest,
+  type CacheInfluenceManifestEntry,
+  type CacheInfluenceSurface,
+} from '@kovojs/core/internal/cache-influence';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
@@ -1225,6 +1230,7 @@ async function buildCheckGraph(
     },
     ...(staticArtifacts.routePages === undefined ? {} : { routePages: staticArtifacts.routePages }),
   });
+  assertBuildCacheGenerality(app, result.graph);
   const diagnostics: CoreGraph.StaticDiagnosticFact[] = [];
   const existingDiagnostics = buildSnapshotDenseArray(
     graph.diagnostics ?? [],
@@ -1277,6 +1283,291 @@ async function buildCheckGraph(
     queryShapeFacts: staticArtifacts.queryShapeFacts,
     sourceFiles: staticArtifacts.sourceFiles,
   };
+}
+
+interface BuildCacheIntent {
+  readonly auditedEscape?: { readonly name: string; readonly retainedObligation: string };
+  readonly cacheControl?: string;
+  readonly externalDataVersions: readonly {
+    readonly key: { readonly axis: string; readonly name?: string };
+    readonly name: string;
+  }[];
+  readonly posture: 'non-public' | 'public';
+  readonly root: string;
+  readonly surface: CacheInfluenceSurface;
+}
+
+/**
+ * Fail the real build before artifact emission when evaluated app declarations disagree with the
+ * compiler-owned cache-influence manifest. Runtime inspection is an equality/rejection check only;
+ * it never supplies positive shared-cache evidence (SPEC §9.4).
+ *
+ * @internal Security regression seam for `check:cache-generality`.
+ */
+export function assertBuildCacheGenerality(
+  app: Pick<KovoApp, 'endpoints' | 'queries'>,
+  graph: CoreGraph.KovoCheckInput,
+): void {
+  const manifestValue = buildOwnDataValue(graph, 'cacheInfluence', 'Build cache graph');
+  const entriesByRoot = buildCreateMap<string, CacheInfluenceManifestEntry>();
+  if (manifestValue !== undefined) {
+    const manifest = snapshotCacheInfluenceManifest(manifestValue);
+    const entries = buildSnapshotDenseArray(manifest.entries, 'Build cache influence entries');
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index]!;
+      if (buildMapHas(entriesByRoot, entry.root)) {
+        throw new Error(`Kovo cache generality check failed: duplicate root ${entry.root}.`);
+      }
+      buildMapSet(entriesByRoot, entry.root, entry);
+    }
+  }
+
+  const queries = buildSnapshotDenseArray(app.queries, 'Build cache query declarations');
+  for (let index = 0; index < queries.length; index += 1) {
+    const query = queries[index]!;
+    const key = requiredBuildCacheText(
+      buildOwnDataValue(query, 'key', `Build cache query[${index}]`),
+      `query[${index}].key`,
+    );
+    const read = optionalBuildCacheRecord(
+      buildOwnDataValue(query, 'read', `Build cache query ${key}`),
+      `query:${key}.read`,
+    );
+    const cacheControl = optionalBuildCacheText(
+      read === undefined
+        ? undefined
+        : buildOwnDataValue(read, 'cacheControl', `Build cache query ${key} read`),
+      `query:${key}.read.cacheControl`,
+    );
+    assertBuildCacheIntent(
+      {
+        ...buildCacheDeclarationIntent(
+          read === undefined
+            ? undefined
+            : buildOwnDataValue(read, 'cacheInfluence', `Build cache query ${key} read`),
+          `query:${key}`,
+        ),
+        ...(cacheControl === undefined ? {} : { cacheControl }),
+        posture:
+          cacheControl !== undefined &&
+          buildRegExpExec(/(?:^|,)\s*public(?:\s|,|$)/iu, cacheControl) !== null
+            ? 'public'
+            : 'non-public',
+        root: `query:${key}`,
+        surface: 'query',
+      },
+      entriesByRoot,
+    );
+  }
+
+  const endpoints = buildSnapshotDenseArray(app.endpoints, 'Build cache endpoint declarations');
+  for (let index = 0; index < endpoints.length; index += 1) {
+    const endpoint = endpoints[index]!;
+    const path = requiredBuildCacheText(
+      buildOwnDataValue(endpoint, 'path', `Build cache endpoint[${index}]`),
+      `endpoint[${index}].path`,
+    );
+    const response = optionalBuildCacheRecord(
+      buildOwnDataValue(endpoint, 'response', `Build cache endpoint ${path}`),
+      `endpoint:${path}.response`,
+    );
+    if (response === undefined) {
+      throw new Error(`Kovo cache generality check failed: endpoint:${path} has no response posture.`);
+    }
+    const cacheControl = requiredBuildCacheText(
+      buildOwnDataValue(response, 'cache', `Build cache endpoint ${path} response`),
+      `endpoint:${path}.response.cache`,
+    );
+    assertBuildCacheIntent(
+      {
+        ...buildCacheDeclarationIntent(
+          buildOwnDataValue(response, 'cacheInfluence', `Build cache endpoint ${path} response`),
+          `endpoint:${path}`,
+        ),
+        cacheControl,
+        posture: cacheControl === 'public' ? 'public' : 'non-public',
+        root: `endpoint:${path}`,
+        surface: 'endpoint',
+      },
+      entriesByRoot,
+    );
+  }
+}
+
+function assertBuildCacheIntent(
+  intent: BuildCacheIntent,
+  entriesByRoot: Map<string, CacheInfluenceManifestEntry>,
+): void {
+  const entry = buildMapGet(entriesByRoot, intent.root);
+  if (entry === undefined) {
+    if (intent.posture === 'public') {
+      throw new Error(
+        `Kovo cache generality check failed: ${intent.root} public intent has no compiler manifest entry.`,
+      );
+    }
+    return;
+  }
+  const sameAuthoredIntent =
+    entry.surface === intent.surface &&
+    entry.authored.posture === intent.posture &&
+    entry.authored.cacheControl === intent.cacheControl &&
+    cacheAuditEscapeKey(entry.authored.auditedEscape) ===
+      cacheAuditEscapeKey(intent.auditedEscape) &&
+    buildJsonStringify(cacheExternalVersionsFromEntry(entry)) ===
+      buildJsonStringify(intent.externalDataVersions);
+  if (!sameAuthoredIntent) {
+    throw new Error(
+      `Kovo cache generality check failed: ${intent.root} authored intent differs from the compiler manifest.`,
+    );
+  }
+  if (intent.posture === 'public' && entry.verdict === 'shared-cache-closed') {
+    throw new Error(
+      `Kovo cache generality check failed: ${intent.root} public intent is closed by compiler influence analysis.`,
+    );
+  }
+}
+
+function buildCacheDeclarationIntent(
+  value: unknown,
+  root: string,
+): Pick<BuildCacheIntent, 'auditedEscape' | 'externalDataVersions'> {
+  const declaration = optionalBuildCacheRecord(value, `${root}.cacheInfluence`);
+  if (declaration === undefined) return { externalDataVersions: [] };
+  const auditedValue = buildOwnDataValue(
+    declaration,
+    'auditedEscape',
+    `${root}.cacheInfluence`,
+  );
+  const audited = optionalBuildCacheRecord(auditedValue, `${root}.cacheInfluence.auditedEscape`);
+  const auditedEscape =
+    audited === undefined
+      ? undefined
+      : {
+          name: requiredBuildCacheText(
+            buildOwnDataValue(audited, 'name', `${root}.cacheInfluence.auditedEscape`),
+            `${root}.cacheInfluence.auditedEscape.name`,
+          ),
+          retainedObligation: requiredBuildCacheText(
+            buildOwnDataValue(
+              audited,
+              'retainedObligation',
+              `${root}.cacheInfluence.auditedEscape`,
+            ),
+            `${root}.cacheInfluence.auditedEscape.retainedObligation`,
+          ),
+        };
+  const externalValue = buildOwnDataValue(
+    declaration,
+    'externalDataVersions',
+    `${root}.cacheInfluence`,
+  );
+  const externalSource =
+    externalValue === undefined
+      ? []
+      : buildSnapshotDenseArray(
+          externalValue as readonly unknown[],
+          `${root}.cacheInfluence.externalDataVersions`,
+        );
+  const externalDataVersions: BuildCacheIntent['externalDataVersions'][number][] = [];
+  for (let index = 0; index < externalSource.length; index += 1) {
+    const version = optionalBuildCacheRecord(
+      externalSource[index],
+      `${root}.cacheInfluence.externalDataVersions[${index}]`,
+    );
+    if (version === undefined) {
+      throw new Error(`Kovo cache generality check failed: ${root} has an invalid external version.`);
+    }
+    const key = optionalBuildCacheRecord(
+      buildOwnDataValue(
+        version,
+        'key',
+        `${root}.cacheInfluence.externalDataVersions[${index}]`,
+      ),
+      `${root}.cacheInfluence.externalDataVersions[${index}].key`,
+    );
+    if (key === undefined) {
+      throw new Error(`Kovo cache generality check failed: ${root} external version has no key.`);
+    }
+    const axis = requiredBuildCacheText(
+      buildOwnDataValue(key, 'axis', `${root}.cacheInfluence external version key`),
+      `${root}.cacheInfluence external version key axis`,
+    );
+    const nameValue = buildOwnDataValue(key, 'name', `${root}.cacheInfluence external version key`);
+    const name = optionalBuildCacheText(
+      nameValue,
+      `${root}.cacheInfluence external version key name`,
+    );
+    buildSecurityArrayAppend(
+      externalDataVersions,
+      {
+        key: { axis, ...(name === undefined ? {} : { name }) },
+        name: requiredBuildCacheText(
+          buildOwnDataValue(
+            version,
+            'name',
+            `${root}.cacheInfluence.externalDataVersions[${index}]`,
+          ),
+          `${root}.cacheInfluence external version name`,
+        ),
+      },
+      'Build cache external data versions',
+    );
+  }
+  return {
+    ...(auditedEscape === undefined ? {} : { auditedEscape }),
+    externalDataVersions,
+  };
+}
+
+function cacheExternalVersionsFromEntry(
+  entry: CacheInfluenceManifestEntry,
+): BuildCacheIntent['externalDataVersions'] {
+  const result: BuildCacheIntent['externalDataVersions'][number][] = [];
+  const axes = buildSnapshotDenseArray(entry.axes, `Build cache axes for ${entry.root}`);
+  for (let index = 0; index < axes.length; index += 1) {
+    const axis = axes[index]!;
+    if (axis.kind !== 'external-data-version') continue;
+    if (axis.key === undefined) {
+      throw new Error(
+        `Kovo cache generality check failed: ${entry.root} external version has no key contribution.`,
+      );
+    }
+    buildSecurityArrayAppend(
+      result,
+      {
+        key: axis.key,
+        name: axis.name,
+      },
+      'Compiler cache external data versions',
+    );
+  }
+  return result;
+}
+
+function cacheAuditEscapeKey(
+  value: { readonly name: string; readonly retainedObligation: string } | undefined,
+): string {
+  return value === undefined ? '' : `${value.name}\u0000${value.retainedObligation}`;
+}
+
+function optionalBuildCacheRecord(value: unknown, label: string): object | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new Error(`Kovo cache generality check failed: ${label} must be an own-data record.`);
+  }
+  return value;
+}
+
+function optionalBuildCacheText(value: unknown, label: string): string | undefined {
+  if (value === undefined) return undefined;
+  return requiredBuildCacheText(value, label);
+}
+
+function requiredBuildCacheText(value: unknown, label: string): string {
+  if (typeof value !== 'string' || buildStringTrim(value) === '') {
+    throw new Error(`Kovo cache generality check failed: ${label} must be non-empty text.`);
+  }
+  return buildStringTrim(value);
 }
 
 function buildPreflightComponentDiagnostics(
@@ -4538,7 +4829,12 @@ export function serializeBuildRuntimeRegistryWireModule(
 ): string {
   return buildJoinStrings(
     [
-      `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
+      `import { registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
+      ...(registry.cacheInfluence === undefined
+        ? []
+        : [
+            `registerGeneratedCacheInfluenceManifest(${stringifyBuildValue(registry.cacheInfluence)});`,
+          ]),
       ...(registry.tableSecurity === undefined
         ? []
         : [

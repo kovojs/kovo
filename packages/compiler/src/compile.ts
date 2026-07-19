@@ -109,6 +109,7 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
+import { componentCacheInfluenceFacts } from './cache-influence-facts.js';
 import {
   componentSecurityOperationFacts,
   componentSecuritySemanticGraphFacts,
@@ -648,6 +649,7 @@ function emitRegistryCssPhase(
         index === 0 ? mutationForms : [],
         fact.component,
         parsed.options.fileName,
+        index === 0 ? componentCacheInfluenceFacts(parsed.originalModel) : [],
         index === 0 ? componentSecurityOperationFacts(lowered.model, client.versionedHandlers) : [],
         index === 0 ? componentSecuritySemanticGraphFacts(parsed.originalModel) : undefined,
       ),

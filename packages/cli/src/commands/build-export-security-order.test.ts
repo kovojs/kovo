@@ -16,10 +16,15 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { mutationHandlerFingerprintFromRuntimeSource } from '@kovojs/compiler/internal';
+import {
+  createCacheInfluenceManifest,
+  deriveCacheInfluenceManifestEntry,
+} from '@kovojs/core/internal/cache-influence';
 import type { KovoApp } from '@kovojs/server';
 
 import {
   appWithBuildStylesheetAssets,
+  assertBuildCacheGenerality,
   completeMutationSessionAuthorityFacts,
   kovoServerHandlerEntrySource,
   serializeBuildRuntimeRegistryWireModule,
@@ -31,6 +36,74 @@ import {
 } from './build-security-intrinsics.js';
 
 describe('build/export security bootstrap ordering', () => {
+  it('rejects evaluated public-cache declarations that drift from compiler evidence', () => {
+    const manifest = createCacheInfluenceManifest([
+      deriveCacheInfluenceManifestEntry({
+        authored: { cacheControl: 'public, max-age=60', posture: 'public' },
+        influences: {
+          externalDataVersions: [
+            {
+              key: { axis: 'request-header', name: 'x-catalog-version' },
+              name: 'catalog',
+            },
+          ],
+          urlPath: true,
+          urlSearch: true,
+        },
+        root: 'query:catalog',
+        surface: 'query',
+      }),
+    ]);
+    const app = {
+      endpoints: [],
+      queries: [
+        {
+          key: 'catalog',
+          read: {
+            cacheControl: 'public, max-age=60',
+            cacheInfluence: {
+              externalDataVersions: [
+                {
+                  key: { axis: 'request-header', name: 'x-catalog-version' },
+                  name: 'catalog',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    } as unknown as Pick<KovoApp, 'endpoints' | 'queries'>;
+
+    expect(() => assertBuildCacheGenerality(app, { cacheInfluence: manifest })).not.toThrow();
+    expect(() =>
+      assertBuildCacheGenerality(
+        {
+          ...app,
+          queries: [
+            {
+              key: 'catalog',
+              read: {
+                cacheControl: 'public, max-age=60',
+                cacheInfluence: {
+                  externalDataVersions: [
+                    {
+                      key: { axis: 'request-header', name: 'x-catalog-version' },
+                      name: 'catalog-v2',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+        { cacheInfluence: manifest },
+      ),
+    ).toThrow(/authored intent differs from the compiler manifest/u);
+    expect(() => assertBuildCacheGenerality(app, {})).toThrow(
+      /public intent has no compiler manifest entry/u,
+    );
+  });
+
   it('keeps the production authority join fail-closed under a late createHash replacement', () => {
     // SPEC §2/§11.4: an evaluated csrf-exempt handler must match the exact handler inspected
     // statically. A late digest collision must not let an ambient-authority handler inherit proof.

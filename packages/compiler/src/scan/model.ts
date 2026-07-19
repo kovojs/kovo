@@ -1,4 +1,5 @@
 import type * as ts from 'typescript';
+import type { CacheInfluenceDerivationInput } from '@kovojs/core/internal/cache-influence';
 import type {
   BrowserSecurityOperationKind,
   SecurityOperationDoor,
@@ -103,6 +104,8 @@ export interface MutationHandlerModel {
   webhookRecordChanges?: readonly WebhookRecordChangeFact[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyStart: number;
+  /** Compiler-owned request/cache-axis facts for one finite query or endpoint root. */
+  cacheInfluence?: CacheInfluenceDerivationInput;
   paramNames: readonly (string | undefined)[];
   params: readonly string[];
   paramSpans: readonly SourceSpan[];

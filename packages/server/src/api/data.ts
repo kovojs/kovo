@@ -58,6 +58,11 @@ function assertRawCsrfMintContext(context: { audience?: string; mutation?: never
 
 export { domain } from '../domain.js';
 export type { Domain } from '../domain.js';
+export type {
+  SharedCacheExternalDataVersion,
+  SharedCacheInfluenceDeclaration,
+  SharedCacheKeyContribution,
+} from '../cache-influence.js';
 export { errorBoundary, queue, stream } from '../mutation.js';
 import { mutation as mutationImplementation } from '../mutation.js';
 import { query as queryImplementation } from '../query.js';

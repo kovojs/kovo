@@ -1,5 +1,9 @@
 import type { DerivationStatus } from './derivation.js';
 import type {
+  CacheInfluenceManifest,
+  CacheInfluenceManifestEntry,
+} from './internal/cache-influence.js';
+import type {
   SecurityOperationIr,
   SecuritySemanticGraph,
 } from './internal/security-operation-ir.js';
@@ -205,6 +209,7 @@ export interface KovoCheckInput {
   authPosture?: readonly AuthPostureFact[];
   capabilities?: readonly CapabilityExplain[];
   capabilityClosure?: readonly CapabilityClosureExplainFact[];
+  cacheInfluence?: CacheInfluenceManifest;
   components?: readonly ComponentExplain[];
   cookieDowngrades?: readonly CookieDowngradeExplain[];
   derivedMutations?: readonly DerivedMutationDomainSet[];
@@ -376,6 +381,7 @@ export type AccessDecisionFact =
 /** @internal */
 export interface ComponentExplain {
   attributeMerges?: readonly AttributeMergeExplain[];
+  cacheInfluence?: readonly CacheInfluenceManifestEntry[];
   clocks?: readonly ClockExplain[];
   derives?: readonly DeriveExplain[];
   disambiguatedDomName?: string;

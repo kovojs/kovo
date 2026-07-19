@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "e06466fc17406befb21c04a5eebc57f00dd043ae8ebd1b47ffd54d22d0ae6306",
+      "sourceTreeSha256": "037aa951fb2d8a37770e47a7758e7154f57365879385a2e19673bbc8e21e5b8b",
       "manifestVariants": [
         {
           "exports": {
@@ -795,47 +795,10 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "a5296019bcde9e7663d60cac56a7214376a2b52dacadbcb09a6a344e817d366b"
+      "sourceTreeSha256": "9f039102d7b106079e83485d68bbdd6aefe763fb318bf134c5dc01ff269cf7b4"
     },
     {
       "manifestVariants": [
-        {
-          "exports": {
-            ".": "./src/index.ts",
-            "./generated": "./src/generated.ts",
-            "./internal/component-render": "./src/internal/component-render.ts",
-            "./internal/agent-docs": "./src/internal/agent-docs.ts",
-            "./internal/client-module-url": "./src/internal/client-module-url.ts",
-            "./internal/classifier-verdict": "./src/internal/classifier-verdict.ts",
-            "./internal/derivation": "./src/internal/derivation.ts",
-            "./internal/diagnostics": "./src/internal/diagnostics.ts",
-            "./internal/document-protocol": "./src/internal/document-protocol.ts",
-            "./internal/event": "./src/internal/event.ts",
-            "./internal/fragment-target": "./src/internal/fragment-target.ts",
-            "./internal/filesystem": "./src/internal/filesystem.ts",
-            "./internal/framework-identity": "./src/internal/framework-identity.ts",
-            "./internal/graph": "./src/internal/graph.ts",
-            "./internal/json": "./src/internal/json.ts",
-            "./internal/module-ref": "./src/internal/module-ref.ts",
-            "./internal/package-prefix": "./src/internal/package-prefix.ts",
-            "./internal/query-delta": "./src/internal/query-delta.ts",
-            "./internal/query-shape-source": "./src/internal/query-shape-source.ts",
-            "./internal/render-plan-token": "./src/internal/render-plan-token.ts",
-            "./internal/route-pattern": "./src/internal/route-pattern.ts",
-            "./internal/security-markers": "./src/internal/security-markers.ts",
-            "./internal/security-operation-ir": "./src/internal/security-operation-ir.ts",
-            "./internal/security-url": "./src/internal/security-url.ts",
-            "./internal/semantic-attributes": "./src/internal/semantic-attributes.ts",
-            "./internal/sink-policy": "./src/internal/sink-policy.ts",
-            "./internal/source-sink-registry": "./src/internal/source-sink-registry.ts",
-            "./internal/sql-safety": "./src/internal/sql-safety.ts",
-            "./internal/storage": "./src/internal/storage.ts",
-            "./internal/verifier": "./src/internal/verifier.ts",
-            "./internal/wire-input-grammar": "./src/internal/wire-input-grammar.ts",
-            "./internal/wire-json": "./src/internal/wire-json.ts"
-          },
-          "fingerprint": "sha256:301b3695b63b2d600d0c76b3eceec1a536bc06061bdea5c9c31bc2a9d88281b2"
-        },
         {
           "exports": {
             ".": {
@@ -857,6 +820,10 @@
             "./internal/client-module-url": {
               "types": "./dist/internal/client-module-url.d.mts",
               "default": "./dist/internal/client-module-url.mjs"
+            },
+            "./internal/cache-influence": {
+              "types": "./dist/internal/cache-influence.d.mts",
+              "default": "./dist/internal/cache-influence.mjs"
             },
             "./internal/classifier-verdict": {
               "types": "./dist/internal/classifier-verdict.d.mts",
@@ -967,7 +934,45 @@
               "default": "./dist/internal/wire-json.mjs"
             }
           },
-          "fingerprint": "sha256:a17ce0331cfce666651bf617e195632540447eac4ce81b4c301058661104bdeb"
+          "fingerprint": "sha256:6ac811f078dbb6ad22a9e5bd8b7ee36b4ee6134bec267c06bdf61862daaffe45"
+        },
+        {
+          "exports": {
+            ".": "./src/index.ts",
+            "./generated": "./src/generated.ts",
+            "./internal/component-render": "./src/internal/component-render.ts",
+            "./internal/agent-docs": "./src/internal/agent-docs.ts",
+            "./internal/client-module-url": "./src/internal/client-module-url.ts",
+            "./internal/cache-influence": "./src/internal/cache-influence.ts",
+            "./internal/classifier-verdict": "./src/internal/classifier-verdict.ts",
+            "./internal/derivation": "./src/internal/derivation.ts",
+            "./internal/diagnostics": "./src/internal/diagnostics.ts",
+            "./internal/document-protocol": "./src/internal/document-protocol.ts",
+            "./internal/event": "./src/internal/event.ts",
+            "./internal/fragment-target": "./src/internal/fragment-target.ts",
+            "./internal/filesystem": "./src/internal/filesystem.ts",
+            "./internal/framework-identity": "./src/internal/framework-identity.ts",
+            "./internal/graph": "./src/internal/graph.ts",
+            "./internal/json": "./src/internal/json.ts",
+            "./internal/module-ref": "./src/internal/module-ref.ts",
+            "./internal/package-prefix": "./src/internal/package-prefix.ts",
+            "./internal/query-delta": "./src/internal/query-delta.ts",
+            "./internal/query-shape-source": "./src/internal/query-shape-source.ts",
+            "./internal/render-plan-token": "./src/internal/render-plan-token.ts",
+            "./internal/route-pattern": "./src/internal/route-pattern.ts",
+            "./internal/security-markers": "./src/internal/security-markers.ts",
+            "./internal/security-operation-ir": "./src/internal/security-operation-ir.ts",
+            "./internal/security-url": "./src/internal/security-url.ts",
+            "./internal/semantic-attributes": "./src/internal/semantic-attributes.ts",
+            "./internal/sink-policy": "./src/internal/sink-policy.ts",
+            "./internal/source-sink-registry": "./src/internal/source-sink-registry.ts",
+            "./internal/sql-safety": "./src/internal/sql-safety.ts",
+            "./internal/storage": "./src/internal/storage.ts",
+            "./internal/verifier": "./src/internal/verifier.ts",
+            "./internal/wire-input-grammar": "./src/internal/wire-input-grammar.ts",
+            "./internal/wire-json": "./src/internal/wire-json.ts"
+          },
+          "fingerprint": "sha256:712bea0c9e8718d0754b978ea06eddb46b8a8310d5980f11cdaaf105344c2e39"
         }
       ],
       "packageName": "@kovojs/core",
@@ -1679,7 +1684,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "3f3d2f6a5fd0fcd59b0b45c40970dbe5db5cea710588c20e912151e91eeda069"
+      "sourceTreeSha256": "c266ca6a2bc0ae2ba95b45a26c594162e62eac2a86f84b66d28071539c85c1f0"
     },
     {
       "manifestVariants": [
@@ -9635,7 +9640,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "5167b51173b28f7360375a8edf87f843acdf30fb7458eed050f9a5ecb5776cf3"
+      "sourceTreeSha256": "d4330d9b0abc17956bf3e47ec95d434e39903c940997387cb92f59f5f6a35f4f"
     },
     {
       "manifestVariants": [

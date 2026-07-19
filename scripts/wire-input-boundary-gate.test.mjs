@@ -122,6 +122,20 @@ it('discovers framework wire reads by TypeScript symbol identity and ignores loo
 });
 
 describe('closed wire-input classifications', () => {
+  // @kovo-security-certifies C13 cache-credential-reader-exact-names
+  it('keeps cache-credential helper reads bound to exact field names', () => {
+    const reads = discoverWireInputReads()
+      .filter(
+        (site) =>
+          site.file === 'packages/server/src/query.ts' &&
+          site.id.includes('#queryRequestHeader.return'),
+      )
+      .map((site) => site.inputName)
+      .sort((left, right) => String(left).localeCompare(String(right)));
+
+    expect(reads).toEqual(['authorization', 'authorization', 'cookie', 'cookie']);
+  });
+
   it('rejects missing, stale, and name-incompatible registry bindings', () => {
     const discovered = discoverWireInputReads({ canonicalReaders, sources });
     const result = evaluateWireInputBoundary({

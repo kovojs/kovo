@@ -386,21 +386,31 @@ shared cache. **Leverage:** high (attacker-facing, unowned by plan-1 or §3.1's 
 `kovo-cache-influence/v1` manifest plus a per-response rejection floor. **Blocks:** public-cache D
 coverage and the cache dimensions of §4.4.
 
-- [ ] Define `kovo-cache-influence/v1` with distinct axes: URL path/search (already part of the cache
+- [x] Define `kovo-cache-influence/v1` with distinct axes: URL path/search (already part of the cache
       key), named request headers (`Vary` candidates), cookies/Authorization (public-cache closed by
       default), principal/session facts, framework runtime state, and declared external data versions.
-- [ ] Derive the complete influence set statically for handlers inside the finite security IR. A
+  - Evidence: `packages/core/src/internal/cache-influence.test.ts` proves the versioned axis and
+    verdict algebra, including keyed and unkeyed external versions.
+- [x] Derive the complete influence set statically for handlers inside the finite security IR. A
       handler with opaque calls or an influence outside the supported public set cannot emit `public`
       without a named audited escape; a single observed execution never establishes positive safety.
-- [ ] Extend runtime provenance to query/document execution only as a rejection floor for the current
+  - Evidence: `packages/compiler/src/cache-influence.security.test.ts` proves query/endpoint axes and
+    closes guards, module captures, request aliases, ambient secrets, opaque calls, and carrier escapes.
+- [x] Extend runtime provenance to query/document execution only as a rejection floor for the current
       response. Principal, cookie, Authorization, secret, or unclassified influence strips/rejects
       `public`; it cannot widen a compile-time closed verdict.
-- [ ] Derive `Vary` only from request-header axes. Never encode principal or URL/search state as a
+  - Evidence: `packages/server/src/cache-generality-intermediary.security.test.ts` proves query
+    credential narrowing and fail-closed document headers through real HTTP response paths.
+- [x] Derive `Vary` only from request-header axes. Never encode principal or URL/search state as a
       `Vary` token; the manifest records how each non-header axis participates in the cache key or
       closes shared caching.
-- [ ] `check:cache-generality` diffs authored intent against the manifest, and a real intermediary
+  - Evidence: `packages/core/src/internal/cache-influence.test.ts` and the intermediary oracle prove
+    only normalized named-header axes become `Vary`.
+- [x] `check:cache-generality` diffs authored intent against the manifest, and a real intermediary
       oracle proves prime/reuse behavior across principals, cookies, Authorization, query variants,
       header variants, and branch changes.
+  - Evidence: `pnpm run check:cache-generality` passes all nine manifest, compiler, runtime, and real
+    intermediary tests.
 
 ### 2.5 Wire-ingress grammar registry + reject-by-default /\_q/
 

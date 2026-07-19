@@ -1,4 +1,5 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import { snapshotCacheInfluenceManifest } from '@kovojs/core/internal/cache-influence';
 import {
   buildOwnDataProperty,
   buildSecuritySourceLiteral,
@@ -93,6 +94,7 @@ export interface RuntimeTableSecurityWireManifest {
 
 /** @internal Runtime registry wire schema shared by Vite dev and CLI build/export. */
 export interface RuntimeRegistryWireFacts {
+  cacheInfluence?: NonNullable<CoreGraph.KovoCheckInput['cacheInfluence']>;
   mutationTouches: Readonly<Record<string, readonly RuntimeRegistryMutationTouchSite[]>>;
   queryReads: readonly RuntimeRegistryQueryReadFact[];
   tableSecurity?: RuntimeTableSecurityWireManifest;
@@ -535,11 +537,19 @@ export function runtimeRegistryWireFactsFromGraph(
     throw new TypeError('Runtime registry graph must be an object.');
   }
   const queriesProperty = buildOwnDataProperty(graph, 'queries', 'runtime registry graph.queries');
+  const cacheInfluenceProperty = buildOwnDataProperty(
+    graph,
+    'cacheInfluence',
+    'runtime registry graph.cacheInfluence',
+  );
   const queries = queriesProperty.present ? queriesProperty.value : undefined;
   if (queries !== undefined && !witnessIsArray(queries)) {
     throw new TypeError('Runtime registry graph.queries must be an own data array.');
   }
   return freezeBuildSecurityValue({
+    ...(!cacheInfluenceProperty.present || cacheInfluenceProperty.value === undefined
+      ? {}
+      : { cacheInfluence: snapshotCacheInfluenceManifest(cacheInfluenceProperty.value) }),
     mutationTouches: runtimeRegistryMutationTouchesFromGraph(graph),
     queryReads: runtimeRegistryQueryReadsFromFacts(
       (queries ?? []) as readonly RuntimeRegistryQueryFactLike[],
@@ -549,13 +559,17 @@ export function runtimeRegistryWireFactsFromGraph(
 
 /** @internal Serialize the runtime registry virtual module consumed by dev and production. */
 export function serializeRuntimeRegistryWireModule(registry: RuntimeRegistryWireFacts): string {
+  const cacheInfluence =
+    registry.cacheInfluence === undefined
+      ? ''
+      : `registerGeneratedCacheInfluenceManifest(${buildSecuritySourceLiteral(registry.cacheInfluence)});\n`;
   const queryReads = buildSecuritySourceLiteral(registry.queryReads);
   const mutationTouches = buildSecuritySourceLiteral(registry.mutationTouches);
   const tableSecurity =
     registry.tableSecurity === undefined
       ? ''
       : `registerGeneratedTableSecurityManifest(${buildSecuritySourceLiteral(registry.tableSecurity)});\n`;
-  return `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';\n${tableSecurity}registerGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
+  return `import { registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';\n${cacheInfluence}${tableSecurity}registerGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
 }
 
 function snapshotRuntimeTouch(

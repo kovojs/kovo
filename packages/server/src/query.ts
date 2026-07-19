@@ -1,6 +1,10 @@
 import { isSecret, type JsonValue } from '@kovojs/core';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { reportServerError } from './diagnostics.js';
+import {
+  snapshotSharedCacheInfluenceDeclaration,
+  type SharedCacheInfluenceDeclaration,
+} from './cache-influence.js';
 import type { Domain } from './domain.js';
 import { snapshotGuardArgsReceipt } from './guard-args-receipt.js';
 import {
@@ -20,11 +24,16 @@ import {
   type ResolvedGuardFailure,
 } from './guards.js';
 import { resolveKovoLifecycleRequest } from './response-posture.js';
+import { principalPostureFromRequest } from './auth-principal.js';
+import { registeredCacheInfluenceForRoot } from './generated-cache-influence-registry.js';
+import { isNativeRequest } from './request-carrier.js';
 import {
   blessRedirectResponse,
   isBlessedRedirectResponse,
+  isHeaderSource,
   frameworkWireBody,
   mergeResponseHeaders,
+  readHeader,
   retryAfterHeaders,
   type FrameworkWireBody,
   type ResponseHeaders,
@@ -44,18 +53,23 @@ import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 import {
   requestIsUrlSearchParams,
+  requestHeader,
   requestSerializeUrlSearchParamsEntries,
   requestUrlSearchParamsEntries,
 } from './request-body-intrinsics.js';
 import {
   securityEncodeURIComponent,
+  securityArrayJoin,
+  securityRegExpTest,
   securityStringIndexOf,
   securityStringSlice,
+  securityStringTrim,
 } from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
   witnessCreateNullRecord,
   witnessDefineProperty,
+  witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
   witnessIsArray,
@@ -86,6 +100,8 @@ const intrinsicObjectPrototype = witnessGetPrototypeOf({});
 
 /** Explicit cache posture for proven public, session-independent typed reads (SPEC §9.4). */
 export interface QueryReadConfig {
+  /** Compiler-reviewed inputs and version-key obligations for an explicitly public response. */
+  cacheInfluence?: SharedCacheInfluenceDeclaration;
   cacheControl?: string;
 }
 
@@ -420,7 +436,47 @@ function snapshotQueryDefinition(
       writable: true,
     });
   }
+  const readDescriptor = witnessGetOwnPropertyDescriptor(snapshot, 'read');
+  if (
+    readDescriptor !== undefined &&
+    'value' in readDescriptor &&
+    readDescriptor.value !== undefined
+  ) {
+    witnessDefineProperty(snapshot, 'read', {
+      configurable: true,
+      enumerable: readDescriptor.enumerable === true,
+      value: snapshotQueryReadConfig(readDescriptor.value),
+      writable: true,
+    });
+  }
   return snapshot as Omit<RegisteredQueryDefinition, 'key'>;
+}
+
+function snapshotQueryReadConfig(value: unknown): QueryReadConfig {
+  if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
+    throw new TypeError('query().read must be a stable own-data record.');
+  }
+  const keys = witnessOwnKeys(value);
+  const snapshot = witnessCreateNullRecord<unknown>();
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (key !== 'cacheControl' && key !== 'cacheInfluence') {
+      throw new TypeError(`Unknown query().read field "${String(key)}".`);
+    }
+    const descriptor = witnessGetOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`query().read.${String(key)} must be an own data property.`);
+    }
+    if (key === 'cacheControl') {
+      if (typeof descriptor.value !== 'string' || securityStringTrim(descriptor.value) === '') {
+        throw new TypeError('query().read.cacheControl must be a non-empty string.');
+      }
+      snapshot.cacheControl = descriptor.value;
+    } else if (descriptor.value !== undefined) {
+      snapshot.cacheInfluence = snapshotSharedCacheInfluenceDeclaration(descriptor.value);
+    }
+  }
+  return witnessFreeze(snapshot) as unknown as QueryReadConfig;
 }
 
 /**
@@ -744,7 +800,7 @@ export const renderQueryEndpointResponse = wireEmitter(
       body: frameworkWireBody(body),
       headers: mergeResponseHeaders(
         { 'Content-Type': 'text/html; charset=utf-8' },
-        querySuccessCacheHeaders(),
+        querySuccessCacheHeaders(definition, endpointRequest.request, lifecycleRequest),
         // SPEC §5.2.1 rule 2(d): stamp the build token so a background refetch into a stale
         // tab can detect deploy skew and avoid merging new-build data into a stale document.
         queryBuildHeaders(endpointRequest),
@@ -1262,16 +1318,71 @@ function queryBuildHeaders<Request>(
   return endpointRequest.buildToken ? { 'Kovo-Build': endpointRequest.buildToken } : {};
 }
 
-function querySuccessCacheHeaders(): ResponseHeaders {
-  // SPEC §9.4: guarded, session-dependent, or unproven /_q reads stay private and
-  // uncacheable. `publicAccess()` is author audit metadata, not the compiler proof
-  // that the query has no guard and no `req.session` reads in its key or load.
-  // Until compiler-owned session-independence metadata is wired here, fail closed
-  // and ignore declared public `read.cacheControl` for endpoint responses.
+function querySuccessCacheHeaders<Request>(
+  definition: { readonly key: string; readonly read?: QueryReadConfig },
+  rawRequest: Request,
+  lifecycleRequest: Request,
+): ResponseHeaders {
+  // SPEC §9.4: public caching is opened only by the compiler-owned manifest registered before app
+  // evaluation. Runtime observations are rejection-only: they may narrow this response but never
+  // turn a compile-time closed or missing verdict into public.
+  const cacheControl = definition.read?.cacheControl;
+  const manifest = registeredCacheInfluenceForRoot(`query:${definition.key}`);
+  if (
+    cacheControl === undefined ||
+    !securityRegExpTest(/(?:^|,)\s*public(?:\s|,|$)/iu, cacheControl) ||
+    manifest === undefined ||
+    manifest.surface !== 'query' ||
+    manifest.authored.posture !== 'public' ||
+    manifest.authored.cacheControl !== cacheControl ||
+    manifest.verdict === 'shared-cache-closed' ||
+    runtimeCacheInfluenceClosesPublic(rawRequest, lifecycleRequest)
+  ) {
+    return privateQueryCacheHeaders();
+  }
   return {
-    'Cache-Control': 'private, no-store',
-    Vary: 'Cookie',
+    'Cache-Control': cacheControl,
+    ...(manifest.vary.length === 0 ? {} : { Vary: securityArrayJoin(manifest.vary, ', ') }),
   };
+}
+
+function privateQueryCacheHeaders(): ResponseHeaders {
+  return { 'Cache-Control': 'private, no-store', Vary: 'Cookie' };
+}
+
+function runtimeCacheInfluenceClosesPublic<Request>(
+  rawRequest: Request,
+  lifecycleRequest: Request,
+): boolean {
+  if (queryRequestHeader(rawRequest, 'cookie') !== undefined) return true;
+  if (queryRequestHeader(rawRequest, 'authorization') !== undefined) return true;
+  if (lifecycleRequest !== null && typeof lifecycleRequest === 'object') {
+    const session = witnessGetOwnPropertyDescriptor(lifecycleRequest, 'session');
+    if (
+      session !== undefined &&
+      (!('value' in session) || (session.value !== null && session.value !== undefined))
+    ) {
+      return true;
+    }
+    if (principalPostureFromRequest(lifecycleRequest).kind !== 'anonymous') return true;
+  }
+  // Supported deployment paths use a genuine Web Request. A caller-supplied opaque carrier has no
+  // runtime provenance vocabulary, so it can only narrow public caching.
+  return rawRequest !== null && typeof rawRequest === 'object' && !isNativeRequest(rawRequest);
+}
+
+function queryRequestHeader(value: unknown, name: 'authorization' | 'cookie'): string | undefined {
+  if (isNativeRequest(value)) {
+    return name === 'cookie'
+      ? (requestHeader(value, 'cookie') ?? undefined)
+      : (requestHeader(value, 'authorization') ?? undefined);
+  }
+  if (value === null || typeof value !== 'object') return undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(value, 'headers');
+  if (descriptor === undefined || !('value' in descriptor)) return undefined;
+  const headers = descriptor.value;
+  if (!isHeaderSource(headers)) return undefined;
+  return name === 'cookie' ? readHeader(headers, 'cookie') : readHeader(headers, 'authorization');
 }
 
 function queryWarningHeaders(

@@ -13,6 +13,10 @@ import {
 } from './audit-justification.js';
 import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
 import {
+  snapshotSharedCacheInfluenceDeclaration,
+  type SharedCacheInfluenceDeclaration,
+} from './cache-influence.js';
+import {
   resolveDbProvider,
   runAccessDecisionGuards,
   type DbProvider,
@@ -96,6 +100,8 @@ export interface EndpointResponsePosture {
   appOwnedSafety: boolean;
   body: EndpointResponseBodyPosture;
   cache: EndpointCachePosture;
+  /** Compiler-reviewed inputs and version-key obligations when `cache` is `public`. */
+  cacheInfluence?: SharedCacheInfluenceDeclaration;
   /**
    * Exact cross-origin redirect origins this raw endpoint may emit in a `Location` header.
    * Same-origin paths need no entry; external origins require an audit-readable reason.
@@ -414,6 +420,7 @@ function snapshotEndpointResponsePosture(source: unknown): EndpointResponsePostu
   const appOwnedSafety = stableRequiredEndpointValue(source, 'appOwnedSafety');
   const bodySource = stableRequiredEndpointValue(source, 'body');
   const cache = stableRequiredEndpointValue(source, 'cache');
+  const cacheInfluenceSource = stableEndpointValue(source, 'cacheInfluence');
   const redirectAllowlistSource = stableEndpointValue(source, 'redirectAllowlist');
   const reservedHeadersSource = stableEndpointValue(source, 'reservedHeaders');
   if (typeof appOwnedSafety !== 'boolean') {
@@ -435,6 +442,10 @@ function snapshotEndpointResponsePosture(source: unknown): EndpointResponsePostu
   snapshot.appOwnedSafety = appOwnedSafety;
   snapshot.body = body;
   snapshot.cache = cache;
+  snapshot.cacheInfluence =
+    cacheInfluenceSource === undefined
+      ? undefined
+      : snapshotSharedCacheInfluenceDeclaration(cacheInfluenceSource);
   snapshot.redirectAllowlist = redirectAllowlist;
   snapshot.reservedHeaders = reservedHeaders;
   return witnessFreeze(snapshot) as unknown as EndpointResponsePosture;

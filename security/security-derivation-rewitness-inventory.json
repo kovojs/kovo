@@ -69,13 +69,19 @@
         "id": "D.public-cache-posture",
         "owner": "compiler cache-influence derivation",
         "authoritativeSource": [
-          "packages/compiler/src/scan/security-operation-ir.ts",
-          "packages/server/src/response-posture.ts"
+          "packages/core/src/internal/cache-influence.ts",
+          "packages/compiler/src/cache-influence-facts.ts",
+          "packages/server/src/query.ts",
+          "packages/server/src/app-document.ts"
         ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "proof": [],
-        "gap": "No finite influence manifest proves public responses principal-independent or derives request-header Vary axes.",
+        "status": "derived",
+        "proof": [
+          "packages/compiler/src/cache-influence.security.test.ts",
+          "packages/server/src/cache-generality-intermediary.security.test.ts",
+          "scripts/check-cache-generality.test.mjs"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {

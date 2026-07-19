@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  createCacheInfluenceManifest,
+  deriveCacheInfluenceManifestEntry,
+} from '@kovojs/core/internal/cache-influence';
+
 import { domain } from './domain.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
@@ -292,7 +297,16 @@ describe('runtimeRegistryFacts', () => {
   });
 
   it('serializes dev/prod runtime registry facts through one wire projection', () => {
+    const cacheInfluence = createCacheInfluenceManifest([
+      deriveCacheInfluenceManifestEntry({
+        authored: { cacheControl: 'public, max-age=60', posture: 'public' },
+        influences: { requestHeaders: ['accept-language'], urlPath: true, urlSearch: true },
+        root: 'query:queries/contact-detail-query',
+        surface: 'query',
+      }),
+    ]);
     const graph = {
+      cacheInfluence,
       queries: [
         { domains: ['contact', 'account'], query: 'queries/contact-detail-query' },
         { domains: [], query: 'queries/empty-query' },
@@ -311,6 +325,7 @@ describe('runtimeRegistryFacts', () => {
     const facts = runtimeRegistryWireFactsFromGraph(graph);
 
     expect(facts).toEqual({
+      cacheInfluence,
       mutationTouches: {
         'mutations/update-contact': [
           { crossTable: true, domain: 'account', keys: null },
@@ -321,6 +336,9 @@ describe('runtimeRegistryFacts', () => {
     });
     expect(serializeRuntimeRegistryWireModule(facts)).toContain(
       'registerGeneratedQueryReadRegistry([{"domains":["account","contact"],"query":"queries/contact-detail-query"}]);',
+    );
+    expect(serializeRuntimeRegistryWireModule(facts)).toContain(
+      'registerGeneratedCacheInfluenceManifest({"entries":[',
     );
   });
 
