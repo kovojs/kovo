@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "d94346ece97603c16d40772f4f77bf243eb7a40e1a42c759b5b894d014860841",
+      "sourceTreeSha256": "248463b2a89c2448ec292a27c504077323dc4f54202bcef3267d89b3b4530da0",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "5a5c3235dfc2bbf7056e71b49c3a5a0f2daf7ba8347a65e0dedf2f1c0c8475d8",
+      "sourceTreeSha256": "d05a29795466a10dd8830e635b1e7c5669c67bd4c84a2bd02f8847921623c387",
       "manifestVariants": [
         {
           "fingerprint": "sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368"
@@ -733,7 +733,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "aeec2c86e31199bcf58fa3526fa95bba931e1e73ed458c5c69ad9a86533f29d3"
+      "sourceTreeSha256": "7b0b7fb6907396853991e6f1e5a6d7018e1d4d4fdf7c6983f9d1048844d18b61"
     },
     {
       "manifestVariants": [
@@ -1673,7 +1673,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "6cabee990ba866737cdec9c909804c2f5e8d3d3c1ac21858b1948e0100133313"
+      "sourceTreeSha256": "89d337b031e980832b55f4e3adbee0f3f07829e1ee9061791be27b1be90f8fe0"
     },
     {
       "manifestVariants": [
@@ -9627,7 +9627,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "8699d1730fcdf7ef0ecde054faf3ff011334614a3494bafc220b157bc8ec88ae"
+      "sourceTreeSha256": "3c56548f9fea0fdc0c56bff6099b9dc3b82338fb5019d7f6b8ed4fd5a01e8962"
     },
     {
       "manifestVariants": [
