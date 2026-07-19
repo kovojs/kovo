@@ -502,7 +502,30 @@ function installInlineKovoLoader(im) {
   };
   const isBlockedActiveEmbed = (el) => {
     const tag = bns.lower(bns.readElementTagName(el) || '');
-    return tag === 'embed' || tag === 'object';
+    return tag === 'embed' || tag === 'frame' || tag === 'frameset' || tag === 'object';
+  };
+  const isBlockedShadowControlName = (name) =>
+    name === 'shadowrootmode' || name === 'shadowrootdelegatesfocus' ||
+    name === 'shadowrootclonable' || name === 'shadowrootserializable';
+  const isDeclarativeShadowControl = (name, value) => {
+    const normalized = bns.lower(name);
+    if (isBlockedShadowControlName(normalized)) return true;
+    if (bns.indexOf(normalized, 'data-bind:') === 0) {
+      return isBlockedShadowControlName(bns.slice(normalized, 'data-bind:'.length));
+    }
+    return normalized === 'data-derive-attr' &&
+      isBlockedShadowControlName(bns.lower(fb(value)));
+  };
+  const stripDeclarativeShadowControls = (el) => {
+    if (bns.lower(bns.readElementTagName(el) || '') !== 'template') return false;
+    const attributes = bns.snapshotElementAttributes(el);
+    for (let index = 0; index < attributes.length; index += 1) {
+      const attribute = attributes[index];
+      if (attribute && isDeclarativeShadowControl(attribute.name, attribute.value)) {
+        bns.removeElementAttribute(el, attribute.name);
+      }
+    }
+    return true;
   };
   const inertBlockedActiveElement = (el) => {
     if (!isBlockedSmil(el) && !isBlockedActiveEmbed(el)) return false;
@@ -556,6 +579,7 @@ function installInlineKovoLoader(im) {
   };
   const wa = (el, name, val) => {
     const n = bns.lower(name);
+    if (stripDeclarativeShadowControls(el) && isDeclarativeShadowControl(n, val)) return;
     if (inertBlockedActiveElement(el)) return;
     if (isGeneratedOnlyAttribute(n)) {
       bns.removeElementAttribute(el, name);

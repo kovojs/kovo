@@ -1,6 +1,7 @@
 import { parseKovoModuleRef, type KovoModuleRef } from '@kovojs/core/internal/module-ref';
 import {
   isBlockedActiveEmbedElementName,
+  isBlockedDeclarativeShadowDomAttributeName,
   isBlockedSvgSmilElementName,
 } from '@kovojs/core/internal/sink-policy';
 
@@ -856,6 +857,12 @@ function removeBoundAttribute(
   name: string,
   securityDecisionApplied = false,
 ): void {
+  if (
+    stripDeclarativeShadowDomBindingControls(element) &&
+    isDeclarativeShadowDomBindingControl(name, '')
+  ) {
+    return;
+  }
   if (inertBlockedActiveBindingElement(element)) return;
   if (
     !securityDecisionApplied &&
@@ -943,6 +950,12 @@ function reconcileDialogOpen(element: QueryBindingElement, value: unknown): bool
 }
 
 function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {
+  if (
+    stripDeclarativeShadowDomBindingControls(element) &&
+    isDeclarativeShadowDomBindingControl(name, value)
+  ) {
+    return;
+  }
   if (inertBlockedActiveBindingElement(element)) return;
   // J3 (SPEC §4.6/§4.8): HTML boolean-presence attributes must remove on false/null/undefined,
   // and set to '' (present) on any other value including true, '', and non-null strings.
@@ -985,13 +998,13 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
 
 function boundAttributeWriteContext(element: QueryBindingElement): {
   effectiveHttpEquiv: string | null;
-  elementName: string | undefined;
+  elementName?: string;
 } {
+  const elementName = readBindingTagName(element);
   return {
     effectiveHttpEquiv:
-      readBindingAttribute(element, 'http-equiv') ??
-      readBindingAttribute(element, 'httpequiv'),
-    elementName: readBindingTagName(element),
+      readBindingAttribute(element, 'http-equiv') ?? readBindingAttribute(element, 'httpequiv'),
+    ...(elementName === undefined ? {} : { elementName }),
   };
 }
 
@@ -1214,4 +1227,37 @@ function inertBlockedActiveBindingElement(element: QueryBindingElement): boolean
   }
   writeQueryPlanElement(element, '');
   return true;
+}
+
+/**
+ * SPEC.md §4.2 / §5.2 rule 10: a live update must not turn an inert template into a parser-created
+ * shadow boundary. Strip both the browser controls and the binding/derive stamps that could
+ * recreate them while leaving ordinary inert template content and metadata intact.
+ */
+function stripDeclarativeShadowDomBindingControls(element: QueryBindingElement): boolean {
+  const tagName = readBindingTagName(element);
+  if (tagName === undefined || securityStringToLowerCase(tagName) !== 'template') return false;
+  const attributes = bindingElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute && isDeclarativeShadowDomBindingControl(attribute.name, attribute.value)) {
+      removeBindingAttribute(element, attribute.name);
+    }
+  }
+  return true;
+}
+
+function isDeclarativeShadowDomBindingControl(name: string, value: unknown): boolean {
+  const normalizedName = securityStringToLowerCase(name);
+  if (isBlockedDeclarativeShadowDomAttributeName(normalizedName)) return true;
+  if (securityStringStartsWith(normalizedName, 'data-bind:')) {
+    return isBlockedDeclarativeShadowDomAttributeName(
+      securityStringSlice(normalizedName, 'data-bind:'.length),
+    );
+  }
+  return (
+    normalizedName === 'data-derive-attr' &&
+    typeof value === 'string' &&
+    isBlockedDeclarativeShadowDomAttributeName(value)
+  );
 }

@@ -20,6 +20,7 @@ import {
 import {
   drainRuntimeSinkSecurityEvent,
   isBlockedActiveEmbedElementName,
+  isBlockedDeclarativeShadowDomAttributeName,
   isBlockedSvgSmilElementName,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
@@ -69,6 +70,7 @@ import {
   formHelperString,
   formHelperStringEndsWith,
   formHelperStringIndexOf,
+  formHelperStringSlice,
   formHelperStringStartsWith,
   formHelperStringToLowerCase,
 } from './jsx-form-helper-intrinsics.js';
@@ -210,16 +212,16 @@ export function jsx(
     );
     return renderedHtml('');
   }
-  // SPEC.md §4.8 / §5.2 rule 10: object/embed can execute same-origin HTML with
-  // parent-document authority but provide no iframe sandbox boundary. The compiler rejects
-  // authored uses; this floor also closes direct/uncompiled JSX and opaque spread construction.
+  // SPEC.md §4.8 / §5.2 rule 10: object/embed and obsolete frame/frameset output can execute or
+  // contain same-origin HTML with parent-document authority but provide no reviewable modern
+  // iframe sandbox boundary. The compiler rejects authored uses; this floor closes uncompiled JSX.
   if (isBlockedActiveEmbedElementName(intrinsicType)) {
     drainRuntimeSinkSecurityEvent(
       runtimeElementSinkEvent(
         `<${intrinsicType}>`,
         'raw-html',
         intrinsicType,
-        'active object/embed elements are disabled because their documents cannot be sandboxed',
+        'active embed/frame elements are disabled because their documents cannot be sandboxed',
       ),
     );
     return renderedHtml('');
@@ -905,6 +907,17 @@ function renderContextualAttributeValue(
   name: string,
   value: unknown,
 ): string | null {
+  if (isDeclarativeShadowDomRuntimeControl(type, name, value)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        `<template> ${name}`,
+        'framework-control',
+        attributeText(name, value),
+        'declarative Shadow DOM is disabled because Kovo component output is light DOM',
+      ),
+    );
+    return null;
+  }
   if (isMetaRefreshContentAttribute(type, props, name)) {
     drainRuntimeSinkSecurityEvent(
       runtimeElementSinkEvent(
@@ -922,6 +935,21 @@ function renderContextualAttributeValue(
   return isKovoTrustedUrl(value) && isUrlAttributeName(name)
     ? escapeAttribute(text)
     : safeRuntimeAttribute(name, text);
+}
+
+function isDeclarativeShadowDomRuntimeControl(type: string, name: string, value: unknown): boolean {
+  if (!formHelperAsciiCaseInsensitiveEqual(type, 'template')) return false;
+  const normalizedName = formHelperStringToLowerCase(name);
+  if (isBlockedDeclarativeShadowDomAttributeName(normalizedName)) return true;
+  if (formHelperStringStartsWith(normalizedName, 'data-bind:')) {
+    return isBlockedDeclarativeShadowDomAttributeName(
+      formHelperStringSlice(normalizedName, 'data-bind:'.length),
+    );
+  }
+  return (
+    normalizedName === 'data-derive-attr' &&
+    isBlockedDeclarativeShadowDomAttributeName(attributeText(name, value))
+  );
 }
 
 function isMetaRefreshContentAttribute(type: string, props: JsxProps, name: string): boolean {

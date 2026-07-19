@@ -105,9 +105,7 @@ export const ActiveEmbed = component({
   render: () => (${markup}),
 });
 `),
-    ).toEqual([
-      expect.objectContaining({ message: expect.stringContaining('sandbox boundary') }),
-    ]);
+    ).toEqual([expect.objectContaining({ message: expect.stringContaining('sandbox boundary') })]);
   });
 
   it.each([
@@ -265,7 +263,7 @@ export const ShadowBoundary = component({
     expect(
       kv236Diagnostics(`
 export const LightDomTemplate = component({
-  render: () => <template data-kind="row"><span>row</span></template>,
+  render: () => <template data-kind="row" {...{ title: "row template" }}><span>row</span></template>,
 });
 `),
     ).toEqual([]);
@@ -278,8 +276,6 @@ export const ObsoleteFrame = component({
   render: () => <${tag} src="/safe/account" />,
 });
 `),
-    ).toEqual([
-      expect.objectContaining({ message: expect.stringContaining('sandbox boundary') }),
-    ]);
+    ).toEqual([expect.objectContaining({ message: expect.stringContaining('sandbox boundary') })]);
   });
 });

@@ -97,6 +97,17 @@ attributes such as `key`, `kovo-key`, `style`, and `styles`.
 
 Components render to **light DOM** as plain, never-registered elements — no shadow roots, no `customElements.define`, no upgrade step (rationale in §3.1). The load-bearing DOM identity is the derived `kovo-c` leaf; the compiler omits it when the host tag already spells the derived leaf (`<cart-badge>` — dashed tags are inert sugar) and emits it on native hosts (`<tr kovo-c="cart-row">`, so table content-model nesting works). Query-backed server-refreshable roots also carry a derived `kovo-fragment-target`; for singleton components this is the DOM leaf (`cart-badge`), while repeated instances append stable authored identity (`product-form:p2`). Registry and type identities are separately namespaced by module path (§6.1), so global uniqueness never lengthens the ordinary DOM leaf. If two distinct registry keys would put the same DOM leaf on one page, the composition pass derives a stable disambiguated `kovo-c` value from the registry key and reports it through component explain output; fragment target identities use the same disambiguated leaf before any instance suffix. StyleX-authored component styles compile to globally collision-free atomic classes and dedupe into declared stylesheet assets; raw co-located CSS remains an escape hatch scoped to the derived host leaf (`@scope`, donut-scoped out of nested islands) (§13.1). With no shadow boundary, IDREF wiring (`commandfor`, `for`, `aria-*`), native form participation, and find-in-page work document-wide — the L0 layer and no-JS form fallback depend on it. The compiler validates JSX nesting against the HTML content model (**KV225**): markup the parser would re-parent (`<div>` in `<p>`, `<tr>` outside a table) makes served HTML and parsed DOM disagree, silently breaking morph identity and fragment targets — a compile error, not a runtime surprise.
 
+**Declarative Shadow DOM is disabled.** A `<template>` carrying `shadowrootmode`,
+`shadowrootdelegatesfocus`, `shadowrootclonable`, or `shadowrootserializable` (ASCII casing
+insensitive) is **KV236**, including direct/static/dynamic attributes, binding or derive targets,
+static spreads, and opaque spreads. There is no app-authored suppression. The server renderer, live
+binding paths, inline loader, and response-fragment sanitizer remove those controls and their
+control-targeting stamps before output or detached-tree adoption, while preserving ordinary inert
+template content. This runtime floor covers uncompiled JSX and hostile response bytes; it does not
+make declarative shadow roots an alternate component API. For the same finite-output reason, Kovo
+does not render or adopt unsandboxable `object`/`embed` or obsolete `frame`/`frameset` primitives;
+use a reviewed sandboxed `iframe` or ordinary navigation/download link instead (§4.8, §5.2 rule 10).
+
 Everything is inspectable in the Elements panel: dependencies (`kovo-deps`), data (the JSON), behavior (`on:*` attributes), pending mutations (`kovo-pending`, §10.3).
 
 ### 4.3 Handlers and closures

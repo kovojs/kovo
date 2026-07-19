@@ -7,6 +7,7 @@ import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
 import {
   elementContextSecurityControl,
   isBlockedActiveEmbedElementName,
+  isBlockedDeclarativeShadowDomAttributeName,
   isBlockedSvgSmilElementName,
 } from '@kovojs/core/internal/sink-policy';
 import {
@@ -283,10 +284,10 @@ function validateElementAttributes(
             start: element.start,
             length: element.openingEnd - element.start,
           },
-          `<${element.intrinsicTagName}> is disabled because it can execute an embedded document without a sandbox boundary`,
+          `<${element.intrinsicTagName}> is disabled because it can create an embedded browsing context without a reviewable sandbox boundary`,
         ),
         help: [
-          'Blocked reason: object/embed can load same-origin HTML with the embedding document origin and no iframe sandbox boundary.',
+          'Blocked reason: object/embed and obsolete frame/frameset output can load or contain same-origin HTML without a reviewable modern iframe sandbox boundary.',
           'Fixes: use a sandboxed <iframe> for active content, or an ordinary download/navigation link for a file.',
           'SPEC §4.8 and §5.2 rule 10 require contextual output safety independent of CSP.',
           'Escape: there is no plain JSX suppression for disabled active embed elements.',
@@ -320,6 +321,11 @@ function validateElementAttributes(
       'SVG SMIL element diagnostics',
     );
   }
+  appendOutputItems(
+    found,
+    validateDeclarativeShadowDomElement(diagnostics, element),
+    'Declarative Shadow DOM diagnostics',
+  );
   appendOutputItems(
     found,
     validateDocumentNavigationElements(diagnostics, element),
@@ -515,6 +521,130 @@ function validateElementAttributes(
   );
 
   return found;
+}
+
+/**
+ * SPEC §4.2 / §5.2 rule 10: Kovo components are light-DOM components. Declarative Shadow DOM
+ * changes parser output before the runtime can traverse it, so every `<template>` construction
+ * channel is closed: direct attributes, bindings/derives, statically visible spreads, and opaque
+ * spreads. The runtime membrane remains the floor for uncompiled JSX and response bytes.
+ */
+function validateDeclarativeShadowDomElement(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  if (element.intrinsicTagName !== 'template') return [];
+
+  const attributes = element.attributes;
+  const attributeLength = compilerArrayLength(attributes, 'Declarative Shadow DOM attributes');
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Declarative Shadow DOM attributes');
+    const issue = declarativeShadowDomControlIssue(
+      attribute.name,
+      staticDirectAttributeValue(attribute),
+    );
+    if (issue !== undefined) {
+      return [declarativeShadowDomDiagnostic(diagnostics, element, issue)];
+    }
+  }
+
+  const spreads = element.spreadAttributes;
+  const spreadLength = compilerArrayLength(spreads, 'Declarative Shadow DOM spreads');
+  for (let index = 0; index < spreadLength; index += 1) {
+    const spread = outputArrayValue(spreads, index, 'Declarative Shadow DOM spreads');
+    if (spread.staticWireAttributeEntries !== undefined) {
+      const entries = spread.staticWireAttributeEntries;
+      const entryLength = compilerArrayLength(entries, 'Static declarative Shadow DOM entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(
+          entries,
+          entryIndex,
+          'Static declarative Shadow DOM entries',
+        );
+        const issue = declarativeShadowDomControlIssue(
+          entry.key,
+          staticWireSpreadAttributeValue(entry),
+        );
+        if (issue !== undefined) {
+          return [declarativeShadowDomDiagnostic(diagnostics, element, issue)];
+        }
+      }
+      continue;
+    }
+    if (spread.objectEntries !== undefined) {
+      const entries = spread.objectEntries;
+      const entryLength = compilerArrayLength(entries, 'Declarative Shadow DOM spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(
+          entries,
+          entryIndex,
+          'Declarative Shadow DOM spread entries',
+        );
+        const issue = declarativeShadowDomControlIssue(
+          entry.key,
+          staticSpreadAttributeValue(entry),
+        );
+        if (issue !== undefined) {
+          return [declarativeShadowDomDiagnostic(diagnostics, element, issue)];
+        }
+      }
+      continue;
+    }
+    return [
+      declarativeShadowDomDiagnostic(
+        diagnostics,
+        element,
+        'an opaque <template> spread could create a declarative Shadow DOM control',
+      ),
+    ];
+  }
+  return [];
+}
+
+function declarativeShadowDomControlIssue(
+  name: string,
+  value: StaticRenderedAttributeValue,
+): string | undefined {
+  const normalizedName = compilerStringToLowerCase(name);
+  if (isBlockedDeclarativeShadowDomAttributeName(normalizedName)) {
+    return `<template> ${normalizedName} would create or configure declarative Shadow DOM`;
+  }
+  if (compilerStringStartsWith(normalizedName, 'data-bind:')) {
+    const target = compilerStringSlice(normalizedName, 'data-bind:'.length);
+    return isBlockedDeclarativeShadowDomAttributeName(target)
+      ? `a live binding could create <template> ${target}`
+      : undefined;
+  }
+  if (normalizedName !== 'data-derive-attr') return undefined;
+  if (value.kind === 'unknown') {
+    return 'an unproved template derive target could create a declarative Shadow DOM control';
+  }
+  if (value.kind === 'omitted') return undefined;
+  const target = compilerStringToLowerCase(value.value);
+  return isBlockedDeclarativeShadowDomAttributeName(target)
+    ? `a derive could create <template> ${target}`
+    : undefined;
+}
+
+function declarativeShadowDomDiagnostic(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+  reason: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnostics.at('KV236', {
+      start: element.start,
+      length: element.openingEnd - element.start,
+    }),
+    help: [
+      `Blocked reason: ${reason}.`,
+      'Kovo component output is light DOM; parser-created shadow roots would hide descendants from framework traversal and document-wide IDREF/form behavior.',
+      'Fixes: keep the template inert and render its content into ordinary light DOM.',
+      'SPEC §4.2 and §5.2 rule 10 make declarative Shadow DOM unavailable in authored output.',
+      'Escape: there is no app-authored declarative Shadow DOM suppression.',
+    ].join('\n'),
+    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}; declarative Shadow DOM is disabled.`,
+  };
 }
 
 /**

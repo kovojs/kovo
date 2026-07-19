@@ -609,6 +609,24 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'active-embed-element-regression',
+        file: 'packages/core/src/sink-policy.test.ts',
+        snippets: [
+          'fails closed on unsandboxable and obsolete active embeds independent of casing',
+          'expect(isBlockedActiveEmbedElementName(name)).toBe(true)',
+          'expect(isBlockedActiveEmbedElementName(name.toUpperCase())).toBe(true)',
+        ],
+      },
+      {
+        id: 'declarative-shadow-dom-control-regression',
+        file: 'packages/core/src/sink-policy.test.ts',
+        snippets: [
+          'classifies every declarative Shadow DOM control independent of authored casing',
+          'expect(isBlockedDeclarativeShadowDomAttributeName(name)).toBe(true)',
+          'expect(isBlockedDeclarativeShadowDomAttributeName(name.toUpperCase())).toBe(true)',
+        ],
+      },
+      {
         id: 'redirect-url-mechanism',
         file: 'packages/core/src/internal/source-sink-registry.test.ts',
         snippets: ["['redirect URL', 'reconstruct']"],
@@ -1001,7 +1019,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
         snippets: [
           'keeps a const-bound trustedSql rawRead closed without a compiler-owned semantic edge',
-          "const db = context?.db;",
+          'const db = context?.db;',
           'const statement = trustedSql(',
           "{ reads: ['contacts'] }",
           "db['rawRead']",

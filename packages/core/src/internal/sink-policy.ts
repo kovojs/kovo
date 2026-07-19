@@ -70,21 +70,38 @@ export const BLOCKED_SVG_SMIL_ELEMENT_NAMES = freezeSecurityValue([
 /**
  * @internal Active embedded-document elements Kovo refuses to render or adopt.
  *
- * SPEC.md §4.8 / §5.2 rule 10: unlike an iframe, `object` and `embed` have no
- * sandbox boundary. A same-origin HTML resource therefore executes with the
- * embedding document's origin and can directly reach its parent. Kovo's
- * technical-preview surface disables the primitives instead of relying on CSP.
+ * SPEC.md §4.8 / §5.2 rule 10: unlike a modern iframe, `object`, `embed`, and obsolete
+ * `frame`/`frameset` output have no reviewable sandbox boundary. A same-origin HTML resource can
+ * therefore execute with the embedding document's origin and directly reach its parent. Kovo's
+ * technical-preview surface disables the primitives instead of relying on CSP or obsolete parsing.
  */
 export const BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES = freezeSecurityValue([
   'embed',
+  'frame',
+  'frameset',
   'object',
+] as const);
+
+/**
+ * @internal Declarative Shadow DOM controls Kovo refuses on `<template>`.
+ *
+ * SPEC.md §4.2: component output is light DOM. A declarative shadow root changes the DOM tree
+ * during parsing and can hide executable or authority-bearing descendants from Kovo's ordinary
+ * light-DOM traversal. These controls are therefore outside the authored/runtime output surface.
+ */
+export const BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES = freezeSecurityValue([
+  'shadowrootmode',
+  'shadowrootdelegatesfocus',
+  'shadowrootclonable',
+  'shadowrootserializable',
 ] as const);
 
 const urlAttributeNames = securitySetOf<string>(URL_ATTRIBUTE_NAMES);
 const safeUrlSchemes = securitySetOf<string>(SAFE_URL_SCHEMES);
 const blockedSvgSmilElementNames = securitySetOf<string>(BLOCKED_SVG_SMIL_ELEMENT_NAMES);
-const blockedActiveEmbedElementNames = securitySetOf<string>(
-  BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
+const blockedActiveEmbedElementNames = securitySetOf<string>(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES);
+const blockedDeclarativeShadowDomAttributeNames = securitySetOf<string>(
+  BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES,
 );
 const urlSchemePattern = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 const htmlColonReferencePattern = /&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/;
@@ -102,6 +119,11 @@ export function isBlockedSvgSmilElementName(name: string): boolean {
 /** @internal True when an intrinsic element is an unsandboxable active embed primitive. */
 export function isBlockedActiveEmbedElementName(name: string): boolean {
   return securitySetHas(blockedActiveEmbedElementNames, securityStringToLowerCase(name));
+}
+
+/** @internal True when an attribute can opt a `<template>` into declarative Shadow DOM. */
+export function isBlockedDeclarativeShadowDomAttributeName(name: string): boolean {
+  return securitySetHas(blockedDeclarativeShadowDomAttributeNames, securityStringToLowerCase(name));
 }
 
 /** @internal One finite element/attribute security-control classification. */
@@ -160,7 +182,8 @@ export function elementContextSecurityControl(
     if (attribute === 'sandbox') {
       return {
         acceptsTrustedUrl: false,
-        reason: 'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
+        reason:
+          'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
       };
     }
   }
@@ -464,12 +487,7 @@ export function decideRuntimeAttributeWrite(
     );
   }
   const family = runtimeSinkFamilyForAttribute(name);
-  const elementContextDecision = decideRuntimeElementContextWrite(
-    name,
-    value,
-    family,
-    options,
-  );
+  const elementContextDecision = decideRuntimeElementContextWrite(name, value, family, options);
   if (elementContextDecision !== undefined) return elementContextDecision;
 
   if (family === 'event-handler' || family === 'srcdoc' || family === 'raw-html') {

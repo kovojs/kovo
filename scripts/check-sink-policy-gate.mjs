@@ -126,8 +126,11 @@ const sqlBlessedBrandStampNames = new Set([
 ]);
 
 const allowedSinkPolicyExports = new Set([
+  'BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES',
+  'BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES',
   'BLOCKED_SVG_SMIL_ELEMENT_NAMES',
   'Blessed',
+  'ElementContextSecurityControl',
   'FRAMEWORK_BLESSED_SINK_KINDS',
   'FragmentHtml',
   'FrameworkBlessedSinkKind',
@@ -147,11 +150,14 @@ const allowedSinkPolicyExports = new Set([
   'createRenderedFragmentHtml',
   'decideRuntimeAttributeWrite',
   'drainRuntimeSinkSecurityEvent',
+  'elementContextSecurityControl',
   'fragmentHtmlContent',
   'hasUnsafeCssText',
   'hasUnsafeCssUrl',
   'hasUnsafeUrlScheme',
   'isBlessedSink',
+  'isBlockedActiveEmbedElementName',
+  'isBlockedDeclarativeShadowDomAttributeName',
   'isBlockedSvgSmilElementName',
   'isCssTextAttributeName',
   'isEventHandlerAttributeName',

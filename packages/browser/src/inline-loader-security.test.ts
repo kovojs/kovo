@@ -245,16 +245,10 @@ describe('inline loader output security', () => {
       ] as const;
 
       for (const testCase of cases) {
-        const element = new BoundTriggerElement(
-          { ...testCase.attributes },
-          testCase.tagName,
-        );
-        await dispatchInlineDelegatedClick(
-          element,
-          async () => ({ commit() {} }),
-          installSource,
-          ['/c/client.js'],
-        );
+        const element = new BoundTriggerElement({ ...testCase.attributes }, testCase.tagName);
+        await dispatchInlineDelegatedClick(element, async () => ({ commit() {} }), installSource, [
+          '/c/client.js',
+        ]);
         expect(element.getAttribute(testCase.blocked), testCase.tagName).toBeNull();
       }
     });
@@ -336,12 +330,9 @@ describe('inline loader output security', () => {
           },
           testCase.tagName,
         );
-        await dispatchInlineDelegatedClick(
-          element,
-          async () => ({ commit() {} }),
-          installSource,
-          ['/c/client.js'],
-        );
+        await dispatchInlineDelegatedClick(element, async () => ({ commit() {} }), installSource, [
+          '/c/client.js',
+        ]);
         expect(element.getAttribute(testCase.attribute), testCase.tagName).toBe(testCase.current);
       }
     });

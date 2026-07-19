@@ -324,8 +324,16 @@ function sa(
   security: HtmlResponseFragmentSecurityControls,
   preserveReviewedContext = false,
 ): void {
-  if (inertBlockedActiveEmbedElement(e, security) || inertBlockedSvgSmilElement(e, security)) return;
+  if (inertBlockedActiveEmbedElement(e, security) || inertBlockedSvgSmilElement(e, security))
+    return;
   const n = security.lower(name);
+  if (
+    stripDeclarativeShadowDomControls(e, security) &&
+    isDeclarativeShadowDomControl(n, v, security)
+  ) {
+    security.removeElementAttribute(e, name);
+    return;
+  }
   if (blocksDocumentNavigationAttribute(e, n, v, security)) {
     security.removeElementAttribute(e, name);
     return;
@@ -423,7 +431,56 @@ function isBlockedActiveEmbedTagName(
   security: HtmlResponseFragmentSecurityControls,
 ): boolean {
   const n = security.lower(name ?? '');
-  return n === 'embed' || n === 'object';
+  return n === 'embed' || n === 'frame' || n === 'frameset' || n === 'object';
+}
+
+function isBlockedDeclarativeShadowDomAttributeName(
+  name: string,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const n = security.lower(name);
+  return (
+    n === 'shadowrootmode' ||
+    n === 'shadowrootdelegatesfocus' ||
+    n === 'shadowrootclonable' ||
+    n === 'shadowrootserializable'
+  );
+}
+
+function isDeclarativeShadowDomControl(
+  name: string,
+  value: string,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const n = security.lower(name);
+  if (isBlockedDeclarativeShadowDomAttributeName(n, security)) return true;
+  if (security.indexOf(n, 'data-bind:') === 0) {
+    return isBlockedDeclarativeShadowDomAttributeName(
+      security.slice(n, 'data-bind:'.length),
+      security,
+    );
+  }
+  return n === 'data-derive-attr' && isBlockedDeclarativeShadowDomAttributeName(value, security);
+}
+
+/**
+ * SPEC.md §4.2 / §5.2 rule 10: response HTML remains light DOM. Remove every declarative Shadow
+ * DOM control and the live stamps that could recreate one while the parsed tree is detached, so
+ * dormant template descendants stay inert through adoption and later serialization/reparse.
+ */
+function stripDeclarativeShadowDomControls(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  if (security.lower(security.readElementTagName(element) ?? '') !== 'template') return false;
+  const attributes = security.snapshotElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute && isDeclarativeShadowDomControl(attribute.name, attribute.value, security)) {
+      security.removeElementAttribute(element, attribute.name);
+    }
+  }
+  return true;
 }
 
 /**
@@ -542,6 +599,7 @@ function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element 
     if (inertBlockedActiveEmbedElement(x, security)) continue;
     if (inertBlockedSvgSmilElement(x, security)) continue;
     if (inertDocumentNavigationElement(x, security)) continue;
+    stripDeclarativeShadowDomControls(x, security);
     const attributes = security.snapshotElementAttributes(x);
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex];
@@ -672,6 +730,10 @@ export const __responseFragmentApplySanitizerParityForTests = {
   isBlockedActiveEmbedElementName(value: string): boolean {
     const security = createBrowserNavigationSecurityControls();
     return isBlockedActiveEmbedTagName(value, security);
+  },
+  isBlockedDeclarativeShadowDomAttributeName(value: string): boolean {
+    const security = createBrowserNavigationSecurityControls();
+    return isBlockedDeclarativeShadowDomAttributeName(value, security);
   },
   sanitizeAttribute(e: Element, name: string, value: string): void {
     sa(e, name, value, createBrowserNavigationSecurityControls());

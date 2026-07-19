@@ -104,12 +104,7 @@ describe('shared runtime sink policy', () => {
     }
 
     expect(FRAMEWORK_BLESSED_SINK_KINDS[0]).toBe('browser:response-fragment-html');
-    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual([
-      'embed',
-      'frame',
-      'frameset',
-      'object',
-    ]);
+    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual(['embed', 'frame', 'frameset', 'object']);
     expect(BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES).toEqual([
       'shadowrootmode',
       'shadowrootdelegatesfocus',
