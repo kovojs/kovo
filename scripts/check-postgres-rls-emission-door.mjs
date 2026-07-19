@@ -617,8 +617,12 @@ function moduleCanResolveToEmitter(fileName, specifier) {
   const resolved = slash(
     path.posix.normalize(path.posix.join(path.posix.dirname(fileName), canonicalSpecifier)),
   );
+  const resolvedIdentity = resolved.toLowerCase().replace(/\.(?:[cm]?[jt]sx?)$/u, '');
+  const emitterIdentity = postgresRlsEmitterFile
+    .toLowerCase()
+    .replace(/\.(?:[cm]?[jt]sx?)$/u, '');
   return (
-    resolved.replace(/\.(?:[cm]?[jt]sx?)$/u, '') === postgresRlsEmitterFile.replace(/\.ts$/u, '')
+    resolvedIdentity === emitterIdentity
   );
 }
 
