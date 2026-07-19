@@ -6,7 +6,7 @@ import {
 } from '@kovojs/core/internal/security-operation-ir';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 
-import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   kovoExecutableReferenceAttributeKind,
   type KovoExecutableReferenceAttributeKind,
@@ -480,7 +480,8 @@ function appendFiniteIrDiagnostic(
   const measuredLength = span.end - span.start;
   compilerArrayAppend(
     found,
-    diagnostics.at(
+    diagnosticAt(
+      diagnostics,
       'KV449',
       { length: measuredLength > 0 ? measuredLength : 1, start: span.start },
       detail,
@@ -498,7 +499,8 @@ function appendScopedKeyDiagnostic(
   const measuredLength = span.end - span.start;
   compilerArrayAppend(
     found,
-    diagnostics.at(
+    diagnosticAt(
+      diagnostics,
       'KV450',
       { length: measuredLength > 0 ? measuredLength : 1, start: span.start },
       detail,

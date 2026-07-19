@@ -2255,6 +2255,29 @@ describe('kovo check', () => {
     expect(result.exitCode).not.toBe(0);
   });
 
+  it('accepts a csrf-exempt endpoint with explicit non-session authority', () => {
+    const result = kovoCheck({
+      endpoints: [
+        {
+          appOwnedSafety: true,
+          auth: 'verifier:machine-signature',
+          body: 'text',
+          cache: 'no-store',
+          csrf: 'exempt',
+          csrfJustification: 'signed machine endpoint',
+          method: 'POST',
+          name: 'machine/sync',
+          path: '/machine/sync',
+          reason: 'signed machine endpoint',
+        },
+      ],
+      sessionAuthority: [{ kind: 'endpoint', name: 'machine/sync', referencesSession: false }],
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toBe('kovo-check/v1\nOK\n');
+  });
+
   it('treats duplicate session-authority facts as an order-independent positive lattice', () => {
     const result = kovoCheck({
       endpoints: [
@@ -2452,6 +2475,50 @@ describe('kovo check', () => {
     expect(output).toBe(
       'kovo-check/v1\nWARN KV311 component=CartBadge query=cart.discount position="conditional <dot>" Query/state-dependent DOM position has no update status.\n',
     );
+  });
+
+  it('fails kovo check coverage as a CLI command when renderOnce is invalidated (KV314)', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-coverage-kv314-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          mutations: [{ key: 'cart/add', writes: ['cart'] }],
+          queries: [{ domains: ['cart'], query: 'cart' }],
+          touchGraph: {
+            'cart.addItem': {
+              touches: [
+                { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
+              ],
+              unresolved: [],
+            },
+          },
+          updateCoverage: [
+            {
+              component: 'CartBadge',
+              detail: 'declared renderOnce',
+              position: 'expression',
+              query: 'cart.count',
+              status: 'renderOnce',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['check', 'coverage', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toContain('ERROR KV314 component=CartBadge query=cart.count');
   });
 
   it('formats KV438 mass-assignment diagnostics through the real kovo check CLI command', () => {

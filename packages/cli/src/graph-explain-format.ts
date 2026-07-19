@@ -46,13 +46,7 @@ export function diagnosticSeverity(
 
 export function diagnosticsForTouchGraph(graph: CoreGraph.TouchGraph): TouchGraphDiagnosticFact[] {
   return Object.values(graph).flatMap((entry) => [
-    ...entry.unresolved.map((unresolved) =>
-      createRegisteredDiagnostic(
-        unresolved.code,
-        { site: unresolved.site },
-        { message: unresolved.message },
-      ),
-    ),
+    ...entry.unresolved.map(touchGraphUnresolvedDiagnostic),
     ...entry.touches
       .filter((touch) => touch.predicate === 'non-eq')
       .map((touch) => createRegisteredDiagnostic('KV409', { site: touch.site })),
@@ -60,6 +54,27 @@ export function diagnosticsForTouchGraph(graph: CoreGraph.TouchGraph): TouchGrap
       .filter((read) => read.predicate === 'non-eq')
       .map((read) => createRegisteredDiagnostic('KV409', { site: read.site })),
   ]);
+}
+
+function touchGraphUnresolvedDiagnostic(
+  unresolved: CoreGraph.TouchGraphEntry['unresolved'][number],
+): TouchGraphDiagnosticFact {
+  const fields = { site: unresolved.site };
+  const options = { message: unresolved.message };
+  switch (unresolved.code) {
+    case 'KV404':
+      return createRegisteredDiagnostic('KV404', fields, options);
+    case 'KV406':
+      return createRegisteredDiagnostic('KV406', fields, options);
+    case 'KV413':
+      return createRegisteredDiagnostic('KV413', fields, options);
+    default:
+      return unreachableTouchGraphDiagnosticCode(unresolved.code);
+  }
+}
+
+function unreachableTouchGraphDiagnosticCode(code: never): never {
+  throw new TypeError(`Unregistered touch-graph diagnostic code: ${String(code)}`);
 }
 
 export function verificationDiagnosticLine(

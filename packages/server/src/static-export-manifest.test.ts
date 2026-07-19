@@ -384,6 +384,7 @@ describe('server static export', () => {
       code: 'KV229' as const,
       message: "KV229 static export cannot export guarded route '/admin'.\nServe dynamically.",
       routePath: '/admin',
+      severity: 'error' as const,
     };
     const error = new StaticExportError([diagnostic]);
 

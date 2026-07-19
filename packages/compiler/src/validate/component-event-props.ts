@@ -1,6 +1,6 @@
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 
-import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -116,7 +116,7 @@ function componentEventPropDiagnostic(
   element: JsxElementModel,
   attribute: Pick<JsxAttributeModel, 'end' | 'name' | 'start'>,
 ): CompilerDiagnostic {
-  const diagnostic = diagnostics.at('KV201', {
+  const diagnostic = diagnosticAt(diagnostics, 'KV201', {
     start: attribute.start,
     length: attribute.end - attribute.start,
   });

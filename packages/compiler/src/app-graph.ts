@@ -1096,23 +1096,23 @@ function registryTypeDriftDiagnostic(
 ): CompilerDiagnostic {
   const code = kind === 'mutation' ? 'KV246' : 'KV247';
   const definition = diagnosticDefinitions[code];
-  return createRegisteredDiagnostic(
-    code,
-    { fileName: `app graph ${kind} table` },
-    {
-      help: joinStrings(
-        [
-          definition.help,
-          `Previous registry key: ${previousKey}`,
-          `Current registry key: ${currentKey}`,
-          `Registry type: ${typeSource}`,
-          `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
-        ],
-        '\n',
-      ),
-      message: `${definition.message} ${previousKey} -> ${currentKey}.`,
-    },
-  );
+  const fields = { fileName: `app graph ${kind} table` };
+  const options = {
+    help: joinStrings(
+      [
+        definition.help,
+        `Previous registry key: ${previousKey}`,
+        `Current registry key: ${currentKey}`,
+        `Registry type: ${typeSource}`,
+        `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
+      ],
+      '\n',
+    ),
+    message: `${definition.message} ${previousKey} -> ${currentKey}.`,
+  };
+  return kind === 'mutation'
+    ? createRegisteredDiagnostic('KV246', fields, options)
+    : createRegisteredDiagnostic('KV247', fields, options);
 }
 
 function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {

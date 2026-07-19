@@ -15,9 +15,11 @@ describe('generated diagnostic registry and constructors (SPEC §2/§11)', () =>
     for (const code of definitionCodes) {
       const typedCode = code as keyof typeof diagnosticDefinitions;
       expect(diagnosticRegistry[typedCode]).toMatchObject(diagnosticDefinitions[typedCode]);
+      expect(diagnosticRegistry[typedCode].code).toBe(typedCode);
       expect(['compile-error', 'fail-closed-runtime', 'audited-escape']).toContain(
         diagnosticRegistry[typedCode].enforcementClass,
       );
+      expect(Object.isFrozen(diagnosticRegistry[typedCode])).toBe(true);
       expect(diagnosticConstructors[typedCode]().code).toBe(typedCode);
       expect(diagnosticConstructors[typedCode]().severity).toBe(
         diagnosticDefinitions[typedCode].severity,
@@ -74,7 +76,6 @@ describe('generated diagnostic registry and constructors (SPEC §2/§11)', () =>
   it('freezes generated registry and constructor authority', () => {
     expect(Object.isFrozen(diagnosticRegistry)).toBe(true);
     expect(Object.isFrozen(diagnosticConstructors)).toBe(true);
-    expect(Object.isFrozen(diagnosticRegistry.KV415)).toBe(true);
     expect(Reflect.set(diagnosticRegistry.KV415, 'enforcementClass', 'audited-escape')).toBe(false);
     expect(Reflect.deleteProperty(diagnosticConstructors, 'KV415')).toBe(false);
   });

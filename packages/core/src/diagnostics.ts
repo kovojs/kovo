@@ -1300,7 +1300,9 @@ export function createRegisteredDiagnosticDefinition(
  * @internal Create a structured diagnostic through the shared validating door.
  * Code and severity always come from `diagnosticDefinitions`; call sites may add
  * own-data context and a contextual message, but cannot override registry-owned
- * fields. This is the runtime half of SPEC §11's generated constructor binding.
+ * fields. Returned diagnostics are frozen so code/severity provenance survives aliases, helper
+ * calls, and container transfers. This is the runtime half of SPEC §11's generated constructor
+ * binding.
  */
 export function createRegisteredDiagnostic<Code extends DiagnosticCode>(
   code: Code,
@@ -1389,7 +1391,7 @@ export function createRegisteredDiagnostic<Code extends DiagnosticCode, Fields e
 
   // The overload is backed by the reserved-field runtime checks above; the cast
   // only retains the caller's already-validated own-data field types.
-  return diagnostic as RegisteredDiagnostic<Code> & Fields;
+  return freezeSecurityValue(diagnostic) as RegisteredDiagnostic<Code> & Fields;
 }
 
 /** @internal Create one generated, code-specific diagnostic constructor. */

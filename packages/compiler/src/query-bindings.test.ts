@@ -510,6 +510,49 @@ export const UserCard = component({
     );
   });
 
+  it('reports KV439 for a nested DB table-row inside an array query shape', () => {
+    const result = compileComponentModule({
+      fileName: 'user-list.tsx',
+      queryShapes: {
+        users: {
+          groups: [
+            {
+              row: {
+                kind: 'table-row',
+                shape: {
+                  id: 'string',
+                  name: 'string',
+                },
+                table: 'users',
+              },
+            },
+          ],
+        },
+      },
+      source: `
+export const UserList = component({
+  queries: { users: {} },
+  render: () => (
+    <user-list>
+      <span data-bind="users.groups.row.name">Ada</span>
+    </user-list>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV439',
+          fileName: 'user-list.tsx',
+          message: expect.stringContaining('path="users.groups.row"'),
+          severity: 'error',
+        }),
+      ]),
+    );
+  });
+
   it('does not report KV439 for explicit projected object query shapes', () => {
     const result = compileComponentModule({
       fileName: 'user-card.tsx',

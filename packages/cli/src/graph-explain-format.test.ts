@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { accessLine, capabilityClosureLine, capabilityLine } from './graph-explain-format.js';
+import {
+  accessLine,
+  capabilityClosureLine,
+  capabilityLine,
+  diagnosticsForTouchGraph,
+} from './graph-explain-format.js';
 
 describe('graph explain formatters', () => {
   it('keeps access fact output stable', () => {
@@ -49,5 +54,17 @@ describe('graph explain formatters', () => {
     ).toBe(
       'CLOSED root=webhook:"billing" capability=network module=src/routes/webhook.ts site=src/lib/send.ts:4:1 path="webhook:billing -> src/lib/send.ts -> package:raw-http" reason="package summary is absent"',
     );
+  });
+
+  it('fails closed when a tampered touch graph carries an unregistered diagnostic code', () => {
+    const unregisteredCode = `KV${999}`;
+    expect(() =>
+      diagnosticsForTouchGraph({
+        tampered: {
+          touches: [],
+          unresolved: [{ code: unregisteredCode, message: 'forged', site: 'forged.ts:1:1' }],
+        },
+      } as never),
+    ).toThrow(`Unregistered touch-graph diagnostic code: ${unregisteredCode}`);
   });
 });

@@ -24,7 +24,7 @@ import {
   compilerStringStartsWith,
   compilerStringToLowerCase,
 } from '../compiler-security-intrinsics.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   componentOptionObjectKeys,
   jsxElements,
@@ -150,7 +150,8 @@ export function validateHandAuthoredNavigationSegmentStamps(
       compilerArrayAppend(
         found,
         {
-          ...diagnostics.at(
+          ...diagnosticAt(
+            diagnostics,
             'KV235',
             { start: attribute.start, length: attribute.end - attribute.start },
             `hand-authored navigation segment stamp ${attribute.name}.`,
@@ -490,7 +491,7 @@ function kv224Diagnostic(
   detail: string,
   id: LiteralIdValue,
 ): CompilerDiagnostic {
-  return diagnostics.at('KV224', { start: id.index, length: id.length }, detail);
+  return diagnosticAt(diagnostics, 'KV224', { start: id.index, length: id.length }, detail);
 }
 
 function htmlContentModelDiagnostic(
@@ -498,7 +499,8 @@ function htmlContentModelDiagnostic(
   element: JsxElementModel,
   detail: string,
 ): CompilerDiagnostic {
-  return diagnostics.at(
+  return diagnosticAt(
+    diagnostics,
     'KV225',
     { start: element.start, length: element.openingEnd - element.start },
     detail,
@@ -548,7 +550,8 @@ function attributeMergeDiagnostic(
   detail: string,
   attribute: JsxAttributeModel,
 ): CompilerDiagnostic {
-  return diagnostics.at(
+  return diagnosticAt(
+    diagnostics,
     code,
     { start: attribute.start, length: attribute.end - attribute.start },
     detail,
@@ -561,7 +564,7 @@ function kv226Diagnostic(
   index: number,
   length: number,
 ): CompilerDiagnostic {
-  return diagnostics.at('KV226', { start: index, length }, detail);
+  return diagnosticAt(diagnostics, 'KV226', { start: index, length }, detail);
 }
 
 function diagnosticKey(diagnostic: CompilerDiagnostic): string {
@@ -569,7 +572,12 @@ function diagnosticKey(diagnostic: CompilerDiagnostic): string {
 }
 
 function kv221Diagnostic(diagnostics: DiagnosticFactory, value: IdrefValue): CompilerDiagnostic {
-  return diagnostics.at('KV221', { start: value.index, length: value.length }, value.value);
+  return diagnosticAt(
+    diagnostics,
+    'KV221',
+    { start: value.index, length: value.length },
+    value.value,
+  );
 }
 
 function idrefValuesForElements(

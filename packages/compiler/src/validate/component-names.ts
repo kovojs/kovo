@@ -16,7 +16,7 @@ import {
   compilerStringSplit,
 } from '../compiler-security-intrinsics.js';
 import { deriveComponentNames } from '../component-names.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   jsxElements,
   type ComponentModel,
@@ -280,7 +280,7 @@ function duplicateComponentNameDiagnostic(
   const definition = diagnosticDefinitions.KV237;
   const duplicateSpan = duplicate.span;
   return {
-    ...diagnostics.at('KV237', {
+    ...diagnosticAt(diagnostics, 'KV237', {
       start: duplicateSpan?.start,
       length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
     }),
@@ -305,7 +305,7 @@ function registryComponentNameDiagnostic(
   const definition = diagnosticDefinitions.KV237;
   const duplicateSpan = duplicate.span;
   return {
-    ...diagnostics.at('KV237', {
+    ...diagnosticAt(diagnostics, 'KV237', {
       start: duplicateSpan?.start,
       length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
     }),
@@ -331,7 +331,7 @@ function changedComponentNameDiagnostic(
   const definition = diagnosticDefinitions.KV241;
   const span = current.span;
   return {
-    ...diagnostics.at('KV241', {
+    ...diagnosticAt(diagnostics, 'KV241', {
       start: span?.start,
       length: span ? span.end - span.start : undefined,
     }),
@@ -357,7 +357,7 @@ function duplicateFragmentTargetNameDiagnostic(
   const definition = diagnosticDefinitions.KV238;
   const duplicateSpan = duplicate.span;
   return {
-    ...diagnostics.at('KV238', {
+    ...diagnosticAt(diagnostics, 'KV238', {
       start: duplicateSpan?.start,
       length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
     }),
@@ -382,7 +382,7 @@ function registryFragmentTargetNameDiagnostic(
   const definition = diagnosticDefinitions.KV238;
   const duplicateSpan = duplicate.span;
   return {
-    ...diagnostics.at('KV238', {
+    ...diagnosticAt(diagnostics, 'KV238', {
       start: duplicateSpan?.start,
       length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
     }),
@@ -407,7 +407,7 @@ function duplicateViewTransitionNameDiagnostic(
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV239;
   return {
-    ...diagnostics.at('KV239', {
+    ...diagnosticAt(diagnostics, 'KV239', {
       start: duplicate.attribute.start,
       length: duplicate.attribute.end - duplicate.attribute.start,
     }),
@@ -432,7 +432,7 @@ function registryViewTransitionNameDiagnostic(
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV239;
   return {
-    ...diagnostics.at('KV239', {
+    ...diagnosticAt(diagnostics, 'KV239', {
       start: duplicate.attribute.start,
       length: duplicate.attribute.end - duplicate.attribute.start,
     }),

@@ -26,7 +26,7 @@ describe('ScopedKey owner provenance (SPEC §6.6 C9)', () => {
     expect(scopedKeyFactsFor(principal).frame).not.toBe(scopedKeyFactsFor(shifted).frame);
   });
 
-  it('round-trips only canonical persisted frames and finite system postures', () => {
+  it('restores a canonical persisted system frame', () => {
     const original = frameworkScopedKey('durable-task-cron', 'nightly:2026-07-19');
     const restored = restoreScopedKey(scopedKeyFactsFor(original).frame);
 
@@ -36,6 +36,9 @@ describe('ScopedKey owner provenance (SPEC §6.6 C9)', () => {
       posture: 'system',
       systemPosture: 'durable-task-cron',
     });
+  });
+
+  it('rejects noncanonical persisted frames and unknown system postures', () => {
     expect(() => restoreScopedKey('01:x')).toThrow(/KV450/u);
     expect(() => restoreScopedKey('18:kovo-scoped-key-v16:system7:unknown1:k')).toThrow(/KV450/u);
     expect(() => frameworkScopedKey('app-reason' as never, 'k')).toThrow(/KV450/u);

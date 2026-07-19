@@ -12,7 +12,7 @@ import {
   compilerStringIncludes,
   compilerStringSplit,
 } from '../compiler-security-intrinsics.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   callExpressions,
   componentOptionObjectEntries,
@@ -48,7 +48,8 @@ export function validateUntrackedClockReadsInDerives(
       const read = ownArrayEntry(reads, readIndex, 'Derive temporal reads');
       compilerArrayAppend(
         found,
-        diagnostics.at(
+        diagnosticAt(
+          diagnostics,
           'KV315',
           { start: read.start, length: read.end - read.start },
           `${read.kind} in ${call.exportedConstName}`,
@@ -117,7 +118,8 @@ export function validateDeclaredClockReadsInRender(
 
       compilerArrayAppend(
         found,
-        diagnostics.at(
+        diagnosticAt(
+          diagnostics,
           'KV312',
           { start: read.start, length: read.end - read.start },
           `now.${read.clock} unsupported cadence`,
@@ -129,7 +131,8 @@ export function validateDeclaredClockReadsInRender(
 
     compilerArrayAppend(
       found,
-      diagnostics.at(
+      diagnosticAt(
+        diagnostics,
         'KV312',
         { start: read.start, length: read.end - read.start },
         `now.${read.clock}`,
@@ -148,7 +151,12 @@ export function validateDeclaredClockReadsInRender(
 
     compilerArrayAppend(
       found,
-      diagnostics.at('KV312', { start: read.start, length: read.end - read.start }, read.path),
+      diagnosticAt(
+        diagnostics,
+        'KV312',
+        { start: read.start, length: read.end - read.start },
+        read.path,
+      ),
       'Temporal diagnostics',
     );
   }

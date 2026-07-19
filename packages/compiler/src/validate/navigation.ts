@@ -13,7 +13,7 @@ import {
   compilerStringSlice,
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 import type { CompileComponentOptions } from '../types.js';
 
@@ -60,7 +60,12 @@ export function validateLiteralHrefs(
     compilerSetAdd(reported, target.value);
     compilerArrayAppend(
       result,
-      diagnostics.at('KV220', { start: target.index, length: target.length }, target.value),
+      diagnosticAt(
+        diagnostics,
+        'KV220',
+        { start: target.index, length: target.length },
+        target.value,
+      ),
       'Literal navigation diagnostics',
     );
   }

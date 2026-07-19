@@ -8,7 +8,7 @@ import {
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import * as ts from 'typescript';
 
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -2062,7 +2062,12 @@ function rawTrustProvenanceDiagnostic(
     ? `or, for a value you assert is not request/query data, use the audited escape ${sink.expectedBrand}(value, "<justification>") so it is surfaced in kovo explain --trust.`
     : 'or route the value through a public trustedHtml()/safeRichHtml() boundary with an audited reason before it reaches the internal renderedHtml sink.';
   return {
-    ...diagnostics.at('KV426', { start: value.getStart(), length: value.getWidth() }, detail),
+    ...diagnosticAt(
+      diagnostics,
+      'KV426',
+      { start: value.getStart(), length: value.getWidth() },
+      detail,
+    ),
     help: compilerArrayJoin(
       [
         `Blocked reason: ${sink.label}() is a pure ${sink.rawSink} escape that performs NO sanitization ` +

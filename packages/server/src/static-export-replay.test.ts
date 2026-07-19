@@ -136,6 +136,7 @@ describe('server static export app replay boundary', () => {
             "file/stream response with Content-Disposition 'attachment; filename=\"orders.pdf\"' and Content-Type 'application/pdf'",
           ),
           routePath: '/downloads/orders.pdf',
+          severity: 'error',
         },
       ],
     });
@@ -167,6 +168,7 @@ describe('server static export app replay boundary', () => {
         concretePath: '/products/%2f',
         message: expect.stringContaining('unsafe URL path segment'),
         routePath: '/products/:id',
+        severity: 'error',
       },
     ]);
   });
@@ -203,6 +205,7 @@ describe('server static export app replay boundary', () => {
           "file/stream response with Content-Disposition 'attachment; filename=\"orders.pdf\"' and Content-Type 'application/pdf'",
         ),
         routePath: '/products/download',
+        severity: 'error',
       },
     ]);
   });

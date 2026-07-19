@@ -8,7 +8,7 @@ import {
 } from '../compiler-security-intrinsics.js';
 import { componentOptionObjectKeys } from '../scan/parse.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
-import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { componentQueryShapes } from '../analyze/query-shapes.js';
 import type { CompileComponentOptions, QueryShape } from '../types.js';
 import { isArrayQueryShape, isQueryShapeObject, isQueryShapeWrapper } from '../types.js';
@@ -40,7 +40,8 @@ export const validateSecretQueryWire = securityClassifier(
       if (requiresClosedQueryShapeFacts(options) && shape === undefined) {
         compilerArrayAppend(
           missingShapeDiagnostics,
-          diagnostics.at(
+          diagnosticAt(
+            diagnostics,
             'KV435',
             undefined,
             `query="${query}" missing query-shape fact for production query-wire validation`,
@@ -62,7 +63,8 @@ export const validateSecretQueryWire = securityClassifier(
       for (let pathIndex = 0; pathIndex < secretPaths.length; pathIndex += 1) {
         compilerArrayAppend(
           result,
-          diagnostics.at(
+          diagnosticAt(
+            diagnostics,
             'KV435',
             undefined,
             `query="${query}" path="${pathForDiagnostic(query, secretPaths[pathIndex]!)}"`,
@@ -74,7 +76,8 @@ export const validateSecretQueryWire = securityClassifier(
       for (let pathIndex = 0; pathIndex < tablePaths.length; pathIndex += 1) {
         compilerArrayAppend(
           result,
-          diagnostics.at(
+          diagnosticAt(
+            diagnostics,
             'KV439',
             undefined,
             `query="${query}" path="${pathForDiagnostic(query, tablePaths[pathIndex]!)}"`,

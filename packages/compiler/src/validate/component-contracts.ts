@@ -20,7 +20,7 @@ import {
   compilerStringSplit,
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
 import { componentRegistryNamespace } from '../component-names.js';
 import { capturesUnserializableReferences } from '../lower/handlers.js';
@@ -113,7 +113,9 @@ export function validateServerFactsInLocalState(
         );
       }
       if (!compilerSetHas(queryRoots, queryRootFromPath(access.path))) continue;
-      return [diagnostics.at('KV301', { start: access.start, length: access.path.length })];
+      return [
+        diagnosticAt(diagnostics, 'KV301', { start: access.start, length: access.path.length }),
+      ];
     }
   }
   return [];
@@ -128,7 +130,7 @@ export function validateReservedQueryNames(
     'state',
     'Reserved query names',
   )
-    ? [diagnostics.at('KV304', undefined, 'state')]
+    ? [diagnosticAt(diagnostics, 'KV304', undefined, 'state')]
     : [];
 }
 
@@ -154,7 +156,10 @@ export function validateIsomorphicJustifications(
     }
     compilerArrayAppend(
       found,
-      diagnostics.at('KV318', { start: option.start, length: option.end - option.start }),
+      diagnosticAt(diagnostics, 'KV318', {
+        start: option.start,
+        length: option.end - option.start,
+      }),
       'Isomorphic justification diagnostics',
     );
   }
@@ -176,7 +181,10 @@ export function validateRemovedFragmentTargetOption(
       compilerArrayAppend(
         found,
         {
-          ...diagnostics.at('KV223', { start: option.start, length: option.end - option.start }),
+          ...diagnosticAt(diagnostics, 'KV223', {
+            start: option.start,
+            length: option.end - option.start,
+          }),
           help: compilerArrayJoin(
             [
               'Would lower to: an inferred server-refresh target for a query-backed component.',
@@ -214,7 +222,7 @@ export function validateHandAuthoredFragmentTargetStamp(
     compilerArrayAppend(
       found,
       {
-        ...diagnostics.at('KV223', {
+        ...diagnosticAt(diagnostics, 'KV223', {
           start: attribute.start,
           length: attribute.end - attribute.start,
         }),
@@ -357,7 +365,7 @@ function kv303RenderInputDiagnostic(
     compilerSetHas(allowedInputs, input.sourceKey)
   ) {
     return {
-      ...diagnostics.at('KV303', span, input.name),
+      ...diagnosticAt(diagnostics, 'KV303', span, input.name),
       help: compilerArrayJoin(
         [
           'Would lower to: a fragment target that can be re-rendered from declared query data plus stamped props.',
@@ -367,11 +375,11 @@ function kv303RenderInputDiagnostic(
         ],
         '\n',
       ),
-      message: `${diagnostics.at('KV303').message} ${input.name} (render destructuring aliases declared key ${input.sourceKey}; use the declared key name in the render parameter)`,
+      message: `${diagnosticAt(diagnostics, 'KV303').message} ${input.name} (render destructuring aliases declared key ${input.sourceKey}; use the declared key name in the render parameter)`,
     };
   }
 
-  return diagnostics.at('KV303', span, input.name);
+  return diagnosticAt(diagnostics, 'KV303', span, input.name);
 }
 
 function isJsxEventAttributeExpression(
@@ -422,7 +430,8 @@ export function validateIsomorphicSlotComposition(
   if (!slots) return [];
 
   return [
-    diagnostics.at(
+    diagnosticAt(
+      diagnostics,
       'KV316',
       { start: slots.start, length: slots.end - slots.start },
       slots.names.length > 0 ? compilerArrayJoin(slots.names, ', ') : undefined,
@@ -504,7 +513,8 @@ export function validateNestedStatefulIslandInRefreshTarget(
 
       compilerArrayAppend(
         found,
-        diagnostics.at(
+        diagnosticAt(
+          diagnostics,
           'KV420',
           {
             start: childTag.openingTagNameStart,
@@ -650,7 +660,12 @@ export function validateEventPayloads(
     compilerSetAdd(seen, payload.path);
     compilerArrayAppend(
       result,
-      diagnostics.at('KV320', { start: payload.index, length: payload.length }, payload.path),
+      diagnosticAt(
+        diagnostics,
+        'KV320',
+        { start: payload.index, length: payload.length },
+        payload.path,
+      ),
       'Event payload diagnostics',
     );
   }
@@ -738,7 +753,7 @@ function webhookRecordChangeDiagnostic(
   if (fact.domainKey === 'UNRESOLVED' || hasUnresolved) {
     return [
       {
-        ...diagnostics.at('KV406', { start: fact.span.start, length }),
+        ...diagnosticAt(diagnostics, 'KV406', { start: fact.span.start, length }),
         help: compilerArrayJoin(
           [
             'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
@@ -761,7 +776,8 @@ function webhookRecordChangeDiagnostic(
   const declaredLabel = declared.length === 0 ? 'none' : joinDenseStrings(declared, ', ');
   return [
     {
-      ...diagnostics.at(
+      ...diagnosticAt(
+        diagnostics,
         'KV402',
         { start: fact.span.start, length },
         `webhook ${fact.owner.value} recordChange("${fact.domainKey}") is outside declared writes (${declaredLabel}).`,
@@ -787,7 +803,7 @@ function handlerWriteSinkDiagnostic(
   const length = rawLength > 1 ? rawLength : 1;
   if (handlerWriteSinkIsUnresolved(sink)) {
     return {
-      ...diagnostics.at('KV406', { start: sink.span.start, length }),
+      ...diagnosticAt(diagnostics, 'KV406', { start: sink.span.start, length }),
       help: compilerArrayJoin(
         [
           'Would lower to: a typed handler write-sink fact that records the audited mutation/domain write surface.',
@@ -809,12 +825,12 @@ function handlerWriteSinkDiagnostic(
   }
 
   if (sink.surface === 'mutation') {
-    return diagnostics.at('KV330', { start: sink.span.start, length });
+    return diagnosticAt(diagnostics, 'KV330', { start: sink.span.start, length });
   }
 
   if (sink.surface === 'task') {
     return {
-      ...diagnostics.at('KV330', { start: sink.span.start, length }),
+      ...diagnosticAt(diagnostics, 'KV330', { start: sink.span.start, length }),
       help: compilerArrayJoin(
         [
           'Would lower to: a durable task graph node whose database effects compose through audited mutations.',
@@ -830,7 +846,7 @@ function handlerWriteSinkDiagnostic(
 
   if (sink.surface === 'endpoint') {
     return {
-      ...diagnostics.at('KV330', { start: sink.span.start, length }),
+      ...diagnosticAt(diagnostics, 'KV330', { start: sink.span.start, length }),
       help: compilerArrayJoin(
         [
           'Would lower to: an endpoint whose database reads use a read-only app handle.',
@@ -846,7 +862,7 @@ function handlerWriteSinkDiagnostic(
   }
 
   return {
-    ...diagnostics.at('KV330', { start: sink.span.start, length }),
+    ...diagnosticAt(diagnostics, 'KV330', { start: sink.span.start, length }),
     help: compilerArrayJoin(
       [
         'Would lower to: a machine-authenticated webhook whose database effects compose through an audited mutation/domain write.',
@@ -1007,7 +1023,12 @@ function kv230Diagnostic(
   const definition = diagnosticDefinitions.KV230;
   const labels = definition.detailLabels;
   return {
-    ...diagnostics.at('KV230', { start: body.offset, length: body.source.length }, target),
+    ...diagnosticAt(
+      diagnostics,
+      'KV230',
+      { start: body.offset, length: body.source.length },
+      target,
+    ),
     help: compilerArrayJoin(
       [
         `${labels.slotHoist} ${target}$slot_children`,
@@ -1025,7 +1046,8 @@ function kv311Diagnostic(
 ): CompilerDiagnostic {
   const span = fact.sourceSpan;
   return {
-    ...diagnostics.at(
+    ...diagnosticAt(
+      diagnostics,
       'KV311',
       { start: span?.start, length: span?.length },
       `${fact.componentName} ${fact.query} ${fact.position}`,

@@ -26,7 +26,7 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import type { QueryProjectedColumn, RevealExplainFact } from '@kovojs/core/internal/graph';
-import { drizzleDiagnostic, sourceSiteForNode } from './diagnostics.js';
+import { drizzleDiagnostic } from './diagnostics.js';
 import {
   appendSourceDestructuredReceiverBinding,
   boundReceiverMethodAccessName,
@@ -1276,12 +1276,11 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
     if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
 
     return [
-      {
+      drizzleDiagnostic({
         code: 'KV406' as const,
-        message: `Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
-        severity: 'error' as const,
-        site: sourceSiteForNode(call),
-      },
+        detail: `Query uses ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
+        node: call,
+      }),
     ];
   });
 }

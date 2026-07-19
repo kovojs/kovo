@@ -12,7 +12,7 @@ import {
   compilerStringIncludes,
   compilerStringSlice,
 } from '../compiler-security-intrinsics.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { unwrapExpression } from '../scan/ast.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 
@@ -35,7 +35,8 @@ export function validateNonLiteralPattern(
     if (flagged) {
       compilerArrayAppend(
         found,
-        diagnostics.at(
+        diagnosticAt(
+          diagnostics,
           'KV434',
           { length: flagged.end - flagged.start, start: flagged.start },
           flagged.reason,

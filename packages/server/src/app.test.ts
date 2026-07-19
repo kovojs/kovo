@@ -1474,6 +1474,7 @@ describe('server createApp request shell', () => {
     expect(app.diagnostics).toEqual([
       {
         code: 'KV228',
+        severity: 'error',
         fileName: '/products/:id <-> /products/new',
         help: expect.stringContaining('SPEC §9.5'),
         message:

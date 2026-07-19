@@ -55,7 +55,7 @@
     "check:sink-policy": "node scripts/check-sink-policy-gate.mjs",
     "check:single-choke": "node scripts/check-single-choke.mjs",
     "check:spec-index": "node scripts/check-spec-index.mjs",
-    "check:spec-conformance-closure": "node scripts/check-spec-conformance-closure.mjs && vitest --run scripts/check-spec-conformance-closure.test.mjs packages/core/src/diagnostic-registry.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts --reporter=dot",
+    "check:spec-conformance-closure": "node scripts/check-spec-conformance-closure.mjs && node scripts/run-spec-conformance-evidence-tests.mjs",
     "check:supply-chain": "node scripts/supply-chain-gates.mjs",
     "check:kovo": "vp run kovo-check",
     "check:no-committed-generated": "node scripts/no-committed-generated.mjs",

@@ -1460,6 +1460,7 @@ export default createRequestHandler(app);
         tasks: [{ key: 'receipt/send' }],
       });
       expect(build.tasks).toEqual([{ key: 'receipt/send' }]);
+      expect(missingJobRunnerError('node', 'receipt/send')).toMatchObject({ code: 'KV446' });
       expect(node().inspect!(build, { declaredEnv: [] })).toEqual([]);
       expect(
         node().inspect!(build, {
@@ -1494,6 +1495,42 @@ export default createRequestHandler(app);
       await expect(cloudflare().inspect!(build, { declaredEnv: [] })).resolves.toEqual([
         missingJobRunnerError('cloudflare', 'receipt/send'),
       ]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('accepts a Postgres-backed durable-task build without KV446', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-task-postgres-runner-'));
+    const sendReceipt = task('receipt/send', {
+      input: s.object({ orderId: s.string() }),
+      async run() {},
+    });
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+          tasks: [sendReceipt],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource:
+          "import { drizzle } from 'drizzle-orm/node-postgres';\nexport default async function handler() { return new Response(String(drizzle)); }\n",
+      });
+      const diagnostics = node().inspect!(build, {
+        declaredEnv: [],
+        readServerHandlerSource() {
+          return "import { drizzle } from 'drizzle-orm/node-postgres';\n";
+        },
+      });
+
+      expect(diagnostics.filter((diagnostic) => diagnostic.code === 'KV446')).toEqual([]);
     } finally {
       await rm(root, { force: true, recursive: true });
     }

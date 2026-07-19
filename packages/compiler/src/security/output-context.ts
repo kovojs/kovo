@@ -23,7 +23,12 @@ import {
 } from '@kovojs/core/internal/semantic-attributes';
 import * as ts from 'typescript';
 
-import { diagnosticFor, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import {
+  diagnosticAt,
+  diagnosticFor,
+  type CompilerDiagnostic,
+  type DiagnosticFactory,
+} from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -523,7 +528,8 @@ function validateElementAttributes(
     compilerArrayAppend(
       found,
       {
-        ...diagnostics.at(
+        ...diagnosticAt(
+          diagnostics,
           'KV236',
           {
             start: element.start,
@@ -548,7 +554,8 @@ function validateElementAttributes(
     compilerArrayAppend(
       found,
       {
-        ...diagnostics.at(
+        ...diagnosticAt(
+          diagnostics,
           'KV236',
           {
             start: element.start,
@@ -882,7 +889,7 @@ function declarativeShadowDomDiagnostic(
   reason: string,
 ): CompilerDiagnostic {
   return {
-    ...diagnostics.at('KV236', {
+    ...diagnosticAt(diagnostics, 'KV236', {
       start: element.start,
       length: element.openingEnd - element.start,
     }),
@@ -1222,7 +1229,7 @@ function elementContextSecurityDiagnostic(
   reason: string,
 ): CompilerDiagnostic {
   return {
-    ...diagnostics.at('KV236', {
+    ...diagnosticAt(diagnostics, 'KV236', {
       start: element.start,
       length: element.openingEnd - element.start,
     }),
@@ -1295,7 +1302,7 @@ function documentNavigationDiagnostic(
   fixes: readonly [string, string],
 ): CompilerDiagnostic {
   return {
-    ...diagnostics.at('KV236', {
+    ...diagnosticAt(diagnostics, 'KV236', {
       start: element.start,
       length: element.openingEnd - element.start,
     }),
@@ -1340,7 +1347,7 @@ function validateCrossAttributeWireSemantics(
   if (issue === undefined) return [];
   return [
     {
-      ...diagnostics.at('KV236', {
+      ...diagnosticAt(diagnostics, 'KV236', {
         start: element.start,
         length: element.openingEnd - element.start,
       }),
@@ -1553,7 +1560,7 @@ function wireIdentityDiagnostic(
   span: SourceSpan,
 ): CompilerDiagnostic {
   return {
-    ...diagnostics.at('KV236', { start: span.start, length: span.end - span.start }),
+    ...diagnosticAt(diagnostics, 'KV236', { start: span.start, length: span.end - span.start }),
     help: [
       'Blocked reason: UTF-8, HTML parsing, or native form serialization would substitute or canonicalize this server-authored wire value; identity-bearing values can then alias a distinct record or DOM target.',
       'Fixes: remove NUL and lone UTF-16 surrogates; use line-ending-free control names and identity-bearing single-line/hidden values. Multiline textarea business content may retain CR/LF. Give options an explicit stable value when their label needs formatting whitespace.',
@@ -2007,7 +2014,7 @@ function outputContextDiagnostic(
   span?: { start?: number | undefined; length?: number | undefined },
 ): CompilerDiagnostic {
   return {
-    ...diagnostics.at('KV236', span, detail),
+    ...diagnosticAt(diagnostics, 'KV236', span, detail),
     help: diagnosticDefinitions.KV236.help,
   };
 }

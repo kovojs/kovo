@@ -1,5 +1,3 @@
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue, type StaticLiteralValue } from '../scan/object.js';
 import {
@@ -706,14 +704,12 @@ function attributeMergeDiagnostic(
   attribute: MergeableAttribute,
 ): CompilerDiagnostic {
   const span = attribute.attribute;
-  return {
-    ...diagnosticFor(
-      options.fileName,
-      code,
-      options.source,
-      span?.start,
-      span ? span.end - span.start : undefined,
-    ),
-    message: `${diagnosticDefinitions[code].message} ${detail}`,
-  };
+  return diagnosticFor(
+    options.fileName,
+    code,
+    options.source,
+    span?.start,
+    span ? span.end - span.start : undefined,
+    detail,
+  );
 }

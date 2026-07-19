@@ -82,12 +82,14 @@ describe('server static export route plan', () => {
         message:
           "KV229 static export cannot export guarded route '/admin'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.",
         routePath: '/admin',
+        severity: 'error',
       },
       {
         code: 'KV229',
         message:
           "KV229 static export cannot enumerate param route '/products/:id' without staticPaths metadata. Add explicit staticPaths for every exported concrete URL, or exclude the route from export.",
         routePath: '/products/:id',
+        severity: 'error',
       },
       {
         code: 'KV229',
@@ -95,12 +97,14 @@ describe('server static export route plan', () => {
         message:
           "KV229 static export staticPath '/orders/:id' for param route '/orders/:id' must be a concrete URL, not a route pattern.",
         routePath: '/orders/:id',
+        severity: 'error',
       },
       {
         code: 'KV229',
         concretePath: '/cart',
         message: "KV229 static export staticPath '/cart' does not match param route '/orders/:id'.",
         routePath: '/orders/:id',
+        severity: 'error',
       },
     ]);
   });
@@ -134,6 +138,7 @@ describe('server static export route plan', () => {
           message:
             "KV229 static export cannot export guarded route '/proxied-private'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.",
           routePath: '/proxied-private',
+          severity: 'error',
         },
       ],
       targets: [],
@@ -164,6 +169,7 @@ describe('server static export route plan', () => {
           message:
             "KV229 static export cannot prove '/profile' is session-independent while the app has a sessionProvider. Exported sites have no server-side sessions; declare publicAccess(...) on explicitly public routes, split this route into an explicitly public app shell, or wait for compiler-backed session-dependence metadata.",
           routePath: '/profile',
+          severity: 'error',
         },
       ],
       targets: [{ path: '/login', routePath: '/login' }],
@@ -194,6 +200,7 @@ describe('server static export route plan', () => {
           message:
             "KV229 static export cannot export publicAccess route '/login' because this app has default-on per-form CSRF for browser mutations. Rendering a mutation form can mint the anonymous CSRF Set-Cookie required by SPEC §9.1, but SPEC §9.5 static files have no response-specific cookie channel. Serve this route dynamically, split the form out of the exported surface, or make the targeted non-browser mutation explicitly csrf:false with a justification.",
           routePath: '/login',
+          severity: 'error',
         },
       ],
       targets: [],
@@ -259,6 +266,7 @@ describe('server static export route plan', () => {
           message:
             "KV229 static export cannot export '/docs/intro' for route '/docs/intro/' because it duplicates the concrete route target from '/docs/intro'.",
           routePath: '/docs/intro/',
+          severity: 'error',
         },
         {
           code: 'KV229',
@@ -266,6 +274,7 @@ describe('server static export route plan', () => {
           message:
             "KV229 static export cannot export '/products/p1' for route '/products/:id' because it duplicates the concrete route target from '/products/:id'.",
           routePath: '/products/:id',
+          severity: 'error',
         },
         {
           code: 'KV229',
@@ -273,6 +282,7 @@ describe('server static export route plan', () => {
           message:
             "KV229 static export cannot export '/docs/intro' for route '/docs/:slug' because it duplicates the concrete route target from '/docs/intro'.",
           routePath: '/docs/:slug',
+          severity: 'error',
         },
       ],
       targets: [
@@ -322,6 +332,7 @@ describe('server static export route plan', () => {
           concretePath: '/docs',
           message: expect.stringContaining("resolves it to exact GET endpoint '/docs'"),
           routePath: '/docs',
+          severity: 'error',
         },
         {
           code: 'KV229',
@@ -330,6 +341,7 @@ describe('server static export route plan', () => {
             "resolves it to prefix GET endpoint '/products/private'",
           ),
           routePath: '/products/:section/:id',
+          severity: 'error',
         },
       ],
       targets: [
@@ -399,6 +411,7 @@ describe('server static export route plan', () => {
           message:
             "KV229 static export cannot export concrete route target '/docs/%2e%2e' for route '/docs/%2e%2e' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
           routePath: '/docs/%2e%2e',
+          severity: 'error',
         },
         {
           code: 'KV229',
@@ -406,6 +419,7 @@ describe('server static export route plan', () => {
           message:
             "KV229 static export cannot export concrete route target '/products/%2f' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
           routePath: '/products/:id',
+          severity: 'error',
         },
         {
           code: 'KV229',
@@ -413,6 +427,7 @@ describe('server static export route plan', () => {
           message:
             "KV229 static export cannot export concrete route target '/products/%E0%A4%A' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
           routePath: '/products/:id',
+          severity: 'error',
         },
       ],
       targets: [],

@@ -14,7 +14,7 @@ import {
   reviewedClientHandlerImportTarget,
   type ClientHandlerImportKind,
 } from '../client-handler-import-policy.js';
-import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayLength,
@@ -1402,7 +1402,8 @@ export function validateClientHandlerSecretCapture(
     if (use.reason === 'client-import-policy') continue;
     compilerArrayAppend(
       found,
-      diagnostics.at(
+      diagnosticAt(
+        diagnostics,
         'KV437',
         { length: use.length, start: use.start },
         use.binding.source === 'import'
@@ -1439,7 +1440,8 @@ export const validateClientHandlerImportPolicy = securityClassifier(
       const binding = use.binding;
       compilerArrayAppend(
         found,
-        diagnostics.at(
+        diagnosticAt(
+          diagnostics,
           'KV201',
           { length: use.length, start: use.start },
           binding.source === 'import'
@@ -1477,7 +1479,8 @@ export const validateClientHandlerExecutionPolicy = securityClassifier(
       }
       compilerArrayAppend(
         found,
-        diagnostics.at(
+        diagnosticAt(
+          diagnostics,
           'KV201',
           { length: use.length, start: use.start },
           'clientHandlerExecution=dynamic-code reviewed=false',

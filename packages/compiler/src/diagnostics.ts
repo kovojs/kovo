@@ -39,19 +39,25 @@ export interface DiagnosticSpan {
  * pair (SPEC.md §5.2). FN9: validators take a factory + typed model instead of a bare `source`
  * string, so a span can only ever be resolved against the source it was measured in — the prior
  * hand-paired `source`/`offsetMap` arguments could silently mislocate a diagnostic with no type
- * error. `at()` is byte-equivalent to the legacy `diagnosticFor(fileName, code, source, start,
- * length)` call (mapping `start` through the bound offset map first when one is present).
+ * error. {@link diagnosticAt} is byte-equivalent to the legacy
+ * `diagnosticFor(fileName, code, source, start, length)` call (mapping `start` through the bound
+ * offset map first when one is present).
  */
+const diagnosticFactoryBrand: unique symbol = Symbol('kovo.diagnostic-factory');
+
 export interface DiagnosticFactory {
+  /** Module-private nominal/runtime witness; only createDiagnosticFactory can mint this value. */
+  readonly [diagnosticFactoryBrand]: true;
   /** The file name stamped onto every diagnostic this factory builds. */
   readonly fileName: string;
-  /**
-   * Build a diagnostic for `code` located at `span`. When `detail` is supplied it is appended to
-   * the definition message as `` `${message} ${detail}` `` — the dominant per-site message pattern.
-   * Callers that need a bespoke `help`/`message` still spread the result and override those fields.
-   */
-  at(code: DiagnosticCode, span?: DiagnosticSpan, detail?: string): CompilerDiagnostic;
 }
+
+interface DiagnosticFactoryState {
+  readonly offsetMap: SourceOffsetMap | undefined;
+  readonly positionFor: (offset: number) => SourcePosition;
+}
+
+const diagnosticFactoryStates = new WeakMap<DiagnosticFactory, DiagnosticFactoryState>();
 
 export function diagnosticFor(
   fileName: string,
@@ -59,6 +65,7 @@ export function diagnosticFor(
   source?: string,
   offset?: number,
   length?: number,
+  detail?: string,
 ): CompilerDiagnostic {
   return createRegisteredDiagnostic(
     code,
@@ -71,14 +78,15 @@ export function diagnosticFor(
           }
         : {}),
     },
-    { includeHelp: true },
+    { ...(detail === undefined ? {} : { detail }), includeHelp: true },
   );
 }
 
 /**
  * @internal Create a {@link DiagnosticFactory} bound to `fileName` and the diagnostic `source`.
- * When `offsetMap` is supplied (pre-lowering / generated-offset validators), `at()`'s `span.start`
- * is treated as a generated offset and mapped to the original source through the same
+ * When `offsetMap` is supplied (pre-lowering / generated-offset validators),
+ * {@link diagnosticAt}'s `span.start` is treated as a generated offset and mapped to the original
+ * source through the same
  * {@link generatedOffsetToOriginal} call the legacy validators applied by hand before calling
  * `diagnosticFor`, so positions stay byte-identical.
  */
@@ -87,29 +95,51 @@ export function createDiagnosticFactory(
   source: string,
   offsetMap?: SourceOffsetMap,
 ): DiagnosticFactory {
-  const positionFor = createOffsetToPosition(source);
-  return {
-    fileName,
-    at(code, span, detail) {
-      const rawStart = span?.start;
-      const offset =
-        offsetMap === undefined ? rawStart : generatedOffsetToOriginal(offsetMap, rawStart);
-      const length = span?.length;
-      return createRegisteredDiagnostic(
-        code,
-        {
-          fileName,
-          ...(offset !== undefined
-            ? {
-                ...(length === undefined ? {} : { length }),
-                start: positionFor(offset),
-              }
-            : {}),
-        },
-        { ...(detail === undefined ? {} : { detail }), includeHelp: true },
-      );
+  const factory = Object.freeze(
+    Object.defineProperty({ fileName }, diagnosticFactoryBrand, {
+      configurable: false,
+      enumerable: false,
+      value: true,
+      writable: false,
+    }),
+  ) as DiagnosticFactory;
+  const state = Object.freeze({ offsetMap, positionFor: createOffsetToPosition(source) });
+  diagnosticFactoryStates.set(factory, state);
+  return factory;
+}
+
+/**
+ * @internal Emit through a runtime-owned {@link DiagnosticFactory} capability. The module-private
+ * WeakMap identity check is the security boundary: a structural lookalike, cast, clone, Proxy, or
+ * parameter annotation cannot mint the capability, and the frozen public shell cannot be rebound.
+ */
+export function diagnosticAt(
+  factory: DiagnosticFactory,
+  code: DiagnosticCode,
+  span?: DiagnosticSpan,
+  detail?: string,
+): CompilerDiagnostic {
+  const state = diagnosticFactoryStates.get(factory);
+  if (state === undefined) {
+    throw new TypeError('DiagnosticFactory must be created by createDiagnosticFactory.');
+  }
+  const rawStart = span?.start;
+  const offset =
+    state.offsetMap === undefined ? rawStart : generatedOffsetToOriginal(state.offsetMap, rawStart);
+  const length = span?.length;
+  return createRegisteredDiagnostic(
+    code,
+    {
+      fileName: factory.fileName,
+      ...(offset !== undefined
+        ? {
+            ...(length === undefined ? {} : { length }),
+            start: state.positionFor(offset),
+          }
+        : {}),
     },
-  };
+    { ...(detail === undefined ? {} : { detail }), includeHelp: true },
+  );
 }
 
 export function offsetToPosition(source: string, offset: number): SourcePosition {

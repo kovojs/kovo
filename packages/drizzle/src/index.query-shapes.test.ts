@@ -879,6 +879,38 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('reports KV412 when a query directly reads an unmodeled materialized view', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          export const productStats = pgMaterializedView("product_stats").as((qb) =>
+            qb.select({ productId: sql<string>\`product_id\` }),
+          );
+
+          export const statsQuery = query("stats/direct", {
+            output: s.object({ productId: s.string() }),
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.select({ productId: sql<string>\`product_id\` }).from(productStats);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV412',
+          message: expect.stringContaining('materialized-view product_stats'),
+          severity: 'error',
+        }),
+      ]),
+    );
+  });
+
   it('derives SQLite view read sets as ordinary views', () => {
     const facts = extractQueryFactsFromProjectBase({
       files: [

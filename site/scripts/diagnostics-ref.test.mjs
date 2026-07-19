@@ -5,6 +5,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  collectKvCodes,
+  collectPackageSourceCodes,
   collectDiagnosticRegistryCodesFromMarkdown,
   collectSpecDiagnosticRegistryCodes,
 } from './diagnostics-ref.mjs';
@@ -34,6 +36,43 @@ function legacySpecWithDiagnostic(code) {
 }
 
 describe('diagnostics registry source', () => {
+  it('decodes runtime KV spellings and walks every JS/TS module extension', async () => {
+    expect([...collectKvCodes("throw new Error('\\x4bV999')", 'fixture.cts')]).toEqual(['KV999']);
+
+    await withTempRepo(async (root) => {
+      const source = path.join(root, 'packages', 'fixture', 'src');
+      await mkdir(source, { recursive: true });
+      await writeFile(path.join(source, 'one.cts'), "throw new Error('\\x4bV997')");
+      await writeFile(path.join(source, 'two.mts'), 'const KV\\u0039\\u0039\\u0038 = true;');
+      await writeFile(path.join(source, 'three.cjs'), "throw new Error('KV996')");
+      await writeFile(
+        path.join(root, 'packages', 'fixture', 'runtime.mts'),
+        "throw new Error('KV995')",
+      );
+
+      const codes = await collectPackageSourceCodes({ packagesDir: path.join(root, 'packages') });
+      expect([...codes].sort()).toEqual(['KV995', 'KV996', 'KV997', 'KV998']);
+    });
+  });
+
+  it('does not let one ignore comment launder later occurrences of the same code', async () => {
+    await withTempRepo(async (root) => {
+      const source = path.join(root, 'packages', 'fixture', 'src');
+      await mkdir(source, { recursive: true });
+      await writeFile(
+        path.join(source, 'runtime.ts'),
+        [
+          '// diagnostics-ref-ignore KV999: intentional fixture token',
+          'const fixture = "KV999";',
+          'throw new Error("KV999 production diagnostic");',
+        ].join('\n'),
+      );
+
+      const codes = await collectPackageSourceCodes({ packagesDir: path.join(root, 'packages') });
+      expect([...codes]).toEqual(['KV999']);
+    });
+  });
+
   it('parses markdown diagnostic table rows with optional code ticks', () => {
     const codes = collectDiagnosticRegistryCodesFromMarkdown(
       [

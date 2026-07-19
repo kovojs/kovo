@@ -5,7 +5,7 @@ import {
   type JsxExpressionModel,
   type SourceSpan,
 } from '../scan/parse.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayLength,
@@ -72,7 +72,8 @@ function deferJsxChildDiagnostic(
   diagnostics: DiagnosticFactory,
   expression: JsxExpressionModel,
 ): CompilerDiagnostic {
-  return diagnostics.at(
+  return diagnosticAt(
+    diagnostics,
     'KV244',
     {
       start: expression.start,

@@ -634,6 +634,7 @@ describe('server static export', () => {
           code: 'KV229',
           routePath: '/products/:id',
           message: expect.stringContaining('staticPaths metadata'),
+          severity: 'error',
         },
       ],
     });
@@ -647,6 +648,7 @@ describe('server static export', () => {
           code: 'KV229',
           routePath: '/products/:id',
           message: expect.stringContaining('staticPaths metadata'),
+          severity: 'error',
         },
       ],
     });

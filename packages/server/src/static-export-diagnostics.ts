@@ -152,15 +152,21 @@ export function blockingStaticExportDiagnostics(
     if (diagnosticDefinitions[diagnostic.code].severity !== 'error') continue;
     witnessArrayAppend(
       blocking,
-      createRegisteredDiagnostic(
-        diagnostic.code,
-        { routePath: diagnostic.fileName },
-        { message: staticExportCompileDiagnosticMessage(diagnostic) },
-      ),
+      blockingStaticExportDiagnostic(diagnostic),
       'Server packages/server/src/static-export-diagnostics.ts collection',
     );
   }
   return blocking;
+}
+
+function blockingStaticExportDiagnostic(
+  diagnostic: StaticExportCompileDiagnostic,
+): StaticExportDiagnostic {
+  return createRegisteredDiagnostic(
+    diagnostic.code,
+    { routePath: diagnostic.fileName },
+    { message: staticExportCompileDiagnosticMessage(diagnostic) },
+  );
 }
 
 function stableDiagnosticText(value: string): string {

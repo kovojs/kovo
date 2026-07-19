@@ -45,16 +45,16 @@
       "kind": "fixtures",
       "ownerPackage": "server",
       "red": {
-        "file": "packages/server/src/static-export-diagnostics.test.ts",
-        "test": "coerces only blocking compiler diagnostics into KV229-compatible export diagnostics"
+        "file": "packages/server/src/static-export-route-guards.test.ts",
+        "test": "fails loudly for guarded and session-provider routes"
       },
       "green": {
-        "file": "packages/server/src/static-export-diagnostics.test.ts",
-        "test": "allows non-blocking compiler diagnostics to continue through static replay"
+        "file": "packages/server/src/static-export-route-plan.test.ts",
+        "test": "does not reject explicitly public routes when every mutation is csrf false"
       },
       "ownLayer": {
-        "file": "packages/server/src/static-export-diagnostics.test.ts",
-        "test": "blocks error diagnostics before route replay or output writes"
+        "file": "packages/server/src/static-export-route-plan.test.ts",
+        "test": "keeps non-exportable route diagnostics out of replay choreography"
       }
     },
     "KV314": {
@@ -70,7 +70,7 @@
       },
       "ownLayer": {
         "file": "packages/cli/src/index.kovo-check.test.ts",
-        "test": "fails KV314 when renderOnce reads a query invalidated by modeled writes"
+        "test": "fails kovo check coverage as a CLI command when renderOnce is invalidated (KV314)"
       }
     },
     "KV402": {
@@ -101,8 +101,8 @@
         "test": "checks only writes observed during the current mutation exec"
       },
       "ownLayer": {
-        "file": "packages/test/src/mutation-verifier.test.ts",
-        "test": "fails verification for writes to unmapped tables"
+        "file": "packages/test/src/query-verifier.test.ts",
+        "test": "does not let parser-recognized DDL and session authority changes disappear"
       }
     },
     "KV405": {
@@ -150,7 +150,7 @@
       },
       "ownLayer": {
         "file": "packages/test/src/verifier-claim-coverage.test.ts",
-        "test": "fails page-render verification when the loader reads an undeclared domain (KV407)"
+        "test": "C144 snapshots page reads before render can widen its fixture declaration"
       }
     },
     "KV408": {
@@ -181,8 +181,8 @@
         "test": "NEGATIVE: opaque projection over a NON-secret declared read stays green"
       },
       "ownLayer": {
-        "file": "packages/drizzle/src/confidentiality-folded-read-set.test.ts",
-        "test": "CASE B (honest reads): declared reads:[users] -> KV435 MUST fire (secret in folded read set)"
+        "file": "packages/drizzle/src/index.query-shapes.test.ts",
+        "test": "reports KV410 for opaque query projections without declared output schemas"
       }
     },
     "KV411": {
@@ -214,7 +214,7 @@
       },
       "ownLayer": {
         "file": "packages/drizzle/src/index.query-shapes.test.ts",
-        "test": "derives view read sets and reports KV412 for unmodeled materialized views"
+        "test": "reports KV412 when a query directly reads an unmodeled materialized view"
       }
     },
     "KV413": {
@@ -230,7 +230,7 @@
       },
       "ownLayer": {
         "file": "packages/drizzle/src/index.writes-receivers.test.ts",
-        "test": "reports KV413 when a detected trigger lacks a declared fan-out"
+        "test": "reports KV413 for a trigger operation without declared fan-out"
       }
     },
     "KV313": {
@@ -274,7 +274,7 @@
       },
       "green": {
         "file": "packages/server/src/response-app-headers.test.ts",
-        "test": "routes dedicated response fields to their structured APIs"
+        "test": "accepts a whole dynamic bag when every name is directly allowlisted"
       },
       "ownLayer": {
         "file": "packages/server/src/response.test.ts",
@@ -301,12 +301,12 @@
       "kind": "fixtures",
       "ownerPackage": "server",
       "red": {
-        "file": "packages/server/src/build.test.ts",
-        "test": "AUD-007: emits KV417 when presets cannot prove deploy-skew retention support"
+        "file": "packages/server/src/client-modules.test.ts",
+        "test": "AUD-007: rejects count-based retention that can evict below the 24-hour floor"
       },
       "green": {
         "file": "packages/server/src/build.test.ts",
-        "test": "AUD-007: emits KV417 when presets cannot prove deploy-skew retention support"
+        "test": "pins Node preset authority before later app/config option mutation"
       },
       "ownLayer": {
         "file": "packages/server/src/build.test.ts",
@@ -322,7 +322,7 @@
       },
       "green": {
         "file": "packages/cli/src/index.kovo-check.test.ts",
-        "test": "treats duplicate session-authority facts as an order-independent positive lattice"
+        "test": "accepts a csrf-exempt endpoint with explicit non-session authority"
       },
       "ownLayer": {
         "file": "packages/cli/src/index.kovo-check.test.ts",
@@ -398,7 +398,7 @@
       "ownerPackage": "cli",
       "red": {
         "file": "packages/cli/src/sources-sinks.test.ts",
-        "test": "flags an unregistered adversarial-lexicon token as KV425 drift"
+        "test": "fails kovo check sources-sinks with a nonzero exit on unregistered drift"
       },
       "green": {
         "file": "packages/cli/src/sources-sinks.test.ts",
@@ -406,7 +406,7 @@
       },
       "ownLayer": {
         "file": "packages/cli/src/sources-sinks.test.ts",
-        "test": "fails kovo check sources-sinks with a nonzero exit on unregistered drift"
+        "test": "flags an unregistered adversarial-lexicon token as KV425 drift"
       }
     },
     "KV428": {
@@ -430,7 +430,7 @@
       "ownerPackage": "drizzle",
       "red": {
         "file": "packages/drizzle/src/index.toctou-readonly.test.ts",
-        "test": "flags an unguarded self-referential atomic decrement"
+        "test": "fails closed when a concurrency spread cannot be statically resolved"
       },
       "green": {
         "file": "packages/drizzle/src/index.toctou-readonly.test.ts",
@@ -438,7 +438,7 @@
       },
       "ownLayer": {
         "file": "packages/drizzle/src/index.toctou-readonly.test.ts",
-        "test": "keeps KV429 open when a version guard does not update the version column"
+        "test": "flags an unguarded self-referential atomic decrement"
       }
     },
     "KV432": {
@@ -501,16 +501,16 @@
         "test": "preserves access-only and guard-only declarations and ignores local lookalikes"
       },
       "ownLayer": {
-        "file": "packages/compiler/src/route-pages.test.ts",
-        "test": "fails KV436 when access and legacy guard coexist on a request surface"
+        "file": "packages/compiler/src/registry.test.ts",
+        "test": "derives producer-owned default-deny access facts for every surface (KV436)"
       }
     },
     "KV438": {
       "kind": "fixtures",
       "ownerPackage": "drizzle",
       "red": {
-        "file": "packages/drizzle/src/index.mass-assignment.test.ts",
-        "test": "rejects request input reaching a governed column (role)"
+        "file": "packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts",
+        "test": "emits KV438 when the validated-input parameter is merely named request"
       },
       "green": {
         "file": "packages/drizzle/src/index.mass-assignment.test.ts",
@@ -534,7 +534,7 @@
       },
       "ownLayer": {
         "file": "packages/compiler/src/query-bindings.test.ts",
-        "test": "reports KV439 when DB table-row provenance reaches a component query wire shape"
+        "test": "reports KV439 for a nested DB table-row inside an array query shape"
       }
     },
     "KV445": {
@@ -550,7 +550,7 @@
       },
       "ownLayer": {
         "file": "packages/server/src/build.test.ts",
-        "test": "fails closed when a task-using build targets a preset without a JobRunner"
+        "test": "C228 keeps durable-task metadata and dynamic preset authority after an inherited index setter"
       }
     },
     "KV446": {
@@ -562,7 +562,7 @@
       },
       "green": {
         "file": "packages/server/src/build.test.ts",
-        "test": "fails closed when a task-using build targets a preset without a JobRunner"
+        "test": "accepts a Postgres-backed durable-task build without KV446"
       },
       "ownLayer": {
         "file": "packages/server/src/build.test.ts",
@@ -594,7 +594,7 @@
       },
       "green": {
         "file": "packages/core/src/scoped-key.test.ts",
-        "test": "round-trips only canonical persisted frames and finite system postures"
+        "test": "restores a canonical persisted system frame"
       },
       "ownLayer": {
         "file": "packages/core/src/scoped-key.test.ts",
