@@ -20,6 +20,10 @@ import {
   SRCSET_ATTRIBUTE_NAMES,
   runtimeSinkFamilyForAttribute,
 } from './internal/sink-policy.js';
+import {
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES,
+} from './internal/semantic-attributes.js';
 
 describe('shared Blessed<Sink> witness substrate (SPEC §6.6)', () => {
   it('recognizes only values minted through the module-private witness registry', () => {
@@ -176,6 +180,34 @@ describe('shared runtime sink policy', () => {
       'remove',
     );
     expect(decideRuntimeAttributeWrite('style', 'min-height: 120px').action).toBe('allow');
+  });
+
+  // @kovo-security-certifies C13 dynamic-binding-control-plane-runtime-floor
+  it('removes every generated-only semantic attribute only for dynamic-binding writes', () => {
+    const reservedNames = [
+      ...GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
+      ...GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES.map((prefix) => `${prefix}probe`),
+    ];
+
+    for (const name of reservedNames) {
+      expect(
+        decideRuntimeAttributeWrite(name.toUpperCase(), '/c/attacker.client.js#run', {
+          posture: 'dynamic-binding',
+        }),
+        name,
+      ).toMatchObject({ action: 'remove', family: 'framework-control' });
+      expect(
+        decideRuntimeAttributeWrite(name, '/c/compiler.client.js#run'),
+        `${name} compiler wire`,
+      ).toMatchObject({ action: 'allow' });
+    }
+
+    for (const name of ['aria-label', 'data-state', 'hidden', 'title', 'value']) {
+      expect(
+        decideRuntimeAttributeWrite(name, 'visible', { posture: 'dynamic-binding' }),
+        name,
+      ).toMatchObject({ action: 'allow' });
+    }
   });
 
   it('parses srcset and drops unsafe candidates without dropping safe candidates', () => {

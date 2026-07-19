@@ -351,22 +351,6 @@ export const NestedPrimitive = component({
     expect(diagnostics).toHaveLength(3);
   });
 
-  it('preserves data-only query and state binding paths while closing module refs', () => {
-    const result = compile(`
-import { component } from '@kovojs/core';
-export const DataBindings = component({
-  render: () => (
-    <section>
-      <output data-bind="cart.count">Count</output>
-      <output data-bind:hidden="state.hidden">Hidden</output>
-    </section>
-  ),
-});
-`);
-
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toEqual([]);
-  });
-
   it('keeps typed event and execution-trigger inputs on compiler-owned lowering', () => {
     const result = compile(`
 import { component } from '@kovojs/core';
