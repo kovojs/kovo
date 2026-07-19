@@ -2748,7 +2748,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'uses exact structurally verified same-file session helper provenance',
           'return request.session.id;',
-          'const existing = await request.db.select({ id: questions.id }).from(questions);',
+          'const existing = await request.db.select({ id: questions.id }).from(questions).where(eq(questions.sessionId, sessionId));',
           "{ kind: 'session', path: 'id' }",
         ],
       },

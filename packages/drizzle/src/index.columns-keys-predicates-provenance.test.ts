@@ -16,7 +16,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
   it('uses exact structurally verified same-file session helper provenance', () => {
     const files = [
       pgDatabaseTypes([
-        'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
         'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
       ]),
       {
@@ -39,8 +39,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '',
           'export const voteUp = mutation("voteUp", {',
           '  async handler({ targetId }: { targetId: string }, request: AppRequest) {',
-          '    const existing = await request.db.select({ id: questions.id }).from(questions);',
           '    const sessionId = requireSessionId(request);',
+          '    const existing = await request.db.select({ id: questions.id }).from(questions).where(eq(questions.sessionId, sessionId));',
           '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
           '  },',
           '});',
