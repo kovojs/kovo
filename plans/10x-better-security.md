@@ -407,9 +407,12 @@ Measurements are versioned and reproducible:
       versioned work bound; headers round-trip through real HTTP implementations.
   - Evidence: the 20-corpus C13 run executes the five normative oracle families; the authority
     matrix additionally passes its 126-test multi-adapter suite.
-- [ ] Run deterministic seeded fuzzers in nightly CI with minimized repro persistence, execution
+- [x] Run deterministic seeded fuzzers in nightly CI with minimized repro persistence, execution
       and coverage budgets, mutation score, and an exact release-time command. Cross-implementation
       disagreement is triaged; only the normative property decides safe versus unsafe.
+  - Evidence: `pnpm run check:security-fuzz-campaign` validates the six-family, 17-case manifest,
+    nightly/release budgets, 249-mutant denominator, scheduled workflow, replay artifacts, and exact
+    release command; `pnpm exec vitest run scripts/security-fuzz-campaign.test.mjs` passes 15/15.
 - [ ] Define a fixed weekly internal adversarial charter and seeded canaries, then record R without
       changing the scope, prompt family, investigator count, or elapsed budget between rounds.
 - [ ] Record third-party audit owner, authorization/budget, selection criteria, frozen scope,
