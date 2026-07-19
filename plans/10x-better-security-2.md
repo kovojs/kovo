@@ -221,9 +221,12 @@ audited-escape`, per SPEC §2 precedence) to the `spec/11-diagnostics.md` KV tab
       author-time ergonomics, not the enforcement proof.
   - Evidence: `node scripts/check-spec-conformance-closure.mjs` passes with 90 codes, 70 error
     classes, and 197 constructor-owned sites, including forged-record and cross-package controls.
-- [ ] Bind each derived emission site and evidence witness to its actual compile/runtime/audited
+- [x] Bind each derived emission site and evidence witness to its actual compile/runtime/audited
       layer, then gate that posture against the registry `enforcementClass`. Kill class-relabeling
       mutants (for example compile-error ↔ fail-closed-runtime), not only code/site swaps.
+  - Evidence: `node scripts/check-spec-conformance-closure.mjs` binds 197 exact production sites and
+    140 exact witness bodies; its 58/58 mutation tests kill both compile/runtime relabel directions
+    while preserving SPEC §11.3 compile-primary/runtime-floor precedence.
 
 ### 1.3 Analysis-time TCB closure + reproducible rebuild
 
