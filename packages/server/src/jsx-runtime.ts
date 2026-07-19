@@ -209,6 +209,21 @@ export function jsx(
     );
     return renderedHtml('');
   }
+  // SPEC §4.8 / §5.2 rule 10: `<base>` is a document-wide navigation capability. Even a
+  // same-origin, safe-scheme href retargets every later relative URL, so per-attribute URL
+  // sanitation cannot make the element an ordinary output sink. The compiler rejects authored
+  // `<base>` and this runtime floor removes direct/uncompiled JSX and opaque-spread construction.
+  if (intrinsicType === 'base') {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        'base',
+        'url',
+        intrinsicType,
+        'HTML base elements are disabled because they change document-wide URL resolution',
+      ),
+    );
+    return renderedHtml('');
+  }
   // SPEC §13.2/§6.6: cross-attribute browser semantics must classify the same immutable
   // own-data props snapshot that the HTML sink consumes. In particular, hidden `_charset_`
   // controls substitute their authored value during native form entry-list construction.
