@@ -57,6 +57,14 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'semantic-attributes/drop-generated-mutation-control-entry',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'semantic-attributes/drop-generated-deferred-style-control-entry',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'compiler-finite-ir/drop-reviewed-command-door',
           status: 'killed',
         }),

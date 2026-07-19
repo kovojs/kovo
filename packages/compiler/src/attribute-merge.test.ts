@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from './index.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 describe('compiler attribute merge diagnostics', () => {
   it('merges primitive attrs-function records into the author element on the wire', () => {

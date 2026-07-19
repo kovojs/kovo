@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, compileComponentModule, emitQueryPlanBootstrapModule } from './index.js';
+import { assertFixpoint, emitQueryPlanBootstrapModule } from './index.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 describe('compiler query coverage', () => {
   it('warns when a derive reads the wall clock without a declared clock input', () => {

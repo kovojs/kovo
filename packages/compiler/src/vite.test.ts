@@ -21,9 +21,9 @@ import { tabsTriggerClick as removeItem } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   queries: { cart: {} },
-  render: () => (
+  render: ({ cart }) => (
     <button onClick={() => removeItem(state, item.id)}>
-      <span data-bind="cart.count">2</span>
+      <span>{cart.count}</span>
     </button>
   ),
 });

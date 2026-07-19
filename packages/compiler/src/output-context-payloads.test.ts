@@ -9,7 +9,8 @@ import {
 } from '@kovojs/browser/generated';
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, compileComponentModule } from './index.js';
+import { assertFixpoint } from './index.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 describe('compiler output-context payload matrix', () => {
   it('snapshots text payload server escaping and client updates', () => {

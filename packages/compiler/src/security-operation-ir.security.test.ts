@@ -265,13 +265,15 @@ export const Raw = component({
 });
 `;
 
-      expect(kv235(source)).toEqual([
-        expect.objectContaining({
-          message: expect.stringContaining(
-            'App source hand-authors an executable lowered-IR reference',
-          ),
-        }),
-      ]);
+      expect(kv235(source)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: expect.stringContaining(
+              'App source hand-authors an executable lowered-IR reference',
+            ),
+          }),
+        ]),
+      );
     },
   );
 

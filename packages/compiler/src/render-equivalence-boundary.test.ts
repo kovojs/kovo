@@ -12,6 +12,7 @@ import {
 } from './emit/render-equivalence.js';
 import { emitServerModule } from './emit/server-render.js';
 import { parseComponentModule } from './scan/parse.js';
+import { compileCompilerEmittedFixture } from './test-support.js';
 
 const compilerSrcDir = dirname(fileURLToPath(import.meta.url));
 const repoPackagesDir = dirname(dirname(compilerSrcDir));
@@ -146,7 +147,8 @@ export const X = component({ queries: { q: {} }, render: ({ q }) => (<p>Hello <s
 
   it('keeps the shared cross-package oracle fixture render-equivalent', () => {
     const oracle = crossPackageOracleFixture();
-    const result = compileComponentModule({
+    expect(oracle.component.sourceProvenance).toBe('compiler-emitted');
+    const result = compileCompilerEmittedFixture({
       fileName: oracle.component.fileName,
       queryShapes: oracle.component.queryShapes,
       registryFacts: oracle.component.registryFacts,

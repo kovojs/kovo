@@ -190,7 +190,7 @@ function renderProductCard(item: ProductItem, signedIn: boolean) {
       {renderAddToCartForm(item, signedIn)}
     </div>
   );
-  return <article kovo-key={item.id}>{Card.definition.render({ children: body })}</article>;
+  return <article key={item.id}>{Card.definition.render({ children: body })}</article>;
 }
 
 export function renderAddToCartForm(item: { id: string; stock: number }, signedIn = true) {

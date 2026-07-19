@@ -1,5 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-import { parseKovoModuleRef } from '@kovojs/core/internal/module-ref';
+import { isCompilerOwnedResidualAttribute } from '@kovojs/core/internal/semantic-attributes';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
@@ -181,9 +181,9 @@ function appendAuthoredExecutableReferenceDiagnostics(
         fileName,
         source,
         attribute.name,
-        staticAuthoredAttributeString(attribute),
         attribute.start,
         attribute.end,
+        true,
       );
       if (
         compilerStringToLowerCase(attribute.name) === 'attrs' &&
@@ -256,9 +256,6 @@ function appendAuthoredExecutableSpreadDiagnostics(
       fileName,
       source,
       entry.key,
-      entry.value.kind === 'known' && typeof entry.value.value === 'string'
-        ? entry.value.value
-        : undefined,
       spread.start,
       spread.end,
     );
@@ -289,7 +286,6 @@ function appendAuthoredExecutableObjectEntryDiagnostics(
       fileName,
       source,
       entry.key,
-      entry.staticStringValue,
       start,
       end,
     );
@@ -312,22 +308,33 @@ function appendAuthoredExecutableReferenceDiagnosticForName(
   fileName: string,
   source: string,
   name: string,
-  staticValue: string | undefined,
   start: number,
   end: number,
+  hasTailoredDirectNavigationDiagnostic = false,
 ): void {
+  // These five attributes already have a source-aware, route-specific KV235 validator with more
+  // actionable help. Keep one diagnostic per authored stamp while the centralized manifest owns
+  // every other residual control-plane attribute.
+  if (hasTailoredDirectNavigationDiagnostic && isNavigationSegmentStamp(name)) return;
   const kind = kovoExecutableReferenceAttributeKind(name);
-  if (kind === undefined) return;
-  // This slice closes executable-reference authority without declaring legacy authored residual
-  // data-bind paths a supported surface. SPEC §4.8/§5.2 still reserves those stamps for compiler
-  // output; migrating the remaining historical fixtures is a separate provenance closure. Until
-  // then, only url#export derives cross this gate, while data-bind-prop remains closed outright.
-  const lowerName = compilerStringToLowerCase(name);
-  if (
-    kind === 'derive' &&
-    (lowerName === 'data-bind' || compilerStringStartsWith(lowerName, 'data-bind:')) &&
-    (staticValue === undefined || parseKovoModuleRef(staticValue, 'derive') === undefined)
-  ) {
+  if (kind === undefined && !isCompilerOwnedResidualAttribute(name)) return;
+  if (kind === undefined) {
+    compilerArrayAppend(
+      diagnostics,
+      {
+        ...diagnosticFor(fileName, 'KV235', source, start, end - start),
+        help: compilerArrayJoin(
+          [
+            `Blocked lowered selector: ${name}.`,
+            'Fix: remove the raw control attribute and author the typed JSX expression, mutation/stream primitive, list expression, or public component API that owns the behavior.',
+            'SPEC.md §5.2 rules 3 and 7: app-authored TSX is the input; only compiler/framework output may mint residual runtime control-plane stamps.',
+          ],
+          '\n',
+        ),
+        message: `App source hand-authors framework control-plane lowered IR; use typed TSX and let the compiler emit it. ${name}`,
+      },
+      'Authoring-surface diagnostics',
+    );
     return;
   }
   compilerArrayAppend(
@@ -348,9 +355,15 @@ function appendAuthoredExecutableReferenceDiagnosticForName(
   );
 }
 
-function staticAuthoredAttributeString(attribute: JsxAttributeModel): string | undefined {
-  if (typeof attribute.expressionStaticValue === 'string') return attribute.expressionStaticValue;
-  return typeof attribute.value === 'string' ? attribute.value : undefined;
+function isNavigationSegmentStamp(name: string): boolean {
+  const normalized = compilerStringToLowerCase(name);
+  return (
+    normalized === 'kovo-nav-components' ||
+    normalized === 'kovo-nav-kind' ||
+    normalized === 'kovo-nav-name' ||
+    normalized === 'kovo-nav-queries' ||
+    normalized === 'kovo-nav-segment'
+  );
 }
 
 function authoredExecutableReferenceFix(kind: KovoExecutableReferenceAttributeKind): string {
