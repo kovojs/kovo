@@ -98,8 +98,8 @@ export const Metadata = component({
 
 describe('element-context execution and isolation sinks', () => {
   // @kovo-security-certifies C13 compiler-finite-browser-control-tuples
-  it('rejects a direct dynamic write for every one of the 39 finite browser controls', () => {
-    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(39);
+  it('rejects a direct dynamic write for every one of the 60 finite browser controls', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(60);
     for (const [tag, attribute] of ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES) {
       const markup = `<${tag} ${attribute}={state.value} />`;
       expect(
@@ -131,7 +131,7 @@ export const BrowserControlSpread = component({
 
   it('fails closed on an opaque spread for every controlled element kind', () => {
     const controlledTags = new Set(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.map(([tag]) => tag));
-    expect(controlledTags.size).toBe(8);
+    expect(controlledTags.size).toBe(15);
     for (const tag of controlledTags) {
       expect(
         kv236Diagnostics(`
@@ -619,8 +619,24 @@ export const ObsoleteFrame = component({
     ['anchor ping', '<a ping="/collect" />'],
     ['area ping spread', '<area {...{ ping: "/collect" }} />'],
     ['script nonce', '<script nonce="reused-nonce" />'],
+    ['style nonce', '<style nonce="reused-nonce" />'],
     ['link nonce spread', '<link {...{ nonce: "reused-nonce" }} />'],
     ['obsolete script language', '<script language="javascript" />'],
+    ['anchor attribution reporting', '<a attributionsrc="https://report.example/register" />'],
+    ['WebKit attribution destination', '<a attributiondestination="https://report.example" />'],
+    ['WebKit attribution source id', '<a attributionsourceid="123" />'],
+    ['WebKit attribution source nonce', '<a attributionsourcenonce="nonce" />'],
+    ['area attribution reporting', '<area attributionsrc="https://report.example/register" />'],
+    ['image attribution reporting', '<img attributionsrc="https://report.example/register" />'],
+    ['script attribution reporting', '<script attributionsrc="https://report.example/register" />'],
+    ['iframe browsing topics', '<iframe browsingtopics="" />'],
+    ['iframe legacy payment request', '<iframe allowpaymentrequest="" />'],
+    ['iframe shared storage write', '<iframe sharedstoragewritable="" />'],
+    ['image shared storage write', '<img sharedstoragewritable="" />'],
+    ['named form target', '<form target="attacker-window" />'],
+    ['form explicit opener', '<form rel="opener" />'],
+    ['named button form target', '<button formtarget="attacker-window" />'],
+    ['named input form target', '<input formtarget="attacker-window" />'],
     ['meta referrer', '<meta name="referrer" content="unsafe-url" />'],
   ])('rejects static unsafe browser control: %s', (_label, markup) => {
     expect(
@@ -639,10 +655,14 @@ export const StaticControls = component({
     <>
       <script type="module" nomodule={false} integrity="sha384-reviewed" crossorigin="anonymous" referrerpolicy="strict-origin" charset="utf-8" async={state.schedule} defer={state.schedule} fetchpriority={state.schedule} />
       <link href="/app.css" rel="stylesheet" type="text/css" media="screen" disabled={false} integrity="sha384-reviewed" crossorigin="anonymous" referrerpolicy="no-referrer" as="style" />
-      <iframe src="/profile" sandbox="allow-forms" allow="fullscreen" credentialless csp="default-src 'none'" referrerpolicy="same-origin" name="profile-frame" />
+      <iframe src="/profile" sandbox="allow-forms" allow="fullscreen" allowfullscreen credentialless csp="default-src 'none'" referrerpolicy="same-origin" name="profile-frame" />
       <a target="_blank" rel="noopener noreferrer" referrerpolicy="strict-origin-when-cross-origin" />
       <area target="_self" rel="noreferrer" referrerpolicy="no-referrer" />
-      <img referrerpolicy="strict-origin" />
+      <form target="_blank" rel="noopener noreferrer"><button formtarget="_self" /><input formtarget="_top" /></form>
+      <img referrerpolicy="strict-origin" crossorigin="anonymous" />
+      <audio crossorigin="anonymous" />
+      <video crossorigin="use-credentials" />
+      <svg><image href="/reviewed.svg" crossorigin="anonymous" /></svg>
       <meta name="description" content="Account" />
     </>
   ),

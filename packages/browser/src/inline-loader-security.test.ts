@@ -255,7 +255,7 @@ describe('inline loader output security', () => {
     });
 
     it(`${label}: enforces the exact finite browser-control denominator on live writes`, async () => {
-      expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(39);
+      expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(60);
 
       for (let index = 0; index < ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.length; index += 1) {
         const [tagName, attribute, , staticPolicy] =

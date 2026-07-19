@@ -476,6 +476,34 @@ describe('runtime output-context helpers', () => {
     expect(kovoBoundAttributeValue('rel', 'stylesheet', { elementName: 'LINK' })).toBeUndefined();
     expect(kovoBoundAttributeValue('sandbox', null, { elementName: 'IFRAME' })).toBeUndefined();
     expect(
+      kovoBoundAttributeValue('allowfullscreen', true, { elementName: 'IFRAME' }),
+    ).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue('target', 'attacker-window', { elementName: 'FORM' }),
+    ).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue('crossorigin', 'use-credentials', { elementName: 'IMG' }),
+    ).toBeUndefined();
+    for (const [elementName, attribute] of [
+      ['A', 'attributionsrc'],
+      ['A', 'attributiondestination'],
+      ['A', 'attributionsourceid'],
+      ['A', 'attributionsourcenonce'],
+      ['AREA', 'attributionsrc'],
+      ['IMG', 'attributionsrc'],
+      ['SCRIPT', 'attributionsrc'],
+      ['IFRAME', 'browsingtopics'],
+      ['IFRAME', 'allowpaymentrequest'],
+      ['IFRAME', 'sharedstoragewritable'],
+      ['IMG', 'sharedstoragewritable'],
+      ['STYLE', 'nonce'],
+    ] as const) {
+      expect(
+        kovoBoundAttributeValue(attribute, 'https://attacker.example/register', { elementName }),
+        `${elementName}[${attribute}]`,
+      ).toBeNull();
+    }
+    expect(
       kovoBoundAttributeValue('src', '/uploads/attacker.html', { elementName: 'IFRAME' }),
     ).toBeNull();
     expect(

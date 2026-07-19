@@ -432,6 +432,87 @@ describe('browser response fragment apply', () => {
     expect(meta?.getAttribute('data-safe')).toBe('kept');
   });
 
+  it('preserves reviewed request controls and strips hidden browser capabilities during morphs', () => {
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'request-controls');
+    target.setAttribute('kovo-key', 'request-controls');
+    target.innerHTML = [
+      '<iframe kovo-key="frame" allowfullscreen></iframe>',
+      '<form kovo-key="form" target="_blank" rel="noopener noreferrer">',
+      '<button kovo-key="button" formtarget="_self">Pay</button>',
+      '<input kovo-key="input" formtarget="_top"></form>',
+      '<a kovo-key="anchor">Anchor</a><map><area kovo-key="area"></map>',
+      '<img kovo-key="img" crossorigin="anonymous">',
+      '<script kovo-key="script" type="application/json"></script>',
+      '<style kovo-key="style"></style>',
+      '<audio kovo-key="audio" crossorigin="anonymous"></audio>',
+      '<video kovo-key="video" crossorigin="use-credentials"></video>',
+      '<svg><image kovo-key="svg-image" href="/reviewed.svg" crossorigin="anonymous"></image></svg>',
+    ].join('');
+    document.body.append(target);
+
+    new DomMorphTarget(target).replaceWithHtml(
+      [
+        '<section kovo-fragment-target="request-controls" kovo-key="request-controls">',
+        '<iframe kovo-key="frame" browsingtopics allowpaymentrequest sharedstoragewritable></iframe>',
+        '<form kovo-key="form" target="attacker-window" rel="opener">',
+        '<button kovo-key="button" formtarget="attacker-window">Pay</button>',
+        '<input kovo-key="input" formtarget="attacker-window"></form>',
+        '<a kovo-key="anchor" attributionsrc="https://attacker.example/register"',
+        ' attributiondestination="https://attacker.example" attributionsourceid="123"',
+        ' attributionsourcenonce="nonce">Anchor</a>',
+        '<map><area kovo-key="area" attributionsrc="https://attacker.example/register"></map>',
+        '<img kovo-key="img" crossorigin="use-credentials"',
+        ' attributionsrc="https://attacker.example/register" sharedstoragewritable>',
+        '<script kovo-key="script" type="module"',
+        ' attributionsrc="https://attacker.example/register"></script>',
+        '<style kovo-key="style" nonce="attacker"></style>',
+        '<audio kovo-key="audio" crossorigin="use-credentials"></audio>',
+        '<video kovo-key="video" crossorigin="anonymous"></video>',
+        '<svg><image kovo-key="svg-image" href="/attacker.svg"',
+        ' crossorigin="use-credentials"></image></svg>',
+        '</section>',
+      ].join(''),
+    );
+
+    const frame = target.querySelector('[kovo-key="frame"]');
+    expect(frame?.hasAttribute('allowfullscreen')).toBe(true);
+    for (const attribute of ['browsingtopics', 'allowpaymentrequest', 'sharedstoragewritable']) {
+      expect(frame?.hasAttribute(attribute), attribute).toBe(false);
+    }
+    const form = target.querySelector('[kovo-key="form"]');
+    expect(form?.getAttribute('target')).toBe('_blank');
+    expect(form?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(target.querySelector('[kovo-key="button"]')?.getAttribute('formtarget')).toBe('_self');
+    expect(target.querySelector('[kovo-key="input"]')?.getAttribute('formtarget')).toBe('_top');
+    for (const key of ['anchor', 'area', 'img', 'script']) {
+      expect(target.querySelector(`[kovo-key="${key}"]`)?.hasAttribute('attributionsrc'), key).toBe(
+        false,
+      );
+    }
+    const anchor = target.querySelector('[kovo-key="anchor"]');
+    for (const attribute of [
+      'attributiondestination',
+      'attributionsourceid',
+      'attributionsourcenonce',
+    ]) {
+      expect(anchor?.hasAttribute(attribute), attribute).toBe(false);
+    }
+    const image = target.querySelector('[kovo-key="img"]');
+    expect(image?.getAttribute('crossorigin')).toBe('anonymous');
+    expect(image?.hasAttribute('sharedstoragewritable')).toBe(false);
+    expect(target.querySelector('[kovo-key="style"]')?.hasAttribute('nonce')).toBe(false);
+    expect(target.querySelector('[kovo-key="audio"]')?.getAttribute('crossorigin')).toBe(
+      'anonymous',
+    );
+    expect(target.querySelector('[kovo-key="video"]')?.getAttribute('crossorigin')).toBe(
+      'use-credentials',
+    );
+    expect(target.querySelector('[kovo-key="svg-image"]')?.getAttribute('crossorigin')).toBe(
+      'anonymous',
+    );
+  });
+
   it('sanitizes whole-node replacement fragment trees before adoption', () => {
     const target = document.createElement('section');
     target.setAttribute('kovo-fragment-target', 'promo');

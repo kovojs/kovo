@@ -141,12 +141,7 @@ describe('shared runtime sink policy', () => {
   it('fails closed on unsandboxable and obsolete active embeds independent of casing', () => {
     // SPEC §4.8 / §5.2 rule 10: this is the finite denominator, not a loop that can
     // become vacuously green when one disabled primitive disappears from the registry.
-    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual([
-      'embed',
-      'frame',
-      'frameset',
-      'object',
-    ]);
+    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual(['embed', 'frame', 'frameset', 'object']);
     for (const name of BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES) {
       expect(isBlockedActiveEmbedElementName(name)).toBe(true);
       expect(isBlockedActiveEmbedElementName(name.toUpperCase())).toBe(true);
@@ -325,20 +320,41 @@ describe('shared runtime sink policy', () => {
   });
 
   // @kovo-security-certifies C13 finite-browser-control-tuple-denominator
-  it('owns one exact non-vacuous 39-tuple browser-control denominator', () => {
-    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(39);
+  it('owns one exact non-vacuous 60-tuple browser-control denominator', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(60);
     const keys = new Set(
       ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.map(([tag, attribute]) => `${tag}[${attribute}]`),
     );
-    expect(keys.size).toBe(39);
+    expect(keys.size).toBe(60);
     for (const witness of [
       'script[integrity]',
       'script[nonce]',
+      'style[nonce]',
       'link[as]',
+      'iframe[allowfullscreen]',
       'iframe[credentialless]',
+      'iframe[browsingtopics]',
+      'iframe[allowpaymentrequest]',
+      'iframe[sharedstoragewritable]',
       'a[target]',
+      'a[attributionsrc]',
+      'a[attributiondestination]',
+      'a[attributionsourceid]',
+      'a[attributionsourcenonce]',
       'area[ping]',
+      'area[attributionsrc]',
+      'form[target]',
+      'form[rel]',
+      'button[formtarget]',
+      'input[formtarget]',
       'img[referrerpolicy]',
+      'img[crossorigin]',
+      'img[attributionsrc]',
+      'img[sharedstoragewritable]',
+      'script[attributionsrc]',
+      'audio[crossorigin]',
+      'video[crossorigin]',
+      'image[crossorigin]',
       'meta[name]',
     ]) {
       expect(keys.has(witness), witness).toBe(true);
@@ -380,6 +396,58 @@ describe('shared runtime sink policy', () => {
     }
     for (const schedulingOnly of ['async', 'defer', 'fetchpriority']) {
       expect(elementContextSecurityControl('script', schedulingOnly)).toBeUndefined();
+    }
+  });
+
+  it('closes hidden network capabilities and reviews fullscreen, form targets, and credentials', () => {
+    expect(elementContextSecurityControl('iframe', 'allowfullscreen')).toMatchObject({
+      acceptsTrustedUrl: false,
+      staticPolicy: 'allow',
+    });
+    for (const [tag, attribute] of [
+      ['a', 'attributionsrc'],
+      ['a', 'attributiondestination'],
+      ['a', 'attributionsourceid'],
+      ['a', 'attributionsourcenonce'],
+      ['area', 'attributionsrc'],
+      ['img', 'attributionsrc'],
+      ['script', 'attributionsrc'],
+      ['iframe', 'browsingtopics'],
+      ['iframe', 'allowpaymentrequest'],
+      ['iframe', 'sharedstoragewritable'],
+      ['img', 'sharedstoragewritable'],
+      ['style', 'nonce'],
+    ] as const) {
+      expect(elementContextSecurityControl(tag, attribute), `${tag}[${attribute}]`).toMatchObject({
+        acceptsTrustedUrl: false,
+        staticPolicy: 'disabled',
+      });
+      expect(
+        elementContextSecurityStaticValueIssue(tag, attribute, ''),
+        `${tag}[${attribute}]`,
+      ).toBe(elementContextSecurityControl(tag, attribute)?.reason);
+    }
+    for (const [tag, attribute] of [
+      ['img', 'crossorigin'],
+      ['audio', 'crossorigin'],
+      ['video', 'crossorigin'],
+      ['image', 'crossorigin'],
+    ] as const) {
+      expect(elementContextSecurityControl(tag, attribute), `${tag}[${attribute}]`).toMatchObject({
+        acceptsTrustedUrl: false,
+        staticPolicy: 'allow',
+      });
+    }
+    for (const [tag, attribute, safeValue, unsafeValue] of [
+      ['form', 'target', '_blank', 'attacker-window'],
+      ['button', 'formtarget', '_self', 'attacker-window'],
+      ['input', 'formtarget', '_top', 'attacker-window'],
+      ['form', 'rel', 'noopener noreferrer', 'opener'],
+    ] as const) {
+      expect(elementContextSecurityStaticValueIssue(tag, attribute, safeValue)).toBeUndefined();
+      expect(elementContextSecurityStaticValueIssue(tag, attribute, unsafeValue)).toContain(
+        tag === 'form' && attribute === 'rel' ? 'opener' : 'browsing context',
+      );
     }
   });
 

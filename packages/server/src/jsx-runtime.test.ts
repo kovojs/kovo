@@ -1215,6 +1215,7 @@ describe('server jsx runtime', () => {
     expect(
       html(
         jsx('script', {
+          attributionsrc: 'https://attacker.example/register',
           charset: 'utf-8',
           crossorigin: 'anonymous',
           integrity: 'sha384-reviewed',
@@ -1228,10 +1229,15 @@ describe('server jsx runtime', () => {
     ).toBe(
       '<script charset="utf-8" crossorigin="anonymous" integrity="sha384-reviewed" referrerpolicy="strict-origin" src="/runtime.js" type="module"></script>',
     );
+    expect(html(jsx('style', { nonce: 'reused-nonce' }))).toBe('<style></style>');
     expect(
       html(
         jsx('a', {
           ...kovoSafeJsxSpread({
+            attributiondestination: 'https://attacker.example',
+            attributionsourceid: '123',
+            attributionsourcenonce: 'nonce',
+            attributionsrc: 'https://attacker.example/register',
             href: 'https://outside.example/',
             ping: '/collect',
             referrerpolicy: 'unsafe-url',
@@ -1246,6 +1252,7 @@ describe('server jsx runtime', () => {
     expect(
       html(
         jsx('area', {
+          attributionsrc: 'https://attacker.example/register',
           ping: '/collect',
           referrerPolicy: 'no-referrer',
           rel: 'noopener',
@@ -1253,6 +1260,54 @@ describe('server jsx runtime', () => {
         }),
       ),
     ).toBe('<area referrerPolicy="no-referrer" rel="noopener" target="_blank">');
+    expect(
+      html(
+        jsx('iframe', {
+          allowfullscreen: true,
+          allowpaymentrequest: true,
+          browsingtopics: true,
+          sharedstoragewritable: true,
+          title: 'safe',
+        }),
+      ),
+    ).toBe('<iframe allowfullscreen title="safe"></iframe>');
+    expect(
+      html(
+        jsx('form', {
+          children: [
+            jsx('button', { children: 'Pay', formtarget: '_self' }),
+            jsx('input', { formtarget: '_top' }),
+          ],
+          rel: 'noopener noreferrer',
+          target: '_blank',
+        }),
+      ),
+    ).toBe(
+      '<form rel="noopener noreferrer" target="_blank"><button formtarget="_self">Pay</button><input formtarget="_top"></form>',
+    );
+    expect(html(jsx('form', { rel: 'opener', target: 'attacker-window', title: 'safe' }))).toBe(
+      '<form title="safe"></form>',
+    );
+    expect(
+      html(
+        jsx('div', {
+          children: [
+            jsx('img', {
+              attributionsrc: 'https://attacker.example/register',
+              crossorigin: 'anonymous',
+              sharedstoragewritable: true,
+            }),
+            jsx('audio', { crossorigin: 'anonymous' }),
+            jsx('video', { crossorigin: 'use-credentials' }),
+            jsx('svg', {
+              children: jsx('image', { crossorigin: 'anonymous', href: '/reviewed.svg' }),
+            }),
+          ],
+        }),
+      ),
+    ).toBe(
+      '<div><img crossorigin="anonymous"><audio crossorigin="anonymous"></audio><video crossorigin="use-credentials"></video><svg><image crossorigin="anonymous" href="/reviewed.svg"></image></svg></div>',
+    );
   });
 
   it('keeps runtime iframe sources behind the finite reviewed sandbox posture', () => {
