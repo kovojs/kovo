@@ -1077,6 +1077,7 @@ describe('server app-shell public API barrels', () => {
       'accessDecisionFor',
       'accessFactsFromApp',
       'appendFrameworkRuntimeArrayValue',
+      'authorizationCorrespondenceFactsFromApp',
       'createMemoryMutationReplayStore',
       'endpointMatches',
       'explainGuard',
