@@ -259,17 +259,18 @@ export function kovoSafeUrl(value: unknown): string {
   return decision.action === 'neutralize' ? (decision.value ?? '#') : rendered;
 }
 
-/**
- * Formats a generated bound attribute value with URL attributes sanitized.
- * Returns null when the attribute must be removed (on*, srcdoc), or undefined when a
- * pair/context-dependent live control must retain its compiler-reviewed value.
- */
+/** Context pinned by Kovo before a generated dynamic attribute write. */
 export interface KovoBoundAttributeWriteContext {
   elementName?: string | undefined;
   effectiveHttpEquiv?: string | null | undefined;
   effectiveIframeSandbox?: string | null | undefined;
 }
 
+/**
+ * Formats a generated bound attribute value with URL attributes sanitized.
+ * Returns null when the attribute must be removed (on*, srcdoc), or undefined when a
+ * pair/context-dependent live control must retain its compiler-reviewed value.
+ */
 export function kovoBoundAttributeValue(
   name: string,
   value: unknown,

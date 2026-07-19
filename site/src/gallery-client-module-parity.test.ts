@@ -37,7 +37,7 @@ describe('site gallery client module parity', () => {
     );
 
     expect(compiled.source).toContain(
-      'export const GalleryToggleDemo$Toggle_click = handler((event, ctx) =>',
+      'export const GalleryToggleDemo$Toggle_click = securityHandler([{"door":"reviewed-client-export","kind":"browser.framework.call","target":"_toggleTriggerClick"},{"door":"compiler-state","kind":"browser.state.write","target":"state.pressed"}], (event, ctx) =>',
     );
     expect(compiled.manifest).toEqual(
       expect.arrayContaining([

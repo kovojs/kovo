@@ -19,6 +19,7 @@ import {
   galleryPrimitiveActionsGeneratedImportManifest,
   galleryPrimitiveActionsGeneratedModuleSpecifier,
   galleryHeadlessGeneratedModuleSpecifier,
+  galleryRuntimeModuleSource,
   galleryRuntimeModuleSpecifier,
   rebaseGalleryClientModuleManifest,
   resolveGalleryClientModuleSpecifiers,
@@ -35,12 +36,6 @@ const galleryInteractiveClientModules = createMemoryVersionedClientModuleRegistr
 // SPEC.md §4.4: load-bearing import maps are a non-goal. Generated client modules carry a manifest
 // of package dependencies; the gallery resolves those entries to served /c/ URLs.
 const galleryRuntimeModulePath = '/c/examples/gallery/src/generated/kovo-runtime.client.js';
-const galleryRuntimeModuleSource = [
-  'export const derive = (inputs, run) => ({ inputs, run });',
-  'export const handler = (fn) => fn;',
-  'export const kovoStyleProperty = (name, value) => value == null || value === false ? "" : `${name}: ${value}`;',
-  '',
-].join('\n');
 const galleryRuntimeModuleHref = galleryInteractiveClientModules.put({
   path: galleryRuntimeModulePath,
   source: galleryRuntimeModuleSource,

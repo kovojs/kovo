@@ -13,6 +13,7 @@ import {
   galleryPrimitiveActionsGeneratedImportManifest,
   galleryPrimitiveActionsGeneratedModuleSpecifier,
   galleryPrimitiveActionsImportManifest,
+  galleryRuntimeModuleSource,
   galleryRuntimeModuleSpecifier,
   rebaseGalleryClientModuleManifest,
   resolveGalleryClientModuleSpecifiers,
@@ -209,17 +210,11 @@ function registerGalleryInteractiveSupportClientModules(
   clientModules: GalleryDeps['clientModules'],
 ): SupportRegistration {
   const moduleHrefs = new Map<string, string>();
-  const runtimeSource = [
-    'export const derive = (inputs, run) => ({ inputs, run });',
-    'export const handler = (fn) => fn;',
-    'export const kovoStyleProperty = (name, value) => value == null || value === false ? "" : `${name}: ${value}`;',
-    '',
-  ].join('\n');
   const runtimePath = '/c/examples/gallery/src/generated/kovo-runtime.client.js';
   const runtimeHref = clientModules.put({
     path: runtimePath,
-    source: runtimeSource,
-    version: contentHash(runtimeSource).slice(0, 8),
+    source: galleryRuntimeModuleSource,
+    version: contentHash(galleryRuntimeModuleSource).slice(0, 8),
   });
   moduleHrefs.set(runtimePath, runtimeHref);
 

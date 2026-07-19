@@ -1,4 +1,5 @@
 import { kovo } from '@kovojs/drizzle';
+import { sql } from 'drizzle-orm';
 import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
 
 import { cart, order, product } from './model.js';
@@ -14,7 +15,9 @@ export const products = pgTable(
     unitPrice: integer('unit_price').notNull(),
   },
   kovo({
-    authzPolicy: 'shared commerce catalog and stock are written only by guarded commerce mutations',
+    // SPEC §10.3: this demo catalog is deliberately shared and publicly readable. The literal
+    // SQL predicate is an engine policy Kovo can install; prose is not Postgres authorization.
+    authzPolicy: sql`true`,
     domain: product,
     key: (t) => t.id,
   }),
@@ -29,7 +32,9 @@ export const cartItems = pgTable(
     unitPrice: integer('unit_price').notNull(),
   },
   kovo({
-    authzPolicy: 'single shared demo cart rows are written only by guarded commerce mutations',
+    // SPEC §10.3: the demo cart is deliberately global, including for anonymous storefront
+    // reads. Mutation guards remain the finer app decision; this engine policy states the truth.
+    authzPolicy: sql`true`,
     domain: cart,
     key: (t) => t.id,
   }),

@@ -109,6 +109,41 @@ describe('authored code snippet extractor', () => {
     }
   });
 
+  it('typechecks adapter snippets that import the separately defined request handler', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-code-snippets-'));
+    await mkdir(path.join(process.cwd(), 'site/gen'), { recursive: true });
+    const outDir = await mkdtemp(path.join(process.cwd(), 'site/gen/code-snippets-test-'));
+    try {
+      await writeFile(
+        path.join(root, 'page.md'),
+        [
+          '# Page',
+          '',
+          'Keep raw host authority in the adapter entry.',
+          '',
+          '```ts',
+          "import '@kovojs/server/runtime-bootstrap';",
+          '',
+          "import { createServer } from 'node:http';",
+          "import { toNodeHandler } from '@kovojs/server';",
+          "import { handler } from './handler.js';",
+          '',
+          'createServer(toNodeHandler(handler)).listen(3000);',
+          '```',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(checkAuthoredCodeSnippets({ dir: root, outDir })).resolves.toMatchObject({
+        ok: true,
+        snippets: [{ id: 'page__L5', lang: 'ts', sourcePath: 'page.md', startLine: 5 }],
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('rejects a large first TypeScript block', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'kovo-doc-style-'));
     try {

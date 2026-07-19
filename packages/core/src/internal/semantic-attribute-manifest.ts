@@ -101,6 +101,7 @@ const compilerOwnedResidualAttributes = [
   'kovo-state',
 ] as const;
 
+/** @internal Closed attribute-policy denominator shared by compiler and runtime gates. */
 export const SEMANTIC_ATTRIBUTE_MANIFEST = {
   generatedOnly: {
     attributes: generatedOnlyAttributes,

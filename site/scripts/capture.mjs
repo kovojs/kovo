@@ -55,7 +55,7 @@ function artifactFrame(title, bodyHtml) {
 export function captureTeachingError() {
   const source = `
 export const ProductCard = component({
-  render: () => <span data-bind="product.details.name">Coffee</span>,
+  render: () => <span>{product.details.name}</span>,
 });
 `;
 

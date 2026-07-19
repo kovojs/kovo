@@ -203,7 +203,7 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
               src={trustedUrl(appHref, 'configured docs example application')}
               title={`${title} running app`}
               loading="lazy"
-              sandbox="allow-scripts allow-same-origin"
+              sandbox="allow-forms allow-scripts"
             ></iframe>
           ) : (
             <div style={[exampleSplitStyles.frame, exampleSplitStyles.frameEmpty]}>

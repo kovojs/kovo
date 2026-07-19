@@ -160,10 +160,9 @@ function heavyPrimitiveCompositionCorpus(): CompilerPerfCorpus {
           `            class: 'primitive primitive-${triggerIndex}',`,
           "            'data-state': 'closed',",
           `            'aria-label': 'Trigger ${index}-${triggerIndex}',`,
-          "            'on:click': '/c/primitive#toggle',",
           '          }}',
           '        >',
-          `          <button class="author author-${triggerIndex}" data-p-index="${triggerIndex}">Toggle ${triggerIndex}</button>`,
+          `          <button class="author author-${triggerIndex}" data-index="${triggerIndex}">Toggle ${triggerIndex}</button>`,
           '        </Tooltip.Trigger>',
         ].join('\n'),
       ).join('\n');

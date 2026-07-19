@@ -489,6 +489,7 @@ async function writeSupportFiles(outDir) {
   await writeFile(path.join(outDir, 'app.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'db.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'domains.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
+  await writeFile(path.join(outDir, 'handler.ts'), 'export const handler = {} as any;\n', 'utf8');
   await writeFile(path.join(outDir, 'queries.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'schema.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'session.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
