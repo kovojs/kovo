@@ -858,7 +858,7 @@ describe('server webhook primitive', () => {
 
     expect(result.response.status).toBe(422);
     await expect(result.response.json()).resolves.toMatchObject({
-      error: { code: 'VALIDATION' },
+      error: { code: 'VALIDATION', payload: { reason: 'shape-budget' } },
       ok: false,
     });
     expect(handlerCalls).toBe(0);

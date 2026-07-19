@@ -4,7 +4,7 @@ import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
 import { query, renderQueryEndpointResponse } from './query.js';
 import { parseRouteRequest, route } from './route.js';
-import { s } from './schema.js';
+import { configureShapeBudget, s } from './schema.js';
 import {
   parseUntrustedJsonBodyBytes,
   readUntrustedCookieValue,
@@ -90,6 +90,93 @@ describe('untrusted request body parser', () => {
       ok: false,
       reason: 'invalid-json',
     });
+  });
+
+  it('reports KV430 shape-budget failure for valid deeply nested JSON without a RangeError', async () => {
+    const depth = 10_000;
+    const body = `${'['.repeat(depth)}0${']'.repeat(depth)}`;
+    expect(() => JSON.parse(body)).not.toThrow();
+
+    await expect(
+      readUntrustedRequestBody(
+        new Request('https://kovo.test/_m/deep', {
+          body,
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'shape-budget' });
+    expect(parseUntrustedJsonBodyBytes(new TextEncoder().encode(body))).toEqual({
+      ok: false,
+      reason: 'shape-budget',
+    });
+  });
+
+  it('rejects JSON breadth before allocating provenance boxes for every scalar', async () => {
+    const entries = 10_001;
+    const body = `[${'0,'.repeat(entries - 1)}0]`;
+
+    await expect(
+      readUntrustedRequestBody(
+        new Request('https://kovo.test/_m/wide', {
+          body,
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'shape-budget' });
+  });
+
+  it('enforces configured JSON string and key ceilings before provenance tagging', async () => {
+    configureShapeBudget({ maxKeyLength: 8, maxStringLength: 8 });
+    try {
+      for (const body of ['{"123456789":1}', '{"value":"123456789"}', '"123456789"']) {
+        await expect(
+          readUntrustedRequestBody(
+            new Request('https://kovo.test/_m/text-budget', {
+              body,
+              headers: { 'Content-Type': 'application/json' },
+              method: 'POST',
+            }),
+          ),
+          body,
+        ).resolves.toEqual({ ok: false, reason: 'shape-budget' });
+      }
+    } finally {
+      configureShapeBudget({ maxKeyLength: 4_096, maxStringLength: 1_048_576 });
+    }
+  });
+
+  it('tags and reveals a deeply nested provenance tree iteratively', () => {
+    let deep: unknown = 'leaf';
+    const depth = 10_000;
+    for (let index = 0; index < depth; index += 1) deep = { child: deep };
+
+    const tagged = tagUntrustedRequestValue(deep);
+    const revealed = revealUntrustedRequestValue(tagged, 'test validates iterative provenance');
+    let cursor = revealed;
+    for (let index = 0; index < depth; index += 1) {
+      cursor = (cursor as { child: unknown }).child;
+    }
+    expect(cursor).toBe('leaf');
+  });
+
+  it('does not invoke hostile accessors while tagging or revealing request records', () => {
+    let getterCalls = 0;
+    const hostile = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(hostile, 'value', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return 'owned';
+      },
+    });
+
+    expect(() => tagUntrustedRequestValue(hostile)).toThrow(/stable own data properties/u);
+    expect(() => revealUntrustedRequestValue(hostile, 'hostile descriptor test')).toThrow(
+      /stable own data properties/u,
+    );
+    expect(getterCalls).toBe(0);
   });
 
   it('tags decoded JSON body leaves as non-coercible untrusted request values', async () => {

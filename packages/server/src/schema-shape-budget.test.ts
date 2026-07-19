@@ -35,6 +35,34 @@ describe('KV430 input-shape DoS budget', () => {
     }
   });
 
+  it('rejects overlong string leaves and record keys', () => {
+    const budget = {
+      maxBreadth: 10,
+      maxDepth: 10,
+      maxKeyLength: 4,
+      maxNodes: 10,
+      maxStringLength: 4,
+    };
+    expect(() => assertShapeWithinBudget('12345', budget)).toThrowError(/string length/i);
+    expect(() => assertShapeWithinBudget({ value: 1 }, budget)).toThrowError(/key length/i);
+    expect(() => assertShapeWithinBudget({ key: '1234' }, budget)).not.toThrow();
+  });
+
+  it('rejects accessor-backed record entries without invoking the getter', () => {
+    let getterCalls = 0;
+    const record = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(record, 'value', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return 'owned';
+      },
+    });
+
+    expect(() => assertShapeWithinBudget(record)).toThrowError(/stable own data/i);
+    expect(getterCalls).toBe(0);
+  });
+
   it('passes a legitimate nested input and still parses it correctly', async () => {
     const ok = { items: ['a', 'b', 'c'], meta: { count: '3' } };
     expect(() => assertShapeWithinBudget(ok)).not.toThrow();

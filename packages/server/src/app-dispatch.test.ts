@@ -885,6 +885,36 @@ describe('server app matched dispatch boundary', () => {
     expect(handlerCalls).toBe(0);
   });
 
+  it('does not dispatch a protected JSON endpoint when extra input exceeds the shape ceiling', async () => {
+    let handlerCalls = 0;
+    const updateEmail = endpoint('/account/email', {
+      handler() {
+        handlerCalls += 1;
+        return new Response('updated');
+      },
+      method: 'POST',
+      reason: 'account email update endpoint',
+      response: rawTextResponse,
+    });
+    const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' };
+    const app = createApp({ csrf, endpoints: [updateEmail] });
+    const request = new Request('https://shop.example.test/account/email', {
+      body: JSON.stringify({
+        email: 'ada@example.com',
+        extra: Array.from({ length: 10_001 }, () => 0),
+        'kovo-csrf': csrfToken({} as Request, csrf),
+      }),
+      headers: { 'Content-Type': 'application/json', Origin: 'https://shop.example.test' },
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(422);
+    await expect(response.text()).resolves.toBe('CSRF');
+    expect(handlerCalls).toBe(0);
+  });
+
   it('fails closed for a malformed JSON endpoint POST without running the handler', async () => {
     let handlerCalls = 0;
     const updateEmail = endpoint('/account/email', {
