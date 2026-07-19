@@ -56,7 +56,15 @@ describe('kovo db', () => {
     expect(check.stdout).toContain('ROLE writerRole="kovo_writer" management=create\n');
     expect(check.stdout).toContain('ROLE adminRole="kovo_admin" management=create\n');
     expect(check.stdout).toContain('ROLE systemRole="kovo_system" management=create\n');
-    expect(check.stdout).toContain('SUMMARY issues=0\n');
+    expect(check.stdout).toContain(
+      'AUTHORIZATION_POLICY schema="public" table="kovo_cli_db_notes" site=owner policy="kovo_owner_scope" status=verified\n',
+    );
+    expect(check.stdout).toContain(
+      'AUTHORIZATION_POLICY schema="public" table="kovo_cli_db_notes" site=system policy="kovo_system_scope" status=verified\n',
+    );
+    expect(check.stdout).toContain(
+      'SUMMARY authorizationPoliciesVerified=2 authorizationPoliciesUnverified=0 issues=0\n',
+    );
   });
 
   it('prefers scaffolded app runtime options without importing the eager runtime module', async () => {

@@ -4552,6 +4552,57 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+    // SPEC §10.3: live environment activation is a server-owned policy-set/shape witness,
+    // not a build-time inference or a guard≡RLS correspondence claim.
+    expect(report.authorizationPolicies).toEqual([
+      {
+        emissionSite: 'owner',
+        policyName: 'kovo_owner_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_notes',
+      },
+      {
+        emissionSite: 'system',
+        policyName: 'kovo_system_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_notes',
+      },
+      {
+        emissionSite: 'admin',
+        policyName: 'kovo_admin_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_notes',
+      },
+    ]);
+
+    const withoutAdminActivation = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema,
+    });
+    expect(withoutAdminActivation.ok).toBe(false);
+    expect(withoutAdminActivation.issues).toContainEqual(
+      expect.objectContaining({ code: 'KV433_POLICY_SET' }),
+    );
+    expect(withoutAdminActivation.authorizationPolicies).toEqual([
+      {
+        emissionSite: 'owner',
+        policyName: 'kovo_owner_scope',
+        schemaName: 'public',
+        status: 'unverified',
+        tableName: 'kovo_runtime_notes',
+      },
+      {
+        emissionSite: 'system',
+        policyName: 'kovo_system_scope',
+        schemaName: 'public',
+        status: 'unverified',
+        tableName: 'kovo_runtime_notes',
+      },
+    ]);
   });
 
   it('keeps audited crossOwnerRead parameters bound under a one-shot array iterator poison', async () => {
@@ -4649,6 +4700,11 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     expect(report.ok).toBe(false);
     expect(report.issues).toContainEqual(expect.objectContaining({ code: 'KV433_ADMIN_POLICY' }));
+    expect(report.authorizationPolicies).toEqual([
+      expect.objectContaining({ emissionSite: 'owner', status: 'unverified' }),
+      expect.objectContaining({ emissionSite: 'system', status: 'unverified' }),
+      expect.objectContaining({ emissionSite: 'admin', status: 'unverified' }),
+    ]);
   });
 
   it('uses engine roles, not kovo.role GUCs, for admin and system RLS scope', async () => {
