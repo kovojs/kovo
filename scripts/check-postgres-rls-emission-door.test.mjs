@@ -166,6 +166,16 @@ export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input
   });
 
   it.each([
+    `export const load = () => import('./postgres-authorization-correſpondence.js');`,
+    `const { emitPostgresRlsPolicySql: rogue } = module.require('./poſtgres-authorization-correspondence.js'); export const sql = rogue({ site: 'admin' });`,
+  ])('kills Unicode filesystem case-fold aliases in runtime loaders', (source) => {
+    const files = cleanFixture();
+    files.set('packages/server/src/rogue-policy.ts', source);
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it.each([
     './postgres-authorization-correspondence.js?rogue',
     './postgres-authorization-correspondence.js#rogue',
     './postgres-authorization-correspondence%2Ejs',
@@ -177,6 +187,16 @@ export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input
     files.set(
       'packages/server/src/rogue-policy.ts',
       `import { emitPostgresRlsPolicySql as rogue } from '${specifier}'; export const sql = rogue({ site: 'admin' });`,
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it('kills a Unicode filesystem case-fold alias in a static import', () => {
+    const files = cleanFixture();
+    files.set(
+      'packages/server/src/rogue-policy.ts',
+      `import { emitPostgresRlsPolicySql as rogue } from './poſtgres-authorization-correspondence.js'; export const sql = rogue({ site: 'admin' });`,
     );
 
     expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });

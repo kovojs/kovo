@@ -810,6 +810,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'rejects a sixth raw CREATE POLICY emitter in any production package',
           'kills the split-literal raw-emitter mutant',
           'kills a sixth reviewed-emitter call even when it reuses a known site',
+          'kills Unicode filesystem case-fold aliases in runtime loaders',
+          'kills a Unicode filesystem case-fold alias in a static import',
+          "./poſtgres-authorization-correspondence.js",
         ],
       },
       {
@@ -2574,8 +2577,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'standalone-late-and-detached-rejection',
         file: 'packages/server/src/anonymous-csrf-cache-security.test.tsx',
         snippets: [
-          'fails closed when a route stream first mints anonymous authority after headers commit',
+          'rejects a reconstructed route-stream request after its owner settles',
           'rejects a detached reconstructed request in an external event after header commit',
+          'without a framework response lifecycle',
           'after response headers were committed',
         ],
       },
