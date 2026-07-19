@@ -704,6 +704,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
       'packages/server/src/postgres-external-probe.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
+      'scripts/check-postgres-rls-emission-door.test.mjs',
     ],
     verdictAnchors: [
       {
@@ -803,12 +804,12 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       },
       {
         id: 'finite-rls-emission-door-and-c13-byte-corpus',
-        file: 'packages/server/src/postgres-authorization-correspondence.test.ts',
+        file: 'scripts/check-postgres-rls-emission-door.test.mjs',
         snippets: [
-          'freezes the five and only five production RLS SQL emission sites',
-          "expect(runtimeSource).not.toContain('CREATE POLICY')",
-          'preserves the C13 byte corpus while rendering SQL from the two-constructor term',
-          'kovo_parent_order_items_2',
+          'accepts the exact production census at the checked-out revision',
+          'rejects a sixth raw CREATE POLICY emitter in any production package',
+          'kills the split-literal raw-emitter mutant',
+          'kills a sixth reviewed-emitter call even when it reuses a known site',
         ],
       },
       {
