@@ -7,6 +7,10 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
+  it('pins the exact forcing denominator after finite browser-control enrollment', () => {
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(232);
+  });
+
   it('executes every finite security-IR mutant against a behavioral compiler oracle', () => {
     const finiteIrMutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
       mutant.name.startsWith('compiler-finite-ir/'),
@@ -71,6 +75,96 @@ describe('security-gate-mutations', () => {
         (mutant) => mutant.name === 'inline-runtime/drop-declarative-shadow-dom-classifier',
       ),
     ).toEqual(expect.objectContaining({ sourceOnly: true }));
+  });
+
+  it('enrolls finite browser-control deletion, inversion, compiler, and runtime mutants', () => {
+    const tupleKeys = [
+      'script[src]',
+      'script[href]',
+      'script[xlink:href]',
+      'script[type]',
+      'script[nomodule]',
+      'script[integrity]',
+      'script[crossorigin]',
+      'script[referrerpolicy]',
+      'script[charset]',
+      'script[nonce]',
+      'script[language]',
+      'script[attributionsrc]',
+      'style[nonce]',
+      'link[href]',
+      'link[rel]',
+      'link[type]',
+      'link[media]',
+      'link[disabled]',
+      'link[integrity]',
+      'link[crossorigin]',
+      'link[referrerpolicy]',
+      'link[as]',
+      'link[nonce]',
+      'iframe[src]',
+      'iframe[sandbox]',
+      'iframe[allow]',
+      'iframe[allowfullscreen]',
+      'iframe[allowpaymentrequest]',
+      'iframe[browsingtopics]',
+      'iframe[credentialless]',
+      'iframe[sharedstoragewritable]',
+      'iframe[csp]',
+      'iframe[referrerpolicy]',
+      'iframe[name]',
+      'annotation-xml[encoding]',
+      'a[target]',
+      'a[rel]',
+      'a[referrerpolicy]',
+      'a[ping]',
+      'a[attributionsrc]',
+      'a[attributiondestination]',
+      'a[attributionsourceid]',
+      'a[attributionsourcenonce]',
+      'area[target]',
+      'area[rel]',
+      'area[referrerpolicy]',
+      'area[ping]',
+      'area[attributionsrc]',
+      'form[target]',
+      'form[rel]',
+      'button[formtarget]',
+      'input[formtarget]',
+      'img[referrerpolicy]',
+      'img[crossorigin]',
+      'img[attributionsrc]',
+      'img[sharedstoragewritable]',
+      'audio[crossorigin]',
+      'video[crossorigin]',
+      'image[crossorigin]',
+      'meta[name]',
+    ];
+    const tupleNames = tupleKeys.map(
+      (key) =>
+        `runtime-sink/drop-finite-browser-${key
+          .replaceAll(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')}-tuple`,
+    );
+    const behavioralNames = [
+      'compiler-output-context/drop-iframe-source-sandbox-boundary',
+      ...tupleNames,
+      'runtime-sink/drop-iframe-sandbox-allow-forms-token',
+      'runtime-sink/drop-iframe-sandbox-combination-closure',
+      'runtime-sink/drop-iframe-source-sandbox-boundary',
+      'runtime-sink/invert-iframe-sandbox-unknown-token-closure',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => behavioralNames.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(behavioralNames.sort());
+    expect(tupleNames).toHaveLength(60);
+    expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
+    expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
+    const inline = SECURITY_GATE_MUTANTS.find(
+      (mutant) => mutant.name === 'inline-runtime/drop-iframe-sandbox-token-vocabulary',
+    );
+    expect(inline).toEqual(expect.objectContaining({ sourceOnly: true }));
+    expect(inline?.behavioralTypeScript).not.toBe(true);
   });
 
   it('kills every enrolled security gate branch deletion mutant', async () => {

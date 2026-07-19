@@ -14,6 +14,10 @@ import {
   type SourceSinkInventoryEntry,
 } from './source-sink-registry.js';
 import { securityOperationKinds } from './security-operation-ir.js';
+import {
+  ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+  SAFE_IFRAME_SANDBOX_TOKENS,
+} from './sink-policy.js';
 
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const rootScripts = (
@@ -39,6 +43,77 @@ const requiredC9SinkNames = [
   'dynamic module/process execution',
 ] as const;
 const allowedBoundaryCrossingMechanisms = new Set(['reconstruct', 'box', 'own']);
+const exactFiniteBrowserControlKeys = [
+  'script[src]',
+  'script[href]',
+  'script[xlink:href]',
+  'script[type]',
+  'script[nomodule]',
+  'script[integrity]',
+  'script[crossorigin]',
+  'script[referrerpolicy]',
+  'script[charset]',
+  'script[nonce]',
+  'script[language]',
+  'script[attributionsrc]',
+  'style[nonce]',
+  'link[href]',
+  'link[rel]',
+  'link[type]',
+  'link[media]',
+  'link[disabled]',
+  'link[integrity]',
+  'link[crossorigin]',
+  'link[referrerpolicy]',
+  'link[as]',
+  'link[nonce]',
+  'iframe[src]',
+  'iframe[sandbox]',
+  'iframe[allow]',
+  'iframe[allowfullscreen]',
+  'iframe[allowpaymentrequest]',
+  'iframe[browsingtopics]',
+  'iframe[credentialless]',
+  'iframe[sharedstoragewritable]',
+  'iframe[csp]',
+  'iframe[referrerpolicy]',
+  'iframe[name]',
+  'annotation-xml[encoding]',
+  'a[target]',
+  'a[rel]',
+  'a[referrerpolicy]',
+  'a[ping]',
+  'a[attributionsrc]',
+  'a[attributiondestination]',
+  'a[attributionsourceid]',
+  'a[attributionsourcenonce]',
+  'area[target]',
+  'area[rel]',
+  'area[referrerpolicy]',
+  'area[ping]',
+  'area[attributionsrc]',
+  'form[target]',
+  'form[rel]',
+  'button[formtarget]',
+  'input[formtarget]',
+  'img[referrerpolicy]',
+  'img[crossorigin]',
+  'img[attributionsrc]',
+  'img[sharedstoragewritable]',
+  'audio[crossorigin]',
+  'video[crossorigin]',
+  'image[crossorigin]',
+  'meta[name]',
+] as const;
+const exactIframeSandboxTokens = [
+  'allow-forms',
+  'allow-modals',
+  'allow-orientation-lock',
+  'allow-pointer-lock',
+  'allow-presentation',
+  'allow-same-origin',
+  'allow-scripts',
+] as const;
 
 function assertNonBlank(value: string, label: string): void {
   if (value.trim() === '') throw new Error(`${label} must be non-blank.`);
@@ -444,5 +519,37 @@ describe('boundary crossing sink inventory', () => {
     expect(htmlCorpus?.negativeTestEvidence).toContain(
       'tests/integration/specs/meta-refresh-sink.spec.ts',
     );
+  });
+
+  it('mechanically ties C9 HTML output to the exact finite browser-control proof', () => {
+    const htmlInventory = frameworkSourceSinkInventory().find(
+      (entry) => entry.sink === 'html.dom.output',
+    );
+    const htmlBoundary = boundaryCrossingSinkInventory().find(
+      (entry) => entry.sink === 'HTML/render output',
+    );
+    const proof = htmlInventory?.finiteBrowserControlProof;
+
+    expect(proof?.controlTuples).toBe(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES);
+    expect(proof?.iframeSandboxTokens).toBe(SAFE_IFRAME_SANDBOX_TOKENS);
+    expect(proof?.controlTuples).toHaveLength(60);
+    expect(proof?.controlTuples.map(([tag, attribute]) => `${tag}[${attribute}]`)).toEqual(
+      exactFiniteBrowserControlKeys,
+    );
+    expect(proof?.iframeSandboxTokens).toEqual(exactIframeSandboxTokens);
+    expect(htmlInventory?.runtimeGuard).toContain('canonical-finite-browser-control-tuples');
+    expect(htmlInventory?.runtimeGuard).toContain('finite-iframe-sandbox-token-policy');
+    for (const evidence of [
+      'packages/core/src/sink-policy.test.ts',
+      'packages/compiler/src/pair-dependent-runtime-sinks.security.test.ts',
+      'packages/browser/src/inline-loader-security.test.ts',
+      'packages/browser/src/response-fragment-apply.browser.test.ts',
+      'packages/server/src/jsx-runtime.test.ts',
+    ]) {
+      expect(htmlInventory?.testEvidence, evidence).toContain(evidence);
+      expect(htmlBoundary?.proofEvidence, evidence).toContain(evidence);
+      expect(htmlBoundary?.hostileValueEvidence, evidence).toContain(evidence);
+    }
+    expect(htmlBoundary?.proofGate).toBe('pnpm run check:security-classifier-corpus');
   });
 });

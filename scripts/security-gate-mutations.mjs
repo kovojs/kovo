@@ -183,6 +183,74 @@ const generatedDeferredStyleControlManifestEntry =
 const removedGeneratedDeferredStyleControlManifestEntry =
   '  // data-kovo-deferred-style generated-control entry removed by mutant';
 
+const safeIframeSandboxAllowFormsEntry = "  'allow-forms',";
+const removedSafeIframeSandboxAllowFormsEntry = '  // allow-forms sandbox token removed by mutant';
+const iframeSandboxUnknownTokenClosureBranch = [
+  '      if (!securitySetHas(safeIframeSandboxTokens, token)) {',
+  '        return `${reason}; allowed tokens are allow-forms, allow-modals, allow-orientation-lock, allow-pointer-lock, allow-presentation, allow-same-origin, and allow-scripts`;',
+  '      }',
+].join('\n');
+const invertedIframeSandboxUnknownTokenClosureBranch = [
+  '      if (securitySetHas(safeIframeSandboxTokens, token)) {',
+  '        return `${reason}; allowed tokens are allow-forms, allow-modals, allow-orientation-lock, allow-pointer-lock, allow-presentation, allow-same-origin, and allow-scripts`;',
+  '      }',
+].join('\n');
+const iframeSandboxCombinationClosureBranch = [
+  '  return allowsSameOrigin && allowsScripts',
+  '    ? `${reason}; allow-scripts and allow-same-origin cannot be combined`',
+  '    : undefined;',
+].join('\n');
+const removedIframeSandboxCombinationClosureBranch = '  return undefined;';
+const runtimeIframeSandboxBoundaryBranch = "  if (tag === 'iframe' && attribute === 'src') {";
+const removedRuntimeIframeSandboxBoundaryBranch =
+  "  if (false && tag === 'iframe' && attribute === 'src') {";
+const compilerIframeSandboxBoundaryBranch =
+  '    validateIframeSandboxBoundary(diagnostics, model, element),';
+const removedCompilerIframeSandboxBoundaryBranch = '    [],';
+const inlineIframeSandboxTokenVocabulary =
+  "const inlineSafeIframeSandboxTokens = readSinkPolicyStringArray('SAFE_IFRAME_SANDBOX_TOKENS');";
+const removedInlineIframeSandboxTokenVocabulary = 'const inlineSafeIframeSandboxTokens = [];';
+
+function finiteBrowserControlTupleDeletionMutants() {
+  const source = readFileSync(coreSinkPolicyPath, 'utf8');
+  const manifestStart = source.indexOf(
+    'export const ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES = freezeSecurityValue([',
+  );
+  const manifestEnd = source.indexOf('\n] as const);', manifestStart);
+  if (manifestStart === -1 || manifestEnd === -1) {
+    throw new Error('finite browser-control tuple source denominator is unavailable');
+  }
+
+  const manifestSource = source.slice(manifestStart, manifestEnd);
+  const tupleSources = [
+    ...manifestSource.matchAll(/^  freezeSecurityValue\(\[\n(?:    .*\n){5}  \] as const\),$/gm),
+  ].map((match) => match[0]);
+  if (tupleSources.length !== 60) {
+    throw new Error(
+      `finite browser-control tuple source denominator drifted: ${tupleSources.length}`,
+    );
+  }
+
+  return tupleSources.map((tupleSource) => {
+    const identity = /^  freezeSecurityValue\(\[\n    '([^']+)',\n    '([^']+)',/.exec(tupleSource);
+    if (identity === null) {
+      throw new Error('finite browser-control tuple identity is unavailable');
+    }
+    const [, tag, attribute] = identity;
+    const mutationIdentity = `${tag}-${attribute}`.replaceAll(/[^a-z0-9]+/g, '-');
+    return {
+      behavioralTypeScript: true,
+      description: `Deletes ${tag}[${attribute}] from the canonical 60-tuple browser-control denominator.`,
+      expectedKiller: 'the finite browser-control denominator must retain every exact tuple',
+      name: `runtime-sink/drop-finite-browser-${mutationIdentity}-tuple`,
+      replacement: `  // ${tag}[${attribute}] finite browser-control tuple removed by mutant`,
+      search: tupleSource,
+      sourceFile: coreSinkPolicyPath,
+      test: assertFiniteBrowserControlDenominatorBehavior,
+    };
+  });
+}
+
 const blockedActiveEmbedEntry = "  'embed',";
 const removedBlockedActiveEmbedEntry = '  // embed denominator entry removed by mutant';
 const blockedActiveFrameEntry = "  'frame',";
@@ -1652,6 +1720,69 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: semanticAttributeManifestPath,
     sourceOnly: true,
     test: assertGeneratedControlManifestEntryBehavior,
+  },
+  ...finiteBrowserControlTupleDeletionMutants(),
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes allow-forms from the exact finite iframe sandbox vocabulary.',
+    expectedKiller: 'the iframe sandbox token vocabulary must remain exact and usable',
+    name: 'runtime-sink/drop-iframe-sandbox-allow-forms-token',
+    replacement: removedSafeIframeSandboxAllowFormsEntry,
+    search: safeIframeSandboxAllowFormsEntry,
+    sourceFile: coreSinkPolicyPath,
+    test: assertIframeSandboxTokenPolicyBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
+      'Inverts iframe sandbox membership so reviewed tokens reject and unknown future tokens pass.',
+    expectedKiller: 'unknown iframe sandbox tokens must fail closed while reviewed tokens pass',
+    name: 'runtime-sink/invert-iframe-sandbox-unknown-token-closure',
+    replacement: invertedIframeSandboxUnknownTokenClosureBranch,
+    search: iframeSandboxUnknownTokenClosureBranch,
+    sourceFile: coreSinkPolicyPath,
+    test: assertIframeSandboxTokenPolicyBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Accepts the isolation-lifting allow-scripts plus allow-same-origin pair.',
+    expectedKiller: 'the iframe sandbox token pair must preserve the isolation boundary',
+    name: 'runtime-sink/drop-iframe-sandbox-combination-closure',
+    replacement: removedIframeSandboxCombinationClosureBranch,
+    search: iframeSandboxCombinationClosureBranch,
+    sourceFile: coreSinkPolicyPath,
+    test: assertIframeSandboxTokenPolicyBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes the runtime requirement that an iframe source has a reviewed sandbox.',
+    expectedKiller: 'runtime iframe source decisions must remove missing or unsafe sandbox posture',
+    name: 'runtime-sink/drop-iframe-source-sandbox-boundary',
+    replacement: removedRuntimeIframeSandboxBoundaryBranch,
+    search: runtimeIframeSandboxBoundaryBranch,
+    sourceFile: coreSinkPolicyPath,
+    test: assertRuntimeIframeSandboxBoundaryBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description: 'Deletes compiler validation of the final iframe source/sandbox relationship.',
+    expectedKiller: 'authored iframe sources without a reviewed sandbox must diagnose KV236',
+    name: 'compiler-output-context/drop-iframe-source-sandbox-boundary',
+    replacement: removedCompilerIframeSandboxBoundaryBranch,
+    search: compilerIframeSandboxBoundaryBranch,
+    sourceFile: compilerOutputContextValidatorPath,
+    test: assertCompilerIframeSandboxBoundaryBehavior,
+  },
+  {
+    description: 'Deletes the iframe sandbox vocabulary from generated inline-loader bytes.',
+    expectedKiller: 'inline-loader freshness must reject generated bytes with an empty vocabulary',
+    name: 'inline-runtime/drop-iframe-sandbox-token-vocabulary',
+    replacement: removedInlineIframeSandboxTokenVocabulary,
+    search: inlineIframeSandboxTokenVocabulary,
+    sourceFile: inlineLoaderBuildPath,
+    sourceOnly: true,
+    test: assertInlineLoaderFreshnessBehavior,
   },
   {
     behavioralTypeScript: true,
@@ -3395,6 +3526,178 @@ export const DynamicRef = component({
   }
 }
 
+const exactFiniteBrowserControlKeys = [
+  'script[src]',
+  'script[href]',
+  'script[xlink:href]',
+  'script[type]',
+  'script[nomodule]',
+  'script[integrity]',
+  'script[crossorigin]',
+  'script[referrerpolicy]',
+  'script[charset]',
+  'script[nonce]',
+  'script[language]',
+  'script[attributionsrc]',
+  'style[nonce]',
+  'link[href]',
+  'link[rel]',
+  'link[type]',
+  'link[media]',
+  'link[disabled]',
+  'link[integrity]',
+  'link[crossorigin]',
+  'link[referrerpolicy]',
+  'link[as]',
+  'link[nonce]',
+  'iframe[src]',
+  'iframe[sandbox]',
+  'iframe[allow]',
+  'iframe[allowfullscreen]',
+  'iframe[allowpaymentrequest]',
+  'iframe[browsingtopics]',
+  'iframe[credentialless]',
+  'iframe[sharedstoragewritable]',
+  'iframe[csp]',
+  'iframe[referrerpolicy]',
+  'iframe[name]',
+  'annotation-xml[encoding]',
+  'a[target]',
+  'a[rel]',
+  'a[referrerpolicy]',
+  'a[ping]',
+  'a[attributionsrc]',
+  'a[attributiondestination]',
+  'a[attributionsourceid]',
+  'a[attributionsourcenonce]',
+  'area[target]',
+  'area[rel]',
+  'area[referrerpolicy]',
+  'area[ping]',
+  'area[attributionsrc]',
+  'form[target]',
+  'form[rel]',
+  'button[formtarget]',
+  'input[formtarget]',
+  'img[referrerpolicy]',
+  'img[crossorigin]',
+  'img[attributionsrc]',
+  'img[sharedstoragewritable]',
+  'audio[crossorigin]',
+  'video[crossorigin]',
+  'image[crossorigin]',
+  'meta[name]',
+];
+const exactIframeSandboxTokens = [
+  'allow-forms',
+  'allow-modals',
+  'allow-orientation-lock',
+  'allow-pointer-lock',
+  'allow-presentation',
+  'allow-same-origin',
+  'allow-scripts',
+];
+
+function assertFiniteBrowserControlDenominatorBehavior(moduleUnderTest) {
+  const tuples = [...moduleUnderTest.ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES];
+  const keys = tuples.map(([tag, attribute]) => `${tag}[${attribute}]`);
+  if (JSON.stringify(keys) !== JSON.stringify(exactFiniteBrowserControlKeys)) {
+    throw new Error(`finite browser-control denominator drifted: ${JSON.stringify(keys)}`);
+  }
+  for (const [tag, attribute, acceptsTrustedUrl, staticPolicy] of tuples) {
+    const control = moduleUnderTest.elementContextSecurityControl(
+      tag.toUpperCase(),
+      attribute.toUpperCase(),
+    );
+    if (
+      control?.acceptsTrustedUrl !== acceptsTrustedUrl ||
+      control?.staticPolicy !== staticPolicy
+    ) {
+      throw new Error(`finite browser-control classifier omitted ${tag}[${attribute}]`);
+    }
+  }
+}
+
+function assertIframeSandboxTokenPolicyBehavior(moduleUnderTest) {
+  const tokens = [...moduleUnderTest.SAFE_IFRAME_SANDBOX_TOKENS];
+  if (JSON.stringify(tokens) !== JSON.stringify(exactIframeSandboxTokens)) {
+    throw new Error(`iframe sandbox token vocabulary drifted: ${JSON.stringify(tokens)}`);
+  }
+  for (const safe of ['', 'allow-forms', 'ALLOW-SCRIPTS', 'allow-same-origin\tallow-modals']) {
+    if (moduleUnderTest.elementContextSecurityStaticValueIssue('iframe', 'sandbox', safe)) {
+      throw new Error(`iframe sandbox rejected reviewed token posture: ${safe}`);
+    }
+  }
+  for (const unsafe of [
+    'allow-scripts allow-same-origin',
+    'future-browser-capability',
+    'allow-top-navigation-by-user-activation',
+    'allow-popups-to-escape-sandbox',
+    'allow-storage-access-by-user-activation',
+  ]) {
+    if (!moduleUnderTest.elementContextSecurityStaticValueIssue('iframe', 'sandbox', unsafe)) {
+      throw new Error(`iframe sandbox admitted unsafe token posture: ${unsafe}`);
+    }
+  }
+}
+
+function assertRuntimeIframeSandboxBoundaryBehavior(moduleUnderTest) {
+  for (const sandbox of [
+    undefined,
+    'allow-scripts allow-same-origin',
+    'future-browser-capability',
+  ]) {
+    const decision = moduleUnderTest.decideRuntimeAttributeWrite('src', '/active', {
+      ...(sandbox === undefined ? {} : { effectiveIframeSandbox: sandbox }),
+      elementName: 'iframe',
+      posture: 'dynamic-binding',
+      trustedUrl: true,
+    });
+    if (decision.action !== 'remove') {
+      throw new Error(`runtime iframe source admitted sandbox posture: ${String(sandbox)}`);
+    }
+  }
+  const safe = moduleUnderTest.decideRuntimeAttributeWrite('src', '/active', {
+    effectiveIframeSandbox: 'allow-scripts',
+    elementName: 'iframe',
+    posture: 'dynamic-binding',
+    trustedUrl: true,
+  });
+  if (safe.action !== 'allow') {
+    throw new Error(`runtime iframe source rejected reviewed sandbox: ${safe.action}`);
+  }
+}
+
+function assertCompilerIframeSandboxBoundaryBehavior(moduleUnderTest) {
+  const unsafe = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+export const UnsafeFrame = component({
+  render: () => <iframe src="/active" />,
+});
+`,
+  );
+  const diagnostics = unsafe.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236');
+  if (!diagnostics.some((diagnostic) => diagnostic.message.includes('sandbox attribute'))) {
+    throw new Error(
+      `iframe source without sandbox did not close through KV236: ${
+        diagnostics.map((diagnostic) => diagnostic.message).join(' | ') || '<open>'
+      }`,
+    );
+  }
+  const safe = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+export const SafeFrame = component({
+  render: () => <iframe src="/active" sandbox="allow-scripts" />,
+});
+`,
+  );
+  if (safe.diagnostics.some((diagnostic) => diagnostic.code === 'KV236')) {
+    throw new Error('compiler rejected iframe source with reviewed sandbox posture');
+  }
+}
+
 function assertActiveEmbedDenominatorBehavior(moduleUnderTest) {
   const denominator = [...moduleUnderTest.BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES];
   if (
@@ -3828,6 +4131,66 @@ async function assertGeneratedControlManifestEntryBehavior(_moduleUnderTest, { s
   }
 }
 
+function assertInlineLoaderFreshnessBehavior(_moduleUnderTest, { sourceText }) {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-inline-loader-freshness-behavior-'));
+  try {
+    const browserRoot = path.join(tempRoot, 'packages', 'browser');
+    const coreInternalRoot = path.join(tempRoot, 'packages', 'core', 'src', 'internal');
+    mkdirSync(browserRoot, { recursive: true });
+    mkdirSync(coreInternalRoot, { recursive: true });
+    cpSync(path.join(repoRoot, 'packages/browser/src'), path.join(browserRoot, 'src'), {
+      recursive: true,
+    });
+    cpSync(
+      path.join(repoRoot, 'packages/browser/package.json'),
+      path.join(browserRoot, 'package.json'),
+    );
+    for (const name of ['semantic-attribute-manifest.ts', 'sink-policy.ts']) {
+      cpSync(
+        path.join(repoRoot, 'packages/core/src/internal', name),
+        path.join(coreInternalRoot, name),
+      );
+    }
+    symlinkSync(
+      path.join(repoRoot, 'packages/browser/node_modules'),
+      path.join(browserRoot, 'node_modules'),
+      'dir',
+    );
+    symlinkSync(path.join(repoRoot, 'node_modules'), path.join(tempRoot, 'node_modules'), 'dir');
+    writeFileSync(path.join(browserRoot, 'src/inline-loader-build.ts'), sourceText, 'utf8');
+    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--experimental-strip-types',
+        '--input-type=module',
+        '--eval',
+        [
+          `const moduleUnderTest = await import(${JSON.stringify(
+            pathToFileURL(path.join(browserRoot, 'src/inline-loader-build.ts')).href,
+          )});`,
+          'await moduleUnderTest.emitInlineKovoLoaderModule({ check: true });',
+        ].join('\n'),
+      ],
+      {
+        cwd: tempRoot,
+        encoding: 'utf8',
+        env: { ...process.env, FORCE_COLOR: '0' },
+        timeout: 60_000,
+      },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(
+        `inline-loader freshness regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      );
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+}
+
 async function assertInlineDynamicControlPlaneClosureBehavior(_moduleUnderTest, { sourceText }) {
   const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-inline-control-plane-behavior-'));
   try {
@@ -3845,6 +4208,10 @@ async function assertInlineDynamicControlPlaneClosureBehavior(_moduleUnderTest, 
     cpSync(
       path.join(repoRoot, 'packages/core/src/internal/semantic-attribute-manifest.ts'),
       path.join(coreInternalRoot, 'semantic-attribute-manifest.ts'),
+    );
+    cpSync(
+      path.join(repoRoot, 'packages/core/src/internal/sink-policy.ts'),
+      path.join(coreInternalRoot, 'sink-policy.ts'),
     );
     symlinkSync(
       path.join(repoRoot, 'packages/browser/node_modules'),
