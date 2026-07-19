@@ -392,11 +392,15 @@ pass**. Requires §0.4 and §0.6 to mean anything.
 
 ### 2.0 Two-week kill gate — does module identity survive?
 
-- [ ] Throwaway parser over the exact file list in `scripts/pack-security.files.json` for
+- [x] Throwaway parser over the exact file list in `scripts/pack-security.files.json` for
       `@kovojs/better-auth` and `@kovojs/server`, reporting recovered module count and resolved import
       edges. **Target the published framework dist trees, not the app's bundled handler** — app-side
       module identity is destroyed by bundling. If edges do not resolve, **abandon the certificate
       entirely**.
+  - Evidence: `pnpm run check:pack-security && pnpm run check:certificate-module-identity` recovers 99
+    exact modules and resolves all 589 in-scope edges against 12 packed Kovo packages; 75
+    third-party/builtin imports and the three Node module-loader modules remain explicit for §2.1's
+    lexical-authority audit, and 7/7 negative controls pass.
 
 ### 2.1 `kovo.certificate/v1` and a standalone checker
 
