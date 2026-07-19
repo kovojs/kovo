@@ -107,10 +107,13 @@ or served artifact.
   - Evidence: red commit `43c87c159`; `schema.test.ts` proves the repaired value is a runtime box and
     blocks template, JSON, structured-clone, wire, SSR, and inspected-log egress, while the production
     artifact/client-capture proofs and the Config-secret C matrix cell cover build/client channels.
-- [ ] Land architecture decision records before production work for: cache-key/influence semantics,
+- [x] Land architecture decision records before production work for: cache-key/influence semantics,
       runtime `ScopedKey` representation and escape authority, principal-epoch source/freshness,
       single-context-envelope vs shared ALS contract, cooperative vs hard deadlines, explicit
       cross-origin isolation, and the deployed-attestation trust anchor.
+  - Evidence: `plans/security-architecture-decisions-phase-0-2026-07-19.md` freezes all seven
+    enforcement shapes and non-claims at baseline `635fbea78`; each shipping phase still owes its
+    normative SPEC delta and forcing/real-behavior proof.
 - [ ] Materialize frozen, stable-ID D and W denominator inventories. Each row names its owner,
       authoritative source, applicability, proof/re-witness, and reviewed exemption; deletion or an
       `inapplicable` change requires an explicit reviewed-raise marker and a killing mutant.
