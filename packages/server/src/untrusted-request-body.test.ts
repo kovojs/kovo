@@ -202,9 +202,10 @@ describe('untrusted request body parser', () => {
     expect(revealUntrusted(value.name, 'test validates request body name')).toBe('Ada');
   });
 
-  it('preserves FormData while tagging submitted scalar fields', async () => {
+  it('keeps every app-visible FormData scalar read behind the provenance membrane', async () => {
     const form = new FormData();
-    form.set('title', 'Hello');
+    form.append('title', 'Hello');
+    form.append('title', 'Again');
     const result = await readUntrustedRequestBody(
       new Request('https://kovo.test/m', { body: form, method: 'POST' }),
     );
@@ -212,9 +213,52 @@ describe('untrusted request body parser', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toBeInstanceOf(FormData);
-    const taggedTitle = (result.value as FormData).get('title');
-    expect(isUntrusted(taggedTitle)).toBe(true);
-    expect(s.object({ title: s.string() }).parse(result.value)).toEqual({ title: 'Hello' });
+    const tagged = result.value as FormData;
+    const assertTaggedScalar = (value: unknown): void => {
+      expect(isUntrusted(value)).toBe(true);
+      expect(() => String(value)).toThrow(/KV426/u);
+    };
+
+    assertTaggedScalar(tagged.get('title'));
+    assertTaggedScalar(Reflect.get(tagged, 'get').call(tagged, 'title'));
+    for (const value of tagged.getAll('title')) assertTaggedScalar(value);
+    for (const [, value] of tagged.entries()) assertTaggedScalar(value);
+    for (const [, value] of tagged) assertTaggedScalar(value);
+    for (const value of tagged.values()) assertTaggedScalar(value);
+
+    const callbackReceiver = {};
+    const callbackValues: unknown[] = [];
+    tagged.forEach(function (value, key, parent) {
+      expect(this).toBe(callbackReceiver);
+      expect(key).toBe('title');
+      expect(parent).toBe(tagged);
+      assertTaggedScalar(value);
+      callbackValues.push(value);
+    }, callbackReceiver);
+    expect(callbackValues).toHaveLength(2);
+
+    // FormData entries are platform-internal rather than enumerable object properties. These
+    // generic reflection/serialization paths must therefore expose no submitted scalar at all.
+    expect(Object.getOwnPropertyDescriptor(tagged, 'title')).toBeUndefined();
+    expect(Object.assign({}, tagged)).toEqual({});
+    expect(JSON.stringify(tagged)).toBe('{}');
+    expect(s.object({ title: s.string() }).parse(tagged)).toEqual({ title: 'Hello' });
+  });
+
+  it('distinguishes budgeted array structure metadata from attacker scalar leaves', () => {
+    const tagged = tagUntrustedRequestValue(['attacker-input']) as unknown[];
+
+    expect(tagged.length).toBe(1);
+    expect(isUntrusted(tagged.length)).toBe(false);
+    expect(Object.getOwnPropertyDescriptor(tagged, 'length')).toEqual(
+      expect.objectContaining({ enumerable: false, value: 1 }),
+    );
+    assertShapeWithinBudget(tagged);
+
+    expect(isUntrusted(Reflect.get(tagged, 0))).toBe(true);
+    expect(isUntrusted(Object.getOwnPropertyDescriptor(tagged, '0')?.value)).toBe(true);
+    expect(isUntrusted(Object.assign([], tagged)[0])).toBe(true);
+    expect(() => JSON.stringify(tagged)).toThrow(/KV426/u);
   });
 
   it('pins the FormData provenance membrane against late global Proxy replacement', () => {
