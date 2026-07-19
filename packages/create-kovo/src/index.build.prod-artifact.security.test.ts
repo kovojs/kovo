@@ -61,6 +61,25 @@ function captureBuildFailure(build: () => void): string {
   throw new Error('Expected production build to fail, but it succeeded.');
 }
 
+async function waitForChildExit(
+  child: ChildProcessWithoutNullStreams,
+  output: () => string,
+  timeoutMs = 15_000,
+): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.removeListener('exit', onExit);
+      reject(new Error(`Timed out waiting for production artifact to exit.\n${output()}`));
+    }, timeoutMs);
+    const onExit = (): void => {
+      clearTimeout(timer);
+      resolve();
+    };
+    child.once('exit', onExit);
+  });
+}
+
 describe('create-kovo starter (build integration: production security artifacts)', () => {
   // @kovo-security-certifies KV438 analyzer-summary-carrier-laundering
   it('rejects summarized mutation input laundering through the real production build preflight', () => {
@@ -254,6 +273,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addRuntimeSecretBoundaryProof(root);
       const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
+      const proofApp = readFileSync(join(root, 'src/app.tsx'), 'utf8');
       const generatedRuntimeDb = readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8');
       const runtimeSecretMigration = readFileSync(
         join(root, 'migrations/001_runtime_secret_boundary.sql'),
@@ -290,12 +310,40 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofQueries).toContain('select id, label from runtime_secret_proof order by id');
       expect(proofQueries).toContain('default reader raw public-column negative control');
       expect(proofQueries).toContain("const boxed = secret('runtime-secret-value')");
+      expect(proofApp).toContain(
+        'env: s.object({ KOVO_CONFIG_SECRET_PROOF: s.secret(s.string()) })',
+      );
       expect(proofQueries).toContain("trustedReveal(secret('runtime-secret-value'), {");
       expect(proofQueries).toContain('audited runtime query-wire reveal acceptance proof');
       expect(proofQueries).not.toContain('if (false)');
 
-      buildParanoidProductionArtifact(root);
+      buildParanoidProductionArtifact(root, {
+        KOVO_CONFIG_SECRET_PROOF: 'runtime-config-secret-value',
+      });
       migrateRuntimeSecretBoundaryProof(root, dataDir);
+
+      const refusedEnv = {
+        ...withRepoBinOnPath(),
+        BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+        HOST: '127.0.0.1',
+        KOVO_DATA_DIR: dataDir,
+        KOVO_PARANOID: '1',
+        NODE_ENV: 'test',
+        PORT: String(port),
+      };
+      delete refusedEnv.KOVO_CONFIG_SECRET_PROOF;
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: refusedEnv,
+      });
+      const refusedOutput = collectOutput(server);
+      await waitForChildExit(server, refusedOutput);
+      expect(server.exitCode).not.toBe(0);
+      expect(refusedOutput()).toContain('Kovo refused to boot');
+      expect(refusedOutput()).toContain('env.KOVO_CONFIG_SECRET_PROOF');
+      expect(refusedOutput()).not.toContain('runtime-config-secret-value');
+      server = undefined;
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -305,6 +353,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
           KOVO_DATA_DIR: dataDir,
+          KOVO_CONFIG_SECRET_PROOF: 'runtime-config-secret-value',
           KOVO_PARANOID: '1',
           NODE_ENV: 'test',
           PORT: String(port),
@@ -396,25 +445,26 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(publicRawBody).toContain('public label');
       expect(publicRawBody).not.toContain('runtime-secret-value');
 
-      const boxOutputOffset = output().length;
-      const boxResponse = await fetch(
-        `${origin}/_q/queries/runtime-secret-explicit-box-egress-query`,
-        { headers: { cookie: cookieHeader(jar) } },
-      );
-      const boxBody = await boxResponse.text();
+      for (const [key, secretValue] of [
+        ['queries/runtime-secret-explicit-box-egress-query', 'runtime-secret-value'],
+      ] as const) {
+        const boxOutputOffset = output().length;
+        const boxResponse = await fetch(`${origin}/_q/${key}`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const boxBody = await boxResponse.text();
 
-      expect(boxResponse.status, boxBody).toBe(500);
-      expect(boxBody).toBe('{"code":"SERVER_ERROR","payload":{}}');
-      expect(boxBody).not.toContain('runtime-secret-value');
-      await vi.waitFor(() => {
-        const requestOutput = output().slice(boxOutputOffset);
-        expect(requestOutput).toContain(
-          'query-endpoint failed query=queries/runtime-secret-explicit-box-egress-query',
-        );
-        expect(requestOutput).toContain('KV435');
-        expect(requestOutput).toContain('Secret runtime value cannot cross');
-        expect(requestOutput).not.toContain('runtime-secret-value');
-      });
+        expect(boxResponse.status, `${key}: ${boxBody}`).toBe(500);
+        expect(boxBody).toBe('{"code":"SERVER_ERROR","payload":{}}');
+        expect(boxBody).not.toContain(secretValue);
+        await vi.waitFor(() => {
+          const requestOutput = output().slice(boxOutputOffset);
+          expect(requestOutput).toContain(`query-endpoint failed query=${key}`);
+          expect(requestOutput).toContain('KV435');
+          expect(requestOutput).toContain('Secret runtime value cannot cross');
+          expect(requestOutput).not.toContain(secretValue);
+        });
+      }
 
       const revealOutputOffset = output().length;
       const revealResponse = await fetch(

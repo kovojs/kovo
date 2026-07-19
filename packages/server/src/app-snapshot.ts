@@ -650,6 +650,7 @@ export function closeKovoAppAggregate<App extends KovoApp>(
   const stylesheets = snapshotStylesheetArray(source.stylesheets, 'app.stylesheets');
   const tasks = snapshotAppRegistry(source.tasks, 'app.tasks', snapshotAppTask);
   const errorShells = snapshotAppErrorShells(source.errorShells);
+  const env = witnessFreeze(snapshotOwnDataRecord(source.env, 'app.env')) as KovoApp['env'];
   const csrf = source.csrf === undefined ? undefined : snapshotAppCsrfOptions(source.csrf);
   const mutationReplayStore =
     source.mutationReplayStore === undefined
@@ -661,6 +662,7 @@ export function closeKovoAppAggregate<App extends KovoApp>(
     ...(csrf === undefined ? {} : { csrf }),
     diagnostics,
     endpoints,
+    env,
     errorShells,
     liveTargetRenderers,
     mutations,

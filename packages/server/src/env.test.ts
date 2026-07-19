@@ -1,4 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import {
+  drainSecretRevealAuditFacts,
+  isSecret,
+  trustedReveal,
+  type SecretValue,
+} from '@kovojs/core';
 
 import { createApp } from './app.js';
 import {
@@ -10,7 +16,7 @@ import {
   resolveBootMode,
   validateAppEnv,
 } from './env.js';
-import { s } from './schema.js';
+import { s, SchemaValidationError } from './schema.js';
 
 // A real, length-clearing secret (~43 base64url chars ≈ 192 bits), matching what the
 // anonymous-CSRF path mints with `randomBytes(32).toString('base64url')`.
@@ -203,31 +209,98 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
       expect(error.issues.some((i) => i.path.startsWith('env.') && i.fatal)).toBe(true);
     });
 
-    it('passes when all required env vars are present', () => {
+    it('returns only the frozen declared projection when all required env vars are present', () => {
+      const source = {
+        API_TOKEN: 'tok',
+        DATABASE_URL: 'postgres://x',
+        UNDECLARED_OPERATOR_SECRET: 'must-stay-internal',
+      };
+      const parsed = validateAppEnv(
+        { csrfSecret: STRONG_SECRET },
+        {
+          mode: 'production',
+          env: envSchema,
+          envSource: source,
+        },
+      );
+
+      source.DATABASE_URL = 'postgres://attacker';
+      expect(parsed).toEqual({ DATABASE_URL: 'postgres://x', API_TOKEN: 'tok' });
+      expect(Object.isFrozen(parsed)).toBe(true);
+      expect(parsed).not.toHaveProperty('UNDECLARED_OPERATOR_SECRET');
+    });
+
+    it('refuses a missing declared env var in development rather than forging typed app.env', () => {
+      const warnings: string[] = [];
       expect(() =>
         validateAppEnv(
           { csrfSecret: STRONG_SECRET },
           {
-            mode: 'production',
+            mode: 'development',
             env: envSchema,
-            envSource: { DATABASE_URL: 'postgres://x', API_TOKEN: 'tok' },
+            envSource: {},
+            onWarn: (m) => warnings.push(m),
           },
         ),
-      ).not.toThrow();
+      ).toThrow(CreateAppBootError);
+      expect(warnings).toHaveLength(0);
     });
 
-    it('warns (not throws) on a missing env var in development', () => {
-      const warnings: string[] = [];
-      validateAppEnv(
-        { csrfSecret: STRONG_SECRET },
-        {
-          mode: 'development',
-          env: envSchema,
-          envSource: {},
-          onWarn: (m) => warnings.push(m),
+    it('rejects structurally compatible custom schemas that could retain undeclared env keys', () => {
+      expect(() =>
+        validateAppEnv(
+          { csrfSecret: STRONG_SECRET },
+          {
+            mode: 'development',
+            env: { parse: (source) => source as Record<string, unknown> },
+            envSource: { API_TOKEN: 'secret', UNDECLARED: 'leak' },
+          },
+        ),
+      ).toThrow(CreateAppBootError);
+    });
+
+    it('does not include a schema-thrown secret in its boot diagnostic', () => {
+      const runtimeSecret = 'sk_live_env_schema_error_must_not_leak';
+      const env = s.object({
+        API_TOKEN: {
+          parse() {
+            throw new Error(runtimeSecret);
+          },
         },
-      );
-      expect(warnings).toHaveLength(1);
+      });
+
+      let caught: unknown;
+      try {
+        validateAppEnv({}, { env, envSource: { API_TOKEN: runtimeSecret }, mode: 'development' });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(CreateAppBootError);
+      expect((caught as Error).message).not.toContain(runtimeSecret);
+    });
+
+    it('does not trust a schema-validation issue message to be secret-free', () => {
+      const runtimeSecret = 'sk_live_validation_issue_must_not_leak';
+      const env = s.object({
+        API_TOKEN: {
+          parse(input) {
+            throw new SchemaValidationError([
+              { message: `invalid credential ${String(input)}`, path: [String(input)] },
+            ]);
+          },
+        },
+      });
+
+      let caught: unknown;
+      try {
+        validateAppEnv({}, { env, envSource: { API_TOKEN: runtimeSecret }, mode: 'development' });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(CreateAppBootError);
+      expect((caught as Error).message).toContain('env.API_TOKEN');
+      expect((caught as Error).message).not.toContain(runtimeSecret);
+      expect((caught as CreateAppBootError).issues[0]?.path).toBe('env.API_TOKEN');
     });
   });
 });
@@ -388,6 +461,63 @@ describe('createApp boot integration (the chokepoint)', () => {
       if (previous === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previous;
     }
+  });
+
+  it('retains a frozen typed app.env projection with runtime-boxed config secrets', () => {
+    const source = {
+      API_TOKEN: 'sk_live_runtime_config_secret',
+      PUBLIC_ORIGIN: 'https://example.test',
+      UNDECLARED_OPERATOR_SECRET: 'must-stay-internal',
+    };
+    const app = createApp({
+      egress: ENV_TEST_EGRESS,
+      env: s.object({
+        API_TOKEN: s.secret(s.string()),
+        PUBLIC_ORIGIN: s.string(),
+      }),
+      envSource: source,
+    });
+
+    source.API_TOKEN = 'sk_live_attacker_replacement';
+    expect(Object.isFrozen(app.env)).toBe(true);
+    expect(Object.keys(app.env)).toEqual(['API_TOKEN', 'PUBLIC_ORIGIN']);
+    expect(app.env).not.toHaveProperty('UNDECLARED_OPERATOR_SECRET');
+    expect(isSecret(app.env.API_TOKEN)).toBe(true);
+    expect(app.env.PUBLIC_ORIGIN).toBe('https://example.test');
+    expect(() => `${app.env.API_TOKEN}`).toThrow(/KV435/u);
+  });
+
+  it('supports a reveal-once credential factory and records its audited exit', () => {
+    drainSecretRevealAuditFacts();
+    const app = createApp({
+      egress: ENV_TEST_EGRESS,
+      env: s.object({ API_TOKEN: s.secret(s.string()) }),
+      envSource: { API_TOKEN: 'sk_live_dependency_bootstrap' },
+    });
+
+    function createCredentialClient(apiToken: SecretValue<string>) {
+      const rawToken = trustedReveal(apiToken, {
+        justification: 'initialize the payment SDK credential once at boot',
+        method: 'arbitrary-fn',
+        source: 'app.env.API_TOKEN',
+      });
+      return Object.freeze({ credentialLength: () => rawToken.length });
+    }
+
+    const client = createCredentialClient(app.env.API_TOKEN);
+    expect(client.credentialLength()).toBe('sk_live_dependency_bootstrap'.length);
+    expect(drainSecretRevealAuditFacts()).toMatchObject([
+      {
+        kind: 'secret-reveal',
+        reason: 'initialize the payment SDK credential once at boot',
+      },
+    ]);
+  });
+
+  it('exposes an empty frozen app.env when no schema is declared', () => {
+    const app = createApp({ egress: ENV_TEST_EGRESS });
+    expect(Object.keys(app.env)).toEqual([]);
+    expect(Object.isFrozen(app.env)).toBe(true);
   });
 });
 

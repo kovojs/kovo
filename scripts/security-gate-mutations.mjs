@@ -127,6 +127,7 @@ const serverRequestBodyProvenancePath = path.join(
 const serverResponsePosturePath = path.join(repoRoot, 'packages/server/src/response-posture.ts');
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
+const serverSchemaPath = path.join(repoRoot, 'packages/server/src/schema.ts');
 
 const serverEgressBehavioralInstrumentation = [
   '',
@@ -141,6 +142,10 @@ const taskEgressBehavioralInstrumentation = [
 const webhookEgressBehavioralInstrumentation = [
   '',
   "export { s as __securityMutationSchema } from './schema.js';",
+].join('\n');
+const schemaSecretBehavioralInstrumentation = [
+  '',
+  "export { isSecret as __securityMutationIsSecret } from '@kovojs/core';",
 ].join('\n');
 const serverBuildBehavioralInstrumentation = [
   '',
@@ -1652,6 +1657,9 @@ const reviewedSecretBoxDoorBranch =
   '  if (serverCallIsExactSecretBox(sourceFile, call, aliases)) {';
 const removedReviewedSecretBoxDoorBranch =
   '  if (false && serverCallIsExactSecretBox(sourceFile, call, aliases)) {';
+const runtimeSchemaSecretBoxBranch = '        return secret(closedSchema.parse(input));';
+const removedRuntimeSchemaSecretBoxBranch =
+  '        return closedSchema.parse(input) as unknown as SecretValue<Value>;';
 const reviewedDrizzleAliasDoorBranch =
   '  if (serverCallIsExactDrizzleTableAlias(sourceFile, call, aliases)) {';
 const removedReviewedDrizzleAliasDoorBranch =
@@ -2666,6 +2674,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: reviewedSecretBoxDoorBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
     test: assertReviewedSecretBoxDoorBehavior,
+  },
+  {
+    behavioralInstrumentation: schemaSecretBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Deletes runtime boxing from s.secret(schema).parse.',
+    expectedKiller:
+      's.secret(schema).parse must return a registered non-coercible SecretValue whose JSON egress fails closed',
+    name: 'server-schema/drop-runtime-secret-boxing',
+    replacement: removedRuntimeSchemaSecretBoxBranch,
+    search: runtimeSchemaSecretBoxBranch,
+    sourceFile: serverSchemaPath,
+    test: assertRuntimeSchemaSecretBoxBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -6423,6 +6443,24 @@ function assertReviewedTrustedRevealDoorBehavior(moduleUnderTest) {
 
 function assertReviewedSecretBoxDoorBehavior(moduleUnderTest) {
   assertFiniteIrAllows(moduleUnderTest, reviewedSecretProjectionFixture);
+}
+
+function assertRuntimeSchemaSecretBoxBehavior(moduleUnderTest) {
+  const isSecret = moduleUnderTest.__securityMutationIsSecret;
+  if (typeof isSecret !== 'function') {
+    throw new Error('runtime SecretValue identity seam was not bundled');
+  }
+  const parsed = moduleUnderTest.s.secret(moduleUnderTest.s.string()).parse('config-secret');
+  if (!isSecret(parsed)) {
+    throw new Error('s.secret(schema).parse returned an unregistered runtime value');
+  }
+  try {
+    JSON.stringify({ parsed });
+  } catch (error) {
+    if (error instanceof Error && /KV435/u.test(error.message)) return;
+    throw error;
+  }
+  throw new Error('s.secret(schema).parse output crossed JSON egress without KV435');
 }
 
 function assertReviewedDrizzleAliasDoorBehavior(moduleUnderTest) {

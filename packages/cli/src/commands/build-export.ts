@@ -911,7 +911,7 @@ function runPreEvaluationStaticTrustPreflight(
   // TASK B may consume only semantic summaries bound to these exact source bytes.
   const facts =
     files.length === 0
-      ? { capabilities: [], cookieDowngrades: [], unregisteredSinks: [] }
+      ? { capabilities: [], cookieDowngrades: [], revealed: [], unregisteredSinks: [] }
       : collectStaticBuildTrustFactsFromProject({
           compilerSecuritySemanticSources: sourceGraphFacts.compilerSecuritySemanticSources,
           files,
@@ -1285,14 +1285,19 @@ async function staticBuildCheckGraph(
   // SPEC §6.6 / KV424: the full build preflight must consume the same immutable app-source
   // snapshots as standalone static analysis. This preserves the existing browser-handler sink
   // corpus and adds request-handler process/call-closure facts before any deploy artifact writes.
-  // The aggregate shares one in-memory syntactic project across all three build trust surfaces.
-  const { capabilities, cookieDowngrades, unregisteredSinks } =
-    options.preEvaluationStaticTrust.facts;
+  // The aggregate shares one in-memory syntactic project across all four build trust surfaces.
+  const {
+    capabilities,
+    cookieDowngrades,
+    revealed: runtimeReveals,
+    unregisteredSinks,
+  } = options.preEvaluationStaticTrust.facts;
   const capabilityClosure = options.preEvaluationStaticTrust.capabilityClosure.facts;
   const queryShapeFacts = buildCompilerQueryShapeFacts(
     files,
     drizzleFacts,
   ) as readonly QueryShapeFact[];
+  const revealed = mergeBuildRevealFacts(drizzleFacts.revealed ?? [], runtimeReveals);
   const queryReadSets = buildMapDense(app.queries, 'Build app queries', (query) =>
     queryCheckFact(query, drizzleFacts.queries),
   );
@@ -1357,6 +1362,7 @@ async function staticBuildCheckGraph(
       ...(capabilities.length === 0 ? {} : { capabilities }),
       ...(capabilityClosure.length === 0 ? {} : { capabilityClosure }),
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
+      ...(revealed.length === 0 ? {} : { revealed }),
       ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
       endpoints,
       mutations,
@@ -1370,6 +1376,48 @@ async function staticBuildCheckGraph(
     routePages: sourceGraphFacts.routePages,
     sourceFiles: files,
   };
+}
+
+/** @internal */ export function mergeBuildRevealFacts(
+  queryReveals: readonly CoreGraph.RevealExplainFact[],
+  runtimeReveals: readonly CoreGraph.RevealExplainFact[],
+): CoreGraph.RevealExplainFact[] {
+  const merged: CoreGraph.RevealExplainFact[] = [];
+  const querySites = buildCreateSet<string>();
+  const querySnapshot = buildSnapshotDenseArray(queryReveals, 'Build query reveal facts');
+  for (let index = 0; index < querySnapshot.length; index += 1) {
+    const reveal = querySnapshot[index]!;
+    buildSetAdd(querySites, reveal.site);
+    insertBuildRevealFact(merged, reveal);
+  }
+  const runtimeSnapshot = buildSnapshotDenseArray(runtimeReveals, 'Build runtime reveal facts');
+  for (let index = 0; index < runtimeSnapshot.length; index += 1) {
+    const reveal = runtimeSnapshot[index]!;
+    if (!buildSetHas(querySites, reveal.site)) insertBuildRevealFact(merged, reveal);
+  }
+  return merged;
+}
+
+function insertBuildRevealFact(
+  facts: CoreGraph.RevealExplainFact[],
+  reveal: CoreGraph.RevealExplainFact,
+): void {
+  buildSecurityArrayAppend(facts, reveal, 'Sorted build reveal facts');
+  let insertAt = facts.length - 1;
+  while (insertAt > 0 && compareBuildRevealFacts(reveal, facts[insertAt - 1]!) < 0) {
+    facts[insertAt] = facts[insertAt - 1]!;
+    insertAt -= 1;
+  }
+  facts[insertAt] = reveal;
+}
+
+function compareBuildRevealFacts(
+  left: CoreGraph.RevealExplainFact,
+  right: CoreGraph.RevealExplainFact,
+): number {
+  const leftKey = `${left.query}\u0000${left.path}\u0000${left.site}`;
+  const rightKey = `${right.query}\u0000${right.path}\u0000${right.site}`;
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
 }
 
 interface SourceGraphFacts {

@@ -175,7 +175,7 @@ describe('server schemas', () => {
     }
   });
 
-  it('boxes secret schema output at runtime and closes ordinary egress channels', () => {
+  it('boxes sync and async secret schema output at runtime and closes ordinary egress channels', async () => {
     const schema = s.object({ passwordHash: s.secret(s.string()) });
     const parsed = schema.parse({ passwordHash: 'hash-1' });
     const assertSecretBoundary = () => {
@@ -194,6 +194,21 @@ describe('server schemas', () => {
     expect(inspect(parsed.passwordHash)).toBe('[secret]');
     expect(inspect(parsed.passwordHash)).not.toContain('hash-1');
     expect(assertSecretBoundary).toBeTypeOf('function');
+
+    let syncCalls = 0;
+    const asyncInner = {
+      parse() {
+        syncCalls += 1;
+        return 'sync-fallback';
+      },
+      async parseAsync(input: unknown) {
+        return `${String(input)}-async`;
+      },
+    };
+    const asyncParsed = await parseSchemaAsync(s.secret(asyncInner), 'hash-2');
+    expect(syncCalls).toBe(0);
+    expect(isSecret(asyncParsed)).toBe(true);
+    expect(revealSecret(asyncParsed, 'async schema test credential consumer')).toBe('hash-2-async');
   });
 
   it('coerces FormData once through the declared schema', async () => {

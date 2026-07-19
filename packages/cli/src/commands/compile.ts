@@ -1060,6 +1060,7 @@ async function runCompileDrizzleStaticCommand(
     analyzeSqlSafetyFromProject,
     collectCapabilityEscapesFromProject,
     collectCookieDowngradesFromProject,
+    collectRuntimeRevealFactsFromProject,
     collectTrustEscapesFromProject,
     collectUnregisteredSinksFromProject,
     deriveInvalidationRegistry,
@@ -1140,7 +1141,19 @@ async function runCompileDrizzleStaticCommand(
       output.queryDomains = queryDomainsFromStaticFacts(getQueryFacts());
     }
     if (extract.has('revealed')) {
-      output.revealed = revealFactsFromQueryFacts(getQueryFacts());
+      const queryReveals = revealFactsFromQueryFacts(getQueryFacts());
+      const queryRevealSites = new Set(queryReveals.map((reveal) => reveal.site));
+      output.revealed = [
+        ...queryReveals,
+        ...collectRuntimeRevealFactsFromProject({ files }).filter(
+          (reveal) => !queryRevealSites.has(reveal.site),
+        ),
+      ].sort(
+        (left, right) =>
+          left.query.localeCompare(right.query) ||
+          left.path.localeCompare(right.path) ||
+          left.site.localeCompare(right.site),
+      );
     }
     if (extract.has('sqlSafetyDiagnostics')) {
       output.sqlSafetyDiagnostics = analyzeSqlSafetyFromProject({ files });

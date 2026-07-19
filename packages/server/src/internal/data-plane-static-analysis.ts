@@ -76,6 +76,7 @@ export interface StaticDataPlaneBuildFacts {
   queries: readonly QueryReadFactLike[];
   queryShapeFacts: readonly QueryShapeFact[];
   queryWriteReachability: readonly CoreGraph.QueryWriteReachabilityFact[];
+  revealed?: readonly CoreGraph.RevealExplainFact[];
   scopeAudits: readonly CoreGraph.ScopeAuditFact[];
   sqlSafetyDiagnostics: readonly CoreGraph.SqlSafetyDiagnosticFact[];
   toctouFacts: readonly CoreGraph.ToctouFact[];
@@ -133,6 +134,7 @@ interface StaticBuildAnalysisFactsLike {
   ownerDomains?: readonly CoreGraph.OwnerDomainFact[];
   queries: readonly unknown[];
   queryWriteReachability?: readonly CoreGraph.QueryWriteReachabilityFact[];
+  revealed?: readonly CoreGraph.RevealExplainFact[];
   runtimeTableSecurityManifest?: RuntimeRegistryWireFacts['tableSecurity'];
   scopeAudits?: readonly CoreGraph.ScopeAuditFact[];
   sqlSafetyDiagnostics: readonly TouchGraphDiagnosticLike[];
@@ -140,7 +142,7 @@ interface StaticBuildAnalysisFactsLike {
   touchGraph: unknown;
 }
 
-const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-02.authz-census.v1';
+const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-19.reveal-facts.v1';
 const existsSync = builtinExistsSync;
 const dirname = builtinDirname;
 const relative = builtinRelative;
@@ -365,6 +367,7 @@ export async function staticDataPlaneBuildFacts(
       rawFacts.queryWriteReachability ?? [],
       'Static query-write facts',
     ),
+    revealed: snapshotDenseArray(rawFacts.revealed ?? [], 'Static query reveal facts'),
     scopeAudits: snapshotDenseArray(rawFacts.scopeAudits ?? [], 'Static scope-audit facts'),
     sqlSafetyDiagnostics,
     toctouFacts: projectToctouFacts(rawFacts.toctouFacts),
@@ -732,6 +735,7 @@ function snapshotStaticBuildAnalysisFacts(
   const massAssignmentFacts = optionalArray('massAssignmentFacts');
   const ownerDomains = optionalArray('ownerDomains');
   const queryWriteReachability = optionalArray('queryWriteReachability');
+  const revealed = optionalArray('revealed');
   const scopeAudits = optionalArray('scopeAudits');
   if (invalidOptionalArray) return undefined;
   const sqlSafetySnapshot = snapshotDenseArray(
@@ -760,6 +764,9 @@ function snapshotStaticBuildAnalysisFacts(
           queryWriteReachability:
             queryWriteReachability as readonly CoreGraph.QueryWriteReachabilityFact[],
         }),
+    ...(revealed === undefined
+      ? {}
+      : { revealed: revealed as readonly CoreGraph.RevealExplainFact[] }),
     ...(scopeAudits === undefined
       ? {}
       : { scopeAudits: scopeAudits as readonly CoreGraph.ScopeAuditFact[] }),

@@ -9,7 +9,7 @@ import {
   runtimeEnvironmentSnapshot,
   runtimeEnvironmentValue,
 } from '@kovojs/server/internal/runtime-environment';
-import { isSchemaValidationError } from './schema.js';
+import { isSchemaValidationError, parseDeclaredAppEnv } from './schema.js';
 import {
   securityIsUint8Array,
   securityMathLog2,
@@ -20,6 +20,8 @@ import {
   createWitnessMap,
   createWitnessSet,
   witnessArrayAppend,
+  witnessCreateNullRecord,
+  witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessMapForEach,
@@ -30,6 +32,10 @@ import {
   witnessSetAdd,
   witnessSetHas,
 } from './security-witness-intrinsics.js';
+
+const EMPTY_APP_ENV = witnessFreeze(witnessCreateNullRecord<unknown>()) as Readonly<
+  Record<never, never>
+>;
 
 /**
  * Env validation + refuse-to-boot on missing/weak framework secrets (SPEC §6.6, §9.5;
@@ -83,8 +89,8 @@ export interface EnvValidationIssue {
 }
 
 /**
- * Thrown by `createApp` when a required framework secret (or an app-declared env schema)
- * fails validation in production. Carries every collected `issues` so a deploy fails
+ * Thrown by `createApp` when a required framework secret fails validation in production or an
+ * app-declared env schema fails validation in any mode. Carries every collected `issues` so boot fails
  * fast with **all** problems at once rather than one-at-a-time. Distinct typed error so
  * deploy tooling and tests can catch it precisely (SPEC §6.6).
  */
@@ -118,9 +124,11 @@ interface FrameworkSecrets {
  * at boot; `envSource` is the record validated against it (defaults to the bootstrap-pinned
  * operator `process.env` snapshot).
  */
-export interface ValidateAppEnvOptions {
+export interface ValidateAppEnvOptions<
+  EnvValue extends Record<string, unknown> = Record<never, never>,
+> {
   mode?: 'production' | 'development';
-  env?: Schema<unknown>;
+  env?: Schema<EnvValue>;
   envSource?: Record<string, unknown>;
   /** Test seam: capture warnings instead of writing to `console.warn`. */
   onWarn?: (message: string) => void;
@@ -149,23 +157,29 @@ export function resolveBootMode(
  * by-construction at the chokepoint. Advisory issues (low-entropy, committed-secret)
  * are warned, not thrown.
  *
- * In `development`: nothing throws (localhost is not bricked); every issue — fatal or
- * advisory — is surfaced as a warning so the problem is visible before it ships.
+ * In `development`: weak framework signing secrets warn instead of bricking localhost. A declared
+ * app-env schema still fails closed because returning a typed `app.env` without a validated value
+ * would be dishonest. Successful parsing returns the frozen declared projection; undeclared raw
+ * operator-environment keys remain internal.
  */
-export function validateAppEnv(
+export function validateAppEnv<EnvValue extends Record<string, unknown> = Record<never, never>>(
   secrets: FrameworkSecrets,
-  options: ValidateAppEnvOptions = {},
-): void {
+  options: ValidateAppEnvOptions<EnvValue> = {},
+): Readonly<EnvValue> {
   const mode = resolveBootMode(options.mode);
   const issues: EnvValidationIssue[] = [];
+  let parsedEnv = EMPTY_APP_ENV as Readonly<EnvValue>;
+  let envInvalid = false;
 
   validateFrameworkSecret(secrets.csrfSecret, 'csrf.secret', issues);
 
   if (options.env !== undefined) {
-    validateAppEnvSchema(options.env, options.envSource ?? readProcessEnv(), issues);
+    const parsed = validateAppEnvSchema(options.env, options.envSource ?? readProcessEnv(), issues);
+    if (parsed === undefined) envInvalid = true;
+    else parsedEnv = parsed;
   }
 
-  if (issues.length === 0) return;
+  if (issues.length === 0) return parsedEnv;
 
   let hasFatal = false;
   for (let index = 0; index < issues.length; index += 1) {
@@ -175,7 +189,7 @@ export function validateAppEnv(
     }
   }
 
-  if (mode === 'production' && hasFatal) {
+  if (envInvalid || (mode === 'production' && hasFatal)) {
     // Refuse to boot — by-construction at the chokepoint (SPEC §6.6). All issues
     // (fatal + advisory) ride the error so one fix-up pass clears the deploy.
     throw new CreateAppBootError(issues);
@@ -184,6 +198,7 @@ export function validateAppEnv(
   // Dev (or prod with only advisory issues): warn, never brick.
   const warn = options.onWarn ?? defaultWarn;
   warn(formatBootWarning(issues, mode));
+  return parsedEnv;
 }
 
 /**
@@ -299,32 +314,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * their own required env at boot, failing fast." `s.object` throws on the first invalid
  * field, so we surface that one `SchemaValidationError` path as a fatal issue.
  */
-function validateAppEnvSchema(
-  schema: Schema<unknown>,
+function validateAppEnvSchema<EnvValue extends Record<string, unknown>>(
+  schema: Schema<EnvValue>,
   source: Record<string, unknown>,
   issues: EnvValidationIssue[],
-): void {
+): Readonly<EnvValue> | undefined {
   try {
-    schema.parse(source);
+    return parseDeclaredAppEnv(schema, source);
   } catch (error) {
     if (isSchemaValidationError(error)) {
       for (let index = 0; index < error.issues.length; index += 1) {
         const issue = error.issues[index]!;
+        // The genuine top-level s.object parser prepends its declared field name. Retain only that
+        // framework-owned segment: a custom child schema may put confidential input in its own
+        // message or deeper path segments, and boot diagnostics are a log/error egress channel.
+        const declaredField = issue.path[0];
+        const displayPath = declaredField ?? 'env';
         appendEnvIssue(issues, {
           code: 'invalid',
-          path: issue.path.length > 0 ? `env.${issue.path.join('.')}` : 'env',
+          path: declaredField === undefined ? 'env' : `env.${declaredField}`,
           fatal: true,
-          message: `App env validation failed for \`${issue.path.join('.') || 'env'}\`: ${issue.message} (createApp({ env }), SPEC §9.5).`,
+          message: `App env validation failed for \`${displayPath}\`; value and validator detail were withheld because operator configuration is confidential (createApp({ env }), SPEC §6.6/§9.5).`,
         });
       }
-      return;
+      return undefined;
     }
     appendEnvIssue(issues, {
       code: 'invalid',
       path: 'env',
       fatal: true,
-      message: `App env validation threw: ${error instanceof Error ? error.message : String(error)} (createApp({ env }), SPEC §9.5).`,
+      message:
+        'App env validation failed inside the declared schema without exposing the thrown value (createApp({ env }), SPEC §6.6/§9.5).',
     });
+    return undefined;
   }
 }
 
@@ -459,7 +481,7 @@ function formatBootError(issues: readonly EnvValidationIssue[]): string {
   const lines = issues.map((issue) => `  - [${issue.code}] ${issue.path}: ${issue.message}`);
   return (
     `createApp() refused to boot: ${issues.filter((i) => i.fatal).length} required env/secret ` +
-    `check(s) failed in production (SPEC §6.6). Fix all of the following, then redeploy:\n` +
+    `check(s) failed (SPEC §6.6/§9.5). Fix all of the following, then restart:\n` +
     lines.join('\n')
   );
 }

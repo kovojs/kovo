@@ -10,7 +10,25 @@ Use this when a value should stay server-only or should not be trusted yet: API 
 digests, request-derived strings, masked PII. Kovo's useful default here is simple: the value does
 not quietly turn into JSON or browser-visible markup.
 
-## Mark a value
+## Load app secrets
+
+Declare the environment keys your app uses. `s.secret(...)` keeps credentials boxed after boot:
+
+```tsx
+import { createApp, s } from '@kovojs/server';
+
+export const app = createApp({
+  env: s.object({
+    API_TOKEN: s.secret(s.string()),
+    PUBLIC_ORIGIN: s.string(),
+  }),
+});
+```
+
+`app.env` is frozen and contains only those two keys. A missing key stops boot, including in
+development. The raw environment snapshot never appears on the app object.
+
+## Mark another value
 
 Wrap the value where it first becomes sensitive:
 
@@ -51,6 +69,29 @@ const authorization = `Bearer ${revealSecret(secret(process.env.STRIPE_SECRET_KE
 
 That justification is the point. It makes the unboxing visible in code review instead of burying it
 inside a helper or a cast.
+
+For a dependency credential, reveal once inside the client factory. Keep the dependency client, not
+the raw string, for later requests:
+
+```tsx
+// Source: packages/server/src/env.test.ts
+import { trustedReveal, type SecretValue } from '@kovojs/core';
+
+function createCredentialClient(apiToken: SecretValue<string>) {
+  const rawToken = trustedReveal(apiToken, {
+    justification: 'initialize the payment SDK credential once at boot',
+    method: 'arbitrary-fn',
+    source: 'app.env.API_TOKEN',
+  });
+  return Object.freeze({ credentialLength: () => rawToken.length });
+}
+
+const client = createCredentialClient(app.env.API_TOKEN);
+```
+
+Run `kovo explain --revealed`. The `trustedReveal` call appears with its source location and
+justification. The combined `--capabilities` view folds in the same fact. This is an audit trail,
+not permission to send the raw key elsewhere.
 
 ## Add the production shape
 
@@ -115,7 +156,9 @@ place, or publish a same-file primitive constant. Use props or a query for dynam
 <details>
 <summary>Spec & diagnostics</summary>
 
-Public exports: `packages/core/src/index.ts` and `packages/server/src/index.ts`. Runtime secret,
+Public exports: `packages/core/src/index.ts` and `packages/server/src/index.ts`. The config-env door
+is specified by SPEC §6.6/§9.5 and implemented in `packages/server/src/env.ts` plus
+`packages/server/src/app.ts`. Runtime secret,
 untrusted, and redacted behavior: `packages/core/src/secret.ts` and `packages/core/src/secret.test.ts`.
 Wire refusal text: `packages/core/src/internal/wire-json.ts` and
 `packages/core/src/internal/wire-json.test.ts`. Runtime sink refusal: `packages/server/src/secret-egress.ts`.

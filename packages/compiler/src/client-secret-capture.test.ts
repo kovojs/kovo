@@ -34,6 +34,24 @@ function codes(source: string, extraFiles: readonly TestExtraFile[] = []): strin
 
 describe('KV437 client-handler secret-capture gate', () => {
   describe('NEGATIVE: a value-position cross-module capture is refused (KV437) and not emitted', () => {
+    it('withholds a captured app.env config secret from the client artifact', () => {
+      const source = `
+import { component } from '@kovojs/core';
+import { app } from './app';
+
+export const PayButton = component({
+  render: () => (
+    <button onClick={() => fetch('/pay', { body: app.env.PAYMENT_API_KEY })}>Pay</button>
+  ),
+});
+`;
+
+      expect(codes(source)).toContain('KV437');
+      const client = clientSource(source);
+      expect(client).not.toContain("from './app'");
+      expect(client).not.toContain('PAYMENT_API_KEY');
+    });
+
     it('fires KV437 for a captured NAMED import in call-argument (value) position', () => {
       const source = `
 import { component } from '@kovojs/core';

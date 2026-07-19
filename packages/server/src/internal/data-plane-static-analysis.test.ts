@@ -242,6 +242,7 @@ export const status = query({
       queries: [],
       queryShapeFacts: [],
       queryWriteReachability: [],
+      revealed: [],
       scopeAudits: [],
       sqlSafetyDiagnostics: [],
       toctouFacts: [],

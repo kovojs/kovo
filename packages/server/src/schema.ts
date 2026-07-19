@@ -1,8 +1,9 @@
 import {
   isUntrusted,
   revealUntrusted,
+  secret,
   type JsonValue,
-  type Secret,
+  type SecretValue,
   type StorageObjectInfo,
   type StoragePutCapability,
 } from '@kovojs/core';
@@ -134,6 +135,32 @@ export function snapshotSchemaForRuntime<Value>(
     witnessWeakMapSet(schemaMetadata, snapshot as Schema<unknown>, metadata);
   }
   return witnessFreeze(snapshot);
+}
+
+/**
+ * @internal Parse a declared application environment through a genuine framework `s.object`
+ * schema and freeze the resulting declared projection (SPEC §6.6/§9.5).
+ *
+ * The private schema-metadata registry is the runtime proof: a structurally similar custom schema
+ * cannot claim that undeclared operator-environment keys were removed. The returned record is the
+ * only environment value exposed on `KovoApp`; the raw bootstrap-pinned source remains internal.
+ */
+export function parseDeclaredAppEnv<Value extends Record<string, unknown>>(
+  source: Schema<Value>,
+  input: Record<string, unknown>,
+): Readonly<Value> {
+  const metadata = witnessWeakMapGet(schemaMetadata, source as Schema<unknown>);
+  if (metadata?.kind !== 'object') {
+    throw new TypeError(
+      'createApp({ env }) requires a genuine s.object(...) schema so undeclared operator-environment keys cannot escape (SPEC §6.6/§9.5).',
+    );
+  }
+  const schema = snapshotSchemaForRuntime(source, 'createApp({ env })');
+  const parsed = schema.parse(input);
+  if (typeof parsed !== 'object' || parsed === null || securityArrayIsArray(parsed)) {
+    throw new TypeError('createApp({ env }) must parse to a declared environment record.');
+  }
+  return witnessFreeze(parsed);
 }
 
 function stableSchemaMethod(
@@ -435,12 +462,16 @@ export const s = witnessFreeze({
   number(): NumberSchema {
     return new NumberSchemaImpl();
   },
-  secret<Value>(schema: Schema<Value>): Schema<Secret<Value>> {
+  secret<Value>(schema: Schema<Value>): Schema<SecretValue<Value>> {
     const closedSchema = snapshotSchemaForRuntime(schema, 's.secret(schema)');
     return witnessFreeze({
-      parse(input: unknown): Secret<Value> {
+      parse(input: unknown): SecretValue<Value> {
         input = revealSchemaInput(input);
-        return closedSchema.parse(input) as Secret<Value>;
+        return secret(closedSchema.parse(input));
+      },
+      async parseAsync(input: unknown): Promise<SecretValue<Value>> {
+        input = revealSchemaInput(input);
+        return secret(await parseSchemaAsync(closedSchema, input, true));
       },
     });
   },

@@ -138,10 +138,11 @@ export function createApp<
   DbValue = never,
   RawRequest extends globalThis.Request = globalThis.Request,
   AppRequest = AppLifecycleRequest<RawRequest, SessionValue, DbValue>,
+  EnvValue extends Record<string, unknown> = Record<never, never>,
 >(
-  options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {},
-): KovoApp<SessionValue, DbValue, RawRequest, AppRequest> {
-  type AppOptions = CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest>;
+  options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest, EnvValue> = {},
+): KovoApp<SessionValue, DbValue, RawRequest, AppRequest, EnvValue> {
+  type AppOptions = CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest, EnvValue>;
   rejectRemovedLiveTargetRenderersOption(options);
   rejectRemovedMutationResponsesOption(options);
   // Read every top-level option exactly once through an own-data descriptor before any authored
@@ -202,8 +203,9 @@ export function createApp<
   // §9.5; plans/secure-framework.md Tier 1). In production a missing/empty/short
   // framework signing secret (today the CSRF/anonymous-CSRF HMAC secret) or an
   // app-declared `env` schema failure throws CreateAppBootError before the app is
-  // assembled. Dev stays lenient (warns, never bricks localhost).
-  validateAppEnv(
+  // assembled. Development remains lenient only for weak framework signing secrets; a declared
+  // env must parse in every mode so the returned typed `app.env` stays honest.
+  const parsedEnv = validateAppEnv<EnvValue>(
     { csrfSecret: csrf?.secret },
     {
       ...(env === undefined ? {} : { env }),
@@ -308,6 +310,7 @@ export function createApp<
       diagnostics: collectAppDiagnostics(routes),
       document,
       endpoints,
+      env: parsedEnv,
       errorShells,
       liveTargetRenderers,
       mutations,
@@ -322,7 +325,7 @@ export function createApp<
       ...(renderRoute === undefined ? {} : { renderRoute }),
       ...(sessionProvider === undefined ? {} : { sessionProvider }),
       tasks,
-    } as KovoApp<SessionValue, DbValue, RawRequest, AppRequest>,
+    } as KovoApp<SessionValue, DbValue, RawRequest, AppRequest, EnvValue>,
     snapshotContext,
   );
   registerAppLiveTargetIdentity(app, appId);

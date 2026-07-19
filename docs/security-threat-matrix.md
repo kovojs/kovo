@@ -80,6 +80,18 @@ GREEN (no longer pending).
   through a positive object-schema allowlist without prototype-pollution side effects, and
   `packages/server/src/schema.test.ts` proves the FormData/object decoder uses null-prototype records with own-key
   gating. Log/error secret redaction via `scrubConsoleArgs` (`logging.ts:39`).
+- **Config secret → Wire/Render/Build/Runtime × C — GREEN.** An app author may accidentally route
+  an operator-supplied API key, connection string, or signing seed toward ordinary HTML, wire JSON,
+  logging, cloning, or client capture. `createApp({ env: s.object(...) })` exposes only a frozen
+  declared projection; undeclared raw environment keys remain internal, and `s.secret(...)` fields
+  are registered runtime `SecretValue` boxes. `packages/server/src/schema.test.ts` proves template,
+  JSON, structured-clone, wire, SSR, and inspected-log behavior; `packages/server/src/env.test.ts`
+  proves the boot projection and sanitized schema failures;
+  `packages/compiler/src/client-secret-capture.test.ts` proves KV437 artifact refusal. The behavioral
+  mutant `server-schema/drop-runtime-secret-boxing` kills removal of the runtime box. The reviewed
+  `trustedReveal` exit is visible through the existing `kovo explain --revealed` fact graph (and its
+  folded `--capabilities` view); this audit trail is not a proof that revealed plaintext cannot later
+  be misused, and same-process authored code remains in the §6.6 author-trust scope.
 - **Wire × Au (A1) — GREEN.** CSRF does not rely on SameSite alone: `packages/server/src/csrf.test.ts` proves the
   Origin / `Sec-Fetch-Site` floor and synchronizer-token audience binding for unsafe requests, and
   `packages/server/src/app-dispatch.test.ts` covers the end-to-end mutation/endpoint dispatch paths that reject missing

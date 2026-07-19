@@ -43,6 +43,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isQueryDeclarations(value.queries) &&
     isRouteDeclarations(value.routes) &&
     isAppDocumentOptions(value.document) &&
+    isRecord(value.env) &&
     isAppErrorShellOptions(value.errorShells) &&
     isLiveTargetRenderers(value.liveTargetRenderers) &&
     isVersionedClientModuleRegistry(value.clientModules) &&

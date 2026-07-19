@@ -7,6 +7,7 @@ import {
   customVerifier as coreCustomVerifier,
   hmacSignature as coreHmacSignature,
   standardWebhooks as coreStandardWebhooks,
+  type SecretValue,
 } from '@kovojs/core';
 
 import * as packageRootApi from '@kovojs/server';
@@ -228,6 +229,42 @@ if (false) {
   closedApp.routes = [];
   // @ts-expect-error - SPEC.md §9.5 closes the app aggregate after construction.
   closedApp.clientModules = publicApi.createMemoryVersionedClientModuleRegistry();
+  // @ts-expect-error SPEC §6.6/§9.5: no-schema apps expose no ambient environment keys.
+  void closedApp.env.UNDECLARED_OPERATOR_SECRET;
+
+  const appWithEnv = publicApi.createApp({
+    env: publicApi.s.object({
+      API_TOKEN: publicApi.s.secret(publicApi.s.string()),
+      PUBLIC_ORIGIN: publicApi.s.string(),
+    }),
+    envSource: {
+      API_TOKEN: 'sk_live_type_fixture',
+      PUBLIC_ORIGIN: 'https://example.test',
+      UNDECLARED_OPERATOR_SECRET: 'absent from app.env',
+    },
+  });
+  const configSecret: SecretValue<string> = appWithEnv.env.API_TOKEN;
+  const publicOrigin: string = appWithEnv.env.PUBLIC_ORIGIN;
+  void configSecret;
+  void publicOrigin;
+
+  const appWithSessionAndEnv = publicApi.createApp<
+    { userId: string },
+    never,
+    Request,
+    Request & { session: { userId: string } | null },
+    { API_TOKEN: SecretValue<string> }
+  >({
+    env: publicApi.s.object({ API_TOKEN: publicApi.s.secret(publicApi.s.string()) }),
+    envSource: { API_TOKEN: 'sk_live_explicit_session_fixture' },
+  });
+  const sessionAppConfigSecret: SecretValue<string> = appWithSessionAndEnv.env.API_TOKEN;
+  void sessionAppConfigSecret;
+
+  // @ts-expect-error SPEC §6.6/§9.5: app.env is a frozen read-only projection.
+  appWithEnv.env.PUBLIC_ORIGIN = 'https://attacker.test';
+  // @ts-expect-error SPEC §6.6/§9.5: undeclared raw environment keys are absent.
+  void appWithEnv.env.UNDECLARED_OPERATOR_SECRET;
 }
 // SPEC.md §9.5: the versioned client-module registry constructor and its option
 // surface are public at the root barrel for `createApp({ clientModules })` consumers.

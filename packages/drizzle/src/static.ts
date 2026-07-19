@@ -111,6 +111,7 @@ export {
 export {
   collectCapabilityEscapesFromProject,
   collectCookieDowngradesFromProject,
+  collectRuntimeRevealFactsFromProject,
   collectStaticBuildTrustFactsFromProject,
   collectTrustEscapesFromProject,
   collectUnregisteredSinksFromProject,
@@ -4143,6 +4144,7 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
   ownerDomains: readonly OwnerDomainFact[];
   queries: readonly QueryFact[];
   queryWriteReachability: readonly QueryWriteReachabilityFact[];
+  revealed: readonly RevealExplainFact[];
   runtimeTableSecurityManifest: RuntimeTableSecurityManifest;
   scopeAudits: readonly ScopeAuditFact[];
   sqlSafetyDiagnostics: readonly TouchGraphDiagnostic[];
@@ -4850,6 +4852,7 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
       ownerDomains: ownerAudit.ownerDomains,
       queries,
       queryWriteReachability: this.queryWriteReachability(),
+      revealed: revealFactsFromQueryFacts(queries),
       runtimeTableSecurityManifest: runtimeTableSecurityManifestFromProjectExtraction(
         this.extraction,
       ),

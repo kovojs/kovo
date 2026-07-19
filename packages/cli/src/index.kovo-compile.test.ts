@@ -967,6 +967,16 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
                   '});',
                 ].join('\n'),
               },
+              {
+                fileName: 'payment.ts',
+                source: [
+                  'import { trustedReveal, type SecretValue } from "@kovojs/core";',
+                  'export function createPaymentClient(key: SecretValue<string>) {',
+                  '  const raw = trustedReveal(key, { justification: "initialize payment SDK once at boot", method: "arbitrary-fn", source: "app.env.PAYMENT_API_KEY" });',
+                  '  return new PaymentClient(raw);',
+                  '}',
+                ].join('\n'),
+              },
             ],
           },
           null,
@@ -981,6 +991,16 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
 
       expect(stderr).not.toHaveBeenCalled();
       expect(JSON.parse(readFileSync(outPath, 'utf8')).revealed).toEqual([
+        {
+          grade: 'audit',
+          justification: 'initialize payment SDK once at boot',
+          method: 'arbitrary-fn',
+          path: 'app.env.PAYMENT_API_KEY',
+          query: 'runtime',
+          selectedSecret: true,
+          site: 'payment.ts:3',
+          source: 'app.env.PAYMENT_API_KEY',
+        },
         {
           grade: 'audit',
           justification: 'one-way digest shown to admins',

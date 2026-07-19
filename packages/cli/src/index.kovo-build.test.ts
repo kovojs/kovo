@@ -30,6 +30,7 @@ import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
 import { installEgressFloorSync } from '../../server/src/egress-bootstrap.js';
+import { mergeBuildRevealFacts } from './commands/build-export.js';
 import {
   builtServerProcess,
   closeBuiltServerProcess,
@@ -1462,6 +1463,127 @@ export default createApp({
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
+  });
+
+  it('persists trustedReveal audit facts through a normal build and both explain views', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-runtime-reveal-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        [
+          "import { secret, trustedReveal } from '@kovojs/core';",
+          "import { createApp } from '@kovojs/server';",
+          '',
+          "const configSecret = secret('build-only-payment-key');",
+          "const credential = trustedReveal(configSecret, { justification: 'initialize payment SDK once at boot', method: 'arbitrary-fn', source: 'app.env.PAYMENT_API_KEY' });",
+          'void credential;',
+          '',
+          'export default createApp({ routes: [] });',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const graphPath = join(outDir, '.kovo/graph.json');
+      const graph = JSON.parse(readFileSync(graphPath, 'utf8')) as {
+        revealed?: readonly Record<string, unknown>[];
+      };
+      expect(graph.revealed).toEqual([
+        {
+          grade: 'audit',
+          justification: 'initialize payment SDK once at boot',
+          method: 'arbitrary-fn',
+          path: 'app.env.PAYMENT_API_KEY',
+          query: 'runtime',
+          selectedSecret: true,
+          site: 'app.mjs:5',
+          source: 'app.env.PAYMENT_API_KEY',
+        },
+      ]);
+
+      stdout.mockClear();
+      expect(main(['explain', '--revealed', graphPath])).toBe(0);
+      const revealedOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(revealedOutput).toContain(
+        'REVEAL grade=audit method=arbitrary-fn query=runtime path=app.env.PAYMENT_API_KEY site=app.mjs:5',
+      );
+
+      stdout.mockClear();
+      expect(main(['explain', '--capabilities', graphPath])).toBe(0);
+      const capabilityOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(capabilityOutput).toContain(
+        'CAPABILITY kind=trustedReveal site=app.mjs:5 module=- target=runtime.app.env.PAYMENT_API_KEY justification="initialize payment SDK once at boot"',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('merges query and runtime reveals with richer query facts winning by source site', () => {
+    expect(
+      mergeBuildRevealFacts(
+        [
+          {
+            grade: 'proof',
+            method: 'server-projection',
+            path: 'digest',
+            query: 'accounts',
+            site: 'queries.ts:8',
+          },
+        ],
+        [
+          {
+            grade: 'audit',
+            justification: 'syntactic duplicate',
+            method: 'arbitrary-fn',
+            path: 'users.token',
+            query: 'runtime',
+            site: 'queries.ts:8',
+          },
+          {
+            grade: 'audit',
+            justification: 'initialize payment SDK once at boot',
+            method: 'arbitrary-fn',
+            path: 'app.env.PAYMENT_API_KEY',
+            query: 'runtime',
+            site: 'payment.ts:5',
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        grade: 'proof',
+        method: 'server-projection',
+        path: 'digest',
+        query: 'accounts',
+        site: 'queries.ts:8',
+      },
+      {
+        grade: 'audit',
+        justification: 'initialize payment SDK once at boot',
+        method: 'arbitrary-fn',
+        path: 'app.env.PAYMENT_API_KEY',
+        query: 'runtime',
+        site: 'payment.ts:5',
+      },
+    ]);
   });
 
   it('fails project-mode data-plane analysis for JS source without Drizzle import spellings', async () => {

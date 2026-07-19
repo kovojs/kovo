@@ -235,6 +235,7 @@ export interface CreateAppOptions<
   DbValue = never,
   RawRequest extends globalThis.Request = globalThis.Request,
   AppRequest = AppLifecycleRequest<RawRequest, SessionValue, DbValue>,
+  EnvValue extends Record<string, unknown> = Record<never, never>,
 > {
   /**
    * Replica-stable canonical UUIDv4 for live-target descriptor authority. Production apps with
@@ -255,13 +256,16 @@ export interface CreateAppOptions<
   /**
    * Optional app-declared env schema (any `s.object` validator) validated at the
    * `createApp` boot chokepoint against `envSource` (default: the bootstrap-pinned operator
-   * `process.env` snapshot). In
-   * production a failure refuses boot with a typed `CreateAppBootError` carrying every
-   * issue at once; in development it warns instead of bricking localhost (SPEC §6.6,
-   * §9.5; `plans/secure-framework.md` Tier 1). Apps declare required env once and fail
-   * fast at boot rather than at the first request that reads a missing var.
+   * `process.env` snapshot). Any app-env schema failure refuses boot with a typed
+   * `CreateAppBootError`, including in
+   * development: a typed `app.env` cannot honestly exist without a valid parsed value. Weak
+   * framework signing secrets remain warning-only in development (SPEC §6.6/§9.5). Apps declare
+   * required env once and fail fast at boot rather than at the first request that reads a missing
+   * var. TypeScript infers the exact env projection for an ordinary `createApp({ env })` call. If
+   * callers explicitly provide an earlier `createApp` generic, TypeScript cannot partially infer
+   * later generics, so they must also spell the final `EnvValue` generic to retain that exact type.
    */
-  env?: Schema<unknown>;
+  env?: Schema<EnvValue>;
   /** Record validated against `env`. Defaults to boot-pinned operator env. Test/adapter seam. */
   envSource?: Record<string, unknown>;
   /**
@@ -328,6 +332,7 @@ export interface KovoApp<
   _DbValue = unknown,
   _RawRequest extends globalThis.Request = globalThis.Request,
   _AppRequest = any,
+  EnvValue extends Record<string, unknown> = Record<never, never>,
 > {
   readonly clientModules: VersionedClientModuleRegistry;
   readonly csrf?: CsrfOptions<any>;
@@ -335,6 +340,12 @@ export interface KovoApp<
   readonly diagnostics: readonly AppDiagnostic[];
   readonly document: AppDocumentOptions;
   readonly endpoints: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
+  /**
+   * Frozen declared environment projection parsed at boot through `createApp({ env: s.object(...) })`.
+   * Secret fields are runtime `SecretValue` boxes; undeclared operator-environment keys are absent
+   * and the raw bootstrap snapshot remains framework-internal (SPEC §6.6/§9.5).
+   */
+  readonly env: Readonly<EnvValue>;
   readonly errorShells: AppErrorShellOptions;
   readonly liveTargetRenderers: readonly LiveTargetRenderer<any>[];
   readonly mutations: readonly AppMutationDeclaration<any>[];

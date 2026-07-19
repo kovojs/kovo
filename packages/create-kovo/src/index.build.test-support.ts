@@ -166,10 +166,14 @@ export function buildReusableProductionArtifact(root: string): void {
   execKovoCli(root, ['build', './src/app.tsx'], nonParanoidStarterEnv(root));
 }
 
-export function buildParanoidProductionArtifact(root: string): void {
+export function buildParanoidProductionArtifact(
+  root: string,
+  additionalEnv: NodeJS.ProcessEnv = {},
+): void {
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
   execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], {
     ...withStarterBinOnPath(root),
+    ...additionalEnv,
     KOVO_PARANOID: '1',
     NODE_OPTIONS: '--max-old-space-size=8192',
   });
@@ -2771,9 +2775,24 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   let app = readFileSync(appPath, 'utf8');
   app = replaceRequired(
     app,
+    '  stylesheet,',
+    ['  s,', '  stylesheet,'].join('\n'),
+    'runtime config secret proof app schema import',
+  );
+  app = replaceRequired(
+    app,
     "import { contactsQuery } from './queries.js';",
     "import { contactsQuery, runtimeSecretColumnEngineDenialQuery, runtimeSecretComputedEngineDenialQuery, runtimeSecretDefaultRawPublicQuery, runtimeSecretExplicitBoxEgressQuery, runtimeSecretFunctionEngineDenialQuery, runtimeSecretOpaqueRawEngineDenialQuery, runtimeSecretRawEngineDenialQuery, runtimeSecretReaderRoleProofQuery, runtimeSecretRevealAcceptanceQuery, runtimeSecretViewEngineDenialQuery, runtimeSecretWholeTableEngineDenialQuery } from './queries.js';",
     'runtime secret proof app import',
+  );
+  app = replaceRequired(
+    app,
+    "  document: { lang: 'en' },",
+    [
+      "  document: { lang: 'en' },",
+      '  env: s.object({ KOVO_CONFIG_SECRET_PROOF: s.secret(s.string()) }),',
+    ].join('\n'),
+    'runtime config secret proof app env',
   );
   app = replaceRequired(
     app,

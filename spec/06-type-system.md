@@ -492,6 +492,25 @@ ergonomics; exact runtime registry membership and config preflight own enforceme
 
 **Operator-environment trust root (normative).** Bootstrap MUST pin operator environment names and values before authored evaluation, and later security lookup MUST preserve the host's name semantics. In particular, Windows names are case-insensitive: the pinned authority MUST resolve every case spelling equivalently and fail closed if an injected source contains case-fold-colliding names, while app env-schema snapshots retain the operator's original key spellings.
 
+**Application config-secret door (normative).** `createApp({ env: s.object(...) })` is the sole
+public operator-environment projection. The runtime MUST admit only a genuine framework `s.object`
+schema, parse the bootstrap-pinned source once, retain only declared own fields, freeze that parsed
+record, and expose it as the precisely inferred read-only `app.env`. The raw operator snapshot and
+undeclared keys remain framework-internal. A declared env schema failure refuses boot in every
+mode: development may warn for a weak framework signing secret, but it cannot return a typed
+`app.env` whose value never validated. `s.secret(schema)` MUST return a runtime `SecretValue`, not a
+type-only `Secret<T>` cast, so interpolation, template/string coercion, JSON and wire encoding,
+structured cloning, SSR output, and artifact capture encounter the existing fail-closed
+confidentiality doors. The box's module-private runtime registration owns this invariant; its type
+is author-time ergonomics only. A dependency credential should be revealed exactly once inside its
+boot-time credential factory through `trustedReveal(..., { justification, method:
+'arbitrary-fn', source })`; the static call site remains an audit-grade row in the existing
+`kovo explain --revealed` fact graph (and therefore also in its folded `--capabilities` view), while
+the bounded runtime reveal collector is observational evidence, not a complete process-lifetime
+proof. This pattern does not claim arbitrary JavaScript string
+comparison is constant-time; use `SecretValue.equals` only for fixed token/verifier comparisons
+whose operands fit that contract.
+
 **Authentication request-origin binding (normative).** A framework-owned Better Auth binding MUST
 normalize and pin the configured `baseURL` origin when the binding is constructed. Before parsing a
 request cookie, delegating to a Better Auth handler, consuming a credential, revoking a session, or

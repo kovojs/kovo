@@ -1254,6 +1254,54 @@ export const save = mutation('cart/save', {
     );
   });
 
+  // SPEC §6.6 (audit-only): a boot-time app.env credential reveal uses the existing reveal-fact
+  // graph. `--capabilities` may fold the same fact for a combined audit, but there is no parallel
+  // capability producer for trustedReveal.
+  it('surfaces a config-secret credential-factory reveal end-to-end through --revealed', async () => {
+    const { collectRuntimeRevealFactsFromProject } =
+      await import('@kovojs/drizzle/internal/static');
+    const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+
+    const revealed = collectRuntimeRevealFactsFromProject({
+      files: [
+        {
+          fileName: 'payment.ts',
+          source: [
+            `import { trustedReveal, type SecretValue } from '@kovojs/core';`,
+            `export function createPaymentClient(key: SecretValue<string>) {`,
+            `  const raw = trustedReveal(key, { justification: 'initialize payment SDK once at boot', method: 'arbitrary-fn', source: 'app.env.PAYMENT_API_KEY' });`,
+            `  return new PaymentClient(raw);`,
+            `}`,
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(revealed).toEqual([
+      {
+        grade: 'audit',
+        justification: 'initialize payment SDK once at boot',
+        method: 'arbitrary-fn',
+        path: 'app.env.PAYMENT_API_KEY',
+        query: 'runtime',
+        selectedSecret: true,
+        site: 'payment.ts:3',
+        source: 'app.env.PAYMENT_API_KEY',
+      },
+    ]);
+
+    const merged = deriveAppGraph({ graph: { revealed } } as Parameters<typeof deriveAppGraph>[0]);
+    const result = kovoExplain(
+      JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
+      { revealed: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain(
+      'REVEAL grade=audit method=arbitrary-fn query=runtime path=app.env.PAYMENT_API_KEY site=payment.ts:3 source=app.env.PAYMENT_API_KEY selectedSecret=yes justification="initialize payment SDK once at boot"',
+    );
+  });
+
   // SPEC §6.6/§9.1 (audit-only), M3: the cookie-downgrade producer rides through deriveAppGraph and
   // `kovo explain --cookies` surfaces a `serializeCookie(..., { unsafe: unsafeCookie(...) })` from
   // REAL source (this field previously had no static producer at all).

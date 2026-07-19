@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectCapabilityEscapesFromProject,
   collectCookieDowngradesFromProject,
+  collectRuntimeRevealFactsFromProject,
   collectStaticBuildTrustFactsFromProject,
   collectUnregisteredSinksFromProject,
 } from '@kovojs/drizzle/internal/static';
@@ -362,6 +363,7 @@ describe('@kovojs/drizzle static build trust-fact aggregate', () => {
     expect(collectStaticBuildTrustFactsFromProject({ files })).toEqual({
       capabilities: collectCapabilityEscapesFromProject({ files }),
       cookieDowngrades: collectCookieDowngradesFromProject({ files }),
+      revealed: collectRuntimeRevealFactsFromProject({ files }),
       unregisteredSinks: collectUnregisteredSinksFromProject({ files }),
     });
   });
@@ -477,6 +479,7 @@ describe('@kovojs/drizzle static build trust-fact aggregate', () => {
     const standalone = {
       capabilities: collectCapabilityEscapesFromProject({ files }),
       cookieDowngrades: collectCookieDowngradesFromProject({ files }),
+      revealed: collectRuntimeRevealFactsFromProject({ files }),
       unregisteredSinks: collectUnregisteredSinksFromProject({ files }),
     };
 

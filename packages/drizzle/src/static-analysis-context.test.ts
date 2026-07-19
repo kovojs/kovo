@@ -11,6 +11,7 @@ import {
   extractStaticBuildAnalysisFactsFromProject,
   extractToctouFromProject,
   extractTouchGraphFromProject,
+  revealFactsFromQueryFacts,
   type ExtractedFunction,
   type TouchGraphProjectOptions,
 } from '@kovojs/drizzle/internal/static';
@@ -66,6 +67,7 @@ describe('@kovojs/drizzle static analysis context', () => {
       ownerDomains: ownerAudit.ownerDomains,
       queries,
       queryWriteReachability: extractQueryWriteReachabilityFromProject(project),
+      revealed: revealFactsFromQueryFacts(queries),
       runtimeTableSecurityManifest: {
         tables: [
           {

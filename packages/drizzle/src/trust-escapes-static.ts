@@ -19,6 +19,7 @@ import { posix as nodePath } from 'node:path';
 import type {
   CapabilityExplain,
   CookieDowngradeExplain,
+  RevealExplainFact,
   TrustEscapeExplain,
   UnregisteredSinkFact,
 } from '@kovojs/core/internal/graph';
@@ -405,7 +406,7 @@ export function collectUnregisteredSinksFromProject(
 /**
  * Build-only aggregate for the three static trust surfaces consumed together by `kovo build`.
  * One immutable in-memory syntactic project is shared across the passes so repeated build checks
- * do not retain three ts-morph programs for the same source snapshot. The project still has no
+ * do not retain four ts-morph programs for the same source snapshot. The project still has no
  * ambient filesystem/module-resolution authority: unresolved package code remains a closed
  * verdict (SPEC §6.6 / §11.4).
  *
@@ -414,12 +415,14 @@ export function collectUnregisteredSinksFromProject(
 export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProjectOptions): {
   capabilities: CapabilityExplain[];
   cookieDowngrades: CookieDowngradeExplain[];
+  revealed: RevealExplainFact[];
   unregisteredSinks: UnregisteredSinkFact[];
 } {
   const { sourceFiles, dispose } = createSyntacticProject(options.files);
   try {
     const capabilities: CapabilityExplain[] = [];
     const cookieDowngrades: CookieDowngradeExplain[] = [];
+    const revealed: RevealExplainFact[] = [];
     const unregisteredSinks: UnregisteredSinkFact[] = [];
     for (const [index, sourceFile] of sourceFiles.entries()) {
       const file = options.files[index];
@@ -428,6 +431,8 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
       for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
         const downgrade = cookieDowngradeForCall(file, call);
         if (downgrade) cookieDowngrades.push(downgrade);
+        const reveal = runtimeRevealFactForCall(file, call);
+        if (reveal) revealed.push(reveal);
       }
     }
     if (options.buildConfigEntryFileName) {
@@ -476,6 +481,7 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
         (left, right) =>
           left.name.localeCompare(right.name) || (left.site ?? '').localeCompare(right.site ?? ''),
       ),
+      revealed: sortRuntimeRevealFacts(revealed),
       unregisteredSinks: unregisteredSinks.sort(
         (left, right) => left.site.localeCompare(right.site) || left.sink.localeCompare(right.sink),
       ),
@@ -38813,6 +38819,73 @@ export function collectCapabilityEscapesFromProject(
   } finally {
     dispose();
   }
+}
+
+/**
+ * Collect exact runtime `trustedReveal(...)` calls into the existing reveal-fact graph
+ * (SPEC §6.6, audit-only). Query projection reveals remain owned by the typed query-shape
+ * analyzer; callers merge by source site so its richer proof/audit verdict wins. A runtime call is
+ * always audit-grade because a syntactic call-site witness cannot prove how the revealed plaintext
+ * is used afterward.
+ *
+ * @internal
+ */
+export function collectRuntimeRevealFactsFromProject(
+  options: TrustEscapeProjectOptions,
+): RevealExplainFact[] {
+  const { sourceFiles, dispose } = createSyntacticProject(options.files);
+  try {
+    const revealed: RevealExplainFact[] = [];
+    for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
+      const sourceFile = sourceFiles[fileIndex];
+      const file = options.files[fileIndex];
+      if (!sourceFile || !file) continue;
+
+      for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        const reveal = runtimeRevealFactForCall(file, call);
+        if (reveal) revealed.push(reveal);
+      }
+    }
+    return sortRuntimeRevealFacts(revealed);
+  } finally {
+    dispose();
+  }
+}
+
+function runtimeRevealFactForCall(
+  file: TrustEscapeSourceFileInput,
+  call: import('ts-morph').CallExpression,
+): RevealExplainFact | undefined {
+  if (!requestCallIsExactTrustedReveal(call)) return undefined;
+  const value = call.getArguments()[0];
+  const optionsArgument = call.getArguments()[1];
+  if (!value || !optionsArgument) return undefined;
+  const revealOptions = unwrapStaticExpression(optionsArgument);
+  if (!Node.isObjectLiteralExpression(revealOptions)) return undefined;
+  const justification = objectStringProperty(revealOptions, 'justification');
+  if (justification === undefined) return undefined;
+  const requestedMethod = objectStringProperty(revealOptions, 'method');
+  const method = requestedMethod === 'server-projection' ? requestedMethod : 'arbitrary-fn';
+  const source = objectStringProperty(revealOptions, 'source') ?? shortSource(value);
+  return {
+    grade: 'audit',
+    justification,
+    method,
+    path: source,
+    query: 'runtime',
+    selectedSecret: true,
+    site: siteFor(file, call),
+    source,
+  };
+}
+
+function sortRuntimeRevealFacts(revealed: RevealExplainFact[]): RevealExplainFact[] {
+  return revealed.sort(
+    (left, right) =>
+      left.site.localeCompare(right.site) ||
+      left.path.localeCompare(right.path) ||
+      (left.justification ?? '').localeCompare(right.justification ?? ''),
+  );
 }
 
 function capabilityEscapesForSourceFile(
