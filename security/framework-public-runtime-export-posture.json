@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "8e187faa424368ca7c73abe47fc2901e84b78f60e917d0173afdb063edfe39f3",
+      "sourceTreeSha256": "bdfc7d7c06a4ca7d23cbbcbdf23968a2efc889718c60b30640fc0038a11445f5",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "1e3b538bfae69cb50e56fbc04fc27dca00bc5c91a0bebb4c51c5fec3f16c360c",
+      "sourceTreeSha256": "3fa464ceb860ad1d2562261dbe814515f80df0d883bb04534cd9da2c329b6c13",
       "manifestVariants": [
         {
           "fingerprint": "sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368"
@@ -449,7 +449,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "3fdda49255836382c92dc30c146569f8e60363df437330e317f928cf8447a6d7"
+      "sourceTreeSha256": "56814e908ac383a983f04cd1e01b0f87cd60a3b7d4650f29e2ce6058173f7ea2"
     },
     {
       "manifestVariants": [
@@ -733,7 +733,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "bb379ba9284df7226f793e53f491489f3e5f72d571b662f2fe080381b0985dd4"
+      "sourceTreeSha256": "699ff99781f8cd87c4f60f3ed019780ba9b9f4cc84e3eb2d13035a7f90e70a8f"
     },
     {
       "manifestVariants": [
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "4a0132cc2805d6d5e1ae5a857753929dacbb4e7de359bba43c5aa9b96d27eeca"
+      "sourceTreeSha256": "ec1112b734842435d61be8b28e78f30e55da706892687d915b3ce37c2e43363d"
     },
     {
       "manifestVariants": [
@@ -1673,7 +1673,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "7df4f93e4c754476dcd923d864d3e8e90c34b75a8a434f32e3c0e432968ace51"
+      "sourceTreeSha256": "10d00849acc084d4e853c99617a38373fda3563478e6da73edd5896295105dec"
     },
     {
       "manifestVariants": [
@@ -1941,7 +1941,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "b9e06b95c6c1c6b653c4c41882120351d66be5712271895eb987cdd57a7b3fef"
+      "sourceTreeSha256": "b2047d254606495b9240698c35a3b42e413deb64b628ce5172918dedf742c6c5"
     },
     {
       "manifestVariants": [
@@ -2473,7 +2473,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "1a5bc49424e84ee33f5dd20be9b97aee82293e17f03c862eef85c0707d102c1a"
+      "sourceTreeSha256": "8f4c266e8a433253b807901689406d226d09462131069ca80625de3150c58249"
     },
     {
       "manifestVariants": [
@@ -6025,7 +6025,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "5ac116375349f053b33281e6b6cf8aaa02e521d3f09f4f4bd98a2be5b1253706"
+      "sourceTreeSha256": "ba9294cd1d47ffdd03123a2372cfad57f53c22f08ad7a7e64a9a0a93c068cc11"
     },
     {
       "manifestVariants": [
@@ -9627,7 +9627,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "3c1370a6121326bc04d453c3e5f34f61629ed8a67e05afff06bb03b5ff7a1908"
+      "sourceTreeSha256": "728c82d0878429e4314137f1c10c9fc5c3421d1b3330026ae2c202214a8dbcfe"
     },
     {
       "manifestVariants": [
@@ -9712,7 +9712,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "36a6a248ec6fcb7227bc2a4c827249a97360f4e2368e38794ebecf04ae3e0a65"
+      "sourceTreeSha256": "4167ef35bfa4adbb2eabe49206881691ba63f0811156815367173e316b992cdc"
     },
     {
       "manifestVariants": [
@@ -9974,7 +9974,7 @@
           "reason": "Raw test database constructors are test-process authority, not request-handler doors."
         }
       ],
-      "sourceTreeSha256": "709d64175844bc83354abecf37b7a4ab41bf9e70e4430c94765a67b68bf20c79"
+      "sourceTreeSha256": "a120b4a986bb24d48492ea893e734b7360a20b74e37c31fee858353520c615f1"
     },
     {
       "manifestVariants": [
@@ -10502,7 +10502,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "1a998dce9fea6e4bbe7405a40e60eeeb8e57f4cb4c56e818facd62c558546ce0"
+      "sourceTreeSha256": "a7ec04add8646fbd927e8179c163e0593d2abfa268f258845a7a3cd3dd2ec976"
     }
   ],
   "classificationSha256": "dfbf93ff7c3ca9befdb0b717f0b5e1709eb4a9f24b0d33a489c7d1ab1af03338"

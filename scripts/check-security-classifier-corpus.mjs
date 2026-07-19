@@ -1912,7 +1912,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'binds every manifest-public runtime value and module initializer to reviewed posture',
           'kills omission, duplicate, and newly exported-member mutants',
-          'digests fixture-named and generated production sources while excluding only tests and itself',
+          'digests every regular production source asset and normalizes only exact compiler self fields',
           'kills security-role omission across auth, secret, SQL, authorization, CSRF, and replay exports',
           "rootKind: 'application'",
         ],

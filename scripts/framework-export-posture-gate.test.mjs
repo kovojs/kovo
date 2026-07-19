@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeFrameworkRuntimeSurface,
   expandFrameworkExportPostureLedger,
+  productionPackedTreeSha256,
   productionSourceTreeSha256,
   readFrameworkExportPostureLedger,
   validateFrameworkExportPosture,
@@ -156,11 +157,11 @@ describe('framework public runtime export posture gate', () => {
     );
   });
 
-  it('digests fixture-named and generated production sources while excluding only tests and itself', () => {
+  it('digests every regular production source asset and normalizes only exact compiler self fields', () => {
     const serverRoot = fileURLToPath(new URL('../packages/server', import.meta.url));
     const fixtureSource = path.join(serverRoot, 'src/test-fixtures.ts');
-    const baseline = productionSourceTreeSha256(serverRoot);
-    const fixtureMutation = productionSourceTreeSha256(serverRoot, (fileName) => {
+    const baseline = productionSourceTreeSha256(serverRoot, '@kovojs/server');
+    const fixtureMutation = productionSourceTreeSha256(serverRoot, '@kovojs/server', (fileName) => {
       const source = readFileSync(fileName);
       return fileName === fixtureSource
         ? Buffer.concat([source, Buffer.from('\n// mutant')])
@@ -173,14 +174,58 @@ describe('framework public runtime export posture gate', () => {
       compilerRoot,
       'src/security/framework-public-runtime-export-posture.generated.ts',
     );
-    const compilerBaseline = productionSourceTreeSha256(compilerRoot);
-    const selfMutation = productionSourceTreeSha256(compilerRoot, (fileName) => {
-      const source = readFileSync(fileName);
-      return fileName === selfGenerated
-        ? Buffer.concat([source, Buffer.from('\n// mutant')])
-        : source;
-    });
-    expect(selfMutation).toBe(compilerBaseline);
+    const compilerBaseline = productionSourceTreeSha256(compilerRoot, '@kovojs/compiler');
+    for (const prefix of [
+      'kovo-compiler-self-source-tree-sha256:',
+      'kovo-compiler-self-packed-tree-sha256:',
+    ]) {
+      const selfMutation = productionSourceTreeSha256(
+        compilerRoot,
+        '@kovojs/compiler',
+        (fileName) => {
+          const source = readFileSync(fileName);
+          return fileName === selfGenerated
+            ? Buffer.from(
+                source
+                  .toString('utf8')
+                  .replace(new RegExp(`${prefix}[a-f0-9]{64}`, 'u'), `${prefix}${'f'.repeat(64)}`),
+              )
+            : source;
+        },
+      );
+      expect(selfMutation, prefix).toBe(compilerBaseline);
+    }
+
+    const permissionMutation = productionSourceTreeSha256(
+      compilerRoot,
+      '@kovojs/compiler',
+      (fileName) => {
+        const source = readFileSync(fileName);
+        return fileName === selfGenerated
+          ? Buffer.concat([source, Buffer.from('\n// changed permission/disposition')])
+          : source;
+      },
+    );
+    expect(permissionMutation).not.toBe(compilerBaseline);
+
+    const nonSelfDigestMutation = productionSourceTreeSha256(
+      compilerRoot,
+      '@kovojs/compiler',
+      (fileName) => {
+        const source = readFileSync(fileName);
+        return fileName === selfGenerated
+          ? Buffer.from(
+              source
+                .toString('utf8')
+                .replace(
+                  /kovo-source-tree-sha256:[a-f0-9]{64}/u,
+                  `kovo-source-tree-sha256:${'e'.repeat(64)}`,
+                ),
+            )
+          : source;
+      },
+    );
+    expect(nonSelfDigestMutation).not.toBe(compilerBaseline);
 
     const generatedRoot = mkdtempSync(path.join(tmpdir(), 'kovo-posture-source-digest-'));
     try {
@@ -188,16 +233,143 @@ describe('framework public runtime export posture gate', () => {
       mkdirSync(sourceRoot);
       const generatedSource = path.join(sourceRoot, 'runtime.generated.ts');
       const testSource = path.join(sourceRoot, 'runtime.test.ts');
+      const runtimeAsset = path.join(sourceRoot, 'runtime-template.json');
       writeFileSync(generatedSource, 'export const generated = 1;\n');
       writeFileSync(testSource, 'export const testOnly = 1;\n');
-      const generatedBaseline = productionSourceTreeSha256(generatedRoot);
+      writeFileSync(runtimeAsset, '{"template":1}\n');
+      const generatedBaseline = productionSourceTreeSha256(generatedRoot, '@kovojs/style');
       writeFileSync(generatedSource, 'export const generated = 2;\n');
-      expect(productionSourceTreeSha256(generatedRoot)).not.toBe(generatedBaseline);
-      const afterGeneratedMutation = productionSourceTreeSha256(generatedRoot);
+      expect(productionSourceTreeSha256(generatedRoot, '@kovojs/style')).not.toBe(
+        generatedBaseline,
+      );
+      const afterGeneratedMutation = productionSourceTreeSha256(generatedRoot, '@kovojs/style');
+      writeFileSync(runtimeAsset, '{"template":2}\n');
+      expect(productionSourceTreeSha256(generatedRoot, '@kovojs/style')).not.toBe(
+        afterGeneratedMutation,
+      );
+      const afterAssetMutation = productionSourceTreeSha256(generatedRoot, '@kovojs/style');
       writeFileSync(testSource, 'export const testOnly = 2;\n');
-      expect(productionSourceTreeSha256(generatedRoot)).toBe(afterGeneratedMutation);
+      expect(productionSourceTreeSha256(generatedRoot, '@kovojs/style')).not.toBe(
+        afterAssetMutation,
+      );
+      symlinkSync(generatedSource, path.join(sourceRoot, 'runtime-link.ts'));
+      expect(() => productionSourceTreeSha256(generatedRoot, '@kovojs/style')).toThrow(
+        'contains non-file entry',
+      );
     } finally {
       rmSync(generatedRoot, { force: true, recursive: true });
+    }
+
+    const linkedRoot = mkdtempSync(path.join(tmpdir(), 'kovo-posture-source-root-link-'));
+    const linkedTarget = mkdtempSync(path.join(tmpdir(), 'kovo-posture-source-root-target-'));
+    try {
+      mkdirSync(path.join(linkedTarget, 'src'));
+      writeFileSync(path.join(linkedTarget, 'src/index.ts'), 'export const value = 1;\n');
+      symlinkSync(path.join(linkedTarget, 'src'), path.join(linkedRoot, 'src'), 'dir');
+      expect(() => productionSourceTreeSha256(linkedRoot, '@kovojs/style')).toThrow(
+        'root is not a directory',
+      );
+    } finally {
+      rmSync(linkedRoot, { force: true, recursive: true });
+      rmSync(linkedTarget, { force: true, recursive: true });
+    }
+  });
+
+  it('digests every packed byte and scopes self-cycle normalization to the compiler catalog', () => {
+    const packageRoot = mkdtempSync(path.join(tmpdir(), 'kovo-posture-packed-digest-'));
+    try {
+      const distRoot = path.join(packageRoot, 'dist');
+      mkdirSync(distRoot);
+      const files = [
+        ['index.mjs', 'export const entry = 1;\n'],
+        ['chunk-A.mjs', 'export const chunk = 1;\n'],
+        ['chunk-A.mjs.map', '{"version":3}\n'],
+        ['chunk-A.d.mts', 'export declare const chunk: number;\n'],
+      ];
+      for (const [fileName, source] of files) writeFileSync(path.join(distRoot, fileName), source);
+
+      const baseline = productionPackedTreeSha256(packageRoot, '@kovojs/style');
+      for (const [fileName, source] of files) {
+        writeFileSync(path.join(distRoot, fileName), `${source}// mutant\n`);
+        expect(productionPackedTreeSha256(packageRoot, '@kovojs/style'), fileName).not.toBe(
+          baseline,
+        );
+        writeFileSync(path.join(distRoot, fileName), source);
+      }
+
+      for (const prefix of [
+        'kovo-source-tree-sha256:',
+        'kovo-packed-tree-sha256:',
+        'kovo-compiler-self-source-tree-sha256:',
+        'kovo-compiler-self-packed-tree-sha256:',
+      ]) {
+        writeFileSync(path.join(distRoot, 'chunk-A.mjs'), `${prefix}${'a'.repeat(64)}`);
+        expect(() => productionPackedTreeSha256(packageRoot, '@kovojs/style')).toThrow(
+          "framework implementation digest marker escaped the compiler's exact generated catalog artifact",
+        );
+      }
+    } finally {
+      rmSync(packageRoot, { force: true, recursive: true });
+    }
+
+    const linkedRoot = mkdtempSync(path.join(tmpdir(), 'kovo-posture-packed-root-link-'));
+    const linkedTarget = mkdtempSync(path.join(tmpdir(), 'kovo-posture-packed-root-target-'));
+    try {
+      mkdirSync(path.join(linkedTarget, 'dist'));
+      writeFileSync(path.join(linkedTarget, 'dist/index.mjs'), 'export const value = 1;\n');
+      symlinkSync(path.join(linkedTarget, 'dist'), path.join(linkedRoot, 'dist'), 'dir');
+      expect(() => productionPackedTreeSha256(linkedRoot, '@kovojs/style')).toThrow(
+        'root is not a directory',
+      );
+    } finally {
+      rmSync(linkedRoot, { force: true, recursive: true });
+      rmSync(linkedTarget, { force: true, recursive: true });
+    }
+
+    const compilerRoot = mkdtempSync(path.join(tmpdir(), 'kovo-compiler-packed-digest-'));
+    try {
+      const distRoot = path.join(compilerRoot, 'dist');
+      mkdirSync(distRoot);
+      const selfSourceDigest = (hex) => `kovo-compiler-self-source-tree-sha256:${hex.repeat(64)}`;
+      const selfDigest = (hex) => `kovo-compiler-self-packed-tree-sha256:${hex.repeat(64)}`;
+      const reviewedDigest = (hex) => `kovo-packed-tree-sha256:${hex.repeat(64)}`;
+      const catalogRuntime = path.join(distRoot, 'internal.mjs');
+      const catalogMap = path.join(distRoot, 'internal.mjs.map');
+      writeFileSync(
+        catalogRuntime,
+        `source=${selfSourceDigest('a')} catalog=${selfDigest('a')} reviewed=${reviewedDigest('b')}\n`,
+      );
+      writeFileSync(catalogMap, `source=${selfSourceDigest('a')} sources=${selfDigest('a')}\n`);
+      writeFileSync(path.join(distRoot, 'index.mjs'), 'export const ordinary = true;\n');
+      const baseline = productionPackedTreeSha256(compilerRoot, '@kovojs/compiler');
+
+      writeFileSync(
+        catalogRuntime,
+        `source=${selfSourceDigest('c')} catalog=${selfDigest('c')} reviewed=${reviewedDigest('b')}\n`,
+      );
+      expect(productionPackedTreeSha256(compilerRoot, '@kovojs/compiler')).toBe(baseline);
+
+      writeFileSync(
+        catalogRuntime,
+        `source=${selfSourceDigest('c')} changed=${selfDigest('c')} reviewed=${reviewedDigest('b')}\n`,
+      );
+      expect(productionPackedTreeSha256(compilerRoot, '@kovojs/compiler')).not.toBe(baseline);
+
+      writeFileSync(
+        catalogRuntime,
+        `source=${selfSourceDigest('a')} catalog=${selfDigest('a')} reviewed=${reviewedDigest('d')}\n`,
+      );
+      expect(productionPackedTreeSha256(compilerRoot, '@kovojs/compiler')).not.toBe(baseline);
+
+      writeFileSync(
+        path.join(distRoot, 'extra.mjs'),
+        `owner=kovo-framework-public-runtime-export-posture/fixture source=${selfSourceDigest('e')} catalog=${selfDigest('e')}\n`,
+      );
+      expect(() => productionPackedTreeSha256(compilerRoot, '@kovojs/compiler')).toThrow(
+        "framework implementation digest marker escaped the compiler's exact generated catalog artifact",
+      );
+    } finally {
+      rmSync(compilerRoot, { force: true, recursive: true });
     }
   });
 

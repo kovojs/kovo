@@ -25,6 +25,10 @@ import {
   frameworkExportPostureSummaryVersion,
   type FrameworkExportPostureDisposition,
 } from './framework-public-runtime-export-posture.generated.js';
+import {
+  canonicalFrameworkImplementationDigest,
+  frameworkImplementationDigestMatches,
+} from './framework-implementation-digest.js';
 
 export type {
   CapabilityClosureSourceFile,
@@ -95,8 +99,13 @@ const sourceExtensions = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', 
 
 const drizzleSummaryVersion = 'kovo-reviewed-drizzle/1.0.0-rc.4.1';
 
+interface FrameworkPackageVariantPosture {
+  readonly conditionsBySubpath: ReadonlyMap<string, readonly string[]>;
+  readonly implementationDigests: readonly string[];
+}
+
 interface FrameworkPackagePosture {
-  readonly variantsByFingerprint: ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>;
+  readonly variantsByFingerprint: ReadonlyMap<string, FrameworkPackageVariantPosture>;
   readonly packageVersion: string;
 }
 
@@ -143,6 +152,11 @@ const frameworkRootKinds = new Set<CapabilityRootKind | 'none'>([
 
 const frameworkPostureRegistry = createFrameworkPostureRegistry();
 
+/** Compiler-registry membership used by the pre-evaluation installed-package resolver. @internal */
+export function isCompilerOwnedCapabilityPackage(packageName: string): boolean {
+  return frameworkPostureRegistry.packages.has(packageName);
+}
+
 function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
   const invalidReasons: string[] = [];
   const packages = new Map<string, FrameworkPackagePosture>();
@@ -154,8 +168,8 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
       invalidReasons.push(`duplicate package ${packageName}`);
       continue;
     }
-    const variantsByFingerprint = new Map<string, ReadonlyMap<string, readonly string[]>>();
-    for (const [fingerprint, subpaths] of variants) {
+    const variantsByFingerprint = new Map<string, FrameworkPackageVariantPosture>();
+    for (const [fingerprint, subpaths, implementationDigests] of variants) {
       if (variantsByFingerprint.has(fingerprint)) {
         invalidReasons.push(`${packageName} has duplicate manifest fingerprint ${fingerprint}`);
         continue;
@@ -171,7 +185,28 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
         }
         conditionsBySubpath.set(subpath, conditions);
       }
-      variantsByFingerprint.set(fingerprint, conditionsBySubpath);
+      const canonicalImplementationDigests = implementationDigests.flatMap((digest) => {
+        const canonical = canonicalFrameworkImplementationDigest(packageName, digest);
+        if (canonical === undefined) {
+          invalidReasons.push(
+            `${packageName}/${fingerprint} has invalid implementation digest ${digest}`,
+          );
+          return [];
+        }
+        return [canonical];
+      });
+      if (
+        canonicalImplementationDigests.length === 0 ||
+        new Set(canonicalImplementationDigests).size !== canonicalImplementationDigests.length
+      ) {
+        invalidReasons.push(
+          `${packageName}/${fingerprint} has empty or duplicate implementation digests`,
+        );
+      }
+      variantsByFingerprint.set(fingerprint, {
+        conditionsBySubpath,
+        implementationDigests: canonicalImplementationDigests,
+      });
     }
     if (variantsByFingerprint.size === 0)
       invalidReasons.push(`${packageName} has no manifest variant`);
@@ -193,7 +228,9 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
     for (const [subpath, names] of members) {
       if (
         pkg === undefined ||
-        ![...pkg.variantsByFingerprint.values()].some((variant) => variant.has(subpath))
+        ![...pkg.variantsByFingerprint.values()].some((variant) =>
+          variant.conditionsBySubpath.has(subpath),
+        )
       ) {
         invalidReasons.push(
           `permission group references unknown package/subpath ${packageName}${subpath}`,
@@ -245,7 +282,9 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
 
   for (const [packageName, pkg] of packages) {
     const subpaths = new Set(
-      [...pkg.variantsByFingerprint.values()].flatMap((variant) => [...variant.keys()]),
+      [...pkg.variantsByFingerprint.values()].flatMap((variant) => [
+        ...variant.conditionsBySubpath.keys(),
+      ]),
     );
     for (const subpath of subpaths) {
       if (!permissions.has(frameworkMemberId(packageName, subpath, '<module>'))) {
@@ -703,8 +742,24 @@ function packageVerdict(
         frameworkExportPostureSummaryVersion,
       );
     }
+    if (
+      !frameworkImplementationDigestMatches(
+        installedVariant.implementationDigests,
+        metadata.implementationDigest,
+      )
+    ) {
+      return closedPackageVerdict(
+        use,
+        metadata.implementationDigest === undefined ? 'unresolved' : 'stale',
+        metadata.implementationDigest === undefined
+          ? `compiler-owned ${packageName} posture has no compiler-derived installed implementation digest`
+          : `compiler-owned ${packageName} posture installed implementation digest does not match the reviewed source or packed implementation`,
+        metadata,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
     const subpath = packageSubpath(specifier);
-    const conditions = installedVariant.get(subpath);
+    const conditions = installedVariant.conditionsBySubpath.get(subpath);
     if (conditions === undefined) {
       return closedPackageVerdict(
         use,
