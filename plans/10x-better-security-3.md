@@ -303,12 +303,12 @@ the guard checks a role SQL never sees.
       renderers. Reject statically visible `CREATE`/`ALTER`/`DROP POLICY` mutations elsewhere across
       production package and starter-template source, and bind the reviewed emitter by TS symbol
       identity so aliases, re-exports, dynamic loads, and extra calls fail closed.
-  - Evidence: `pnpm run check:rls-emission-door` passes 42/42 with exactly 3 CREATE renderers, 4 DROP
-    renderers, and 5 constructor calls, including query/fragment, percent-encoded, Windows-path, and
-    case-folded loader identities. The 144/144 four-file PostgreSQL suite rejects an extra policy with
-    `KV433_POLICY_SET`, an `ALTER POLICY ... USING (true)` weakening with `KV433_OWNER_POLICY`, and a
-    sixth policy that survives a provisioning reset; external Postgres defaults the post-provision
-    boot audit on.
+  - Evidence: `pnpm run check:rls-emission-door` passes 48/48 with exactly 3 CREATE renderers, 4 DROP
+    renderers, and 5 constructor calls, including URL/CJS, percent, Windows-path, Unicode case-fold,
+    and filesystem-inode loader identities. The 144/144 four-file PostgreSQL suite rejects an extra
+    policy with `KV433_POLICY_SET`, an `ALTER POLICY ... USING (true)` weakening with
+    `KV433_OWNER_POLICY`, and a sixth policy that survives a provisioning reset; external Postgres
+    defaults the post-provision boot audit on.
   - Honesty boundary: the source gate recognizes a deliberately finite static grammar over trusted
     framework source; it does not claim to decide arbitrary JavaScript or dynamically assembled SQL.
     The supported-deployment security boundary is the live boot posture check over the engine's exact

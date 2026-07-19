@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import ts from 'typescript';
@@ -94,7 +94,7 @@ export function checkPostgresRlsEmissionDoor({ files, rootDir = repoRoot } = {})
     validateEmitterInventory(emitterSource, findings);
     validateEmitterSwitch(emitterSource, findings);
     validatePrimaryEmitterCalls(emitterSource, checker, findings);
-    validateRendererSymbolClosure(program, emitterSource, checker, findings);
+    validateRendererSymbolClosure(program, emitterSource, checker, findings, rootDir);
   }
 
   const createRenderers = [];
@@ -110,8 +110,8 @@ export function checkPostgresRlsEmissionDoor({ files, rootDir = repoRoot } = {})
       dropRenderers,
       findings,
     );
-    collectEmitterModuleEscapes(sourceFile, checker, fileName, findings);
-    const bindings = collectEmitterImportBindings(sourceFile, fileName, findings);
+    collectEmitterModuleEscapes(sourceFile, checker, fileName, findings, rootDir);
+    const bindings = collectEmitterImportBindings(sourceFile, fileName, findings, rootDir);
     if (fileName === postgresRlsRuntimeFile) runtimeEmitterImports = bindings.importCount;
     collectEmitterCalls(sourceFile, fileName, bindings, runtimeCalls, findings);
     collectEmitterBindingEscapes(sourceFile, fileName, bindings, findings);
@@ -218,21 +218,7 @@ function resolveSourceModule(sources, containingFile, specifier) {
   const unresolved = slash(
     path.posix.normalize(path.posix.join(path.posix.dirname(containingFile), specifier)),
   );
-  const withoutRuntimeExtension = unresolved.replace(/\.(?:[cm]?js|jsx)$/u, '');
-  const candidates = [
-    unresolved,
-    `${withoutRuntimeExtension}.ts`,
-    `${withoutRuntimeExtension}.tsx`,
-    `${withoutRuntimeExtension}.mts`,
-    `${withoutRuntimeExtension}.cts`,
-    `${withoutRuntimeExtension}.js`,
-    `${withoutRuntimeExtension}.jsx`,
-    `${withoutRuntimeExtension}.mjs`,
-    `${withoutRuntimeExtension}.cjs`,
-    `${withoutRuntimeExtension}/index.ts`,
-    `${withoutRuntimeExtension}/index.tsx`,
-    `${withoutRuntimeExtension}/index.js`,
-  ];
+  const candidates = sourceResolutionCandidates(unresolved);
   const resolvedFileName = candidates.find((candidate) => sources.has(candidate));
   if (resolvedFileName === undefined) return undefined;
   return {
@@ -358,7 +344,7 @@ function validatePrimaryEmitterCalls(sourceFile, checker, findings) {
   }
 }
 
-function validateRendererSymbolClosure(program, sourceFile, checker, findings) {
+function validateRendererSymbolClosure(program, sourceFile, checker, findings, rootDir) {
   const publicDeclaration = findFunctionDeclaration(sourceFile, emitterName);
   const declaration = findFunctionDeclaration(sourceFile, primaryEmitterName);
   const publicTarget =
@@ -394,7 +380,7 @@ function validateRendererSymbolClosure(program, sourceFile, checker, findings) {
       }
       if (!sameSymbol(checker, symbol, publicTarget)) return;
       if (node === publicDeclaration.name) return;
-      if (isReviewedRuntimeEmitterReference(node, candidate, fileName)) return;
+      if (isReviewedRuntimeEmitterReference(node, candidate, fileName, rootDir)) return;
       findings.push(
         `${fileName}:${lineOf(candidate, node)}: ${emitterName} may appear only in its declaration, the reviewed runtime import, and the five direct runtime calls`,
       );
@@ -402,7 +388,7 @@ function validateRendererSymbolClosure(program, sourceFile, checker, findings) {
   }
 }
 
-function isReviewedRuntimeEmitterReference(node, sourceFile, fileName) {
+function isReviewedRuntimeEmitterReference(node, sourceFile, fileName, rootDir) {
   if (fileName !== postgresRlsRuntimeFile || node.text !== emitterName) return false;
   if (
     ts.isImportSpecifier(node.parent) &&
@@ -413,7 +399,7 @@ function isReviewedRuntimeEmitterReference(node, sourceFile, fileName) {
     return (
       ts.isImportDeclaration(declaration) &&
       ts.isStringLiteral(declaration.moduleSpecifier) &&
-      moduleCanResolveToEmitter(fileName, declaration.moduleSpecifier.text)
+      moduleCanResolveToEmitter(fileName, declaration.moduleSpecifier.text, rootDir)
     );
   }
   return ts.isCallExpression(node.parent) && node.parent.expression === node;
@@ -502,14 +488,14 @@ function validateRawRenderers(createRows, dropRows, findings) {
   }
 }
 
-function collectEmitterImportBindings(sourceFile, fileName, findings) {
+function collectEmitterImportBindings(sourceFile, fileName, findings, rootDir) {
   const localNames = new Set();
   let importCount = 0;
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
       continue;
     }
-    if (!moduleCanResolveToEmitter(fileName, statement.moduleSpecifier.text)) continue;
+    if (!moduleCanResolveToEmitter(fileName, statement.moduleSpecifier.text, rootDir)) continue;
     const clause = statement.importClause;
     if (
       clause === undefined ||
@@ -546,13 +532,13 @@ function collectEmitterImportBindings(sourceFile, fileName, findings) {
   return { importCount, localNames };
 }
 
-function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings) {
+function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings, rootDir) {
   for (const statement of sourceFile.statements) {
     if (
       ts.isExportDeclaration(statement) &&
       statement.moduleSpecifier !== undefined &&
       ts.isStringLiteral(statement.moduleSpecifier) &&
-      moduleCanResolveToEmitter(fileName, statement.moduleSpecifier.text)
+      moduleCanResolveToEmitter(fileName, statement.moduleSpecifier.text, rootDir)
     ) {
       findings.push(
         `${fileName}:${lineOf(sourceFile, statement)}: the RLS correspondence module must not be re-exported through a barrel`,
@@ -563,7 +549,7 @@ function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings) {
       ts.isExternalModuleReference(statement.moduleReference) &&
       statement.moduleReference.expression !== undefined &&
       ts.isStringLiteral(statement.moduleReference.expression) &&
-      moduleCanResolveToEmitter(fileName, statement.moduleReference.expression.text)
+      moduleCanResolveToEmitter(fileName, statement.moduleReference.expression.text, rootDir)
     ) {
       findings.push(
         `${fileName}:${lineOf(sourceFile, statement)}: the RLS correspondence module may not be imported through import-equals`,
@@ -576,14 +562,19 @@ function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings) {
     const argument = node.arguments?.[0];
     if (argument === undefined) return;
     const specifier = evaluateStaticString(argument, checker);
-    if (specifier === undefined || !moduleCanResolveToEmitter(fileName, specifier)) return;
+    if (specifier === undefined || !moduleCanResolveToEmitter(fileName, specifier, rootDir)) return;
     findings.push(
       `${fileName}:${lineOf(sourceFile, node)}: the RLS correspondence module may not be supplied to runtime loading code`,
     );
   });
 
   walk(sourceFile, (node) => {
-    if (!ts.isStringLiteral(node) || !moduleCanResolveToEmitter(fileName, node.text)) return;
+    if (
+      !ts.isStringLiteral(node) ||
+      !moduleCanResolveToEmitter(fileName, node.text, rootDir)
+    ) {
+      return;
+    }
     const parent = node.parent;
     if (
       (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) &&
@@ -604,26 +595,89 @@ function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings) {
   });
 }
 
-function moduleCanResolveToEmitter(fileName, specifier) {
+function moduleCanResolveToEmitter(fileName, specifier, rootDir) {
   if (!specifier.startsWith('.')) return false;
+  const emitterIdentity = portableModuleIdentityWithoutExtension(postgresRlsEmitterFile);
+  for (const resolved of moduleSpecifierPathInterpretations(fileName, specifier)) {
+    if (filesystemModuleIdentityMatchesEmitter(rootDir, resolved)) return true;
+    if (portableModuleIdentityWithoutExtension(resolved) === emitterIdentity) return true;
+  }
+  return false;
+}
+
+function moduleSpecifierPathInterpretations(fileName, specifier) {
+  const spellings = [specifier, specifier.replaceAll('\\', '/')];
   const suffixIndex = specifier.search(/[?#]/u);
-  const pathPart = suffixIndex < 0 ? specifier : specifier.slice(0, suffixIndex);
-  let canonicalSpecifier;
+  const urlPath = suffixIndex < 0 ? specifier : specifier.slice(0, suffixIndex);
   try {
-    canonicalSpecifier = decodeURIComponent(pathPart).replaceAll('\\', '/');
+    const decodedUrlPath = decodeURIComponent(urlPath);
+    spellings.push(decodedUrlPath, decodedUrlPath.replaceAll('\\', '/'));
+  } catch {
+    // Malformed URL encoding is still a valid literal CJS filename on POSIX.
+  }
+  const resolved = [];
+  for (const spelling of spellings) {
+    const candidate = path.posix.normalize(
+      path.posix.join(path.posix.dirname(fileName), spelling),
+    );
+    if (!resolved.includes(candidate)) resolved.push(candidate);
+  }
+  return resolved;
+}
+
+/**
+ * Compare source-module identities conservatively across supported filesystems. Case-insensitive
+ * APFS resolves Unicode case-fold aliases such as U+017F LONG S to ASCII `s`; lowercasing alone
+ * misses that loader path. Compatibility normalization plus the lower/upper/lower closure captures
+ * multi-code-point and compatibility case folds while accepting only an exact emitter identity.
+ */
+function portableModuleIdentity(value) {
+  return value.normalize('NFKC').toLowerCase().toUpperCase().toLowerCase().normalize('NFKC');
+}
+
+function portableModuleIdentityWithoutExtension(value) {
+  return portableModuleIdentity(value).replace(/\.(?:[cm]?[jt]s|[jt]sx)$/u, '');
+}
+
+function filesystemModuleIdentityMatchesEmitter(rootDir, resolved) {
+  let emitter;
+  try {
+    emitter = statSync(path.join(rootDir, postgresRlsEmitterFile), { bigint: true });
   } catch {
     return false;
   }
-  const resolved = slash(
-    path.posix.normalize(path.posix.join(path.posix.dirname(fileName), canonicalSpecifier)),
-  );
-  const resolvedIdentity = resolved.toLowerCase().replace(/\.(?:[cm]?[jt]sx?)$/u, '');
-  const emitterIdentity = postgresRlsEmitterFile
-    .toLowerCase()
-    .replace(/\.(?:[cm]?[jt]sx?)$/u, '');
-  return (
-    resolvedIdentity === emitterIdentity
-  );
+  for (const candidate of sourceResolutionCandidates(resolved)) {
+    try {
+      const resolvedStat = statSync(path.join(rootDir, candidate), { bigint: true });
+      if (resolvedStat.dev === emitter.dev && resolvedStat.ino === emitter.ino) return true;
+    } catch {
+      // The portable identity check below owns platforms where this spelling is not loadable.
+    }
+  }
+  return false;
+}
+
+function sourceResolutionCandidates(resolved) {
+  const lastSlash = resolved.lastIndexOf('/');
+  const lastDot = resolved.lastIndexOf('.');
+  const extension = lastDot > lastSlash ? portableModuleIdentity(resolved.slice(lastDot + 1)) : '';
+  const hasRecognizedExtension = /^(?:[cm]?[jt]s|[jt]sx)$/u.test(extension);
+  if (lastDot > lastSlash && !hasRecognizedExtension) return [resolved];
+  const stem = hasRecognizedExtension ? resolved.slice(0, lastDot) : resolved;
+  return [
+    resolved,
+    ...['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'].map(
+      (candidateExtension) => `${stem}${candidateExtension}`,
+    ),
+    `${stem}/index.ts`,
+    `${stem}/index.tsx`,
+    `${stem}/index.mts`,
+    `${stem}/index.cts`,
+    `${stem}/index.js`,
+    `${stem}/index.jsx`,
+    `${stem}/index.mjs`,
+    `${stem}/index.cjs`,
+  ];
 }
 
 function collectEmitterCalls(sourceFile, fileName, bindings, rows, findings) {
