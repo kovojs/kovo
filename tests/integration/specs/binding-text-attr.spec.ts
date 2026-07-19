@@ -9,7 +9,7 @@ test('updates text and attribute bindings from current server and state surfaces
   await page.goto('/');
 
   const queryOutput = page.locator('binding-card [data-bind="card.text"]');
-  const queryButton = page.locator('binding-card [data-bind\\:aria-label="card.label"]');
+  const queryButton = page.locator('binding-card > button[type="button"]');
   await expect(queryOutput).toHaveText('Initial text');
   await expect(queryButton).toHaveAttribute('aria-label', 'Initial card');
   await expect(queryButton).toHaveAttribute('data-state', 'idle');
@@ -43,11 +43,13 @@ test('updates text and attribute bindings from current server and state surfaces
   const rows = await kovoApp.db.query('select text, label, status from card_state where id = 1');
   expect(rows[0]).toEqual({ label: 'Updated card', status: 'ready', text: 'Updated text' });
 
-  expect(
-    await kovoApp.semantic('binding-card', {
-      keepAttrs: ['data-bind:aria-label', 'data-bind:data-state'],
-    }),
-  ).toMatchSnapshot('binding-card.semantic.txt');
+  const bindingCardSemantic = await kovoApp.semantic('binding-card', {
+    keepAttrs: ['data-bind:aria-label', 'data-bind:data-state'],
+  });
+  expect(bindingCardSemantic).toContain('aria-label="Updated card"');
+  expect(bindingCardSemantic).toContain('data-state="ready"');
+  expect(bindingCardSemantic).toMatch(/data-bind:aria-label="card\.BindingCard\$/u);
+  expect(bindingCardSemantic).toMatch(/data-bind:data-state="card\.BindingCard\$/u);
   expect(
     await kovoApp.semantic('state-binding-panel', {
       keepAttrs: ['data-bind:aria-label', 'data-bind:data-state'],

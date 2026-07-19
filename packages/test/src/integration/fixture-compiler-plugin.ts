@@ -22,14 +22,18 @@ import {
   verifierApply,
   verifierArrayJoin,
   verifierArrayPush,
+  verifierArraySort,
   verifierDenseArraySnapshot,
   verifierFreeze,
   verifierGetOwnPropertyDescriptor,
   verifierJsonStringify,
   verifierMap,
+  verifierMapForEach,
   verifierMapGet,
+  verifierMapHas,
   verifierMapSet,
   verifierRegExpExec,
+  verifierStringEndsWith,
   verifierStringIncludes,
   verifierStringIndexOf,
   verifierStringReplaceAll,
@@ -47,9 +51,32 @@ const nativeProcessCwd = process.cwd;
 
 const virtualCssManifestId = 'virtual:kovo-fixture-css-manifest';
 const resolvedVirtualCssManifestId = `\0${virtualCssManifestId}`;
+const virtualGeneratedQueryPlansId = 'virtual:kovo-fixture-generated-query-plans';
 
 interface FixtureCssAsset extends ComponentCssAsset {
   source: string;
+}
+
+interface FixtureGeneratedClientModule {
+  exportName?: string;
+  fileName: string;
+  id: string;
+  queries: readonly string[];
+  source: string;
+}
+
+interface FixtureQueryPlanIdentity {
+  componentName: string;
+  query: string;
+}
+
+interface FixtureCompileResultSnapshot {
+  cssAssets: readonly ComponentCssAsset[];
+  dependencyFootprint: object;
+  diagnostics: CompileResult['diagnostics'];
+  files: CompileResult['files'];
+  loweredSource: string | undefined;
+  queryPlanIdentities: readonly FixtureQueryPlanIdentity[];
 }
 
 export function kovoFixtureCompilerPlugin(
@@ -60,8 +87,12 @@ export function kovoFixtureCompilerPlugin(
 ): Plugin & { readonly fixtureCssRuntimeId: string } {
   const privateCssRegistrationId = `${virtualCssManifestId}:register:${randomUUID()}`;
   const resolvedPrivateCssRegistrationId = `\0${privateCssRegistrationId}`;
+  const privateGeneratedQueryPlansId = `${virtualGeneratedQueryPlansId}:aggregate:${randomUUID()}`;
+  const resolvedPrivateGeneratedQueryPlansId = `\0${privateGeneratedQueryPlansId}`;
   let root = pathResolve(verifierApply<string>(nativeProcessCwd, process, []));
+  let configurationEpoch = 0;
   const cssAssets = verifierMap<string, FixtureCssAsset>();
+  const generatedClientModules = verifierMap<string, FixtureGeneratedClientModule>();
 
   return {
     name: 'kovo-fixture-compiler',
@@ -75,6 +106,7 @@ export function kovoFixtureCompilerPlugin(
         throw new TypeError('Fixture Vite config.root must be a stable own string.');
       }
       root = pathResolve(configuredRoot);
+      configurationEpoch += 1;
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
@@ -97,12 +129,21 @@ export function kovoFixtureCompilerPlugin(
     resolveId(id) {
       if (id === virtualCssManifestId) return resolvedVirtualCssManifestId;
       if (id === privateCssRegistrationId) return resolvedPrivateCssRegistrationId;
+      if (id === virtualGeneratedQueryPlansId) return resolvedPrivateGeneratedQueryPlansId;
+      if (verifierMapHas(generatedClientModules, cleanModulePath(id))) {
+        return cleanModulePath(id);
+      }
       return null;
     },
     load(id) {
       if (id === resolvedVirtualCssManifestId) {
         return `export { kovoFixtureStylesheetManifest, kovoFixtureStylesheetsForTargets } from ${jsonString(privateCssRegistrationId)};`;
       }
+      if (id === resolvedPrivateGeneratedQueryPlansId) {
+        return generatedQueryPlanAggregateSource(generatedClientModules);
+      }
+      const generatedClient = verifierMapGet(generatedClientModules, cleanModulePath(id));
+      if (generatedClient !== undefined) return generatedClient.source;
       if (id !== resolvedPrivateCssRegistrationId) return null;
 
       return `
@@ -278,16 +319,21 @@ export function kovoFixtureStylesheetsForTargets(targets) {
         return null;
       }
 
-      const fileName = fixtureComponentFileName(id, root);
+      const transformRoot = root;
+      const transformConfigurationEpoch = configurationEpoch;
+      const fileName = fixtureComponentFileName(id, transformRoot);
       const compileOptions = {
         fileName,
-        packagePrefixDiscoveryRoot: root,
+        packagePrefixDiscoveryRoot: transformRoot,
         ...(projectMutationFacts?.mutationBindings.length
           ? { registryFacts: projectMutationFacts }
           : {}),
         source,
       };
       const result = await snapshotCompileResult(compile(compileOptions));
+      if (configurationEpoch !== transformConfigurationEpoch || root !== transformRoot) {
+        throw new Error('Fixture Vite configuration changed while a component was compiled.');
+      }
 
       const errors: CompileResult['diagnostics'][number][] = [];
       for (let index = 0; index < result.diagnostics.length; index += 1) {
@@ -318,6 +364,8 @@ export function kovoFixtureStylesheetsForTargets(targets) {
         verifierMapSet(cssAssets, asset.href, verifierFreeze({ ...asset, source: cssSource }));
       }
 
+      registerGeneratedClientModule(generatedClientModules, result, fileName, transformRoot);
+
       const code = result.loweredSource;
       if (typeof code !== 'string') return null;
       return verifierFreeze({
@@ -328,7 +376,7 @@ export function kovoFixtureStylesheetsForTargets(targets) {
   };
 }
 
-function snapshotCompileResult(value: unknown): CompileResult {
+function snapshotCompileResult(value: unknown): FixtureCompileResultSnapshot {
   if (typeof value !== 'object' || value === null) {
     throw new TypeError('Fixture compiler result must be an object.');
   }
@@ -397,13 +445,178 @@ function snapshotCompileResult(value: unknown): CompileResult {
   if (typeof dependencyFootprint !== 'object' || dependencyFootprint === null) {
     throw new TypeError('Fixture compiler result.dependencyFootprint must be an own data object.');
   }
+  const queryPlanIdentities = verifierDenseArraySnapshot(
+    ownData(value, 'queryUpdatePlans', 'fixture compiler result') ?? [],
+    'fixture compiler queryUpdatePlans',
+    (plan, index) => {
+      if (typeof plan !== 'object' || plan === null) {
+        throw new TypeError(`Fixture compiler queryUpdatePlans[${index}] must be an object.`);
+      }
+      return verifierFreeze({
+        componentName: requiredString(
+          plan,
+          'componentName',
+          `fixture compiler queryUpdatePlans[${index}]`,
+        ),
+        query: requiredString(plan, 'query', `fixture compiler queryUpdatePlans[${index}]`),
+      });
+    },
+  );
   return verifierFreeze({
     cssAssets,
     dependencyFootprint,
     diagnostics,
     files,
     loweredSource,
-  }) as unknown as CompileResult;
+    queryPlanIdentities,
+  });
+}
+
+function registerGeneratedClientModule(
+  modules: Map<string, FixtureGeneratedClientModule>,
+  result: FixtureCompileResultSnapshot,
+  componentFileName: string,
+  root: string,
+): void {
+  let clientFile: CompileResult['files'][number] | undefined;
+  for (let index = 0; index < result.files.length; index += 1) {
+    const file = result.files[index];
+    if (file?.kind !== 'client') continue;
+    if (clientFile !== undefined) {
+      throw new TypeError(
+        `Fixture compiler emitted more than one client module for ${componentFileName}.`,
+      );
+    }
+    clientFile = file;
+  }
+
+  if (clientFile === undefined) {
+    if (result.queryPlanIdentities.length > 0) {
+      throw new TypeError(
+        `Fixture compiler emitted query plans without a client module for ${componentFileName}.`,
+      );
+    }
+    return;
+  }
+
+  const expectedFileName = fixtureClientFileName(componentFileName);
+  if (clientFile.fileName !== expectedFileName) {
+    throw new TypeError(
+      `Fixture compiler client module identity mismatch for ${componentFileName}: expected ${expectedFileName}, received ${clientFile.fileName}.`,
+    );
+  }
+  const id = pathResolve(root, clientFile.fileName);
+  if (!pathContains(pathResolve(root), id)) {
+    throw new TypeError(
+      `Fixture compiler client module for ${componentFileName} escaped the configured root.`,
+    );
+  }
+
+  let exportName: string | undefined;
+  const queries: string[] = [];
+  const seenQueries = verifierMap<string, true>();
+  for (let index = 0; index < result.queryPlanIdentities.length; index += 1) {
+    const identity = result.queryPlanIdentities[index]!;
+    if (verifierRegExpExec(/^[A-Za-z_$][A-Za-z0-9_$]*$/u, identity.componentName) === null) {
+      throw new TypeError(
+        `Fixture compiler query-plan component name ${identity.componentName} is not a valid generated identifier.`,
+      );
+    }
+    const candidate = `${identity.componentName}$queryUpdatePlans`;
+    if (exportName !== undefined && exportName !== candidate) {
+      throw new TypeError(
+        `Fixture compiler emitted multiple query-plan component identities for ${componentFileName}.`,
+      );
+    }
+    exportName = candidate;
+    if (verifierMapHas(seenQueries, identity.query)) {
+      throw new TypeError(
+        `Fixture compiler emitted duplicate query-plan identity ${identity.query} for ${componentFileName}.`,
+      );
+    }
+    verifierMapSet(seenQueries, identity.query, true);
+    verifierArrayPush(queries, identity.query);
+  }
+
+  verifierMapSet(
+    modules,
+    id,
+    verifierFreeze({
+      ...(exportName === undefined ? {} : { exportName }),
+      fileName: clientFile.fileName,
+      id,
+      queries: verifierFreeze(queries),
+      source: clientFile.source,
+    }),
+  );
+}
+
+function fixtureClientFileName(componentFileName: string): string {
+  const extensions = ['.mtsx', '.ctsx', '.tsx', '.mts', '.cts', '.ts'];
+  for (let index = 0; index < extensions.length; index += 1) {
+    const extension = extensions[index]!;
+    if (!verifierStringEndsWith(componentFileName, extension)) continue;
+    return `${verifierStringSlice(componentFileName, 0, -extension.length)}.client.js`;
+  }
+  throw new TypeError(
+    `Fixture compiler component identity ${componentFileName} has no supported TypeScript extension.`,
+  );
+}
+
+function generatedQueryPlanAggregateSource(
+  modules: ReadonlyMap<string, FixtureGeneratedClientModule>,
+): string {
+  const planModules: FixtureGeneratedClientModule[] = [];
+  verifierMapForEach(modules, (module) => {
+    if (module.exportName !== undefined) verifierArrayPush(planModules, module);
+  });
+  verifierArraySort(planModules, (left, right) =>
+    left.fileName < right.fileName ? -1 : left.fileName > right.fileName ? 1 : 0,
+  );
+  if (planModules.length === 0) {
+    throw new TypeError(
+      'Fixture generated-query-plan module was imported before any compiler-owned query plans were registered.',
+    );
+  }
+
+  const imports: string[] = [];
+  const sources: string[] = [];
+  for (let index = 0; index < planModules.length; index += 1) {
+    const module = planModules[index]!;
+    const alias = `__kovoFixtureQueryPlans_${index}`;
+    verifierArrayPush(
+      imports,
+      `import { ${module.exportName} as ${alias} } from ${jsonString(module.id)};`,
+    );
+    verifierArrayPush(sources, `{ plans: ${alias}, queries: ${jsonStringArray(module.queries)} }`);
+  }
+
+  return `${verifierArrayJoin(imports, '\n')}
+
+const queryPlans = Object.create(null);
+for (const source of [${verifierArrayJoin(sources, ', ')}]) {
+  for (const query of source.queries) {
+    const descriptor = Object.getOwnPropertyDescriptor(source.plans, query);
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+      throw new TypeError('Fixture generated query plans must contain own function values.');
+    }
+    const existing = Object.getOwnPropertyDescriptor(queryPlans, query);
+    const apply = descriptor.value;
+    Object.defineProperty(queryPlans, query, {
+      configurable: true,
+      enumerable: true,
+      value: existing && 'value' in existing
+        ? (root, value, context = {}) => {
+            existing.value(root, value, context);
+            return apply(root, value, context);
+          }
+        : apply,
+    });
+  }
+}
+
+export const kovoFixtureQueryPlans = Object.freeze(queryPlans);
+`;
 }
 
 function snapshotCssAsset(value: unknown, label: string): ComponentCssAsset {
