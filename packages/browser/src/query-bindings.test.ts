@@ -194,6 +194,14 @@ describe('query binding helpers', () => {
       },
       { tagName: 'IFRAME' },
     );
+    const iframeSource = new FakeQueryPlanElement(
+      {
+        'data-bind:src': 'page.frameSource',
+        sandbox: 'allow-forms',
+        src: '/reviewed/profile',
+      },
+      { tagName: 'IFRAME' },
+    );
     const iframeNullSandbox = new FakeQueryPlanElement(
       {
         'data-bind:sandbox': 'page.nullSandbox',
@@ -209,10 +217,12 @@ describe('query binding helpers', () => {
       linkRelationship,
       iframeSandbox,
       iframeNullSandbox,
+      iframeSource,
     );
 
     applyQueryBindings(root, 'page', {
       nullSandbox: null,
+      frameSource: '/uploads/attacker.html',
       relationship: 'stylesheet',
       sandbox: 'allow-scripts allow-same-origin',
       script: '/uploads/attacker.js',
@@ -226,6 +236,7 @@ describe('query binding helpers', () => {
     expect(linkRelationship.getAttribute('rel')).toBe('icon');
     expect(iframeSandbox.getAttribute('sandbox')).toBe('allow-forms');
     expect(iframeNullSandbox.getAttribute('sandbox')).toBe('allow-forms');
+    expect(iframeSource.getAttribute('src')).toBe('/reviewed/profile');
   });
 
   it('applies optional binding path segments and removes empty attribute bindings', () => {

@@ -300,6 +300,13 @@ describe('inline loader output security', () => {
           tagName: 'IFRAME',
           value: null,
         },
+        {
+          attribute: 'src',
+          binding: 'src',
+          current: '/reviewed/profile',
+          tagName: 'IFRAME',
+          value: '/uploads/attacker.html',
+        },
       ] as const;
 
       for (const testCase of cases) {

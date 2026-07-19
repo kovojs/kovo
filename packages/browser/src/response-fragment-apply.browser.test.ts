@@ -237,6 +237,7 @@ describe('browser response fragment apply', () => {
       '<link kovo-key="link-rel" rel="preload" href="/uploads/attacker.css">',
       '<iframe kovo-key="frame-value" sandbox="allow-forms"></iframe>',
       '<iframe kovo-key="frame-removal" sandbox="allow-forms"></iframe>',
+      '<iframe kovo-key="frame-source" sandbox="allow-forms" src="/reviewed/profile"></iframe>',
     ].join('');
     document.body.append(target);
 
@@ -248,6 +249,7 @@ describe('browser response fragment apply', () => {
         '<link kovo-key="link-rel" rel="stylesheet" href="/uploads/attacker.css">',
         '<iframe kovo-key="frame-value" sandbox="allow-scripts allow-same-origin"></iframe>',
         '<iframe kovo-key="frame-removal"></iframe>',
+        '<iframe kovo-key="frame-source" sandbox="allow-forms" src="/uploads/attacker.html"></iframe>',
         '</section>',
       ].join(''),
     );
@@ -257,12 +259,14 @@ describe('browser response fragment apply', () => {
     const linkRel = target.querySelector('[kovo-key="link-rel"]');
     const frameValue = target.querySelector('[kovo-key="frame-value"]');
     const frameRemoval = target.querySelector('[kovo-key="frame-removal"]');
+    const frameSource = target.querySelector('[kovo-key="frame-source"]');
     expect(script?.getAttribute('type')).toBe('application/json');
     expect(script?.getAttribute('src')).toBe('/reviewed/data.json');
     expect(linkHref?.getAttribute('href')).toBe('/reviewed/app.css');
     expect(linkRel?.getAttribute('rel')).toBe('preload');
     expect(frameValue?.getAttribute('sandbox')).toBe('allow-forms');
     expect(frameRemoval?.getAttribute('sandbox')).toBe('allow-forms');
+    expect(frameSource?.getAttribute('src')).toBe('/reviewed/profile');
   });
 
   it('sanitizes whole-node replacement fragment trees before adoption', () => {
