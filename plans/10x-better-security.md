@@ -402,9 +402,9 @@ Measurements are versioned and reproducible:
 
 - [x] Build executable property oracles rather than treating parser disagreement as truth:
       egress asserts undeclared means no DNS/dial and simulates rebinding; authority asserts the
-      normative grammar/source-precedence matrix across adapters; CSRF uses a mint/deliver/
-      validate/rotate/replay state model; ReDoS enforces a versioned work bound; headers round-trip
-      through real HTTP implementations.
+      normative grammar/source-precedence matrix across adapters; CSRF uses a frozen 18-surface ×
+      5-stage mint/deliver/validate/rotate/replay label table plus source anchors; ReDoS enforces a
+      versioned work bound; headers round-trip through real HTTP implementations.
   - Evidence: the 20-corpus C13 run executes the five normative oracle families; the authority
     matrix additionally passes its 126-test multi-adapter suite.
 - [ ] Run deterministic seeded fuzzers in nightly CI with minimized repro persistence, execution

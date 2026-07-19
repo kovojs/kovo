@@ -213,7 +213,7 @@ Ranked by leverage (impact × breadth-unblocked ÷ cost). Each item is an action
 - [x] Flake gate (fail/annotate on retried-but-passed) + scheduled `--repeat-each=3` over race-prone specs.
   - Evidence: `tests/integration/flaky-reporter.ts`, `tests/flaky-reporter.meta.test.ts`, `.github/workflows/ci.yml`, and `.github/workflows/race-repeat.yml` define the fail-on-flake gate and scheduled `@race-prone --repeat-each=3` run; `pnpm exec vitest run tests/flaky-reporter.meta.test.ts --reporter=dot` passes.
 - [x] Optimistic `queue:` FIFO + multi-transform rebase ordering; concurrent-distinct-write lost-update test.
-  - Evidence: `pnpm exec vitest run packages/browser/src/mutation-optimistic-queue.test.ts --reporter=dot` passes for queue FIFO; `pnpm exec playwright test --config tests/integration/playwright.config.ts tests/integration/specs/optimistic-rebase.spec.ts tests/integration/specs/concurrent-distinct-writes.spec.ts` passes for rebase ordering and concurrent distinct writes.
+  - Evidence: `pnpm exec vitest run packages/browser/src/mutation-optimistic-queue.test.ts --reporter=dot` passes for queue FIFO; `optimistic-rebase.spec.ts` covers rebase ordering. The former PGlite arithmetic race was retired; `postgres-external-probe.test.ts` now proves a declared-version CAS race against two real Postgres connections.
 - [ ] `isomorphic: true` island render-equivalence fixture.
 - [ ] Time/clock freshness (`clocks` input, relative-time binding; KV312/KV315).
 - [ ] KV234 cross-package prefix conflict; `kovo explain --endpoints` driven from the _extracted_ graph.

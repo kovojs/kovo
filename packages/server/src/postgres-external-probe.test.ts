@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { kovo, sql } from '@kovojs/drizzle';
+import { compareAndSet, kovo, sql } from '@kovojs/drizzle';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { bigint, integer, pgTable, text } from 'drizzle-orm/pg-core';
@@ -94,6 +94,23 @@ const guardAssertionProbeNotes = pgTable(
   }),
 );
 const guardAssertionSchema = { guardAssertionProbeNotes };
+const lostUpdateCounters = pgTable(
+  'kovo_ext_lost_update_counters',
+  {
+    count: integer('count').notNull(),
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    version: integer('version').notNull(),
+  },
+  kovo({
+    atomic: 'count',
+    domain: 'external-postgres-lost-update-counter',
+    key: 'id',
+    owner: 'ownerId',
+    version: 'version',
+  }),
+);
+const lostUpdateSchema = { lostUpdateCounters };
 const externalRateLimit = pgTable('rateLimit', {
   count: integer('count').notNull(),
   id: text('id').primaryKey(),
@@ -123,6 +140,19 @@ const createGuardAssertionNotesMigration = {
       owner_id text NOT NULL,
       title text NOT NULL
     );
+  `,
+};
+const createLostUpdateCountersMigration = {
+  id: '001-create-lost-update-counters.sql',
+  sql: `
+    CREATE TABLE kovo_ext_lost_update_counters (
+      id text PRIMARY KEY,
+      owner_id text NOT NULL,
+      count integer NOT NULL,
+      version integer NOT NULL
+    );
+    INSERT INTO kovo_ext_lost_update_counters (id, owner_id, count, version)
+      VALUES ('shared', 'counter-owner', 0, 0);
   `,
 };
 
@@ -386,6 +416,117 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       assumedAdminRuntimeUrl,
       adminDatabaseUrl,
     );
+  }, 30_000);
+
+  it('races declared-version read-decide-write handlers under real Postgres READ COMMITTED', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-external-lost-update-'));
+    roots.push(root);
+    const cluster = await startLocalPostgres(root);
+    clusters.push(cluster);
+    const database = `${probeRun}_lost_update`;
+    const adminRole = `${probeRun}_lost_update_admin`;
+    const runtimeRole = `${probeRun}_lost_update_runtime`;
+    await withPool(cluster.url('postgres', 'postgres'), async (pool) => {
+      await pool.query(`CREATE ROLE ${quoteIdent(adminRole)} LOGIN CREATEROLE NOBYPASSRLS`);
+      await pool.query(
+        `CREATE ROLE ${quoteIdent(runtimeRole)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await pool.query(`CREATE DATABASE ${quoteIdent(database)} OWNER ${quoteIdent(adminRole)}`);
+    });
+
+    const adminDatabaseUrl = cluster.url(database, adminRole);
+    const runtimeDatabaseUrl = cluster.url(database, runtimeRole);
+    const migrated = await migratePostgresAppDb({
+      databaseUrl: adminDatabaseUrl,
+      migrations: [createLostUpdateCountersMigration],
+      runtimeDatabaseUrl,
+      schema: lostUpdateSchema,
+    });
+    expect(migrated.posture.ok, JSON.stringify(migrated.posture.issues)).toBe(true);
+
+    const pool = new Pool({ connectionString: runtimeDatabaseUrl, max: 2 });
+    try {
+      const runtimeClient = new TestNodePostgresRuntimeClient(pool);
+      const clients = [
+        createPostgresScopedClient(runtimeClient, {
+          principal: 'counter-owner',
+          role: 'kovo_writer',
+        }),
+        createPostgresScopedClient(runtimeClient, {
+          principal: 'counter-owner',
+          role: 'kovo_writer',
+        }),
+      ] as const;
+      let readersAtBarrier = 0;
+      let releaseBarrier: () => void = () => undefined;
+      const bothRead = new Promise<void>((resolve) => {
+        releaseBarrier = resolve;
+      });
+      const waitForBothReads = async (): Promise<void> => {
+        readersAtBarrier += 1;
+        if (readersAtBarrier === 2) releaseBarrier();
+        await bothRead;
+      };
+
+      const attempt = async (clientIndex: 0 | 1, amount: number) =>
+        clients[clientIndex].transaction(async (tx) => {
+          const isolation = await tx.query<{ transaction_isolation: string }>(
+            "SELECT pg_catalog.current_setting('transaction_isolation') AS transaction_isolation",
+          );
+          expect(isolation.rows).toEqual([{ transaction_isolation: 'read committed' }]);
+          const before = await tx.query<{ count: number; version: number }>(
+            'SELECT count, version FROM kovo_ext_lost_update_counters WHERE id = $1',
+            ['shared'],
+          );
+          const snapshot = before.rows[0];
+          if (snapshot === undefined) throw new Error('versioned counter disappeared');
+          await waitForBothReads();
+          const cas = await compareAndSet(
+            tx.query(
+              [
+                'UPDATE kovo_ext_lost_update_counters',
+                'SET count = $1, version = $2',
+                'WHERE id = $3 AND version = $4',
+              ].join(' '),
+              [snapshot.count + amount, snapshot.version + 1, 'shared', snapshot.version],
+            ),
+          );
+          return { amount, cas, clientIndex };
+        });
+
+      const attempts = await Promise.all([attempt(0, 10), attempt(1, 1)]);
+      expect(attempts.filter((result) => result.cas.ok)).toHaveLength(1);
+      const conflicted = attempts.find((result) => !result.cas.ok);
+      if (conflicted === undefined) throw new Error('the version race did not produce a conflict');
+
+      const retry = await clients[conflicted.clientIndex].transaction(async (tx) => {
+        const current = await tx.query<{ count: number; version: number }>(
+          'SELECT count, version FROM kovo_ext_lost_update_counters WHERE id = $1',
+          ['shared'],
+        );
+        const snapshot = current.rows[0];
+        if (snapshot === undefined) throw new Error('versioned counter disappeared before retry');
+        return compareAndSet(
+          tx.query(
+            [
+              'UPDATE kovo_ext_lost_update_counters',
+              'SET count = $1, version = $2',
+              'WHERE id = $3 AND version = $4',
+            ].join(' '),
+            [snapshot.count + conflicted.amount, snapshot.version + 1, 'shared', snapshot.version],
+          ),
+        );
+      });
+      expect(retry).toEqual({ ok: true });
+
+      const final = await clients[0].query<{ count: number; version: number }>(
+        'SELECT count, version FROM kovo_ext_lost_update_counters WHERE id = $1',
+        ['shared'],
+      );
+      expect(final.rows).toEqual([{ count: 11, version: 2 }]);
+    } finally {
+      await pool.end();
+    }
   }, 30_000);
 
   it('rejects privileged startup settings before they can disable runtime enforcement', async () => {
@@ -1240,9 +1381,9 @@ class TestNodePostgresRuntimeClient {
   async query<Row extends QueryResultRow = QueryResultRow>(
     query: QueryConfig | string,
     params?: unknown[],
-  ): Promise<{ rows: Row[] }> {
+  ): Promise<{ rowCount: number | null; rows: Row[] }> {
     const result = await this.pool.query<Row>(query as QueryConfig, params);
-    return { rows: result.rows };
+    return { rowCount: result.rowCount, rows: result.rows };
   }
 
   async transaction<Result>(
@@ -1274,9 +1415,9 @@ class TestNodePostgresTransactionClient {
   async query<Row extends QueryResultRow = QueryResultRow>(
     query: QueryConfig | string,
     params?: unknown[],
-  ): Promise<{ rows: Row[] }> {
+  ): Promise<{ rowCount: number | null; rows: Row[] }> {
     const result = await this.client.query<Row>(query as QueryConfig, params);
-    return { rows: result.rows };
+    return { rowCount: result.rowCount, rows: result.rows };
   }
 }
 

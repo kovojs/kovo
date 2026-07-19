@@ -3895,6 +3895,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     await expect(scoped.query('select id from contacts')).resolves.toEqual([]);
     expect(log).toEqual([
+      'exec:SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
       'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
       'exec:SET LOCAL ROLE "kovo_reader"',
@@ -3948,6 +3949,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     await expect(query('select id from allowed')).resolves.toEqual([{ secret: 'victim-secret' }]);
     expect(log).toEqual([
       'transaction',
+      'exec:SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
       'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       `raw:SELECT set_config('kovo.principal', $1, true)`,
       'raw:select id from allowed',
@@ -4207,6 +4209,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     carrier.values.push('mutated');
     expect(log).toEqual([
       'transaction',
+      'exec:SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
       'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'query:{"rowMode":"array","text":"select id from contacts where id = $1","types":{"getTypeParser":"driver-codec-marker"},"values":["c1"]}:[]',
     ]);
@@ -4222,6 +4225,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     ).toThrow(/submit-bearing[\s\S]*SPEC §10\.3/);
     expect(log).toEqual([
       'transaction',
+      'exec:SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
       'exec:SET LOCAL search_path = pg_catalog, public, pg_temp',
       'query:{"rowMode":"array","text":"select id from contacts where id = $1","types":{"getTypeParser":"driver-codec-marker"},"values":["c1"]}:[]',
     ]);

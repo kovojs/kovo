@@ -134,16 +134,22 @@ claimant runs the same job. (~0.1 pm)
 
 ### 0.2 Retire two false assurances
 
-- [ ] `tests/integration/specs/concurrent-distinct-writes.spec.ts` is a **placebo**: it races
+- [x] `tests/integration/specs/concurrent-distinct-writes.spec.ts` was a **placebo**: it raced
       `count = count + $1`, in-DB arithmetic that cannot lose an update under any isolation level. No
-      app in the repo exercises `atomic:`/`version:`/`compareAndSet` at all, so the lost-update
-      guarantee has never been raced. Replace with a real read-decide-write race on a declared
-      `version:` column against **real Postgres** (PGlite is single-connection —
+      app in the repo exercised `atomic:`/`version:`/`compareAndSet`, so the lost-update guarantee had
+      never been raced. It is replaced by a real read-decide-write race on a declared `version:`
+      column against **real Postgres** (PGlite is single-connection —
       `packages/test/src/pglite.ts:176-178` — and unfit for concurrency claims).
-- [ ] Assert the mutation transaction's isolation level instead of assuming it: `mutation.ts:624-648`
-      issues no `SET TRANSACTION`, yet KV429's normative ceiling (`spec/10-data-plane.md:482`) is
-      stated _relative to_ READ COMMITTED and nothing detects a deployment that differs.
-- [ ] Correct plan-1 line 405: `scripts/check-csrf-mint-delivery.mjs` is a frozen 18-surface × 5-stage
+  - Evidence: `postgres-external-probe.test.ts` forces two connections to read version 0 before
+    either CAS, observes one typed conflict, retries it, and proves `{ count: 11, version: 2 }` on a
+    real engine; the PGlite fixture/spec were removed.
+- [x] Pin the mutation transaction to READ COMMITTED before app SQL instead of assuming it. The
+      existing boot posture already rejects a different `default_transaction_isolation`; the live
+      frame now independently executes the exact transaction control required by KV429.
+  - Evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts` (172/172), plus the
+    real-Postgres race asserts `current_setting('transaction_isolation') = 'read committed'` in both
+    competing transaction callbacks.
+- [x] Correct plan-1 line 405: `scripts/check-csrf-mint-delivery.mjs` is a frozen 18-surface × 5-stage
       label table plus grep anchors, not a "state model". Reword the claim; do not build a model
       (see kill list).
 

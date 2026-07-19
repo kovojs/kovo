@@ -2892,6 +2892,14 @@ async function runPostgresTransactionControl(
   controls: PostgresTransactionControls,
   options: PostgresScopedClientOptions,
 ): Promise<void> {
+  if (options.readOnly !== true) {
+    // SPEC §10.3 (KV429): the lost-update ceiling is defined relative to READ COMMITTED.
+    // Pin the mutation frame before any app statement instead of relying only on the boot-time
+    // default_transaction_isolation posture witness.
+    await witnessReflectApply<Promise<unknown>>(controls.exec, tx, [
+      'SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
+    ]);
+  }
   // SPEC §10.3 (C9/C10): every framework-owned app transaction starts from a closed namespace.
   // This overwrites URL, role, database, and pooled-session search_path state before any helper,
   // policy expression, trigger, or app statement can resolve an unqualified name.
