@@ -375,12 +375,6 @@ function shortSource(node: Node): string {
 // through the finite browser IR. The former callback-body name lexicon was redundant and is absent:
 // a raw registration closes before its callback effects need to be guessed from names (SPEC §6.6).
 
-interface DangerousSinkMatch {
-  sink: string;
-  safePath: string;
-  source?: string;
-}
-
 /**
  * Collect unsupported request/process authority as `UnregisteredSinkFact`s (SPEC §6.6, KV424).
  * Compiler-owned JSX handlers instead close through KV449's finite operation set. Raw imperative
@@ -14138,20 +14132,6 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
       continue;
     }
 
-    const moduleAuthority = requestModuleResolutionAuthorityForCall(call);
-    if (moduleAuthority) {
-      const [source] = call.getArguments();
-      appendRequestAuthorityFact(context, call, moduleAuthority, source);
-      continue;
-    }
-
-    const constructorAuthority = requestConstructorCodeAuthorityForExpression(call.getExpression());
-    if (constructorAuthority) {
-      const [source] = call.getArguments();
-      appendRequestAuthorityFact(context, call, constructorAuthority, source);
-      continue;
-    }
-
     const frameworkAuthority = requestFrameworkAuthorityForExpression(call.getExpression());
     if (frameworkAuthority) {
       const [source] = call.getArguments();
@@ -14167,39 +14147,11 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
       continue;
     }
 
-    const dangerous = dangerousCallSink(call);
-    if (dangerous) {
-      context.facts.push({
-        sink: dangerous.sink,
-        safePath: dangerous.safePath,
-        site: projectSiteFor(context.filesByPath, call),
-        ...(dangerous.source ? { source: dangerous.source } : {}),
-      });
-      continue;
-    }
-
+    // C13 class kill (SPEC §6.6): exact raw capabilities (including eval/Function and string
+    // timers) have already closed above. Dynamic loaders, document methods, constructor
+    // indirection, and every other unresolved invocation close through the single callable
+    // resolution boundary below. Do not reintroduce a parallel terminal-name lexicon here.
     const callee = call.getExpression();
-    if (callee.getKind() === SyntaxKind.ImportKeyword) {
-      const [source] = call.getArguments();
-      context.facts.push({
-        sink: 'import()',
-        safePath: 'use compiler-owned versioned handler imports only',
-        site: projectSiteFor(context.filesByPath, call),
-        ...(source ? { source: shortSource(source) } : {}),
-      });
-      continue;
-    }
-    if (unshadowedGlobalIdentifier(callee, 'Function')) {
-      const [source] = call.getArguments();
-      context.facts.push({
-        sink: 'Function',
-        safePath: 'remove dynamic code evaluation',
-        site: projectSiteFor(context.filesByPath, call),
-        ...(source ? { source: shortSource(source) } : {}),
-      });
-      continue;
-    }
-
     const fetchInvocation = requestReviewedFetchInvocation(call, callable, context.provenance);
     if (
       fetchInvocation &&
@@ -14318,25 +14270,13 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
     }
     const callee = construct.getExpression();
     const [source] = construct.getArguments();
-    if (unshadowedGlobalIdentifier(callee, 'Function')) {
-      context.facts.push({
-        sink: 'Function',
-        safePath: 'remove dynamic code evaluation',
-        site: projectSiteFor(context.filesByPath, construct),
-        ...(source ? { source: shortSource(source) } : {}),
-      });
-      continue;
-    }
     const rawAuthority = requestRawAuthorityForExpression(callee, new Set(), 0, context.provenance);
     if (rawAuthority) {
       appendRequestAuthorityFact(context, construct, rawAuthority, source);
       continue;
     }
-    const constructorAuthority = requestConstructorCodeAuthorityForExpression(callee);
-    if (constructorAuthority) {
-      appendRequestAuthorityFact(context, construct, constructorAuthority, source);
-      continue;
-    }
+    // Unknown construction shares the same capability-closure rule as unknown calls; spelling a
+    // `.constructor` member does not need a separate Function-constructor predicate (SPEC §6.6).
     if (!requestConstructorIsKnownSafe(construct, callable, context)) {
       context.facts.push({
         sink: 'request-handler.opaque-constructor',
@@ -33364,13 +33304,8 @@ function requestExpressionContainsClosedAuthority(
     if (
       requestRawAuthorityForExpression(callee, new Set(), 0) ||
       requestStringTimerAuthorityForCall(node) ||
-      requestModuleResolutionAuthorityForCall(node) ||
-      requestConstructorCodeAuthorityForExpression(callee) ||
       requestFrameworkAuthorityForExpression(callee) ||
-      requestFrameworkNamespaceEscapeForExpression(callee) ||
-      dangerousCallSink(node) ||
-      callee.getKind() === SyntaxKind.ImportKeyword ||
-      unshadowedGlobalIdentifier(callee, 'Function')
+      requestFrameworkNamespaceEscapeForExpression(callee)
     ) {
       return true;
     }
@@ -33379,11 +33314,7 @@ function requestExpressionContainsClosedAuthority(
   }
   if (Node.isNewExpression(node)) {
     const callee = node.getExpression();
-    return !!(
-      requestRawAuthorityForExpression(callee, new Set(), 0) ||
-      requestConstructorCodeAuthorityForExpression(callee) ||
-      unshadowedGlobalIdentifier(callee, 'Function')
-    );
+    return !!requestRawAuthorityForExpression(callee, new Set(), 0);
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     return requestExpressionContainsClosedAuthority(node.getExpression(), seen, depth + 1);
@@ -35637,51 +35568,6 @@ function requestEscapedTimerAuthorityForExpression(
     return {
       sink: timer,
       safePath: `${timer}(fn, ...) with a statically resolved function callback`,
-    };
-  }
-  return undefined;
-}
-
-function requestConstructorCodeAuthorityForExpression(
-  expression: Node,
-): RequestRawAuthority | undefined {
-  const node = unwrapStaticExpression(expression);
-  if (Node.isPropertyAccessExpression(node) && node.getName() === 'constructor') {
-    return { sink: 'Function.constructor', safePath: REQUEST_DYNAMIC_CODE_SAFE_PATH };
-  }
-  if (
-    Node.isElementAccessExpression(node) &&
-    staticMemberName(node.getArgumentExpression()) === 'constructor'
-  ) {
-    return { sink: 'Function.constructor', safePath: REQUEST_DYNAMIC_CODE_SAFE_PATH };
-  }
-  return undefined;
-}
-
-function requestModuleResolutionAuthorityForCall(call: Node): RequestRawAuthority | undefined {
-  if (!Node.isCallExpression(call)) return undefined;
-  const callee = call.getExpression();
-  if (
-    requestGlobalNamespaceMethodForExpression(
-      callee,
-      'process',
-      REQUEST_PROCESS_MODULE_METHODS,
-      new Set(),
-      0,
-    ) ||
-    expressionResolvesToGlobalCallable(callee, 'require', new Set(), 0) ||
-    requestModuleMethodForExpression(
-      callee,
-      isNodeModuleModule,
-      REQUEST_CREATE_REQUIRE_METHODS,
-      new Set(),
-      0,
-    ) ||
-    expressionResolvesToCreatedRequire(callee, new Set(), 0)
-  ) {
-    return {
-      sink: 'node:module.dynamic-resolution',
-      safePath: 'use static module-scope imports; request-reachable module resolution is forbidden',
     };
   }
   return undefined;
@@ -38702,52 +38588,6 @@ function optionalOpaqueModule(opaqueModule: string | undefined): { opaqueModule?
   return opaqueModule === undefined ? {} : { opaqueModule };
 }
 
-function dangerousCallSink(call: Node): DangerousSinkMatch | null {
-  if (!Node.isCallExpression(call)) return null;
-  const callee = call.getExpression();
-
-  if (Node.isIdentifier(callee)) {
-    const name = callee.getText();
-    if (name === 'eval' && unshadowedGlobalIdentifier(callee, 'eval')) {
-      const [arg] = call.getArguments();
-      return { sink: 'eval', safePath: 'remove dynamic code evaluation', ...sourceField(arg) };
-    }
-    if (
-      (name === 'setTimeout' || name === 'setInterval') &&
-      unshadowedGlobalIdentifier(callee, name)
-    ) {
-      const [arg] = call.getArguments();
-      // Only the string-body form is the dangerous code-injection sink.
-      if (arg && isStringLiteralLike(arg)) {
-        return {
-          sink: name,
-          safePath: `${name}(fn, ...) with a function callback`,
-          source: shortSource(arg),
-        };
-      }
-    }
-    return null;
-  }
-
-  if (Node.isPropertyAccessExpression(callee)) {
-    const receiver = callee.getExpression();
-    const method = callee.getName();
-    if (
-      (method === 'write' || method === 'writeln') &&
-      unshadowedGlobalIdentifier(receiver, 'document')
-    ) {
-      const [arg] = call.getArguments();
-      return {
-        sink: `document.${method}`,
-        safePath: 'trustedHtml',
-        ...sourceField(arg),
-      };
-    }
-  }
-
-  return null;
-}
-
 function unshadowedGlobalIdentifier(node: Node, expectedName: string): boolean {
   if (!Node.isIdentifier(node) || !identifierTextEquals(node, expectedName)) return false;
 
@@ -38857,10 +38697,6 @@ function requestDeclarationCreatesRuntimeBinding(declaration: Node): boolean {
 
 function identifierTextEquals(identifier: Node & { getText(): string }, expected: string): boolean {
   return identifier.getText() === expected;
-}
-
-function sourceField(node: Node | undefined): { source?: string } {
-  return node ? { source: shortSource(node) } : {};
 }
 
 // =====================================================================================

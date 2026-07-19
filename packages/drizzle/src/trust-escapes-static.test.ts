@@ -627,9 +627,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       'Function',
       'Function',
       'eval',
-      'import()',
       'node:vm.Script',
       'node:vm.runInNewContext',
+      'request-handler.opaque-call',
       'request-handler.opaque-protocol',
       'setTimeout',
     ]);
@@ -659,10 +659,18 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts.map((fact) => fact.sink)).toEqual(
       expect.arrayContaining([
         'Function',
-        'Function.constructor',
         'eval',
+        'request-handler.opaque-call',
         'setInterval',
         'setTimeout',
+      ]),
+    );
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: '(() => {}).constructor',
+        }),
       ]),
     );
   });
@@ -785,7 +793,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
-  it('closes process.getBuiltinModule, createRequire, and dynamic require resolution', () => {
+  it('closes process.getBuiltinModule, createRequire, and dynamic require structurally', () => {
     const facts = sinksFor(`
       import { createRequire } from 'node:module';
       import { mutation } from '@kovojs/server';
@@ -802,7 +810,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       expect.arrayContaining([
         'child_process.execFileSync',
         'node:fs.readFileSync',
-        'node:module.dynamic-resolution',
+        'node:process.getBuiltinModule',
+        'request-handler.opaque-call',
+        'request-handler.opaque-package-call',
       ]),
     );
   });
