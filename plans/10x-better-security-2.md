@@ -197,14 +197,14 @@ audited-escape`, per SPEC §2 precedence) to the `spec/11-diagnostics.md` KV tab
 - [x] Generate typed KV constructors from the registry and route production emission through the
       validating diagnostics door; stage removal of ad hoc `{ code: 'KV###' }` production literals
       under the classifier-refactor rule without banning test fixtures that consume generated IDs.
-  - Evidence: the generated constructor registry is current and the AST gate derives 198 production
+  - Evidence: the generated constructor registry is current and the AST gate derives 197 production
     sites while rejecting ad hoc production diagnostic literals.
 - [x] `check:spec-conformance-closure` requires, per error-class KV, a registry row, derived production
       enforcement site, red fixture, green counterpart, and own-layer evidence. Runtime emission
       coverage is supporting evidence only; a platform-specific zero-emission row needs a reviewed
       applicability reason rather than a synthetic test call.
   - Evidence: `node scripts/check-spec-conformance-closure.mjs` passes with 90 codes, 70 error-class
-    rows, and 198 derived enforcement sites; `node scripts/run-spec-conformance-evidence-tests.mjs`
+    rows, and 197 derived enforcement sites; `node scripts/run-spec-conformance-evidence-tests.mjs`
     executes 35 files and passes all 105 bound witnesses plus 6 mandatory gate controls.
 - [x] Promote `diagnostics-ref`'s registry equality out of the site pipeline into the root check chain.
   - Evidence: the root `check` chain invokes `check:spec-conformance-closure`, which calls the
@@ -212,10 +212,12 @@ audited-escape`, per SPEC §2 precedence) to the `spec/11-diagnostics.md` KV tab
 - [ ] Inventory and bind every raw KV guard-error channel (`Error`/throw/rejection/log text) to
       registry-derived identity, or migrate it through a dedicated raw guard-error door; gate code
       swaps and new channels. Structured diagnostic evidence does not cover these raw strings.
-- [ ] Close `RegisteredDiagnostic` runtime provenance: record constructor outputs behind a
+- [x] Close `RegisteredDiagnostic` runtime provenance: record constructor outputs behind a
       module-private sentinel/registry and make every collection and rendering sink reject
       structurally forged records. Add cross-package negative controls; TypeScript shape alone is
       author-time ergonomics, not the enforcement proof.
+  - Evidence: `node scripts/check-spec-conformance-closure.mjs` passes with 90 codes, 70 error
+    classes, and 197 constructor-owned sites, including forged-record and cross-package controls.
 - [ ] Bind each derived emission site and evidence witness to its actual compile/runtime/audited
       layer, then gate that posture against the registry `enforcementClass`. Kill class-relabeling
       mutants (for example compile-error ↔ fail-closed-runtime), not only code/site swaps.

@@ -42,7 +42,7 @@ const cliStaticExportDiagnosticRehydrationDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '53c740c76181942e870d2a1c6e6cb96803f93fcd3429bcfbaf33003b5b103bf8';
+  '65f06e1fcd0ebf8fb28526decfadc927f34e866c33c935091e3975c3cbb2e891';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -77,13 +77,13 @@ const expectedCoreBuildDistCommand =
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/inline-loader.ts#2f9e41eda34b608793f2dbd54817ca1f0aa04da106d278e7fef51e4d03caaa91#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#3b2fbaed304404bb191701b08b79947a7869566df27f18520e91925ff3bc2d31',
-  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#f3f265afd66e69c25580b7ce0942eaf5bd8e36b1c3b9ec15d8a8cac80eba3836',
-  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#bc216e52c412c8b193eb048ec65ffe9acb38280f67773837203ae1f164ba01a2',
-  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#1c6d930e4e45cf09d26898686ca29ac9f739589a667ca73b6b77a70dfd7744ec',
-  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#666bd656e7c42491b16f3d6f97fb64bef5faaf31813e8ac4ecdd5f3df6eb104d',
-  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#606f565bbb48636a234c79a4289dac3cf14d662050180563b00a61a266db42aa',
-  'packages/cli/src/commands/db.ts#ee124a743f4e948da7fa66338746629c412a5f4c44113cad02e5e30cf064069b#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
+  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#3b2fbaed304404bb191701b08b79947a7869566df27f18520e91925ff3bc2d31',
+  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#f3f265afd66e69c25580b7ce0942eaf5bd8e36b1c3b9ec15d8a8cac80eba3836',
+  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#bc216e52c412c8b193eb048ec65ffe9acb38280f67773837203ae1f164ba01a2',
+  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#1c6d930e4e45cf09d26898686ca29ac9f739589a667ca73b6b77a70dfd7744ec',
+  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#666bd656e7c42491b16f3d6f97fb64bef5faaf31813e8ac4ecdd5f3df6eb104d',
+  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#606f565bbb48636a234c79a4289dac3cf14d662050180563b00a61a266db42aa',
+  'packages/cli/src/commands/db.ts#56af7873918dd0309505fa16539961821f5cd6d2c522d05c70671802e31b731a#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
@@ -107,7 +107,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'a3f0e056e282bb26179e8e4923ad17674b995ef6320326091a21e71d55db9f8e'],
   [
     'packages/cli/src/commands/build-export.ts',
-    'd438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5',
+    'f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed',
   ],
   [
     'packages/cli/src/commands/compile.ts',
