@@ -6,6 +6,7 @@ import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-t
 import { reconcileKeyed } from './keyed-reconciler.js';
 import {
   applyResponseFragments,
+  preservesReviewedHtmlElementContextAttribute,
   sanitizeHtmlResponseElementTree,
   setSafeHtmlResponseAttribute,
 } from './response-fragment-apply.js';
@@ -436,7 +437,10 @@ function syncDomAttributes(
     const attribute = currentAttributes[index];
     if (!attribute) continue;
     if (attribute.name === 'kovo-state' && currentState !== null) continue;
-    if (!security.hasElementAttribute(next, attribute.name)) {
+    if (
+      !security.hasElementAttribute(next, attribute.name) &&
+      !preservesReviewedHtmlElementContextAttribute(current, attribute.name, security)
+    ) {
       security.removeElementAttribute(current, attribute.name);
     }
   }
@@ -446,7 +450,7 @@ function syncDomAttributes(
     const attribute = nextAttributes[index];
     if (!attribute) continue;
     if (attribute.name === 'kovo-state' && currentState !== null) continue;
-    setSafeHtmlResponseAttribute(current, attribute.name, attribute.value, security);
+    setSafeHtmlResponseAttribute(current, attribute.name, attribute.value, security, true);
   }
 }
 

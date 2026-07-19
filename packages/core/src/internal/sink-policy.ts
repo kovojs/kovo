@@ -162,7 +162,7 @@ export type RuntimeSinkFamily =
   | 'url';
 
 /** @internal Runtime fail-closed action for a dynamic sink write. */
-export type RuntimeSinkAction = 'allow' | 'neutralize' | 'remove';
+export type RuntimeSinkAction = 'allow' | 'neutralize' | 'preserve' | 'remove';
 
 /** @internal Structured event for blocked runtime sink writes (SPEC.md §4.8 / KV236). */
 export interface RuntimeSinkSecurityEvent {
@@ -195,7 +195,13 @@ type RuntimeAttributeWritePosture = 'compiler-wire' | 'dynamic-binding';
 
 /** @internal Runtime attribute-write context; compiler wire is preserved unless explicitly narrowed. */
 interface RuntimeAttributeWriteOptions {
+  /** Browser-effective element name for pair/context-dependent attributes. */
+  elementName?: string;
+  /** Existing meta pragma posture before the proposed write is committed. */
+  effectiveHttpEquiv?: string | null;
   posture?: RuntimeAttributeWritePosture;
+  /** Exact module-private TrustedUrl witness already verified by the browser package. */
+  trustedUrl?: boolean;
 }
 
 /** @internal Attribute names whose value is a srcset candidate list, not one plain URL. */
@@ -368,6 +374,13 @@ export function decideRuntimeAttributeWrite(
     );
   }
   const family = runtimeSinkFamilyForAttribute(name);
+  const elementContextDecision = decideRuntimeElementContextWrite(
+    name,
+    value,
+    family,
+    options,
+  );
+  if (elementContextDecision !== undefined) return elementContextDecision;
 
   if (family === 'event-handler' || family === 'srcdoc' || family === 'raw-html') {
     return blockedDecision(name, family, value, 'runtime write would create executable markup');
@@ -402,11 +415,95 @@ export function decideRuntimeAttributeWrite(
     return { action: 'allow', family, value };
   }
 
-  if (family === 'url' && hasUnsafeUrlScheme(value)) {
+  if (family === 'url' && options.trustedUrl !== true && hasUnsafeUrlScheme(value)) {
     return neutralizedDecision(name, family, '#', value, 'URL scheme is not allowed');
   }
 
   return { action: 'allow', family, value };
+}
+
+/**
+ * SPEC §4.8 / §5.2 rule 10: some individually harmless attribute strings become executable or
+ * remove isolation because of their element and sibling attributes. Dynamic writes either inert
+ * the complete document-navigation primitive or preserve the compiler-reviewed live value.
+ */
+function decideRuntimeElementContextWrite(
+  name: string,
+  value: string,
+  family: RuntimeSinkFamily,
+  options: RuntimeAttributeWriteOptions,
+): RuntimeSinkDecision | undefined {
+  const tag = securityStringToLowerCase(options.elementName ?? '');
+  const attribute = securityStringToLowerCase(name);
+
+  if (tag === 'base') {
+    return blockedDecision(
+      name,
+      family,
+      value,
+      'base elements cannot receive document-wide URL-resolution controls',
+    );
+  }
+  if (tag === 'meta') {
+    if (
+      attribute === 'content' &&
+      securityStringToLowerCase(securityStringTrim(options.effectiveHttpEquiv ?? '')) === 'refresh'
+    ) {
+      return blockedDecision(
+        name,
+        family,
+        value,
+        'meta refresh content is an executable document-navigation sink',
+      );
+    }
+    if (
+      (attribute === 'http-equiv' || attribute === 'httpequiv') &&
+      securityStringToLowerCase(securityStringTrim(value)) === 'refresh'
+    ) {
+      return blockedDecision(
+        name,
+        family,
+        value,
+        'dynamic meta refresh posture is an executable document-navigation sink',
+      );
+    }
+  }
+
+  if (options.posture !== 'dynamic-binding') return undefined;
+  const preserveReason = dynamicElementContextPreserveReason(
+    tag,
+    attribute,
+    options.trustedUrl === true,
+  );
+  return preserveReason === undefined
+    ? undefined
+    : preservedDecision(name, family, value, preserveReason);
+}
+
+function dynamicElementContextPreserveReason(
+  tag: string,
+  attribute: string,
+  trustedUrl: boolean,
+): string | undefined {
+  if (tag === 'script') {
+    if (attribute === 'src' && !trustedUrl)
+      return 'dynamic script sources require an exact reviewed TrustedUrl';
+    if (attribute === 'type')
+      return 'dynamic script type could turn an inert data block into executable JavaScript';
+  }
+  if (tag === 'link') {
+    if (attribute === 'href' && !trustedUrl)
+      return 'dynamic link URLs require an exact reviewed TrustedUrl';
+    if (attribute === 'rel')
+      return 'dynamic link relationship could turn an inert resource into an active stylesheet';
+  }
+  if (tag === 'iframe') {
+    if (attribute === 'src' && !trustedUrl)
+      return 'dynamic iframe sources require an exact reviewed TrustedUrl';
+    if (attribute === 'sandbox')
+      return 'dynamic iframe sandbox changes can remove the embedded-document isolation boundary';
+  }
+  return undefined;
 }
 
 /** @internal Sanitize a srcset candidate list by dropping unsafe URL candidates. */
@@ -543,6 +640,19 @@ function blockedDecision(
   return {
     action: 'remove',
     event: runtimeSinkSecurityEvent(sink, family, value, 'remove', reason),
+    family,
+  };
+}
+
+function preservedDecision(
+  sink: string,
+  family: RuntimeSinkFamily,
+  value: string,
+  reason: string,
+): RuntimeSinkDecision {
+  return {
+    action: 'preserve',
+    event: runtimeSinkSecurityEvent(sink, family, value, 'preserve', reason),
     family,
   };
 }

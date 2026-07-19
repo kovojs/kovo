@@ -848,8 +848,18 @@ function writeQueryPlanElement(element: QueryBindingElement, rendered: string): 
   element.textContent = rendered;
 }
 
-function removeBoundAttribute(element: QueryBindingElement, name: string): void {
+function removeBoundAttribute(
+  element: QueryBindingElement,
+  name: string,
+  securityDecisionApplied = false,
+): void {
   if (inertBlockedSvgSmilBindingElement(element)) return;
+  if (
+    !securityDecisionApplied &&
+    kovoBoundAttributeValue(name, null, boundAttributeWriteContext(element)) === undefined
+  ) {
+    return;
+  }
   // SPEC §5.2.4: closing a <dialog> by removing `open` never exits the top layer;
   // route through dialog.close() so a show-modal dialog leaves the top layer.
   if (name === 'open' && reconcileDialogOpen(element, null)) return;
@@ -950,10 +960,12 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
 
   // SPEC §1 and §5.2: generated/client-updated attributes use the shared output-context model so
   // security behavior remains auditable in emitted code and in the live update path.
-  // F2: kovoBoundAttributeValue returns null for blocked sinks; remove any prior value.
-  const rendered = kovoBoundAttributeValue(name, value);
+  // F2 / SPEC §4.8: `null` removes a blocked primitive; `undefined` preserves the compiler-reviewed
+  // live value when the element/attribute pair is itself the execution or isolation control.
+  const rendered = kovoBoundAttributeValue(name, value, boundAttributeWriteContext(element));
+  if (rendered === undefined) return;
   if (rendered === null) {
-    removeBoundAttribute(element, name);
+    removeBoundAttribute(element, name, true);
     return;
   }
   setBindingAttribute(element, name, rendered);
@@ -966,6 +978,18 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
   if ((name === 'scrollTop' || name === 'scrolltop') && element.scrollTop !== undefined) {
     element.scrollTop = securityNumber(value) || 0;
   }
+}
+
+function boundAttributeWriteContext(element: QueryBindingElement): {
+  effectiveHttpEquiv: string | null;
+  elementName: string | undefined;
+} {
+  return {
+    effectiveHttpEquiv:
+      readBindingAttribute(element, 'http-equiv') ??
+      readBindingAttribute(element, 'httpequiv'),
+    elementName: readBindingTagName(element),
+  };
 }
 
 function formatBoundValue(value: unknown): string {

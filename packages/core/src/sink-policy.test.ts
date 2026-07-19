@@ -221,6 +221,60 @@ describe('shared runtime sink policy', () => {
     }
   });
 
+  it('classifies document-navigation and element-context writes with closed actions', () => {
+    expect(
+      decideRuntimeAttributeWrite('href', '/safe/', {
+        elementName: 'BASE',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'remove', family: 'url' });
+    expect(
+      decideRuntimeAttributeWrite('content', '0; url=https://attacker.example/', {
+        effectiveHttpEquiv: ' ReFrEsH ',
+        elementName: 'meta',
+        posture: 'dynamic-binding',
+      }),
+    ).toMatchObject({ action: 'remove' });
+    expect(
+      decideRuntimeAttributeWrite('http-equiv', 'refresh', {
+        elementName: 'meta',
+        posture: 'dynamic-binding',
+      }),
+    ).toMatchObject({ action: 'remove' });
+
+    for (const [elementName, name] of [
+      ['script', 'src'],
+      ['script', 'type'],
+      ['link', 'href'],
+      ['link', 'rel'],
+      ['iframe', 'src'],
+      ['iframe', 'sandbox'],
+    ] as const) {
+      expect(
+        decideRuntimeAttributeWrite(name, '/uploads/attacker', {
+          elementName,
+          posture: 'dynamic-binding',
+        }),
+        `${elementName}[${name}]`,
+      ).toMatchObject({ action: 'preserve' });
+    }
+
+    expect(
+      decideRuntimeAttributeWrite('src', 'data:text/javascript,alert(1)', {
+        elementName: 'script',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'allow', value: 'data:text/javascript,alert(1)' });
+    expect(
+      decideRuntimeAttributeWrite('title', 'Profile', {
+        elementName: 'iframe',
+        posture: 'dynamic-binding',
+      }),
+    ).toMatchObject({ action: 'allow', value: 'Profile' });
+  });
+
   it('parses srcset and drops unsafe candidates without dropping safe candidates', () => {
     expect(
       sanitizeRuntimeSrcset(

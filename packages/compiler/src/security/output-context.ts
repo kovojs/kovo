@@ -690,6 +690,9 @@ function renderedElementContextSinkIssue(
   if (tag === 'iframe' && target === 'sandbox') {
     return 'a dynamic iframe sandbox value can remove the embedded-document isolation boundary';
   }
+  if (tag === 'iframe' && target === 'src') {
+    return 'a dynamic iframe source can load same-origin attacker-controlled active content';
+  }
   return undefined;
 }
 
@@ -736,7 +739,7 @@ function elementContextSecurityDiagnostic(
     help: compilerArrayJoin(
       [
         `Blocked reason: ${reason}.`,
-        'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script or link URL.',
+        'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
         'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
         'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed.',
       ],

@@ -260,29 +260,52 @@ export function kovoSafeUrl(value: unknown): string {
 
 /**
  * Formats a generated bound attribute value with URL attributes sanitized.
- * Returns null when the attribute write must be suppressed entirely (on*, srcdoc).
+ * Returns null when the attribute must be removed (on*, srcdoc), or undefined when a
+ * pair/context-dependent live control must retain its compiler-reviewed value.
  */
-export function kovoBoundAttributeValue(name: string, value: unknown): string | null {
-  // URL attributes route the RAW value through kovoSafeUrl so a `trustedUrl`
-  // brand survives (formatting it first would stringify the wrapper object).
-  if (runtimeSinkFamilyForAttribute(name) === 'url') return kovoSafeUrl(value);
+export interface KovoBoundAttributeWriteContext {
+  elementName?: string;
+  effectiveHttpEquiv?: string | null;
+}
 
-  const rendered = formatOutputValue(value);
-  const decision = decideRuntimeAttributeWrite(name, rendered, { posture: 'dynamic-binding' });
+export function kovoBoundAttributeValue(
+  name: string,
+  value: unknown,
+  context: KovoBoundAttributeWriteContext = {},
+): string | null | undefined {
+  // Preserve the module-private TrustedUrl witness until the element-aware decision. Formatting
+  // first would stringify away the only reviewed suppression for script/link/iframe URL controls.
+  const trustedUrlWrite = runtimeSinkFamilyForAttribute(name) === 'url' && isKovoTrustedUrl(value);
+  const rendered = trustedUrlWrite
+    ? (securityWeakMapGet(trustedUrlSnapshots, value as object) ?? '#')
+    : formatOutputValue(value);
+  const decision = decideRuntimeAttributeWrite(name, rendered, {
+    ...context,
+    posture: 'dynamic-binding',
+    trustedUrl: trustedUrlWrite,
+  });
   drainRuntimeSinkSecurityEvent(decision.event);
+  if (decision.action === 'preserve') return undefined;
   return decision.action === 'remove' ? null : (decision.value ?? rendered);
 }
 
 /** Sets one dynamic DOM attribute through Kovo's safe attribute sink rules. */
 export function kovoSetSafeAttribute(
   element: {
+    getAttribute?(name: string): string | null;
     removeAttribute?(name: string): void;
     setAttribute?(name: string, value: string): void;
+    tagName?: string;
   },
   name: string,
   value: unknown,
 ): void {
-  const rendered = kovoBoundAttributeValue(name, value);
+  const rendered = kovoBoundAttributeValue(name, value, {
+    effectiveHttpEquiv:
+      element.getAttribute?.('http-equiv') ?? element.getAttribute?.('httpequiv') ?? null,
+    elementName: element.tagName,
+  });
+  if (rendered === undefined) return;
   if (rendered === null) {
     element.removeAttribute?.(name);
     return;

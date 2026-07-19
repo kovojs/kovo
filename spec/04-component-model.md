@@ -333,6 +333,14 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 - the `style` attribute and `<style>` element text;
 - `srcdoc`;
 - `<script>` element text and `<script type="application/json">` island bodies (§9.1 governs the byte-level encoding for the latter).
+- element-context execution and isolation controls: a dynamic `<script src>` can execute
+  same-origin attacker-controlled JavaScript, a dynamic script `type` can turn inert data into
+  code, a dynamic stylesheet `<link href>`/`rel` pair can apply attacker-controlled CSS, and a
+  dynamic `<iframe src>`/`sandbox` pair can load active same-origin content or lift its isolation.
+  These attributes must be static compiler-reviewed values. The URL halves (`script[src]`,
+  `link[href]`, and `iframe[src]`) may instead hold an exact `trustedUrl(value, auditedReason)`;
+  `trustedUrl` never suppresses `type`, `rel`, or `sandbox`. Live bindings and keyed fragment
+  morphs preserve the reviewed value rather than applying or removing a blocked control.
 - document-wide navigation elements are outside the app-authored output surface: `<base>` is
   disabled because even a safe-scheme value retargets every later relative URL, and
   `<meta http-equiv="refresh">` is disabled because `http-equiv` plus `content` is one executable

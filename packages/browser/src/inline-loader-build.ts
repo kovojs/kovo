@@ -511,6 +511,43 @@ function installInlineKovoLoader(im) {
     }
     return true;
   };
+  const blockElementContextWrite = (el, name, val) => {
+    const tag = bns.lower(bns.readElementTagName(el) || '');
+    if (tag === 'base') {
+      const attributes = bns.snapshotElementAttributes(el);
+      for (let index = 0; index < attributes.length; index += 1) {
+        const attribute = attributes[index];
+        if (attribute) bns.removeElementAttribute(el, attribute.name);
+      }
+      return true;
+    }
+    if (tag === 'meta') {
+      if (name === 'content') {
+        const posture = bns.readAttribute(el, 'http-equiv') || bns.readAttribute(el, 'httpequiv');
+        if (posture !== null && bns.lower(bns.trim(posture)) === 'refresh') {
+          bns.removeElementAttribute(el, name);
+          return true;
+        }
+      }
+      if (
+        (name === 'http-equiv' || name === 'httpequiv') &&
+        bns.lower(bns.trim(fb(val))) === 'refresh'
+      ) {
+        bns.removeElementAttribute(el, name);
+        return true;
+      }
+    }
+    if (
+      (tag === 'script' && (name === 'src' || name === 'type')) ||
+      (tag === 'link' && (name === 'href' || name === 'rel')) ||
+      (tag === 'iframe' && (name === 'src' || name === 'sandbox'))
+    ) {
+      // Preserve the compiler-reviewed live value. Removing iframe[sandbox] is privilege
+      // elevation, so blocked context writes must never share the ordinary remove action.
+      return true;
+    }
+    return false;
+  };
   const wa = (el, name, val) => {
     const n = bns.lower(name);
     if (inertBlockedSmil(el)) return;
@@ -518,6 +555,7 @@ function installInlineKovoLoader(im) {
       bns.removeElementAttribute(el, name);
       return;
     }
+    if (blockElementContextWrite(el, n, val)) return;
     // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
     // lives in the top layer. Toggling its open attribute alone never exits the
     // top layer (it stays :modal with an inert backdrop intercepting every

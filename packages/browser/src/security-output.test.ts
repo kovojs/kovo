@@ -469,6 +469,28 @@ describe('runtime output-context helpers', () => {
     expect(kovoBoundAttributeValue('aria-label', 'Close')).toBe('Close');
   });
 
+  it('returns an explicit no-write sentinel for reviewed element-context controls', () => {
+    expect(
+      kovoBoundAttributeValue('src', '/uploads/attacker.js', { elementName: 'SCRIPT' }),
+    ).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue('rel', 'stylesheet', { elementName: 'LINK' }),
+    ).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue('sandbox', null, { elementName: 'IFRAME' }),
+    ).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue('src', '/uploads/attacker.html', { elementName: 'IFRAME' }),
+    ).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue(
+        'src',
+        trustedUrl('data:text/javascript,export default 1', 'reviewed executable asset'),
+        { elementName: 'SCRIPT' },
+      ),
+    ).toBe('data:text/javascript,export default 1');
+  });
+
   // @kovo-security-certifies C13 modular-dynamic-control-plane-runtime-floor
   it('removes compiler-generated control-plane names from modular dynamic bindings', () => {
     const reservedNames = [

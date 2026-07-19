@@ -294,14 +294,18 @@ function m(c: Element, n: Element, security: HtmlResponseFragmentSecurityControl
   const currentAttributes = security.snapshotElementAttributes(c);
   for (let index = currentAttributes.length; index--; ) {
     const attribute = currentAttributes[index];
-    if (attribute && !security.hasElementAttribute(n, attribute.name)) {
+    if (
+      attribute &&
+      !security.hasElementAttribute(n, attribute.name) &&
+      !preservesReviewedHtmlElementContextAttribute(c, attribute.name, security)
+    ) {
       security.removeElementAttribute(c, attribute.name);
     }
   }
   const nextAttributes = security.snapshotElementAttributes(n);
   for (let index = 0; index < nextAttributes.length; index += 1) {
     const attribute = nextAttributes[index];
-    if (attribute) sa(c, attribute.name, attribute.value, security);
+    if (attribute) sa(c, attribute.name, attribute.value, security, true);
   }
 
   // SPEC.md §9.1: a focused keyed input/textarea keeps its browser-owned
@@ -318,11 +322,15 @@ function sa(
   name: string,
   v: string,
   security: HtmlResponseFragmentSecurityControls,
+  preserveReviewedContext = false,
 ): void {
   if (inertBlockedSvgSmilElement(e, security)) return;
   const n = security.lower(name);
   if (blocksDocumentNavigationAttribute(e, n, v, security)) {
     security.removeElementAttribute(e, name);
+    return;
+  }
+  if (preserveReviewedContext && preservesReviewedHtmlElementContextAttribute(e, n, security)) {
     return;
   }
   if (r(n)) {
@@ -346,6 +354,21 @@ function sa(
     }
   }
   security.setElementAttribute(e, name, v);
+}
+
+/** @internal Whether a reused element must retain its reviewed active-content control. */
+export function preservesReviewedHtmlElementContextAttribute(
+  element: Element,
+  name: string,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const tag = security.lower(security.readElementTagName(element) ?? '');
+  const attribute = security.lower(name);
+  return (
+    (tag === 'script' && (attribute === 'src' || attribute === 'type')) ||
+    (tag === 'link' && (attribute === 'href' || attribute === 'rel')) ||
+    (tag === 'iframe' && (attribute === 'src' || attribute === 'sandbox'))
+  );
 }
 
 function r(n: string): boolean {
@@ -509,8 +532,9 @@ export function setSafeHtmlResponseAttribute(
   name: string,
   value: string,
   security: HtmlResponseFragmentSecurityControls = createBrowserNavigationSecurityControls(),
+  preserveReviewedContext = false,
 ): void {
-  sa(element, name, value, security);
+  sa(element, name, value, security, preserveReviewedContext);
 }
 
 function y(v: string, security: HtmlResponseFragmentSecurityControls): string | null {
