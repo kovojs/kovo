@@ -267,7 +267,7 @@ export function kovoBoundAttributeValue(name: string, value: unknown): string | 
   if (runtimeSinkFamilyForAttribute(name) === 'url') return kovoSafeUrl(value);
 
   const rendered = formatOutputValue(value);
-  const decision = decideRuntimeAttributeWrite(name, rendered);
+  const decision = decideRuntimeAttributeWrite(name, rendered, { posture: 'dynamic-binding' });
   drainRuntimeSinkSecurityEvent(decision.event);
   return decision.action === 'remove' ? null : (decision.value ?? rendered);
 }

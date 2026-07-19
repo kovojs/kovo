@@ -182,7 +182,8 @@ describe('inline loader output security', () => {
         'data-bind:on:click': 'state.handler',
         'data-kovo-module-allowlist': '/c/client.js',
         'data-stream-renderer': '/c/victim.client.js#render',
-        'kovo-state': '{"handler":"/c/attacker.client.js#run","label":"Ready","module":"/c/attacker.client.js","renderer":"/c/attacker.client.js#render"}',
+        'kovo-state':
+          '{"handler":"/c/attacker.client.js#run","label":"Ready","module":"/c/attacker.client.js","renderer":"/c/attacker.client.js#render"}',
         'on:click': '/c/client.js#commitReserved',
       });
 

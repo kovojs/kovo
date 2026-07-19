@@ -94,9 +94,7 @@ describe('browser response fragment apply', () => {
     );
     expect(button?.getAttribute('on:click')).toBe('/c/fragment.client.js#run');
     expect(button?.getAttribute('data-kovo-module-allowlist')).toBe('/c/fragment.client.js');
-    expect(button?.getAttribute('data-stream-renderer')).toBe(
-      '/c/fragment.client.js#render',
-    );
+    expect(button?.getAttribute('data-stream-renderer')).toBe('/c/fragment.client.js#render');
 
     button?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));

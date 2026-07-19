@@ -59,6 +59,22 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'compiler-finite-ir/drop-authored-executable-reference-provenance',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'runtime-sink/drop-dynamic-binding-control-plane-closure',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-output-context/drop-dynamic-generated-control-target-closure',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'inline-runtime/drop-dynamic-binding-control-plane-closure',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'compiler-finite-ir/drop-reviewed-command-door',
           status: 'killed',
         }),

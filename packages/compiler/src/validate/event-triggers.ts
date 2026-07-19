@@ -16,31 +16,28 @@ compilerSetAdd(declaredExecutionTriggers, 'load');
 compilerSetAdd(declaredExecutionTriggers, 'visible');
 
 const delegatedDomEvents = compilerCreateSet<string>();
+// Keep this compiler-owned typed-event vocabulary byte-for-byte aligned with the runtime's
+// defaultDelegatedEvents plus its synthesized pointerenter/pointerleave pair (SPEC §4.4/§5.2).
 const delegatedDomEventNames = [
-  'beforeinput',
+  'animationend',
+  'beforetoggle',
   'blur',
+  'cancel',
   'change',
   'click',
-  'close',
   'contextmenu',
-  'dblclick',
   'focus',
-  'focusin',
-  'focusout',
   'input',
   'keydown',
   'keyup',
-  'pointercancel',
+  'paste',
   'pointerdown',
   'pointerenter',
   'pointerleave',
   'pointermove',
-  'pointerout',
-  'pointerover',
   'pointerup',
-  'reset',
+  'scroll',
   'submit',
-  'toggle',
 ] as const;
 const delegatedDomEventNameLength = compilerArrayLength(
   delegatedDomEventNames,
@@ -109,7 +106,10 @@ function eventTriggerAttributes(
       if (!attribute) {
         compilerFailClosed(`Event-trigger attributes[${attributeIndex}] must be own data.`);
       }
-      const name = attribute.executionTriggerName;
+      // Authored TSX uses typed onClick/onIdle/onVisible/onLoad props. Raw on:* is emitted IR and
+      // is rejected by the authoring-surface gate; retaining only executionTriggerName here would
+      // therefore make this validator unreachable from supported authoring syntax.
+      const name = attribute.executionTriggerName ?? attribute.domEventName;
       if (name !== undefined) {
         compilerArrayAppend(
           result,

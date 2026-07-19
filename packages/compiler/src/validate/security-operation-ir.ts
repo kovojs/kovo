@@ -8,13 +8,15 @@ import { securityClassifier } from '@kovojs/core/internal/security-markers';
 
 import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
 import {
+  kovoExecutableReferenceAttributeKind,
+  type KovoExecutableReferenceAttributeKind,
+} from '../executable-reference-attributes.js';
+import {
   compilerArrayAppend,
   compilerArrayLength,
   compilerFailClosed,
   compilerOwnDataValue,
   compilerSetHas,
-  compilerStringStartsWith,
-  compilerStringToLowerCase,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
@@ -256,29 +258,6 @@ function appendRuntimeSelectedLegacySpreadDiagnostics(
     }
     appendRuntimeSelectedExecutableReferenceDiagnostic(found, diagnostics, entry.key, kind, spread);
   }
-}
-
-type KovoExecutableReferenceAttributeKind =
-  | 'derive'
-  | 'handler'
-  | 'module-allowlist'
-  | 'stream-renderer';
-
-function kovoExecutableReferenceAttributeKind(
-  name: string,
-): KovoExecutableReferenceAttributeKind | undefined {
-  const lower = compilerStringToLowerCase(name);
-  if (compilerStringStartsWith(lower, 'on:')) return 'handler';
-  if (
-    lower === 'data-bind' ||
-    compilerStringStartsWith(lower, 'data-bind:') ||
-    compilerStringStartsWith(lower, 'data-bind-prop:')
-  ) {
-    return 'derive';
-  }
-  if (lower === 'data-stream-renderer') return 'stream-renderer';
-  if (lower === 'data-kovo-module-allowlist') return 'module-allowlist';
-  return undefined;
 }
 
 function appendRuntimeSelectedExecutableReferenceDiagnostic(

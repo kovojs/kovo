@@ -21,6 +21,7 @@ import {
   securityWeakSetAdd,
   securityWeakSetHas,
 } from '#security-witness-intrinsics';
+import { isGeneratedOnlySemanticAttribute } from './semantic-attributes.js';
 
 /**
  * @internal URL sink facts for server render, browser runtime writes, and compiler
@@ -153,6 +154,7 @@ export type RuntimeSinkFamily =
   | 'attribute'
   | 'css-text'
   | 'event-handler'
+  | 'framework-control'
   | 'header'
   | 'raw-html'
   | 'srcdoc'
@@ -186,6 +188,14 @@ export interface RuntimeSinkDecision {
   event?: RuntimeSinkSecurityEvent;
   family: RuntimeSinkFamily;
   value?: string;
+}
+
+/** @internal Provenance posture for one runtime attribute write. */
+type RuntimeAttributeWritePosture = 'compiler-wire' | 'dynamic-binding';
+
+/** @internal Runtime attribute-write context; compiler wire is preserved unless explicitly narrowed. */
+interface RuntimeAttributeWriteOptions {
+  posture?: RuntimeAttributeWritePosture;
 }
 
 /** @internal Attribute names whose value is a srcset candidate list, not one plain URL. */
@@ -344,7 +354,19 @@ export function contextualOutputSinkFamilyForAttribute(name: string): RuntimeSin
  * @internal Decide a dynamic attribute write. Unsafe sinks return `remove`; unsafe plain URL
  * attributes return `neutralize` with `#` to preserve the existing server/browser ABI.
  */
-export function decideRuntimeAttributeWrite(name: string, value: string): RuntimeSinkDecision {
+export function decideRuntimeAttributeWrite(
+  name: string,
+  value: string,
+  options: RuntimeAttributeWriteOptions = {},
+): RuntimeSinkDecision {
+  if (options.posture === 'dynamic-binding' && isGeneratedOnlySemanticAttribute(name)) {
+    return blockedDecision(
+      name,
+      'framework-control',
+      value,
+      'dynamic binding cannot mint or replace compiler-generated control-plane markup',
+    );
+  }
   const family = runtimeSinkFamilyForAttribute(name);
 
   if (family === 'event-handler' || family === 'srcdoc' || family === 'raw-html') {
