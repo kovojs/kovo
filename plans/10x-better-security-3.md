@@ -313,13 +313,15 @@ the guard checks a role SQL never sees.
     framework source; it does not claim to decide arbitrary JavaScript or dynamically assembled SQL.
     The supported-deployment security boundary is the live boot posture check over the engine's exact
     policy set and policy shape, which the two catalog-state regressions pin.
-- [ ] **Ship the non-correspondence explain record second, not last**: place the generated RLS
+- [x] **Ship the non-correspondence explain record second, not last**: place the generated RLS
       predicate text and the `explainGuard` audit facts side by side with status `unproven` for every
       table outside the decided fragment (hand `authzPolicy`, arbitrary `ownsRow`, system/admin
       `USING(true)`). Include the dead `kovo.role` fact as a first-class explain warning. Both halves
       already exist in the system and are simply never placed next to each other.
-  - Remaining gap: the typed record and honest statuses exist, but no production explain/env output
-    consumes the record yet.
+  - Evidence: the 210/210 seven-file authorization suite proves `kovo explain --authorization`
+    emits per-surface guard/RLS records with `unproven`, `divergent`, or `environment-unchecked`
+    status plus the dead-role warning; `kovo db check --env` reports the exact escaped live policy
+    rows as verified only when FORCE RLS and the complete expected policy set and shapes pass.
 - [x] Retarget `resolveProtectedPostgresTables` (`:7710-7778`) to build a 2-constructor algebra term
       and render SQL **from** the term; first proof obligation is byte-identity against today's
       predicate strings (already pinned by `postgres-runtime.test.ts` / `postgres-authz.test.ts`).
