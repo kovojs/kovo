@@ -489,17 +489,35 @@ const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
     if (!operation || typeof operation !== 'object') {
       throw new TypeError('KV449: invalid generated browser security operation.');
     }
-    const keys = Object.keys(operation);
-    if (keys.some((key) => key !== 'door' && key !== 'kind' && key !== 'target')) {
+    const keys = Reflect.ownKeys(operation);
+    const prototype = Object.getPrototypeOf(operation);
+    if (
+      (prototype !== Object.prototype && prototype !== null) ||
+      keys.some((key) => key !== 'door' && key !== 'kind' && key !== 'target')
+    ) {
       throw new TypeError('KV449: invalid generated browser security operation.');
     }
     const kindEntry = Object.getOwnPropertyDescriptor(operation, 'kind');
     const doorEntry = Object.getOwnPropertyDescriptor(operation, 'door');
     const targetEntry = Object.getOwnPropertyDescriptor(operation, 'target');
-    const kind = kindEntry && Object.prototype.hasOwnProperty.call(kindEntry, 'value') ? kindEntry.value : undefined;
-    const door = doorEntry && Object.prototype.hasOwnProperty.call(doorEntry, 'value') ? doorEntry.value : undefined;
-    const target = targetEntry && Object.prototype.hasOwnProperty.call(targetEntry, 'value') ? targetEntry.value : undefined;
-    if (doors[kind] !== door || (targetEntry && typeof target !== 'string')) {
+    const kindIsOwnData =
+      kindEntry !== undefined && Object.prototype.hasOwnProperty.call(kindEntry, 'value');
+    const doorIsOwnData =
+      doorEntry !== undefined && Object.prototype.hasOwnProperty.call(doorEntry, 'value');
+    const targetIsOwnData =
+      targetEntry !== undefined && Object.prototype.hasOwnProperty.call(targetEntry, 'value');
+    const kind = kindIsOwnData ? kindEntry.value : undefined;
+    const door = doorIsOwnData ? doorEntry.value : undefined;
+    const target = targetIsOwnData ? targetEntry.value : undefined;
+    if (
+      !kindIsOwnData ||
+      !doorIsOwnData ||
+      typeof kind !== 'string' ||
+      typeof door !== 'string' ||
+      !Object.prototype.hasOwnProperty.call(doors, kind) ||
+      doors[kind] !== door ||
+      (targetEntry !== undefined && (!targetIsOwnData || typeof target !== 'string'))
+    ) {
       throw new TypeError('KV449: invalid generated browser security operation.');
     }
   }

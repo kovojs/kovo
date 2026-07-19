@@ -15,6 +15,7 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { runInNewContext } from 'node:vm';
 
 import { build as buildWithEsbuild } from 'esbuild';
 import { Node, Project, SyntaxKind, ts } from 'ts-morph';
@@ -46,6 +47,7 @@ const coreFrameworkIdentityPath = path.join(
 );
 const compilerCompilePath = path.join(repoRoot, 'packages/compiler/src/compile.ts');
 const compilerBehavioralEntryPath = path.join(repoRoot, 'packages/compiler/src/index.ts');
+const compilerClientEmitPath = path.join(repoRoot, 'packages/compiler/src/emit/client.ts');
 const compilerVitePath = path.join(repoRoot, 'packages/compiler/src/vite.ts');
 const compilerSecuritySemanticGraphPath = path.join(
   repoRoot,
@@ -201,6 +203,25 @@ const removedGeneratedDeferredStyleControlManifestEntry =
 
 const scopedKeyRuntimeWitnessBranch = '  if (facts === undefined) {';
 const removedScopedKeyRuntimeWitnessBranch = '  if (false && facts === undefined) {';
+
+const generatedClientSecurityManifestOwnDataBranch = [
+  '    if (',
+  '      !kindIsOwnData ||',
+  '      !doorIsOwnData ||',
+  "      typeof kind !== 'string' ||",
+  "      typeof door !== 'string' ||",
+  '      !Object.prototype.hasOwnProperty.call(doors, kind) ||',
+  '      doors[kind] !== door ||',
+  "      (targetEntry !== undefined && (!targetIsOwnData || typeof target !== 'string'))",
+  '    ) {',
+  "      throw new TypeError('KV449: invalid generated browser security operation.');",
+  '    }',
+].join('\n');
+const weakenedGeneratedClientSecurityManifestOwnDataBranch = [
+  "    if (doors[kind] !== door || (targetEntry !== undefined && typeof target !== 'string')) {",
+  "      throw new TypeError('KV449: invalid generated browser security operation.');",
+  '    }',
+].join('\n');
 
 const safeIframeSandboxAllowFormsEntry = "  'allow-forms',";
 const removedSafeIframeSandboxAllowFormsEntry = '  // allow-forms sandbox token removed by mutant';
@@ -1718,6 +1739,18 @@ const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
 ].join('\n');
 
 export const SECURITY_GATE_MUTANTS = [
+  {
+    behavioralTypeScript: true,
+    description:
+      'Restores allow-by-omission in the standalone generated-client security-operation helper.',
+    expectedKiller:
+      'emitted browser helpers must require own data kind and door descriptors before matching reviewed tuples',
+    name: 'generated-client/drop-security-operation-own-data-boundary',
+    replacement: weakenedGeneratedClientSecurityManifestOwnDataBranch,
+    search: generatedClientSecurityManifestOwnDataBranch,
+    sourceFile: compilerClientEmitPath,
+    test: assertGeneratedClientSecurityManifestOwnDataBehavior,
+  },
   {
     description: 'Lets an unwitnessed structure pass the ScopedKey runtime authority lookup.',
     expectedKiller: 'stateful sink keys must retain the module-private runtime witness',
@@ -4569,6 +4602,43 @@ function compileFiniteIrFixture(moduleUnderTest, source, extraFiles = []) {
     fileName: 'src/finite-ir-mutation-fixture.tsx',
     source,
   });
+}
+
+function assertGeneratedClientSecurityManifestOwnDataBehavior(moduleUnderTest) {
+  const valid = executeStandaloneGeneratedClientModule(
+    moduleUnderTest,
+    "[{ door: 'compiler-state', kind: 'browser.state.write', target: 'state.count' }]",
+  );
+  if (valid.probe() !== 'accepted') {
+    throw new Error('standalone generated-client helper rejected an exact reviewed operation');
+  }
+
+  let failure;
+  try {
+    executeStandaloneGeneratedClientModule(moduleUnderTest, '[{}]');
+  } catch (error) {
+    failure = error;
+  }
+  if (!/KV449: invalid generated browser security operation\./u.test(String(failure))) {
+    throw new Error(
+      `standalone generated-client helper admitted missing own data: ${String(failure)}`,
+    );
+  }
+  return Promise.resolve();
+}
+
+function executeStandaloneGeneratedClientModule(moduleUnderTest, manifest) {
+  const source = moduleUnderTest.rewriteClientModuleRuntimeImportsForBrowser(
+    [
+      "import { securityHandler } from '@kovojs/browser/generated';",
+      `export const probe = securityHandler(${manifest}, () => 'accepted');`,
+      '',
+    ].join('\n'),
+  );
+  const exports = {};
+  const executable = source.replace(/export const ([A-Za-z_$][\w$]*)/gu, 'const $1 = exports.$1');
+  runInNewContext(executable, { exports }, { timeout: 1_000 });
+  return exports;
 }
 
 function finiteIrDiagnostics(result) {

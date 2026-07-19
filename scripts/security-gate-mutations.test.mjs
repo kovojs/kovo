@@ -8,7 +8,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after finite browser-control enrollment', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(246);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(250);
   });
 
   it('enrolls behavioral request-body shape, allocation, and FormData mutants', () => {
@@ -503,6 +503,7 @@ describe('security-gate-mutations', () => {
   it('executes runtime-boundary mutants instead of source-text assertions', () => {
     const behavioralNames = [
       'better-auth-credential-gate/drop-result-consumer-identity',
+      'generated-client/drop-security-operation-own-data-boundary',
       'better-auth-credential-gate/drop-source-identity',
       'drizzle-egress/allow-inexact-context-fetch-call',
       'request-ingress/recompute-vercel-prepared-verdict',
