@@ -235,6 +235,28 @@ const ignored = "import('@kovojs/core/internal/string-literal')";
     );
   });
 
+  it('mechanically forbids every Kovo import from the standalone verifier package', async () => {
+    const rootDir = await fixtureRoot();
+    await writeFixture(
+      rootDir,
+      'packages/verify/src/index.ts',
+      "import { createApp } from '@kovojs/server'; import { parse } from 'es-module-lexer/js';\n",
+    );
+
+    await expect(
+      collectImportBoundaryViolations({
+        rootDir,
+        roots: ['packages/verify'],
+      }),
+    ).resolves.toEqual([
+      {
+        fileName: 'packages/verify/src/index.ts',
+        specifier: '@kovojs/server',
+        tier: 'standalone-kovo',
+      },
+    ]);
+  });
+
   it('detects committed generated artifacts in app-local roots only', () => {
     expect(
       trackedGeneratedViolations([

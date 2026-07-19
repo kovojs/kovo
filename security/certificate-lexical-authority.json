@@ -1,0 +1,41 @@
+{
+  "$comment": "Plan 3 §2.1 lexical-authority adequacy ledger. Modeled routes are checked by @kovojs/verify; residual runtime code-construction and host-global routes remain explicit work in §4.6 rather than being silently treated as absent.",
+  "schema": "kovo.certificate-lexical-authority/v1",
+  "routes": [
+    {
+      "route": "re-exported-bindings",
+      "status": "modeled",
+      "evidence": "es-module-lexer static import/export records are resolved into exact certificate edges and covered by the missing-edge negative control"
+    },
+    {
+      "route": "computed-dynamic-import",
+      "status": "modeled",
+      "evidence": "@kovojs/verify requires an exact opaque row for every non-literal dynamic import and fails an unledgered occurrence as coverage/computed-import"
+    },
+    {
+      "route": "eval",
+      "status": "plan-3-4.6",
+      "evidence": "dynamic source evaluation has no finite import edge and is retained by plans/10x-better-security-3.md §4.6"
+    },
+    {
+      "route": "new-function",
+      "status": "plan-3-4.6",
+      "evidence": "dynamic Function construction has no finite import edge and is retained by plans/10x-better-security-3.md §4.6"
+    },
+    {
+      "route": "host-globals",
+      "status": "plan-3-4.6",
+      "evidence": "the search-side generator rejects direct CommonJS require; aliases, process.getBuiltinModule, and other ambient host-global acquisition are outside the one-parser checker and retained by plans/10x-better-security-3.md §4.6"
+    },
+    {
+      "route": "native-addons",
+      "status": "modeled-and-plan-3-4.6",
+      "evidence": "literal .node imports fail coverage/native-or-wasm-import; process.dlopen and equivalent host-global acquisition remain in plans/10x-better-security-3.md §4.6"
+    },
+    {
+      "route": "wasm",
+      "status": "modeled-and-plan-3-4.6",
+      "evidence": "literal .wasm imports fail coverage/native-or-wasm-import; WebAssembly host-global compilation remains in plans/10x-better-security-3.md §4.6"
+    }
+  ]
+}

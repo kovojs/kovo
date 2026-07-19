@@ -36,7 +36,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     const original = artifactSource({ [rootModule]: 'export const root = true;' });
     const certificate = certificateFor(original, { cap: { [rootModule]: [] } });
     const injected = artifactSource({
-      [rootModule]: "import 'node:child_process';\nexport const root = true;",
+      [rootModule]: "require('node:child_process');\nexport const root = true;",
     });
 
     const result = await verifyCertificate(certificate, injected);
@@ -136,6 +136,70 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     expect((await verifyCertificate(certificateFor(unresolved), unresolved)).findings).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'edge-unresolved' })]),
     );
+
+    for (const source of [
+      "import './worker.mjs?query';",
+      "import 'data:text/javascript,export default true';",
+      "import '/absolute.mjs';",
+    ]) {
+      const unsupported = artifactSource({ [rootModule]: source });
+      expect((await verifyCertificate(certificateFor(unsupported), unsupported)).findings).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'unsupported-import' })]),
+      );
+    }
+  });
+
+  it('requires an exact opaque row for every external import outside the seven-kind domain', async () => {
+    const artifacts = artifactSource({
+      [rootModule]: "import 'third-party-parser'; export const root = true;",
+    });
+    const reason =
+      'imports external module "third-party-parser" outside the seven-kind lexical capability domain';
+    expect((await verifyCertificate(certificateFor(artifacts), artifacts)).findings).toEqual([
+      expect.objectContaining({ code: 'opaque-missing', obligation: 'coverage' }),
+    ]);
+    await expect(
+      verifyCertificate(
+        certificateFor(artifacts, { opaque: [{ module: rootModule, reason }] }),
+        artifacts,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it('independently classifies every member of the frozen capability domain', async () => {
+    const specimens = new Map<string, (typeof KOVO_CERTIFICATE_CAPABILITY_DOMAIN)[number]>([
+      ['pg', 'database-driver'],
+      ['node:module', 'dynamic-loader'],
+      ['node:fs', 'filesystem'],
+      ['node:net', 'network'],
+      ['node:child_process', 'process'],
+      ['node:vm', 'vm'],
+      ['node:worker_threads', 'worker'],
+    ]);
+    for (const [specifier, capability] of specimens) {
+      const artifacts = artifactSource({ [rootModule]: `import ${JSON.stringify(specifier)};` });
+      const certificate = certificateFor(artifacts, {
+        ...(specifier === 'node:module'
+          ? {
+              opaque: [
+                {
+                  module: rootModule,
+                  reason:
+                    'imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage',
+                },
+              ],
+            }
+          : {}),
+      });
+      const result = await verifyCertificate(certificate, artifacts);
+      expect(result.findings, specifier).toEqual([
+        expect.objectContaining({
+          code: 'local-capability-missing',
+          message: expect.stringContaining(capability),
+          obligation: 'stability',
+        }),
+      ]);
+    }
   });
 
   it('rejects schema drift, inherited carriers, non-canonical paths, and duplicate rows', async () => {
@@ -143,13 +207,29 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     const valid = certificateFor(artifacts);
     const inherited = Object.assign(Object.create({ schema: 'kovo.certificate/v1' }), valid);
     delete inherited.schema;
+    const symbolProperty = { ...valid };
+    Object.defineProperty(symbolProperty, Symbol('hidden'), { value: true });
+    const nonenumerableArrayProperty = [...valid.artifacts];
+    Object.defineProperty(nonenumerableArrayProperty, 'hidden', { value: true });
+    const noncanonicalArrayIndex = [...valid.artifacts];
+    Object.defineProperty(noncanonicalArrayIndex, '00', {
+      enumerable: true,
+      value: valid.artifacts[0],
+    });
 
     for (const malformed of [
       { ...valid, extra: true },
       { ...valid, domain: [...KOVO_CERTIFICATE_CAPABILITY_DOMAIN, 'socket'] },
       { ...valid, artifacts: [{ ...valid.artifacts[0]!, path: '../root.mjs' }] },
+      {
+        ...valid,
+        artifacts: [{ ...valid.artifacts[0]!, path: '@kovojs/server/private/dist/root.mjs' }],
+      },
       { ...valid, artifacts: [valid.artifacts[0]!, valid.artifacts[0]!] },
+      { ...valid, artifacts: nonenumerableArrayProperty },
+      { ...valid, artifacts: noncanonicalArrayIndex },
       inherited,
+      symbolProperty,
     ]) {
       const result = await verifyCertificate(malformed, artifacts);
       expect(result.ok).toBe(false);

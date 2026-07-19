@@ -113,6 +113,7 @@ import {
 } from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
+import { kovoCertificateV1Json } from '../certificate.js';
 import {
   readCapabilityPackageSummaries,
   resolveCapabilityPackages,
@@ -1186,6 +1187,9 @@ function writeKovoBuildGraphArtifact(
     join(neutralBuild.outDir, 'graph.json'),
     `${stringifyBuildValue({ ...graph, provenance }, 2)}\n`,
   );
+  // Plan 3 §2.1: the release-bound framework certificate is an independently-checkable sibling,
+  // not an app-authored graph field. Its committed canonical bytes are embedded in the CLI build.
+  writeFileSync(join(neutralBuild.outDir, 'certificate.json'), kovoCertificateV1Json);
 }
 
 function buildCheckFailureOutput(output: string): string {

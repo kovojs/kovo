@@ -200,6 +200,13 @@ describe('kovo build', () => {
       };
 
       const first = await build();
+      const firstCertificate = readFileSync(join(outDir, '.kovo/certificate.json'), 'utf8');
+      expect(JSON.parse(firstCertificate)).toMatchObject({
+        schema: 'kovo.certificate/v1',
+      });
+      expect(firstCertificate).toBe(
+        readFileSync(join(repoRoot, 'security/kovo-certificate-v1.json'), 'utf8'),
+      );
       const graph = JSON.parse(first) as {
         provenance?: {
           frameworkPackages: readonly { name: string; version: string }[];
@@ -227,6 +234,7 @@ describe('kovo build', () => {
       });
       expect(JSON.stringify(graph.provenance)).not.toContain(root);
       expect(await build()).toBe(first);
+      expect(readFileSync(join(outDir, '.kovo/certificate.json'), 'utf8')).toBe(firstCertificate);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

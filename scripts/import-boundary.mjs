@@ -15,6 +15,7 @@ import { collectFilesAsync } from './lib/source-files.mjs';
 const appFacingRoots = [
   'examples',
   'packages/create-kovo/templates',
+  'packages/verify',
   'site/content',
   'site/scripts',
   'site/src',
@@ -126,6 +127,9 @@ export function appLocalGeneratedImportTier(specifier, importerPath = null) {
 }
 
 function importBoundaryTier(specifier, importerPath) {
+  if (importerPath.startsWith('packages/verify/') && specifier.startsWith('@kovojs/')) {
+    return 'standalone-kovo';
+  }
   return nonPublicKovoImportTier(specifier) ?? appLocalGeneratedImportTier(specifier, importerPath);
 }
 
@@ -137,6 +141,7 @@ function allowedImportBoundaryException(
   if (tier === 'internal') return internalExceptions.has(allowKey);
   if (tier === 'generated') return generatedExceptions.has(allowKey);
   if (tier === 'app-local-generated') return false;
+  if (tier === 'standalone-kovo') return false;
   return false;
 }
 
@@ -276,7 +281,7 @@ function appLocalGeneratedImportPath(specifier, importerPath) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const violations = await collectImportBoundaryViolations();
   if (violations.length > 0) {
-    console.error('import-boundary: app-facing code imports non-public Kovo subpaths:');
+    console.error('import-boundary: forbidden Kovo or generated imports:');
     for (const violation of violations) {
       const reason = violation.staleException
         ? `stale ${violation.tier} exception`
