@@ -108,8 +108,8 @@
       "dist/invocation-environment-CHCSzrGX.mjs",
       "dist/invocation-environment-jX17N8Ev.mjs",
       "dist/invocation-environment-jX17N8Ev.mjs.map",
-      "dist/src-CWSAacKO.mjs",
-      "dist/src-CWSAacKO.mjs.map",
+      "dist/src-B7NBzMca.mjs",
+      "dist/src-B7NBzMca.mjs.map",
       "package.json",
       "README.md"
     ],
@@ -120,8 +120,8 @@
       "dist/app-graph-DbBXnSQ9.mjs.map",
       "dist/attribute-merge-DVEviEwj.d.mts",
       "dist/attribute-merge-DVEviEwj.d.mts.map",
-      "dist/compile-BiXer4RC.mjs",
-      "dist/compile-BiXer4RC.mjs.map",
+      "dist/compile-DQ8SO2ie.mjs",
+      "dist/compile-DQ8SO2ie.mjs.map",
       "dist/compile.d.mts",
       "dist/compile.d.mts.map",
       "dist/compile.mjs",
@@ -163,8 +163,8 @@
       "dist/vite-config.d.mts.map",
       "dist/vite-config.mjs",
       "dist/vite-config.mjs.map",
-      "dist/vite-UErJxfLs.mjs",
-      "dist/vite-UErJxfLs.mjs.map",
+      "dist/vite-vAj09IuR.mjs",
+      "dist/vite-vAj09IuR.mjs.map",
       "package.json",
       "README.md"
     ],
@@ -8183,6 +8183,10 @@
       "dist/index.mjs",
       "dist/src-NhMvGKg8.mjs",
       "dist/src-NhMvGKg8.mjs.map",
+      "dist/translation.d.mts",
+      "dist/translation.d.mts.map",
+      "dist/translation.mjs",
+      "dist/translation.mjs.map",
       "package.json"
     ],
     "create-kovo": [

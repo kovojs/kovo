@@ -105,12 +105,12 @@
       "sha512": "sha512-MdHLTuubZXG+6il5TVmP8F1/de9ztfJzM79UZddtaCaxMPY52HyVIXY/3YSkE4HdhQ6zEYpadOayngg2s2YEtQ=="
     },
     {
-      "path": "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
-      "sha512": "sha512-cHi0V4Lxzscxz9SxDFnHXx4UxFo/khJN7eVYZ7ucKMUE4bB6daWxVfNKfg3s+I7udv5O5O0yhSPRh3g7YgAgWQ=="
+      "path": "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
+      "sha512": "sha512-W8qNlprCatIMjCIsdmsu+souP40C6oJ8eWhp6pz6/WHVM50tJolvq9QShIn39MJB4hsSDyFjtnpkLBuijsQlpw=="
     },
     {
       "path": "@kovojs/compiler/dist/compile.mjs",
-      "sha512": "sha512-qTZujXdm7ZUkcfFoW9fgiWdGaqkzvVkWxy+OumsSG4h+3c8tAG5bkLR6wP8aThGYdaUkJqlWqPeV5x1g+vfLOQ=="
+      "sha512": "sha512-pIVnBmHH4gktdgiyES25YFU0IKJF5jwkgNmuq4h32l2LwHSyDuaWgdIMZXERYANgrmDSjnglFCSr3BicPrRS9g=="
     },
     {
       "path": "@kovojs/compiler/dist/compiler-security-intrinsics-B9VroZvS.mjs",
@@ -122,11 +122,11 @@
     },
     {
       "path": "@kovojs/compiler/dist/index.mjs",
-      "sha512": "sha512-lR4CQN/QGPs4K1AduMEQZytmD1aEWmrVXbuxzltm34C8CQfL9VnwBuku/lqUhOwkrvtixr2bKCZjSIAWiOhQLA=="
+      "sha512": "sha512-IVgZYe3Ij8uOdcGyCJ/B00Y1xPza3q8idQVDB7QWQdX1Rf9FIC0xzHqysPwju+/YhUJNpybIm3O6KsM5ly+B4A=="
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-/BG1MQdJhwgO0kZHhepz+kGF76kTxYSbmhhkAVs096LAxJkxGLr75wL8K3PDppUYobCB/9Xzes6cQFjKiZRHtg=="
+      "sha512": "sha512-B3My19Gb4A8J3QO/Mazxnmo26Bhot9Jdjb00HENxkaT+Am2NSdhKl+C3R0Y4DgW8F6czp3XqFqN2GF6mj610pw=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -153,12 +153,12 @@
       "sha512": "sha512-xqR90scAYm/P/YL2M/6JMyGsWIPb+4UBInOd4NiLhr4FMttgf2CIOUoLYI+/jqZg6vHysBICaFcCAoSbTV9RNA=="
     },
     {
-      "path": "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "sha512": "sha512-vl5kewZ30lDrXXm15rgLSGlFNPIKLoPcT83I1LUt2eIc0cHMvIp4gUlq4s966+GuGyWYdGxkeRtVgh8JZc9quw=="
+      "path": "@kovojs/compiler/dist/vite-config.mjs",
+      "sha512": "sha512-/Dse25e0RNVOhCLkdT0lrc0UKq46P7lNp1A2iz67CIheyGTK3SYkwzu4ithErsxBtz/zotn85SSFY2cEoRVLpQ=="
     },
     {
-      "path": "@kovojs/compiler/dist/vite-config.mjs",
-      "sha512": "sha512-Xc+rptm4IXujEX0SyiPVk/A+SCHyXX/Mw99kMGBzaa45IuJs4CDqrkaJwZakZRkkUzFY7wJpG0oytgIwN86+TA=="
+      "path": "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "sha512": "sha512-f6hVRGFHXEQ8DVjOssGkknyzSA900Qxwf9uZFLfC1atUNjx3GsJcAe+Hk5qGClCEQoMLxrfgc6TFqG179Nhsvw=="
     },
     {
       "path": "@kovojs/core/dist/audit-text-BiQ7KNmO.mjs",
@@ -735,6 +735,22 @@
     {
       "path": "@kovojs/style/dist/internal.mjs",
       "sha512": "sha512-lGcfUS0wjzzgdaTQXGw/DYME133vnf9fitlHTOBGTXo42ksntpdnsWhZRpRPcRlFOYLQ9YgANwY4objmQRV9SA=="
+    },
+    {
+      "path": "@kovojs/verify/dist/bin.mjs",
+      "sha512": "sha512-CqsAeLj8nAFiL6o6QtCpbMShjj2LGLHVXL3VO/Vdh7aUbiG7Bd3kludobk8cCoEC2ETscOALZaeIpjB/XsX7nw=="
+    },
+    {
+      "path": "@kovojs/verify/dist/index.mjs",
+      "sha512": "sha512-DpsKYzpsYu+cceFJewHo1upNfyv85OWPgR3dF8hnCQQn4slYuJwhMPR7HxwDThftFRX1MfLKdOgGn700cwUipQ=="
+    },
+    {
+      "path": "@kovojs/verify/dist/src-NhMvGKg8.mjs",
+      "sha512": "sha512-k6W1gL8Zw42ctIrKbLzNMW4CUauzcdaQWkEC5Z3i5XYbAar3TJL9oKagLDXf8SVAbHOGLCI/ArJeJK3bOHYccA=="
+    },
+    {
+      "path": "@kovojs/verify/dist/translation.mjs",
+      "sha512": "sha512-pS9m3Nskcu0m3uJ2y0HG99Q6kCAh4ojpOyC8R4nAQM6vKQUelw+yAWW4wJhQhbSjhjNkjnY3ElyVTIQqOZ6usQ=="
     }
   ],
   "cap": {
@@ -788,7 +804,7 @@
       "dynamic-loader",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/compile-BiXer4RC.mjs": [
+    "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs": [
       "dynamic-loader",
       "filesystem"
     ],
@@ -835,12 +851,12 @@
     "@kovojs/compiler/dist/source-filesystem.mjs": [
       "filesystem"
     ],
-    "@kovojs/compiler/dist/vite-UErJxfLs.mjs": [
+    "@kovojs/compiler/dist/vite-config.mjs": [
       "dynamic-loader",
       "filesystem",
       "vm"
     ],
-    "@kovojs/compiler/dist/vite-config.mjs": [
+    "@kovojs/compiler/dist/vite-vAj09IuR.mjs": [
       "dynamic-loader",
       "filesystem",
       "vm"
@@ -1186,7 +1202,17 @@
     ],
     "@kovojs/style/dist/engine-CXFYWPm_.mjs": [],
     "@kovojs/style/dist/index.mjs": [],
-    "@kovojs/style/dist/internal.mjs": []
+    "@kovojs/style/dist/internal.mjs": [],
+    "@kovojs/verify/dist/bin.mjs": [
+      "filesystem"
+    ],
+    "@kovojs/verify/dist/index.mjs": [
+      "filesystem"
+    ],
+    "@kovojs/verify/dist/src-NhMvGKg8.mjs": [
+      "filesystem"
+    ],
+    "@kovojs/verify/dist/translation.mjs": []
   },
   "domain": [
     "database-driver",
@@ -1804,68 +1830,72 @@
       "@kovojs/core/dist/internal/security-operation-ir.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/compiler/dist/app-graph-DbBXnSQ9.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/compiler/dist/compiler-security-intrinsics-B9VroZvS.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/compiler/dist/package-prefixes-CtTPYac1.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/classifier-verdict.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/client-module-url.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/module-ref.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/render-plan-token.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/route-pattern.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/security-operation-ir.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/security-url.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/semantic-attributes.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
+      "@kovojs/verify/dist/translation.mjs"
+    ],
+    [
       "@kovojs/compiler/dist/compile.mjs",
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs"
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs"
     ],
     [
       "@kovojs/compiler/dist/graph.mjs",
@@ -1877,7 +1907,7 @@
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs"
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
@@ -1897,7 +1927,7 @@
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs"
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
@@ -1905,7 +1935,7 @@
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs"
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
@@ -1917,7 +1947,7 @@
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs"
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
@@ -2008,38 +2038,6 @@
       "@kovojs/compiler/dist/compiler-security-intrinsics-B9VroZvS.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "@kovojs/compiler/dist/app-graph-DbBXnSQ9.mjs"
-    ],
-    [
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "@kovojs/compiler/dist/compile-BiXer4RC.mjs"
-    ],
-    [
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-B9VroZvS.mjs"
-    ],
-    [
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "@kovojs/compiler/dist/package-prefixes-CtTPYac1.mjs"
-    ],
-    [
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "@kovojs/compiler/dist/source-filesystem.mjs"
-    ],
-    [
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "@kovojs/core/dist/internal/client-module-url.mjs"
-    ],
-    [
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "@kovojs/core/dist/internal/diagnostics.mjs"
-    ],
-    [
-      "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "@kovojs/core/dist/internal/framework-identity.mjs"
-    ],
-    [
       "@kovojs/compiler/dist/vite-config.mjs",
       "@kovojs/core/dist/internal/classifier-verdict.mjs"
     ],
@@ -2102,6 +2100,42 @@
     [
       "@kovojs/compiler/dist/vite-config.mjs",
       "@kovojs/style/dist/internal.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-config.mjs",
+      "@kovojs/verify/dist/translation.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "@kovojs/compiler/dist/app-graph-DbBXnSQ9.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "@kovojs/compiler/dist/compiler-security-intrinsics-B9VroZvS.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CtTPYac1.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "@kovojs/compiler/dist/source-filesystem.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "@kovojs/core/dist/internal/client-module-url.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "@kovojs/core/dist/internal/diagnostics.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
       "@kovojs/core/dist/audit-text-BiQ7KNmO.mjs",
@@ -4682,6 +4716,14 @@
     [
       "@kovojs/style/dist/internal.mjs",
       "@kovojs/style/dist/engine-CXFYWPm_.mjs"
+    ],
+    [
+      "@kovojs/verify/dist/bin.mjs",
+      "@kovojs/verify/dist/src-NhMvGKg8.mjs"
+    ],
+    [
+      "@kovojs/verify/dist/index.mjs",
+      "@kovojs/verify/dist/src-NhMvGKg8.mjs"
     ]
   ],
   "opaque": [
@@ -4714,7 +4756,7 @@
       "reason": "imports external module \"typescript\" outside the seven-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/compile-BiXer4RC.mjs",
+      "module": "@kovojs/compiler/dist/compile-DQ8SO2ie.mjs",
       "reason": "imports external module \"typescript\" outside the seven-kind lexical capability domain"
     },
     {
@@ -4778,18 +4820,6 @@
       "reason": "imports external module \"typescript\" outside the seven-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "reason": "imports external module \"node:path\" outside the seven-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "reason": "imports external module \"node:url\" outside the seven-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/compiler/dist/vite-UErJxfLs.mjs",
-      "reason": "imports external module \"typescript\" outside the seven-kind lexical capability domain"
-    },
-    {
       "module": "@kovojs/compiler/dist/vite-config.mjs",
       "reason": "imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage"
     },
@@ -4815,6 +4845,18 @@
     },
     {
       "module": "@kovojs/compiler/dist/vite-config.mjs",
+      "reason": "imports external module \"typescript\" outside the seven-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "reason": "imports external module \"node:path\" outside the seven-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
+      "reason": "imports external module \"node:url\" outside the seven-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/compiler/dist/vite-vAj09IuR.mjs",
       "reason": "imports external module \"typescript\" outside the seven-kind lexical capability domain"
     },
     {
@@ -5056,6 +5098,30 @@
     {
       "module": "@kovojs/style/dist/engine-CXFYWPm_.mjs",
       "reason": "imports external module \"@material/material-color-utilities\" outside the seven-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/verify/dist/bin.mjs",
+      "reason": "imports external module \"node:path\" outside the seven-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/verify/dist/bin.mjs",
+      "reason": "imports external module \"node:url\" outside the seven-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/verify/dist/src-NhMvGKg8.mjs",
+      "reason": "imports external module \"es-module-lexer/js\" outside the seven-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/verify/dist/src-NhMvGKg8.mjs",
+      "reason": "imports external module \"node:crypto\" outside the seven-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/verify/dist/src-NhMvGKg8.mjs",
+      "reason": "imports external module \"node:path\" outside the seven-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/verify/dist/translation.mjs",
+      "reason": "imports external module \"es-module-lexer/js\" outside the seven-kind lexical capability domain"
     }
   ],
   "roots": [

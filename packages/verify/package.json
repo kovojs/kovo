@@ -13,7 +13,8 @@
   ],
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./internal/translation": "./src/translation.ts"
   },
   "publishConfig": {
     "bin": {
@@ -23,11 +24,15 @@
       ".": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
+      },
+      "./internal/translation": {
+        "types": "./dist/translation.d.mts",
+        "default": "./dist/translation.mjs"
       }
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/bin.ts src/index.ts --dts",
+    "build:dist": "vp pack src/bin.ts src/index.ts src/translation.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

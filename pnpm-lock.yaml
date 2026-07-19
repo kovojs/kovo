@@ -471,6 +471,9 @@ importers:
       '@kovojs/style':
         specifier: workspace:*
         version: link:../style
+      '@kovojs/verify':
+        specifier: workspace:*
+        version: link:../verify
       typescript:
         specifier: 6.0.3
         version: 6.0.3

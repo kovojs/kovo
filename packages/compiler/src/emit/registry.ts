@@ -45,6 +45,7 @@ export interface EmitRegistryModuleOptions {
   platformSubstitutions: readonly PlatformSubstitution[];
   queryShapeFacts?: readonly QueryShapeFact[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  refusedQueryNames?: readonly string[];
   registryFacts?: RegistryFacts;
   registryComponentName: string;
   viewTransitions: readonly ViewTransitionStamp[];
@@ -118,13 +119,22 @@ export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
   }
   const styleRuleLines = compilerArrayJoin(styleRuleLineParts, '\n');
   const queryTypeFacts = compilerCreateNullRecord<string>();
+  const refusedQueryNames = compilerCreateSet<string>();
+  const refusedQueryNameSnapshot = compilerSnapshotDenseArray(
+    options.refusedQueryNames ?? [],
+    'Registry refused query names',
+  );
+  for (let index = 0; index < refusedQueryNameSnapshot.length; index += 1) {
+    compilerSetAdd(refusedQueryNames, refusedQueryNameSnapshot[index]!);
+  }
   if (options.queryShapeFacts) {
     appendRegistryTypeFacts(
       queryTypeFacts,
       queryShapeRegistryTypeFacts(queryShapesFromFacts(options.queryShapeFacts)),
+      refusedQueryNames,
     );
   }
-  appendRegistryTypeFacts(queryTypeFacts, options.registryFacts?.queries);
+  appendRegistryTypeFacts(queryTypeFacts, options.registryFacts?.queries, refusedQueryNames);
   const queryRegistryLines = registryTypeFactLines(queryTypeFacts);
   const mutationRegistryLines = registryTypeFactLines(options.registryFacts?.mutations);
   const routeRegistryLines = routeRegistryFactLines(options.registryFacts?.routes);
@@ -334,11 +344,13 @@ function compareRegistryCodeUnits(left: string, right: string): number {
 function appendRegistryTypeFacts(
   target: Record<string, string>,
   facts: RegistryTypeFacts | undefined,
+  refusedKeys: ReadonlySet<string> = compilerCreateSet<string>(),
 ): void {
   if (facts === undefined) return;
   const keys = compilerObjectKeys(facts);
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
+    if (compilerSetHas(refusedKeys, key)) continue;
     const value = compilerOwnDataValue(facts, key, 'Registry type facts');
     if (typeof value !== 'string')
       throw new TypeError(`Registry type fact ${key} must be a string.`);

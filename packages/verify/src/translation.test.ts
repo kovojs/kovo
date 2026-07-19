@@ -7,6 +7,11 @@ import { type KovoEmittedTranslationInput, verifyEmittedTranslation } from './tr
 describe('emitted translation validation (Plan 3 §2.2)', () => {
   it('accepts exact reviewed imports, secret-free client surfaces, covered kinds, and operation records', () => {
     expect(verifyEmittedTranslation(validTranslation())).toEqual({ findings: [], ok: true });
+
+    const wrapped = validTranslation();
+    const server = artifact(wrapped, 'server');
+    server.source = `export function renderSource() { return \`${server.source.trim()}\`; }\n`;
+    expect(verifyEmittedTranslation(wrapped)).toEqual({ findings: [], ok: true });
   });
 
   it('rejects an emitted binding absent from the KV437-reviewed import set', () => {
@@ -31,6 +36,18 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
     const safe = validTranslation();
     artifact(safe, 'registry').source += '\ninterface Safe { passwordHashDigest: string }\n';
     expect(verifyEmittedTranslation(safe)).toMatchObject({ ok: true });
+
+    const commented = validTranslation();
+    artifact(commented, 'registry').source += '\n// passwordHash\n';
+    expect(verifyEmittedTranslation(commented).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactKind: 'registry',
+          code: 'secret-field-emitted',
+          relation: 'secret-field-absence',
+        }),
+      ]),
+    );
 
     for (const kind of ['client', 'registry'] as const) {
       const input = validTranslation();

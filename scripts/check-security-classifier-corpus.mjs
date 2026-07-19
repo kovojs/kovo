@@ -2140,6 +2140,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
       'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
       'packages/server/src/guard-args-receipt-security.test.ts',
+      'packages/verify/src/translation.test.ts',
       'scripts/security-coverage.test.mjs',
     ],
     verdictAnchors: [
@@ -2227,6 +2228,18 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'securityHandler([',
           '__kovoSecurityOperationManifest_v1',
           'kovo-security-operation-ir/v1',
+        ],
+      },
+      {
+        id: 'independently-reparsed-emitted-translation',
+        file: 'packages/verify/src/translation.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 independently-reparsed-emitted-translation',
+          'rejects an emitted binding absent from the KV437-reviewed import set',
+          'rejects exact secret field tokens in client or registry output without substring false positives',
+          'fails a synthetic emitted kind until the coverage policy classifies it',
+          'requires server and per-handler operation JSON to use the frozen vocabularies and decision facts',
+          'rejects JavaScript object syntax where the emission contract requires own-data JSON',
         ],
       },
       {

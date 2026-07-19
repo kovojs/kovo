@@ -2142,7 +2142,7 @@
       "apiBoundary": {
         "public": ["."],
         "generated": [],
-        "internal": []
+        "internal": ["./internal/translation"]
       }
     },
     {
