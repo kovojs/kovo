@@ -243,8 +243,12 @@ Measurements are versioned and reproducible:
   - Evidence: `pnpm run check:security-gate-mutations` kills 68/68 mutants, including cycles, all
     four budgets, surface propagation, laundering, alias/member mutation, rest/arguments, capture,
     and opaque containers.
-- [ ] Remove only predicates proven superseded by the normalized engine. Record P across all moved
+- [x] Remove only predicates proven superseded by the normalized engine. Record P across all moved
       modules and G across real fixtures; do not claim success from moving LOC elsewhere.
+  - Evidence: the live convergence collector reports `P=8,112` across all 13 production predicate
+    files, with the retired imperative-DOM name lexicon at zero; `pnpm run check:green-corpus`
+    passes 18/18. The higher total honestly includes newly enrolled closure logic rather than
+    presenting the eight deleted callback-name rows as a global P reduction.
 - [ ] Apply the substrate to OPP-28 only where principal-to-predicate correspondence is structurally
       provable. Re-scope the remainder to an explicit audit/engine responsibility instead of
       overclaiming full JavaScript predicate correctness.
@@ -340,30 +344,30 @@ Measurements are versioned and reproducible:
         owner-table reads hidden in a nested query helper invoked with validated input.
     - Evidence: the focused compiler/CLI suites pass; `index.phase2c-exact-tip-adversarial.test.ts`
       emits KV406 for the nested owner read, and both families are enrolled in C13.
-- [ ] Delete each superseded syntax/name predicate only after its C13 and mutation evidence passes.
+- [x] Delete each superseded syntax/name predicate only after its C13 and mutation evidence passes.
       Record the remaining P obligations and explain every survivor.
-- [ ] Maintain a Phase 3C survivor register until every residual has an owner, reachable-root set,
+  - Evidence: the compiler-owned JSX scan and the raw imperative callback-body name scan are absent;
+    four focused historical-C13 cases stay closed through finite IR or registration-level authority,
+    and the `drop-raw-registration-closure` plus `restore-static-build-analysis-bypass` behavioral
+    mutants are killed. No request/process or Drizzle correspondence predicate was deleted.
+- [x] Maintain a Phase 3C survivor register until every residual has an owner, reachable-root set,
       terminal family, C13 anchor, behavioral mutant, and explicit replacement/deletion condition.
       Moving a predicate into another module does not remove it from P.
-  - Current survivor: raw imperative handlers outside compiler-owned JSX, owned by
-    `nonCompilerRawHandlerBodies` / `unregisteredSinksForSourceFile` / `dangerousCallSink`; roots are
-    direct `on*` property assignments and `addEventListener` callbacks; terminals are `Function`,
-    `eval`, `innerHTML`, `outerHTML`, string `setInterval`/`setTimeout`, `document.write`, and
-    `document.writeln`. Its `kv424-request-process` C13 anchor stays closed until those registration
-    forms lower through finite IR or this narrow floor receives an executable deletion mutant and
-    an explicit long-term disposition.
   - Current survivor: request/process KV424 authority and reachability analysis, owned by
-    `requestProcessSinksForProject` and its root/callable scans. It retains raw filesystem, process,
-    network, worker, VM, dynamic-loader, database-driver, build-initializer, request-authority, and
-    opaque-call terminals not discharged by the exact compiler semantic carrier. Delete a family
-    only when capability closure or finite IR owns the same roots and its behavioral mutant proves
-    the replacement; otherwise retain it as P rather than calling all TASK B logic retired.
+    `requestProcessSinksForProject`; reachable roots are every enrolled request factory, module
+    initializer, raw `on*` assignment, and `addEventListener` registration.
+    Its terminal family is raw filesystem/process/network/worker/VM/dynamic-loader/database-driver,
+    build-initializer, request-authority, and opaque protocol/call authority. C13 anchor
+    `kv424-request-process` and behavioral mutants `restore-static-build-analysis-bypass` and
+    `drop-raw-registration-closure` retain the floor. Delete a terminal only when capability closure
+    or finite IR owns the same roots and a replacement mutant proves that exact correspondence.
   - Current survivor: specialized Drizzle KV406/OPP correspondence in
     `static/session-provenance.ts`, `static/summaries.ts`, and the write analyzer. Exact carrier,
-    principal projection, predicate, operation, and target mapping stay specialized until the
-    normalized graph proves the same correspondence and behavioral mutants kill declaration,
-    carrier, alias, and predicate laundering. Actual Drizzle writes remain an engine/audit
-    responsibility whenever JavaScript predicate correctness is not structurally provable.
+    principal projection, predicate, operation, and target mapping cover query/mutation/write roots
+    and owner/predicate terminals. C13 anchor `drizzle-analyzer-provenance` and all 28 executable
+    `drizzle-analyzer-summary/*` mutants kill declaration, carrier, alias, and predicate laundering.
+    Delete this survivor only when the normalized graph proves the same correspondence; arbitrary
+    JavaScript predicate correctness remains an engine/audit responsibility.
 - [ ] Run full classifier, compiler, integration, browser, build, package, performance, and memory
       gates before declaring the treadmill retired.
 
