@@ -989,12 +989,26 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'kv424-request-process',
     marker: '@kovo-security-classifier-corpus kv424-request-process',
     testFiles: [
+      'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
       'packages/drizzle/src/capability-escapes-static.test.ts',
       'packages/drizzle/src/trust-escapes-static.test.ts',
       'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
       'packages/drizzle/src/index.toctou-readonly.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'compiler-semantic-context-raw-read-consistency',
+        file: 'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
+        snippets: [
+          'preserves an exact context-owned rawRead over one immutable trustedSql binding when compiler semantics are present',
+          "const db = context?.db;",
+          'const statement = trustedSql(',
+          "{ reads: ['contacts'] }",
+          "db['rawRead']",
+          'const rawRead = db.rawRead;',
+          'expect(hasRequestHandlerClosure(files, semanticSources)).toBe(false)',
+        ],
+      },
       {
         id: 'static-build-task-b-authoritative-consistency',
         file: 'packages/drizzle/src/capability-escapes-static.test.ts',
