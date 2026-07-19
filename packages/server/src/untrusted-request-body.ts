@@ -391,6 +391,24 @@ function tagUntrustedFormData(form: FormData): FormData {
           return requestIterableIterator(tagged);
         };
       }
+      if (property === 'forEach') {
+        return function forEach(
+          callback: (value: FormDataEntryValue, key: string, parent: FormData) => void,
+          thisArg?: unknown,
+        ): void {
+          if (typeof callback !== 'function') {
+            throw new TypeError('FormData.forEach requires a callback function.');
+          }
+          const source = requestFormDataEntries(target);
+          for (let index = 0; index < source.length; index += 1) {
+            const pair = source[index]!;
+            // SPEC §9.2 KV430: callback reads cross the same lazy scalar membrane as get()/the
+            // iterators, and the callback's carrier is the visible proxy rather than the raw
+            // validation snapshot.
+            requestApply(callback, thisArg, [tagUntrustedFormEntry(pair[1])!, pair[0], proxy]);
+          }
+        };
+      }
       if (property === 'append') {
         return (name: string, value: string | Blob, filename?: string) =>
           requestFormDataAppend(target, name, value, filename);

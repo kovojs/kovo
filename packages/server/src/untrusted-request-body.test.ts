@@ -242,7 +242,9 @@ describe('untrusted request body parser', () => {
     expect(Object.getOwnPropertyDescriptor(tagged, 'title')).toBeUndefined();
     expect(Object.assign({}, tagged)).toEqual({});
     expect(JSON.stringify(tagged)).toBe('{}');
-    expect(s.object({ title: s.string() }).parse(tagged)).toEqual({ title: 'Hello' });
+    expect(s.object({ title: s.array(s.string()) }).parse(tagged)).toEqual({
+      title: ['Hello', 'Again'],
+    });
   });
 
   it('distinguishes budgeted array structure metadata from attacker scalar leaves', () => {

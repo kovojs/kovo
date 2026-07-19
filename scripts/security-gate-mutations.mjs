@@ -410,6 +410,10 @@ const eagerRequestScalarSnapshotBranch = [
   '        ? snapshotContainer(sourceValue, sourceSnapshots, frames)',
   '        : tagLeaf(sourceValue));',
 ].join('\n');
+const formDataForEachProvenanceBranch =
+  '            requestApply(callback, thisArg, [tagUntrustedFormEntry(pair[1])!, pair[0], proxy]);';
+const removedFormDataForEachProvenanceBranch =
+  '            requestApply(callback, thisArg, [pair[1], pair[0], target]);';
 
 const canonicalPostMethodBranch =
   "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
@@ -3320,6 +3324,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: lazyRequestScalarSnapshotBranch,
     sourceFile: serverRequestBodyProvenancePath,
     test: assertLazyRequestBodyProvenanceBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets FormData.forEach expose raw scalar values and the validation carrier.',
+    expectedKiller:
+      'FormData.forEach must lazily tag every scalar and pass only the visible provenance proxy',
+    name: 'request-body/drop-formdata-foreach-provenance',
+    replacement: removedFormDataForEachProvenanceBranch,
+    search: formDataForEachProvenanceBranch,
+    sourceFile: serverUntrustedRequestBodyPath,
+    test: assertFormDataForEachProvenanceBehavior,
   },
   {
     baseModule: requestIngressPolicy,
@@ -6575,6 +6590,28 @@ function assertLazyRequestBodyProvenanceBehavior(moduleUnderTest) {
   if (scalarBoxAllocations !== 3 || finalRead.value !== 9_978) {
     throw new Error('request provenance did not preserve the exact legal boundary leaf');
   }
+}
+
+function assertFormDataForEachProvenanceBehavior(moduleUnderTest) {
+  const source = new FormData();
+  source.append('title', 'attacker-input');
+  const tagged = moduleUnderTest.tagUntrustedRequestValue(source);
+  let callbackParent;
+  let callbackValue;
+  tagged.forEach((value, _key, parent) => {
+    callbackParent = parent;
+    callbackValue = value;
+  });
+
+  if (callbackParent !== tagged) {
+    throw new Error('FormData.forEach exposed the raw validation carrier to app code');
+  }
+  try {
+    String(callbackValue);
+  } catch {
+    return;
+  }
+  throw new Error('FormData.forEach exposed a coercible attacker-controlled scalar');
 }
 
 async function assertRequestIngressMethodIdentityIsClosed(moduleUnderTest) {

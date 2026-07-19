@@ -8,11 +8,12 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after finite browser-control enrollment', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(236);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(237);
   });
 
-  it('enrolls behavioral request-body shape and lazy-provenance allocation mutants', () => {
+  it('enrolls behavioral request-body shape, allocation, and FormData mutants', () => {
     const names = [
+      'request-body/drop-formdata-foreach-provenance',
       'request-body-provenance/restore-eager-scalar-boxing',
       'request-body/drop-json-pretag-shape-budget',
     ];
