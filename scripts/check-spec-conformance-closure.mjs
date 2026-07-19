@@ -39,7 +39,7 @@ const rootDiagnosticDoor = `${coreDiagnosticsPath}#createRegisteredDiagnostic`;
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'bb291cb34bc67c5f8b8791dae2a7690c3aded5a8abe351e850f7ff4be86100c3';
+  '1f605f161d5d1d5513044e1403ff7ce34772583cbbee778aecba9abc60d04ef2';
 const expectedRootDiagnosticDoorDigest =
   '6ace905f997e5c733f0e3b070dde67b2c6a399bf1b1f8f92851b0bd4985440e8';
 const expectedRegisteredDiagnosticDefinitionFactoryDigest =
@@ -49,7 +49,7 @@ const expectedDiagnosticFactoryConstructorDigest =
 const expectedDiagnosticFactorySinkDigest =
   '74213deb854487b068017e285bc57791f0fcd5ec333c8971b3bcf22df832befd';
 const expectedDiagnosticEvidenceWitnessDigest =
-  '578193a75b8fc9c49cd0caca1cf47b2093b29a79c9ff45d960364174283c474d';
+  '0f17c841bb8faf327a15805eb1ac84c4d1a000254175e00c3a5ed00c9d34b841';
 const expectedBlockingStaticExportCollectionDigest =
   '37a12e352557d6831047c8ded36f5eb4d7d616b6124b6e31f868834a5ad0ba73';
 const expectedCompilerValidatorPipelineDigest =
@@ -73,6 +73,8 @@ const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/cli/src/commands/build-export.ts#b0d61e0aa85fb61fda9eb18b2f23addae9057d2e32aa30d2b3eff3821a295dcb#666bd656e7c42491b16f3d6f97fb64bef5faaf31813e8ac4ecdd5f3df6eb104d',
   'packages/cli/src/commands/build-export.ts#b0d61e0aa85fb61fda9eb18b2f23addae9057d2e32aa30d2b3eff3821a295dcb#606f565bbb48636a234c79a4289dac3cf14d662050180563b00a61a266db42aa',
   'packages/cli/src/commands/db.ts#ee124a743f4e948da7fa66338746629c412a5f4c44113cad02e5e30cf064069b#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
+  'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
+  'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/vite-source.ts#d20810d8378391eeced5375aa3c41998c433b9846f2a612735e2c1d9365d6d41#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/sqlite.ts#bf1d2efe01383618c6bb4f0c6050b408b074f8f76ab263d3a02f6a164e81d9c8#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',

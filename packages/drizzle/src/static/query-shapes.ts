@@ -1279,6 +1279,7 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
       drizzleDiagnostic({
         code: 'KV406' as const,
         detail: `Query uses ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
+        messageVariant: 'raw-query-read',
         node: call,
       }),
     ];

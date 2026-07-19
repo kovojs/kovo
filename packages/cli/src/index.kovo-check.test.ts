@@ -488,9 +488,10 @@ describe('kovo check', () => {
     expect(result.output).toContain('request-derived SQL text');
   });
 
-  // SPEC §6.6 (KV424, error-severity): the dangerous-sink producer rides through deriveAppGraph and
-  // `kovo check` fails on an app handler-body innerHTML/eval write.
-  it('fails kovo check end-to-end when the app dangerous-sink producer rides into the merged graph', async () => {
+  // SPEC §6.6 (KV424, error-severity): unsupported imperative browser registration is opaque
+  // request authority, so the producer rides through deriveAppGraph and `kovo check` fails closed.
+  // Compiler-owned JSX handlers close separately through KV449's finite browser IR.
+  it('fails kovo check end-to-end when opaque browser authority rides into the merged graph', async () => {
     const { collectUnregisteredSinksFromProject } = await import('@kovojs/drizzle/internal/static');
     const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 
@@ -499,9 +500,7 @@ describe('kovo check', () => {
         {
           fileName: 'widget.tsx',
           source: [
-            'export const Widget = () => (',
-            '  <div onClick={(e: any) => { e.target.innerHTML = location.hash; }} />',
-            ');',
+            "element.addEventListener('click', () => { element.focus(); });",
           ].join('\n'),
         },
       ],
@@ -516,7 +515,7 @@ describe('kovo check', () => {
     const result = kovoCheck(checkInput);
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain('ERROR KV424 widget.tsx');
-    expect(result.output).toContain('sink=innerHTML');
+    expect(result.output).toContain('sink=request-handler.opaque-call');
   });
 
   it('fails on KV310 optimistic coverage gaps', () => {

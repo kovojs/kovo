@@ -197,14 +197,15 @@ audited-escape`, per SPEC §2 precedence) to the `spec/11-diagnostics.md` KV tab
 - [x] Generate typed KV constructors from the registry and route production emission through the
       validating diagnostics door; stage removal of ad hoc `{ code: 'KV###' }` production literals
       under the classifier-refactor rule without banning test fixtures that consume generated IDs.
-  - Evidence: the generated constructor registry is current and the AST gate derives 191 production
+  - Evidence: the generated constructor registry is current and the AST gate derives 198 production
     sites while rejecting ad hoc production diagnostic literals.
 - [x] `check:spec-conformance-closure` requires, per error-class KV, a registry row, derived production
       enforcement site, red fixture, green counterpart, and own-layer evidence. Runtime emission
       coverage is supporting evidence only; a platform-specific zero-emission row needs a reviewed
       applicability reason rather than a synthetic test call.
-  - Evidence: `pnpm run check:spec-conformance-closure` passes 20/20 with 90 codes, 70 error-class
-    evidence rows, and 191 derived enforcement sites.
+  - Evidence: `node scripts/check-spec-conformance-closure.mjs` passes with 90 codes, 70 error-class
+    rows, and 198 derived enforcement sites; `node scripts/run-spec-conformance-evidence-tests.mjs`
+    executes 35 files and passes all 105 bound witnesses plus 6 mandatory gate controls.
 - [x] Promote `diagnostics-ref`'s registry equality out of the site pipeline into the root check chain.
   - Evidence: the root `check` chain invokes `check:spec-conformance-closure`, which calls the
     write-free `checkDiagnosticsRegistryEquality` comparison.

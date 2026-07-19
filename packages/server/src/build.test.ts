@@ -1460,7 +1460,7 @@ export default createRequestHandler(app);
         tasks: [{ key: 'receipt/send' }],
       });
       expect(build.tasks).toEqual([{ key: 'receipt/send' }]);
-      expect(missingJobRunnerError('node', 'receipt/send')).toMatchObject({ code: 'KV446' });
+      expect(sqliteDurableTaskStoreError('node', 'receipt/send')).toMatchObject({ code: 'KV446' });
       expect(node().inspect!(build, { declaredEnv: [] })).toEqual([]);
       expect(
         node().inspect!(build, {
