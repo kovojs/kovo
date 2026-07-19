@@ -1391,7 +1391,8 @@ const weakenedAnalyzerSummaryAcceptedGuardCarrierProofBranch = [
 ].join('\n');
 const analyzerSummaryOpaqueCarrierEscapeBranch = [
   '    if (referenceKey !== parameterKey || nodeContains(auditedUse, reference)) continue;',
-  '    if (!privateScopeCarrierReferenceHasReviewedConsumer(reference, parameterKey, body)) return false;',
+  '    if (!privateScopeCarrierReferenceHasReviewedConsumer(reference, parameterKey, body))',
+  '      return false;',
 ].join('\n');
 const weakenedAnalyzerSummaryOpaqueCarrierEscapeBranch = [
   '    if (referenceKey !== parameterKey || nodeContains(auditedUse, reference)) continue;',
