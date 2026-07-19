@@ -102,6 +102,178 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
     ).toEqual([]);
   });
 
+  it('C13 canaries: rejects local shadows, namespace lookalikes, and fake diagnostics.at', () => {
+    const canaries = [
+      [
+        'local shadow',
+        "const createRegisteredDiagnostic = () => undefined; createRegisteredDiagnostic('KV415');",
+      ],
+      [
+        'parameter shadow',
+        [
+          "import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';",
+          "export function fake(createRegisteredDiagnostic) { createRegisteredDiagnostic('KV415'); }",
+        ].join('\n'),
+      ],
+      [
+        'namespace lookalike',
+        [
+          "import * as diagnosticDoor from '@kovojs/core/internal/diagnostics';",
+          "diagnosticDoor.createRegisteredDiagnostic('KV415');",
+        ].join('\n'),
+      ],
+      [
+        'member lookalike',
+        "const fake = { drizzleDiagnostic() {} }; fake.drizzleDiagnostic({ code: 'KV415' });",
+      ],
+      ['fake factory', "const diagnostics = { at() {} }; diagnostics.at('KV415');"],
+      [
+        'fake typed factory',
+        [
+          'interface DiagnosticFactory { at(code: string): void }',
+          "export function fake(diagnostics: DiagnosticFactory) { diagnostics.at('KV415'); }",
+        ].join('\n'),
+      ],
+    ];
+
+    for (const [name, text] of canaries) {
+      const result = scanDiagnosticProductionSources([
+        { path: `packages/server/src/conformance-${name.replaceAll(' ', '-')}.ts`, text },
+      ]);
+      expect(result.siteCount, name).toBe(0);
+      expect(result.findings.join('\n'), name).toContain('untrusted diagnostic emitter binding');
+    }
+  });
+
+  it('C13 canaries: rejects import/local aliases and generated-constructor namespace drift', () => {
+    const canaries = [
+      [
+        'import alias',
+        [
+          "import { createRegisteredDiagnostic as emit } from '@kovojs/core/internal/diagnostics';",
+          "emit('KV415');",
+        ].join('\n'),
+      ],
+      [
+        'local alias',
+        [
+          "import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';",
+          'const emit = createRegisteredDiagnostic;',
+          "emit('KV415');",
+        ].join('\n'),
+      ],
+      [
+        'assignment alias',
+        [
+          "import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';",
+          'let emit;',
+          'emit = createRegisteredDiagnostic;',
+          "emit('KV415');",
+        ].join('\n'),
+      ],
+      [
+        'constructor alias',
+        [
+          "import { diagnosticConstructors as constructors } from '@kovojs/core/internal/diagnostics';",
+          'constructors.KV313();',
+        ].join('\n'),
+      ],
+      [
+        'constructor namespace',
+        [
+          "import * as diagnostics from '@kovojs/core/internal/diagnostics';",
+          'diagnostics.diagnosticConstructors.KV313();',
+        ].join('\n'),
+      ],
+      [
+        'namespace member alias',
+        [
+          "import * as diagnostics from '@kovojs/core/internal/diagnostics';",
+          'const emit = diagnostics.createRegisteredDiagnostic;',
+          "emit('KV415');",
+        ].join('\n'),
+      ],
+      [
+        'namespace destructuring alias',
+        [
+          "import * as diagnostics from '@kovojs/core/internal/diagnostics';",
+          'const { createRegisteredDiagnostic: emit } = diagnostics;',
+          "emit('KV415');",
+        ].join('\n'),
+      ],
+      [
+        'factory type alias',
+        [
+          "import type { DiagnosticFactory as Factory } from '../../compiler/src/diagnostics.js';",
+          "export function emit(diagnostics: Factory) { diagnostics.at('KV415'); }",
+        ].join('\n'),
+      ],
+      [
+        'factory capability reassignment',
+        [
+          "import type { DiagnosticFactory } from '../../compiler/src/diagnostics.js';",
+          'export function emit(diagnostics: DiagnosticFactory) {',
+          '  diagnostics = { at() {} } as DiagnosticFactory;',
+          "  diagnostics.at('KV415');",
+          '}',
+        ].join('\n'),
+      ],
+    ];
+
+    for (const [name, text] of canaries) {
+      const result = scanDiagnosticProductionSources([
+        { path: `packages/server/src/conformance-${name.replaceAll(' ', '-')}.ts`, text },
+      ]);
+      expect(result.siteCount, name).toBe(0);
+      expect(result.findings.join('\n'), name).toContain('forbidden');
+    }
+  });
+
+  it('accepts only exact named root, generated-constructor, and DiagnosticFactory bindings', () => {
+    const direct = scanDiagnosticProductionSources([
+      {
+        path: 'packages/server/src/conformance-exact-root.ts',
+        text: [
+          "import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';",
+          "createRegisteredDiagnostic('KV415');",
+        ].join('\n'),
+      },
+      {
+        path: 'packages/browser/src/conformance-exact-constructor.ts',
+        text: [
+          "import { diagnosticConstructors } from '@kovojs/core/internal/diagnostics';",
+          'diagnosticConstructors.KV313();',
+        ].join('\n'),
+      },
+      {
+        path: 'packages/compiler/src/validate/conformance-exact-factory.ts',
+        text: [
+          "import type { DiagnosticFactory } from '../diagnostics.js';",
+          "export function emit(diagnostics: DiagnosticFactory) { diagnostics.at('KV415'); }",
+        ].join('\n'),
+      },
+    ]);
+    expect(direct.findings).toEqual([]);
+    expect(direct.siteCount).toBe(3);
+  });
+
+  it('C13 canary: rejects a nested same-file shadow of a reviewed wrapper', () => {
+    const result = scanDiagnosticProductionSources([
+      {
+        path: 'packages/compiler/src/diagnostics.ts',
+        text: [
+          'export function diagnosticFor() { return undefined; }',
+          'export function fake() {',
+          '  function diagnosticFor() { return undefined; }',
+          "  return diagnosticFor('KV415');",
+          '}',
+        ].join('\n'),
+      },
+    ]);
+    expect(result.siteCount).toBe(0);
+    expect(result.findings.join('\n')).toContain('local function shadows a reviewed emitter name');
+  });
+
   it('C13 mutation: requires an explicit reviewed applicability reason for zero emission', () => {
     const productionFiles = replaceProductionFile('packages/server/src/build.ts', (text) =>
       text.replaceAll("'KV445'", "'KV446'"),
@@ -148,7 +320,33 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
       text.replaceAll('createRegisteredDiagnostic(', 'removedRegistryDoor('),
     );
     expect(evaluate({ productionFiles }).findings.join('\n')).toContain(
-      'approved diagnostic wrapper lost registry-door anchor',
+      'reviewed diagnostic wrapper has no exact path',
+    );
+  });
+
+  it('C13 mutation: a wrapper-local root lookalike cannot satisfy the reviewed call graph', () => {
+    const productionFiles = replaceProductionFile('packages/compiler/src/diagnostics.ts', (text) =>
+      text.replace(
+        "import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';",
+        'function createRegisteredDiagnostic() { return undefined; }',
+      ),
+    );
+    const findings = evaluate({ productionFiles }).findings.join('\n');
+    expect(findings).toContain('reviewed wrapper uses untrusted emitter');
+    expect(findings).toContain('reviewed diagnostic wrapper has no exact path');
+  });
+
+  it('C13 mutation: rejects alias drift even when it still reaches the real root function', () => {
+    const productionFiles = replaceProductionFile('packages/server/src/build.ts', (text) =>
+      text
+        .replace(
+          'import { createRegisteredDiagnostic }',
+          'import { createRegisteredDiagnostic as emitDiagnostic }',
+        )
+        .replaceAll('createRegisteredDiagnostic(', 'emitDiagnostic('),
+    );
+    expect(evaluate({ productionFiles }).findings.join('\n')).toContain(
+      'alias drift emitDiagnostic -> createRegisteredDiagnostic is forbidden',
     );
   });
 

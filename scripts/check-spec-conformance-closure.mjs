@@ -23,7 +23,46 @@ export const diagnosticConformanceSchema = 'kovo.diagnostic-conformance-evidence
 const compilerMatrixKind = 'compiler-matrix';
 const fixturesKind = 'fixtures';
 const reviewedZeroEmissionKind = 'reviewed-zero-emission';
-const approvedCallEmitters = new Set([
+const coreDiagnosticsPath = 'packages/core/src/diagnostics.ts';
+const coreInternalDiagnosticsPath = 'packages/core/src/internal/diagnostics.ts';
+const generatedDiagnosticRegistryModulePath =
+  'packages/core/src/internal/diagnostic-registry.generated.ts';
+const compilerDiagnosticsPath = 'packages/compiler/src/diagnostics.ts';
+const rootDiagnosticDoor = `${coreDiagnosticsPath}#createRegisteredDiagnostic`;
+const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#DiagnosticFactory.at`;
+const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
+
+// These are reviewed wrapper definitions, not spelling-based exemptions. A call is approved only
+// when its lexical binding resolves to this exact file + symbol and the wrapper graph below proves
+// that definition still reaches the root createRegisteredDiagnostic door.
+const reviewedDiagnosticWrappers = new Map([
+  [`${compilerDiagnosticsPath}#diagnosticFor`, { exported: true, name: 'diagnosticFor' }],
+  [
+    'packages/compiler/src/lower/attribute-merge.ts#attributeMergeDiagnostic',
+    { exported: false, name: 'attributeMergeDiagnostic' },
+  ],
+  [
+    'packages/compiler/src/validate/event-triggers.ts#eventTriggerDiagnostic',
+    { exported: false, name: 'eventTriggerDiagnostic' },
+  ],
+  [
+    'packages/compiler/src/validate/markup.ts#attributeMergeDiagnostic',
+    { exported: false, name: 'attributeMergeDiagnostic' },
+  ],
+  [
+    'packages/drizzle/src/static/diagnostics.ts#drizzleDiagnostic',
+    { exported: true, name: 'drizzleDiagnostic' },
+  ],
+  [
+    'packages/server/src/static-export-diagnostics.ts#staticExportDiagnostic',
+    { exported: true, name: 'staticExportDiagnostic' },
+  ],
+  [
+    'packages/test/src/verifier-diagnostics.ts#diagnosticMessage',
+    { exported: true, name: 'diagnosticMessage' },
+  ],
+]);
+const reviewedDiagnosticEmitterNames = new Set([
   'attributeMergeDiagnostic',
   'createRegisteredDiagnostic',
   'diagnosticFor',
@@ -32,6 +71,15 @@ const approvedCallEmitters = new Set([
   'eventTriggerDiagnostic',
   'staticExportDiagnostic',
 ]);
+const aliasSensitiveDiagnosticBindings = new Set([
+  ...reviewedDiagnosticEmitterNames,
+  'createDiagnosticFactory',
+  'diagnosticConstructors',
+  'DiagnosticFactory',
+]);
+const productionAnalysisCache = new WeakMap();
+const productionScanCache = new WeakMap();
+const emissionDoorBindingCache = new WeakMap();
 const diagnosticLiteralExemptions = new Set([
   'packages/core/src/diagnostics.ts',
   'packages/core/src/internal/diagnostic-registry.generated.ts',
@@ -183,37 +231,54 @@ export function evaluateSpecConformanceClosure(input) {
 }
 
 export function scanDiagnosticProductionSources(files) {
+  const cached = productionScanCache.get(files);
+  if (cached !== undefined) return cached;
   const findings = [];
   const emissionSites = new Map();
   let siteCount = 0;
+  const analysis = createProductionAnalysis(files);
 
-  for (const file of files) {
-    const fileName = normalizePath(file.path);
+  for (const [fileName, sourceFile] of analysis.sourceFiles) {
     if (!isProductionSourcePath(fileName)) continue;
-    const sourceFile = ts.createSourceFile(
-      fileName,
-      file.text,
-      ts.ScriptTarget.Latest,
-      true,
-      fileName.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    );
 
     const visit = (node) => {
+      const aliasFinding = diagnosticAliasDeclarationFinding(node, {
+        ...analysis,
+        fileName,
+        sourceFile,
+      });
+      if (aliasFinding !== undefined) {
+        const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+        findings.push(`${fileName}:${position.line + 1}: ${aliasFinding}`);
+      }
       if (ts.isCallExpression(node)) {
-        const emitter = approvedEmitterName(node.expression, sourceFile);
-        if (emitter !== undefined) {
-          const codes = diagnosticCodesInEmissionCall(node, emitter);
-          for (const code of codes) {
+        const codes = diagnosticCodesInEmissionCall(node);
+        if (codes.size > 0) {
+          const resolution = resolveDiagnosticEmitterCall(node, {
+            ...analysis,
+            fileName,
+            sourceFile,
+          });
+          if (resolution.status === 'rejected') {
             const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-            const site = {
-              emitter,
-              file: fileName,
-              line: position.line + 1,
-            };
-            const existing = emissionSites.get(code) ?? [];
-            existing.push(site);
-            emissionSites.set(code, existing);
-            siteCount += 1;
+            findings.push(
+              `${fileName}:${position.line + 1}: untrusted diagnostic emitter binding for ${node.expression.getText(sourceFile)} (${resolution.reason})`,
+            );
+          }
+          if (resolution.status === 'approved') {
+            if (resolution.constructorCode !== undefined) codes.add(resolution.constructorCode);
+            for (const code of codes) {
+              const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+              const site = {
+                emitter: resolution.emitter,
+                file: fileName,
+                line: position.line + 1,
+              };
+              const existing = emissionSites.get(code) ?? [];
+              existing.push(site);
+              emissionSites.set(code, existing);
+              siteCount += 1;
+            }
           }
         }
       }
@@ -232,28 +297,516 @@ export function scanDiagnosticProductionSources(files) {
     visit(sourceFile);
   }
 
-  return { emissionSites, findings, siteCount };
+  const result = { emissionSites, findings, siteCount };
+  productionScanCache.set(files, result);
+  return result;
 }
 
-function approvedEmitterName(expression, sourceFile) {
-  const text = expression.getText(sourceFile);
-  const leaf = text.split('.').at(-1);
-  if (approvedCallEmitters.has(text) || approvedCallEmitters.has(leaf)) return leaf;
-  if (/^diagnosticConstructors\.KV\d{3}$/u.test(text)) return text;
+function diagnosticAliasDeclarationFinding(node, context) {
+  if (ts.isImportSpecifier(node)) {
+    const binding = importBindingFromSpecifier(node);
+    if (
+      binding.localName !== binding.importedName &&
+      aliasSensitiveDiagnosticBindings.has(binding.importedName)
+    ) {
+      return `diagnostic binding alias drift ${binding.localName} -> ${binding.importedName} is forbidden`;
+    }
+    return undefined;
+  }
+  if (ts.isNamespaceImport(node)) {
+    const importDeclaration = node.parent.parent;
+    const moduleSpecifier = importDeclaration.moduleSpecifier.text;
+    const modulePath = resolveImportModulePath(context.fileName, moduleSpecifier);
+    if (isReviewedDiagnosticModule(modulePath)) {
+      return `diagnostic namespace import ${node.name.text} from ${moduleSpecifier} is forbidden`;
+    }
+    return undefined;
+  }
   if (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === 'at' &&
-    /diagnostic/iu.test(expression.expression.getText(sourceFile))
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    context.boundFileNames.has(context.fileName)
   ) {
-    return 'diagnostics.at';
+    if (ts.isIdentifier(node.right)) {
+      const target = resolveIdentifierDiagnosticEmitter(node.right, context);
+      if (target.status === 'approved' || target.status === 'rejected') {
+        return `assigned diagnostic emitter alias ${node.left.getText(context.sourceFile)} is forbidden`;
+      }
+    }
+    if (
+      ts.isPropertyAccessExpression(node.right) &&
+      (aliasSensitiveDiagnosticBindings.has(node.right.name.text) ||
+        (/^KV\d{3}$/u.test(node.right.name.text) &&
+          isDiagnosticConstructorReceiver(node.right.expression, context)))
+    ) {
+      return `assigned diagnostic member alias ${node.left.getText(context.sourceFile)} is forbidden`;
+    }
+    if (ts.isIdentifier(node.left)) {
+      const symbol = context.checker.getSymbolAtLocation(node.left);
+      const declaration = symbol === undefined ? undefined : preferredValueDeclaration(symbol);
+      if (declaration !== undefined && ts.isParameter(declaration)) {
+        if (isExactDiagnosticFactoryType(declaration.type, context)) {
+          return `DiagnosticFactory capability reassignment ${node.left.text} is forbidden`;
+        }
+      }
+    }
+    return undefined;
+  }
+  if (!ts.isVariableDeclaration(node) || node.initializer === undefined) return undefined;
+  if (!ts.isIdentifier(node.name)) {
+    const alias = diagnosticBindingElementAlias(node.name);
+    return alias === undefined ? undefined : `diagnostic destructuring alias ${alias} is forbidden`;
+  }
+
+  if (ts.isIdentifier(node.initializer) && context.boundFileNames.has(context.fileName)) {
+    const target = resolveIdentifierDiagnosticEmitter(node.initializer, context);
+    if (target.status === 'approved' || target.status === 'rejected') {
+      return `local diagnostic emitter alias ${node.name.text} is forbidden`;
+    }
+  }
+  if (ts.isPropertyAccessExpression(node.initializer)) {
+    const member = node.initializer.name.text;
+    if (
+      aliasSensitiveDiagnosticBindings.has(member) ||
+      (/^KV\d{3}$/u.test(member) &&
+        isDiagnosticConstructorReceiver(node.initializer.expression, context))
+    ) {
+      return `local diagnostic member alias ${node.name.text} -> ${member} is forbidden`;
+    }
   }
   return undefined;
 }
 
-function diagnosticCodesInEmissionCall(call, emitter) {
+function isDiagnosticConstructorReceiver(receiver, context) {
+  if (ts.isPropertyAccessExpression(receiver)) {
+    return receiver.name.text === 'diagnosticConstructors';
+  }
+  if (!ts.isIdentifier(receiver) || !context.boundFileNames.has(context.fileName)) return false;
+  return importedBinding(receiver, context)?.importedName === 'diagnosticConstructors';
+}
+
+function diagnosticBindingElementAlias(name) {
+  for (const element of name.elements) {
+    if (ts.isOmittedExpression(element)) continue;
+    if (element.dotDotDotToken !== undefined) continue;
+    const propertyName = element.propertyName;
+    const importedName =
+      propertyName !== undefined &&
+      (ts.isIdentifier(propertyName) || ts.isStringLiteralLike(propertyName))
+        ? propertyName.text
+        : ts.isIdentifier(element.name)
+          ? element.name.text
+          : undefined;
+    if (importedName !== undefined && aliasSensitiveDiagnosticBindings.has(importedName)) {
+      const localName = ts.isIdentifier(element.name) ? element.name.text : '<nested>';
+      return `${localName} -> ${importedName}`;
+    }
+    if (!ts.isIdentifier(element.name)) {
+      const nested = diagnosticBindingElementAlias(element.name);
+      if (nested !== undefined) return nested;
+    }
+  }
+  return undefined;
+}
+
+function isReviewedDiagnosticModule(modulePath) {
+  if (
+    modulePath === coreDiagnosticsPath ||
+    modulePath === coreInternalDiagnosticsPath ||
+    modulePath === generatedDiagnosticRegistryModulePath ||
+    modulePath === compilerDiagnosticsPath
+  ) {
+    return true;
+  }
+  return [...reviewedDiagnosticWrappers.keys()].some((key) => key.startsWith(`${modulePath}#`));
+}
+
+function createProductionAnalysis(files) {
+  const cached = productionAnalysisCache.get(files);
+  if (cached !== undefined) return cached;
+  const sourceFiles = new Map();
+  for (const file of files) {
+    const fileName = normalizePath(file.path);
+    if (!isProductionSourcePath(fileName)) continue;
+    sourceFiles.set(
+      fileName,
+      ts.createSourceFile(
+        fileName,
+        file.text,
+        ts.ScriptTarget.Latest,
+        true,
+        sourceScriptKind(fileName),
+      ),
+    );
+  }
+  const compilerOptions = {
+    allowJs: true,
+    module: ts.ModuleKind.ESNext,
+    noLib: true,
+    noResolve: true,
+    target: ts.ScriptTarget.Latest,
+  };
+  const host = {
+    fileExists: (fileName) => sourceFiles.has(normalizePath(fileName)),
+    getCanonicalFileName: (fileName) => normalizePath(fileName),
+    getCurrentDirectory: () => '',
+    getDefaultLibFileName: () => '',
+    getDirectories: () => [],
+    getNewLine: () => '\n',
+    getSourceFile: (fileName) => sourceFiles.get(normalizePath(fileName)),
+    readFile: (fileName) => sourceFiles.get(normalizePath(fileName))?.text,
+    useCaseSensitiveFileNames: () => true,
+    writeFile: () => {},
+  };
+  const rootNames = [...sourceFiles]
+    .filter(
+      ([fileName, sourceFile]) =>
+        diagnosticBindingCandidateSource(sourceFile.text) ||
+        fileName === coreInternalDiagnosticsPath ||
+        fileName === coreDiagnosticsPath ||
+        fileName === compilerDiagnosticsPath ||
+        [...reviewedDiagnosticWrappers.keys()].some((key) => key.startsWith(`${fileName}#`)),
+    )
+    .map(([fileName]) => fileName);
+  const program = ts.createProgram({
+    host,
+    options: compilerOptions,
+    rootNames,
+  });
+  const analysis = {
+    boundFileNames: new Set(rootNames),
+    checker: program.getTypeChecker(),
+    sourceFiles,
+  };
+  productionAnalysisCache.set(files, analysis);
+  return analysis;
+}
+
+function diagnosticBindingCandidateSource(source) {
+  return (
+    /KV\d{3}/u.test(source) ||
+    /\b(?:attributeMergeDiagnostic|createDiagnosticConstructor|createRegisteredDiagnostic|diagnosticConstructors|diagnosticFor|diagnosticMessage|drizzleDiagnostic|eventTriggerDiagnostic|staticExportDiagnostic)\b/u.test(
+      source,
+    ) ||
+    /\bdiagnostics\.at\s*\(/u.test(source)
+  );
+}
+
+function sourceScriptKind(fileName) {
+  if (/\.tsx$/u.test(fileName)) return ts.ScriptKind.TSX;
+  if (/\.jsx$/u.test(fileName)) return ts.ScriptKind.JSX;
+  if (/\.(?:mjs|cjs|js)$/u.test(fileName)) return ts.ScriptKind.JS;
+  return ts.ScriptKind.TS;
+}
+
+function resolveDiagnosticEmitterCall(call, context) {
+  const expression = call.expression;
+  if (ts.isIdentifier(expression)) {
+    return resolveIdentifierDiagnosticEmitter(expression, context);
+  }
+  if (!ts.isPropertyAccessExpression(expression)) return { status: 'none' };
+
+  const member = expression.name.text;
+  if (/^KV\d{3}$/u.test(member)) {
+    if (!ts.isIdentifier(expression.expression)) {
+      return {
+        reason: 'generated constructor receiver must be the exact named import',
+        status: 'rejected',
+      };
+    }
+    const binding = importedBinding(expression.expression, context);
+    if (binding === undefined || binding.importedName !== 'diagnosticConstructors') {
+      return {
+        reason: 'generated constructor receiver is a local/lookalike binding',
+        status: 'rejected',
+      };
+    }
+    if (binding.localName !== binding.importedName) {
+      return {
+        reason: 'generated constructor import aliases are not census-stable',
+        status: 'rejected',
+      };
+    }
+    const modulePath = resolveImportModulePath(context.fileName, binding.moduleSpecifier);
+    if (modulePath !== coreInternalDiagnosticsPath) {
+      return {
+        reason: `diagnosticConstructors must come from ${coreInternalDiagnosticsPath}`,
+        status: 'rejected',
+      };
+    }
+    return {
+      constructorCode: member,
+      emitter: `diagnosticConstructors.${member}`,
+      status: 'approved',
+      target: generatedDiagnosticConstructorDoor,
+    };
+  }
+
+  if (member === 'at') return resolveDiagnosticFactoryAtCall(expression.expression, context);
+  if (reviewedDiagnosticEmitterNames.has(member)) {
+    return {
+      reason: 'namespace/member lookalikes are forbidden; import the reviewed symbol by name',
+      status: 'rejected',
+    };
+  }
+  return { status: 'none' };
+}
+
+function resolveIdentifierDiagnosticEmitter(identifier, context, seen = new Set()) {
+  const symbol = context.checker.getSymbolAtLocation(identifier);
+  if (symbol === undefined) {
+    return reviewedDiagnosticEmitterNames.has(identifier.text)
+      ? { reason: 'unbound reviewed-emitter spelling', status: 'rejected' }
+      : { status: 'none' };
+  }
+  if (seen.has(symbol)) return { reason: 'diagnostic emitter alias cycle', status: 'rejected' };
+  seen.add(symbol);
+
+  const declaration = preferredValueDeclaration(symbol);
+  if (declaration === undefined) {
+    return reviewedDiagnosticEmitterNames.has(identifier.text)
+      ? { reason: 'reviewed-emitter spelling has no resolvable declaration', status: 'rejected' }
+      : { status: 'none' };
+  }
+
+  if (ts.isImportSpecifier(declaration)) {
+    const binding = importBindingFromSpecifier(declaration);
+    const target = reviewedImportTarget(context.fileName, binding);
+    if (target !== undefined) {
+      if (binding.localName !== binding.importedName) {
+        return {
+          reason: `alias drift ${binding.localName} -> ${binding.importedName} is forbidden`,
+          status: 'rejected',
+        };
+      }
+      return {
+        emitter: binding.importedName,
+        status: 'approved',
+        target,
+      };
+    }
+    return reviewedDiagnosticEmitterNames.has(binding.localName) ||
+      reviewedDiagnosticEmitterNames.has(binding.importedName)
+      ? {
+          reason: `import does not resolve to a reviewed emitter definition (${binding.moduleSpecifier})`,
+          status: 'rejected',
+        }
+      : { status: 'none' };
+  }
+
+  if (ts.isFunctionDeclaration(declaration)) {
+    const name = declaration.name?.text;
+    const key = name === undefined ? undefined : `${context.fileName}#${name}`;
+    if (
+      (key === rootDiagnosticDoor || reviewedDiagnosticWrappers.has(key)) &&
+      declaration.parent === context.sourceFile
+    ) {
+      return { emitter: name, status: 'approved', target: key };
+    }
+    return reviewedDiagnosticEmitterNames.has(identifier.text)
+      ? { reason: 'local function shadows a reviewed emitter name', status: 'rejected' }
+      : { status: 'none' };
+  }
+
+  if (ts.isVariableDeclaration(declaration)) {
+    const initializer = declaration.initializer;
+    if (initializer !== undefined && ts.isIdentifier(initializer)) {
+      const target = resolveIdentifierDiagnosticEmitter(initializer, context, seen);
+      if (target.status === 'approved' || target.status === 'rejected') {
+        return {
+          reason: `local alias ${identifier.text} obscures the reviewed emitter binding`,
+          status: 'rejected',
+        };
+      }
+    }
+    return reviewedDiagnosticEmitterNames.has(identifier.text)
+      ? { reason: 'local variable shadows a reviewed emitter name', status: 'rejected' }
+      : { status: 'none' };
+  }
+
+  return reviewedDiagnosticEmitterNames.has(identifier.text)
+    ? {
+        reason: `${ts.SyntaxKind[declaration.kind]} shadows a reviewed emitter name`,
+        status: 'rejected',
+      }
+    : { status: 'none' };
+}
+
+function resolveDiagnosticFactoryAtCall(receiver, context) {
+  if (!ts.isIdentifier(receiver)) {
+    return {
+      reason: 'DiagnosticFactory.at receiver must be a lexically resolved identifier',
+      status: 'rejected',
+    };
+  }
+  const symbol = context.checker.getSymbolAtLocation(receiver);
+  const declaration = symbol === undefined ? undefined : preferredValueDeclaration(symbol);
+  if (declaration === undefined) {
+    return { reason: 'fake diagnostics.at receiver has no binding', status: 'rejected' };
+  }
+  if (symbol !== undefined && bindingIsAssignedBefore(symbol, receiver, context)) {
+    return {
+      reason: 'DiagnosticFactory capability binding was reassigned before emission',
+      status: 'rejected',
+    };
+  }
+
+  if (ts.isParameter(declaration) && isExactDiagnosticFactoryType(declaration.type, context)) {
+    return {
+      emitter: 'DiagnosticFactory.at',
+      status: 'approved',
+      target: diagnosticFactoryDoor,
+    };
+  }
+  if (ts.isVariableDeclaration(declaration)) {
+    const initializer = declaration.initializer;
+    if (
+      initializer !== undefined &&
+      ts.isCallExpression(initializer) &&
+      ts.isIdentifier(initializer.expression) &&
+      isExactImportedOrLocalBinding(
+        initializer.expression,
+        compilerDiagnosticsPath,
+        'createDiagnosticFactory',
+        context,
+      )
+    ) {
+      return {
+        emitter: 'DiagnosticFactory.at',
+        status: 'approved',
+        target: diagnosticFactoryDoor,
+      };
+    }
+  }
+  return {
+    reason: 'fake diagnostics.at receiver is not an exact DiagnosticFactory capability',
+    status: 'rejected',
+  };
+}
+
+function bindingIsAssignedBefore(symbol, use, context) {
+  let scope = use.parent;
+  while (scope !== undefined && !ts.isFunctionLike(scope) && !ts.isSourceFile(scope)) {
+    scope = scope.parent;
+  }
+  if (scope === undefined) return false;
+  let assigned = false;
+  const visit = (node) => {
+    if (assigned || node.getStart(context.sourceFile) >= use.getStart(context.sourceFile)) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left) &&
+      context.checker.getSymbolAtLocation(node.left) === symbol
+    ) {
+      assigned = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(scope, visit);
+  return assigned;
+}
+
+function isExactDiagnosticFactoryType(typeNode, context) {
+  if (typeNode === undefined || !ts.isTypeReferenceNode(typeNode)) return false;
+  if (!ts.isIdentifier(typeNode.typeName) || typeNode.typeName.text !== 'DiagnosticFactory') {
+    return false;
+  }
+  return isExactImportedOrLocalBinding(
+    typeNode.typeName,
+    compilerDiagnosticsPath,
+    'DiagnosticFactory',
+    context,
+  );
+}
+
+function isExactImportedOrLocalBinding(identifier, expectedFile, expectedName, context) {
+  const symbol = context.checker.getSymbolAtLocation(identifier);
+  const declaration = symbol === undefined ? undefined : preferredValueDeclaration(symbol);
+  if (declaration === undefined) return false;
+  if (ts.isImportSpecifier(declaration)) {
+    const binding = importBindingFromSpecifier(declaration);
+    return (
+      binding.localName === expectedName &&
+      binding.importedName === expectedName &&
+      resolveImportModulePath(context.fileName, binding.moduleSpecifier) === expectedFile
+    );
+  }
+  if (
+    (ts.isInterfaceDeclaration(declaration) ||
+      ts.isFunctionDeclaration(declaration) ||
+      ts.isVariableDeclaration(declaration)) &&
+    declaration.name !== undefined &&
+    ts.isIdentifier(declaration.name)
+  ) {
+    return context.fileName === expectedFile && declaration.name.text === expectedName;
+  }
+  return false;
+}
+
+function importedBinding(identifier, context) {
+  const symbol = context.checker.getSymbolAtLocation(identifier);
+  const declaration = symbol === undefined ? undefined : preferredValueDeclaration(symbol);
+  return declaration !== undefined && ts.isImportSpecifier(declaration)
+    ? importBindingFromSpecifier(declaration)
+    : undefined;
+}
+
+function preferredValueDeclaration(symbol) {
+  return symbol.declarations?.find(
+    (declaration) =>
+      ts.isImportSpecifier(declaration) ||
+      ts.isFunctionDeclaration(declaration) ||
+      ts.isVariableDeclaration(declaration) ||
+      ts.isParameter(declaration) ||
+      ts.isInterfaceDeclaration(declaration) ||
+      ts.isBindingElement(declaration),
+  );
+}
+
+function importBindingFromSpecifier(specifier) {
+  const importDeclaration = specifier.parent.parent.parent;
+  return {
+    importedName: specifier.propertyName?.text ?? specifier.name.text,
+    localName: specifier.name.text,
+    moduleSpecifier: importDeclaration.moduleSpecifier.text,
+  };
+}
+
+function reviewedImportTarget(fileName, binding) {
+  const modulePath = resolveImportModulePath(fileName, binding.moduleSpecifier);
+  if (
+    (modulePath === coreInternalDiagnosticsPath || modulePath === coreDiagnosticsPath) &&
+    binding.importedName === 'createRegisteredDiagnostic'
+  ) {
+    return rootDiagnosticDoor;
+  }
+  const wrapperKey = `${modulePath}#${binding.importedName}`;
+  return reviewedDiagnosticWrappers.has(wrapperKey) ? wrapperKey : undefined;
+}
+
+function resolveImportModulePath(fileName, moduleSpecifier) {
+  if (moduleSpecifier === '@kovojs/core/internal/diagnostics') {
+    return coreInternalDiagnosticsPath;
+  }
+  if (!moduleSpecifier.startsWith('.')) return moduleSpecifier;
+  const resolved = normalizePath(
+    path.posix.normalize(path.posix.join(path.posix.dirname(fileName), moduleSpecifier)),
+  );
+  if (/\.(?:js|mjs|cjs)$/u.test(resolved)) return resolved.replace(/\.(?:mjs|cjs|js)$/u, '.ts');
+  if (/\.ts$/u.test(resolved)) return resolved;
+  return `${resolved}.ts`;
+}
+
+function diagnosticCodesInEmissionCall(call) {
   const codes = new Set();
-  const constructorMatch = emitter.match(/^diagnosticConstructors\.(KV\d{3})$/u);
-  if (constructorMatch) codes.add(constructorMatch[1]);
+  if (
+    ts.isPropertyAccessExpression(call.expression) &&
+    /^KV\d{3}$/u.test(call.expression.name.text)
+  ) {
+    codes.add(call.expression.name.text);
+  }
 
   const visit = (node) => {
     if (ts.isStringLiteralLike(node) && /^KV\d{3}$/u.test(node.text)) codes.add(node.text);
@@ -290,23 +843,173 @@ function propertyNameText(name, sourceFile) {
 }
 
 function validateEmissionDoorBindings(files) {
-  const byPath = new Map(files.map((file) => [normalizePath(file.path), file.text]));
-  const requirements = [
-    ['packages/compiler/src/diagnostics.ts', 'createRegisteredDiagnostic('],
-    ['packages/drizzle/src/static/diagnostics.ts', 'createRegisteredDiagnostic('],
-    ['packages/server/src/static-export-diagnostics.ts', 'createRegisteredDiagnostic('],
-    ['packages/test/src/verifier-diagnostics.ts', 'createRegisteredDiagnostic('],
-    ['packages/compiler/src/validate/event-triggers.ts', 'diagnostics.at('],
-    ['packages/compiler/src/lower/attribute-merge.ts', 'diagnosticFor('],
-  ];
+  const cached = emissionDoorBindingCache.get(files);
+  if (cached !== undefined) return cached;
+  const analysis = createProductionAnalysis(files);
   const findings = [];
-  for (const [file, anchor] of requirements) {
-    const text = byPath.get(file);
-    if (text === undefined || !text.includes(anchor)) {
-      findings.push(`${file}: approved diagnostic wrapper lost registry-door anchor ${anchor}`);
+  const edges = new Map();
+
+  const coreBridge = analysis.sourceFiles.get(coreInternalDiagnosticsPath);
+  if (
+    coreBridge === undefined ||
+    !hasExactStarExport(coreBridge, coreInternalDiagnosticsPath, coreDiagnosticsPath)
+  ) {
+    findings.push(
+      `${coreInternalDiagnosticsPath}: reviewed diagnostics bridge lost exact ${coreDiagnosticsPath} export`,
+    );
+  }
+  if (
+    coreBridge === undefined ||
+    !hasExactStarExport(
+      coreBridge,
+      coreInternalDiagnosticsPath,
+      generatedDiagnosticRegistryModulePath,
+    )
+  ) {
+    findings.push(
+      `${coreInternalDiagnosticsPath}: reviewed diagnostics bridge lost exact generated constructor export`,
+    );
+  }
+
+  const rootSource = analysis.sourceFiles.get(coreDiagnosticsPath);
+  if (
+    rootSource === undefined ||
+    findTopLevelFunction(rootSource, 'createRegisteredDiagnostic') === undefined
+  ) {
+    findings.push(`${rootDiagnosticDoor}: root validating diagnostic door is missing`);
+  }
+
+  const constructorFunction =
+    rootSource === undefined
+      ? undefined
+      : findTopLevelFunction(rootSource, 'createDiagnosticConstructor');
+  if (constructorFunction === undefined) {
+    findings.push(
+      `${generatedDiagnosticConstructorDoor}: generated constructor wrapper is missing`,
+    );
+  } else {
+    edges.set(
+      generatedDiagnosticConstructorDoor,
+      emitterTargetsInNode(constructorFunction, coreDiagnosticsPath, analysis, findings),
+    );
+  }
+
+  const compilerSource = analysis.sourceFiles.get(compilerDiagnosticsPath);
+  const factoryMethod =
+    compilerSource === undefined ? undefined : findDiagnosticFactoryAtMethod(compilerSource);
+  if (factoryMethod === undefined) {
+    findings.push(`${diagnosticFactoryDoor}: reviewed factory method is missing`);
+  } else {
+    edges.set(
+      diagnosticFactoryDoor,
+      emitterTargetsInNode(factoryMethod, compilerDiagnosticsPath, analysis, findings),
+    );
+  }
+
+  for (const [key, wrapper] of reviewedDiagnosticWrappers) {
+    const separator = key.lastIndexOf('#');
+    const fileName = key.slice(0, separator);
+    const sourceFile = analysis.sourceFiles.get(fileName);
+    const declaration =
+      sourceFile === undefined ? undefined : findTopLevelFunction(sourceFile, wrapper.name);
+    if (declaration === undefined) {
+      findings.push(`${key}: reviewed diagnostic wrapper definition is missing`);
+      continue;
+    }
+    if (wrapper.exported && !hasExportModifier(declaration)) {
+      findings.push(`${key}: reviewed imported wrapper must remain a named export`);
+    }
+    edges.set(key, emitterTargetsInNode(declaration, fileName, analysis, findings));
+  }
+
+  for (const key of [
+    ...reviewedDiagnosticWrappers.keys(),
+    diagnosticFactoryDoor,
+    generatedDiagnosticConstructorDoor,
+  ]) {
+    if (!emitterGraphReachesRoot(key, edges)) {
+      findings.push(
+        `${key}: reviewed diagnostic wrapper has no exact path to ${rootDiagnosticDoor}`,
+      );
     }
   }
+  emissionDoorBindingCache.set(files, findings);
   return findings;
+}
+
+function emitterTargetsInNode(node, fileName, analysis, findings) {
+  const sourceFile = analysis.sourceFiles.get(fileName);
+  const targets = new Set();
+  if (sourceFile === undefined) return targets;
+  const visit = (child) => {
+    if (child !== node && (ts.isFunctionDeclaration(child) || ts.isClassDeclaration(child))) return;
+    if (ts.isCallExpression(child)) {
+      const resolution = resolveDiagnosticEmitterCall(child, {
+        ...analysis,
+        fileName,
+        sourceFile,
+      });
+      if (resolution.status === 'approved') targets.add(resolution.target);
+      if (resolution.status === 'rejected') {
+        const position = sourceFile.getLineAndCharacterOfPosition(child.getStart(sourceFile));
+        findings.push(
+          `${fileName}:${position.line + 1}: reviewed wrapper uses untrusted emitter ${child.expression.getText(sourceFile)} (${resolution.reason})`,
+        );
+      }
+    }
+    ts.forEachChild(child, visit);
+  };
+  ts.forEachChild(node, visit);
+  return targets;
+}
+
+function emitterGraphReachesRoot(start, edges, seen = new Set()) {
+  if (start === rootDiagnosticDoor) return true;
+  if (seen.has(start)) return false;
+  seen.add(start);
+  for (const target of edges.get(start) ?? []) {
+    if (emitterGraphReachesRoot(target, edges, new Set(seen))) return true;
+  }
+  return false;
+}
+
+function findTopLevelFunction(sourceFile, name) {
+  return sourceFile.statements.find(
+    (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === name,
+  );
+}
+
+function findDiagnosticFactoryAtMethod(sourceFile) {
+  const factory = findTopLevelFunction(sourceFile, 'createDiagnosticFactory');
+  if (factory === undefined) return undefined;
+  let found;
+  const visit = (node) => {
+    if (found !== undefined) return;
+    if (ts.isMethodDeclaration(node) && propertyNameText(node.name, sourceFile) === 'at') {
+      found = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(factory);
+  return found;
+}
+
+function hasExportModifier(declaration) {
+  return ts
+    .getModifiers(declaration)
+    ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword);
+}
+
+function hasExactStarExport(sourceFile, fileName, expectedModulePath) {
+  return sourceFile.statements.some(
+    (statement) =>
+      ts.isExportDeclaration(statement) &&
+      statement.exportClause === undefined &&
+      statement.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(statement.moduleSpecifier) &&
+      resolveImportModulePath(fileName, statement.moduleSpecifier.text) === expectedModulePath,
+  );
 }
 
 function validateDiagnosticEvidence({ emissionSites, errorCodes, evidence, fixtureFiles }) {
