@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "f4e77ea1666680d4fe01e241101194952b178eb6a9c0d31264c2619258bfd094",
+      "sourceTreeSha256": "e8aa991e10c94949bd0745a70620e8d74a961b69bd86cba0bafbe68c302be11e",
       "manifestVariants": [
         {
           "exports": {
@@ -733,7 +733,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "8f121e4635725e711523abcbbf5e7ccb81d3a63b0d89bdf2818535fc02ab83e9"
+      "sourceTreeSha256": "62de5df9d4e9a0babd4bbc34d1b83d634809839784da58e09d36d0869def08e0"
     },
     {
       "manifestVariants": [
@@ -1673,7 +1673,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "7ed2eaf2073ed53c5d22f6c770d3eb32558b93e019fa54edb614ffa075948e60"
+      "sourceTreeSha256": "6cabee990ba866737cdec9c909804c2f5e8d3d3c1ac21858b1948e0100133313"
     },
     {
       "manifestVariants": [
@@ -1941,7 +1941,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "a661bdd631cb99c28e9368f146b01cf40545bdcaab7464233bd17e79aac65ca1"
+      "sourceTreeSha256": "8458cdbbe2ef3905c8f1ad3ccf613040514bff0a484699c0e16434ea829067b0"
     },
     {
       "manifestVariants": [
@@ -9627,7 +9627,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "85bb145181c2833f053072d9bf317b6456bbea7abfe6f639341e833d3e41861d"
+      "sourceTreeSha256": "e152811a8e56a39927ebe057319975c118d31170d29350074e741bbfffbdd0e1"
     },
     {
       "manifestVariants": [
