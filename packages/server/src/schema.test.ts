@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { File } from 'node:buffer';
-import type { JsonValue, Secret, StorageCapability, StorageReadCapability } from '@kovojs/core';
+import { inspect } from 'node:util';
+import {
+  isSecret,
+  revealSecret,
+  type JsonValue,
+  type Secret,
+  type StorageCapability,
+  type StorageReadCapability,
+} from '@kovojs/core';
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
 import { stringifyWireValue } from '@kovojs/core/internal/wire-json';
 
@@ -15,6 +23,7 @@ import {
 import { unsafeRegex } from './redos.js';
 import { testMutation as mutation } from './test-fixtures.js';
 import { accept } from './upload-sniff.js';
+import { renderHtmlValue } from './html.js';
 
 describe('server schemas', () => {
   it('snapshots JSON schema input instead of returning a post-validation proxy view', () => {
@@ -166,7 +175,7 @@ describe('server schemas', () => {
     }
   });
 
-  it('wraps schemas as Secret values outside JsonValue client payloads', () => {
+  it('boxes secret schema output at runtime and closes ordinary egress channels', () => {
     const schema = s.object({ passwordHash: s.secret(s.string()) });
     const parsed = schema.parse({ passwordHash: 'hash-1' });
     const assertSecretBoundary = () => {
@@ -175,7 +184,15 @@ describe('server schemas', () => {
       const _json: JsonValue = parsed.passwordHash;
     };
 
-    expect(parsed.passwordHash).toBe('hash-1');
+    expect(isSecret(parsed.passwordHash)).toBe(true);
+    expect(revealSecret(parsed.passwordHash, 'schema test credential consumer')).toBe('hash-1');
+    expect(() => `${parsed.passwordHash}`).toThrow(/KV435/u);
+    expect(() => JSON.stringify(parsed)).toThrow(/KV435/u);
+    expect(() => structuredClone(parsed)).toThrow(/KV435/u);
+    expect(() => stringifyWireValue(parsed)).toThrow(/KV435/u);
+    expect(() => renderHtmlValue(parsed.passwordHash)).toThrow(/KV435/u);
+    expect(inspect(parsed.passwordHash)).toBe('[secret]');
+    expect(inspect(parsed.passwordHash)).not.toContain('hash-1');
     expect(assertSecretBoundary).toBeTypeOf('function');
   });
 
