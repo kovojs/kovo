@@ -58,6 +58,7 @@ describe('escape-census trust facts (C13 anchor)', () => {
           source: [
             "import { analyzerSummary, machineMutation, schema } from './framework.js';",
             'const local = { string: () => ({ allowControlChars() {} }) };',
+            'const rawText = schema.string();',
             'const localSummary = () => undefined;',
             'const localMutation = () => undefined;',
             'function principal(context: { request: { session: { id: string } } }) {',
@@ -67,7 +68,7 @@ describe('escape-census trust facts (C13 anchor)', () => {
             "machineMutation('machine/write', {",
             '  csrf: false,',
             "  csrfJustification: 'signed machine request',",
-            '  input: schema.object({ payload: schema.string().allowControlChars() }),',
+            '  input: schema.object({ payload: rawText.allowControlChars() }),',
             '  handler(input) { return input; },',
             '});',
             'local.string().allowControlChars();',

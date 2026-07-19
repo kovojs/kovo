@@ -5,6 +5,7 @@ import {
   collectCookieDowngradesFromProject,
   collectRuntimeRevealFactsFromProject,
   collectStaticBuildTrustFactsFromProject,
+  collectTrustEscapesFromProject,
   collectUnregisteredSinksFromProject,
 } from '@kovojs/drizzle/internal/static';
 import type { TrustEscapeSourceFileInput } from '@kovojs/drizzle/internal/static';
@@ -365,6 +366,7 @@ describe('@kovojs/drizzle static build trust-fact aggregate', () => {
       cookieDowngrades: collectCookieDowngradesFromProject({ files }),
       diagnostics: [],
       revealed: collectRuntimeRevealFactsFromProject({ files }),
+      trustEscapes: collectTrustEscapesFromProject({ files }),
       unregisteredSinks: collectUnregisteredSinksFromProject({ files }),
     });
   });
@@ -482,6 +484,7 @@ describe('@kovojs/drizzle static build trust-fact aggregate', () => {
       cookieDowngrades: collectCookieDowngradesFromProject({ files }),
       diagnostics: [],
       revealed: collectRuntimeRevealFactsFromProject({ files }),
+      trustEscapes: collectTrustEscapesFromProject({ files }),
       unregisteredSinks: collectUnregisteredSinksFromProject({ files }),
     };
 

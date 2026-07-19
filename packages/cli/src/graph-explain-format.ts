@@ -820,6 +820,7 @@ export function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
   return [
     'TRUST',
     `kind=${escape.kind}`,
+    `root=${escape.root ?? escape.site}`,
     `site=${escape.site}`,
     `source=${escape.source ?? '-'}`,
     `owner=${escape.owner ?? '-'}`,

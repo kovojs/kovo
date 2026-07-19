@@ -1,9 +1,14 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   ESCAPE_CENSUS_DOORS,
   evaluateEscapeCensus,
   formatEscapeCensusReport,
+  runEscapeCensusCli,
 } from './escape-census-gate.mjs';
 
 const zeroBudget = Object.fromEntries(ESCAPE_CENSUS_DOORS.map((door) => [door, 0]));
@@ -19,6 +24,7 @@ function budgets(overrides = {}) {
 
 function graph(overrides = {}) {
   return {
+    components: [],
     escapeCensus: {
       doors: ESCAPE_CENSUS_DOORS,
       schema: 'kovo.escape-census-coverage/v1',
@@ -31,6 +37,8 @@ function graph(overrides = {}) {
         trustedSql: 'trustEscapes',
       },
     },
+    mutations: [],
+    trustEscapes: [],
     ...overrides,
   };
 }
@@ -137,6 +145,9 @@ describe('escape census gate (C13 anchor)', () => {
     expect(evaluateEscapeCensus(input({})).findings).toContain(
       'fixture: missing kovo.escape-census-coverage/v1 producer witness',
     );
+    expect(evaluateEscapeCensus(input({})).findings).toContain(
+      'fixture: authoritative trustEscapes array is absent',
+    );
 
     const missingSemantic = evaluateEscapeCensus(
       input(
@@ -180,7 +191,9 @@ describe('escape census gate (C13 anchor)', () => {
 
   it('rejects unsupported trust kinds and any per-package budget increase', () => {
     const unknown = evaluateEscapeCensus(
-      input(graph({ trustEscapes: [{ kind: 'futureEscape', root: 'app.ts:1', site: 'app.ts:1' }] })),
+      input(
+        graph({ trustEscapes: [{ kind: 'futureEscape', root: 'app.ts:1', site: 'app.ts:1' }] }),
+      ),
     );
     expect(unknown.findings).toContain('fixture: unsupported trust-escape kind futureEscape');
 
@@ -190,6 +203,11 @@ describe('escape census gate (C13 anchor)', () => {
     expect(grown.findings).toContain(
       '@fixture/app: trustedHtml budget increased from 1 to 2; escape budgets are monotone',
     );
+
+    const missingPackage = evaluateEscapeCensus(
+      input(graph(), { packages: {}, schema: 'kovo.escape-budgets/v1' }),
+    );
+    expect(missingPackage.findings).toContain('@fixture/app: missing per-package escape budget');
   });
 
   it('fails when current roots exceed a package budget and reports each exact root', () => {
@@ -208,5 +226,43 @@ describe('escape census gate (C13 anchor)', () => {
     expect(result.findings).toContain(
       '@fixture/app: trustedHtml escaped roots 2 exceed budget 1 (fixture:app.tsx:4, fixture:app.tsx:9)',
     );
+  });
+
+  it('reads only declared graph and budget artifacts through the CLI config', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-escape-census-'));
+    const output = { stderr: '', stdout: '' };
+    const io = {
+      stderr: { write: (chunk) => (output.stderr += String(chunk)) },
+      stdout: { write: (chunk) => (output.stdout += String(chunk)) },
+    };
+
+    try {
+      writeFileSync(join(root, 'graph.json'), JSON.stringify(graph()), 'utf8');
+      writeFileSync(join(root, 'budgets.json'), JSON.stringify(budgets()), 'utf8');
+      writeFileSync(join(root, 'previous.json'), JSON.stringify(budgets()), 'utf8');
+      writeFileSync(
+        join(root, 'config.json'),
+        JSON.stringify({
+          apps: [
+            {
+              app: 'fixture',
+              graph: './graph.json',
+              package: '@fixture/app',
+            },
+          ],
+          budgets: './budgets.json',
+          previousBudgets: './previous.json',
+          schema: 'kovo.escape-census-config/v1',
+        }),
+        'utf8',
+      );
+
+      expect(runEscapeCensusCli(['--config', join(root, 'config.json')], io)).toBe(0);
+      expect(output.stderr).toBe('');
+      expect(output.stdout).toContain('kovo.escape-census/v1');
+      expect(output.stdout).toContain('PACKAGE package=@fixture/app total=0');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 });

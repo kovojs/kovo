@@ -163,6 +163,9 @@ const TRUSTED_CALL_OWNER: Readonly<Record<string, string>> = {
  *  - `trustedHtml(...)`  call site → kind `trustedHtml`
  *  - `trustedUrl(...)`   call site → kind `trustedUrl`
  *  - `trustedSql(...)`   call site → kind `trustedSql`
+ *  - `mutation({ csrf: false })` → kind `csrfFalse`
+ *  - `kovoAnalyzerSummary(...)` → kind `kovoAnalyzerSummary`
+ *  - `s.string().allowControlChars()` → kind `allowControlChars`
  *  - `endpoint(...)`     declaration → kind `rawEndpoint`
  *  - `webhook({ verify: 'none' })` → kind `webhookVerifyNone`
  *
@@ -216,6 +219,22 @@ function trustEscapesForSourceFile(
       continue;
     }
 
+    if (requestCallIsExactKovoAnalyzerSummary(call)) {
+      escapes.push(buildAnalyzerSummaryEscape(file, call));
+      continue;
+    }
+
+    if (isAllowControlCharsEscape(call)) {
+      escapes.push(buildAllowControlCharsEscape(file, call));
+      continue;
+    }
+
+    if (isKovoServerTrustCallee(callee, 'mutation')) {
+      const escape = buildCsrfFalseEscape(file, call);
+      if (escape) escapes.push(escape);
+      continue;
+    }
+
     if (isKovoServerTrustCallee(callee, 'endpoint')) {
       escapes.push(buildRawEndpointEscape(file, call));
       continue;
@@ -233,8 +252,10 @@ function trustEscapesForSourceFile(
 function trustedCallNameForCallee(callee: Node): keyof typeof TRUSTED_CALL_KINDS | undefined {
   const candidates = [
     ['trustedHtml', '@kovojs/browser'],
+    ['trustedHtml', '@kovojs/server'],
     ['trustedSql', '@kovojs/drizzle'],
     ['trustedUrl', '@kovojs/browser'],
+    ['trustedUrl', '@kovojs/server'],
   ] as const;
   return candidates.find(([exportName, module]) =>
     expressionResolvesToFrameworkExport(callee, frameworkExport(module, exportName), {
@@ -243,7 +264,10 @@ function trustedCallNameForCallee(callee: Node): keyof typeof TRUSTED_CALL_KINDS
   )?.[0];
 }
 
-function isKovoServerTrustCallee(callee: Node, exportName: 'endpoint' | 'webhook'): boolean {
+function isKovoServerTrustCallee(
+  callee: Node,
+  exportName: 'endpoint' | 'mutation' | 'webhook',
+): boolean {
   return expressionResolvesToFrameworkExport(
     callee,
     frameworkExport('@kovojs/server', exportName),
@@ -265,11 +289,13 @@ function buildTrustedCallEscape(
     trailingStringJustification(args) ??
     leadingJustification(call);
   const owner = TRUSTED_CALL_OWNER[name];
+  const site = siteFor(file, call);
   return {
     kind,
     ...(owner ? { owner } : {}),
     safePath: TRUSTED_CALL_SAFE_PATH[name] ?? name,
-    site: siteFor(file, call),
+    root: site,
+    site,
     ...(args[0] ? { source: shortSource(args[0]) } : {}),
     ...(justification === undefined ? {} : { justification }),
   };
@@ -285,11 +311,13 @@ function buildRawEndpointEscape(file: TrustEscapeSourceFileInput, call: Node): T
         objectStringProperty(definition, 'justification'))
       : undefined) ?? leadingJustification(call);
   const path = args[0] && isStringLiteralLike(args[0]) ? args[0].getLiteralText() : undefined;
+  const site = siteFor(file, call);
   return {
     kind: 'rawEndpoint',
     owner: 'ingress.endpoint.raw',
     safePath: 'endpoint(...)',
-    site: siteFor(file, call),
+    root: site,
+    site,
     ...(path ? { source: path } : args[0] ? { source: shortSource(args[0]) } : {}),
     ...(justification === undefined ? {} : { justification }),
   };
@@ -312,12 +340,88 @@ function buildWebhookVerifyNoneEscape(
   // Webhook name is the first arg: webhook('order-paid', { ... }).
   const nameArg = args[0];
   const source = nameArg && isStringLiteralLike(nameArg) ? nameArg.getLiteralText() : undefined;
+  const site = siteFor(file, call);
   return {
     kind: 'webhookVerifyNone',
     owner: 'ingress.endpoint.webhook',
     safePath: 'webhook({verify:none})',
-    site: siteFor(file, call),
+    root: site,
+    site,
     ...(source ? { source } : {}),
+    ...(justification === undefined ? {} : { justification }),
+  };
+}
+
+function buildAnalyzerSummaryEscape(
+  file: TrustEscapeSourceFileInput,
+  call: import('ts-morph').CallExpression,
+): TrustEscapeExplain {
+  const site = siteFor(file, call);
+  const helper = call.getArguments()[0];
+  return {
+    kind: 'kovoAnalyzerSummary',
+    owner: 'compiler.provenance.summary',
+    root: site,
+    safePath: 'kovoAnalyzerSummary',
+    site,
+    ...(helper === undefined ? {} : { source: shortSource(helper) }),
+  };
+}
+
+function isAllowControlCharsEscape(call: import('ts-morph').CallExpression): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  return (
+    requestStaticCallMember(callee) === 'allowControlChars' &&
+    receiver !== undefined &&
+    requestExpressionResolvesToFrameworkSchemaBuilderValue(receiver, new Set(), 0)
+  );
+}
+
+function buildAllowControlCharsEscape(
+  file: TrustEscapeSourceFileInput,
+  call: import('ts-morph').CallExpression,
+): TrustEscapeExplain {
+  const site = siteFor(file, call);
+  return {
+    kind: 'allowControlChars',
+    owner: 'ingress.schema.control-characters',
+    root: site,
+    safePath: 's.string().allowControlChars()',
+    site,
+    source: shortSource(call),
+  };
+}
+
+function buildCsrfFalseEscape(
+  file: TrustEscapeSourceFileInput,
+  call: import('ts-morph').CallExpression,
+): TrustEscapeExplain | undefined {
+  const args = call.getArguments();
+  const definition = args.findLast(Node.isObjectLiteralExpression);
+  if (!definition) return undefined;
+  const csrfProperty = definition.getProperty('csrf');
+  if (!Node.isPropertyAssignment(csrfProperty)) return undefined;
+  const csrf = csrfProperty.getInitializer();
+  if (!csrf || csrf.getKind() !== SyntaxKind.FalseKeyword) return undefined;
+
+  const site = siteFor(file, call);
+  const explicitKey = args.length > 1 ? args[0] : undefined;
+  const variable = call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const source =
+    explicitKey && isStringLiteralLike(explicitKey)
+      ? explicitKey.getLiteralText()
+      : variable && Node.isIdentifier(variable.getNameNode())
+        ? variable.getName()
+        : site;
+  const justification = objectStringProperty(definition, 'csrfJustification');
+  return {
+    kind: 'csrfFalse',
+    owner: 'ingress.mutation.csrf',
+    root: `mutation:${source}`,
+    safePath: 'mutation({csrf:false})',
+    site,
+    source,
     ...(justification === undefined ? {} : { justification }),
   };
 }
@@ -406,9 +510,9 @@ export function collectUnregisteredSinksFromProject(
 }
 
 /**
- * Build-only aggregate for the three static trust surfaces consumed together by `kovo build`.
+ * Build-only aggregate for the static trust surfaces consumed together by `kovo build`.
  * One immutable in-memory syntactic project is shared across the passes so repeated build checks
- * do not retain four ts-morph programs for the same source snapshot. The project still has no
+ * do not retain separate ts-morph programs for the same source snapshot. The project still has no
  * ambient filesystem/module-resolution authority: unresolved package code remains a closed
  * verdict (SPEC §6.6 / §11.4).
  *
@@ -419,6 +523,7 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
   cookieDowngrades: CookieDowngradeExplain[];
   diagnostics: StaticDiagnosticFact[];
   revealed: RevealExplainFact[];
+  trustEscapes: TrustEscapeExplain[];
   unregisteredSinks: UnregisteredSinkFact[];
 } {
   const { sourceFiles, dispose } = createSyntacticProject(options.files);
@@ -427,11 +532,13 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
     const cookieDowngrades: CookieDowngradeExplain[] = [];
     const diagnostics: StaticDiagnosticFact[] = [];
     const revealed: RevealExplainFact[] = [];
+    const trustEscapes: TrustEscapeExplain[] = [];
     const unregisteredSinks: UnregisteredSinkFact[] = [];
     for (const [index, sourceFile] of sourceFiles.entries()) {
       const file = options.files[index];
       if (!file) continue;
       capabilities.push(...capabilityEscapesForSourceFile(file, sourceFile));
+      trustEscapes.push(...trustEscapesForSourceFile(file, sourceFile));
       for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
         const downgrade = cookieDowngradeForCall(file, call);
         if (downgrade) cookieDowngrades.push(downgrade);
@@ -488,6 +595,9 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
       ),
       diagnostics: sortRuntimeRevealDiagnostics(diagnostics),
       revealed: sortRuntimeRevealFacts(revealed),
+      trustEscapes: trustEscapes.sort(
+        (left, right) => left.kind.localeCompare(right.kind) || left.site.localeCompare(right.site),
+      ),
       unregisteredSinks: unregisteredSinks.sort(
         (left, right) => left.site.localeCompare(right.site) || left.sink.localeCompare(right.sink),
       ),

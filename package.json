@@ -49,7 +49,7 @@
     "check:fundamental-fixes-census": "node scripts/fundamental-fixes-census-gate.mjs",
     "check:filesystem-boundary": "node scripts/check-filesystem-boundary.mjs",
     "check:egress-boundary": "node scripts/check-egress-boundary.mjs",
-    "check:escape-census": "vitest --run scripts/escape-census-gate.test.mjs packages/drizzle/src/trust-escapes-static.escape-census.test.ts --reporter=dot",
+    "check:escape-census": "vitest --run scripts/escape-census-gate.test.mjs packages/core/src/escape-census-graph.test.ts packages/drizzle/src/trust-escapes-static.escape-census.test.ts --reporter=dot",
     "check:wire-output-boundary": "node scripts/check-wire-output-boundary.mjs",
     "check:tcb-boundary": "node scripts/check-tcb-boundary.mjs",
     "check:publish": "node scripts/egress-floor.mjs --policy publish -- node scripts/check-publish.mjs",

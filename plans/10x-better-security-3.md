@@ -568,13 +568,17 @@ bar on the first attempt. Nothing in plan-1 or plan-2 counts, trends, or ratchet
 
 ### 4.1 Escape census and ratchet — metric E (**start here; ~0.5 pm**)
 
-- [ ] Read-only script over the existing `securitySemanticGraph` on `ComponentExplain`
+- [x] Read-only script over the existing `securitySemanticGraph` on `ComponentExplain`
       (`packages/core/src/graph.ts`) plus the trust-escape rows already formatted by `trustEscapeLine`
-      (`packages/cli/src/graph-explain-format.ts:755-765`), counting escaped **roots** reached per app
+      (`packages/cli/src/graph-explain-format.ts`), counting escaped **roots** reached per app
       and per door for `trustedHtml` / `trustedSql` / `ctx.fetch` plus `csrf: false` /
       `kovoAnalyzerSummary` / `allowControlChars`.
-- [ ] Per-package escape budgets with a monotone ratchet, so escape growth is structurally impossible
+  - Evidence: `pnpm run check:escape-census` passes 9/9 structural/CLI/producer tests; the focused
+    `index.kovo-build.test.ts` build emits the closed six-door coverage witness and exact roots.
+- [x] Per-package escape budgets with a monotone ratchet, so escape growth is structurally impossible
       rather than merely graphed.
+  - Evidence: `escape-census-gate.test.mjs` rejects budget increases, missing package budgets, and
+    exact-root counts above a ceiling; `pnpm run check:escape-census` is enrolled in the root check.
 
 ### 4.2 Structured obligations replacing free-text justifications
 

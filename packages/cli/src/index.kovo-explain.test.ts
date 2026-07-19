@@ -1163,9 +1163,9 @@ export const save = mutation('cart/save', {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       TRUST
-      TRUST kind=staticExportPathOverride site=app/export.ts:4 source=EXPORT_ROOT owner=file.storage.static-export safePath=static export path override justification="tenant export root mounted by deploy"
-      TRUST kind=trustedHtml site=app/promo.tsx:12 source=cms.promo.body owner=html.dom.output safePath=trustedHtml justification="cms sanitizer owns rich text"
-      TRUST kind=webhookVerifyNone site=app/webhook.ts:8 source=stripe owner=ingress.endpoint.webhook safePath=webhook({verify:none}) justification="provider retries unsigned local dev"
+      TRUST kind=staticExportPathOverride root=app/export.ts:4 site=app/export.ts:4 source=EXPORT_ROOT owner=file.storage.static-export safePath=static export path override justification="tenant export root mounted by deploy"
+      TRUST kind=trustedHtml root=app/promo.tsx:12 site=app/promo.tsx:12 source=cms.promo.body owner=html.dom.output safePath=trustedHtml justification="cms sanitizer owns rich text"
+      TRUST kind=webhookVerifyNone root=app/webhook.ts:8 site=app/webhook.ts:8 source=stripe owner=ingress.endpoint.webhook safePath=webhook({verify:none}) justification="provider retries unsigned local dev"
       SUMMARY total=3
       "
     `);
@@ -1197,7 +1197,7 @@ export const save = mutation('cart/save', {
     );
 
     expect(result.exitCode).toBe(0);
-    expect(result.output).toContain('TRUST kind=trustedHtml site=promo.tsx');
+    expect(result.output).toContain('TRUST kind=trustedHtml root=promo.tsx');
   });
 
   // SPEC §6.6 (audit-only), threat-matrix-plan.md M3: the capability-escape producer rides through
@@ -1586,7 +1586,7 @@ export const save = mutation('cart/save', {
       'SINK source=app-document-TSX|inline-script-source|inline-style-source|font-preload-url|modulepreload-url|body-end-ui sink=document.shell.output',
     );
     expect(result.output).toContain(
-      'TRUST kind=trustedHtml site=app/document.tsx:12 source=cms.documentChrome owner=document.shell.output safePath=InlineScript|InlineStyle|structured document primitives justification="reviewed document rich text island"',
+      'TRUST kind=trustedHtml root=app/document.tsx:12 site=app/document.tsx:12 source=cms.documentChrome owner=document.shell.output safePath=InlineScript|InlineStyle|structured document primitives justification="reviewed document rich text island"',
     );
     expect(result.output).not.toContain('cms.page');
     expect(result.output).toContain('SUMMARY sinks=1 trustEscapes=1');
@@ -1713,7 +1713,7 @@ export const save = mutation('cart/save', {
       [
         'kovo-explain/v1',
         'TRUST',
-        'TRUST kind=trustedUrl site=app/link.tsx:3 source=partner.redirect owner=url.navigation.selector safePath=trustedUrl justification="reviewed external redirect"',
+        'TRUST kind=trustedUrl root=app/link.tsx:3 site=app/link.tsx:3 source=partner.redirect owner=url.navigation.selector safePath=trustedUrl justification="reviewed external redirect"',
         'SUMMARY total=1',
         '',
       ].join('\n'),

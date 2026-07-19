@@ -1498,7 +1498,7 @@ const adminMutation = mutation('admin/update', {
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   guard: allow,
-  input: s.object({ id: s.string() }),
+  input: s.object({ id: s.string().allowControlChars() }),
   handler() {
     return { ok: true };
   },
@@ -1524,14 +1524,51 @@ export default createApp({
       expect(errorOutput).not.toContain('UNGUARDED');
       expect(existsSync(outDir)).toBe(true);
       const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        escapeCensus?: Record<string, unknown>;
         mutations?: readonly Record<string, unknown>[];
+        trustEscapes?: readonly Record<string, unknown>[];
       };
+      expect(graph.escapeCensus).toEqual({
+        doors: [
+          'allowControlChars',
+          'csrf:false',
+          'ctx.fetch',
+          'kovoAnalyzerSummary',
+          'trustedHtml',
+          'trustedSql',
+        ],
+        schema: 'kovo.escape-census-coverage/v1',
+        sources: {
+          allowControlChars: 'trustEscapes',
+          'csrf:false': 'trustEscapes',
+          'ctx.fetch': 'securitySemanticGraph',
+          kovoAnalyzerSummary: 'trustEscapes',
+          trustedHtml: 'trustEscapes',
+          trustedSql: 'trustEscapes',
+        },
+      });
       expect(graph.mutations).toContainEqual(
         expect.objectContaining({
           csrf: 'exempt',
           csrfJustification: 'non-browser regression fixture',
           key: 'admin/update',
         }),
+      );
+      expect(graph.trustEscapes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'allowControlChars',
+            root: 'app.mjs:18',
+          }),
+          expect.objectContaining({
+            kind: 'csrfFalse',
+            root: 'mutation:admin/update',
+          }),
+          expect.objectContaining({
+            kind: 'trustedHtml',
+            root: 'app.mjs:30',
+          }),
+        ]),
       );
     } finally {
       stdout.mockRestore();

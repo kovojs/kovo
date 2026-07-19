@@ -212,6 +212,7 @@ export interface KovoCheckInput {
   diagnostics?: readonly StaticDiagnosticFact[];
   endpoints?: readonly EndpointExplain[];
   endpointPosture?: readonly EndpointPostureVerificationFact[];
+  escapeCensus?: EscapeCensusCoverageFact;
   eventPayloads?: readonly EventPayloadFact[];
   fixpointChecks?: readonly FixpointCheck[];
   handlerWriteSinks?: readonly HandlerWriteSinkExplain[];
@@ -719,7 +720,10 @@ export interface ToctouFact {
  * this value so widening the audit surface cannot silently outgrow its matrix cell.
  */
 export const AUDITED_TRUST_ESCAPE_KINDS = freezeSecurityValue([
+  'allowControlChars',
+  'csrfFalse',
   'customVerifier',
+  'kovoAnalyzerSummary',
   'rawEndpoint',
   'staticExportPathOverride',
   'trustedHtml',
@@ -728,11 +732,46 @@ export const AUDITED_TRUST_ESCAPE_KINDS = freezeSecurityValue([
   'webhookVerifyNone',
 ] as const);
 
+/** @internal Closed metric-E door vocabulary for plans/10x-better-security-3.md §4.1. */
+export const ESCAPE_CENSUS_DOORS = freezeSecurityValue([
+  'allowControlChars',
+  'csrf:false',
+  'ctx.fetch',
+  'kovoAnalyzerSummary',
+  'trustedHtml',
+  'trustedSql',
+] as const);
+
+/** @internal */
+export type EscapeCensusDoor = (typeof ESCAPE_CENSUS_DOORS)[number];
+
+/**
+ * Build-owned proof that all metric-E producers ran over the same immutable app snapshot.
+ * The read-only census refuses an absent or widened witness instead of interpreting missing
+ * arrays as zero escapes (SPEC §2 and §5.3).
+ *
+ * @internal
+ */
+export interface EscapeCensusCoverageFact {
+  doors: readonly EscapeCensusDoor[];
+  schema: 'kovo.escape-census-coverage/v1';
+  sources: {
+    readonly allowControlChars: 'trustEscapes';
+    readonly 'csrf:false': 'trustEscapes';
+    readonly 'ctx.fetch': 'securitySemanticGraph';
+    readonly kovoAnalyzerSummary: 'trustEscapes';
+    readonly trustedHtml: 'trustEscapes';
+    readonly trustedSql: 'trustEscapes';
+  };
+}
+
 /** @internal */
 export interface TrustEscapeExplain {
   justification?: string;
   kind: (typeof AUDITED_TRUST_ESCAPE_KINDS)[number];
   owner?: string;
+  /** Stable source-derived escape-root identity used by metric E. */
+  root?: string;
   safePath?: string;
   site: string;
   source?: string;
@@ -2037,6 +2076,11 @@ export function validateKovoExplainInput(input: unknown): GraphInputValidationEr
   }
 
   validateDiagnosticFactCodes(fields.diagnostics, 'diagnostics', errors, budget);
+  validateEscapeCensusCoverage(
+    ownGraphData(input, 'escapeCensus', 'input.escapeCensus'),
+    errors,
+    budget,
+  );
   validateDiagnosticFactCodes(
     fields.verificationDiagnostics,
     'verificationDiagnostics',
@@ -2046,13 +2090,75 @@ export function validateKovoExplainInput(input: unknown): GraphInputValidationEr
   validateDiagnosticFactCodes(fields.lints, 'lints', errors, budget);
   validateAttributeMergeDiagnosticCodes(fields.components, errors, budget);
   validateTouchGraphDiagnosticCodes(touchGraph, errors, budget);
-  validateAuthorizationCorrespondenceFacts(
-    fields.authorizationCorrespondence,
-    errors,
-    budget,
-  );
+  validateAuthorizationCorrespondenceFacts(fields.authorizationCorrespondence, errors, budget);
 
   return errors;
+}
+
+function validateEscapeCensusCoverage(
+  value: unknown,
+  errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
+): void {
+  if (value === undefined) return;
+  const path = 'escapeCensus';
+  if (!isRecord(value)) {
+    appendGraphValidationError(errors, path, 'escapeCensus must be an object');
+    return;
+  }
+  validateExactGraphString(
+    ownGraphData(value, 'schema', `${path}.schema`),
+    `${path}.schema`,
+    'escapeCensus.schema',
+    ['kovo.escape-census-coverage/v1'],
+    errors,
+  );
+  const doors = ownGraphData(value, 'doors', `${path}.doors`);
+  if (!securityIsArray(doors)) {
+    appendGraphValidationError(errors, `${path}.doors`, 'doors must be an array');
+  } else {
+    const length = snapshotGraphArrayLength(doors, `${path}.doors`, budget);
+    if (length !== ESCAPE_CENSUS_DOORS.length) {
+      appendGraphValidationError(errors, `${path}.doors`, 'doors must match metric E exactly');
+    }
+    for (let index = 0; index < ESCAPE_CENSUS_DOORS.length; index += 1) {
+      const entry = securityOwnArrayEntry(doors, index);
+      if (!entry.ok || entry.value !== ESCAPE_CENSUS_DOORS[index]) {
+        appendGraphValidationError(
+          errors,
+          `${path}.doors[${index}]`,
+          `door must be ${ESCAPE_CENSUS_DOORS[index]}`,
+        );
+      }
+    }
+  }
+  const sources = ownGraphData(value, 'sources', `${path}.sources`);
+  if (!isRecord(sources)) {
+    appendGraphValidationError(errors, `${path}.sources`, 'sources must be an object');
+    return;
+  }
+  const expectedSources: Readonly<Record<EscapeCensusDoor, string>> = {
+    allowControlChars: 'trustEscapes',
+    'csrf:false': 'trustEscapes',
+    'ctx.fetch': 'securitySemanticGraph',
+    kovoAnalyzerSummary: 'trustEscapes',
+    trustedHtml: 'trustEscapes',
+    trustedSql: 'trustEscapes',
+  };
+  const keys = securityObjectKeys(sources);
+  if (keys.length !== ESCAPE_CENSUS_DOORS.length) {
+    appendGraphValidationError(errors, `${path}.sources`, 'sources must cover metric E exactly');
+  }
+  for (let index = 0; index < ESCAPE_CENSUS_DOORS.length; index += 1) {
+    const door = ESCAPE_CENSUS_DOORS[index]!;
+    validateExactGraphString(
+      ownGraphData(sources, door, `${path}.sources.${door}`),
+      `${path}.sources.${door}`,
+      `source for ${door}`,
+      [expectedSources[door]!],
+      errors,
+    );
+  }
 }
 
 function validateAuthorizationCorrespondenceFacts(
@@ -2127,7 +2233,11 @@ function validateAuthorizationSurface(
     ['framework-policy', 'mutation', 'page', 'query', 'unreferenced'],
     errors,
   );
-  validateRequiredGraphString(ownGraphData(surface, 'name', `${path}.name`), `${path}.name`, errors);
+  validateRequiredGraphString(
+    ownGraphData(surface, 'name', `${path}.name`),
+    `${path}.name`,
+    errors,
+  );
   validateOptionalGraphString(
     ownGraphData(surface, 'viaQuery', `${path}.viaQuery`),
     `${path}.viaQuery`,
@@ -2411,7 +2521,11 @@ function validateAuthorizationDecision(
   const counterexample = ownGraphData(decision, 'counterexample', `${path}.counterexample`);
   if (counterexample === undefined) return;
   if (!isRecord(counterexample)) {
-    appendGraphValidationError(errors, `${path}.counterexample`, 'counterexample must be an object');
+    appendGraphValidationError(
+      errors,
+      `${path}.counterexample`,
+      'counterexample must be an object',
+    );
     return;
   }
   validateRequiredGraphBoolean(

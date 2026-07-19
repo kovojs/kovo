@@ -18,6 +18,8 @@ export type {
   DeriveExplain,
   EndpointExplain,
   EndpointPostureVerificationFact,
+  EscapeCensusCoverageFact,
+  EscapeCensusDoor,
   EventPayloadFact,
   FixpointCheck,
   GraphInputValidationError,
@@ -83,5 +85,6 @@ export {
   deriveAuthPostureFacts,
   deriveOwnershipPostureFacts,
   deriveSessionAuthorityFacts,
+  ESCAPE_CENSUS_DOORS,
   validateKovoExplainInput,
 } from '../graph.js';

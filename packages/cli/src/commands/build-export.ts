@@ -37,6 +37,7 @@ import {
   isDiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
+import { ESCAPE_CENSUS_DOORS } from '@kovojs/core/internal/graph';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
@@ -939,6 +940,7 @@ function runPreEvaluationStaticTrustPreflight(
           cookieDowngrades: [],
           diagnostics: [],
           revealed: [],
+          trustEscapes: [],
           unregisteredSinks: [],
         }
       : collectStaticBuildTrustFactsFromProject({
@@ -1336,6 +1338,7 @@ async function staticBuildCheckGraph(
     capabilities,
     cookieDowngrades,
     revealed: runtimeReveals,
+    trustEscapes: staticTrustEscapes,
     unregisteredSinks,
   } = options.preEvaluationStaticTrust.facts;
   const capabilityClosure = options.preEvaluationStaticTrust.capabilityClosure.facts;
@@ -1380,6 +1383,7 @@ async function staticBuildCheckGraph(
   const mutations = buildMapDense(app.mutations, 'Build app mutations', (mutation) =>
     mutationCheckFact(mutation, queryReadSets, options.execution),
   );
+  const trustEscapes = completeBuildTrustEscapes(staticTrustEscapes, mutations);
   const optimistic = buildFlatMapDense(
     app.mutations,
     'Build app mutations for optimistic coverage',
@@ -1418,7 +1422,22 @@ async function staticBuildCheckGraph(
       ...(capabilities.length === 0 ? {} : { capabilities }),
       ...(capabilityClosure.length === 0 ? {} : { capabilityClosure }),
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
+      escapeCensus: {
+        doors: ESCAPE_CENSUS_DOORS,
+        schema: 'kovo.escape-census-coverage/v1',
+        sources: {
+          allowControlChars: 'trustEscapes',
+          'csrf:false': 'trustEscapes',
+          'ctx.fetch': 'securitySemanticGraph',
+          kovoAnalyzerSummary: 'trustEscapes',
+          trustedHtml: 'trustEscapes',
+          trustedSql: 'trustEscapes',
+        },
+      },
       ...(revealed.length === 0 ? {} : { revealed }),
+      // Keep the authoritative producer result explicit even when empty: the read-only census
+      // must distinguish a proved zero from a missing fact source (SPEC §2 / §5.3).
+      trustEscapes,
       ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
       ...(authorizationCorrespondence.length === 0 ? {} : { authorizationCorrespondence }),
       endpoints,
@@ -1433,6 +1452,42 @@ async function staticBuildCheckGraph(
     routePages: sourceGraphFacts.routePages,
     sourceFiles: files,
   };
+}
+
+function completeBuildTrustEscapes(
+  staticFacts: readonly CoreGraph.TrustEscapeExplain[],
+  mutations: readonly CoreGraph.MutationExplain[],
+): CoreGraph.TrustEscapeExplain[] {
+  const result = buildSnapshotDenseArray(staticFacts, 'Static build trust-escape facts');
+  const roots = buildCreateSet<string>();
+  for (let index = 0; index < result.length; index += 1) {
+    const root = result[index]?.root;
+    if (root !== undefined) buildSetAdd(roots, root);
+  }
+  const mutationSnapshot = buildSnapshotDenseArray(mutations, 'Build mutation escape facts');
+  for (let index = 0; index < mutationSnapshot.length; index += 1) {
+    const mutation = mutationSnapshot[index]!;
+    if (mutation.csrf !== 'exempt') continue;
+    const root = `mutation:${mutation.key}`;
+    if (buildSetHas(roots, root)) continue;
+    buildSetAdd(roots, root);
+    buildSecurityArrayAppend(
+      result,
+      {
+        kind: 'csrfFalse',
+        owner: 'ingress.mutation.csrf',
+        root,
+        safePath: 'mutation({csrf:false})',
+        site: `app-registry:${mutation.key}`,
+        source: mutation.key,
+        ...(mutation.csrfJustification === undefined
+          ? {}
+          : { justification: mutation.csrfJustification }),
+      },
+      'Build mutation escape facts',
+    );
+  }
+  return result;
 }
 
 /** @internal */ export function mergeBuildRevealFacts(
