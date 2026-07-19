@@ -13,6 +13,26 @@ describe('security-gate-mutations', () => {
     expect(results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          name: 'drizzle-semantic-v2/drop-source-byte-equality',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'drizzle-semantic-v2/drop-factory-root-reconstruction',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'drizzle-semantic-v2/drop-helper-callable-span-reconstruction',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'drizzle-semantic-v2/drop-operation-inventory-reconstruction',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'drizzle-semantic-v2/drop-closed-sibling-quarantine',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'compiler-capability-closure/drop-webrtc-network-global',
           status: 'killed',
         }),
@@ -212,6 +232,35 @@ describe('security-gate-mutations', () => {
     );
     expect(results.every((result) => result.status === 'killed')).toBe(true);
     expect(results.length).toBe(SECURITY_GATE_MUTANTS.length);
+  });
+
+  it('executes semantic-v2 consumer mutants instead of source-text assertions', () => {
+    const semanticV2Mutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
+      mutant.name.startsWith('drizzle-semantic-v2/'),
+    );
+
+    expect(semanticV2Mutants).toHaveLength(12);
+    expect(
+      semanticV2Mutants.every(
+        (mutant) => mutant.behavioralTypeScript === true && mutant.sourceOnly !== true,
+      ),
+    ).toBe(true);
+  });
+
+  it('executes OPP and TASK B boundary mutants instead of source-text assertions', () => {
+    const behavioralNames = [
+      'drizzle-analyzer-summary/allow-extra-carrier-argument',
+      'drizzle-analyzer-summary/allow-opp-alias-chain',
+      'drizzle-analyzer-summary/drop-carrier-integrity-proof',
+      'drizzle-task-b/restore-jsx-name-scanner',
+      'drizzle-task-b/restore-static-build-analysis-bypass',
+    ];
+
+    for (const name of behavioralNames) {
+      const mutant = SECURITY_GATE_MUTANTS.find((candidate) => candidate.name === name);
+      expect(mutant).toEqual(expect.objectContaining({ behavioralTypeScript: true, name }));
+      expect(mutant?.sourceOnly).not.toBe(true);
+    }
   });
 
   it('reports a surviving mutant when the branch mutation is a no-op', async () => {

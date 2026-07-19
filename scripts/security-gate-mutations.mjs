@@ -14,6 +14,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { build as buildWithEsbuild } from 'esbuild';
+import { Project, SyntaxKind, ts } from 'ts-morph';
+
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 import * as authorizationMatrixGate from './check-authorization-matrix.mjs';
@@ -767,6 +770,72 @@ const weakenedSemanticTableNamespaceClosureBranch = [
   "    return kind ? serverOperationProvenance(kind) : 'unknown-authority';",
 ].join('\n');
 
+const semanticV2SourceByteEqualityBranch =
+  '    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) return new Map();';
+const weakenedSemanticV2SourceByteEqualityBranch =
+  '    if (!sourceFile || !semanticSource) return new Map();';
+const semanticV2SchemaBranch =
+  "      if (graph.schema !== 'kovo-security-semantic-graph/v2') return new Map();";
+const weakenedSemanticV2SchemaBranch =
+  "      if (false && graph.schema !== 'kovo-security-semantic-graph/v2') return new Map();";
+const semanticV2FactoryRootBranch = [
+  '    requestCompilerSemanticRootForFactoryCall(binding.factory, factoryCall, fileName) !==',
+  '      root.root ||',
+].join('\n');
+const weakenedSemanticV2FactoryRootBranch = '    false ||';
+const semanticV2CallableSpanBranch = [
+  '      binding.callableSpan.start !== root.declaration.getStart() ||',
+  '      binding.callableSpan.end !== root.declaration.getEnd() ||',
+].join('\n');
+const weakenedSemanticV2CallableSpanBranch = ['      false ||', '      false ||'].join('\n');
+const semanticV2HelperCallableSpanLookupBranch =
+  '  return session.compilerSemanticHelperProofs.get(key) ?? [];';
+const weakenedSemanticV2HelperCallableSpanLookupBranch = [
+  '  return (',
+  '    session.compilerSemanticHelperProofs.get(key) ??',
+  '    [...session.compilerSemanticHelperProofs.values()].flat()',
+  '  );',
+].join('\n');
+const semanticV2FactoryCallSpanBranch = [
+  '      binding.factoryCallSpan.start !== rootFactoryCall.getStart() ||',
+  '      binding.factoryCallSpan.end !== rootFactoryCall.getEnd() ||',
+].join('\n');
+const weakenedSemanticV2FactoryCallSpanBranch = ['      false ||', '      false ||'].join('\n');
+const semanticV2HelperCallSpanBranch = [
+  '      proof.callSpan.start !== call.getStart() ||',
+  '      proof.callSpan.end !== call.getEnd() ||',
+].join('\n');
+const weakenedSemanticV2HelperCallSpanBranch = ['      false ||', '      false ||'].join('\n');
+const semanticV2ArgumentSpanBranch = [
+  '      invocation.argumentSpans.length !== invocationCall.getArguments().length ||',
+  '      invocation.argumentSpans.some(',
+  '        (span, index) =>',
+  '          !requestCompilerSemanticSpanIsValid(span, sourceLength) ||',
+  '          span.start !== invocationCall.getArguments()[index]?.getStart() ||',
+  '          span.end !== invocationCall.getArguments()[index]?.getEnd(),',
+  '      ) ||',
+].join('\n');
+const weakenedSemanticV2ArgumentSpanBranch = '      false ||';
+const semanticV2AuthorityReconstructionBranch = [
+  '      proof.authorityInputs.length !== expectedAuthorityInputs.length ||',
+  '      proof.authorityInputs.some(',
+  '        (authority, index) => authority !== expectedAuthorityInputs[index],',
+  '      ) ||',
+].join('\n');
+const weakenedSemanticV2AuthorityReconstructionBranch = '      false ||';
+const semanticV2OperationInventoryBranch = [
+  '      !requestCompilerSemanticDatabaseOperationInventoryMatches(',
+  '        proof.operationKinds,',
+  '        expectedDatabaseOperations,',
+  '      ) ||',
+].join('\n');
+const weakenedSemanticV2OperationInventoryBranch = '      false ||';
+const semanticV2ClosedRootBranch =
+  "        const rootClosed = root.traces.some((trace) => trace.verdict === 'closed');";
+const weakenedSemanticV2ClosedRootBranch = '        const rootClosed = false;';
+const semanticV2ClosedSiblingBranch = '  for (const key of invalidProofKeys) proofs.delete(key);';
+const weakenedSemanticV2ClosedSiblingBranch = '  void invalidProofKeys;';
+
 const exactTrustedAssignIdentityBranch =
   '  if (frameworkIdentityIn(frameworkIdentity, SERVER_REVIEWED_DATA_HELPER_IDENTITIES)) {';
 const weakenedExactTrustedAssignIdentityBranch = [
@@ -930,17 +999,11 @@ const weakenedAnalyzerSummaryAcceptedGuardCarrierProofBranch = [
   '  if (false && !privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;',
 ].join('\n');
 const analyzerSummaryOpaqueCarrierEscapeBranch = [
-  '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
-  '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
-  '    if (exactFrameworkPrivateScopeValueCall(call)) continue;',
-  '    if (exactFinitePrivateScopeProofConsumer(call)) continue;',
-  '    return false;',
+  '    if (referenceKey !== parameterKey || nodeContains(auditedUse, reference)) continue;',
+  '    if (!privateScopeCarrierReferenceHasReviewedConsumer(reference, parameterKey, body)) return false;',
 ].join('\n');
 const weakenedAnalyzerSummaryOpaqueCarrierEscapeBranch = [
-  '    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;',
-  '    if (exactDrizzlePrivateScopeProofCall(call)) continue;',
-  '    if (exactFrameworkPrivateScopeValueCall(call)) continue;',
-  '    if (exactFinitePrivateScopeProofConsumer(call)) continue;',
+  '    if (referenceKey !== parameterKey || nodeContains(auditedUse, reference)) continue;',
   '    continue;',
 ].join('\n');
 const analyzerSummaryPrivatePathPrefixBranch =
@@ -1063,32 +1126,12 @@ const analyzerSummaryConstValueAliasBranch =
 const weakenedAnalyzerSummaryConstValueAliasBranch =
   '  if (false && !isConstVariableBindingDeclaration(declaration)) return false;';
 const analyzerSummaryValueAliasEscapeClosureBranch = [
-  '  // Scan through the whole sink statement, not merely preceding statements. Query builders may',
-  '  // evaluate another argument before `.where(...)`, and they may retain an object parameter until',
-  '  // dispatch; either an earlier or later same-statement escape can therefore rewrite the value.',
-  '  return !use',
-  '    .getSourceFile()',
-  '    .getDescendantsOfKind(SyntaxKind.Identifier)',
-  '    .some((candidate) => {',
-  '      if (sameSourceNode(candidate, use)) return false;',
-  '      if (',
-  '        candidate.getStart() < variable.getEnd() ||',
-  '        candidate.getEnd() > used.statement.getEnd()',
-  '      ) {',
-  '        return false;',
-  '      }',
-  '      const candidateKey = resolvedSymbolKey(',
-  '        symbolForIdentifierReference(candidate) ?? candidate.getSymbol(),',
+  '      return !(',
+  '        bindingIsImmutableScalar &&',
+  '        privateScopeScalarReferenceHasReviewedConsumer(candidate, used.statement)',
   '      );',
-  '      return candidateKey === bindingKey;',
-  '    });',
 ].join('\n');
-const weakenedAnalyzerSummaryValueAliasEscapeClosureBranch = [
-  '  // Scan through the whole sink statement, not merely preceding statements. Query builders may',
-  '  // evaluate another argument before `.where(...)`, and they may retain an object parameter until',
-  '  // dispatch; either an earlier or later same-statement escape can therefore rewrite the value.',
-  '  return true;',
-].join('\n');
+const weakenedAnalyzerSummaryValueAliasEscapeClosureBranch = ['      return false;'].join('\n');
 const analyzerSummaryConditionalEffectClosureBranch = [
   'function privateScopeConditionIsEffectFree(condition: Node): boolean {',
   '  for (const node of [condition, ...condition.getDescendants()]) {',
@@ -1259,6 +1302,126 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertRuntimeSelectedExecutableReferenceClosureBehavior,
   },
   {
+    behavioralTypeScript: true,
+    description: 'Lets a compiler semantic verdict authorize different authored source bytes.',
+    expectedKiller: 'semantic-v2 proofs must remain bound to the exact authored source carrier',
+    name: 'drizzle-semantic-v2/drop-source-byte-equality',
+    replacement: weakenedSemanticV2SourceByteEqualityBranch,
+    search: semanticV2SourceByteEqualityBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2SourceByteEqualityIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets an unknown semantic graph schema mint request-helper authority.',
+    expectedKiller: 'the Drizzle consumer must accept only the exact semantic-v2 schema',
+    name: 'drizzle-semantic-v2/allow-unknown-schema',
+    replacement: weakenedSemanticV2SchemaBranch,
+    search: semanticV2SchemaBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2SchemaIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Stops reconstructing the claimed root from the authored factory call.',
+    expectedKiller: 'semantic-v2 root identity must be reconstructed from authored factory syntax',
+    name: 'drizzle-semantic-v2/drop-factory-root-reconstruction',
+    replacement: weakenedSemanticV2FactoryRootBranch,
+    search: semanticV2FactoryRootBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2FactoryRootIsReconstructed,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets a root binding claim a different callback byte range.',
+    expectedKiller: 'semantic-v2 callback spans must identify the exact authored root callable',
+    name: 'drizzle-semantic-v2/drop-callable-span-reconstruction',
+    replacement: weakenedSemanticV2CallableSpanBranch,
+    search: semanticV2CallableSpanBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2CallableSpanIsReconstructed,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Falls back to an unrelated helper proof when the callable byte range misses.',
+    expectedKiller: 'semantic-v2 helper callable spans must key the exact authored declaration',
+    name: 'drizzle-semantic-v2/drop-helper-callable-span-reconstruction',
+    replacement: weakenedSemanticV2HelperCallableSpanLookupBranch,
+    search: semanticV2HelperCallableSpanLookupBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2HelperCallableSpanIsReconstructed,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets a root binding point at a different same-name factory call.',
+    expectedKiller: 'semantic-v2 factory spans must identify the exact authored root call',
+    name: 'drizzle-semantic-v2/drop-factory-call-span-reconstruction',
+    replacement: weakenedSemanticV2FactoryCallSpanBranch,
+    search: semanticV2FactoryCallSpanBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2FactoryCallSpanIsReconstructed,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets a helper proof point at a same-shaped call outside the request root.',
+    expectedKiller: 'semantic-v2 helper call spans must identify the exact authored invocation',
+    name: 'drizzle-semantic-v2/drop-helper-call-span-reconstruction',
+    replacement: weakenedSemanticV2HelperCallSpanBranch,
+    search: semanticV2HelperCallSpanBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2HelperCallSpanIsReconstructed,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets compiler-declared argument ranges drift from the authored helper call.',
+    expectedKiller: 'semantic-v2 argument spans must exactly cover every authored argument',
+    name: 'drizzle-semantic-v2/drop-argument-span-reconstruction',
+    replacement: weakenedSemanticV2ArgumentSpanBranch,
+    search: semanticV2ArgumentSpanBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2ArgumentSpansAreReconstructed,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Trusts the compiler-declared authority role without reconstructing call inputs.',
+    expectedKiller: 'semantic-v2 authority inputs must be reconstructed from authored arguments',
+    name: 'drizzle-semantic-v2/drop-authority-reconstruction',
+    replacement: weakenedSemanticV2AuthorityReconstructionBranch,
+    search: semanticV2AuthorityReconstructionBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2AuthorityIsReconstructed,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Trusts a compiler operation inventory that disagrees with the helper body.',
+    expectedKiller: 'semantic-v2 DB operations must be reconstructed from the authored helper',
+    name: 'drizzle-semantic-v2/drop-operation-inventory-reconstruction',
+    replacement: weakenedSemanticV2OperationInventoryBranch,
+    search: semanticV2OperationInventoryBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2OperationInventoryIsReconstructed,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets a proved helper survive another closed path in the same semantic root.',
+    expectedKiller: 'a closed semantic-v2 root must quarantine every helper proof in that root',
+    name: 'drizzle-semantic-v2/drop-closed-root-quarantine',
+    replacement: weakenedSemanticV2ClosedRootBranch,
+    search: semanticV2ClosedRootBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2ClosedRootIsQuarantined,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets a proved helper survive a closed same-span semantic sibling.',
+    expectedKiller: 'a closed semantic-v2 sibling must quarantine the shared callable span',
+    name: 'drizzle-semantic-v2/drop-closed-sibling-quarantine',
+    replacement: weakenedSemanticV2ClosedSiblingBranch,
+    search: semanticV2ClosedSiblingBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertSemanticV2ClosedSiblingIsQuarantined,
+  },
+  {
     description: 'Trusts an app analyzer declaration without proving the helper body.',
     expectedKiller: 'private analyzer summaries must retain exact same-file structural proof',
     name: 'drizzle-analyzer-summary/drop-structural-body-proof',
@@ -1280,6 +1443,7 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertAnalyzerSummaryCallCarrierIsPinned,
   },
   {
+    behavioralTypeScript: true,
     description:
       'Lets extra argument evaluation run before a proved private helper reads its carrier.',
     expectedKiller: 'private helper calls must retain the sole carrier argument grammar',
@@ -1287,8 +1451,7 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: weakenedAnalyzerSummarySoleCarrierArgumentBranch,
     search: analyzerSummarySoleCarrierArgumentBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummarySoleCarrierArgumentIsPinned,
+    test: assertAnalyzerSummarySoleCarrierArgumentIsEnforced,
   },
   {
     description: 'Lets derived helper aliases become provenance for another alias hop.',
@@ -1301,14 +1464,20 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertAnalyzerSummaryDirectAliasSnapshotIsPinned,
   },
   {
+    behavioralInstrumentation: [
+      '',
+      'export { summarizedStaticCallablePrivateScope as __summarizedStaticCallablePrivateScope };',
+      "export { sessionProvenanceContextForNodes } from './session-provenance.js';",
+      '',
+    ].join('\n'),
+    behavioralTypeScript: true,
     description: 'Restores recursive const-alias expansion in the OPP private-scope consumer.',
     expectedKiller: 'OPP private helper aliases must stop after one direct alias',
     name: 'drizzle-analyzer-summary/allow-opp-alias-chain',
     replacement: weakenedAnalyzerSummaryOppAliasChainClosureBranch,
     search: analyzerSummaryOppAliasChainClosureBranch,
     sourceFile: drizzleSummariesPath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryOppAliasChainClosureIsPinned,
+    test: assertAnalyzerSummaryOppAliasChainClosureIsEnforced,
   },
   {
     description: 'Lets an unenrolled positional parameter pass as private context.',
@@ -1321,14 +1490,14 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertAnalyzerSummaryUnenrolledCarrierClosureIsPinned,
   },
   {
+    behavioralTypeScript: true,
     description: 'Skips the whole-callback integrity proof for an enrolled private carrier.',
     expectedKiller: 'private carriers must retain the exact binding-integrity proof',
     name: 'drizzle-analyzer-summary/drop-carrier-integrity-proof',
     replacement: weakenedAnalyzerSummaryCarrierIntegrityBranch,
     search: analyzerSummaryCarrierIntegrityBranch,
     sourceFile: drizzleSessionProvenancePath,
-    sourceOnly: true,
-    test: assertAnalyzerSummaryCarrierIntegrityIsPinned,
+    test: assertAnalyzerSummaryCarrierIntegrityIsEnforced,
   },
   {
     description: 'Lets direct guard/session/tenant reads bypass carrier integrity.',
@@ -1591,24 +1760,24 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertBrowserRtcNetworkCapabilityIsPinned,
   },
   {
+    behavioralTypeScript: true,
     description: 'Restores an early empty-result bypass before authoritative TASK B analysis.',
     expectedKiller: 'static build trust facts must always construct and run the authoritative pass',
     name: 'drizzle-task-b/restore-static-build-analysis-bypass',
     replacement: bypassedStaticBuildAuthoritativeProjectBranch,
     search: staticBuildAuthoritativeProjectBranch,
     sourceFile: drizzleTrustEscapesPath,
-    sourceOnly: true,
-    test: assertStaticBuildAuthoritativeProjectIsPinned,
+    test: assertStaticBuildAuthoritativeProjectIsExecuted,
   },
   {
+    behavioralTypeScript: true,
     description: 'Restores the superseded per-name JSX handler sink traversal.',
     expectedKiller: 'compiler-owned JSX handlers must stay exclusively on finite IR',
     name: 'drizzle-task-b/restore-jsx-name-scanner',
     replacement: restoredTaskBJsxNameScannerBranch,
     search: taskBImperativeHandlerOnlyBranch,
     sourceFile: drizzleTrustEscapesPath,
-    sourceOnly: true,
-    test: assertTaskBJsxNameScannerRetirementIsPinned,
+    test: assertTaskBJsxNameScannerRetirementIsEnforced,
   },
   {
     description: 'Deletes the exact reviewed runCommand capability-door admission.',
@@ -2638,6 +2807,8 @@ async function assertRuntimeSelectedExecutableReferenceClosureBehavior(
   }
 }
 
+const behavioralTypeScriptBaselineModules = new Map();
+
 export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_MUTANTS } = {}) {
   const results = [];
 
@@ -2651,7 +2822,16 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
 
     try {
       const sourceText = readFileSync(mutant.sourceFile, 'utf8');
-      await mutant.test(mutant.baseModule, { sourceText });
+      const baselineModule =
+        mutant.behavioralTypeScript === true
+          ? await behavioralTypeScriptBaselineModule(
+              mutant.sourceFile,
+              sourceText,
+              mutant.behavioralEntryFile,
+              mutant.behavioralInstrumentation,
+            )
+          : mutant.baseModule;
+      await mutant.test(baselineModule, { sourceText });
     } catch (error) {
       results.push({
         ...result,
@@ -2666,6 +2846,30 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
       const mutantPath = path.join(tempRoot, 'scripts', path.basename(mutant.sourceFile));
       const sourceText = readFileSync(mutant.sourceFile, 'utf8');
       const mutatedSourceText = applyExactMutation(sourceText, mutant);
+      if (mutant.behavioralTypeScript === true) {
+        const mutantModule = await bundleBehavioralTypeScriptModule(
+          tempRoot,
+          mutant.sourceFile,
+          mutatedSourceText,
+          mutant.behavioralEntryFile,
+          mutant.behavioralInstrumentation,
+        );
+        try {
+          await mutant.test(mutantModule, { sourceText: mutatedSourceText });
+          results.push({
+            ...result,
+            error: 'mutated gate still satisfied the killer assertion',
+            status: 'survived',
+          });
+        } catch (error) {
+          results.push({
+            ...result,
+            killerFailure: formatError(error),
+            status: 'killed',
+          });
+        }
+        continue;
+      }
       if (mutant.sourceOnly === true) {
         try {
           await mutant.test(mutant.baseModule, { sourceText: mutatedSourceText });
@@ -2715,6 +2919,82 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
   }
 
   return results;
+}
+
+function behavioralTypeScriptBaselineModule(
+  sourceFile,
+  sourceText,
+  entryFile = sourceFile,
+  instrumentation = '',
+) {
+  const key = `${sourceFile}\0${entryFile}\0${instrumentation}`;
+  let modulePromise = behavioralTypeScriptBaselineModules.get(key);
+  if (!modulePromise) {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-security-gate-baseline-'));
+    modulePromise = bundleBehavioralTypeScriptModule(
+      tempRoot,
+      sourceFile,
+      sourceText,
+      entryFile,
+      instrumentation,
+    ).finally(() => {
+      rmSync(tempRoot, { force: true, recursive: true });
+    });
+    behavioralTypeScriptBaselineModules.set(key, modulePromise);
+  }
+  return modulePromise;
+}
+
+async function bundleBehavioralTypeScriptModule(
+  tempRoot,
+  sourceFile,
+  sourceText,
+  entryFile = sourceFile,
+  instrumentation = '',
+) {
+  const outputFile = path.join(tempRoot, `behavioral-${Date.now()}-${Math.random()}.mjs`);
+  const tempNodeModules = path.join(tempRoot, 'node_modules');
+  if (!existsSync(tempNodeModules)) {
+    symlinkSync(path.join(repoRoot, 'node_modules'), tempNodeModules, 'dir');
+  }
+  const loader = path.extname(sourceFile).endsWith('x') ? 'tsx' : 'ts';
+  const usesDependencyOverlay = path.resolve(entryFile) !== path.resolve(sourceFile);
+  const executableSource = `${sourceText}${instrumentation}`;
+  await buildWithEsbuild({
+    absWorkingDir: repoRoot,
+    bundle: true,
+    ...(usesDependencyOverlay ? { entryPoints: [entryFile] } : {}),
+    external: ['ts-morph'],
+    format: 'esm',
+    logLevel: 'silent',
+    outfile: outputFile,
+    platform: 'node',
+    ...(usesDependencyOverlay
+      ? {
+          plugins: [
+            {
+              name: 'kovo-behavioral-mutant-overlay',
+              setup(build) {
+                build.onLoad({ filter: /.*/ }, (args) =>
+                  path.resolve(args.path) === path.resolve(sourceFile)
+                    ? { contents: executableSource, loader }
+                    : undefined,
+                );
+              },
+            },
+          ],
+        }
+      : {
+          stdin: {
+            contents: executableSource,
+            loader,
+            resolveDir: path.dirname(sourceFile),
+            sourcefile: path.basename(sourceFile),
+          },
+        }),
+    target: 'node24',
+  });
+  return import(`${pathToFileURL(outputFile).href}?behavioral=${Date.now()}-${Math.random()}`);
 }
 
 function installMutantScriptLib(tempRoot) {
@@ -2852,6 +3132,271 @@ async function assertThreatMatrixMissingPublicSurfaceDenominatorIsPinned(moduleU
   }
 }
 
+function semanticV2MutationFixture() {
+  const decoyCall = 'nestedWrite(request.db, input)';
+  const decoyFactory = `mutation('summary-carrier/update', {
+  handler() { return { ok: true }; },
+})`;
+  const decoyHandler = 'handler() { return { ok: true }; }';
+  const helper = `async function nestedWrite(db, carrier) {
+      await db
+        .update(account)
+        .set({ userId: serverValue(exactGuard(carrier), 'claimed owner') })
+        .where(eq(account.id, input.id));
+    }`;
+  const handler = `async handler(input, request) {
+    ${helper}
+    await ${decoyCall};
+    return { ok: true };
+  }`;
+  const factory = `mutation('summary-carrier/update', {
+  ${handler},
+})`;
+  const source = `import { kovoAnalyzerSummary } from '@kovojs/drizzle';
+import { mutation, serverValue } from '@kovojs/server';
+import { eq } from 'drizzle-orm';
+import { account } from './schema.js';
+
+function exactGuard(context) { return context.guard.userId; }
+kovoAnalyzerSummary(exactGuard, { returns: { kind: 'guard', path: 'userId' } });
+
+function unusedCallShape(nestedWrite, request, input) {
+  return ${decoyCall};
+}
+
+${decoyFactory};
+
+export const update = ${factory};
+`;
+  const schemaSource = `import { pgTable, text } from 'drizzle-orm/pg-core';
+export const account = pgTable('account', {
+  id: text('id').notNull(),
+  userId: text('user_id').notNull(),
+});
+`;
+  const span = (text, from = 0) => {
+    const start = source.indexOf(text, from);
+    if (start < 0) throw new Error(`semantic-v2 mutation fixture lost exact text: ${text}`);
+    return { end: start + text.length, start };
+  };
+  const decoyCallSpan = span(decoyCall);
+  const actualCallSpan = span(decoyCall, decoyCallSpan.end);
+  const actualArgumentSpans = ['request.db', 'input'].map((argument) =>
+    span(argument, actualCallSpan.start),
+  );
+  const decoyArgumentSpans = ['request.db', 'input'].map((argument) =>
+    span(argument, decoyCallSpan.start),
+  );
+  const callableSpan = span(helper);
+  const root = 'mutation:summary-carrier/update';
+  const transfer = 'local:nestedWrite[arg0=database]';
+  const graph = {
+    budgets: { callDepth: 16, nodes: 50_000, operations: 4_096, summaries: 256 },
+    roots: [
+      {
+        binding: {
+          callback: 'handler',
+          callableSpan: span(handler),
+          factory: 'mutation',
+          factoryCallSpan: span(factory),
+          root,
+        },
+        helperInvocations: [
+          {
+            argumentSpans: actualArgumentSpans,
+            authorityInputs: ['arg0=database'],
+            callable: 'local:nestedWrite',
+            callableSpan,
+            callSpan: actualCallSpan,
+            operationKinds: ['server.database.write'],
+            transfers: [transfer],
+            verdict: 'proved',
+          },
+        ],
+        root,
+        summaries: [
+          {
+            authorityInputs: ['arg0=database'],
+            callable: 'local:nestedWrite',
+            callableSpan,
+            operationKinds: ['server.database.write'],
+            verdict: 'proved',
+          },
+        ],
+        traces: [
+          {
+            root,
+            sink: {
+              door: 'managed-db',
+              kind: 'server.database.write',
+              target: 'db.update',
+            },
+            transfers: [transfer],
+            verdict: 'proved',
+          },
+        ],
+      },
+    ],
+    schema: 'kovo-security-semantic-graph/v2',
+  };
+  return {
+    decoyArgumentSpans,
+    decoyCallSpan,
+    decoyFactorySpan: span(decoyFactory),
+    decoyHandlerSpan: span(decoyHandler),
+    files: [
+      { fileName: 'summary-carrier.ts', source },
+      { fileName: 'schema.ts', source: schemaSource },
+    ],
+    graph,
+    schemaSource,
+    source,
+  };
+}
+
+function semanticV2Sinks(moduleUnderTest, fixture, graph, semanticSource = fixture.source) {
+  return moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: [
+      { fileName: 'summary-carrier.ts', graphs: [graph], source: semanticSource },
+      { fileName: 'schema.ts', graphs: [], source: fixture.schemaSource },
+    ],
+    files: fixture.files,
+  });
+}
+
+function semanticV2GraphCopy(fixture) {
+  return structuredClone(fixture.graph);
+}
+
+function assertSemanticV2FixtureAdmitsExactProof(moduleUnderTest, fixture) {
+  const sinks = semanticV2Sinks(moduleUnderTest, fixture, fixture.graph);
+  if (sinks.length !== 0) {
+    throw new Error(`exact semantic-v2 proof was not admitted: ${JSON.stringify(sinks)}`);
+  }
+}
+
+function assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph, semanticSource) {
+  assertSemanticV2FixtureAdmitsExactProof(moduleUnderTest, fixture);
+  const sinks = semanticV2Sinks(moduleUnderTest, fixture, graph, semanticSource);
+  if (!sinks.some((sink) => sink.sink === 'request-handler.opaque-protocol')) {
+    throw new Error(`tampered semantic-v2 proof was admitted: ${JSON.stringify(sinks)}`);
+  }
+}
+
+async function assertSemanticV2SourceByteEqualityIsEnforced(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, fixture.graph, `${fixture.source}\n`);
+}
+
+async function assertSemanticV2SchemaIsEnforced(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  graph.schema = 'kovo-security-semantic-graph/v1';
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2FactoryRootIsReconstructed(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  const root = graph.roots[0];
+  root.root = 'mutation:forged/update';
+  root.binding.root = root.root;
+  for (const trace of root.traces) trace.root = root.root;
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2CallableSpanIsReconstructed(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  graph.roots[0].binding.callableSpan = fixture.decoyHandlerSpan;
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2HelperCallableSpanIsReconstructed(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  graph.roots[0].summaries[0].callableSpan = fixture.decoyHandlerSpan;
+  graph.roots[0].helperInvocations[0].callableSpan = fixture.decoyHandlerSpan;
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2FactoryCallSpanIsReconstructed(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  graph.roots[0].binding.factoryCallSpan = fixture.decoyFactorySpan;
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2HelperCallSpanIsReconstructed(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  const invocation = graph.roots[0].helperInvocations[0];
+  invocation.callSpan = fixture.decoyCallSpan;
+  invocation.argumentSpans = fixture.decoyArgumentSpans;
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2ArgumentSpansAreReconstructed(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  graph.roots[0].helperInvocations[0].argumentSpans = fixture.decoyArgumentSpans;
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2AuthorityIsReconstructed(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  const root = graph.roots[0];
+  const authorityInputs = ['arg0=request'];
+  const transfer = 'local:nestedWrite[arg0=request]';
+  root.summaries[0].authorityInputs = authorityInputs;
+  root.helperInvocations[0].authorityInputs = authorityInputs;
+  root.helperInvocations[0].transfers = [transfer];
+  root.traces[0].transfers = [transfer];
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2OperationInventoryIsReconstructed(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  const root = graph.roots[0];
+  root.summaries[0].operationKinds = ['server.database.read'];
+  root.helperInvocations[0].operationKinds = ['server.database.read'];
+  root.traces[0].sink = {
+    door: 'managed-db',
+    kind: 'server.database.read',
+    target: 'db.select',
+  };
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2ClosedRootIsQuarantined(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  const root = graph.roots[0];
+  root.traces.push({
+    detail: 'closed sibling path',
+    reason: 'opaque-transfer',
+    root: root.root,
+    sink: 'closed sibling path',
+    transfers: [...root.helperInvocations[0].transfers],
+    verdict: 'closed',
+  });
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
+async function assertSemanticV2ClosedSiblingIsQuarantined(moduleUnderTest) {
+  const fixture = semanticV2MutationFixture();
+  const graph = semanticV2GraphCopy(fixture);
+  const root = graph.roots[0];
+  root.summaries.push({ ...structuredClone(root.summaries[0]), verdict: 'closed' });
+  root.helperInvocations.push({
+    ...structuredClone(root.helperInvocations[0]),
+    verdict: 'closed',
+  });
+  assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
+}
+
 async function assertSemanticCycleClosureIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(semanticCycleClosureBranch)) {
     throw new Error('normalized semantic graph no longer absorbs an active helper-summary cycle');
@@ -2948,9 +3493,48 @@ async function assertAnalyzerSummaryCallCarrierIsPinned(_moduleUnderTest, { sour
   }
 }
 
-async function assertAnalyzerSummarySoleCarrierArgumentIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummarySoleCarrierArgumentBranch)) {
-    throw new Error('private helper calls no longer require the carrier as their sole argument');
+function analyzerSummaryCarrierVerdict(moduleUnderTest, statements, callArguments) {
+  const project = new Project({
+    compilerOptions: {
+      jsx: ts.JsxEmit.Preserve,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noEmit: true,
+      skipLibCheck: true,
+      target: ts.ScriptTarget.ESNext,
+    },
+    skipAddingFilesFromTsConfig: true,
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile(
+    'opp-carrier.ts',
+    `import { query } from '@kovojs/server';
+function current(context) { return context.request.guard.userId; }
+function opaque(value) { return value; }
+export const list = query('list', {
+  async load(_input, context) {
+    ${statements}
+    return current(${callArguments});
+  },
+});`,
+  );
+  try {
+    const call = sourceFile
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .find((candidate) => candidate.getExpression().getText() === 'current');
+    if (!call) throw new Error('OPP carrier mutation fixture lost its current(...) call');
+    return moduleUnderTest.privateScopeHelperCallCarrierIsProven(call);
+  } finally {
+    sourceFile.forget();
+    project.getLanguageService().compilerObject.dispose();
+  }
+}
+
+async function assertAnalyzerSummarySoleCarrierArgumentIsEnforced(moduleUnderTest) {
+  if (!analyzerSummaryCarrierVerdict(moduleUnderTest, '', 'context')) {
+    throw new Error('exact sole-carrier OPP fixture was not admitted');
+  }
+  if (analyzerSummaryCarrierVerdict(moduleUnderTest, '', 'context, 0')) {
+    throw new Error('OPP admitted a helper call with an extra argument evaluation channel');
   }
 }
 
@@ -2960,9 +3544,65 @@ async function assertAnalyzerSummaryDirectAliasSnapshotIsPinned(_moduleUnderTest
   }
 }
 
-async function assertAnalyzerSummaryOppAliasChainClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryOppAliasChainClosureBranch)) {
-    throw new Error('OPP private helper aliases no longer stop after one direct alias');
+function analyzerSummaryAliasScope(moduleUnderTest, aliasDeclarations, helperName) {
+  const source = [
+    'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+    'import { query } from "@kovojs/server";',
+    'type Context = { request: { guard: { userId: string } } };',
+    'function current(context: Context) { return context.request.guard.userId; }',
+    'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+    aliasDeclarations,
+    'export const list = query("list", {',
+    '  async load(_input: unknown, context: Context) {',
+    `    return ${helperName}(context);`,
+    '  },',
+    '});',
+  ].join('\n');
+  const project = new Project({
+    compilerOptions: {
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noEmit: true,
+      skipLibCheck: true,
+      target: ts.ScriptTarget.ESNext,
+    },
+    skipAddingFilesFromTsConfig: true,
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile('opp-alias.ts', source);
+  try {
+    const target = sourceFile
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .find((call) => call.getExpression().getText() === helperName);
+    const load = sourceFile
+      .getDescendantsOfKind(SyntaxKind.MethodDeclaration)
+      .find((method) => method.getName() === 'load');
+    if (!target || !load?.getBody()) {
+      throw new Error('OPP alias mutation fixture lost its load/helper call');
+    }
+    const context = moduleUnderTest.sessionProvenanceContextForNodes(sourceFile, [load.getBody()]);
+    const provenance = moduleUnderTest.__summarizedStaticCallablePrivateScope(
+      target.getExpression(),
+      context,
+    );
+    return provenance ? `${provenance.kind}:${provenance.path}` : undefined;
+  } finally {
+    sourceFile.forget();
+    project.getLanguageService().compilerObject.dispose();
+  }
+}
+
+async function assertAnalyzerSummaryOppAliasChainClosureIsEnforced(moduleUnderTest) {
+  const direct = analyzerSummaryAliasScope(moduleUnderTest, 'const first = current;', 'first');
+  if (direct !== 'guard:userId') {
+    throw new Error(`exact one-hop OPP alias was not admitted: ${String(direct)}`);
+  }
+  const transitive = analyzerSummaryAliasScope(
+    moduleUnderTest,
+    'const first = current;\nconst second = first;',
+    'second',
+  );
+  if (transitive !== undefined) {
+    throw new Error('OPP admitted a two-hop private helper alias chain');
   }
 }
 
@@ -2975,9 +3615,12 @@ async function assertAnalyzerSummaryUnenrolledCarrierClosureIsPinned(
   }
 }
 
-async function assertAnalyzerSummaryCarrierIntegrityIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(analyzerSummaryCarrierIntegrityBranch)) {
-    throw new Error('private carriers no longer require exact binding-integrity proof');
+async function assertAnalyzerSummaryCarrierIntegrityIsEnforced(moduleUnderTest) {
+  if (!analyzerSummaryCarrierVerdict(moduleUnderTest, '', 'context')) {
+    throw new Error('exact stable OPP carrier fixture was not admitted');
+  }
+  if (analyzerSummaryCarrierVerdict(moduleUnderTest, 'opaque(context);', 'context')) {
+    throw new Error('OPP admitted a carrier after opaque whole-callback escape');
   }
 }
 
@@ -3167,17 +3810,30 @@ async function assertTrustedAssignNestedReviewIsPinned(_moduleUnderTest, { sourc
   }
 }
 
-async function assertStaticBuildAuthoritativeProjectIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(staticBuildAuthoritativeProjectBranch)) {
-    throw new Error('static build trust facts no longer enter the authoritative TASK B project');
+async function assertStaticBuildAuthoritativeProjectIsExecuted(moduleUnderTest) {
+  const facts = moduleUnderTest.collectStaticBuildTrustFactsFromProject({
+    files: [
+      {
+        fileName: 'raw-handler.ts',
+        source: `element.onclick = () => { document.write(userInput); };`,
+      },
+    ],
+  });
+  if (!facts.unregisteredSinks.some((fact) => fact.sink === 'document.write')) {
+    throw new Error('static build trust facts bypassed authoritative TASK B analysis');
   }
 }
 
-async function assertTaskBJsxNameScannerRetirementIsPinned(_moduleUnderTest, { sourceText }) {
-  if (
-    !sourceText.includes(taskBImperativeHandlerOnlyBranch) ||
-    sourceText.includes('sourceFile.getDescendantsOfKind(SyntaxKind.JsxAttribute)')
-  ) {
+async function assertTaskBJsxNameScannerRetirementIsEnforced(moduleUnderTest) {
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    files: [
+      {
+        fileName: 'compiler-owned-handler.tsx',
+        source: `export const view = <button onClick={() => { element.innerHTML = userInput; }}>Save</button>;`,
+      },
+    ],
+  });
+  if (sinks.some((fact) => fact.sink === 'innerHTML')) {
     throw new Error('TASK B restored the superseded per-name JSX handler traversal');
   }
 }
