@@ -91,3 +91,46 @@ export const Metadata = component({
     expect(diagnostics).toEqual([]);
   });
 });
+
+describe('element-context execution and isolation sinks', () => {
+  it.each([
+    [
+      'script source',
+      '<script src={state.value} />',
+      'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+    ],
+    [
+      'script type',
+      '<script src="/uploads/reviewed.js" type={state.value} />',
+      'a dynamic script type can turn an inert data block into executable JavaScript',
+    ],
+    [
+      'stylesheet href',
+      '<link rel="stylesheet" href={state.value} />',
+      'a dynamic stylesheet URL can apply attacker-controlled CSS',
+    ],
+    [
+      'link relationship',
+      '<link href="/uploads/theme.css" rel={state.value} />',
+      'a dynamic link relationship can turn an inert resource into an active stylesheet',
+    ],
+    [
+      'iframe sandbox',
+      '<iframe src="/untrusted/profile" sandbox={state.value} />',
+      'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
+    ],
+  ])('rejects a dynamic %s', (_label, markup, expectedReason) => {
+    const diagnostics = kv236Diagnostics(`
+export const ContextualSink = component({
+  state: () => ({ value: '' }),
+  render: (_queries, state) => (${markup}),
+});
+`);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        help: expect.stringContaining(expectedReason),
+      }),
+    ]);
+  });
+});
