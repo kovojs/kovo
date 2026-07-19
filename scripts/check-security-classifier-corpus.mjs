@@ -2480,8 +2480,12 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/server/src/guard-args-receipt-security.test.ts',
         snippets: [
           '@kovo-security-certifies C13 guard-args-receipt-proxy-drift',
+          '@kovo-security-certifies C13 guard-args-receipt-borrowed-date-mutator',
           'pins the validated ownership key before an async query loader consumes it',
           'pins the validated ownership key before an async mutation handler consumes it',
+          'prevents a borrowed Date mutator from changing the accepted query final consumer',
+          'prevents a borrowed Date mutator from changing the accepted mutation final consumer',
+          'Date.prototype.setTime.call(args.authorized, args.selected.getTime())',
           "return reads === 1 ? 'owned' : 'victim'",
           'expect(drift.reads()).toBe(0)',
         ],

@@ -8,9 +8,17 @@ import { testMutation as mutation } from './test-fixtures.js';
 
 // @kovo-security-classifier-corpus finite-security-operation-ir
 // @kovo-security-certifies C13 guard-args-receipt-proxy-drift
+// @kovo-security-certifies C13 guard-args-receipt-borrowed-date-mutator
 describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => {
   type AppRequest = { session?: { user?: { id: string } | null } | null };
   type ArgsRequest = GuardArgsRequest<AppRequest, { id: string }>;
+  type DateArgs = { authorized: Date; selected: Date };
+  type DateArgsRequest = GuardArgsRequest<AppRequest, DateArgs>;
+
+  const authorizedDate = '2025-07-20T00:00:00.000Z';
+  const selectedDate = '1970-01-01T00:00:00.000Z';
+  const rejectedDateMessage =
+    'Validated guard args cannot contain Date values because JavaScript Date internal slots are mutable through borrowed native mutators; use an ISO timestamp string or epoch number instead.';
 
   function driftingArgsSchema(): {
     readonly reads: () => number;
@@ -59,6 +67,33 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
 
   function ownershipThenMutationAttempt(): Guard<AppRequest> {
     return guards.all<AppRequest>(ownershipGuard(), attemptedArgsMutationGuard());
+  }
+
+  function dateOwnershipThenRemoteSelection(): Guard<AppRequest> {
+    const ownsAuthorizedDate = guards.owns<AppRequest, DateArgsRequest, Date>(
+      (request) => request.args.authorized,
+      async (_request, accepted) => accepted.toISOString() === authorizedDate,
+    );
+    const applyRemoteSelection: Guard<AppRequest> = (request) => {
+      const args = (request as DateArgsRequest).args;
+      Date.prototype.setTime.call(args.authorized, args.selected.getTime());
+      return true;
+    };
+    return guards.all<AppRequest>(ownsAuthorizedDate, applyRemoteSelection);
+  }
+
+  async function expectBorrowedDateMutationClosed(
+    operation: Promise<unknown>,
+    consumer: ReturnType<typeof vi.fn>,
+  ): Promise<void> {
+    try {
+      await expect(operation).resolves.toMatchObject({ ok: true, value: authorizedDate });
+      expect(consumer).toHaveBeenCalledOnce();
+    } catch (error) {
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error).toHaveProperty('message', rejectedDateMessage);
+      expect(consumer).not.toHaveBeenCalled();
+    }
   }
 
   function accessorArgsSchema(reads: { value: number }): Schema<{ id: string }> {
@@ -110,6 +145,43 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
       runMutation(definition, { id: 'owned' }, { session: { user: { id: 'owner' } } }),
     ).resolves.toMatchObject({ ok: true, value: 'owned' });
     expect(drift.reads()).toBe(0);
+  });
+
+  it('prevents a borrowed Date mutator from changing the accepted query final consumer', async () => {
+    const load = vi.fn((input: DateArgs) => input.authorized.toISOString());
+    const definition = query('security/guard-args-query-date-receipt', {
+      args: s.object({ authorized: s.datetime(), selected: s.datetime() }),
+      guard: dateOwnershipThenRemoteSelection(),
+      load,
+      reads: [],
+    });
+
+    await expectBorrowedDateMutationClosed(
+      runQuery(
+        definition,
+        { authorized: authorizedDate, selected: selectedDate },
+        { session: { user: { id: 'owner' } } },
+      ),
+      load,
+    );
+  });
+
+  it('prevents a borrowed Date mutator from changing the accepted mutation final consumer', async () => {
+    const handler = vi.fn((input: DateArgs) => input.authorized.toISOString());
+    const definition = mutation('security/guard-args-mutation-date-receipt', {
+      guard: dateOwnershipThenRemoteSelection(),
+      handler,
+      input: s.object({ authorized: s.datetime(), selected: s.datetime() }),
+    });
+
+    await expectBorrowedDateMutationClosed(
+      runMutation(
+        definition,
+        { authorized: authorizedDate, selected: selectedDate },
+        { session: { user: { id: 'owner' } } },
+      ),
+      handler,
+    );
   });
 
   it('rejects query schema accessors without invoking them', async () => {
