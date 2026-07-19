@@ -208,6 +208,17 @@ describe('shared runtime sink policy', () => {
         name,
       ).toMatchObject({ action: 'allow' });
     }
+
+    // Fixed high-impact witnesses keep entry-deletion mutants from shrinking the denominator and
+    // then vacuously passing the manifest-driven loop above.
+    for (const name of ['data-kovo-deferred-style', 'data-mutation']) {
+      expect(
+        decideRuntimeAttributeWrite(name, 'attacker-selected', {
+          posture: 'dynamic-binding',
+        }),
+        `${name} fixed denominator witness`,
+      ).toMatchObject({ action: 'remove', family: 'framework-control' });
+    }
   });
 
   it('parses srcset and drops unsafe candidates without dropping safe candidates', () => {

@@ -1,10 +1,11 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, compileComponentModule } from './index.js';
+import { assertFixpoint } from './index.js';
 import { collectMinifierReservedNames } from './internal.js';
 import { capturesUnserializableReferences, lowerEventHandlers } from './lower/handlers.js';
 import { parseComponentModule } from './scan/parse.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 const kv210 = diagnosticDefinitions.KV210;
 

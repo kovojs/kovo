@@ -774,7 +774,9 @@ function renderSemanticAttributeWithName(
   name: string,
   attribute: JsxAttributeModel,
 ): string | null {
-  if (isGeneratedOnlySemanticAttribute(attribute.name)) return null;
+  // Classification follows the emitted wire name. Typed sugar such as streamText lowers to a
+  // generated-only data-stream-text control and must be ignored on both sides of the differential.
+  if (isGeneratedOnlySemanticAttribute(name)) return null;
   if (attribute.domEventName) return null;
   if (compilerStringStartsWith(attribute.name, 'on') && attribute.name.length > 2) {
     const eventInitial = compilerStringCharCodeAt(attribute.name, 2);

@@ -62,6 +62,10 @@ const compilerOutputContextValidatorPath = path.join(
   'packages/compiler/src/security/output-context.ts',
 );
 const coreSinkPolicyPath = path.join(repoRoot, 'packages/core/src/internal/sink-policy.ts');
+const semanticAttributeManifestPath = path.join(
+  repoRoot,
+  'packages/core/src/internal/semantic-attribute-manifest.ts',
+);
 const inlineLoaderBuildPath = path.join(repoRoot, 'packages/browser/src/inline-loader-build.ts');
 const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
@@ -139,6 +143,14 @@ const inlineDynamicControlPlaneClosureBranch = [
 ].join('\n');
 const removedInlineDynamicControlPlaneClosureBranch =
   '    // inline dynamic-binding control-plane closure removed by mutant';
+const generatedMutationControlManifestEntry =
+  "  'data-mutation', // fixed high-impact denominator witness";
+const removedGeneratedMutationControlManifestEntry =
+  '  // data-mutation generated-control entry removed by mutant';
+const generatedDeferredStyleControlManifestEntry =
+  "  'data-kovo-deferred-style', // fixed high-impact denominator witness";
+const removedGeneratedDeferredStyleControlManifestEntry =
+  '  // data-kovo-deferred-style generated-control entry removed by mutant';
 
 const browserRtcNetworkCapabilityBranch = [
   'const globalCapabilities = new Map<string, RawCapabilityKind>([',
@@ -1432,6 +1444,29 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: inlineLoaderBuildPath,
     sourceOnly: true,
     test: assertInlineDynamicControlPlaneClosureBehavior,
+  },
+  {
+    description: 'Deletes enhanced mutation identity from the generated control-plane denominator.',
+    expectedKiller:
+      'a state/query value must not be able to turn an ordinary form into an enhanced mutation transport',
+    name: 'semantic-attributes/drop-generated-mutation-control-entry',
+    replacement: removedGeneratedMutationControlManifestEntry,
+    search: generatedMutationControlManifestEntry,
+    sourceFile: semanticAttributeManifestPath,
+    sourceOnly: true,
+    test: assertGeneratedControlManifestEntryBehavior,
+  },
+  {
+    description:
+      'Deletes deferred stylesheet promotion from the generated control-plane denominator.',
+    expectedKiller:
+      'a state/query value must not be able to activate a framework-deferred stylesheet link',
+    name: 'semantic-attributes/drop-generated-deferred-style-control-entry',
+    replacement: removedGeneratedDeferredStyleControlManifestEntry,
+    search: generatedDeferredStyleControlManifestEntry,
+    sourceFile: semanticAttributeManifestPath,
+    sourceOnly: true,
+    test: assertGeneratedControlManifestEntryBehavior,
   },
   {
     description:
@@ -3047,6 +3082,56 @@ async function assertDynamicGeneratedControlTargetCompilerBehavior(
     if (result.status !== 0) {
       throw new Error(
         `dynamic generated-control compiler regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      );
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+}
+
+async function assertGeneratedControlManifestEntryBehavior(_moduleUnderTest, { sourceText }) {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-generated-control-manifest-behavior-'));
+  try {
+    const coreRoot = path.join(tempRoot, 'packages', 'core');
+    mkdirSync(coreRoot, { recursive: true });
+    cpSync(path.join(repoRoot, 'packages/core/src'), path.join(coreRoot, 'src'), {
+      recursive: true,
+    });
+    cpSync(path.join(repoRoot, 'packages/core/package.json'), path.join(coreRoot, 'package.json'));
+    symlinkSync(
+      path.join(repoRoot, 'packages/core/node_modules'),
+      path.join(coreRoot, 'node_modules'),
+      'dir',
+    );
+    symlinkSync(path.join(repoRoot, 'node_modules'), path.join(tempRoot, 'node_modules'), 'dir');
+    writeFileSync(
+      path.join(coreRoot, 'src/internal/semantic-attribute-manifest.ts'),
+      sourceText,
+      'utf8',
+    );
+    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'node_modules/vitest/vitest.mjs'),
+        '--run',
+        'packages/core/src/sink-policy.test.ts',
+        '--testNamePattern',
+        'removes every generated-only semantic attribute',
+        '--reporter=dot',
+      ],
+      {
+        cwd: tempRoot,
+        encoding: 'utf8',
+        env: { ...process.env, FORCE_COLOR: '0' },
+        timeout: 60_000,
+      },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(
+        `generated control-manifest behavioral regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
       );
     }
   } finally {

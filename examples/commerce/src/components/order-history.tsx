@@ -66,7 +66,7 @@ export function renderOrderHistoryItems(result: OrderHistoryResult): ComponentRe
   return (
     <>
       {result.items.map((item: OrderHistoryItem) => (
-        <li kovo-key={item.id} style={orderHistoryStyles.item}>
+        <li key={item.id} style={orderHistoryStyles.item}>
           <div style={orderHistoryStyles.stackSm}>
             <span style={orderHistoryStyles.title}>{item.productId}</span>
             <span style={orderHistoryStyles.mutedText}>Order {item.id}</span>

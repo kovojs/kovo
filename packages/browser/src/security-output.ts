@@ -3,6 +3,7 @@ import {
   drainRuntimeSinkSecurityEvent,
   runtimeSinkFamilyForAttribute,
 } from '@kovojs/core/internal/sink-policy';
+import { isKovoControlPlaneAttribute } from '@kovojs/core/internal/semantic-attributes';
 
 import {
   securityArrayAppend,
@@ -674,31 +675,11 @@ function isAllowedRichHtmlAttribute(name: string, tagAttributes: Set<string> | u
   // census used by compiler-owned JSX spread reconstruction at the server
   // boundary; safeRichHtml is a content boundary, not an authority boundary.
   if (securityStringSlice(name, 0, 5) === 'data-') {
-    return !isReservedRichHtmlDataAttribute(name);
+    return !isKovoControlPlaneAttribute(name);
   }
   return (
     securitySetHas(GLOBAL_RICH_HTML_ATTRIBUTES, name) ||
     (tagAttributes !== undefined && securitySetHas(tagAttributes, name))
-  );
-}
-
-function isReservedRichHtmlDataAttribute(name: string): boolean {
-  return (
-    securityStringSlice(name, 0, 10) === 'data-kovo-' ||
-    name === 'data-bind' ||
-    securityStringSlice(name, 0, 10) === 'data-bind:' ||
-    securityStringSlice(name, 0, 10) === 'data-bind-' ||
-    name === 'data-derive' ||
-    name === 'data-derive-attr' ||
-    name === 'data-plan' ||
-    securityStringSlice(name, 0, 7) === 'data-p-' ||
-    name === 'data-enhance' ||
-    name === 'data-mutation' ||
-    name === 'data-mutation-stream' ||
-    name === 'data-stream' ||
-    securityStringSlice(name, 0, 12) === 'data-stream-' ||
-    name === 'data-state' ||
-    name === 'data-key'
   );
 }
 

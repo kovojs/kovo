@@ -19,6 +19,7 @@ import {
 } from './index.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import { mutationInputFactsFromSource } from './internal.js';
+import { compileCompilerEmittedFixture } from './test-support.js';
 import type { CompileResult, EmittedFile } from './types.js';
 
 const commerceComponentNames = ['cart-badge', 'order-history', 'product-grid'] as const;
@@ -913,7 +914,8 @@ describe('compiler conformance corpus', () => {
 
   it('keeps the shared cross-package oracle fixture green through compiler conformance gates', () => {
     const oracle = crossPackageOracleFixture();
-    const result = compileComponentModule({
+    expect(oracle.component.sourceProvenance).toBe('compiler-emitted');
+    const result = compileCompilerEmittedFixture({
       fileName: oracle.component.fileName,
       queryShapes: oracle.component.queryShapes,
       registryFacts: oracle.component.registryFacts,
@@ -1340,7 +1342,7 @@ function commerceRegistryFacts() {
 }
 
 function focusedGeneratedFixture(): CompileResult {
-  return compileComponentModule({
+  return compileCompilerEmittedFixture({
     fileName: 'conformance/generated/cart-badge.tsx',
     queryShapes: {
       cart: {
@@ -1412,6 +1414,10 @@ function corpusArtifactFact(result: CompileResult): CorpusArtifactFact {
 }
 
 function compilerDiagnosticFixtures(): Array<{ code: string; result: CompileResult }> {
+  // These fixtures intentionally exercise diagnostics over residual compiler IR. The authored
+  // surface has its own KV235 conformance corpus; downstream validators receive compiler-owned
+  // provenance so their narrower diagnostics remain observable after SPEC.md §5.2 hardening.
+  const compileComponentModule = compileCompilerEmittedFixture;
   const simpleComponent = `
 export const Shell = component({
   render: () => <section></section>,

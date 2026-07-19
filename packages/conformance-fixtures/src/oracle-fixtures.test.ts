@@ -40,6 +40,7 @@ describe('oracle fixtures', () => {
       fileName: 'conformance/oracles/cart-oracle.tsx',
       fragmentTarget: 'conformance/oracles/cart-oracle/cart-oracle',
       queryPlanExportName: 'CartOracle$queryUpdatePlans',
+      sourceProvenance: 'compiler-emitted',
       queryShapes: {
         cart: {
           count: 'number',

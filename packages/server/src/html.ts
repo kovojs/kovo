@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
   assertHtmlWireValueStable,
+  isKovoControlPlaneAttribute,
   type HtmlWireValuePosture,
 } from '@kovojs/core/internal/semantic-attributes';
 import {
@@ -36,7 +37,6 @@ import {
   witnessRegExpTest,
   witnessString,
   witnessStringReplaceAll,
-  witnessStringStartsWith,
   witnessStringToLowerCase,
   witnessObjectKeys,
   witnessWeakMapGet,
@@ -423,37 +423,7 @@ const safeAttributeNamePattern = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/;
  * them (SPEC §4.7/§4.8, §5.2 rule 10, §6.6).
  */
 export function isKovoControlAttributeName(name: string): boolean {
-  const lower = witnessStringToLowerCase(name);
-  return (
-    witnessStringStartsWith(lower, 'on:') ||
-    witnessStringStartsWith(lower, 'kovo-') ||
-    witnessStringStartsWith(lower, 'data-kovo-') ||
-    // Browser query/update plans. `data-plan` is a framework-authored selector anchor even
-    // though plans may also carry an explicit selector.
-    lower === 'data-bind' ||
-    witnessStringStartsWith(lower, 'data-bind:') ||
-    witnessStringStartsWith(lower, 'data-bind-prop:') ||
-    lower === 'data-derive' ||
-    lower === 'data-derive-attr' ||
-    lower === 'data-plan' ||
-    witnessStringStartsWith(lower, 'data-p-') ||
-    // Server JSX and browser enhanced-submit dispatch controls. Keep the bare JSX spellings in
-    // the same boundary as their rendered wire forms: a spread must not turn an ordinary form
-    // into a mutation/streaming form before the renderer emits the `data-*` attributes.
-    lower === 'mutation' ||
-    lower === 'enhance' ||
-    lower === 'data-enhance' ||
-    lower === 'stream' ||
-    lower === 'streamtext' ||
-    lower === 'data-mutation' ||
-    lower === 'data-mutation-stream' ||
-    lower === 'data-stream' ||
-    witnessStringStartsWith(lower, 'data-stream-') ||
-    // Unprefixed browser behavior/morph metadata. Standard ARIA, URL, id, and presentation
-    // attributes remain ordinary HTML and continue through the contextual sink policy.
-    lower === 'data-state' ||
-    lower === 'data-key'
-  );
+  return isKovoControlPlaneAttribute(name);
 }
 
 /**
