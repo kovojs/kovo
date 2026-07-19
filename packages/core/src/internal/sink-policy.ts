@@ -96,6 +96,24 @@ export const BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES = freezeSecurityValu
   'shadowrootserializable',
 ] as const);
 
+/**
+ * @internal Finite sandbox relaxations that retain the iframe isolation boundary.
+ *
+ * Unknown tokens fail closed so a future browser token cannot silently acquire authority. Tokens
+ * that escape into new/top-level browsing contexts, storage access, or downloads are intentionally
+ * absent. `allow-scripts` and `allow-same-origin` are individually useful, but their combination is
+ * rejected below because a same-origin child can then remove its own sandbox attribute.
+ */
+export const SAFE_IFRAME_SANDBOX_TOKENS = freezeSecurityValue([
+  'allow-forms',
+  'allow-modals',
+  'allow-orientation-lock',
+  'allow-pointer-lock',
+  'allow-presentation',
+  'allow-same-origin',
+  'allow-scripts',
+] as const);
+
 const urlAttributeNames = securitySetOf<string>(URL_ATTRIBUTE_NAMES);
 const safeUrlSchemes = securitySetOf<string>(SAFE_URL_SCHEMES);
 const blockedSvgSmilElementNames = securitySetOf<string>(BLOCKED_SVG_SMIL_ELEMENT_NAMES);
@@ -103,6 +121,7 @@ const blockedActiveEmbedElementNames = securitySetOf<string>(BLOCKED_ACTIVE_EMBE
 const blockedDeclarativeShadowDomAttributeNames = securitySetOf<string>(
   BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES,
 );
+const safeIframeSandboxTokens = securitySetOf<string>(SAFE_IFRAME_SANDBOX_TOKENS);
 const urlSchemePattern = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 const htmlColonReferencePattern = /&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/;
 
@@ -133,6 +152,7 @@ export interface ElementContextSecurityControl {
   readonly staticPolicy:
     | 'allow'
     | 'disabled'
+    | 'iframe-sandbox-tokens'
     | 'meta-referrer-name'
     | 'referrer-policy'
     | 'rel-no-opener'
@@ -303,7 +323,7 @@ export const ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES = freezeSecurityValue([
     'iframe',
     'sandbox',
     false,
-    'allow',
+    'iframe-sandbox-tokens',
     'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
   ] as const),
   freezeSecurityValue([
@@ -465,6 +485,9 @@ export function elementContextSecurityStaticValueIssue(
 
   const exact = securityStringToLowerCase(value);
   const normalized = securityStringToLowerCase(securityStringTrim(value));
+  if (control.staticPolicy === 'iframe-sandbox-tokens') {
+    return iframeSandboxStaticValueIssue(normalized, control.reason);
+  }
   if (control.staticPolicy === 'meta-referrer-name') {
     return normalized === 'referrer' ? control.reason : undefined;
   }
@@ -487,6 +510,29 @@ export function elementContextSecurityStaticValueIssue(
     return asciiWhitespaceTokenListContains(normalized, 'opener') ? control.reason : undefined;
   }
   return control.reason;
+}
+
+function iframeSandboxStaticValueIssue(value: string, reason: string): string | undefined {
+  let start = 0;
+  let allowsSameOrigin = false;
+  let allowsScripts = false;
+  for (let index = 0; index <= value.length; index += 1) {
+    const code = index < value.length ? securityStringCharCodeAt(value, index) : 0x20;
+    const whitespace = code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
+    if (!whitespace) continue;
+    if (start < index) {
+      const token = securityStringSlice(value, start, index);
+      if (!securitySetHas(safeIframeSandboxTokens, token)) {
+        return `${reason}; allowed tokens are allow-forms, allow-modals, allow-orientation-lock, allow-pointer-lock, allow-presentation, allow-same-origin, and allow-scripts`;
+      }
+      if (token === 'allow-same-origin') allowsSameOrigin = true;
+      if (token === 'allow-scripts') allowsScripts = true;
+    }
+    start = index + 1;
+  }
+  return allowsSameOrigin && allowsScripts
+    ? `${reason}; allow-scripts and allow-same-origin cannot be combined`
+    : undefined;
 }
 
 function asciiWhitespaceTokenListContains(value: string, expected: string): boolean {
@@ -614,9 +660,11 @@ type RuntimeAttributeWritePosture = 'compiler-wire' | 'dynamic-binding';
 /** @internal Runtime attribute-write context; compiler wire is preserved unless explicitly narrowed. */
 interface RuntimeAttributeWriteOptions {
   /** Browser-effective element name for pair/context-dependent attributes. */
-  elementName?: string;
+  elementName?: string | undefined;
   /** Existing meta pragma posture before the proposed write is committed. */
-  effectiveHttpEquiv?: string | null;
+  effectiveHttpEquiv?: string | null | undefined;
+  /** Existing/final iframe sandbox posture before an active source is committed. */
+  effectiveIframeSandbox?: string | null | undefined;
   posture?: RuntimeAttributeWritePosture;
   /** Exact module-private TrustedUrl witness already verified by the browser package. */
   trustedUrl?: boolean;
@@ -881,6 +929,15 @@ function decideRuntimeElementContextWrite(
         'dynamic meta refresh posture is an executable document-navigation sink',
       );
     }
+  }
+
+  if (tag === 'iframe' && attribute === 'src') {
+    const sandbox = options.effectiveIframeSandbox;
+    const issue =
+      sandbox === undefined || sandbox === null
+        ? 'iframe sources require a statically reviewed sandbox attribute'
+        : elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox);
+    if (issue !== undefined) return blockedDecision(name, family, value, issue);
   }
 
   const control = elementContextSecurityControl(tag, attribute);

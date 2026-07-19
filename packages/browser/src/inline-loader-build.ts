@@ -54,6 +54,9 @@ if (!inlineBuildByteLengthRejectedForeignReceiver) {
 }
 
 const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
+const coreSinkPolicySourcePath = fileURLToPath(
+  new URL('../../core/src/internal/sink-policy.ts', import.meta.url),
+);
 const modularLoaderSourcePath = fileURLToPath(new URL('./loader.ts', import.meta.url));
 const fragmentTargetsSourcePath = fileURLToPath(new URL('./fragment-targets.ts', import.meta.url));
 const inlineResponseApplySourcePath = fileURLToPath(
@@ -158,6 +161,8 @@ export const inlineEnhancedNavigationReadableSource = readInlineEnhancedNavigati
 export const inlineDocumentLifecycleReadableSource = readInlineDocumentLifecycleReadableSource();
 export const inlineTrustedTypesReadableSource = readInlineTrustedTypesReadableSource();
 export const inlineDelegatedEvents = readModularDefaultDelegatedEvents();
+const inlineElementContextSecurityControlTuples = readElementContextSecurityControlTuples();
+const inlineSafeIframeSandboxTokens = readSinkPolicyStringArray('SAFE_IFRAME_SANDBOX_TOKENS');
 const inlineBooleanPresenceAttributes = [
   'checked',
   'disabled',
@@ -227,6 +232,20 @@ function installInlineKovoLoader(im) {
     }
     return false;
   };
+  // Generated from core's finite browser-control classifier denominator. The deferred runtime,
+  // response-fragment sanitizer, and compiler consume the same tuples (SPEC §4.8/#5.2 rule 10).
+  const elementContextControls = ${JSON.stringify(inlineElementContextSecurityControlTuples)};
+  const safeIframeSandboxTokens = ${JSON.stringify(inlineSafeIframeSandboxTokens)};
+  const elementContextSecurityControl = (elementName, attributeName) => {
+    const tag = bns.lower(elementName);
+    const attribute = bns.lower(attributeName);
+    for (let index = 0; index < elementContextControls.length; index += 1) {
+      const control = elementContextControls[index];
+      if (!control || control[0] !== tag || control[1] !== attribute) continue;
+      return { acceptsTrustedUrl: control[2], staticPolicy: control[3], reason: control[4] };
+    }
+    return undefined;
+  };
   const tk = (source, separator) => {
     const values = [];
     let start = 0;
@@ -242,6 +261,51 @@ function installInlineKovoLoader(im) {
       start = index + 1;
     }
     return values;
+  };
+  const elementContextSecurityStaticValueIssue = (elementName, attributeName, value) => {
+    const control = elementContextSecurityControl(elementName, attributeName);
+    if (!control || control.staticPolicy === 'allow') return undefined;
+    if (control.staticPolicy === 'disabled') return control.reason;
+    const exact = bns.lower(value);
+    const normalized = bns.lower(bns.trim(value));
+    if (control.staticPolicy === 'iframe-sandbox-tokens') {
+      const tokens = tk(normalized, /[\t\n\f\r ]/u);
+      let allowsSameOrigin = false;
+      let allowsScripts = false;
+      for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
+        const token = tokens[tokenIndex];
+        let safe = false;
+        for (let safeIndex = 0; safeIndex < safeIframeSandboxTokens.length; safeIndex += 1) {
+          if (token === safeIframeSandboxTokens[safeIndex]) safe = true;
+        }
+        if (!safe) return control.reason;
+        if (token === 'allow-same-origin') allowsSameOrigin = true;
+        if (token === 'allow-scripts') allowsScripts = true;
+      }
+      return allowsSameOrigin && allowsScripts ? control.reason : undefined;
+    }
+    if (control.staticPolicy === 'meta-referrer-name') {
+      return normalized === 'referrer' ? control.reason : undefined;
+    }
+    if (control.staticPolicy === 'referrer-policy') {
+      return normalized === 'no-referrer' || normalized === 'same-origin' ||
+        normalized === 'strict-origin' || normalized === 'strict-origin-when-cross-origin'
+        ? undefined
+        : control.reason;
+    }
+    if (control.staticPolicy === 'target-keyword') {
+      return exact === '_blank' || exact === '_self' || exact === '_parent' || exact === '_top'
+        ? undefined
+        : control.reason;
+    }
+    if (control.staticPolicy === 'rel-no-opener') {
+      const tokens = tk(normalized, /[\t\n\f\r ]/u);
+      for (let index = 0; index < tokens.length; index += 1) {
+        if (tokens[index] === 'opener') return control.reason;
+      }
+      return undefined;
+    }
+    return control.reason;
   };
   const sj = (values, separator) => {
     let joined = '';
@@ -538,6 +602,18 @@ function installInlineKovoLoader(im) {
     }
     return true;
   };
+  const inertUnsafeLiveIframeSource = (el) => {
+    if (bns.lower(bns.readElementTagName(el) || '') !== 'iframe') return false;
+    if (bns.readAttribute(el, 'src') === null) return false;
+    const sandbox = bns.readAttribute(el, 'sandbox');
+    if (
+      sandbox !== null &&
+      elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox) === undefined
+    ) return false;
+    bns.removeElementAttribute(el, 'src');
+    if (sandbox !== null) bns.removeElementAttribute(el, 'sandbox');
+    return true;
+  };
   const blockElementContextWrite = (el, name, val) => {
     const tag = bns.lower(bns.readElementTagName(el) || '');
     if (tag === 'base') {
@@ -564,13 +640,11 @@ function installInlineKovoLoader(im) {
         return true;
       }
     }
-    if (
-      (tag === 'script' &&
-        (name === 'src' || name === 'href' || name === 'xlink:href' || name === 'type')) ||
-      (tag === 'link' && (name === 'href' || name === 'rel')) ||
-      (tag === 'iframe' && (name === 'src' || name === 'sandbox')) ||
-      (tag === 'annotation-xml' && name === 'encoding')
-    ) {
+    const control = elementContextSecurityControl(tag, name);
+    if (control) {
+      if (control.staticPolicy === 'disabled') {
+        bns.removeElementAttribute(el, name);
+      }
       // Preserve the compiler-reviewed live value. Removing iframe[sandbox] is privilege
       // elevation, so blocked context writes must never share the ordinary remove action.
       return true;
@@ -581,6 +655,7 @@ function installInlineKovoLoader(im) {
     const n = bns.lower(name);
     if (stripDeclarativeShadowControls(el) && isDeclarativeShadowControl(n, val)) return;
     if (inertBlockedActiveElement(el)) return;
+    inertUnsafeLiveIframeSource(el);
     if (isGeneratedOnlyAttribute(n)) {
       bns.removeElementAttribute(el, name);
       return;
@@ -2932,6 +3007,117 @@ function readModularDefaultDelegatedEvents(
   throw new Error('Inline Kovo loader could not find defaultDelegatedEvents in loader.ts.');
 }
 
+function readElementContextSecurityControlTuples(
+  source = readFileSync(coreSinkPolicySourcePath, 'utf8'),
+): Array<readonly [string, string, boolean, string, string]> {
+  const sourceFile = ts.createSourceFile(
+    'sink-policy.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== 'ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES' ||
+        declaration.initializer === undefined
+      ) {
+        continue;
+      }
+      const outer = unwrapInlineManifestExpression(declaration.initializer);
+      if (!ts.isArrayLiteralExpression(outer)) break;
+      const tuples: Array<readonly [string, string, boolean, string, string]> = [];
+      for (const element of outer.elements) {
+        const tuple = unwrapInlineManifestExpression(element);
+        if (!ts.isArrayLiteralExpression(tuple) || tuple.elements.length !== 5) {
+          throw new Error('Element-context security controls must remain five-field tuples.');
+        }
+        const elementName = inlineManifestString(tuple.elements[0]);
+        const attributeName = inlineManifestString(tuple.elements[1]);
+        const trustedUrl = tuple.elements[2];
+        const staticPolicy = inlineManifestString(tuple.elements[3]);
+        const reason = inlineManifestString(tuple.elements[4]);
+        if (
+          trustedUrl === undefined ||
+          (trustedUrl.kind !== ts.SyntaxKind.TrueKeyword &&
+            trustedUrl.kind !== ts.SyntaxKind.FalseKeyword)
+        ) {
+          throw new Error('Element-context trustedUrl posture must remain a boolean literal.');
+        }
+        tuples.push([
+          elementName,
+          attributeName,
+          trustedUrl.kind === ts.SyntaxKind.TrueKeyword,
+          staticPolicy,
+          reason,
+        ]);
+      }
+      return tuples;
+    }
+  }
+
+  throw new Error('Inline Kovo loader could not find ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.');
+}
+
+function readSinkPolicyStringArray(
+  name: string,
+  source = readFileSync(coreSinkPolicySourcePath, 'utf8'),
+): string[] {
+  const sourceFile = ts.createSourceFile(
+    'sink-policy.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== name ||
+        declaration.initializer === undefined
+      ) {
+        continue;
+      }
+      const array = unwrapInlineManifestExpression(declaration.initializer);
+      if (!ts.isArrayLiteralExpression(array)) break;
+      return array.elements.map((element) => inlineManifestString(element));
+    }
+  }
+  throw new Error(`Inline Kovo loader could not find ${name}.`);
+}
+
+function unwrapInlineManifestExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (true) {
+    if (ts.isAsExpression(current) || ts.isParenthesizedExpression(current)) {
+      current = current.expression;
+      continue;
+    }
+    if (ts.isCallExpression(current) && current.arguments.length === 1) {
+      current = current.arguments[0]!;
+      continue;
+    }
+    return current;
+  }
+}
+
+function inlineManifestString(expression: ts.Expression | undefined): string {
+  const unwrapped = expression && unwrapInlineManifestExpression(expression);
+  if (
+    unwrapped &&
+    (ts.isStringLiteral(unwrapped) || ts.isNoSubstitutionTemplateLiteral(unwrapped))
+  ) {
+    return unwrapped.text;
+  }
+  throw new Error('Element-context security control string fields must remain literals.');
+}
+
 export function extractInlineWireParserReadableSource(
   source: string,
   rootFunctionNames: readonly string[] = inlineHelperSpecs.wireParser.rootFunctionNames,
@@ -3031,6 +3217,8 @@ function extractInlineHelperReadableSource({
     new Map([
       ['securityArrayAppend', 'bns.appendDenseSecurityValue'],
       ['securityGetOwnPropertyDescriptor', 'bns.getOwnSecurityPropertyDescriptor'],
+      ['elementContextSecurityControl', 'elementContextSecurityControl'],
+      ['elementContextSecurityStaticValueIssue', 'elementContextSecurityStaticValueIssue'],
     ]),
   );
 }
@@ -3469,6 +3657,8 @@ function collectInlineHelperFunctionDependencies(
       if (
         name !== 'securityArrayAppend' &&
         name !== 'securityGetOwnPropertyDescriptor' &&
+        name !== 'elementContextSecurityControl' &&
+        name !== 'elementContextSecurityStaticValueIssue' &&
         unsupportedTopLevelBindings.has(name) &&
         !declarations.has(name) &&
         !local

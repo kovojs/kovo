@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
   BLOCKED_SVG_SMIL_ELEMENT_NAMES,
+  ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
 } from '@kovojs/core/internal/sink-policy';
 
 import {
@@ -253,87 +254,70 @@ describe('inline loader output security', () => {
       }
     });
 
-    it(`${label}: preserves reviewed execution and isolation controls`, async () => {
-      const cases = [
-        {
-          attribute: 'src',
-          binding: 'src',
-          current: '/reviewed/runtime.js',
-          tagName: 'SCRIPT',
-          value: '/uploads/attacker.js',
-        },
-        {
-          attribute: 'type',
-          binding: 'type',
-          current: 'application/json',
-          tagName: 'SCRIPT',
-          value: 'module',
-        },
-        {
-          attribute: 'href',
-          binding: 'href',
-          current: '/reviewed/svg-runtime.js',
-          tagName: 'SCRIPT',
-          value: '/uploads/attacker-svg.js',
-        },
-        {
-          attribute: 'href',
-          binding: 'href',
-          current: '/reviewed/theme.css',
-          tagName: 'LINK',
-          value: '/uploads/attacker.css',
-        },
-        {
-          attribute: 'rel',
-          binding: 'rel',
-          current: 'icon',
-          tagName: 'LINK',
-          value: 'stylesheet',
-        },
-        {
-          attribute: 'sandbox',
-          binding: 'sandbox',
-          current: 'allow-forms',
-          tagName: 'IFRAME',
-          value: 'allow-scripts allow-same-origin',
-        },
-        {
-          attribute: 'sandbox',
-          binding: 'sandbox',
-          current: 'allow-forms',
-          tagName: 'IFRAME',
-          value: null,
-        },
-        {
-          attribute: 'src',
-          binding: 'src',
-          current: '/reviewed/profile',
-          tagName: 'IFRAME',
-          value: '/uploads/attacker.html',
-        },
-        {
-          attribute: 'encoding',
-          binding: 'encoding',
-          current: 'text/plain',
-          tagName: 'ANNOTATION-XML',
-          value: 'text/html',
-        },
-      ] as const;
+    it(`${label}: enforces the exact finite browser-control denominator on live writes`, async () => {
+      expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(39);
 
-      for (const testCase of cases) {
+      for (let index = 0; index < ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.length; index += 1) {
+        const [tagName, attribute, , staticPolicy] =
+          ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES[index]!;
+        const current =
+          staticPolicy === 'referrer-policy'
+            ? 'strict-origin'
+            : staticPolicy === 'target-keyword'
+              ? '_blank'
+              : staticPolicy === 'rel-no-opener'
+                ? 'noopener noreferrer'
+                : staticPolicy === 'iframe-sandbox-tokens'
+                  ? 'allow-forms'
+                  : staticPolicy === 'meta-referrer-name'
+                    ? 'description'
+                    : `reviewed-${index}`;
         const element = new BoundTriggerElement(
           {
-            [testCase.attribute]: testCase.current,
-            [`data-bind:${testCase.binding}`]: 'state.value',
-            'kovo-state': JSON.stringify({ value: testCase.value }),
+            ...(tagName === 'iframe' && attribute !== 'sandbox' ? { sandbox: 'allow-forms' } : {}),
+            [attribute]: current,
+            [`data-bind:${attribute}`]: 'state.value',
+            'kovo-state': '{"value":"attacker-selected"}',
             'on:click': '/c/client.js#commit',
           },
-          testCase.tagName,
+          tagName.toUpperCase(),
         );
         await dispatchInlineDelegatedClick(element, async () => ({ commit() {} }), installSource, [
           '/c/client.js',
         ]);
-        expect(element.getAttribute(testCase.attribute), testCase.tagName).toBe(testCase.current);
+        expect(element.getAttribute(attribute), `${tagName}[${attribute}]`).toBe(
+          staticPolicy === 'disabled' ? null : current,
+        );
+      }
+    });
+
+    it(`${label}: strips an iframe source without the finite reviewed sandbox posture`, async () => {
+      for (const [sandbox, expectedSource] of [
+        [undefined, null],
+        ['allow-scripts allow-same-origin', null],
+        ['allow-top-navigation-by-user-activation', null],
+        ['allow-popups-to-escape-sandbox', null],
+        ['allow-storage-access-by-user-activation', null],
+        ['allow-scripts', '/reviewed'],
+      ] as const) {
+        const element = new BoundTriggerElement(
+          {
+            ...(sandbox === undefined ? {} : { sandbox }),
+            src: '/reviewed',
+            'data-bind:title': 'state.title',
+            'kovo-state': '{"title":"updated"}',
+            'on:click': '/c/client.js#commitFrame',
+          },
+          'IFRAME',
+        );
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({ commitFrame() {} }),
+          installSource,
+          ['/c/client.js'],
+        );
+        expect(element.getAttribute('src'), sandbox ?? 'missing').toBe(expectedSource);
+        if (expectedSource === null) expect(element.getAttribute('sandbox')).toBeNull();
       }
     });
 

@@ -527,9 +527,9 @@ function firstRenderedAttributeValue(props: JsxProps, expectedName: string): str
     if (isKovoTrustedUrl(value)) continue;
     if (!safeRuntimeAttributeName(name)) continue;
     if (value === true) return '';
-    // Only a primitive string can serialize to either reserved keyword exactly. Numbers and
-    // object JSON encodings remain first-attribute blockers but cannot spell `hidden`/`_charset_`.
-    return typeof value === 'string' ? value : '';
+    // Preserve exact rendered bytes for relational policies such as iframe sandbox tokens.
+    // Numbers and object JSON encodings remain blockers for the hidden/_charset_ keywords too.
+    return attributeText(name, value);
   }
   return undefined;
 }
@@ -944,8 +944,14 @@ function renderContextualAttributeValue(
   const text = attributeText(name, value);
   const posture = htmlAttributeWireValuePosture(type, name);
   if (posture !== undefined) assertHtmlWireValueStable(text, posture, `<${type}>[${name}]`);
-  if (isKovoTrustedUrl(value) && isUrlAttributeName(name)) return escapeAttribute(text);
-  const decision = decideRuntimeAttributeWrite(name, text, { elementName: type });
+  const trustedUrl = isKovoTrustedUrl(value) && isUrlAttributeName(name);
+  const decision = decideRuntimeAttributeWrite(name, text, {
+    effectiveIframeSandbox: formHelperAsciiCaseInsensitiveEqual(type, 'iframe')
+      ? (firstRenderedAttributeValue(props, 'sandbox') ?? null)
+      : undefined,
+    elementName: type,
+    trustedUrl,
+  });
   drainRuntimeSinkSecurityEvent(decision.event);
   return decision.action === 'remove' ? null : escapeAttribute(decision.value ?? text);
 }

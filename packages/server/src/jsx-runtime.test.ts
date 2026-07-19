@@ -1255,6 +1255,60 @@ describe('server jsx runtime', () => {
     ).toBe('<area referrerPolicy="no-referrer" rel="noopener" target="_blank">');
   });
 
+  it('keeps runtime iframe sources behind the finite reviewed sandbox posture', () => {
+    expect(
+      html(
+        jsx('iframe', {
+          src: '/forms',
+          sandbox: 'allow-forms allow-modals',
+          title: 'forms',
+        }),
+      ),
+    ).toBe('<iframe src="/forms" sandbox="allow-forms allow-modals" title="forms"></iframe>');
+    expect(
+      html(
+        jsx('iframe', {
+          src: trustedUrl(
+            'data:text/html,<script>parent.pwned=true</script>',
+            'reviewed active frame',
+          ),
+          sandbox: 'allow-scripts',
+        }),
+      ),
+    ).toBe(
+      '<iframe src="data:text/html,&lt;script&gt;parent.pwned=true&lt;/script&gt;" sandbox="allow-scripts"></iframe>',
+    );
+
+    for (const props of [
+      { src: '/missing-boundary', title: 'missing' },
+      {
+        src: '/lifted-boundary',
+        sandbox: 'allow-scripts allow-same-origin',
+        title: 'pair',
+      },
+      {
+        src: '/top-navigation',
+        sandbox: 'allow-top-navigation-by-user-activation',
+        title: 'top',
+      },
+      {
+        src: '/popup-escape',
+        sandbox: 'allow-popups-to-escape-sandbox',
+        title: 'popup',
+      },
+      {
+        src: '/storage-access',
+        sandbox: 'allow-storage-access-by-user-activation',
+        title: 'storage',
+      },
+      { src: '/non-string-sandbox', sandbox: { allowScripts: true }, title: 'object' },
+    ]) {
+      expect(html(jsx('iframe', props)), props.title).toBe(
+        `<iframe title="${props.title}"></iframe>`,
+      );
+    }
+  });
+
   it('disables meta referrer policy at the runtime JSX floor', () => {
     expect(html(jsx('meta', { name: 'referrer', content: 'unsafe-url' }))).toBe('');
     expect(

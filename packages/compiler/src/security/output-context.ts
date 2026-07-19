@@ -577,6 +577,11 @@ function validateElementAttributes(
   );
   appendOutputItems(
     found,
+    validateIframeSandboxBoundary(diagnostics, model, element),
+    'Iframe sandbox boundary diagnostics',
+  );
+  appendOutputItems(
+    found,
     validateCrossAttributeWireSemantics(diagnostics, element),
     'Cross-attribute wire diagnostics',
   );
@@ -1062,6 +1067,47 @@ function validateElementContextSecuritySinks(
   return [];
 }
 
+/**
+ * SPEC §4.8 / §5.2 rule 10: a reviewed sandbox is mandatory whenever an iframe has an active
+ * source. Per-attribute checks validate the token set; this relational check proves presence from
+ * the final JSX/spread wire order. Unknown non-branded sources already receive their own KV236.
+ */
+function validateIframeSandboxBoundary(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  if (element.intrinsicTagName !== 'iframe') return [];
+  const states = staticEffectiveElementWireAttributeStates(element);
+  if (states === undefined) return [];
+  const source = effectiveStaticRenderedAttribute(states, 'src');
+  if (source.kind === 'omitted') return [];
+  if (source.kind === 'unknown' && !elementHasTrustedIframeSource(model, element)) return [];
+  const sandbox = effectiveStaticRenderedAttribute(states, 'sandbox');
+  if (sandbox.kind !== 'omitted') return [];
+  return [
+    elementContextSecurityDiagnostic(
+      diagnostics,
+      element,
+      'iframe sources require a statically reviewed sandbox attribute',
+    ),
+  ];
+}
+
+function elementHasTrustedIframeSource(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): boolean {
+  const attributes = element.attributes;
+  const length = compilerArrayLength(attributes, 'Trusted iframe source attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Trusted iframe source attributes');
+    if (compilerStringToLowerCase(attribute.name) !== 'src') continue;
+    if (attributeExpressionIsTrustedUrlBrand(model, attribute)) return true;
+  }
+  return false;
+}
+
 function directElementContextSinkIssue(
   model: ComponentModuleModel,
   tag: string,
@@ -1263,6 +1309,20 @@ function validateCrossAttributeWireSemantics(
 function staticEffectiveInputWireAttributes(
   element: JsxElementModel,
 ): { name?: string; type?: string } | undefined {
+  const states = staticEffectiveElementWireAttributeStates(element);
+  if (states === undefined) return undefined;
+  const type = effectiveStaticRenderedAttribute(states, 'type');
+  const name = effectiveStaticRenderedAttribute(states, 'name');
+  if (type.kind === 'unknown' || name.kind === 'unknown') return undefined;
+  return {
+    ...(name.kind === 'known' ? { name: name.value } : {}),
+    ...(type.kind === 'known' ? { type: type.value } : {}),
+  };
+}
+
+function staticEffectiveElementWireAttributeStates(
+  element: JsxElementModel,
+): StaticRenderedAttributeState[] | undefined {
   const states: StaticRenderedAttributeState[] = [];
   let attributeIndex = 0;
   let spreadIndex = 0;
@@ -1312,13 +1372,7 @@ function staticEffectiveInputWireAttributes(
     spreadIndex += 1;
   }
 
-  const type = effectiveStaticRenderedAttribute(states, 'type');
-  const name = effectiveStaticRenderedAttribute(states, 'name');
-  if (type.kind === 'unknown' || name.kind === 'unknown') return undefined;
-  return {
-    ...(name.kind === 'known' ? { name: name.value } : {}),
-    ...(type.kind === 'known' ? { type: type.value } : {}),
-  };
+  return states;
 }
 
 function staticDirectAttributeValue(attribute: JsxAttributeModel): StaticRenderedAttributeValue {
@@ -1356,7 +1410,7 @@ function setStaticRenderedAttribute(
   value: StaticRenderedAttributeValue,
 ): void {
   const folded = compilerStringToLowerCase(key);
-  if (folded !== 'name' && folded !== 'type') return;
+  if (folded !== 'name' && folded !== 'type' && folded !== 'src' && folded !== 'sandbox') return;
   const length = compilerArrayLength(states, 'Static rendered input attributes');
   for (let index = 0; index < length; index += 1) {
     const state = outputArrayValue(states, index, 'Static rendered input attributes');
@@ -1369,7 +1423,7 @@ function setStaticRenderedAttribute(
 
 function effectiveStaticRenderedAttribute(
   states: readonly StaticRenderedAttributeState[],
-  expectedName: 'name' | 'type',
+  expectedName: 'name' | 'sandbox' | 'src' | 'type',
 ): StaticRenderedAttributeValue {
   const length = compilerArrayLength(states, 'Static effective input attributes');
   for (let index = 0; index < length; index += 1) {

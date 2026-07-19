@@ -1,6 +1,7 @@
 import {
   decideRuntimeAttributeWrite,
   drainRuntimeSinkSecurityEvent,
+  elementContextSecurityStaticValueIssue,
   runtimeSinkFamilyForAttribute,
 } from '@kovojs/core/internal/sink-policy';
 import { isKovoControlPlaneAttribute } from '@kovojs/core/internal/semantic-attributes';
@@ -264,8 +265,9 @@ export function kovoSafeUrl(value: unknown): string {
  * pair/context-dependent live control must retain its compiler-reviewed value.
  */
 export interface KovoBoundAttributeWriteContext {
-  elementName?: string;
-  effectiveHttpEquiv?: string | null;
+  elementName?: string | undefined;
+  effectiveHttpEquiv?: string | null | undefined;
+  effectiveIframeSandbox?: string | null | undefined;
 }
 
 export function kovoBoundAttributeValue(
@@ -300,9 +302,26 @@ export function kovoSetSafeAttribute(
   name: string,
   value: unknown,
 ): void {
+  const elementName = securityStringToLowerCase(element.tagName ?? '');
+  const effectiveIframeSandbox =
+    elementName === 'iframe' ? (element.getAttribute?.('sandbox') ?? null) : undefined;
+  const effectiveIframeSource =
+    elementName === 'iframe' ? (element.getAttribute?.('src') ?? null) : undefined;
+  if (
+    elementName === 'iframe' &&
+    effectiveIframeSource !== null &&
+    effectiveIframeSource !== undefined &&
+    (effectiveIframeSandbox === null ||
+      effectiveIframeSandbox === undefined ||
+      elementContextSecurityStaticValueIssue('iframe', 'sandbox', effectiveIframeSandbox) !==
+        undefined)
+  ) {
+    element.removeAttribute?.('src');
+  }
   const rendered = kovoBoundAttributeValue(name, value, {
     effectiveHttpEquiv:
       element.getAttribute?.('http-equiv') ?? element.getAttribute?.('httpequiv') ?? null,
+    effectiveIframeSandbox,
     ...(element.tagName === undefined ? {} : { elementName: element.tagName }),
   });
   if (rendered === undefined) return;

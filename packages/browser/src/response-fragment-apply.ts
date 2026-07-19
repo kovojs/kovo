@@ -1,4 +1,8 @@
-import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
+import {
+  elementContextSecurityControl,
+  elementContextSecurityStaticValueIssue,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 
 import type { FragmentChunk } from './wire-response-scanner.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
@@ -307,6 +311,7 @@ function m(c: Element, n: Element, security: HtmlResponseFragmentSecurityControl
     const attribute = nextAttributes[index];
     if (attribute) sa(c, attribute.name, attribute.value, security, true);
   }
+  inertUnsafeIframeSource(c, security);
 
   // SPEC.md §9.1: a focused keyed input/textarea keeps its browser-owned
   // selection state because keyed morph reuses the live element and skips
@@ -341,6 +346,11 @@ function sa(
   if (preserveReviewedContext && preservesReviewedHtmlElementContextAttribute(e, n, security)) {
     return;
   }
+  const tag = security.lower(security.readElementTagName(e) ?? '');
+  if (elementContextSecurityStaticValueIssue(tag, n, v) !== undefined) {
+    security.removeElementAttribute(e, name);
+    return;
+  }
   if (r(n)) {
     security.removeElementAttribute(e, name);
     return;
@@ -372,16 +382,8 @@ export function preservesReviewedHtmlElementContextAttribute(
 ): boolean {
   const tag = security.lower(security.readElementTagName(element) ?? '');
   const attribute = security.lower(name);
-  return (
-    (tag === 'script' &&
-      (attribute === 'src' ||
-        attribute === 'href' ||
-        attribute === 'xlink:href' ||
-        attribute === 'type')) ||
-    (tag === 'link' && (attribute === 'href' || attribute === 'rel')) ||
-    (tag === 'iframe' && (attribute === 'src' || attribute === 'sandbox')) ||
-    (tag === 'annotation-xml' && attribute === 'encoding')
-  );
+  const control = elementContextSecurityControl(tag, attribute);
+  return control !== undefined && control.staticPolicy !== 'disabled';
 }
 
 function r(n: string): boolean {
@@ -543,6 +545,14 @@ function inertDocumentNavigationElement(
   if (tag === 'meta' && metaElementHasRefreshPosture(element, security)) {
     removeAsciiCaseAttribute(element, 'content', security);
   }
+  if (tag === 'meta' && metaElementHasReferrerPosture(element, security)) {
+    // Removing the activating pair is sufficient to disable the pragma while retaining inert
+    // framework identity such as kovo-key. Keeping that identity lets a reviewed keyed meta node
+    // survive an attacker-selected incoming `name=referrer` without becoming an unkeyed morph.
+    removeAsciiCaseAttribute(element, 'name', security);
+    removeAsciiCaseAttribute(element, 'content', security);
+    return true;
+  }
   return false;
 }
 
@@ -577,6 +587,14 @@ function metaElementHasRefreshPosture(
   return effective !== null && security.lower(security.trim(effective)) === 'refresh';
 }
 
+function metaElementHasReferrerPosture(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const effective = security.readAttribute(element, 'name');
+  return effective !== null && security.lower(security.trim(effective)) === 'referrer';
+}
+
 function removeAsciiCaseAttribute(
   element: Element,
   expectedName: string,
@@ -591,7 +609,33 @@ function removeAsciiCaseAttribute(
   }
 }
 
-function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element {
+/**
+ * SPEC §4.8 / §5.2 rule 10: an active iframe source is admissible only behind the finite reviewed
+ * sandbox token posture. This runs after the element's attributes are sanitized so parser order
+ * cannot make a source observe a sandbox that a later attribute check removes.
+ */
+function inertUnsafeIframeSource(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const tag = security.lower(security.readElementTagName(element) ?? '');
+  if (tag !== 'iframe' || security.readAttribute(element, 'src') === null) return false;
+  const sandbox = security.readAttribute(element, 'sandbox');
+  const issue =
+    sandbox === null
+      ? 'iframe sources require a statically reviewed sandbox attribute'
+      : elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox);
+  if (issue === undefined) return false;
+  removeAsciiCaseAttribute(element, 'src', security);
+  if (sandbox !== null) removeAsciiCaseAttribute(element, 'sandbox', security);
+  return true;
+}
+
+function g(
+  e: Element,
+  security: HtmlResponseFragmentSecurityControls,
+  preserveReviewedContext = false,
+): Element {
   const descendants = security.queryAllElements(e, '*');
   for (let elementIndex = -1; elementIndex < descendants.length; elementIndex += 1) {
     const x = elementIndex < 0 ? e : descendants[elementIndex];
@@ -603,8 +647,11 @@ function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element 
     const attributes = security.snapshotElementAttributes(x);
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex];
-      if (attribute) sa(x, attribute.name, attribute.value, security);
+      if (attribute) {
+        sa(x, attribute.name, attribute.value, security, preserveReviewedContext);
+      }
     }
+    inertUnsafeIframeSource(x, security);
   }
   return e;
 }
@@ -613,8 +660,9 @@ function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element 
 export function sanitizeHtmlResponseElementTree(
   element: Element,
   security: HtmlResponseFragmentSecurityControls = createBrowserNavigationSecurityControls(),
+  preserveReviewedContext = false,
 ): Element {
-  return g(element, security);
+  return g(element, security, preserveReviewedContext);
 }
 
 /** @internal Apply one response attribute through the shared pinned sanitizer policy. */
@@ -626,6 +674,7 @@ export function setSafeHtmlResponseAttribute(
   preserveReviewedContext = false,
 ): void {
   sa(element, name, value, security, preserveReviewedContext);
+  inertUnsafeIframeSource(element, security);
 }
 
 function y(v: string, security: HtmlResponseFragmentSecurityControls): string | null {

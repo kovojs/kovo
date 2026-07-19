@@ -1,5 +1,6 @@
 import { parseKovoModuleRef, type KovoModuleRef } from '@kovojs/core/internal/module-ref';
 import {
+  elementContextSecurityStaticValueIssue,
   isBlockedActiveEmbedElementName,
   isBlockedDeclarativeShadowDomAttributeName,
   isBlockedSvgSmilElementName,
@@ -864,6 +865,7 @@ function removeBoundAttribute(
     return;
   }
   if (inertBlockedActiveBindingElement(element)) return;
+  inertUnsafeIframeBindingSource(element);
   if (
     !securityDecisionApplied &&
     kovoBoundAttributeValue(name, null, boundAttributeWriteContext(element)) === undefined
@@ -957,6 +959,7 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
     return;
   }
   if (inertBlockedActiveBindingElement(element)) return;
+  inertUnsafeIframeBindingSource(element);
   // J3 (SPEC §4.6/§4.8): HTML boolean-presence attributes must remove on false/null/undefined,
   // and set to '' (present) on any other value including true, '', and non-null strings.
   // This covers both query-source raw booleans and state-derive '' / null patterns.
@@ -998,12 +1001,14 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
 
 function boundAttributeWriteContext(element: QueryBindingElement): {
   effectiveHttpEquiv: string | null;
+  effectiveIframeSandbox: string | null;
   elementName?: string;
 } {
   const elementName = readBindingTagName(element);
   return {
     effectiveHttpEquiv:
       readBindingAttribute(element, 'http-equiv') ?? readBindingAttribute(element, 'httpequiv'),
+    effectiveIframeSandbox: readBindingAttribute(element, 'sandbox'),
     ...(elementName === undefined ? {} : { elementName }),
   };
 }
@@ -1260,4 +1265,20 @@ function isDeclarativeShadowDomBindingControl(name: string, value: unknown): boo
     typeof value === 'string' &&
     isBlockedDeclarativeShadowDomAttributeName(value)
   );
+}
+
+function inertUnsafeIframeBindingSource(element: QueryBindingElement): boolean {
+  const tagName = readBindingTagName(element);
+  if (tagName === undefined || securityStringToLowerCase(tagName) !== 'iframe') return false;
+  if (readBindingAttribute(element, 'src') === null) return false;
+  const sandbox = readBindingAttribute(element, 'sandbox');
+  if (
+    sandbox !== null &&
+    elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox) === undefined
+  ) {
+    return false;
+  }
+  removeBindingAttribute(element, 'src');
+  if (sandbox !== null) removeBindingAttribute(element, 'sandbox');
+  return true;
 }

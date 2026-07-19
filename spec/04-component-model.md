@@ -344,16 +344,45 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 - the `style` attribute and `<style>` element text;
 - `srcdoc`;
 - `<script>` element text and `<script type="application/json">` island bodies (§9.1 governs the byte-level encoding for the latter).
-- element-context execution and isolation controls: a dynamic HTML `<script src>` or SVG
-  `<script href>`/`xlink:href` can execute same-origin attacker-controlled JavaScript, a dynamic
-  script `type` can turn inert data into
-  code, a dynamic stylesheet `<link href>`/`rel` pair can apply attacker-controlled CSS, and a
-  dynamic `<iframe src>`/`sandbox` pair can load active same-origin content or lift its isolation.
-  A dynamic MathML `annotation-xml[encoding]` can likewise turn inert descendants into live HTML.
-  These attributes must be static compiler-reviewed values. The URL halves (`script[src|href|xlink:href]`,
-  `link[href]`, and `iframe[src]`) may instead hold an exact `trustedUrl(value, auditedReason)`;
-  `trustedUrl` never suppresses `type`, `rel`, or `sandbox`. Live bindings and keyed fragment
-  morphs preserve the reviewed value rather than applying or removing a blocked control.
+- element-context execution, request, and isolation controls form one finite denominator of exactly
+  39 element/attribute tuples: `script` × (`src`, `href`, `xlink:href`, `type`, `nomodule`,
+  `integrity`, `crossorigin`, `referrerpolicy`, `charset`, `nonce`, `language`); `link` × (`href`,
+  `rel`, `type`, `media`, `disabled`, `integrity`, `crossorigin`, `referrerpolicy`, `as`, `nonce`);
+  `iframe` × (`src`, `sandbox`, `allow`, `credentialless`, `csp`, `referrerpolicy`, `name`);
+  `annotation-xml[encoding]`; `a` and `area` × (`target`, `rel`, `referrerpolicy`, `ping`);
+  `img[referrerpolicy]`; and `meta[name]`. Every listed control is static-only: a direct dynamic
+  value, dynamic removal, or opaque spread is KV236. The parser-request controls are included as
+  tuples, not treated as independent strings: changing a script/link `integrity`, credential mode,
+  destination/type, or referrer policy after the parser starts a request cannot retroactively secure
+  that request. Script scheduling hints (`async`, `defer`, `fetchpriority`) are deliberately outside
+  this denominator because they schedule an already-reviewed resource rather than select its
+  authority or isolation posture.
+  The URL halves (`script[src|href|xlink:href]`, `link[href]`, and `iframe[src]`) may instead hold an
+  exact `trustedUrl(value, auditedReason)`; `trustedUrl` suppresses no other tuple. Live bindings and
+  keyed fragment morphs preserve the reviewed current value (including absence) rather than apply
+  or remove a blocked control; newly adopted fragment nodes pass the same static-value floor before
+  adoption. Compiler, server JSX, modular binding/fragment code, and the generated inline loader
+  consume the same closed classifier, and the conformance corpus asserts every tuple non-vacuously.
+- the finite browser-control denominator has these stronger value rules. `referrerpolicy` is limited
+  to `no-referrer`, `same-origin`, `strict-origin`, or `strict-origin-when-cross-origin`, so an
+  element cannot weaken Kovo's `strict-origin-when-cross-origin` response-header floor. Anchor and
+  area `target` accepts only `_blank`, `_self`, `_parent`, or `_top` (never an opener-bearing named
+  browsing context), and their `rel` token list must not contain `opener`. Anchor/area `ping` is
+  disabled outright because its reporting headers can disclose the source URL. `meta[name=referrer]`
+  is disabled because it can override the response-header posture. Script/link `nonce` is
+  framework-owned and disabled in authored output under Kovo's hash-locked CSP, and obsolete
+  `script[language]` is disabled. These bans have no trusted-value suppression.
+  An `iframe[src]` additionally requires a present, statically reviewed `sandbox` attribute; a
+  trusted URL never suppresses that relational boundary. `sandbox` is an ASCII-whitespace token
+  set with the exact admitted tokens `allow-forms`, `allow-modals`, `allow-orientation-lock`,
+  `allow-pointer-lock`, `allow-presentation`, `allow-same-origin`, and `allow-scripts`. Unknown or
+  newly introduced tokens fail closed. `allow-scripts` and `allow-same-origin` may each appear but
+  MUST NOT be combined, because a same-origin scripted child can remove its own sandbox.
+  Navigation/popup/storage/download escapes — including every `allow-top-navigation*` token,
+  `allow-popups`, `allow-popups-to-escape-sandbox`, `allow-storage-access-by-user-activation`, and
+  `allow-downloads` — are not admitted. The compiler rejects missing or unsafe sandbox posture;
+  server JSX and modular/generated live or fragment floors remove the active `src` (and any unsafe
+  `sandbox`) before adoption or update.
 - document-wide navigation elements are outside the app-authored output surface: `<base>` is
   disabled because even a safe-scheme value retargets every later relative URL, and
   `<meta http-equiv="refresh">` is disabled because `http-equiv` plus `content` is one executable

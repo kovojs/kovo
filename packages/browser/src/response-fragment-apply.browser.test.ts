@@ -203,6 +203,23 @@ describe('browser response fragment apply', () => {
     }
   });
 
+  it('removes an unreviewed iframe source before any modular live binding commits', async () => {
+    const root = document.createElement('div');
+    root.innerHTML = [
+      '<iframe data-case="missing" src="/missing" data-bind:title="state.title"></iframe>',
+      '<iframe data-case="pair" src="/pair" sandbox="allow-scripts allow-same-origin" data-bind:title="state.title"></iframe>',
+      '<iframe data-case="safe" src="/safe" sandbox="allow-scripts" data-bind:title="state.title"></iframe>',
+    ].join('');
+    document.body.append(root);
+
+    await applyStateBindings(root, { title: 'updated' });
+
+    for (const unsafe of root.querySelectorAll('iframe:not([data-case="safe"])')) {
+      expect(unsafe.getAttribute('src'), unsafe.getAttribute('data-case') ?? '').toBeNull();
+    }
+    expect(root.querySelector('iframe[data-case="safe"]')?.getAttribute('src')).toBe('/safe');
+  });
+
   it('morphs the fragment root instead of leading stylesheet links', () => {
     const target = document.createElement('div');
     target.setAttribute('kovo-fragment-target', 'cart-badge');
@@ -270,41 +287,149 @@ describe('browser response fragment apply', () => {
     target.setAttribute('kovo-fragment-target', 'context-controls');
     target.setAttribute('kovo-key', 'context-controls');
     target.innerHTML = [
-      '<script kovo-key="script" type="application/json" src="/reviewed/data.json"></script>',
-      '<link kovo-key="link-href" rel="stylesheet" href="/reviewed/app.css">',
-      '<link kovo-key="link-rel" rel="preload" href="/uploads/attacker.css">',
-      '<iframe kovo-key="frame-value" sandbox="allow-forms"></iframe>',
-      '<iframe kovo-key="frame-removal" sandbox="allow-forms"></iframe>',
-      '<iframe kovo-key="frame-source" sandbox="allow-forms" src="/reviewed/profile"></iframe>',
+      '<script kovo-key="script" type="application/json" src="/reviewed/data.json" nomodule',
+      ' integrity="sha384-reviewed" crossorigin="anonymous" referrerpolicy="strict-origin"',
+      ' charset="utf-8" nonce="forbidden" language="javascript"></script>',
+      '<link kovo-key="link" rel="alternate" href="data:text/plain,reviewed" type="text/css"',
+      ' media="print" disabled integrity="sha384-reviewed" crossorigin="anonymous"',
+      ' referrerpolicy="strict-origin" as="style" nonce="forbidden">',
+      '<iframe kovo-key="frame" src="#reviewed" sandbox="allow-forms" allow="fullscreen"',
+      ' credentialless csp="default-src \'none\'" referrerpolicy="strict-origin"',
+      ' name="reviewed-frame"></iframe>',
+      '<annotation-xml kovo-key="annotation" encoding="text/plain"></annotation-xml>',
+      '<a kovo-key="anchor" target="_blank" rel="noopener noreferrer"',
+      ' referrerpolicy="strict-origin" ping="/forbidden">reviewed</a>',
+      '<map><area kovo-key="area" target="_self" rel="noreferrer"',
+      ' referrerpolicy="no-referrer" ping="/forbidden"></map>',
+      '<img kovo-key="image" referrerpolicy="same-origin">',
+      '<meta kovo-key="metadata" name="description" content="reviewed">',
     ].join('');
     document.body.append(target);
 
     new DomMorphTarget(target).replaceWithHtml(
       [
         '<section kovo-fragment-target="context-controls" kovo-key="context-controls">',
-        '<script kovo-key="script" type="module" src="/uploads/attacker.js"></script>',
-        '<link kovo-key="link-href" rel="stylesheet" href="/uploads/attacker.css">',
-        '<link kovo-key="link-rel" rel="stylesheet" href="/uploads/attacker.css">',
-        '<iframe kovo-key="frame-value" sandbox="allow-scripts allow-same-origin"></iframe>',
-        '<iframe kovo-key="frame-removal"></iframe>',
-        '<iframe kovo-key="frame-source" sandbox="allow-forms" src="/uploads/attacker.html"></iframe>',
+        '<script kovo-key="script" type="module" src="/uploads/attacker.js"',
+        ' integrity="" crossorigin="use-credentials" referrerpolicy="unsafe-url"',
+        ' charset="attacker" nonce="attacker" language="vbscript"></script>',
+        '<link kovo-key="link" rel="stylesheet" href="/uploads/attacker.css" type="attacker"',
+        ' media="all" integrity="" crossorigin="use-credentials" referrerpolicy="unsafe-url"',
+        ' as="script" nonce="attacker">',
+        '<iframe kovo-key="frame" src="/uploads/attacker.html"',
+        ' sandbox="allow-scripts allow-same-origin" allow="camera" csp=""',
+        ' referrerpolicy="unsafe-url" name="attacker-frame"></iframe>',
+        '<annotation-xml kovo-key="annotation" encoding="text/html"></annotation-xml>',
+        '<a kovo-key="anchor" target="customer-window" rel="opener"',
+        ' referrerpolicy="unsafe-url" ping="/collect">attacker</a>',
+        '<map><area kovo-key="area" target="customer-window" rel="opener"',
+        ' referrerpolicy="unsafe-url" ping="/collect"></map>',
+        '<img kovo-key="image" referrerpolicy="unsafe-url">',
+        '<meta kovo-key="metadata" name="referrer" content="unsafe-url">',
         '</section>',
       ].join(''),
     );
 
     const script = target.querySelector('[kovo-key="script"]');
-    const linkHref = target.querySelector('[kovo-key="link-href"]');
-    const linkRel = target.querySelector('[kovo-key="link-rel"]');
-    const frameValue = target.querySelector('[kovo-key="frame-value"]');
-    const frameRemoval = target.querySelector('[kovo-key="frame-removal"]');
-    const frameSource = target.querySelector('[kovo-key="frame-source"]');
+    const link = target.querySelector('[kovo-key="link"]');
+    const frame = target.querySelector('[kovo-key="frame"]');
+    const annotation = target.querySelector('[kovo-key="annotation"]');
+    const anchor = target.querySelector('[kovo-key="anchor"]');
+    const area = target.querySelector('[kovo-key="area"]');
+    const image = target.querySelector('[kovo-key="image"]');
+    const metadata = target.querySelector('[kovo-key="metadata"]');
     expect(script?.getAttribute('type')).toBe('application/json');
     expect(script?.getAttribute('src')).toBe('/reviewed/data.json');
-    expect(linkHref?.getAttribute('href')).toBe('/reviewed/app.css');
-    expect(linkRel?.getAttribute('rel')).toBe('preload');
-    expect(frameValue?.getAttribute('sandbox')).toBe('allow-forms');
-    expect(frameRemoval?.getAttribute('sandbox')).toBe('allow-forms');
-    expect(frameSource?.getAttribute('src')).toBe('/reviewed/profile');
+    expect(script?.getAttribute('integrity')).toBe('sha384-reviewed');
+    expect(script?.getAttribute('crossorigin')).toBe('anonymous');
+    expect(script?.getAttribute('referrerpolicy')).toBe('strict-origin');
+    expect(script?.getAttribute('charset')).toBe('utf-8');
+    expect(script?.hasAttribute('nomodule')).toBe(true);
+    expect(script?.getAttribute('nonce')).toBeNull();
+    expect(script?.getAttribute('language')).toBeNull();
+    expect(link?.getAttribute('href')).toBe('data:text/plain,reviewed');
+    expect(link?.getAttribute('rel')).toBe('alternate');
+    expect(link?.getAttribute('type')).toBe('text/css');
+    expect(link?.getAttribute('media')).toBe('print');
+    expect(link?.hasAttribute('disabled')).toBe(true);
+    expect(link?.getAttribute('integrity')).toBe('sha384-reviewed');
+    expect(link?.getAttribute('crossorigin')).toBe('anonymous');
+    expect(link?.getAttribute('referrerpolicy')).toBe('strict-origin');
+    expect(link?.getAttribute('as')).toBe('style');
+    expect(link?.getAttribute('nonce')).toBeNull();
+    expect(frame?.getAttribute('src')).toBe('#reviewed');
+    expect(frame?.getAttribute('sandbox')).toBe('allow-forms');
+    expect(frame?.getAttribute('allow')).toBe('fullscreen');
+    expect(frame?.hasAttribute('credentialless')).toBe(true);
+    expect(frame?.getAttribute('csp')).toBe("default-src 'none'");
+    expect(frame?.getAttribute('referrerpolicy')).toBe('strict-origin');
+    expect(frame?.getAttribute('name')).toBe('reviewed-frame');
+    expect(annotation?.getAttribute('encoding')).toBe('text/plain');
+    expect(anchor?.getAttribute('target')).toBe('_blank');
+    expect(anchor?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(anchor?.getAttribute('referrerpolicy')).toBe('strict-origin');
+    expect(anchor?.getAttribute('ping')).toBeNull();
+    expect(area?.getAttribute('target')).toBe('_self');
+    expect(area?.getAttribute('rel')).toBe('noreferrer');
+    expect(area?.getAttribute('referrerpolicy')).toBe('no-referrer');
+    expect(area?.getAttribute('ping')).toBeNull();
+    expect(image?.getAttribute('referrerpolicy')).toBe('same-origin');
+    expect(metadata?.getAttribute('name')).toBe('description');
+    expect(metadata?.getAttribute('content')).toBeNull();
+  });
+
+  it('removes unsafe static browser-control values from newly adopted fragment nodes', () => {
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'unsafe-controls');
+    document.body.append(target);
+
+    new DomMorphTarget(target).replaceWithHtml(
+      [
+        '<article kovo-fragment-target="unsafe-controls">',
+        '<a target="customer-window" rel="noreferrer opener" referrerpolicy="unsafe-url"',
+        ' ping="/collect">link</a>',
+        '<area target="customer-window" rel="opener" referrerpolicy="origin" ping="/collect">',
+        '<img referrerpolicy="no-referrer-when-downgrade">',
+        '<script type="application/json" nonce="attacker" language="javascript"></script>',
+        '<link rel="alternate" nonce="attacker">',
+        '<iframe data-case="missing" src="/missing-sandbox"></iframe>',
+        '<iframe data-case="pair" src="/lifted" sandbox="allow-scripts allow-same-origin"></iframe>',
+        '<iframe data-case="top" src="/top" sandbox="allow-top-navigation-by-user-activation"></iframe>',
+        '<iframe data-case="popup" src="/popup" sandbox="allow-popups-to-escape-sandbox"></iframe>',
+        '<iframe data-case="storage" src="/storage" sandbox="allow-storage-access-by-user-activation"></iframe>',
+        '<iframe data-case="safe" src="/safe" sandbox="allow-scripts allow-forms"></iframe>',
+        '<meta name="referrer" content="unsafe-url" data-safe="kept">',
+        '</article>',
+      ].join(''),
+    );
+
+    const adopted = document.querySelector('article[kovo-fragment-target="unsafe-controls"]');
+    const [anchor, area] = adopted?.querySelectorAll('a, area') ?? [];
+    const image = adopted?.querySelector('img');
+    const script = adopted?.querySelector('script');
+    const link = adopted?.querySelector('link');
+    const meta = adopted?.querySelector('meta');
+    for (const element of [anchor, area, image]) {
+      expect(element?.getAttribute('referrerpolicy')).toBeNull();
+    }
+    expect(anchor?.getAttribute('target')).toBeNull();
+    expect(anchor?.getAttribute('rel')).toBeNull();
+    expect(anchor?.getAttribute('ping')).toBeNull();
+    expect(area?.getAttribute('target')).toBeNull();
+    expect(area?.getAttribute('rel')).toBeNull();
+    expect(area?.getAttribute('ping')).toBeNull();
+    expect(script?.getAttribute('nonce')).toBeNull();
+    expect(script?.getAttribute('language')).toBeNull();
+    expect(link?.getAttribute('nonce')).toBeNull();
+    for (const unsafe of adopted?.querySelectorAll('iframe:not([data-case="safe"])') ?? []) {
+      expect(unsafe.getAttribute('src'), unsafe.getAttribute('data-case') ?? '').toBeNull();
+      expect(unsafe.getAttribute('sandbox'), unsafe.getAttribute('data-case') ?? '').toBeNull();
+    }
+    const safeFrame = adopted?.querySelector('iframe[data-case="safe"]');
+    expect(safeFrame?.getAttribute('src')).toBe('/safe');
+    expect(safeFrame?.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
+    expect(meta?.getAttribute('name')).toBeNull();
+    expect(meta?.getAttribute('content')).toBeNull();
+    expect(meta?.getAttribute('data-safe')).toBe('kept');
   });
 
   it('sanitizes whole-node replacement fragment trees before adoption', () => {
@@ -486,6 +611,38 @@ describe('browser response fragment apply', () => {
       );
       element?.remove();
     }
+  });
+
+  it('keeps the extracted inline fragment path behind the same iframe sandbox boundary', () => {
+    installInlineKovoLoader(async () => ({}));
+    const existing = document.createElement('section');
+    existing.setAttribute('kovo-fragment-target', 'inline-iframes');
+    document.body.append(existing);
+
+    (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+      [
+        '<kovo-fragment target="inline-iframes">',
+        '<section kovo-fragment-target="inline-iframes">',
+        '<iframe data-case="missing" src="/missing"></iframe>',
+        '<iframe data-case="pair" src="/pair" sandbox="allow-same-origin allow-scripts"></iframe>',
+        '<iframe data-case="escape" src="/escape" sandbox="allow-popups-to-escape-sandbox"></iframe>',
+        '<iframe data-case="safe" src="/safe" sandbox="allow-scripts"></iframe>',
+        '</section>',
+        '</kovo-fragment>',
+      ].join(''),
+    );
+
+    for (const unsafe of document.querySelectorAll(
+      '[kovo-fragment-target="inline-iframes"] iframe:not([data-case="safe"])',
+    )) {
+      expect(unsafe.getAttribute('src'), unsafe.getAttribute('data-case') ?? '').toBeNull();
+      expect(unsafe.getAttribute('sandbox'), unsafe.getAttribute('data-case') ?? '').toBeNull();
+    }
+    const safe = document.querySelector(
+      '[kovo-fragment-target="inline-iframes"] iframe[data-case="safe"]',
+    );
+    expect(safe?.getAttribute('src')).toBe('/safe');
+    expect(safe?.getAttribute('sandbox')).toBe('allow-scripts');
   });
 
   it('H12 keeps the extracted inline fragment path on the same SMIL ban', async () => {

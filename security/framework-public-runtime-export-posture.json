@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-18.1",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-18.2",
   "runtimeSurfaceSha256": "528e47f8a2d1446a4b5b5906d226d87081932494658338ac81debfa2d58a03be",
   "postureMemberSha256": "263b1f27d4ffa571086107668af68448aae0a8554ca7761a074aa4cedbd59b7c",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "bdfc7d7c06a4ca7d23cbbcbdf23968a2efc889718c60b30640fc0038a11445f5",
+      "sourceTreeSha256": "f4e77ea1666680d4fe01e241101194952b178eb6a9c0d31264c2619258bfd094",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "3fa464ceb860ad1d2562261dbe814515f80df0d883bb04534cd9da2c329b6c13",
+      "sourceTreeSha256": "5a5c3235dfc2bbf7056e71b49c3a5a0f2daf7ba8347a65e0dedf2f1c0c8475d8",
       "manifestVariants": [
         {
           "fingerprint": "sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368"
@@ -733,7 +733,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "699ff99781f8cd87c4f60f3ed019780ba9b9f4cc84e3eb2d13035a7f90e70a8f"
+      "sourceTreeSha256": "8f121e4635725e711523abcbbf5e7ccb81d3a63b0d89bdf2818535fc02ab83e9"
     },
     {
       "manifestVariants": [
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "ec1112b734842435d61be8b28e78f30e55da706892687d915b3ce37c2e43363d"
+      "sourceTreeSha256": "6c2a26c4ab30a79c3b31a30e2ee0726836fbd40d4d6d63c50a95e821d9b8f519"
     },
     {
       "manifestVariants": [
@@ -1673,7 +1673,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "10d00849acc084d4e853c99617a38373fda3563478e6da73edd5896295105dec"
+      "sourceTreeSha256": "7ed2eaf2073ed53c5d22f6c770d3eb32558b93e019fa54edb614ffa075948e60"
     },
     {
       "manifestVariants": [
@@ -1941,7 +1941,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "b2047d254606495b9240698c35a3b42e413deb64b628ce5172918dedf742c6c5"
+      "sourceTreeSha256": "a661bdd631cb99c28e9368f146b01cf40545bdcaab7464233bd17e79aac65ca1"
     },
     {
       "manifestVariants": [
@@ -9627,7 +9627,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "728c82d0878429e4314137f1c10c9fc5c3421d1b3330026ae2c202214a8dbcfe"
+      "sourceTreeSha256": "85bb145181c2833f053072d9bf317b6456bbea7abfe6f639341e833d3e41861d"
     },
     {
       "manifestVariants": [

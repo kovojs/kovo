@@ -665,7 +665,7 @@ export const DynamicControlSpread = component({
     expect(serverSource).toMatch(/on:click="\/c\/.*#DynamicControlSpread\$button_click"/);
   });
 
-  it('keeps dynamic meta attributes behind the runtime pair sink through render equivalence', () => {
+  it('rejects an opaque dynamic meta spread while preserving render-equivalence evidence', () => {
     const result = compileComponentModule({
       fileName: 'persisted-meta.tsx',
       source: `
@@ -677,7 +677,11 @@ export const PersistedMeta = component({
     });
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('opaque <meta> spread'),
+      }),
+    ]);
     expect(result.loweredSource).toContain('{...kovoSafeJsxSpread(page.remoteMeta)}');
     expect(serverSource).toContain('{...kovoSafeJsxSpread(page.remoteMeta)}');
     expect(result.renderEquivalenceChecks.every(({ ok }) => ok)).toBe(true);

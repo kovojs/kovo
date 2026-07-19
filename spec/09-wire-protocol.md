@@ -308,6 +308,14 @@ Unexpected-error shells are app config with safe defaults: 404, 403, and 500 doc
 
 Static export replays synthetic GET `Request`s through the same handler. An exportable route writes `.html`, referenced immutable `/c/` modules, and static assets; there is no second render path. Export is L0/L1 only: a route with a guard, unproven session dependence, mutation-only interaction, or a param path without explicit static-path enumeration fails or skips loudly with **KV229** according to the configured export policy. Exported documents disable server refetch assumptions; the no-JS document is the artifact.
 
+**Static subresource integrity (normative).** Once exact bytes are known, static export adds a
+SHA-384 `integrity` value to first-party module-script, modulepreload, stylesheet, and style-preload
+tags. An authored integrity assertion is accepted only when there is exactly one
+ASCII-case-insensitive `integrity` attribute and its decoded value exactly equals the computed hash.
+An empty placeholder, duplicate, malformed value, stale hash, or mismatch aborts export; the build
+never hides a disagreement by deleting or replacing author text. A tag with no authored assertion
+receives exactly one computed value before the artifact is published.
+
 #### 9.5.1 Dev HMR
 
 Hot module reloading is a dev-only request-shell enhancement over Vite transport. It is not a

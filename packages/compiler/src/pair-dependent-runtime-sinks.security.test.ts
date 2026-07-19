@@ -114,6 +114,37 @@ export const BrowserControl = component({
     }
   });
 
+  it('rejects object-literal spread writes for every finite browser control', () => {
+    for (const [tag, attribute] of ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES) {
+      const markup = `<${tag} {...{ ${JSON.stringify(attribute)}: state.value }} />`;
+      expect(
+        kv236Diagnostics(`
+export const BrowserControlSpread = component({
+  state: () => ({ value: '' }),
+  render: (_queries, state) => (${markup}),
+});
+`),
+        `${tag}[${attribute}] spread`,
+      ).toHaveLength(1);
+    }
+  });
+
+  it('fails closed on an opaque spread for every controlled element kind', () => {
+    const controlledTags = new Set(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.map(([tag]) => tag));
+    expect(controlledTags.size).toBe(8);
+    for (const tag of controlledTags) {
+      expect(
+        kv236Diagnostics(`
+export const OpaqueBrowserControlSpread = component({
+  state: () => ({ value: {} }),
+  render: (_queries, state) => (<${tag} {...state.value} />),
+});
+`),
+        `<${tag}> opaque spread`,
+      ).toHaveLength(1);
+    }
+  });
+
   it.each([
     ['object', '<object data="/safe/account" type="text/html">fallback</object>'],
     ['embed', '<embed src="/safe/account" type="text/html" />'],
@@ -125,6 +156,65 @@ export const ActiveEmbed = component({
 });
 `),
     ).toEqual([expect.objectContaining({ message: expect.stringContaining('sandbox boundary') })]);
+  });
+
+  it.each([
+    ['missing sandbox', '<iframe src="/untrusted/profile" />'],
+    [
+      'missing sandbox in a static spread',
+      '<iframe {...{ src: "/untrusted/profile", title: "profile" }} />',
+    ],
+    [
+      'missing sandbox for a reviewed dynamic source',
+      '<iframe src={trustedUrl(state.value, "reviewed embed")} />',
+    ],
+    [
+      'isolation-lifting pair',
+      '<iframe src="/untrusted/profile" sandbox="allow-scripts allow-same-origin" />',
+    ],
+    [
+      'top navigation token in a static spread',
+      '<iframe {...{ src: "/untrusted/profile", sandbox: "allow-top-navigation-by-user-activation" }} />',
+    ],
+    [
+      'popup escape token',
+      '<iframe src="/untrusted/profile" sandbox="allow-popups-to-escape-sandbox" />',
+    ],
+    [
+      'storage access token',
+      '<iframe src="/untrusted/profile" sandbox="allow-storage-access-by-user-activation" />',
+    ],
+  ])('rejects an iframe with %s', (_label, markup) => {
+    const diagnostics = kv236Diagnostics(`
+import { trustedUrl } from '@kovojs/browser';
+export const Frame = component({
+  state: () => ({ value: '/untrusted/profile' }),
+  render: (_queries, state) => (${markup}),
+});
+`);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        help: expect.stringContaining('iframe'),
+      }),
+    ]);
+  });
+
+  it('accepts a finite safe iframe sandbox posture across direct and static spread forms', () => {
+    expect(
+      kv236Diagnostics(`
+export const Frames = component({
+  render: () => (
+    <>
+      <iframe src="/forms" sandbox="allow-forms" />
+      <iframe src="/active" sandbox="allow-scripts" />
+      <iframe {...{ src: '/passive', sandbox: 'allow-same-origin allow-modals' }} />
+      <iframe sandbox="" title="inert frame" />
+    </>
+  ),
+});
+`),
+    ).toEqual([]);
   });
 
   it.each([
