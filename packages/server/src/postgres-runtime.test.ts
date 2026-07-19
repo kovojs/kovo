@@ -5449,6 +5449,38 @@ describe('createPostgresAppRuntimeDb', () => {
     ).toThrow(/KV433_AUTHZ_POLICY_UNSUPPORTED.*string guard assertion.*RLS/u);
   });
 
+  it('reasserts a monotone posture epoch and an empty migration-ledger head on every migrate path', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-posture-epoch-'));
+    roots.push(dataDir);
+    const first = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema: { notes } });
+    await first.ready;
+    await first.close();
+
+    const firstEpoch = await queryPglite<{ value: string }>(
+      dataDir,
+      "SELECT value FROM kovo_schema_state WHERE key = 'posture_epoch'",
+    );
+    expect(firstEpoch.rows).toEqual([{ value: '1' }]);
+    const emptyLedger = await queryPglite<{ id: string }>(
+      dataDir,
+      'SELECT id FROM kovo_migrations ORDER BY id',
+    );
+    expect(emptyLedger.rows).toEqual([]);
+
+    const migrated = await migratePostgresAppDb({
+      dataDir,
+      driver: 'pglite',
+      migrations: [],
+      schema: { notes },
+    });
+    expect(migrated.posture.ok).toBe(true);
+    const secondEpoch = await queryPglite<{ value: string }>(
+      dataDir,
+      "SELECT value FROM kovo_schema_state WHERE key = 'posture_epoch'",
+    );
+    expect(secondEpoch.rows).toEqual([{ value: '2' }]);
+  });
+
   it('derives the bounded posture-lease digest from two pooler statements and catalog subsets', async () => {
     let poolerQuery = 0;
     const runtimeClient = {
@@ -5596,8 +5628,22 @@ describe('createPostgresAppRuntimeDb', () => {
       },
     };
     const postureClient = {
-      async transaction<Result>(callback: (tx: never) => Promise<Result>) {
-        return callback({} as never);
+      async transaction<Result>(
+        callback: (tx: {
+          exec(): Promise<void>;
+          query<Row>(statement: string): Promise<{ rows: Row[] }>;
+        }) => Promise<Result>,
+      ) {
+        return callback({
+          async exec() {},
+          async query<Row>(statement: string) {
+            return {
+              rows: statement.includes('kovo-posture-lease:freshness')
+                ? ([{ key: 'posture_epoch', kind: 'posture-epoch', value: '7' }] as Row[])
+                : [],
+            };
+          },
+        });
       },
     };
 
