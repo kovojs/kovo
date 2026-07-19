@@ -300,27 +300,43 @@ the guard checks a role SQL never sees.
 - [ ] **Freeze the emission door first** (cheap, pure anti-drift, worth doing standalone): a test
       enumerating the five and only five RLS-SQL emission sites — owner `:7736`, ownerVia `:7788-7833`,
       authzPolicy `:7767`, system `USING(true)` `:7877`, admin `USING(true)` `:7903`.
+  - Remaining gap: the current focused test freezes the central emitter inventory and each runtime
+    call, but does not yet reject a sixth raw `CREATE POLICY` emitter added in another production file.
 - [ ] **Ship the non-correspondence explain record second, not last**: place the generated RLS
       predicate text and the `explainGuard` audit facts side by side with status `unproven` for every
       table outside the decided fragment (hand `authzPolicy`, arbitrary `ownsRow`, system/admin
       `USING(true)`). Include the dead `kovo.role` fact as a first-class explain warning. Both halves
       already exist in the system and are simply never placed next to each other.
-- [ ] Retarget `resolveProtectedPostgresTables` (`:7710-7778`) to build a 2-constructor algebra term
+  - Remaining gap: the typed record and honest statuses exist, but no production explain/env output
+    consumes the record yet.
+- [x] Retarget `resolveProtectedPostgresTables` (`:7710-7778`) to build a 2-constructor algebra term
       and render SQL **from** the term; first proof obligation is byte-identity against today's
       predicate strings (already pinned by `postgres-runtime.test.ts` / `postgres-authz.test.ts`).
-- [ ] Implement the three-valued Kleene denotation and an **exhaustive** enumerator over
+  - Evidence: the combined four-file PostgreSQL suite passes 140/140 and pins owner/ownerVia SQL
+    byte identity while the live runtime resolves both through the shared term.
+- [x] Implement the three-valued Kleene denotation and an **exhaustive** enumerator over
       `{true,false,null}` per equality and `{present,absent,null}` per FK edge, up to the shipped
       recursion bound — a decision procedure, **no SMT solver**. Assert the model count equals the
       closed-form `3^k·3^e` per shape, and that it finds the injected NULL/unset over-permission case.
-- [ ] Emit the framework-owned `ownsRow` from the same term and prove equivalence; a targeted
+  - Evidence: the focused correspondence suite exhausts `3^(1+e)` through depth four and detects the
+    planted NULL/unset over-permission counterexample.
+- [x] Emit the framework-owned `ownsRow` from the same term and prove equivalence; a targeted
       regression must show the old hand-written mirror (`row.ownerId === req.session.userId`) reported
       as **divergent** under three-valued semantics.
-- [ ] Close the SQL-side extraction gap against a real engine: a PGlite test materializes every
+  - Evidence: all 243 bounded models agree with the framework-derived evaluator, while the old
+    undefined-equals-undefined mirror produces a minimized divergent record.
+- [x] Close the SQL-side extraction gap against a real engine: a PGlite test materializes every
       enumerated model as rows under FORCE RLS with the actually-generated policy and asserts observed
       visibility equals the denotation for all models. Finite and enumerated, not sampled.
+  - Evidence: `postgres-authorization-correspondence.pglite.test.ts` passes inside the 140/140 root
+    run and compares all 243 model rows under FORCE RLS.
 
 > Sequencing: the framework-generated `ownsRow` default is a **breaking change to a shipped public
 > guard**. Land it as its own change _after_ the decision procedure is green — never bundled into it.
+
+- [ ] In a separately reviewed breaking change, bind the shipped owner-guard path to the
+      framework-derived evaluator and remove arbitrary app callback semantics from the proven
+      fragment; retain a distinctly named audited escape for intentionally unproven predicates.
 
 ### 1.3 Grammar containment: a kABNF → DFA substrate
 
