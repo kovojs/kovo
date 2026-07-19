@@ -49,11 +49,6 @@ function cloneWitness(
   };
 }
 
-async function settleTimers(): Promise<void> {
-  await vi.runOnlyPendingTimersAsync();
-  await Promise.resolve();
-}
-
 describe('Postgres posture digest', () => {
   it('is stable across fact order and physical backend changes', () => {
     const reordered = cloneWitness({ facts: [...BASE_WITNESS.facts].reverse() });
@@ -144,11 +139,10 @@ describe('Postgres posture lease', () => {
     await expect(lease.admit()).rejects.toThrow(/KV433.*posture lease/isu);
 
     await vi.advanceTimersByTimeAsync(1_000);
-    await settleTimers();
     expect(drain).toHaveBeenCalledTimes(1);
+    expect(lease.snapshot()).toMatchObject({ status: 'shed' });
 
     await vi.advanceTimersByTimeAsync(2_000);
-    await settleTimers();
     expect(lease.snapshot()).toMatchObject({ status: 'fresh' });
     await expect(lease.admit()).resolves.toBeUndefined();
 
@@ -178,9 +172,9 @@ describe('Postgres posture lease', () => {
     }
     expect(witness).toHaveBeenCalledTimes(2);
 
+    const admitted = lease.admit();
     releaseRenewal(cloneWitness());
-    await Promise.resolve();
-    await Promise.resolve();
+    await admitted;
     expect(lease.snapshot()).toMatchObject({ status: 'fresh' });
 
     lease.close();
@@ -209,7 +203,6 @@ describe('Postgres posture lease', () => {
     expect(drain).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(1_000);
-    await settleTimers();
     expect(lease.snapshot()).toMatchObject({ status: 'fresh' });
 
     lease.close();
