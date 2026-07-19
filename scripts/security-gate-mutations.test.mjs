@@ -39,9 +39,7 @@ describe('security-gate-mutations', () => {
       'core-framework-identity/drop-element-access-kind-resolution',
       'core-framework-identity/drop-export-star-resolution',
     ];
-    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
-      behavioralNames.includes(mutant.name),
-    );
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => behavioralNames.includes(mutant.name));
 
     expect(mutants.map((mutant) => mutant.name).sort()).toEqual(behavioralNames.sort());
     expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
