@@ -15,6 +15,7 @@ import {
 } from './endpoint.js';
 import {
   assertEndpointResponsePosture,
+  assertEndpointResponsePostureAndSnapshot,
   endpointRequestWithoutSession,
 } from './response-posture.js';
 
@@ -1206,6 +1207,50 @@ describe('server endpoints', () => {
       else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previousVerify;
     }
   });
+
+  it.each([undefined, 'test', 'staging'] as const)(
+    'enforces declared response posture with NODE_ENV=%s for direct and custom runners',
+    async (nodeEnvironment) => {
+      const previousNodeEnv = process.env.NODE_ENV;
+      const previousVerify = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      if (nodeEnvironment === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = nodeEnvironment;
+      delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+
+      const mismatched = endpoint(`/machine/${nodeEnvironment ?? 'unset'}-posture-bad`, {
+        csrf: false,
+        csrfJustification: 'environment-independent runtime posture verification test',
+        handler: () =>
+          new Response('{"ok":true}', {
+            headers: { 'Cache-Control': 'public', 'Content-Type': 'text/plain' },
+          }),
+        method: 'POST',
+        reason: 'environment-independent runtime posture verification test',
+        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+      });
+      const request = new Request(`https://example.test${mismatched.path}`, { method: 'POST' });
+
+      try {
+        await expect(runEndpoint(mismatched, request)).rejects.toThrow(
+          /response posture mismatch/u,
+        );
+        expect(() =>
+          assertEndpointResponsePostureAndSnapshot(
+            mismatched,
+            new Response('{"ok":true}', {
+              headers: { 'Cache-Control': 'public', 'Content-Type': 'text/plain' },
+            }),
+            { request },
+          ),
+        ).toThrow(/response posture mismatch/u);
+      } finally {
+        if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = previousNodeEnv;
+        if (previousVerify === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+        else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previousVerify;
+      }
+    },
+  );
 
   it('matches exact and prefix endpoint mounts without routing side effects', () => {
     const exact = endpoint('/downloads/orders.bin', {
