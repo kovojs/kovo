@@ -68,9 +68,7 @@ describe('SPEC §6.6 analyzable-fragment witnesses', () => {
         `${row.id} did not emit KV449 with ${closedVerdict}`,
       ).toBe(true);
       expect(
-        traces.some(
-          (trace) => trace.verdict === 'closed' && trace.reason === row.closedReason,
-        ),
+        traces.some((trace) => trace.verdict === 'closed' && trace.reason === row.closedReason),
         `${row.id} did not retain ${row.closedReason} in the semantic graph`,
       ).toBe(true);
     }
@@ -100,7 +98,7 @@ describe('SPEC §6.6 analyzable-fragment witnesses', () => {
 
     expect(rootCount).toBe(ledger.budgetBindingMeasurement.corpus.rootCount);
     for (const budget of ledger.budgetBindingMeasurement.budgets) {
-      expect([...bindingRoots.get(budget.reason) ?? []].sort(), budget.id).toEqual(
+      expect([...(bindingRoots.get(budget.reason) ?? [])].sort(), budget.id).toEqual(
         budget.bindingRoots,
       );
     }

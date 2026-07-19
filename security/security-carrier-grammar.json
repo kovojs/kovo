@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 237,
+    "historicalWitnesses": 240,
     "productions": 12
   },
   "productions": [
@@ -992,6 +992,24 @@
       "corpus": "capability-closure",
       "production": "root-registration",
       "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "analyzable-fragment-emitted-kv449-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "exact-operation",
+      "reason": "Each authored prohibition fixture reaches its exact emitted KV449 closed decision and retained semantic trace."
+    },
+    {
+      "anchor": "analyzable-fragment-real-root-budget-binding",
+      "corpus": "finite-security-operation-ir",
+      "production": "budget-edge",
+      "reason": "The checked real-root corpus records the binding set for every named finite semantic resource ceiling."
+    },
+    {
+      "anchor": "analyzable-fragment-artifact-drift",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "The generated ledger closes the prohibition, verdict, budget, fixture, and normative SPEC vocabularies against drift."
     },
     {
       "anchor": "browser-operation-real-workflows",

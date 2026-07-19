@@ -1,0 +1,187 @@
+{
+  "authority": "none",
+  "budgetBindingMeasurement": {
+    "budgets": [
+      {
+        "bindingRoots": [],
+        "id": "callDepth",
+        "label": "helper edges on one path",
+        "limit": 16,
+        "reason": "budget-call-depth"
+      },
+      {
+        "bindingRoots": [],
+        "id": "nodes",
+        "label": "interpreted AST nodes",
+        "limit": 50000,
+        "reason": "budget-node-count"
+      },
+      {
+        "bindingRoots": [],
+        "id": "operations",
+        "label": "finite operations",
+        "limit": 4096,
+        "reason": "budget-operation-count"
+      },
+      {
+        "bindingRoots": [],
+        "id": "summaries",
+        "label": "helper summaries per root",
+        "limit": 256,
+        "reason": "budget-summary-count"
+      }
+    ],
+    "corpus": {
+      "files": [
+        "packages/create-kovo/templates/src/app.tsx",
+        "packages/create-kovo/templates/src/queries.ts",
+        "packages/create-kovo/templates/src/mutations.ts",
+        "examples/commerce/src/auth.ts",
+        "examples/commerce/src/domain.ts",
+        "examples/commerce/src/queries.ts",
+        "examples/crm/src/mutations.ts",
+        "examples/crm/src/queries.ts",
+        "examples/reference/src/auth.ts",
+        "examples/stackoverflow/src/mutations.ts",
+        "examples/stackoverflow/src/queries.ts"
+      ],
+      "rootCount": 29,
+      "selection": "Every tracked starter/example source file that declares a shipping query, mutation, endpoint, webhook, or task root at measurement time."
+    },
+    "limits": "This is an observational regression measurement over the named repository corpus. It is not a claim that a downstream root cannot bind a budget.",
+    "method": "Compile each listed source with compileComponentModule, enumerate its emitted semantic roots, and collect roots with each exact budget-* closed trace reason."
+  },
+  "closedReasons": [
+    "budget-call-depth",
+    "budget-node-count",
+    "budget-operation-count",
+    "budget-summary-count",
+    "helper-cycle",
+    "opaque-transfer",
+    "unknown-operation",
+    "unsupported-authority-use"
+  ],
+  "handArgument": {
+    "file": "spec/06-analyzable-fragment-hand-argument.md",
+    "kind": "reviewed-non-mechanized-hand-argument"
+  },
+  "prohibitions": [
+    {
+      "classification": "DELIBERATE",
+      "closedReason": "unsupported-authority-use",
+      "id": "returning-authority",
+      "rationale": "Structured outcomes intentionally cannot transfer live framework authority to an unmodelled caller.",
+      "title": "Returning authority",
+      "witness": {
+        "diagnostic": "KV449",
+        "file": "packages/compiler/src/fixtures/analyzable-fragment/returning-authority.tsx.txt"
+      }
+    },
+    {
+      "classification": "DELIBERATE",
+      "closedReason": "unsupported-authority-use",
+      "id": "throwing-authority",
+      "rationale": "Exception propagation intentionally cannot carry authority across implicit catch and host boundaries.",
+      "title": "Throwing authority",
+      "witness": {
+        "diagnostic": "KV449",
+        "file": "packages/compiler/src/fixtures/analyzable-fragment/throwing-authority.tsx.txt"
+      }
+    },
+    {
+      "classification": "FUNDAMENTAL",
+      "closedReason": "opaque-transfer",
+      "id": "opaque-container",
+      "rationale": "General JavaScript containers can hide authority behind mutation, accessors, proxies, and unknown aliases.",
+      "title": "Opaque authority container",
+      "witness": {
+        "diagnostic": "KV449",
+        "file": "packages/compiler/src/fixtures/analyzable-fragment/opaque-container.tsx.txt"
+      }
+    },
+    {
+      "classification": "FUNDAMENTAL",
+      "closedReason": "unsupported-authority-use",
+      "id": "mutating-authority-alias",
+      "rationale": "A sound and complete account of general mutable heap aliases is outside the finite local relation.",
+      "title": "Mutating an authority alias or member",
+      "witness": {
+        "diagnostic": "KV449",
+        "file": "packages/compiler/src/fixtures/analyzable-fragment/mutating-authority-alias.tsx.txt"
+      }
+    },
+    {
+      "classification": "FUNDAMENTAL",
+      "closedReason": "opaque-transfer",
+      "id": "mutable-ambiguous-join",
+      "rationale": "General path-sensitive joins can depend on mutable heap state and opaque control flow.",
+      "title": "Mutable or ambiguous join",
+      "witness": {
+        "diagnostic": "KV449",
+        "file": "packages/compiler/src/fixtures/analyzable-fragment/mutable-ambiguous-join.tsx.txt"
+      }
+    },
+    {
+      "classification": "DELIBERATE",
+      "closedReason": "opaque-transfer",
+      "id": "unsummarized-nested-callable",
+      "rationale": "The current summary language intentionally covers exact same-file named helpers, not captured closures.",
+      "title": "Unsummarized nested callable",
+      "witness": {
+        "diagnostic": "KV449",
+        "file": "packages/compiler/src/fixtures/analyzable-fragment/unsummarized-nested-callable.tsx.txt"
+      }
+    },
+    {
+      "classification": "DELIBERATE",
+      "closedReason": "opaque-transfer",
+      "id": "arguments-rest-spread-recovery",
+      "rationale": "Dynamic argument-vector recovery is intentionally excluded from exact positional authority mapping.",
+      "title": "`arguments`, rest, or spread recovery",
+      "witness": {
+        "diagnostic": "KV449",
+        "file": "packages/compiler/src/fixtures/analyzable-fragment/arguments-rest-spread-recovery.tsx.txt"
+      }
+    },
+    {
+      "classification": "DELIBERATE",
+      "closedReason": "opaque-transfer",
+      "id": "call-apply-bind",
+      "rationale": "Indirect invocation is intentionally excluded so operation identity stays syntactically exact.",
+      "title": "`call`, `apply`, or `bind` invocation",
+      "witness": {
+        "diagnostic": "KV449",
+        "file": "packages/compiler/src/fixtures/analyzable-fragment/call-apply-bind.tsx.txt"
+      }
+    },
+    {
+      "classification": "FUNDAMENTAL",
+      "closedReason": "opaque-transfer",
+      "id": "foreign-callable",
+      "rationale": "An unresolved or otherwise foreign callable has behavior unavailable to the analyzed source unit.",
+      "title": "Imported, computed, aliased, reassigned, unresolved, or foreign callable",
+      "witness": {
+        "diagnostic": "KV449",
+        "file": "packages/compiler/src/fixtures/analyzable-fragment/foreign-callable.tsx.txt"
+      }
+    }
+  ],
+  "purpose": "publication-honesty-ledger",
+  "schema": "kovo-analyzable-fragment/v1",
+  "sources": {
+    "budgets": "packages/compiler/src/scan/security-provenance-relation.ts",
+    "closedReasons": "packages/core/src/internal/security-operation-ir.ts",
+    "specification": "spec/06-type-system.md#66-compiler-owned-security-operation-ir-normative"
+  },
+  "summary": {
+    "budgets": 4,
+    "classifications": {
+      "BUDGETED": 0,
+      "DELIBERATE": 5,
+      "FUNDAMENTAL": 4
+    },
+    "closedReasons": 8,
+    "prohibitions": 9,
+    "realRoots": 29
+  }
+}

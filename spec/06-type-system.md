@@ -461,6 +461,28 @@ or a rest/spread mapping, invoking an operation through `call`/`apply`/`bind`, o
 computed, aliased, reassigned, unresolved, or otherwise foreign callable is unsupported and MUST
 remain KV449. A query root's no-managed-write posture propagates unchanged through every summary.
 
+<!-- BEGIN GENERATED ANALYZABLE FRAGMENT -->
+
+#### Closed analyzable-fragment prohibitions (generated)
+
+This table is generated from [`security/analyzable-fragment.json`](../security/analyzable-fragment.json). The classification describes the general prohibition; each fixture is a minimal compiler-verdict witness, not an impossibility proof.
+
+| Prohibition                                                              | Classification | KV449 closed reason         | Witness                                                                                                 |
+| ------------------------------------------------------------------------ | -------------- | --------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Returning authority                                                      | `DELIBERATE`   | `unsupported-authority-use` | [fixture](../packages/compiler/src/fixtures/analyzable-fragment/returning-authority.tsx.txt)            |
+| Throwing authority                                                       | `DELIBERATE`   | `unsupported-authority-use` | [fixture](../packages/compiler/src/fixtures/analyzable-fragment/throwing-authority.tsx.txt)             |
+| Opaque authority container                                               | `FUNDAMENTAL`  | `opaque-transfer`           | [fixture](../packages/compiler/src/fixtures/analyzable-fragment/opaque-container.tsx.txt)               |
+| Mutating an authority alias or member                                    | `FUNDAMENTAL`  | `unsupported-authority-use` | [fixture](../packages/compiler/src/fixtures/analyzable-fragment/mutating-authority-alias.tsx.txt)       |
+| Mutable or ambiguous join                                                | `FUNDAMENTAL`  | `opaque-transfer`           | [fixture](../packages/compiler/src/fixtures/analyzable-fragment/mutable-ambiguous-join.tsx.txt)         |
+| Unsummarized nested callable                                             | `DELIBERATE`   | `opaque-transfer`           | [fixture](../packages/compiler/src/fixtures/analyzable-fragment/unsummarized-nested-callable.tsx.txt)   |
+| `arguments`, rest, or spread recovery                                    | `DELIBERATE`   | `opaque-transfer`           | [fixture](../packages/compiler/src/fixtures/analyzable-fragment/arguments-rest-spread-recovery.tsx.txt) |
+| `call`, `apply`, or `bind` invocation                                    | `DELIBERATE`   | `opaque-transfer`           | [fixture](../packages/compiler/src/fixtures/analyzable-fragment/call-apply-bind.tsx.txt)                |
+| Imported, computed, aliased, reassigned, unresolved, or foreign callable | `FUNDAMENTAL`  | `opaque-transfer`           | [fixture](../packages/compiler/src/fixtures/analyzable-fragment/foreign-callable.tsx.txt)               |
+
+The ledger also records the current real-root budget-binding measurement. Its [reviewed hand argument](06-analyzable-fragment-hand-argument.md) states the compositionality claim, adequacy claim, and limits.
+
+<!-- END GENERATED ANALYZABLE FRAGMENT -->
+
 The resource contract is deterministic and has no app-authored widening knob: at most 16 helper
 edges on one path, 50,000 interpreted AST nodes, 4,096 finite operations, and 256 helper summaries
 per root. A repeated active summary key is a recursion cycle, not a fixpoint guess. The only closed

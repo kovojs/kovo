@@ -1,10 +1,7 @@
 // @kovo-security-classifier-corpus finite-security-operation-ir
 import { describe, expect, it } from 'vitest';
 
-import {
-  evaluateAnalyzableFragment,
-  loadAnalyzableFragmentInput,
-} from './analyzable-fragment.mjs';
+import { evaluateAnalyzableFragment, loadAnalyzableFragmentInput } from './analyzable-fragment.mjs';
 
 const baseline = loadAnalyzableFragmentInput();
 
