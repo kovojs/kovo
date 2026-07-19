@@ -781,6 +781,45 @@ const weakenedSemanticTableNamespaceClosureBranch = [
   "    return kind ? serverOperationProvenance(kind) : 'unknown-authority';",
 ].join('\n');
 
+const semanticGraphBehavioralInstrumentation = [
+  '',
+  '/** Mutation-only executable seam for SPEC §6.6 normalized semantic-graph oracles. */',
+  "export function __scanSecuritySemanticMutationFixture(source, surface = 'endpoint') {",
+  '  const sourceFile = ts.createSourceFile(',
+  "    'semantic-graph-mutation-fixture.ts',",
+  '    source,',
+  '    ts.ScriptTarget.Latest,',
+  '    true,',
+  '    ts.ScriptKind.TS,',
+  '  );',
+  '  const root = sourceFile.statements.find(',
+  "    (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === 'root',",
+  '  );',
+  '  if (!root || !root.body) {',
+  "    throw new Error('semantic mutation fixture must declare function root');",
+  '  }',
+  "  const factory = surface === 'query' ? 'query' : surface;",
+  "  const callback = surface === 'query' ? 'load' : surface === 'task' ? 'run' : 'handler';",
+  '  const rootName = `${factory}:mutation-fixture`;',
+  '  const callableSpan = { end: root.getEnd(), start: root.getStart(sourceFile) };',
+  '  return scanServerSecurityOperations(',
+  '    sourceFile,',
+  '    root.body,',
+  '    surface,',
+  '    root.parameters,',
+  '    rootName,',
+  '    {',
+  '      callback,',
+  '      callableSpan,',
+  '      factory,',
+  '      factoryCallSpan: callableSpan,',
+  '      root: rootName,',
+  '    },',
+  '  );',
+  '}',
+  '',
+].join('\n');
+
 const semanticV2SourceByteEqualityBranch =
   '    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) return new Map();';
 const weakenedSemanticV2SourceByteEqualityBranch =
@@ -1924,134 +1963,147 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertReviewedUnionContinuationIsPinned,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Deletes normalized helper-cycle absorption.',
     expectedKiller: 'recursive helper summaries must retain the helper-cycle closed verdict',
     name: 'compiler-semantic-graph/drop-helper-cycle-closure',
     replacement: removedSemanticCycleClosureBranch,
     search: semanticCycleClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticCycleClosureIsPinned,
+    test: assertSemanticCycleClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Deletes the normalized helper call-depth ceiling.',
     expectedKiller: 'helper summary paths must retain deterministic call-depth closure',
     name: 'compiler-semantic-graph/drop-call-depth-closure',
     replacement: removedSemanticDepthClosureBranch,
     search: semanticDepthClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticDepthClosureIsPinned,
+    test: assertSemanticDepthClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Deletes the normalized interpreted-node ceiling.',
     expectedKiller: 'semantic roots must retain deterministic AST-node budget closure',
     name: 'compiler-semantic-graph/drop-node-budget-closure',
     replacement: removedSemanticNodeBudgetClosureBranch,
     search: semanticNodeBudgetClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticNodeBudgetClosureIsPinned,
+    test: assertSemanticNodeBudgetClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Deletes the normalized finite-operation ceiling.',
     expectedKiller: 'semantic roots must retain deterministic operation budget closure',
     name: 'compiler-semantic-graph/drop-operation-budget-closure',
     replacement: removedSemanticOperationBudgetClosureBranch,
     search: semanticOperationBudgetClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticOperationBudgetClosureIsPinned,
+    test: assertSemanticOperationBudgetClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Deletes the normalized helper-summary ceiling.',
     expectedKiller: 'semantic roots must retain deterministic summary budget closure',
     name: 'compiler-semantic-graph/drop-summary-budget-closure',
     replacement: removedSemanticSummaryBudgetClosureBranch,
     search: semanticSummaryBudgetClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticSummaryBudgetClosureIsPinned,
+    test: assertSemanticSummaryBudgetClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Forgets the query/task/mutation root posture when entering a helper summary.',
     expectedKiller: 'helper summaries must preserve the originating security surface',
     name: 'compiler-semantic-graph/drop-root-surface-propagation',
     replacement: weakenedSemanticSurfacePropagationBranch,
     search: semanticSurfacePropagationBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticSurfacePropagationIsPinned,
+    test: assertSemanticSurfacePropagationIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Treats members of an exact operation function as the same reviewed sink.',
     expectedKiller: 'operation-function call/apply/bind laundering must remain opaque',
     name: 'compiler-semantic-graph/allow-operation-member-laundering',
     replacement: weakenedSemanticOperationMemberClosureBranch,
     search: semanticOperationMemberClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticOperationMemberClosureIsPinned,
+    test: assertSemanticOperationMemberClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Deletes capability-member mutation closure from normalized semantics.',
     expectedKiller: 'authority-bearing members must remain immutable in the semantic lattice',
     name: 'compiler-semantic-graph/drop-member-mutation-closure',
     replacement: removedSemanticMemberMutationClosureBranch,
     search: semanticMemberMutationClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticMemberMutationClosureIsPinned,
+    test: assertSemanticMemberMutationClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Allows authority recovery through a helper arguments object.',
     expectedKiller: 'arguments-object recovery must remain outside finite helper summaries',
     name: 'compiler-semantic-graph/allow-arguments-authority-recovery',
     replacement: removedSemanticArgumentsClosureBranch,
     search: semanticArgumentsClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticArgumentsClosureIsPinned,
+    test: assertSemanticArgumentsClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Allows authority capture by an unsummarized nested callable.',
     expectedKiller: 'nested callable captures must remain absorbing semantic closure',
     name: 'compiler-semantic-graph/allow-nested-authority-capture',
     replacement: removedSemanticNestedCaptureClosureBranch,
     search: semanticNestedCaptureClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticNestedCaptureClosureIsPinned,
+    test: assertSemanticNestedCaptureClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Allows authority to move through an opaque container or join.',
     expectedKiller: 'opaque authority containers must remain closed',
     name: 'compiler-semantic-graph/allow-opaque-authority-container',
     replacement: removedSemanticOpaqueContainerClosureBranch,
     search: semanticOpaqueContainerClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticOpaqueContainerClosureIsPinned,
+    test: assertSemanticOpaqueContainerClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Allows authority to enter a helper rest-parameter mapping.',
     expectedKiller: 'authority-bearing rest arguments must remain outside finite summaries',
     name: 'compiler-semantic-graph/allow-rest-authority-mapping',
     replacement: removedSemanticRestArgumentClosureBranch,
     search: semanticRestArgumentClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticRestArgumentClosureIsPinned,
+    test: assertSemanticRestArgumentClosureIsEnforced,
   },
   {
+    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Treats arbitrary raw-driver-shaped DB namespaces as managed operations.',
     expectedKiller: 'generic DB table namespaces must stay limited to finite read terminals',
     name: 'compiler-semantic-graph/allow-raw-database-namespace-chain',
     replacement: weakenedSemanticTableNamespaceClosureBranch,
     search: semanticTableNamespaceClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertSemanticTableNamespaceClosureIsPinned,
+    test: assertSemanticTableNamespaceClosureIsEnforced,
   },
   {
     description:
@@ -2997,7 +3049,10 @@ async function bundleBehavioralTypeScriptModule(
     absWorkingDir: repoRoot,
     bundle: true,
     ...(usesDependencyOverlay ? { entryPoints: [entryFile] } : {}),
-    external: ['ts-morph'],
+    // Both packages have runtime filesystem loaders. Keep their real Node modules outside the ESM
+    // bundle so behavioral mutants execute the production TypeScript APIs instead of an esbuild
+    // rewrite that cannot support their dynamic CommonJS requires.
+    external: ['ts-morph', 'typescript'],
     format: 'esm',
     logLevel: 'silent',
     outfile: outputFile,
@@ -3430,81 +3485,250 @@ async function assertSemanticV2ClosedSiblingIsQuarantined(moduleUnderTest) {
   assertSemanticV2TamperIsRejected(moduleUnderTest, fixture, graph);
 }
 
-async function assertSemanticCycleClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticCycleClosureBranch)) {
-    throw new Error('normalized semantic graph no longer absorbs an active helper-summary cycle');
+function scanSecuritySemanticMutationFixture(moduleUnderTest, source, surface = 'endpoint') {
+  if (typeof moduleUnderTest.__scanSecuritySemanticMutationFixture !== 'function') {
+    throw new Error('behavioral semantic-graph scanner seam was not bundled');
+  }
+  try {
+    return moduleUnderTest.__scanSecuritySemanticMutationFixture(source, surface);
+  } catch (error) {
+    throw new Error(`semantic-graph scanner did not return a verdict: ${formatError(error)}`);
   }
 }
 
-async function assertSemanticDepthClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticDepthClosureBranch)) {
-    throw new Error('normalized semantic graph no longer closes exhausted helper depth');
+function semanticMutationClosedTraces(result) {
+  return (result.semanticRoot?.traces ?? []).filter((trace) => trace.verdict === 'closed');
+}
+
+function assertSemanticMutationClosedReason(moduleUnderTest, source, reason, surface = 'endpoint') {
+  const result = scanSecuritySemanticMutationFixture(moduleUnderTest, source, surface);
+  const closed = semanticMutationClosedTraces(result);
+  if (!closed.some((trace) => trace.reason === reason)) {
+    throw new Error(
+      `semantic graph did not emit closed:${reason}: ${JSON.stringify({
+        traces: result.semanticRoot?.traces ?? [],
+        violations: result.violations,
+      })}`,
+    );
+  }
+  return result;
+}
+
+function assertSemanticMutationClosedDetail(moduleUnderTest, source, detail, surface = 'endpoint') {
+  const result = scanSecuritySemanticMutationFixture(moduleUnderTest, source, surface);
+  const closed = semanticMutationClosedTraces(result);
+  if (!closed.some((trace) => trace.detail?.includes(detail))) {
+    throw new Error(
+      `semantic graph did not emit closed detail ${JSON.stringify(detail)}: ${JSON.stringify({
+        traces: result.semanticRoot?.traces ?? [],
+        violations: result.violations,
+      })}`,
+    );
+  }
+  return result;
+}
+
+async function assertSemanticCycleClosureIsEnforced(moduleUnderTest) {
+  const result = assertSemanticMutationClosedReason(
+    moduleUnderTest,
+    [
+      'function first(database) { return second(database); }',
+      'function second(database) { return first(database); }',
+      'function root(_input, context) { return first(context.db); }',
+    ].join('\n'),
+    'helper-cycle',
+  );
+  if (!result.semanticRoot?.summaries.some((summary) => summary.verdict === 'closed')) {
+    throw new Error('helper cycle did not produce a closed bottom-up summary');
   }
 }
 
-async function assertSemanticNodeBudgetClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticNodeBudgetClosureBranch)) {
-    throw new Error('normalized semantic graph no longer closes exhausted node budgets');
+async function assertSemanticDepthClosureIsEnforced(moduleUnderTest) {
+  const helpers = Array.from({ length: 18 }, (_unused, index) =>
+    index === 17
+      ? `function helper${index}(database) { return database.select(); }`
+      : `function helper${index}(database) { return helper${index + 1}(database); }`,
+  );
+  const result = assertSemanticMutationClosedReason(
+    moduleUnderTest,
+    [...helpers, 'function root(_input, context) { return helper0(context.db); }'].join('\n'),
+    'budget-call-depth',
+  );
+  const depthTrace = semanticMutationClosedTraces(result).find(
+    (trace) => trace.reason === 'budget-call-depth',
+  );
+  if ((depthTrace?.transfers.length ?? 0) !== 17) {
+    throw new Error(
+      `call-depth closure lost its exact transfer path: ${JSON.stringify(depthTrace)}`,
+    );
   }
 }
 
-async function assertSemanticOperationBudgetClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticOperationBudgetClosureBranch)) {
-    throw new Error('normalized semantic graph no longer closes exhausted operation budgets');
+async function assertSemanticNodeBudgetClosureIsEnforced(moduleUnderTest) {
+  const oversizedBody = Array.from({ length: 50_100 }, () => ';').join('\n');
+  assertSemanticMutationClosedReason(
+    moduleUnderTest,
+    `function root(_input, context) { ${oversizedBody} void context; }`,
+    'budget-node-count',
+  );
+}
+
+async function assertSemanticOperationBudgetClosureIsEnforced(moduleUnderTest) {
+  const operations = Array.from({ length: 4_097 }, () => 'context.db.select();').join('\n');
+  const result = assertSemanticMutationClosedReason(
+    moduleUnderTest,
+    `function root(_input, context) { ${operations} }`,
+    'budget-operation-count',
+  );
+  const reads = result.operations.filter((operation) => operation.kind === 'server.database.read');
+  if (reads.length !== 4_097) {
+    throw new Error(`operation-budget oracle did not execute all 4097 reads: ${reads.length}`);
   }
 }
 
-async function assertSemanticSummaryBudgetClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticSummaryBudgetClosureBranch)) {
-    throw new Error('normalized semantic graph no longer closes exhausted summary budgets');
+async function assertSemanticSummaryBudgetClosureIsEnforced(moduleUnderTest) {
+  const helperCount = 257;
+  const helpers = Array.from(
+    { length: helperCount },
+    (_unused, index) => `function helper${index}(database) { return database.select(); }`,
+  );
+  const calls = Array.from(
+    { length: helperCount },
+    (_unused, index) => `helper${index}(context.db);`,
+  ).join('\n');
+  const result = assertSemanticMutationClosedReason(
+    moduleUnderTest,
+    [...helpers, `function root(_input, context) { ${calls} }`].join('\n'),
+    'budget-summary-count',
+  );
+  if (
+    !result.semanticRoot?.summaries.some(
+      (summary) => summary.verdict === 'closed' && summary.operationKinds.length === 0,
+    )
+  ) {
+    throw new Error('summary-budget closure did not emit a closed empty-operation summary');
   }
 }
 
-async function assertSemanticSurfacePropagationIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticSurfacePropagationBranch)) {
-    throw new Error('normalized helper summary no longer inherits its originating surface');
+async function assertSemanticSurfacePropagationIsEnforced(moduleUnderTest) {
+  const result = assertSemanticMutationClosedDetail(
+    moduleUnderTest,
+    [
+      "function write(database) { return database.insert('catalog'); }",
+      'function root(_input, context) { return write(context.db); }',
+    ].join('\n'),
+    'query loaders cannot perform a managed database write',
+    'query',
+  );
+  if (!result.violations.some((violation) => violation.surface === 'query')) {
+    throw new Error('query helper closure lost its source-root surface on the emitted violation');
   }
 }
 
-async function assertSemanticOperationMemberClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticOperationMemberClosureBranch)) {
-    throw new Error('normalized operation members no longer become absorbing unknown authority');
+async function assertSemanticOperationMemberClosureIsEnforced(moduleUnderTest) {
+  const result = assertSemanticMutationClosedDetail(
+    moduleUnderTest,
+    [
+      'async function root(_input, context) {',
+      '  const outbound = context.fetch.bind(null);',
+      "  await outbound('https://api.example.test');",
+      '}',
+    ].join('\n'),
+    'computed server capability call context.fetch.bind',
+  );
+  if (result.operations.some((operation) => operation.kind === 'server.egress.request')) {
+    throw new Error('operation-member laundering was emitted as a proved egress operation');
   }
 }
 
-async function assertSemanticMemberMutationClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticMemberMutationClosureBranch)) {
-    throw new Error('normalized semantic graph no longer rejects capability-member mutation');
+async function assertSemanticMemberMutationClosureIsEnforced(moduleUnderTest) {
+  assertSemanticMutationClosedDetail(
+    moduleUnderTest,
+    [
+      'async function root(_input, context) {',
+      '  context.fetch.custom = () => null;',
+      "  await context.fetch('https://api.example.test');",
+      '}',
+    ].join('\n'),
+    'server capability members and containers cannot be mutated',
+  );
+}
+
+async function assertSemanticArgumentsClosureIsEnforced(moduleUnderTest) {
+  const result = assertSemanticMutationClosedDetail(
+    moduleUnderTest,
+    [
+      'function consume(_database) { return arguments[0].select(); }',
+      'function root(_input, context) { return consume(context.db); }',
+    ].join('\n'),
+    'arguments-object authority recovery in local:consume',
+  );
+  if (
+    !result.semanticRoot?.helperInvocations.some(
+      (invocation) => invocation.callable === 'local:consume' && invocation.verdict === 'closed',
+    )
+  ) {
+    throw new Error('arguments recovery did not close the exact authority-bearing invocation');
   }
 }
 
-async function assertSemanticArgumentsClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticArgumentsClosureBranch)) {
-    throw new Error('normalized semantic graph no longer rejects arguments-object recovery');
+async function assertSemanticNestedCaptureClosureIsEnforced(moduleUnderTest) {
+  assertSemanticMutationClosedDetail(
+    moduleUnderTest,
+    [
+      'function root(_input, context) {',
+      '  const delayed = () => context.db.select();',
+      '  return Boolean(delayed);',
+      '}',
+    ].join('\n'),
+    'server authority cannot be captured by an unsummarized nested callable',
+  );
+}
+
+async function assertSemanticOpaqueContainerClosureIsEnforced(moduleUnderTest) {
+  assertSemanticMutationClosedDetail(
+    moduleUnderTest,
+    [
+      'function root(_input, context) {',
+      '  const hidden = { database: context.db };',
+      '  return Boolean(hidden);',
+      '}',
+    ].join('\n'),
+    'server authority cannot move through an opaque container or control-flow join',
+  );
+}
+
+async function assertSemanticRestArgumentClosureIsEnforced(moduleUnderTest) {
+  const result = assertSemanticMutationClosedDetail(
+    moduleUnderTest,
+    [
+      "function consumeRest(_plain, ..._rest) { return 'ok'; }",
+      "function root(_input, context) { return consumeRest('plain', 'also plain', context.db); }",
+    ].join('\n'),
+    'authority-bearing rest argument into local:consumeRest',
+  );
+  if (
+    !result.semanticRoot?.helperInvocations.some(
+      (invocation) =>
+        invocation.callable === 'local:consumeRest' && invocation.verdict === 'closed',
+    )
+  ) {
+    throw new Error('rest mapping did not close the exact authority-bearing invocation');
   }
 }
 
-async function assertSemanticNestedCaptureClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticNestedCaptureClosureBranch)) {
-    throw new Error('normalized semantic graph no longer rejects nested authority capture');
-  }
-}
-
-async function assertSemanticOpaqueContainerClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticOpaqueContainerClosureBranch)) {
-    throw new Error('normalized semantic graph no longer rejects opaque authority containers');
-  }
-}
-
-async function assertSemanticRestArgumentClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticRestArgumentClosureBranch)) {
-    throw new Error('normalized semantic graph no longer rejects authority-bearing rest mappings');
-  }
-}
-
-async function assertSemanticTableNamespaceClosureIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(semanticTableNamespaceClosureBranch)) {
-    throw new Error('generic DB table namespaces no longer reject raw-driver-shaped terminals');
+async function assertSemanticTableNamespaceClosureIsEnforced(moduleUnderTest) {
+  const result = assertSemanticMutationClosedDetail(
+    moduleUnderTest,
+    [
+      'async function root(_input, context) {',
+      "  await context.db.driver.execute('drop table accounts');",
+      '}',
+    ].join('\n'),
+    'computed server capability call context.db.driver.execute',
+  );
+  if (result.operations.some((operation) => operation.kind === 'server.database.write')) {
+    throw new Error('raw-driver-shaped namespace was emitted as a managed database write');
   }
 }
 
