@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -9,7 +8,6 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -43,6 +41,7 @@ const coreFrameworkIdentityPath = path.join(
   'packages/core/src/internal/framework-identity.ts',
 );
 const compilerCompilePath = path.join(repoRoot, 'packages/compiler/src/compile.ts');
+const compilerBehavioralEntryPath = path.join(repoRoot, 'packages/compiler/src/index.ts');
 const compilerVitePath = path.join(repoRoot, 'packages/compiler/src/vite.ts');
 const compilerSecuritySemanticGraphPath = path.join(
   repoRoot,
@@ -1340,6 +1339,8 @@ const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
 
 export const SECURITY_GATE_MUTANTS = [
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description:
       'Deletes compiler closure for request/query-selected executable module/export references.',
     expectedKiller:
@@ -1348,7 +1349,6 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedRuntimeSelectedExecutableReferenceClosureBranch,
     search: runtimeSelectedExecutableReferenceClosureBranch,
     sourceFile: compilerFiniteSecurityValidatorPath,
-    sourceOnly: true,
     test: assertRuntimeSelectedExecutableReferenceClosureBehavior,
   },
   {
@@ -1852,16 +1852,19 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertTaskBJsxNameScannerRetirementIsEnforced,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes the exact reviewed runCommand capability-door admission.',
     expectedKiller: 'finite IR must retain the exact runtime-validated command capability door',
     name: 'compiler-finite-ir/drop-reviewed-command-door',
     replacement: removedReviewedCommandCapabilityDoorBranch,
     search: reviewedCommandCapabilityDoorBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedCommandCapabilityDoorIsPinned,
+    test: assertReviewedCommandCapabilityDoorBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description:
       'Stops exact immutable module-scope storage factories from minting storage provenance.',
     expectedKiller: 'finite IR must retain exact module-scope storage factory provenance',
@@ -1869,98 +1872,106 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedReviewedModuleStorageFactoryBranch,
     search: reviewedModuleStorageFactoryBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedModuleStorageFactoryIsPinned,
+    test: assertReviewedModuleStorageFactoryBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes storage.stat from the finite storage-read vocabulary.',
     expectedKiller: 'finite IR must retain storage.stat as a reviewed storage read',
     name: 'compiler-finite-ir/drop-storage-stat-read',
     replacement: removedReviewedStorageStatBranch,
     search: reviewedStorageStatBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedStorageStatIsPinned,
+    test: assertReviewedStorageStatBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes exact static sql.raw composition from the trustedSql reviewed door.',
     expectedKiller: 'finite IR must retain exact trustedSql(sql.raw(static literal)) admission',
     name: 'compiler-finite-ir/drop-trusted-sql-raw-door',
     replacement: removedReviewedTrustedSqlRawDoorBranch,
     search: reviewedTrustedSqlRawDoorBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedTrustedSqlRawDoorIsPinned,
+    test: assertReviewedTrustedSqlRawDoorBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes the exact public declared secret-read capability door.',
     expectedKiller: 'finite IR must retain exact declared secret-read capability admission',
     name: 'compiler-finite-ir/drop-declared-secret-read-door',
     replacement: removedReviewedDeclaredSecretReadDoorBranch,
     search: reviewedDeclaredSecretReadDoorBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedDeclaredSecretReadDoorIsPinned,
+    test: assertReviewedDeclaredSecretReadDoorBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes the exact declaration-before-one-execution secret-read door.',
     expectedKiller: 'finite IR must retain exact declared secret-read execution admission',
     name: 'compiler-finite-ir/drop-declared-secret-read-execution-door',
     replacement: removedReviewedDeclaredSecretReadExecutionBranch,
     search: reviewedDeclaredSecretReadExecutionBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedDeclaredSecretReadExecutionIsPinned,
+    test: assertReviewedDeclaredSecretReadExecutionBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes the exact audited trustedReveal data door.',
     expectedKiller: 'finite IR must retain exact trustedReveal admission',
     name: 'compiler-finite-ir/drop-trusted-reveal-door',
     replacement: removedReviewedTrustedRevealDoorBranch,
     search: reviewedTrustedRevealDoorBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedTrustedRevealDoorIsPinned,
+    test: assertReviewedTrustedRevealDoorBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes the exact framework secret boxing data door.',
     expectedKiller: 'finite IR must retain exact secret(value) admission',
     name: 'compiler-finite-ir/drop-secret-box-door',
     replacement: removedReviewedSecretBoxDoorBranch,
     search: reviewedSecretBoxDoorBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedSecretBoxDoorIsPinned,
+    test: assertReviewedSecretBoxDoorBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes exact Drizzle table alias construction from reviewed data.',
     expectedKiller: 'finite IR must retain exact alias(table, static name) admission',
     name: 'compiler-finite-ir/drop-drizzle-table-alias-door',
     replacement: removedReviewedDrizzleAliasDoorBranch,
     search: reviewedDrizzleAliasDoorBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedDrizzleAliasDoorIsPinned,
+    test: assertReviewedDrizzleAliasDoorBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes innerJoin from the finite managed-read continuation vocabulary.',
     expectedKiller: 'finite IR must retain inline managed innerJoin continuation admission',
     name: 'compiler-finite-ir/drop-inner-join-continuation',
     replacement: removedReviewedInnerJoinContinuationBranch,
     search: reviewedInnerJoinContinuationBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedInnerJoinContinuationIsPinned,
+    test: assertReviewedInnerJoinContinuationBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Deletes union from the finite managed-read continuation vocabulary.',
     expectedKiller: 'finite IR must retain inline managed union continuation admission',
     name: 'compiler-finite-ir/drop-union-continuation',
     replacement: removedReviewedUnionContinuationBranch,
     search: reviewedUnionContinuationBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertReviewedUnionContinuationIsPinned,
+    test: assertReviewedUnionContinuationBehavior,
   },
   {
     behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
@@ -2106,6 +2117,8 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertSemanticTableNamespaceClosureIsEnforced,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description:
       'Lets a same-spelled local or foreign trustedAssign bypass exact @kovojs/server identity.',
     expectedKiller: 'trustedAssign admission must retain exact framework export identity',
@@ -2113,68 +2126,73 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: weakenedExactTrustedAssignIdentityBranch,
     search: exactTrustedAssignIdentityBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertExactTrustedAssignIdentityIsPinned,
+    test: assertExactTrustedAssignIdentityBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Lets a replaced ambient Error constructor pass as the reviewed intrinsic.',
     expectedKiller: 'ambient Error admission must retain callable stability proof',
     name: 'compiler-finite-ir/drop-ambient-error-stability',
     replacement: weakenedAmbientErrorStabilityBranch,
     search: ambientErrorStabilityBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertAmbientErrorStabilityIsPinned,
+    test: assertAmbientErrorStabilityBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Lets a replaced ambient crypto.randomUUID member pass as reviewed data.',
     expectedKiller: 'ambient crypto.randomUUID admission must retain member stability proof',
     name: 'compiler-finite-ir/drop-random-uuid-stability',
     replacement: weakenedAmbientCryptoRandomUuidStabilityBranch,
     search: ambientCryptoRandomUuidStabilityBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertAmbientCryptoRandomUuidStabilityIsPinned,
+    test: assertAmbientCryptoRandomUuidStabilityBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Admits any inline managed-DB continuation instead of the finite method set.',
     expectedKiller: 'managed-DB continuations must retain the exact finite method vocabulary',
     name: 'compiler-finite-ir/allow-unknown-managed-db-continuation',
     replacement: weakenedFiniteManagedDatabaseContinuationBranch,
     search: finiteManagedDatabaseContinuationBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertFiniteManagedDatabaseContinuationIsPinned,
+    test: assertFiniteManagedDatabaseContinuationBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Lets an imported executable value enter a reviewed managed-DB continuation.',
     expectedKiller: 'managed-DB continuations must reject unreviewed foreign executable arguments',
     name: 'compiler-finite-ir/allow-foreign-managed-db-argument',
     replacement: weakenedManagedDatabaseForeignArgumentClosureBranch,
     search: managedDatabaseForeignArgumentClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertManagedDatabaseForeignArgumentClosureIsPinned,
+    test: assertManagedDatabaseForeignArgumentClosureBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Treats any imported project factory call as a reviewed Drizzle schema table.',
     expectedKiller: 'project schema admission must retain exact pgTable/sqliteTable identity',
     name: 'compiler-finite-ir/allow-foreign-project-schema-factory',
     replacement: weakenedExactProjectSchemaFactoryIdentityBranch,
     search: exactProjectSchemaFactoryIdentityBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertExactProjectSchemaFactoryIdentityIsPinned,
+    test: assertExactProjectSchemaFactoryIdentityBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Keeps a project schema value reviewed after its exported binding is reassigned.',
     expectedKiller: 'project schema admission must retain immutable exported binding proof',
     name: 'compiler-finite-ir/allow-reassigned-project-schema',
     replacement: weakenedImmutableProjectSchemaBindingBranch,
     search: immutableProjectSchemaBindingBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    sourceOnly: true,
-    test: assertImmutableProjectSchemaBindingIsPinned,
+    test: assertImmutableProjectSchemaBindingBehavior,
   },
   {
     description:
@@ -2837,58 +2855,62 @@ export const SECURITY_GATE_MUTANTS = [
   },
 ];
 
-async function assertRuntimeSelectedExecutableReferenceClosureBehavior(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-finite-ir-behavior-'));
-  try {
-    const compilerRoot = path.join(tempRoot, 'packages', 'compiler');
-    mkdirSync(compilerRoot, { recursive: true });
-    cpSync(path.join(repoRoot, 'packages/compiler/src'), path.join(compilerRoot, 'src'), {
-      recursive: true,
-    });
-    cpSync(
-      path.join(repoRoot, 'packages/compiler/package.json'),
-      path.join(compilerRoot, 'package.json'),
+async function assertRuntimeSelectedExecutableReferenceClosureBehavior(moduleUnderTest) {
+  const result = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+export const DynamicRef = component({
+  render: ({ profile }) => <button on:click={profile.executableRef}>Run</button>,
+});
+`,
+  );
+  const diagnostics = finiteIrDiagnostics(result);
+  if (
+    !diagnostics.some((diagnostic) =>
+      diagnostic.message.includes(
+        'runtime-selected on:* handler reference is not compiler-authorized',
+      ),
+    )
+  ) {
+    throw new Error(
+      `runtime-selected executable reference did not close through KV449: ${finiteIrDiagnosticSummary(diagnostics)}`,
     );
-    symlinkSync(
-      path.join(repoRoot, 'packages/compiler/node_modules'),
-      path.join(compilerRoot, 'node_modules'),
-      'dir',
-    );
-    writeFileSync(
-      path.join(compilerRoot, 'src/validate/security-operation-ir.ts'),
-      sourceText,
-      'utf8',
-    );
-    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
+  }
+}
 
-    const result = spawnSync(
-      process.execPath,
-      [
-        path.join(repoRoot, 'node_modules/vitest/vitest.mjs'),
-        '--run',
-        'packages/compiler/src/security-operation-ir.security.test.ts',
-        '--testNamePattern',
-        'runtime-selected handler reference|runtime-selected executable selector|exact static reviewed executable references',
-        '--reporter=dot',
-      ],
-      {
-        cwd: tempRoot,
-        encoding: 'utf8',
-        env: { ...process.env, FORCE_COLOR: '0' },
-        timeout: 60_000,
-      },
-    );
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-      throw new Error(
-        `finite browser IR behavioral regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
-      );
-    }
-  } finally {
-    rmSync(tempRoot, { force: true, recursive: true });
+function compileFiniteIrFixture(moduleUnderTest, source, extraFiles = []) {
+  return moduleUnderTest.compileComponentModule({
+    ...(extraFiles.length > 0 ? { extraFiles } : {}),
+    fileName: 'src/finite-ir-mutation-fixture.tsx',
+    source,
+  });
+}
+
+function finiteIrDiagnostics(result) {
+  return result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
+}
+
+function finiteIrDiagnosticSummary(diagnostics) {
+  return diagnostics.length === 0
+    ? '<open>'
+    : diagnostics.map((diagnostic) => diagnostic.message).join(' | ');
+}
+
+function assertFiniteIrAllows(moduleUnderTest, source, extraFiles = []) {
+  const diagnostics = finiteIrDiagnostics(
+    compileFiniteIrFixture(moduleUnderTest, source, extraFiles),
+  );
+  if (diagnostics.length > 0) {
+    throw new Error(`expected finite-IR allow verdict: ${finiteIrDiagnosticSummary(diagnostics)}`);
+  }
+}
+
+function assertFiniteIrCloses(moduleUnderTest, source, extraFiles = []) {
+  const diagnostics = finiteIrDiagnostics(
+    compileFiniteIrFixture(moduleUnderTest, source, extraFiles),
+  );
+  if (diagnostics.length === 0) {
+    throw new Error('expected finite-IR closed verdict, but the compiler admitted the fixture');
   }
 }
 
@@ -3108,10 +3130,19 @@ function installMutantScriptLib(tempRoot) {
   );
 }
 
-async function assertExactTrustedAssignIdentityIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(exactTrustedAssignIdentityBranch)) {
-    throw new Error('trustedAssign no longer requires exact @kovojs/server export identity');
-  }
+function assertExactTrustedAssignIdentityBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+import { trustedAssign } from './lookalike.js';
+export const save = mutation('contacts/save', {
+  handler(input) {
+    return trustedAssign(input.id, 'foreign helper must not inherit framework identity');
+  },
+});
+`,
+  );
 }
 
 async function assertBrowserRtcNetworkCapabilityIsPinned(_moduleUnderTest, { sourceText }) {
@@ -3120,45 +3151,102 @@ async function assertBrowserRtcNetworkCapabilityIsPinned(_moduleUnderTest, { sou
   }
 }
 
-async function assertAmbientErrorStabilityIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(ambientErrorStabilityBranch)) {
-    throw new Error('ambient Error admission no longer requires stable callable identity');
-  }
+function assertAmbientErrorStabilityBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { query } from '@kovojs/server';
+const capturedError = Error;
+export const list = query('contacts/list', {
+  load() { throw new Error('ambient constructor escaped before use'); },
+});
+void capturedError;
+`,
+  );
 }
 
-async function assertAmbientCryptoRandomUuidStabilityIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(ambientCryptoRandomUuidStabilityBranch)) {
-    throw new Error(
-      'ambient crypto.randomUUID admission no longer requires stable member identity',
-    );
-  }
+function assertAmbientCryptoRandomUuidStabilityBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+const capturedCrypto = crypto;
+export const save = mutation('contacts/save', {
+  handler() { return { id: crypto.randomUUID() }; },
+});
+void capturedCrypto;
+`,
+  );
 }
 
-async function assertFiniteManagedDatabaseContinuationIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(finiteManagedDatabaseContinuationBranch)) {
-    throw new Error('managed database continuations no longer require the finite method set');
-  }
+function assertFiniteManagedDatabaseContinuationBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+export const save = mutation('contacts/save', {
+  handler(_input, request) { return request.db.select().dropEverything(); },
+});
+`,
+  );
 }
 
-async function assertManagedDatabaseForeignArgumentClosureIsPinned(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  if (!sourceText.includes(managedDatabaseForeignArgumentClosureBranch)) {
-    throw new Error('managed database continuations no longer reject foreign executable arguments');
-  }
+function assertManagedDatabaseForeignArgumentClosureBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+import { foreignPredicate } from './lookalike.js';
+export const save = mutation('contacts/save', {
+  handler(_input, request) { return request.db.select().where(foreignPredicate); },
+});
+`,
+  );
 }
 
-async function assertExactProjectSchemaFactoryIdentityIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(exactProjectSchemaFactoryIdentityBranch)) {
-    throw new Error('project schema values no longer require exact Drizzle table-factory identity');
-  }
+function assertExactProjectSchemaFactoryIdentityBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+import { contacts } from './schema.js';
+export const save = mutation('contacts/save', {
+  handler(_input, request) { return request.db.select().from(contacts); },
+});
+`,
+    [
+      {
+        fileName: 'src/schema.ts',
+        source: `
+import { alias } from 'drizzle-orm/pg-core';
+export const contacts = alias({}, 'contacts');
+`,
+      },
+    ],
+  );
 }
 
-async function assertImmutableProjectSchemaBindingIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(immutableProjectSchemaBindingBranch)) {
-    throw new Error('project schema values no longer require immutable exported bindings');
-  }
+function assertImmutableProjectSchemaBindingBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+import { contacts } from './schema.js';
+export const save = mutation('contacts/save', {
+  handler(_input, request) { return request.db.select().limit(contacts); },
+});
+`,
+    [
+      {
+        fileName: 'src/schema.ts',
+        source: `
+import { pgTable } from 'drizzle-orm/pg-core';
+export const contacts = pgTable('contacts', {});
+contacts = new Proxy({}, {});
+`,
+      },
+    ],
+  );
 }
 
 async function assertRenderEquivalenceProjectIdentityIsPinned(_moduleUnderTest, { sourceText }) {
@@ -4095,71 +4183,183 @@ async function assertTaskBJsxNameScannerRetirementIsEnforced(moduleUnderTest) {
   }
 }
 
-async function assertReviewedCommandCapabilityDoorIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedCommandCapabilityDoorBranch)) {
-    throw new Error('finite IR no longer admits the exact runtime-validated command door');
-  }
+function assertReviewedCommandCapabilityDoorBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(
+    moduleUnderTest,
+    `
+import { cmd, commandAllowlist, mutation, runCommand } from '@kovojs/server';
+const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixed health probe' });
+const command = cmd('/usr/bin/true', [], { allow });
+export const verify = mutation({
+  async handler() {
+    await runCommand(command);
+    return { ok: true };
+  },
+});
+`,
+  );
 }
 
-async function assertReviewedModuleStorageFactoryIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedModuleStorageFactoryBranch)) {
-    throw new Error('finite IR no longer derives exact module-scope storage provenance');
-  }
+function assertReviewedModuleStorageFactoryBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(moduleUnderTest, reviewedStorageStatFixture);
 }
 
-async function assertReviewedStorageStatIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedStorageStatBranch)) {
-    throw new Error('finite IR no longer classifies storage.stat as a reviewed read');
-  }
+function assertReviewedStorageStatBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(moduleUnderTest, reviewedStorageStatFixture);
 }
 
-async function assertReviewedTrustedSqlRawDoorIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedTrustedSqlRawDoorBranch)) {
-    throw new Error('finite IR no longer admits exact trustedSql(sql.raw(static literal))');
-  }
+function assertReviewedTrustedSqlRawDoorBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(
+    moduleUnderTest,
+    `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(_input, context) {
+    await context.db.execute(trustedSql(sql.raw('select 1'), {
+      justification: 'fixed reviewed statement',
+    }));
+    return Response.json({ ok: true });
+  },
+});
+`,
+  );
 }
 
-async function assertReviewedDeclaredSecretReadDoorIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedDeclaredSecretReadDoorBranch)) {
-    throw new Error('finite IR no longer admits the exact declared secret-read capability');
-  }
+function assertReviewedDeclaredSecretReadDoorBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(moduleUnderTest, reviewedDeclaredSecretReadFixture);
 }
 
-async function assertReviewedDeclaredSecretReadExecutionIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedDeclaredSecretReadExecutionBranch)) {
-    throw new Error('finite IR no longer admits exact declared secret-read execution');
-  }
+function assertReviewedDeclaredSecretReadExecutionBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(moduleUnderTest, reviewedDeclaredSecretReadFixture);
 }
 
-async function assertReviewedTrustedRevealDoorIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedTrustedRevealDoorBranch)) {
-    throw new Error('finite IR no longer admits exact audited trustedReveal');
-  }
+function assertReviewedTrustedRevealDoorBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(moduleUnderTest, reviewedSecretProjectionFixture);
 }
 
-async function assertReviewedSecretBoxDoorIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedSecretBoxDoorBranch)) {
-    throw new Error('finite IR no longer admits exact framework secret boxing');
-  }
+function assertReviewedSecretBoxDoorBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(moduleUnderTest, reviewedSecretProjectionFixture);
 }
 
-async function assertReviewedDrizzleAliasDoorIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedDrizzleAliasDoorBranch)) {
-    throw new Error('finite IR no longer admits exact Drizzle table aliases');
-  }
+function assertReviewedDrizzleAliasDoorBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(
+    moduleUnderTest,
+    `
+import { endpoint } from '@kovojs/server';
+import { alias } from 'drizzle-orm/pg-core';
+import { accounts } from './schema.js';
+export const report = endpoint('/report', {
+  handler() {
+    const reviewedAccounts = alias(accounts, 'reviewed_accounts');
+    return Response.json({ table: reviewedAccounts.id });
+  },
+});
+`,
+    reviewedDatabaseSchemaFiles,
+  );
 }
 
-async function assertReviewedInnerJoinContinuationIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedInnerJoinContinuationBranch)) {
-    throw new Error('finite IR no longer admits inline managed innerJoin continuations');
-  }
+function assertReviewedInnerJoinContinuationBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(
+    moduleUnderTest,
+    `
+import { endpoint } from '@kovojs/server';
+import { eq } from 'drizzle-orm';
+import { accounts, items } from './schema.js';
+export const report = endpoint('/report', {
+  async handler(_input, context) {
+    const rows = await context.db.select({ id: accounts.id })
+      .from(accounts)
+      .innerJoin(items, eq(items.accountId, accounts.id));
+    return Response.json({ rows });
+  },
+});
+`,
+    reviewedDatabaseSchemaFiles,
+  );
 }
 
-async function assertReviewedUnionContinuationIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(reviewedUnionContinuationBranch)) {
-    throw new Error('finite IR no longer admits inline managed union continuations');
-  }
+function assertReviewedUnionContinuationBehavior(moduleUnderTest) {
+  assertFiniteIrAllows(
+    moduleUnderTest,
+    `
+import { endpoint } from '@kovojs/server';
+import { accounts, items } from './schema.js';
+export const report = endpoint('/report', {
+  async handler(_input, context) {
+    const rows = await context.db.select({ id: accounts.id })
+      .from(accounts)
+      .union(context.db.select({ id: items.id }).from(items));
+    return Response.json({ rows });
+  },
+});
+`,
+    reviewedDatabaseSchemaFiles,
+  );
 }
+
+const reviewedStorageStatFixture = `
+import { createFileSystemStorage, mutation } from '@kovojs/server';
+const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+export const verify = mutation({
+  async handler() {
+    await storage.stat('fixed-key');
+    return { ok: true };
+  },
+});
+`;
+
+const reviewedDeclaredSecretReadFixture = `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability, query } from '@kovojs/server';
+export const report = query({
+  async load(_input, context) {
+    const statement = trustedSql(sql.raw('select id, classified from accounts'), {
+      justification: 'reviewed static secret read',
+    });
+    declareSecretReadCapability(statement, {
+      columns: ['classified'],
+      justification: 'review the classified fixture value on the server',
+      source: 'accounts.classified',
+      table: 'accounts',
+    });
+    const result = await context.db.execute(statement);
+    return { items: result.rows ?? [] };
+  },
+});
+`;
+
+const reviewedSecretProjectionFixture = `
+import { secret, trustedReveal } from '@kovojs/core';
+import { query } from '@kovojs/server';
+export const report = query({
+  load(input) {
+    const reviewed = trustedReveal(secret(input.value), {
+      justification: 'reviewed server projection',
+      method: 'server-projection',
+      source: 'accounts.classified',
+    });
+    return { reviewed };
+  },
+});
+`;
+
+const reviewedDatabaseSchemaFiles = [
+  {
+    fileName: 'src/schema.ts',
+    source: `
+import { pgTable, text } from 'drizzle-orm/pg-core';
+export const accounts = pgTable('accounts', {
+  id: text('id').primaryKey(),
+});
+export const items = pgTable('items', {
+  accountId: text('account_id').notNull(),
+  id: text('id').primaryKey(),
+});
+`,
+  },
+];
 
 async function assertAuthorizationMatrixDocumentIsClosed(_moduleUnderTest, { sourceText }) {
   const check = authorizationMatrixGate.validateAuthorizationMatrixDocument(JSON.parse(sourceText));
