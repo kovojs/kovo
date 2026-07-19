@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "248463b2a89c2448ec292a27c504077323dc4f54202bcef3267d89b3b4530da0",
+      "sourceTreeSha256": "34fc11173520f2993756fc4bb7dc7b8d9022fcb65b5eb01b0d3eb56e5f3169da",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "d05a29795466a10dd8830e635b1e7c5669c67bd4c84a2bd02f8847921623c387",
+      "sourceTreeSha256": "8504e8ad1071d49d3c4b93ed8c2da171c466a0f8360ece1a161cd7c5f8a136b8",
       "manifestVariants": [
         {
           "fingerprint": "sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368"
@@ -1941,7 +1941,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "8458cdbbe2ef3905c8f1ad3ccf613040514bff0a484699c0e16434ea829067b0"
+      "sourceTreeSha256": "30c05785db1a0cac549118a1dd3cff7f03b2e80d6c6ecb5756f129f38a3b9e4e"
     },
     {
       "manifestVariants": [

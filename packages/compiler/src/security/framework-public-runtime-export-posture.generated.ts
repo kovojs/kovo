@@ -62,10 +62,10 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/compiler", "0.2.0", [
     ["sha256:21d6efc7eb88bc768717c0e7a396abab70b204e8c0cc49c215a8885811fed018", [
 
-    ], ["kovo-compiler-self-source-tree-sha256:248463b2a89c2448ec292a27c504077323dc4f54202bcef3267d89b3b4530da0"]],
+    ], ["kovo-compiler-self-source-tree-sha256:34fc11173520f2993756fc4bb7dc7b8d9022fcb65b5eb01b0d3eb56e5f3169da"]],
     ["sha256:ae324e67b1862da80aca7fbcce8f08ee8736916c8ee767f59093e03b6430f411", [
 
-    ], ["kovo-compiler-self-packed-tree-sha256:e41f6336018c67d020988ebc96d9cda7254521c647ad9b7a6d98b86d22e5e1cf"]],
+    ], ["kovo-compiler-self-packed-tree-sha256:8c4624fc730fbfa054f7211c7dca697250524f64fc08db23b113018177da3474"]],
   ]],
   ["@kovojs/core", "0.2.0", [
     ["sha256:0a2601682508fdf9aa0e622fcff62e4e0d15c4e305fdcff4d56ef83e567e22e1", [
@@ -78,10 +78,10 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/drizzle", "0.2.0", [
     ["sha256:0036ed241b94055828034de201690c38cc10e593d66c38f9aa2779fd11f76073", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:8458cdbbe2ef3905c8f1ad3ccf613040514bff0a484699c0e16434ea829067b0"]],
+    ], ["kovo-source-tree-sha256:30c05785db1a0cac549118a1dd3cff7f03b2e80d6c6ecb5756f129f38a3b9e4e"]],
     ["sha256:251d2105fefc584adb577a804eb22a6f0bfd25b72e5e92dd8c185c39a364ce4a", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:60337d29f23919fc7317938fecb686505c3b7ebac3186bdac6db1bf120b8d70f"]],
+    ], ["kovo-packed-tree-sha256:821afddde1c3dd32e173a3943b428e088f3ed8b6c3574150058cd93c37a233a4"]],
   ]],
   ["@kovojs/headless-ui", "0.2.0", [
     ["sha256:6a24b5584a6fa410caa4da1027e11b4cf43e1cdd0c0888894abdcae4afdbfe76", [
@@ -3786,7 +3786,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["create-kovo", "0.2.0", [
     ["sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368", [
 
-    ], ["kovo-packed-tree-sha256:9f6d35b9ece54c56db2ada33d514477a1a76112c870a9e51f975a9543d172852","kovo-source-tree-sha256:d05a29795466a10dd8830e635b1e7c5669c67bd4c84a2bd02f8847921623c387"]],
+    ], ["kovo-packed-tree-sha256:9f6d35b9ece54c56db2ada33d514477a1a76112c870a9e51f975a9543d172852","kovo-source-tree-sha256:8504e8ad1071d49d3c4b93ed8c2da171c466a0f8360ece1a161cd7c5f8a136b8"]],
   ]],
 ];
 
