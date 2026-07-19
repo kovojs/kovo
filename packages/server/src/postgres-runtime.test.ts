@@ -1687,6 +1687,48 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it.each([
+    {
+      code: 'KV433_POLICY_SET',
+      label: 'an extra policy',
+      sql: [
+        'CREATE POLICY attacker_open ON public.kovo_runtime_notes',
+        'FOR ALL TO PUBLIC USING (true) WITH CHECK (true)',
+      ].join(' '),
+    },
+    {
+      code: 'KV433_OWNER_POLICY',
+      label: 'an ALTER POLICY weakening',
+      sql: [
+        'ALTER POLICY kovo_owner_scope ON public.kovo_runtime_notes',
+        'USING (true) WITH CHECK (true)',
+      ].join(' '),
+    },
+  ])('fails the boot posture check after $label', async ({ code, sql }) => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-boot-'));
+    roots.push(dataDir);
+    const baseline = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await baseline.ready;
+    } finally {
+      await baseline.close();
+    }
+
+    await execPglite(dataDir, sql);
+    const drifted = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheck: { onBoot: true },
+      provisionOnBoot: false,
+      schema,
+    });
+    try {
+      await expect(drifted.ready).rejects.toThrow(code);
+    } finally {
+      await drifted.close();
+    }
+  });
+
   it('refuses expected policy names with substituted role, command, or permissiveness', async () => {
     const variants = [
       {

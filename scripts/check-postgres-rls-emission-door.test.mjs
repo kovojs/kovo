@@ -13,6 +13,7 @@ describe('Postgres RLS emission-door census', () => {
     const result = checkPostgresRlsEmissionDoor();
     expect(result.findings).toEqual([]);
     expect(result).toMatchObject({
+      dropRendererCount: 4,
       ok: true,
       rawRendererCount: 3,
       runtimeCallCount: 5,
@@ -233,8 +234,8 @@ export function rogue(input) { return emit({ ...input, site: 'owner' }); }
       files
         .get(runtimeFile)
         .replace(
-          'export function apply() {',
-          'const hiddenEmitter = emitPostgresRlsPolicySql;\nexport function apply() {',
+          'async function applyPostgresRlsPolicies() {',
+          'const hiddenEmitter = emitPostgresRlsPolicySql;\nasync function applyPostgresRlsPolicies() {',
         )
         .replace(
           "  emitPostgresRlsPolicySql({ site: 'admin' });",
@@ -344,12 +345,16 @@ function primaryPolicySql() { return \`CREATE POLICY \${name} ON \${table}\`; }
       runtimeFile,
       `
 import { emitPostgresRlsPolicySql } from './postgres-authorization-correspondence.js';
-export function apply() {
+async function applyPostgresRlsPolicies() {
   emitPostgresRlsPolicySql({ site: 'owner' });
   emitPostgresRlsPolicySql({ site: 'ownerVia' });
   emitPostgresRlsPolicySql({ site: 'authzPolicy' });
   emitPostgresRlsPolicySql({ site: 'system' });
   emitPostgresRlsPolicySql({ site: 'admin' });
+  client.exec(\`DROP POLICY IF EXISTS kovo_owner_scope ON \${table}\`);
+  client.exec(\`DROP POLICY IF EXISTS kovo_authz_policy ON \${table}\`);
+  client.exec(\`DROP POLICY IF EXISTS kovo_system_scope ON \${table}\`);
+  client.exec(\`DROP POLICY IF EXISTS kovo_admin_scope ON \${table}\`);
 }
 `,
     ],

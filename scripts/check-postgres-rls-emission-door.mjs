@@ -26,10 +26,16 @@ const emitterName = 'emitPostgresRlsPolicySql';
 const primaryEmitterName = 'primaryPolicySql';
 const productionSourcePattern = /(?:\.[cm]?[jt]sx?|\.sql)$/u;
 const productionTestPattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
-const expectedRawRenderers = Object.freeze([
+const expectedCreateRenderers = Object.freeze([
   `${emitterName}\u0000CREATE POLICY kovo_admin_scope ON `,
   `${emitterName}\u0000CREATE POLICY kovo_system_scope ON `,
   `${primaryEmitterName}\u0000CREATE POLICY `,
+]);
+const expectedDropRenderers = Object.freeze([
+  'applyPostgresRlsPolicies\u0000DROP POLICY IF EXISTS kovo_admin_scope ON ',
+  'applyPostgresRlsPolicies\u0000DROP POLICY IF EXISTS kovo_authz_policy ON ',
+  'applyPostgresRlsPolicies\u0000DROP POLICY IF EXISTS kovo_owner_scope ON ',
+  'applyPostgresRlsPolicies\u0000DROP POLICY IF EXISTS kovo_system_scope ON ',
 ]);
 const expectedPrimaryCases = Object.freeze(['authzPolicy', 'owner', 'ownerVia']);
 
@@ -63,9 +69,10 @@ export function checkPostgresRlsEmissionDoor({ files, rootDir = repoRoot } = {})
 
   for (const [fileName, source] of sources) {
     if (fileName.endsWith('.sql')) {
-      if (containsCreatePolicySql(source)) {
+      const policyMutation = postgresPolicyMutationKeyword(source);
+      if (policyMutation !== undefined) {
         findings.push(
-          `${fileName}:1: raw CREATE POLICY SQL is outside the sole reviewed renderer ${postgresRlsEmitterFile}`,
+          `${fileName}:1: raw ${policyMutation} POLICY SQL is outside the sole reviewed renderer ${postgresRlsEmitterFile}`,
         );
       }
       continue;
@@ -87,22 +94,30 @@ export function checkPostgresRlsEmissionDoor({ files, rootDir = repoRoot } = {})
     validateEmitterInventory(emitterSource, findings);
     validateEmitterSwitch(emitterSource, findings);
     validatePrimaryEmitterCalls(emitterSource, checker, findings);
-    validateRendererSymbolClosure(emitterSource, checker, findings);
+    validateRendererSymbolClosure(program, emitterSource, checker, findings);
   }
 
-  const rawRenderers = [];
+  const createRenderers = [];
+  const dropRenderers = [];
   const runtimeCalls = [];
   let runtimeEmitterImports = 0;
   for (const [fileName, sourceFile] of parsed) {
-    collectRawPolicyRenderers(sourceFile, checker, fileName, rawRenderers, findings);
-    collectEmitterModuleEscapes(sourceFile, fileName, findings);
+    collectRawPolicyRenderers(
+      sourceFile,
+      checker,
+      fileName,
+      createRenderers,
+      dropRenderers,
+      findings,
+    );
+    collectEmitterModuleEscapes(sourceFile, checker, fileName, findings);
     const bindings = collectEmitterImportBindings(sourceFile, fileName, findings);
     if (fileName === postgresRlsRuntimeFile) runtimeEmitterImports = bindings.importCount;
     collectEmitterCalls(sourceFile, fileName, bindings, runtimeCalls, findings);
     collectEmitterBindingEscapes(sourceFile, fileName, bindings, findings);
   }
 
-  validateRawRenderers(rawRenderers, findings);
+  validateRawRenderers(createRenderers, dropRenderers, findings);
   validateRuntimeCalls(runtimeCalls, findings);
   if (runtimeEmitterImports !== 1) {
     findings.push(
@@ -113,12 +128,14 @@ export function checkPostgresRlsEmissionDoor({ files, rootDir = repoRoot } = {})
   return {
     findings,
     ok: findings.length === 0,
-    rawRendererCount: rawRenderers.length,
+    createRendererCount: createRenderers.length,
+    dropRendererCount: dropRenderers.length,
+    rawRendererCount: createRenderers.length,
     runtimeCallCount: runtimeCalls.length,
     siteCount: postgresRlsEmissionSites.length,
     summary:
       findings.length === 0
-        ? `OK ${postgresRlsEmissionSites.length} Postgres RLS emission sites, ${rawRenderers.length} raw SQL renderers, ${runtimeCalls.length} runtime constructor calls`
+        ? `OK ${postgresRlsEmissionSites.length} Postgres RLS emission sites, ${createRenderers.length} CREATE renderers, ${dropRenderers.length} DROP renderers, ${runtimeCalls.length} runtime constructor calls`
         : `${findings.length} Postgres RLS emission-door violation(s)`,
   };
 }
@@ -341,68 +358,146 @@ function validatePrimaryEmitterCalls(sourceFile, checker, findings) {
   }
 }
 
-function validateRendererSymbolClosure(sourceFile, checker, findings) {
+function validateRendererSymbolClosure(program, sourceFile, checker, findings) {
+  const publicDeclaration = findFunctionDeclaration(sourceFile, emitterName);
   const declaration = findFunctionDeclaration(sourceFile, primaryEmitterName);
+  const publicTarget =
+    publicDeclaration?.name === undefined
+      ? undefined
+      : checker.getSymbolAtLocation(publicDeclaration.name);
   const target =
     declaration?.name === undefined ? undefined : checker.getSymbolAtLocation(declaration.name);
-  if (declaration?.name === undefined || target === undefined) {
+  if (
+    publicDeclaration?.name === undefined ||
+    publicTarget === undefined ||
+    declaration?.name === undefined ||
+    target === undefined
+  ) {
     findings.push(
-      `${postgresRlsEmitterFile}: private ${primaryEmitterName}() declaration is missing`,
+      `${postgresRlsEmitterFile}: reviewed public/private RLS renderer declarations are missing`,
     );
     return;
   }
 
-  walk(sourceFile, (node) => {
-    if (!ts.isIdentifier(node)) return;
-    if (!sameSymbol(checker, checker.getSymbolAtLocation(node), target)) return;
-    if (node === declaration.name) return;
-    if (ts.isCallExpression(node.parent) && node.parent.expression === node) return;
-    findings.push(
-      `${postgresRlsEmitterFile}:${lineOf(sourceFile, node)}: private ${primaryEmitterName} may not be aliased, exported, returned, or otherwise escape its three reviewed direct call positions`,
-    );
-  });
+  for (const candidate of program.getSourceFiles()) {
+    const fileName = slash(candidate.fileName);
+    walk(candidate, (node) => {
+      if (!ts.isIdentifier(node)) return;
+      const symbol = checker.getSymbolAtLocation(node);
+      if (sameSymbol(checker, symbol, target)) {
+        if (node === declaration.name) return;
+        if (ts.isCallExpression(node.parent) && node.parent.expression === node) return;
+        findings.push(
+          `${fileName}:${lineOf(candidate, node)}: private ${primaryEmitterName} may not be aliased, exported, returned, or otherwise escape its three reviewed direct call positions`,
+        );
+        return;
+      }
+      if (!sameSymbol(checker, symbol, publicTarget)) return;
+      if (node === publicDeclaration.name) return;
+      if (isReviewedRuntimeEmitterReference(node, candidate, fileName)) return;
+      findings.push(
+        `${fileName}:${lineOf(candidate, node)}: ${emitterName} may appear only in its declaration, the reviewed runtime import, and the five direct runtime calls`,
+      );
+    });
+  }
 }
 
-function collectRawPolicyRenderers(sourceFile, checker, fileName, rows, findings) {
+function isReviewedRuntimeEmitterReference(node, sourceFile, fileName) {
+  if (fileName !== postgresRlsRuntimeFile || node.text !== emitterName) return false;
+  if (
+    ts.isImportSpecifier(node.parent) &&
+    node.parent.name === node &&
+    node.parent.propertyName === undefined
+  ) {
+    const declaration = node.parent.parent.parent.parent;
+    return (
+      ts.isImportDeclaration(declaration) &&
+      ts.isStringLiteral(declaration.moduleSpecifier) &&
+      moduleCanResolveToEmitter(fileName, declaration.moduleSpecifier.text)
+    );
+  }
+  return ts.isCallExpression(node.parent) && node.parent.expression === node;
+}
+
+function collectRawPolicyRenderers(
+  sourceFile,
+  checker,
+  fileName,
+  createRows,
+  dropRows,
+  findings,
+) {
   walk(sourceFile, (node) => {
-    if (isStringToken(node) && containsCreatePolicySql(node.text)) {
-      rows.push({
-        fileName,
-        functionName: enclosingFunctionName(node) ?? '<module>',
-        line: lineOf(sourceFile, node),
-        text: node.text,
-      });
+    if (isStringToken(node)) {
+      const policyMutation = postgresPolicyMutationKeyword(node.text);
+      if (policyMutation === 'CREATE') {
+        createRows.push({
+          fileName,
+          functionName: enclosingFunctionName(node) ?? '<module>',
+          line: lineOf(sourceFile, node),
+          text: node.text,
+        });
+      } else if (policyMutation === 'DROP') {
+        dropRows.push({
+          fileName,
+          functionName: enclosingFunctionName(node) ?? '<module>',
+          line: lineOf(sourceFile, node),
+          text: node.text,
+        });
+      } else if (policyMutation !== undefined) {
+        findings.push(
+          `${fileName}:${lineOf(sourceFile, node)}: raw ${policyMutation} POLICY SQL is outside the sole reviewed renderer ${postgresRlsEmitterFile}`,
+        );
+      }
     }
     if (!isStaticStringComposition(node)) return;
     const value = evaluateStaticString(node, checker);
-    if (value === undefined || !containsCreatePolicySql(value)) return;
-    if (containsDirectPolicyLiteral(node)) return;
+    const policyMutation =
+      value === undefined ? undefined : postgresPolicyMutationKeyword(value);
+    if (policyMutation === undefined) return;
+    if (containsDirectPolicyMutationLiteral(node)) return;
     const parentValue = isStaticStringComposition(node.parent)
       ? evaluateStaticString(node.parent, checker)
       : undefined;
-    if (parentValue !== undefined && containsCreatePolicySql(parentValue)) return;
+    if (parentValue !== undefined && postgresPolicyMutationKeyword(parentValue) !== undefined) return;
     findings.push(
-      `${fileName}:${lineOf(sourceFile, node)}: statically concatenated CREATE POLICY SQL is outside the sole reviewed renderer`,
+      `${fileName}:${lineOf(sourceFile, node)}: statically concatenated ${policyMutation} POLICY SQL is outside the sole reviewed renderer`,
     );
   });
 }
 
-function validateRawRenderers(rows, findings) {
-  for (const row of rows) {
+function validateRawRenderers(createRows, dropRows, findings) {
+  for (const row of createRows) {
     if (row.fileName !== postgresRlsEmitterFile) {
       findings.push(
         `${row.fileName}:${row.line}: raw CREATE POLICY SQL is outside the sole reviewed renderer ${postgresRlsEmitterFile}`,
       );
     }
   }
-  const centralRows = rows
+  const centralRows = createRows
     .filter((row) => row.fileName === postgresRlsEmitterFile)
     .map((row) => `${row.functionName}\u0000${row.text}`)
     .sort((left, right) => left.localeCompare(right));
-  if (!equalArrays(centralRows, expectedRawRenderers)) {
+  if (!equalArrays(centralRows, expectedCreateRenderers)) {
     findings.push(
       `${postgresRlsEmitterFile}: expected exactly three reviewed CREATE POLICY renderers owned by ${emitterName}()/` +
         `${primaryEmitterName}(), found ${centralRows.length}`,
+    );
+  }
+  for (const row of dropRows) {
+    if (row.fileName !== postgresRlsRuntimeFile) {
+      findings.push(
+        `${row.fileName}:${row.line}: raw DROP POLICY SQL is outside the sole reviewed runtime policy reset ${postgresRlsRuntimeFile}`,
+      );
+    }
+  }
+  const runtimeDropRows = dropRows
+    .filter((row) => row.fileName === postgresRlsRuntimeFile)
+    .map((row) => `${row.functionName}\u0000${row.text}`)
+    .sort((left, right) => left.localeCompare(right));
+  if (!equalArrays(runtimeDropRows, expectedDropRenderers)) {
+    findings.push(
+      `${postgresRlsRuntimeFile}: expected exactly four reviewed DROP POLICY resets owned by applyPostgresRlsPolicies(), found ${runtimeDropRows.length}`,
     );
   }
 }
@@ -451,7 +546,7 @@ function collectEmitterImportBindings(sourceFile, fileName, findings) {
   return { importCount, localNames };
 }
 
-function collectEmitterModuleEscapes(sourceFile, fileName, findings) {
+function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings) {
   for (const statement of sourceFile.statements) {
     if (
       ts.isExportDeclaration(statement) &&
@@ -479,13 +574,29 @@ function collectEmitterModuleEscapes(sourceFile, fileName, findings) {
   walk(sourceFile, (node) => {
     if (!ts.isCallExpression(node) || node.arguments.length !== 1) return;
     const argument = node.arguments[0];
-    if (!ts.isStringLiteral(argument)) return;
     const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
     const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
     if (!isDynamicImport && !isRequire) return;
-    if (!moduleCanResolveToEmitter(fileName, argument.text)) return;
+    const specifier = evaluateStaticString(argument, checker);
+    if (specifier === undefined || !moduleCanResolveToEmitter(fileName, specifier)) return;
     findings.push(
       `${fileName}:${lineOf(sourceFile, node)}: the RLS correspondence module may not be loaded dynamically`,
+    );
+  });
+
+  walk(sourceFile, (node) => {
+    if (!ts.isStringLiteral(node) || !moduleCanResolveToEmitter(fileName, node.text)) return;
+    const parent = node.parent;
+    if (
+      (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) &&
+      parent.moduleSpecifier === node
+    ) {
+      return;
+    }
+    if (ts.isExternalModuleReference(parent) && parent.expression === node) return;
+    if (ts.isCallExpression(parent) && parent.arguments[0] === node) return;
+    findings.push(
+      `${fileName}:${lineOf(sourceFile, node)}: the RLS correspondence module specifier may not escape into computed loading data`,
     );
   });
 }
@@ -607,10 +718,10 @@ function isStringToken(node) {
   );
 }
 
-function containsDirectPolicyLiteral(node) {
+function containsDirectPolicyMutationLiteral(node) {
   let found = false;
   walk(node, (child) => {
-    if (isStringToken(child) && containsCreatePolicySql(child.text)) found = true;
+    if (isStringToken(child) && postgresPolicyMutationKeyword(child.text) !== undefined) found = true;
   });
   return found;
 }
@@ -717,15 +828,17 @@ function staticConstDeclaration(checker, identifier) {
   return declarations?.length === 1 ? declarations[0] : undefined;
 }
 
-function containsCreatePolicySql(value) {
+function postgresPolicyMutationKeyword(value) {
   for (let index = 0; index < value.length; index += 1) {
-    if (!sqlKeywordAt(value, index, 'CREATE')) continue;
-    const afterCreate = index + 'CREATE'.length;
-    const afterTrivia = skipPostgresTrivia(value, afterCreate);
-    if (afterTrivia === afterCreate) continue;
-    if (sqlKeywordAt(value, afterTrivia, 'POLICY')) return true;
+    for (const keyword of ['CREATE', 'ALTER', 'DROP']) {
+      if (!sqlKeywordAt(value, index, keyword)) continue;
+      const afterKeyword = index + keyword.length;
+      const afterTrivia = skipPostgresTrivia(value, afterKeyword);
+      if (afterTrivia === afterKeyword) continue;
+      if (sqlKeywordAt(value, afterTrivia, 'POLICY')) return keyword;
+    }
   }
-  return false;
+  return undefined;
 }
 
 function sqlKeywordAt(value, index, keyword) {
