@@ -106,6 +106,16 @@ describe('Postgres RLS emission-door census', () => {
     expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
   });
 
+  it.each([
+    `export const policy = \`ALTER POLICY kovo_owner_scope ON secrets USING (true)\`;`,
+    `export const policy = ['DROP', 'POLICY kovo_owner_scope ON secrets'].join(' ');`,
+  ])('kills statically visible policy mutations outside the reviewed emitter', (source) => {
+    const files = cleanFixture();
+    files.set('packages/core/src/rogue-policy.ts', source);
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
   it('kills computed namespace access to the reviewed emitter', () => {
     const files = cleanFixture();
     files.set(
@@ -136,11 +146,23 @@ export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input
   it.each([
     `export const load = () => import('./postgres-authorization-correspondence.js');`,
     `export const load = () => require('./postgres-authorization-correspondence.js');`,
+    `const moduleName = './postgres-' + 'authorization-correspondence.js'; export const load = () => import(moduleName);`,
+    `const moduleName = new URL('./postgres-authorization-correspondence.js', import.meta.url); export const load = () => import(moduleName.href);`,
   ])('kills dynamic access to the correspondence module', (source) => {
     const files = cleanFixture();
     files.set('packages/server/src/rogue-policy.ts', source);
 
     expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it('uses symbol identity rather than rejecting an unrelated same-spelled local', () => {
+    const files = cleanFixture();
+    files.set(
+      'packages/core/src/unrelated.ts',
+      `function emitPostgresRlsPolicySql() { return 'not SQL'; } export const value = emitPostgresRlsPolicySql();`,
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files }).findings).toEqual([]);
   });
 
   it('kills a live sixth policy installed through an alias of the private renderer', () => {
