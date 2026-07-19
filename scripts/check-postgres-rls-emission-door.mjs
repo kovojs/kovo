@@ -606,8 +606,16 @@ function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings) {
 
 function moduleCanResolveToEmitter(fileName, specifier) {
   if (!specifier.startsWith('.')) return false;
+  const suffixIndex = specifier.search(/[?#]/u);
+  const pathPart = suffixIndex < 0 ? specifier : specifier.slice(0, suffixIndex);
+  let canonicalSpecifier;
+  try {
+    canonicalSpecifier = decodeURIComponent(pathPart).replaceAll('\\', '/');
+  } catch {
+    return false;
+  }
   const resolved = slash(
-    path.posix.normalize(path.posix.join(path.posix.dirname(fileName), specifier)),
+    path.posix.normalize(path.posix.join(path.posix.dirname(fileName), canonicalSpecifier)),
   );
   return (
     resolved.replace(/\.(?:[cm]?[jt]sx?)$/u, '') === postgresRlsEmitterFile.replace(/\.ts$/u, '')
