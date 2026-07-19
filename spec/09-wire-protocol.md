@@ -158,6 +158,21 @@ expected failure UI is normal TSX (`<FieldError>`, `<FormError>`, or direct `for
 than a separate response template. `ctx.submit`'s `onError` receives the same typed union. Expected
 failure responses never use committed invalidation or `Kovo-Targets` success selection.
 
+**KV430 request-body posture (normative).** After successful JSON decoding, Kovo MUST enforce the
+iterative depth/breadth/node budget before provenance decoration, schema traversal, CSRF-token field
+extraction, or handler dispatch. URL-encoded segment and multipart-part ceilings enter the same
+posture. Provenance decoration MUST keep every app-visible scalar read non-coercible and untrusted,
+including reads through own-property descriptors, `Reflect.get`, `Object.assign`, and serialization,
+but MUST NOT eagerly allocate one persistent poison object per scalar leaf; the validation-only raw
+container view is module-private and unforgeable. A CSRF-exempt mutation that exceeds one of these
+ceilings answers **422** with `{"code":"VALIDATION","payload":{"reason":"shape-budget"}}`. A
+CSRF-protected mutation or endpoint cannot safely recover its submitted token from an over-budget
+carrier and therefore fails through the ordinary CSRF response without exposing the body verdict.
+After webhook authentication, malformed JSON remains **400** `Invalid JSON webhook body`, while a
+valid JSON body that exceeds KV430 answers **422** with
+`{"error":{"code":"VALIDATION","payload":{"reason":"shape-budget"}},"ok":false}`. None of
+these expected input refusals calls the app's unexpected-error hook or handler.
+
 Declared `fail()` payloads are client-bound wire values and MUST satisfy the same `JsonValue`
 vocabulary as query values and island state: JSON primitives, arrays, and plain objects only. An
 error schema may parse richer server-side values for internal use, but `context.fail(code, payload)`

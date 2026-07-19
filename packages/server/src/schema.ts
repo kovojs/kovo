@@ -28,6 +28,7 @@ import {
 import {
   createWitnessSet,
   createWitnessWeakMap,
+  createWitnessWeakSet,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -39,6 +40,8 @@ import {
   witnessSetHas,
   witnessWeakMapGet,
   witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import {
   requestCreateNullRecord,
@@ -51,6 +54,7 @@ import {
   requestIsFormData,
   requestIsPlainRecord,
 } from './request-body-intrinsics.js';
+import { revealRequestProvenanceContainer } from './request-body-provenance.js';
 import {
   assertResponseSecurityIntrinsics,
   securityArrayIsArray,
@@ -220,17 +224,6 @@ function arrayEvery<Value>(
     }
   }
   return true;
-}
-
-function ownRecordValues(record: Record<string, unknown>): unknown[] {
-  const values: unknown[] = [];
-  const keys = witnessObjectKeys(record);
-  for (let index = 0; index < keys.length; index += 1) {
-    const descriptor = witnessGetOwnPropertyDescriptor(record, keys[index]!);
-    if (descriptor === undefined || !('value' in descriptor)) continue;
-    appendSchemaArrayValue(values, descriptor.value);
-  }
-  return values;
 }
 
 /** @internal Return the declared upload bytes needed by file schemas nested in this schema. */
@@ -1655,6 +1648,22 @@ export interface ShapeBudget {
 
 const DEFAULT_SHAPE_BUDGET: ShapeBudget = { maxDepth: 64, maxBreadth: 10_000, maxNodes: 200_000 };
 let activeShapeBudget: ShapeBudget = DEFAULT_SHAPE_BUDGET;
+const shapeBudgetErrors = createWitnessWeakSet<object>();
+
+/** @internal Recognize only a KV430 verdict minted by the iterative shape-budget gate. */
+export function isShapeBudgetError(error: unknown): boolean {
+  return (
+    (typeof error === 'object' || typeof error === 'function') &&
+    error !== null &&
+    witnessWeakSetHas(shapeBudgetErrors, error)
+  );
+}
+
+function shapeBudgetError(message: string): SchemaValidationError {
+  const error = validationError(`KV430 input shape budget: ${message}`);
+  witnessWeakSetAdd(shapeBudgetErrors, error);
+  return error;
+}
 
 /**
  * Raise or lower the global input-shape budget (KV430). The default stops the
@@ -1663,15 +1672,6 @@ let activeShapeBudget: ShapeBudget = DEFAULT_SHAPE_BUDGET;
  */
 export function configureShapeBudget(budget: Partial<ShapeBudget>): void {
   activeShapeBudget = { ...activeShapeBudget, ...budget };
-}
-
-/** Container children to descend; non-plain objects (File/Blob/Date/Map) are leaves. */
-function descendableChildren(value: object): readonly unknown[] | undefined {
-  if (securityArrayIsArray(value)) return value;
-  if (requestIsPlainRecord(value)) {
-    return ownRecordValues(value as Record<string, unknown>);
-  }
-  return undefined;
 }
 
 /**
@@ -1690,33 +1690,62 @@ export function assertShapeWithinBudget(
   if (input === null || typeof input !== 'object') return;
   let nodes = 1;
   const stack: Array<readonly [value: object, depth: number]> = [[input, 0]];
+  const seen = createWitnessWeakSet<object>();
+  witnessWeakSetAdd(seen, input);
   while (stack.length > 0) {
     const entry = popSchemaArrayValue(stack);
     if (entry === undefined) break;
-    const value = entry[0];
+    const value = revealSchemaInput(entry[0]);
+    if (value === null || typeof value !== 'object') continue;
     const depth = entry[1];
     if (depth > budget.maxDepth) {
-      throw validationError(`Input nesting exceeds the maximum depth of ${budget.maxDepth}.`);
+      throw shapeBudgetError(`input nesting exceeds the maximum depth of ${budget.maxDepth}.`);
     }
-    const children = descendableChildren(value);
-    if (children === undefined) continue;
-    const childCount = stableSchemaArrayLength(children);
+    const array = securityArrayIsArray(value);
+    const keys = array
+      ? undefined
+      : requestIsPlainRecord(value)
+        ? witnessObjectKeys(value)
+        : undefined;
+    if (!array && keys === undefined) continue;
+    const childCount = array ? stableSchemaArrayLength(value) : keys!.length;
     if (childCount > budget.maxBreadth) {
-      throw validationError(
-        `Input container of ${childCount} entries exceeds the maximum breadth of ${budget.maxBreadth}.`,
+      throw shapeBudgetError(
+        `input container of ${childCount} entries exceeds the maximum breadth of ${budget.maxBreadth}.`,
       );
     }
     nodes += childCount;
     if (nodes > budget.maxNodes) {
-      throw validationError(`Input exceeds the maximum node count of ${budget.maxNodes}.`);
+      throw shapeBudgetError(`input exceeds the maximum node count of ${budget.maxNodes}.`);
     }
     for (let index = 0; index < childCount; index += 1) {
-      const child = stableSchemaArrayValue(children, index);
-      if (child !== null && typeof child === 'object') {
+      const child = revealSchemaInput(
+        array ? stableSchemaArrayValue(value, index) : stableShapeRecordValue(value, keys![index]!),
+      );
+      if (child !== null && typeof child === 'object' && !witnessWeakSetHas(seen, child)) {
+        witnessWeakSetAdd(seen, child);
         appendSchemaArrayValue(stack, [child, depth + 1]);
       }
     }
   }
+}
+
+function stableShapeRecordValue(value: object, property: PropertyKey): unknown {
+  const before = witnessGetOwnPropertyDescriptor(value, property);
+  const after = witnessGetOwnPropertyDescriptor(value, property);
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw shapeBudgetError('request records require stable own data properties.');
+  }
+  return before.value;
 }
 
 function popSchemaArrayValue<Value>(values: Value[]): Value | undefined {
@@ -1738,7 +1767,7 @@ function stableSchemaArrayLength(values: readonly unknown[]): number {
     !securityNumberIsInteger(descriptor.value) ||
     descriptor.value < 0
   ) {
-    throw validationError('Expected stable array input');
+    throw shapeBudgetError('expected stable array input.');
   }
   return descriptor.value;
 }
@@ -1746,7 +1775,7 @@ function stableSchemaArrayLength(values: readonly unknown[]): number {
 function stableSchemaArrayValue(values: readonly unknown[], index: number): unknown {
   const descriptor = witnessGetOwnPropertyDescriptor(values, index);
   if (descriptor === undefined || !('value' in descriptor)) {
-    throw validationError('Expected dense stable array input');
+    throw shapeBudgetError('expected dense stable array input.');
   }
   return descriptor.value;
 }
@@ -1755,8 +1784,11 @@ const SCHEMA_UNTRUSTED_REVEAL_REASON =
   'validated request-derived input through Kovo schema parsing';
 
 function revealSchemaInput(input: unknown): unknown {
-  if (isUntrusted(input)) return revealUntrusted(input, SCHEMA_UNTRUSTED_REVEAL_REASON);
-  return input;
+  input = revealRequestProvenanceContainer(input);
+  if (isUntrusted(input)) {
+    input = revealUntrusted(input, SCHEMA_UNTRUSTED_REVEAL_REASON);
+  }
+  return revealRequestProvenanceContainer(input);
 }
 
 export async function parseSchemaAsync<T>(
