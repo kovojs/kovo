@@ -200,6 +200,13 @@ describe('kovo build', () => {
       };
 
       const first = await build();
+      const firstCertificate = readFileSync(join(outDir, '.kovo/certificate.json'), 'utf8');
+      expect(JSON.parse(firstCertificate)).toMatchObject({
+        schema: 'kovo.certificate/v1',
+      });
+      expect(firstCertificate).toBe(
+        readFileSync(join(repoRoot, 'security/kovo-certificate-v1.json'), 'utf8'),
+      );
       const graph = JSON.parse(first) as {
         provenance?: {
           frameworkPackages: readonly { name: string; version: string }[];
@@ -227,6 +234,7 @@ describe('kovo build', () => {
       });
       expect(JSON.stringify(graph.provenance)).not.toContain(root);
       expect(await build()).toBe(first);
+      expect(readFileSync(join(outDir, '.kovo/certificate.json'), 'utf8')).toBe(firstCertificate);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -4366,24 +4374,26 @@ const carts = {};
 
 const saveCart = mutation('cart/save', {
   input: s.object({ id: s.string() }),
-  handler(input) {
-    appDb.insert(carts).values({ id: input.id });
+  handler(input, request: { db: typeof appDb }) {
+    request.db.insert(carts).values({ id: input.id });
     return { ok: true };
   },
 });
 
 const sendReceipt = task('tasks/send-receipt', {
   input: s.object({ id: s.string() }),
-  run(input) {
-    appDb.insert(receipts).values({ id: input.id });
+  run(input, context) {
+    // @ts-expect-error security regression fixture deliberately exercises forbidden task DB access
+    context.db.insert(receipts).values({ id: input.id });
     return { ok: true };
   },
 });
 
 const paymentWebhook = webhook('/webhooks/payment', {
   access: { kind: 'public', reason: 'build preflight regression fixture' },
-  handler(input) {
-    appDb.insert(payments).values({ id: input.id });
+  handler(input, context) {
+    // @ts-expect-error security regression fixture deliberately exercises forbidden webhook DB access
+    context.tx.insert(payments).values({ id: input.id });
     return { ok: true };
   },
   idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
@@ -4658,19 +4668,13 @@ function writeKv414PreflightStaticSources(root: string): void {
       'import { query, s, type QueryLoadContext, type Reader } from "@kovojs/server";',
       'import { accounts } from "./schema.js";',
       '',
-      'type AppDb = PgAsyncDatabase<unknown, unknown>;',
+      'type AppDb = PgAsyncDatabase<any, any>;',
       'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
-      '',
-      'function requireDb(context?: AppQueryLoadContext): Reader<AppDb> {',
-      '  const db = context?.db;',
-      '  if (!db) throw new Error("KV414 build proof requires context.db");',
-      '  return db;',
-      '}',
-      '',
       'export const accountById = query({',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, context?: AppQueryLoadContext) {',
-      '    const db = requireDb(context);',
+      '    const db: Reader<AppDb> | undefined = context?.db;',
+      '    if (!db) throw new Error("KV414 build proof requires context.db");',
       '    return db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, input.id));',
       '  },',
       '});',

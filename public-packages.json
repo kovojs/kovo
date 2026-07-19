@@ -2137,6 +2137,17 @@
       }
     },
     {
+      "name": "@kovojs/verify",
+      "dir": "verify",
+      "visibility": "public",
+      "kind": "cli",
+      "apiBoundary": {
+        "public": ["."],
+        "generated": [],
+        "internal": ["./internal/translation"]
+      }
+    },
+    {
       "name": "create-kovo",
       "dir": "create-kovo",
       "visibility": "public",

@@ -28,7 +28,7 @@ export type FrameworkExportPostureGroup = readonly [
 ];
 
 export const frameworkExportPostureSummaryVersion =
-  'kovo-framework-public-runtime-export-posture/2026-07-19.5' as const;
+  'kovo-framework-public-runtime-export-posture/2026-07-19.6' as const;
 
 // Compact generated closed membership; expanded formatting triples parse input.
 // prettier-ignore
@@ -54,18 +54,18 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/cli", "0.2.0", [
     ["sha256:55ced4126de7fc822390a6b2fd624a40e36d9e5571b004d0c25f1e06962b6cc9", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:69a79ba3dd6f2d7dbc034ab02482cde29a3be1d7379fa4fdf72cc3c7af39267a"]],
+    ], ["kovo-packed-tree-sha256:e541bdb7d8c9cd4bab89412d44d52f7db30697e83871ec3e394fc3ef600faf53"]],
     ["sha256:be78408be21a86cbac9a8dc0fd404b3f323a33e2cbbdf32eed7dba60849ed74e", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:9f039102d7b106079e83485d68bbdd6aefe763fb318bf134c5dc01ff269cf7b4"]],
+    ], ["kovo-source-tree-sha256:38bcc568ec07905702854df25189bc008deaf2c804e70b3fa5dc2e08b9e2021d"]],
   ]],
   ["@kovojs/compiler", "0.2.0", [
     ["sha256:21d6efc7eb88bc768717c0e7a396abab70b204e8c0cc49c215a8885811fed018", [
 
-    ], ["kovo-compiler-self-source-tree-sha256:037aa951fb2d8a37770e47a7758e7154f57365879385a2e19673bbc8e21e5b8b"]],
+    ], ["kovo-compiler-self-source-tree-sha256:975eb898d00b19fb5550cc8f84ad2d995d222fce83a839ef79e0114fb0a3a91d"]],
     ["sha256:ae324e67b1862da80aca7fbcce8f08ee8736916c8ee767f59093e03b6430f411", [
 
-    ], ["kovo-compiler-self-packed-tree-sha256:147ee04e4492e9bc5f3513627c01482bf4095edb521521e98ac8651e8338c369"]],
+    ], ["kovo-compiler-self-packed-tree-sha256:1dd42bba474f8c3f4b73faf1741c122f26885def3deb6dfa0ba2bd834163b228"]],
   ]],
   ["@kovojs/core", "0.2.0", [
     ["sha256:6ac811f078dbb6ad22a9e5bd8b7ee36b4ee6134bec267c06bdf61862daaffe45", [
@@ -3649,7 +3649,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default","types"]],
       ["./testing",["default","types"]],
       ["./vite",["default","types"]],
-    ], ["kovo-packed-tree-sha256:119d31fc851e7df02d6ca13b88614090d75f72a2f1f24bde361b23833dc963c1"]],
+    ], ["kovo-packed-tree-sha256:db1f3904b7394804efe5e0ee5e2ab53ef296e0487ba1574437f68797c1e67963"]],
     ["sha256:ddf6f53b981cd30cbee6a39ab2915cde76be0a61808fb5cbea18367d50ec7f83", [
       [".",["default"]],
       ["./build",["default"]],
@@ -3657,7 +3657,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default"]],
       ["./testing",["default"]],
       ["./vite",["default"]],
-    ], ["kovo-source-tree-sha256:d4330d9b0abc17956bf3e47ec95d434e39903c940997387cb92f59f5f6a35f4f"]],
+    ], ["kovo-source-tree-sha256:ea1a4894108baeddaf26e6639035f28d21819a2249e98f931c7ab8ae3e571cd8"]],
   ]],
   ["@kovojs/style", "0.2.0", [
     ["sha256:6a05257804d6e0287e3c9bfa07ba88aa48ac29abaef9458b3b6299bb21fdac86", [
@@ -3782,6 +3782,14 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./toolbar",["default","types"]],
       ["./tooltip",["default","types"]],
     ], ["kovo-packed-tree-sha256:480aaf7efdd80ae407d572a6d129eb786abd3d24ec2c10907e2777d5c9cb066f"]],
+  ]],
+  ["@kovojs/verify", "0.2.0", [
+    ["sha256:da859a9bf3e28a086707fe37a6e75c5039c72314622d3e6f9eb4318111135aac", [
+      [".",["default","types"]],
+    ], ["kovo-packed-tree-sha256:fed9d23479385cf0c7a4afa891da0cd3ca2f290f5f76d44aa4ce3a6f58ddd570"]],
+    ["sha256:e624bffd99f35bcafddeb7bd909587711f36385a63eeffa7c1f9cb76c99d738d", [
+      [".",["default"]],
+    ], ["kovo-source-tree-sha256:140b9519855eec9c62d26612ea2aefbcf329d82ac5da834ff1a39320b35fe46b"]],
   ]],
   ["create-kovo", "0.2.0", [
     ["sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368", [
@@ -7937,5 +7945,8 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
     ["./toggle-group",["ToggleGroup","ToggleGroupButton","ToggleGroupItem"]],
     ["./toolbar",["Toolbar","ToolbarButton","ToolbarItem"]],
     ["./tooltip",["Tooltip","TooltipContent","TooltipTrigger"]],
+  ]],
+  ["@kovojs/verify", "request-closed", ["filesystem"], "none", "Certificate verification is build/release tooling; its filesystem authority is not available inside request handlers.", [
+    [".",["<module>","KOVO_CERTIFICATE_CAPABILITY_DOMAIN","formatCertificateVerification","verifyCertificate","verifyCertificateDirectory"]],
   ]],
 ];

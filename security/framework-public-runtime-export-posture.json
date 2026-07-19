@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.5",
-  "runtimeSurfaceSha256": "2211793f10b6b4c168fedd7d184131160c89212ec6d7e4d130d82da8c36f144e",
-  "postureMemberSha256": "b68a8fab59b3cbac968e0625a218b667b95bcb62fbe73f351d71250ffd3bc0ef",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.6",
+  "runtimeSurfaceSha256": "ad2d0241e80c7e8282b367095c79ab8fb3051e6a46855d030d557e0d55bd2749",
+  "postureMemberSha256": "c42ba357f5d4a4a68b48be5365d3347c1f2334b2ce832a933b08c1659d4f7d00",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "037aa951fb2d8a37770e47a7758e7154f57365879385a2e19673bbc8e21e5b8b",
+      "sourceTreeSha256": "975eb898d00b19fb5550cc8f84ad2d995d222fce83a839ef79e0114fb0a3a91d",
       "manifestVariants": [
         {
           "exports": {
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "9f039102d7b106079e83485d68bbdd6aefe763fb318bf134c5dc01ff269cf7b4"
+      "sourceTreeSha256": "38bcc568ec07905702854df25189bc008deaf2c804e70b3fa5dc2e08b9e2021d"
     },
     {
       "manifestVariants": [
@@ -9640,7 +9640,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "d4330d9b0abc17956bf3e47ec95d434e39903c940997387cb92f59f5f6a35f4f"
+      "sourceTreeSha256": "ea1a4894108baeddaf26e6639035f28d21819a2249e98f931c7ab8ae3e571cd8"
     },
     {
       "manifestVariants": [
@@ -10516,7 +10516,67 @@
         }
       ],
       "sourceTreeSha256": "a7ec04add8646fbd927e8179c163e0593d2abfa268f258845a7a3cd3dd2ec976"
+    },
+    {
+      "manifestVariants": [
+        {
+          "exports": {
+            ".": {
+              "types": "./dist/index.d.mts",
+              "default": "./dist/index.mjs"
+            },
+            "./internal/translation": {
+              "types": "./dist/translation.d.mts",
+              "default": "./dist/translation.mjs"
+            }
+          },
+          "fingerprint": "sha256:da859a9bf3e28a086707fe37a6e75c5039c72314622d3e6f9eb4318111135aac"
+        },
+        {
+          "exports": {
+            ".": "./src/index.ts",
+            "./internal/translation": "./src/translation.ts"
+          },
+          "fingerprint": "sha256:e624bffd99f35bcafddeb7bd909587711f36385a63eeffa7c1f9cb76c99d738d"
+        }
+      ],
+      "packageName": "@kovojs/verify",
+      "packageVersion": "0.2.0",
+      "postureGroups": [
+        {
+          "capabilities": ["filesystem"],
+          "disposition": "request-closed",
+          "id": "request-closed-request-closed-build-compiler-filesystem-certificate-verifier-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "build-compiler"
+          },
+          "members": {
+            ".": [
+              "<module>",
+              "KOVO_CERTIFICATE_CAPABILITY_DOMAIN",
+              "formatCertificateVerification",
+              "verifyCertificate",
+              "verifyCertificateDirectory"
+            ]
+          },
+          "review": {
+            "basis": "The standalone certificate verifier is build/release tooling. Its directory verifier owns filesystem reads, and the package is never a request-handler capability door.",
+            "evidence": ["packages/verify/src/index.ts"],
+            "id": "first-party-runtime-posture/2026-07-19"
+          },
+          "rootKind": "none",
+          "securityRole": "request-closed",
+          "reason": "Certificate verification is build/release tooling; its filesystem authority is not available inside request handlers."
+        }
+      ],
+      "sourceTreeSha256": "140b9519855eec9c62d26612ea2aefbcf329d82ac5da834ff1a39320b35fe46b"
     }
   ],
-  "classificationSha256": "f7869ac3bf819b0ee4087630826b94ee9d5c1b4c86f2f12b83e09a326ac55f3d"
+  "classificationSha256": "ab104252cee1fc0ed12baba21adbb5516402313862594dcd92787204ab291628"
 }

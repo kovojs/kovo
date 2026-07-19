@@ -18,9 +18,11 @@ export const certificateProbePackageNames = Object.freeze([
 const snapshotPath = path.join(repoRoot, 'scripts', 'pack-security.files.json');
 
 export function probePublishedModuleIdentity({
-  packageConfigs = defaultPackageConfigs(repoRoot),
+  allowOpaqueComputedImports = false,
+  packageConfigs = certificateProbePackageConfigs(repoRoot),
   packageNames = certificateProbePackageNames,
   snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8')),
+  validateOnlySelectedPackages = false,
 } = {}) {
   const findings = [];
   const configsByName = new Map(packageConfigs.map((config) => [config.name, config]));
@@ -32,7 +34,12 @@ export function probePublishedModuleIdentity({
       findings.push(`${config.name}: scripts/pack-security.files.json has no exact file list`);
       continue;
     }
-    const modules = validateExactModuleFiles({ config, findings, packedFiles });
+    const modules = validateExactModuleFiles({
+      checkActual: !validateOnlySelectedPackages || packageNames.includes(config.name),
+      config,
+      findings,
+      packedFiles,
+    });
     resolutionPackages.push({ ...config, modules, moduleSet: new Set(modules) });
   }
 
@@ -58,7 +65,9 @@ export function probePublishedModuleIdentity({
       const module = moduleId(packageEntry.name, modulePath);
       const absolutePath = path.join(packageEntry.rootDir, modulePath);
       const source = readFileSync(absolutePath, 'utf8');
-      const parsed = parsePublishedModule(module, source, findings);
+      const parsed = parsePublishedModule(module, source, findings, {
+        allowOpaqueComputedImports,
+      });
 
       if (parsed.importsModuleLoader) {
         const opaque = {
@@ -66,6 +75,10 @@ export function probePublishedModuleIdentity({
           reason:
             'imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage',
         };
+        opaqueModules.set(`${opaque.module}\0${opaque.reason}`, opaque);
+      }
+      for (const reason of parsed.opaqueReasons) {
+        const opaque = { module, reason };
         opaqueModules.set(`${opaque.module}\0${opaque.reason}`, opaque);
       }
 
@@ -149,7 +162,7 @@ export function formatPublishedModuleIdentityReport(report, { includeEdges = fal
   return `${lines.join('\n')}\n`;
 }
 
-function validateExactModuleFiles({ config, findings, packedFiles }) {
+function validateExactModuleFiles({ checkActual, config, findings, packedFiles }) {
   const seen = new Set();
   const modules = [];
   for (const packedFile of packedFiles) {
@@ -175,24 +188,26 @@ function validateExactModuleFiles({ config, findings, packedFiles }) {
   }
   modules.sort(compareStrings);
 
-  const actualModules = collectFiles(config.rootDir, ['dist'], {
-    includeFile: ({ relativePath }) => relativePath.endsWith('.mjs'),
-  }).sort(compareStrings);
-  if (JSON.stringify(actualModules) !== JSON.stringify(modules)) {
-    const expected = new Set(modules);
-    const actual = new Set(actualModules);
-    for (const missing of modules.filter((entry) => !actual.has(entry))) {
-      findings.push(`${config.name}: packed module is missing from dist: ${missing}`);
+  if (checkActual) {
+    const actualModules = collectFiles(config.rootDir, ['dist'], {
+      includeFile: ({ relativePath }) => relativePath.endsWith('.mjs'),
+    }).sort(compareStrings);
+    if (JSON.stringify(actualModules) !== JSON.stringify(modules)) {
+      const expected = new Set(modules);
+      const actual = new Set(actualModules);
+      for (const missing of modules.filter((entry) => !actual.has(entry))) {
+        findings.push(`${config.name}: packed module is missing from dist: ${missing}`);
+      }
+      for (const extra of actualModules.filter((entry) => !expected.has(entry))) {
+        findings.push(
+          `${config.name}: dist module is absent from the exact packed file list: ${extra}`,
+        );
+      }
     }
-    for (const extra of actualModules.filter((entry) => !expected.has(entry))) {
-      findings.push(
-        `${config.name}: dist module is absent from the exact packed file list: ${extra}`,
-      );
-    }
-  }
 
-  validatePackageRoot(config, findings);
-  for (const modulePath of modules) validateNoSymlinkPath(config, modulePath, findings);
+    validatePackageRoot(config, findings);
+    for (const modulePath of modules) validateNoSymlinkPath(config, modulePath, findings);
+  }
   return modules;
 }
 
@@ -236,7 +251,7 @@ function validateNoSymlinkPath(config, modulePath, findings) {
   }
 }
 
-function parsePublishedModule(module, source, findings) {
+function parsePublishedModule(module, source, findings, { allowOpaqueComputedImports }) {
   const sourceFile = ts.createSourceFile(
     module,
     source,
@@ -253,6 +268,7 @@ function parsePublishedModule(module, source, findings) {
 
   const specifiers = [];
   let importsModuleLoader = false;
+  const opaqueReasons = [];
   const addSpecifier = (node, kind) => {
     if (!node || !ts.isStringLiteralLike(node)) return false;
     const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
@@ -273,9 +289,15 @@ function parsePublishedModule(module, source, findings) {
     } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       if (!addSpecifier(node.arguments[0], 'dynamic-import')) {
         const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-        findings.push(
-          `${module}:${start.line + 1}:${start.character + 1}: computed dynamic import has no resolvable module identity`,
-        );
+        if (allowOpaqueComputedImports) {
+          opaqueReasons.push(
+            'contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage',
+          );
+        } else {
+          findings.push(
+            `${module}:${start.line + 1}:${start.character + 1}: computed dynamic import has no resolvable module identity`,
+          );
+        }
       }
     } else if (
       ts.isCallExpression(node) &&
@@ -290,7 +312,7 @@ function parsePublishedModule(module, source, findings) {
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return { importsModuleLoader, specifiers };
+  return { importsModuleLoader, opaqueReasons, specifiers };
 }
 
 function resolvePublishedSpecifier({ from, imported, packageEntry, packagesByName }) {
@@ -357,7 +379,7 @@ function resolvePublishedSpecifier({ from, imported, packageEntry, packagesByNam
   return { kind: 'edge', target: moduleId(targetPackage.name, targetPath) };
 }
 
-function defaultPackageConfigs(rootDir) {
+export function certificateProbePackageConfigs(rootDir = repoRoot) {
   return publicPackages()
     .filter((entry) => entry.name.startsWith('@kovojs/'))
     .map((entry) => {

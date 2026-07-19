@@ -470,6 +470,37 @@ export const UserCard = component({
     );
   });
 
+  it('withholds KV435-refused field names from emitted client and registry artifacts', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      queryShapeFacts: [
+        {
+          query: 'user',
+          shape: {
+            id: 'string',
+            passwordHash: { kind: 'secret', shape: 'string' },
+          },
+          source: 'generated/queries/user.shape.ts',
+        },
+      ],
+      source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => <user-card><span data-bind="user.id">u1</span></user-card>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'KV435' })]),
+    );
+    for (const file of result.files.filter(
+      (entry) => entry.kind === 'client' || entry.kind === 'registry',
+    )) {
+      expect(file.source).not.toMatch(/\bpasswordHash\b/u);
+    }
+  });
+
   it('reports KV439 when DB table-row provenance reaches a component query wire shape', () => {
     const result = compileComponentModule({
       fileName: 'user-card.tsx',

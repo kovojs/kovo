@@ -2,6 +2,7 @@ import type { LiveTargetRenderer } from './mutation-wire.js';
 import {
   createFrameworkAsyncContextCell,
   currentFrameworkAsyncContextValue,
+  runWithFrameworkAsyncContext,
   runWithIsolatedFrameworkAsyncContext,
 } from './async-context.js';
 import { appendDenseOwnArrayValue, denseOwnArrayForEach } from './registry-lookup.js';
@@ -39,6 +40,17 @@ const consumedGeneratedLiveTargetRegistryScopes =
  */
 export function runWithGeneratedLiveTargetRegistry<Value>(load: () => Value): Value {
   return runWithIsolatedFrameworkAsyncContext(
+    generatedLiveTargetRegistryContext,
+    createWitnessMap<string, LiveTargetRenderer<unknown>>(),
+    load,
+  );
+}
+
+/** @internal Compose the registry into an already-isolated framework lifecycle. */
+export function runWithGeneratedLiveTargetRegistryInCurrentContext<Value>(
+  load: () => Value,
+): Value {
+  return runWithFrameworkAsyncContext(
     generatedLiveTargetRegistryContext,
     createWitnessMap<string, LiveTargetRenderer<unknown>>(),
     load,

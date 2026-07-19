@@ -24,6 +24,21 @@ const RELEVANT_DRIZZLE_SOURCE = {
   ].join('\n'),
 };
 
+let analyzerDiagnosticFactory:
+  | (typeof import('@kovojs/core/internal/diagnostics'))['createRegisteredDiagnostic']
+  | undefined;
+
+function analyzerDiagnostic(
+  code: 'KV422' | 'KV447',
+  message: string,
+  site: string,
+) {
+  if (analyzerDiagnosticFactory === undefined) {
+    throw new TypeError('Analyzer diagnostic factory is unavailable before the subject loads.');
+  }
+  return analyzerDiagnosticFactory(code, { site }, { message });
+}
+
 describe('data-plane static analysis aggregate ABI', () => {
   afterEach(() => {
     vi.doUnmock('@kovojs/drizzle/internal/static');
@@ -254,12 +269,11 @@ export const status = query({
     const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
       queries: [],
       sqlSafetyDiagnostics: [
-        {
-          code: 'KV422',
-          message: 'wrapper SQL text reaches a managed sink',
-          severity: 'error',
-          site: 'src/search.js:5',
-        },
+        analyzerDiagnostic(
+          'KV422',
+          'wrapper SQL text reaches a managed sink',
+          'src/search.js:5',
+        ),
       ],
       toctouFacts: [],
       touchGraph: {},
@@ -305,12 +319,11 @@ export const status = query({
       extractStaticBuildAnalysisFactsFromProject: () => ({
         queries: [],
         sqlSafetyDiagnostics: [
-          {
-            code: 'KV447',
-            message: 'SQLite owner annotations are advisory only.',
-            severity: 'warn',
-            site: 'src/schema.ts:5',
-          },
+          analyzerDiagnostic(
+            'KV447',
+            'SQLite owner annotations are advisory only.',
+            'src/schema.ts:5',
+          ),
         ],
         toctouFacts: [],
         touchGraph: {},
@@ -338,12 +351,11 @@ export const status = query({
     const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
       queries: [],
       sqlSafetyDiagnostics: [
-        {
-          code: 'KV422',
-          message: 'raw SQL input reaches the managed sink',
-          severity: 'error',
-          site: 'src/schema.ts:4',
-        },
+        analyzerDiagnostic(
+          'KV422',
+          'raw SQL input reaches the managed sink',
+          'src/schema.ts:4',
+        ),
       ],
       toctouFacts: [],
       touchGraph: {},
@@ -389,12 +401,11 @@ export const status = query({
         queries: [],
         sqlSafetyDiagnostics: files[0]?.source.includes('sql.raw')
           ? [
-              {
-                code: 'KV422',
-                message: 'raw SQL input reaches the managed sink',
-                severity: 'error',
-                site: 'src/schema.ts:4',
-              },
+              analyzerDiagnostic(
+                'KV422',
+                'raw SQL input reaches the managed sink',
+                'src/schema.ts:4',
+              ),
             ]
           : [],
         toctouFacts: [],
@@ -431,12 +442,11 @@ export const status = query({
     const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
       queries: [],
       sqlSafetyDiagnostics: [
-        {
-          code: 'KV422',
-          message: 'raw SQL input reaches the managed sink',
-          severity: 'error',
-          site: 'src/schema.ts:4',
-        },
+        analyzerDiagnostic(
+          'KV422',
+          'raw SQL input reaches the managed sink',
+          'src/schema.ts:4',
+        ),
       ],
       toctouFacts: [],
       touchGraph: {},
@@ -464,12 +474,11 @@ export const status = query({
     const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
       queries: [],
       sqlSafetyDiagnostics: [
-        {
-          code: 'KV422',
-          message: 'raw SQL input reaches the managed sink',
-          severity: 'error',
-          site: 'src/schema.ts:4',
-        },
+        analyzerDiagnostic(
+          'KV422',
+          'raw SQL input reaches the managed sink',
+          'src/schema.ts:4',
+        ),
       ],
       toctouFacts: [],
       touchGraph: {},
@@ -880,5 +889,9 @@ export const status = query({
 });
 
 async function loadSubject(): Promise<DataPlaneStaticAnalysisModule> {
-  return import('./data-plane-static-analysis.js');
+  const subject = await import('./data-plane-static-analysis.js');
+  ({ createRegisteredDiagnostic: analyzerDiagnosticFactory } = await import(
+    '@kovojs/core/internal/diagnostics'
+  ));
+  return subject;
 }

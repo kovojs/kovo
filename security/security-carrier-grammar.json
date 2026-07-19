@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 244,
+    "historicalWitnesses": 245,
     "productions": 12
   },
   "productions": [
@@ -1064,6 +1064,12 @@
       "corpus": "finite-security-operation-ir",
       "production": "structural-closure",
       "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "independently-reparsed-emitted-translation",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness independently reparses emitted module text and compares it with compiler decision facts."
     },
     {
       "anchor": "realistic-reviewed-browser-operations",

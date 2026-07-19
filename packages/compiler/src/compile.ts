@@ -17,6 +17,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
+import { verifyEmittedTranslation } from '@kovojs/verify/internal/translation';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
 import { canonicalJson } from './canonical-json.js';
@@ -105,6 +106,7 @@ import {
 } from './package-prefixes.js';
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { analyzeClientCaptures } from './validate/client-capture.js';
+import { secretQueryWireDecisionFacts } from './validate/confidentiality.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
@@ -113,6 +115,7 @@ import { componentCacheInfluenceFacts } from './cache-influence-facts.js';
 import {
   componentSecurityOperationFacts,
   componentSecuritySemanticGraphFacts,
+  serverSecurityOperationFacts,
 } from './security-operation-facts.js';
 import { compilerEmittedSourceProvenanceToken } from './source-provenance.js';
 import { ensureTypescriptRuntime } from './ts-api.js';
@@ -353,6 +356,7 @@ interface EmitClientPhaseResult {
 
 interface EmitRegistryCssPhaseResult {
   readonly componentGraphFacts: readonly ComponentGraphFact[];
+  readonly confidentialityClosed: boolean;
   readonly cssAssets: readonly ComponentCssAsset[];
   readonly cssSource: string;
   readonly fileNames: ReturnType<typeof compileArtifactFileNames>;
@@ -361,6 +365,7 @@ interface EmitRegistryCssPhaseResult {
   readonly liveTargetFacts: ReturnType<typeof findLiveTargetFacts>;
   readonly mutationForms: MutationFormFacts;
   readonly registrySource: string;
+  readonly secretFieldNames: readonly string[];
 }
 
 interface EmitServerPhaseResult {
@@ -594,6 +599,7 @@ function emitRegistryCssPhase(
   client: EmitClientPhaseResult,
 ): EmitRegistryCssPhaseResult {
   const fileNames = compileArtifactFileNames(parsed.options.fileName);
+  const secretWireDecision = secretQueryWireDecisionFacts(lowered.model, parsed.compileOptions);
   const componentNameFacts = componentNameFactsForModel(parsed.options.fileName, lowered.model);
   const primaryComponentNames = componentNameFacts[0]?.names ?? parsed.componentNames;
   const componentCssSource = emitCssModule(primaryComponentNames.domName, lowered.model);
@@ -673,6 +679,7 @@ function emitRegistryCssPhase(
 
   return {
     componentGraphFacts,
+    confidentialityClosed: secretWireDecision.refusedQueryNames.length > 0,
     cssAssets,
     cssSource,
     fileNames,
@@ -698,10 +705,12 @@ function emitRegistryCssPhase(
         ? { queryShapeFacts: parsed.options.queryShapeFacts }
         : {}),
       queryUpdatePlans: validated.queryUpdatePlans,
+      refusedQueryNames: secretWireDecision.refusedQueryNames,
       ...(parsed.options.registryFacts ? { registryFacts: parsed.options.registryFacts } : {}),
       registryComponentName: primaryComponentNames.registryKey,
       viewTransitions: lowered.lowering.structuralLowering.viewTransitionStamps,
     }),
+    secretFieldNames: secretWireDecision.fieldNames,
   };
 }
 
@@ -941,6 +950,34 @@ function assembleCompileResult(
     server,
     parsed.originalModel,
   );
+  const confidentialityClosed = registryCss.confidentialityClosed;
+  const files: CompileResult['files'] = [
+    {
+      fileName: registryCss.fileNames.server,
+      kind: 'server',
+      source: server.serverModule.source,
+    },
+    {
+      fileName: registryCss.fileNames.client,
+      kind: 'client',
+      source: confidentialityClosed ? '' : client.clientSource,
+    },
+    ...(registryCss.cssSource
+      ? [
+          {
+            fileName: registryCss.fileNames.css,
+            kind: 'css' as const,
+            source: registryCss.cssSource,
+          },
+        ]
+      : []),
+    {
+      fileName: registryCss.fileNames.registry,
+      kind: 'registry',
+      source: confidentialityClosed ? '' : registryCss.registrySource,
+    },
+  ];
+  assertEmittedTranslation(lowered, client, registryCss, files, confidentialityClosed);
 
   return {
     clientModuleImportManifest: client.clientModuleImportManifest,
@@ -963,28 +1000,7 @@ function assembleCompileResult(
     }),
     diagnostics: verified.diagnostics,
     endpointGraphFacts: facts.endpointGraphFacts,
-    files: [
-      {
-        fileName: registryCss.fileNames.server,
-        kind: 'server',
-        source: server.serverModule.source,
-      },
-      { fileName: registryCss.fileNames.client, kind: 'client', source: client.clientSource },
-      ...(registryCss.cssSource
-        ? [
-            {
-              fileName: registryCss.fileNames.css,
-              kind: 'css' as const,
-              source: registryCss.cssSource,
-            },
-          ]
-        : []),
-      {
-        fileName: registryCss.fileNames.registry,
-        kind: 'registry',
-        source: registryCss.registrySource,
-      },
-    ],
+    files,
     clientExports: compilerAppendDense(
       compilerMapDense(
         client.versionedHandlers,
@@ -1033,6 +1049,42 @@ function assembleCompileResult(
     updateCoverage: facts.queryUpdateCoverage,
     viewTransitions: facts.viewTransitions,
   };
+}
+
+function assertEmittedTranslation(
+  lowered: LowerComponentPhaseResult,
+  client: EmitClientPhaseResult,
+  registryCss: EmitRegistryCssPhaseResult,
+  files: CompileResult['files'],
+  confidentialityClosed: boolean,
+): void {
+  const result = verifyEmittedTranslation({
+    artifacts: files,
+    decision: {
+      clientHandlers: confidentialityClosed
+        ? []
+        : compilerMapDense(
+            client.versionedHandlers,
+            'Translation-validation client handlers',
+            (handler) => ({
+              exportName: handler.exportName,
+              operations: handler.securityOperations,
+            }),
+          ),
+      clientImports: client.clientModuleImportManifest,
+      secretFieldNames: registryCss.secretFieldNames,
+      serverOperations: serverSecurityOperationFacts(lowered.model),
+    },
+  });
+  if (result.ok) return;
+  const findings = compilerMapDense(
+    result.findings,
+    'Emitted translation findings',
+    (finding) => `${finding.relation}:${finding.code}:${finding.message}`,
+  );
+  compilerFailClosed(
+    `Emitted translation validation failed: ${compilerArrayJoin(findings, ' | ')}`,
+  );
 }
 
 function componentCompileFactSnapshot(

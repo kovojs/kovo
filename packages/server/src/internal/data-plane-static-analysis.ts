@@ -448,10 +448,11 @@ function dataPlaneErrorDiagnosticsFromStaticFacts(
     'Vite SQL-safety diagnostics',
   );
   for (let index = 0; index < sqlDiagnostics.length; index += 1) {
-    const projected = sqlSafetyDiagnosticFact(sqlDiagnostics[index]);
-    for (let projectedIndex = 0; projectedIndex < projected.length; projectedIndex += 1) {
-      staticAnalysisArrayAppend(raw, projected[projectedIndex]!, 'Vite SQL diagnostics');
-    }
+    staticAnalysisArrayAppend(
+      raw,
+      registeredSqlSafetyDiagnostic(sqlDiagnostics[index]),
+      'Vite SQL diagnostics',
+    );
   }
   const toctouFacts = projectToctouFacts(staticFacts.toctouFacts);
   for (let index = 0; index < toctouFacts.length; index += 1) {
@@ -560,6 +561,7 @@ async function cachedStaticBuildAnalysisFacts(
   try {
     const facts = snapshotStaticBuildAnalysisFacts(
       staticAnalysisJsonParse(await entry.resultPreimage),
+      { diagnosticCarrier: 'serialized' },
     );
     if (facts === undefined) {
       throw new TypeError('Kovo process-local static-analysis cache returned invalid facts.');
@@ -588,6 +590,7 @@ async function runStaticBuildAnalysisFacts(
     }
     const facts = snapshotStaticBuildAnalysisFacts(
       extractStaticBuildAnalysisFactsFromProject({ files }),
+      { diagnosticCarrier: 'registered' },
     );
     if (facts === undefined) {
       throw new TypeError(
@@ -689,7 +692,9 @@ function snapshotDataPlaneAnalysisPreimage(preimage: string): DataPlaneAnalysis 
       throw new TypeError('Kovo process-local data-plane cache returned an invalid query shape.');
     }
   }
-  const staticFacts = snapshotStaticBuildAnalysisFacts(staticFactsValue);
+  const staticFacts = snapshotStaticBuildAnalysisFacts(staticFactsValue, {
+    diagnosticCarrier: 'serialized',
+  });
   if (staticFacts === undefined) {
     throw new TypeError('Kovo process-local data-plane cache returned invalid static facts.');
   }
@@ -705,6 +710,7 @@ function snapshotDataPlaneAnalysisPreimage(preimage: string): DataPlaneAnalysis 
 
 function snapshotStaticBuildAnalysisFacts(
   value: unknown,
+  options: { diagnosticCarrier: 'registered' | 'serialized' },
 ): StaticBuildAnalysisFactsLike | undefined {
   if (!value || typeof value !== 'object' || staticAnalysisArrayIsArray(value)) return undefined;
   const queries = staticAnalysisOwnDataValue(value, 'queries', 'Static-analysis facts');
@@ -750,12 +756,21 @@ function snapshotStaticBuildAnalysisFacts(
   const revealed = optionalArray('revealed');
   const scopeAudits = optionalArray('scopeAudits');
   if (invalidOptionalArray) return undefined;
-  const sqlSafetySnapshot = snapshotDenseArray(
+  const rawSqlSafetySnapshot = snapshotDenseArray(
     sqlSafetyDiagnostics,
     'Static SQL-safety diagnostics',
   ) as readonly TouchGraphDiagnosticLike[];
-  for (let index = 0; index < sqlSafetySnapshot.length; index += 1) {
-    sqlSafetyDiagnosticFact(sqlSafetySnapshot[index]);
+  const sqlSafetySnapshot: TouchGraphDiagnosticLike[] = [];
+  for (let index = 0; index < rawSqlSafetySnapshot.length; index += 1) {
+    const diagnostic =
+      options.diagnosticCarrier === 'registered'
+        ? registeredSqlSafetyDiagnostic(rawSqlSafetySnapshot[index])
+        : rehydrateSerializedSqlSafetyDiagnostic(rawSqlSafetySnapshot[index]);
+    staticAnalysisArrayAppend(
+      sqlSafetySnapshot,
+      diagnostic,
+      'Static SQL-safety diagnostic snapshot',
+    );
   }
   const toctouSnapshot = snapshotDenseArray(
     toctouFacts,
@@ -1351,31 +1366,54 @@ function isIgnoredDataPlaneDirectory(entry: string): boolean {
 }
 
 function sqlSafetyDiagnosticFact(value: unknown): CoreGraph.SqlSafetyDiagnosticFact[] {
+  const diagnostic = registeredSqlSafetyDiagnostic(value);
+  const code = diagnostic.code;
+  const message = diagnostic.message;
+  const severity = diagnostic.severity;
+  const site = diagnostic.site;
+  return [{ code, message, severity, site }];
+}
+
+function registeredSqlSafetyDiagnostic(value: unknown): TouchGraphDiagnosticLike {
   assertRegisteredDiagnostic(value, 'Static SQL-safety diagnostic');
   const code = staticAnalysisOwnDataValue(value, 'code', 'SQL-safety diagnostic');
   const message = staticAnalysisOwnDataValue(value, 'message', 'SQL-safety diagnostic');
   const severity = staticAnalysisOwnDataValue(value, 'severity', 'SQL-safety diagnostic');
   const site = staticAnalysisOwnDataValue(value, 'site', 'SQL-safety diagnostic');
-  const normalizedSeverity = severity ?? 'error';
   if (
     isDiagnosticCode(code) &&
     typeof message === 'string' &&
     typeof site === 'string' &&
-    (normalizedSeverity === 'error' ||
-      normalizedSeverity === 'warn' ||
-      normalizedSeverity === 'lint' ||
-      normalizedSeverity === 'notice')
+    (severity === 'error' ||
+      severity === 'warn' ||
+      severity === 'lint' ||
+      severity === 'notice')
   ) {
-    return [
-      {
-        code,
-        message,
-        severity: normalizedSeverity,
-        site,
-      },
-    ];
+    return value as TouchGraphDiagnosticLike;
   }
   throw new TypeError('Static SQL-safety diagnostic has malformed authority fields.');
+}
+
+function rehydrateSerializedSqlSafetyDiagnostic(value: unknown): TouchGraphDiagnosticLike {
+  const code = staticAnalysisOwnDataValue(value, 'code', 'Serialized SQL-safety diagnostic');
+  const message = staticAnalysisOwnDataValue(value, 'message', 'Serialized SQL-safety diagnostic');
+  const severity = staticAnalysisOwnDataValue(
+    value,
+    'severity',
+    'Serialized SQL-safety diagnostic',
+  );
+  const site = staticAnalysisOwnDataValue(value, 'site', 'Serialized SQL-safety diagnostic');
+  if (!isDiagnosticCode(code) || typeof message !== 'string' || typeof site !== 'string') {
+    throw new TypeError('Serialized SQL-safety diagnostic has malformed authority fields.');
+  }
+  // SPEC §2/§11: the process-local cache stores canonical JSON, so constructor identity cannot
+  // survive the round trip. Re-mint only after validating the finite registry code and exact
+  // registry-owned severity; arbitrary analyzer output still has to arrive registered above.
+  const diagnostic = createRegisteredDiagnostic(code, { site }, { message });
+  if (severity !== diagnostic.severity) {
+    throw new TypeError('Serialized SQL-safety diagnostic severity does not match the registry.');
+  }
+  return diagnostic;
 }
 
 function projectToctouFacts(values: readonly ToctouFactLike[]): CoreGraph.ToctouFact[] {

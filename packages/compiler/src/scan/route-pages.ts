@@ -1,7 +1,10 @@
 import { dirname, relative, resolve } from 'node:path';
 import * as ts from 'typescript';
 
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
@@ -173,9 +176,8 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
   const artifactFileName =
     stableOptions.artifactFileName ?? routeArtifactFileName(stableOptions.fileName);
 
-  return compilerSnapshotJsonValue(
+  const stableResult = compilerSnapshotJsonValue(
     {
-      diagnostics,
       files:
         routePageCount === 0
           ? []
@@ -196,6 +198,21 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
     },
     'Compiler route module result',
   );
+  const diagnosticCount = compilerArrayLength(diagnostics, 'Compiler route diagnostics');
+  for (let index = 0; index < diagnosticCount; index += 1) {
+    assertRegisteredDiagnostic(
+      compilerOwnDataValue(diagnostics, index, 'Compiler route diagnostics'),
+      `Compiler route diagnostics[${index}]`,
+    );
+  }
+  // SPEC §5.2/§11: route facts are JSON-snapshotted own data, but diagnostics are
+  // constructor-authenticated capabilities. JSON-cloning the latter destroys their private
+  // registry identity and makes a legitimate compiler result indistinguishable from a forgery.
+  return {
+    diagnostics,
+    files: stableResult.files,
+    routePageFacts: stableResult.routePageFacts,
+  };
 }
 
 function routePageFromCall(

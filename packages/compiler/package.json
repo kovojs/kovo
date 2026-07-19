@@ -63,6 +63,7 @@
   "dependencies": {
     "@kovojs/core": "workspace:*",
     "@kovojs/style": "workspace:*",
+    "@kovojs/verify": "workspace:*",
     "typescript": "6.0.3"
   },
   "devDependencies": {

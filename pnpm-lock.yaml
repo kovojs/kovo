@@ -471,6 +471,9 @@ importers:
       '@kovojs/style':
         specifier: workspace:*
         version: link:../style
+      '@kovojs/verify':
+        specifier: workspace:*
+        version: link:../verify
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -740,6 +743,16 @@ importers:
       '@kovojs/browser':
         specifier: workspace:*
         version: link:../browser
+      vitest:
+        specifier: 4.1.8
+        version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0))
+
+  packages/verify:
+    dependencies:
+      es-module-lexer:
+        specifier: 2.1.0
+        version: 2.1.0
+    devDependencies:
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0))

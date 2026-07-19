@@ -1,6 +1,8 @@
 // @kovo-security-classifier-corpus finite-security-operation-ir
 import { describe, expect, it } from 'vitest';
 
+import { isRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+
 import { compileRouteModule } from './scan/route-pages.js';
 
 describe('compileRouteModule', () => {
@@ -576,6 +578,7 @@ export const guardOnlyWebhook = webhook('/guard-only-webhook', {
     expect(result.diagnostics.every((diagnostic) => diagnostic.help?.includes('SPEC §10.2'))).toBe(
       true,
     );
+    expect(result.diagnostics.every(isRegisteredDiagnostic)).toBe(true);
   });
 
   it('preserves access-only and guard-only declarations and ignores local lookalikes', () => {

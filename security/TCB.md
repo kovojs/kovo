@@ -120,6 +120,14 @@ that closure.
       "integrity": "sha512-Wp3tnZ2bzwxyTZMtgWVzXDfm7lB1Drz+y9DmmYH/L702PQhPyVrp3pkou3yIz4qjS14GY9kcpmLiOOMvl8oG1g==",
       "role": "Drizzle schema extraction and source-model inspection used by the compile path.",
       "reviewTrigger": "Any ts-morph bump must re-run Drizzle extraction, schema identity, and compiler conformance suites."
+    },
+    {
+      "id": "analysis.certificate-es-module-lexer",
+      "dependency": "es-module-lexer",
+      "pinnedVersion": "2.1.0",
+      "integrity": "sha512-n27zTYMjYu1aj4MjCWzSP7G9r75utsaoc8m61weK+W8JMBGGQybd43GstCXZ3WNmSFtGT9wi59qQTW6mhTR5LQ==",
+      "role": "Standalone certificate checker import and re-export extraction from exact published JavaScript bytes.",
+      "reviewTrigger": "Any bump must re-run the certificate schema, three obligation-specific negative controls, lexical-authority audit, packed-package, and outside-process CLI verification."
     }
   ],
   "analysisDependencies": [
@@ -172,6 +180,7 @@ that closure.
       "packages/drizzle/src/derive.ts"
     ],
     "roots": [
+      "analysis.certificate-es-module-lexer",
       "analysis.esbuild",
       "analysis.lucide-static",
       "analysis.material-color-utilities",

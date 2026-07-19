@@ -118,6 +118,7 @@ import {
 } from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
+import { kovoCertificateV1Json } from '../certificate.js';
 import {
   readCapabilityPackageSummaries,
   resolveCapabilityPackages,
@@ -1191,6 +1192,9 @@ function writeKovoBuildGraphArtifact(
     join(neutralBuild.outDir, 'graph.json'),
     `${stringifyBuildValue({ ...graph, provenance }, 2)}\n`,
   );
+  // Plan 3 §2.1: the release-bound framework certificate is an independently-checkable sibling,
+  // not an app-authored graph field. Its committed canonical bytes are embedded in the CLI build.
+  writeFileSync(join(neutralBuild.outDir, 'certificate.json'), kovoCertificateV1Json);
 }
 
 function buildCheckFailureOutput(output: string): string {
@@ -2881,20 +2885,13 @@ async function loadBuildAppModule(
     const serverExecutionModule = await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/execution'), root),
     );
-    const serverBuildContextModule = (await server.ssrLoadModule(
-      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build-context'), root),
-    )) as typeof import('@kovojs/server/internal/build-context');
     const serverInternalBuildModule = await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
     );
     const trustedInternalBuild =
       serverInternalBuildModule as LoadedBuildAppModule['serverInternalBuildModule'];
-    const appModule = await serverBuildContextModule.withKovoBuildContext(
-      { appEnvironment: 'unavailable', graphDerivation: true },
-      () =>
-        trustedInternalBuild.runWithGeneratedLiveTargetRegistry(() =>
-          server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
-        ),
+    const appModule = await trustedInternalBuild.runWithUnavailableBuildAppEnvironment(
+      () => server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
     );
     return {
       appModule,
