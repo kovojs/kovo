@@ -1,0 +1,11 @@
+import { consume } from './foreign.js';
+import { endpoint } from '@kovojs/server';
+
+export const root = endpoint('/ledger/foreign', {
+  handler(input, context) {
+    consume(context.db);
+    const computed = input.helpers[input.helperName];
+    computed(context.db);
+    return Response.json({ ok: true });
+  },
+});

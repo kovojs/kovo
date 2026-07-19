@@ -1,0 +1,9 @@
+import { endpoint } from '@kovojs/server';
+
+export const root = endpoint('/ledger/mutate', {
+  handler(input, context) {
+    let database = context.db;
+    database = input.database;
+    return database.select();
+  },
+});

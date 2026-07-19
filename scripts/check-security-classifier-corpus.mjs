@@ -2127,6 +2127,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/browser/src/security-output.test.ts',
       'packages/compiler/src/output-context-security.test.ts',
       'packages/compiler/src/route-pages.test.ts',
+      'packages/compiler/src/analyzable-fragment.security.test.ts',
       'packages/compiler/src/security-operation-ir.security.test.ts',
       'packages/compiler/src/security-analyzer-soundness-oracle.test.ts',
       'packages/compiler/src/executable-reference-attributes.test.ts',
@@ -2140,9 +2141,43 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
       'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
       'packages/server/src/guard-args-receipt-security.test.ts',
+      'scripts/analyzable-fragment-gate.test.mjs',
       'scripts/security-coverage.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'analyzable-fragment-emitted-kv449-closure',
+        file: 'packages/compiler/src/analyzable-fragment.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 analyzable-fragment-emitted-kv449-closure',
+          'proves every ledger witness by compiling it to its emitted KV449 closed reason',
+          "diagnostic.code === 'KV449'",
+          'verdict=closed:${row.closedReason}',
+          "trace.verdict === 'closed' && trace.reason === row.closedReason",
+        ],
+      },
+      {
+        id: 'analyzable-fragment-real-root-budget-binding',
+        file: 'packages/compiler/src/analyzable-fragment.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 analyzable-fragment-real-root-budget-binding',
+          'measures every named semantic budget against the checked real-root corpus',
+          'ledger.budgetBindingMeasurement.corpus.files',
+          'ledger.budgetBindingMeasurement.corpus.rootCount',
+          'budget.bindingRoots',
+        ],
+      },
+      {
+        id: 'analyzable-fragment-artifact-drift',
+        file: 'scripts/analyzable-fragment-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 analyzable-fragment-artifact-drift',
+          'binds nine prohibitions, eight closed reasons, four budgets, fixtures, and generated SPEC',
+          'kills omission, classification, closed-reason, fixture, budget, and SPEC-table drift',
+          'missingFixture.delete',
+          'widenedBudget.budgetBindingMeasurement.budgets[0].limit += 1',
+        ],
+      },
       {
         id: 'browser-operation-real-workflows',
         file: 'packages/browser/src/security-operation-workflows.browser.test.ts',
