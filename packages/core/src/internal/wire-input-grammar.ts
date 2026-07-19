@@ -25,6 +25,229 @@ export const FRAMEWORK_WIRE_INPUT_GRAMMAR = Object.freeze({
 } as const);
 
 /** @internal */
+export type FrameworkWireInputCarrier =
+  | 'header'
+  | 'request-cookie'
+  | 'request-header'
+  | 'response-header'
+  | 'search-param'
+  | 'search-params';
+
+/** @internal */
+export type FrameworkWireInputGrammarKind =
+  | 'boolean-literal'
+  | 'capability-token'
+  | 'cookie-value'
+  | 'fragment-target'
+  | 'http-field-value'
+  | 'idempotency-token'
+  | 'json'
+  | 'live-target-list'
+  | 'media-type'
+  | 'opaque-token'
+  | 'reviewed-door'
+  | 'same-origin-path'
+  | 'same-origin-url'
+  | 'schema-validated-record'
+  | 'target-list';
+
+/** @internal */
+export interface FrameworkWireInputRegistryEntry {
+  readonly carrier: FrameworkWireInputCarrier;
+  readonly grammar: FrameworkWireInputGrammarKind;
+  readonly id: string;
+  readonly name: string;
+}
+
+/**
+ * Closed vocabulary for framework-owned header, cookie, and URL-search reads (SPEC §9.1).
+ * `check:wire-input-boundary` resolves the exact reader symbols and requires every call site to
+ * bind to one of these entries. `*` is reserved for reviewed dynamic-name or whole-carrier doors;
+ * a literal read cannot bind to it.
+ *
+ * @internal
+ */
+export const FRAMEWORK_WIRE_INPUT_REGISTRY = Object.freeze({
+  inputs: Object.freeze([
+    {
+      carrier: 'header',
+      grammar: 'reviewed-door',
+      id: 'header.dynamic-framework-door',
+      name: '*',
+    },
+    {
+      carrier: 'request-cookie',
+      grammar: 'cookie-value',
+      id: 'request-cookie.dynamic-name',
+      name: '*',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'http-field-value',
+      id: 'request-header.accept',
+      name: 'accept',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'media-type',
+      id: 'request-header.content-type',
+      name: 'content-type',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'http-field-value',
+      id: 'request-header.cookie',
+      name: 'cookie',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'reviewed-door',
+      id: 'request-header.dynamic-framework-door',
+      name: '*',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'opaque-token',
+      id: 'request-header.if-none-match',
+      name: 'if-none-match',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'opaque-token',
+      id: 'request-header.kovo-build',
+      name: 'kovo-build',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'same-origin-url',
+      id: 'request-header.kovo-current-url',
+      name: 'kovo-current-url',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'fragment-target',
+      id: 'request-header.kovo-form-target',
+      name: 'kovo-form-target',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'boolean-literal',
+      id: 'request-header.kovo-fragment',
+      name: 'kovo-fragment',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'idempotency-token',
+      id: 'request-header.kovo-idem',
+      name: 'kovo-idem',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'live-target-list',
+      id: 'request-header.kovo-live-targets',
+      name: 'kovo-live-targets',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'boolean-literal',
+      id: 'request-header.kovo-stream',
+      name: 'kovo-stream',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'target-list',
+      id: 'request-header.kovo-targets',
+      name: 'kovo-targets',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'same-origin-url',
+      id: 'request-header.origin',
+      name: 'origin',
+    },
+    {
+      carrier: 'request-header',
+      grammar: 'same-origin-url',
+      id: 'request-header.referer',
+      name: 'referer',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'media-type',
+      id: 'response-header.content-type',
+      name: 'content-type',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'opaque-token',
+      id: 'response-header.kovo-build',
+      name: 'kovo-build',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'json',
+      id: 'response-header.kovo-changes',
+      name: 'kovo-changes',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'same-origin-path',
+      id: 'response-header.kovo-reauth',
+      name: 'kovo-reauth',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'opaque-token',
+      id: 'response-header.kovo-session-transition',
+      name: 'kovo-session-transition',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'same-origin-url',
+      id: 'response-header.location',
+      name: 'location',
+    },
+    {
+      carrier: 'search-param',
+      grammar: 'opaque-token',
+      id: 'search-param.build',
+      name: 'build',
+    },
+    {
+      carrier: 'search-param',
+      grammar: 'capability-token',
+      id: 'search-param.kovo-cap',
+      name: 'kovo-cap',
+    },
+    {
+      carrier: 'search-param',
+      grammar: 'opaque-token',
+      id: 'search-param.old-build',
+      name: 'oldBuild',
+    },
+    {
+      carrier: 'search-param',
+      grammar: 'same-origin-url',
+      id: 'search-param.url',
+      name: 'url',
+    },
+    {
+      carrier: 'search-param',
+      grammar: 'opaque-token',
+      id: 'search-param.version',
+      name: 'v',
+    },
+    {
+      carrier: 'search-params',
+      grammar: 'schema-validated-record',
+      id: 'search-params.query-input',
+      name: '*',
+    },
+  ] satisfies readonly FrameworkWireInputRegistryEntry[]),
+  schema: 'kovo.wire-input-registry/v1',
+} as const);
+
+/** @internal */
 export interface FrameworkWireTarget {
   readonly deps: readonly string[];
   readonly target: string;

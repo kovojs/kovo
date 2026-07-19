@@ -2025,6 +2025,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/compiler/src/capability-closure.security.test.ts',
       'packages/cli/src/capability-closure-packages.test.ts',
       'scripts/capability-surface-census-gate.test.mjs',
+      'scripts/wire-input-boundary-gate.test.mjs',
       'scripts/framework-export-posture-gate.test.mjs',
     ],
     verdictAnchors: [
@@ -2038,6 +2039,18 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "api: 'systemDb'",
           'fails closed when a discovered mint is absent, stale, or lacks a reviewed reason',
           'retains structural closed verdicts for raw exports, internal consumers, and SQL snapshots',
+        ],
+      },
+      {
+        id: 'wire-input-symbol-identity-census',
+        file: 'scripts/wire-input-boundary-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 wire-input-symbol-identity-census',
+          'discovers framework wire reads by TypeScript symbol identity and ignores lookalikes',
+          "api: 'requestHeader'",
+          "api: 'browserReadHeader'",
+          'rejects missing, stale, and name-incompatible registry bindings',
+          'missing wire-input boundary row consumer.ts#responseBuild',
         ],
       },
       {

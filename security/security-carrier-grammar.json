@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 240,
+    "historicalWitnesses": 241,
     "productions": 12
   },
   "productions": [
@@ -950,6 +950,12 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "wire-input-symbol-identity-census",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "This witness closes framework input reads over exact reader symbols and a finite carrier grammar."
     },
     {
       "anchor": "complete-root-census",

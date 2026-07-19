@@ -417,12 +417,16 @@ Today the server hand-parses `Kovo-Targets`/`Kovo-Live-Targets` (a quote/depth-a
 while three independent browser encoders hand-write the same grammar; an argsless `/_q/` query casts
 the raw tagged search record straight into `load` (`query.ts:807`, `rawInput as Input`).
 
-- [ ] Core-owned grammar declared once as typed data; derive BOTH the browser encoder and server
+- [x] Core-owned grammar declared once as typed data; derive BOTH the browser encoder and server
       decoder from it (kills the two-implementations drift class structurally). Seeded round-trip
       oracle `decode(encode(v)) ≡ v` enrolled in C13.
-- [ ] `check:wire-input-boundary` (patterned on `check:c9-sink-inventory`): symbol-identity census of
+  - Evidence: `pnpm run check:inline-loader` proves the shared exact codec, browser/server consumers,
+    generated loader, and seeded malformed/round-trip corpus.
+- [x] `check:wire-input-boundary` (patterned on `check:c9-sink-inventory`): symbol-identity census of
       framework protocol header/cookie/search-param reads vs the registry. App-owned reads and reviewed
       third-party adapters are outside this grammar unless they enter through a named framework door.
+  - Evidence: `pnpm run check:wire-input-boundary` closes 44 exact symbol-identity sites, including
+    five reviewed dynamic doors, and enrolls the C13 census witness.
 - [x] Make `/_q/` reject-by-default: 422 when no `args` schema is declared and search input is
       non-empty; update SPEC §9.4 + conformance sweep.
   - Evidence: the 47/47 query-ingress/endpoint suite returns 422 before lifecycle providers, guards,
