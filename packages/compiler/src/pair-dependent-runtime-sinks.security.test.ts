@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from './index.js';
+import { assertFixpoint, compileComponentModule } from './index.js';
+import { validateEffectiveElementContextOutputFacts } from './security/output-context.js';
 
 function kv236Diagnostics(source: string) {
   return compileComponentModule({ fileName: 'pair-dependent-sink.tsx', source }).diagnostics.filter(
@@ -202,6 +203,10 @@ export const StaticContext = component({
       <script {...{ src: '/assets/runtime.js', type: 'module' }} />
       <link {...{ href: '/assets/theme.css', rel: 'stylesheet' }} />
       <iframe {...{ sandbox: 'allow-forms', src: '/untrusted/profile' }} />
+      <script {...{ src: trustedUrl(state.asset, 'reviewed spread module'), type: 'module' }} />
+      <script {...{ ...{ src: trustedUrl(state.asset, 'reviewed nested spread module') }, type: 'module' }} />
+      <link {...{ href: trustedUrl(state.stylesheet, 'reviewed spread stylesheet'), rel: 'stylesheet' }} />
+      <iframe {...{ sandbox: 'allow-forms', src: trustedUrl(state.asset, 'reviewed spread frame') }} />
       <script src={trustedUrl(state.asset, 'reviewed executable module asset')} />
       <link
         rel="stylesheet"
@@ -216,6 +221,222 @@ export const StaticContext = component({
 });
 `),
     ).toEqual([]);
+  });
+
+  it('rejects a trustedUrl lookalike normalized from a static spread', () => {
+    expect(
+      kv236Diagnostics(`
+const trustedUrl = (value) => value;
+export const SpreadLookalike = component({
+  state: () => ({ asset: '/attacker.js' }),
+  render: (_queries, state) => (
+    <script {...{ src: trustedUrl(state.asset, 'not a capability'), type: 'module' }} />
+  ),
+});
+`),
+    ).toEqual([
+      expect.objectContaining({
+        help: expect.stringContaining('dynamic script source'),
+      }),
+    ]);
+  });
+
+  it.each([
+    [
+      'script source',
+      '<Tooltip.Trigger asChild attrs={{ src: state.value }}><script type="module" /></Tooltip.Trigger>',
+      'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+    ],
+    [
+      'script type',
+      '<Tooltip.Trigger asChild attrs={{ type: state.value }}><script src="/reviewed.js" /></Tooltip.Trigger>',
+      'a dynamic script type can turn an inert data block into executable JavaScript',
+    ],
+    [
+      'stylesheet href',
+      '<Tooltip.Trigger asChild attrs={{ href: state.value }}><link rel="stylesheet" /></Tooltip.Trigger>',
+      'a dynamic stylesheet URL can apply attacker-controlled CSS',
+    ],
+    [
+      'link relationship',
+      '<Tooltip.Trigger asChild attrs={{ rel: state.value }}><link href="/theme.css" /></Tooltip.Trigger>',
+      'a dynamic link relationship can turn an inert resource into an active stylesheet',
+    ],
+    [
+      'iframe source',
+      '<Tooltip.Trigger asChild attrs={{ src: state.value }}><iframe sandbox="allow-forms" /></Tooltip.Trigger>',
+      'a dynamic iframe source can load same-origin attacker-controlled active content',
+    ],
+    [
+      'iframe sandbox',
+      '<Tooltip.Trigger asChild attrs={{ sandbox: state.value }}><iframe src="/profile" /></Tooltip.Trigger>',
+      'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
+    ],
+    [
+      'MathML annotation encoding',
+      '<Tooltip.Trigger asChild attrs={{ encoding: state.value }}><annotation-xml /></Tooltip.Trigger>',
+      'a dynamic MathML annotation encoding can activate inert descendants as HTML',
+    ],
+  ])('rejects a dynamic %s merged through primitive attrs', (_label, markup, reason) => {
+    const diagnostics = kv236Diagnostics(`
+export const ComposedContext = component({
+  state: () => ({ value: '' }),
+  render: (_queries, state) => (${markup}),
+});
+`);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        help: expect.stringContaining(reason),
+      }),
+    ]);
+  });
+
+  it('retains exact trustedUrl identity through primitive attrs composition', () => {
+    const result = compileComponentModule({
+      fileName: 'trusted-composed-context.tsx',
+      source: `
+import { trustedUrl as reviewedUrl } from '@kovojs/browser';
+import * as browser from '@kovojs/browser';
+export const TrustedComposedContext = component({
+  state: () => ({ script: '/reviewed.js', stylesheet: '/reviewed.css', frame: '/reviewed' }),
+  render: (_queries, state) => (
+    <>
+      <Tooltip.Trigger asChild attrs={{ src: reviewedUrl(state.script, 'reviewed script') }}>
+        <script type="module" />
+      </Tooltip.Trigger>
+      <Tooltip.Trigger asChild attrs={{ href: browser.trustedUrl(state.stylesheet, 'reviewed stylesheet') }}>
+        <link rel="stylesheet" />
+      </Tooltip.Trigger>
+      <Tooltip.Trigger asChild attrs={{ src: reviewedUrl(state.frame, 'reviewed frame') }}>
+        <iframe sandbox="allow-forms" />
+      </Tooltip.Trigger>
+    </>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    expect(result.loweredSource).toContain("src={reviewedUrl(state.script, 'reviewed script')}");
+    expect(result.loweredSource).toContain(
+      "href={browser.trustedUrl(state.stylesheet, 'reviewed stylesheet')}",
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('does not accept a local trustedUrl lookalike after composition', () => {
+    const diagnostics = kv236Diagnostics(`
+const trustedUrl = (value) => value;
+export const LookalikeComposedContext = component({
+  state: () => ({ value: '/attacker.js' }),
+  render: (_queries, state) => (
+    <Tooltip.Trigger asChild attrs={{ src: trustedUrl(state.value, 'not a capability') }}>
+      <script type="module" />
+    </Tooltip.Trigger>
+  ),
+});
+`);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        help: expect.stringContaining('dynamic script source'),
+      }),
+    ]);
+  });
+
+  it('retains trustedUrl provenance in initial SSR and emitted client derives', () => {
+    const result = compileComponentModule({
+      fileName: 'trusted-live-context.tsx',
+      source: `
+import { trustedUrl } from '@kovojs/browser';
+export const TrustedLiveContext = component({
+  state: () => ({ script: '/reviewed.js', stylesheet: '/reviewed.css', frame: '/reviewed' }),
+  render: (_queries, state) => (
+    <>
+      <script type="module" src={trustedUrl(state.script, 'reviewed script')} />
+      <link rel="stylesheet" href={trustedUrl(state.stylesheet, 'reviewed stylesheet')} />
+      <iframe sandbox="allow-forms" src={trustedUrl(state.frame, 'reviewed frame')} />
+    </>
+  ),
+});
+`,
+    });
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    expect(clientSource).toContain("trustedUrl(state.script, 'reviewed script')");
+    expect(clientSource).toContain("trustedUrl(state.stylesheet, 'reviewed stylesheet')");
+    expect(clientSource).toContain("trustedUrl(state.frame, 'reviewed frame')");
+    expect(serverSource).toContain('data-bind:src=');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+});
+
+describe('effective element-context derive invariant', () => {
+  const trustedInitial = {
+    attribute: 'src',
+    element: 'script',
+    reason: 'script source control',
+    span: { end: 1, start: 0 },
+    trustedUrl: true,
+  } as const;
+
+  it('accepts an emitted derive only when exact parser provenance is retained', () => {
+    expect(
+      validateEffectiveElementContextOutputFacts(
+        { fileName: 'derive.tsx', source: 'x' },
+        [trustedInitial],
+        [
+          {
+            ...trustedInitial,
+            exportName: 'Trusted$script_src_derive',
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'drops trusted provenance',
+      [{ ...trustedInitial, exportName: 'Lost$script_src_derive', trustedUrl: false }],
+      'lost its required exact trustedUrl provenance',
+    ],
+    [
+      'claims forged provenance',
+      [{ ...trustedInitial, exportName: 'Forged$script_src_derive', trustedUrl: true }],
+      'claims trustedUrl without matching exact parser provenance',
+    ],
+    [
+      'has no final control match',
+      [
+        {
+          ...trustedInitial,
+          exportName: 'Detached$script_src_derive',
+          span: { end: 2, start: 1 },
+        },
+      ],
+      'has no matching final <script> src control fact',
+    ],
+  ])('fails closed when an emitted derive %s', (_label, outputs, reason) => {
+    const initial =
+      _label === 'claims forged provenance'
+        ? [{ ...trustedInitial, trustedUrl: false }]
+        : [trustedInitial];
+    const diagnostics = validateEffectiveElementContextOutputFacts(
+      { fileName: 'derive.tsx', source: 'xx' },
+      initial,
+      outputs,
+    );
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV236',
+        message: expect.stringContaining(reason),
+      }),
+    ]);
   });
 });
 

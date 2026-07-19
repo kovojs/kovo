@@ -20,7 +20,7 @@ import {
 } from '@kovojs/core/internal/semantic-attributes';
 import * as ts from 'typescript';
 
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticFor, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -44,9 +44,11 @@ import {
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
 import { literalStringValue } from '../scan/object.js';
+import type { JsxIrAttribute, JsxIrChild, JsxIrElement } from '../jsx-ir.js';
 import {
   jsxElements,
   jsxExpressions,
+  parserFactHasFrameworkTrustedUrl,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -107,6 +109,241 @@ export function validateOutputContexts(
   );
 
   return found;
+}
+
+/** Typed post-composition fact for one dynamic effective intrinsic element control. */
+export interface EffectiveElementContextFact {
+  readonly attribute: string;
+  readonly element: string;
+  readonly reason: string;
+  readonly span?: SourceSpan;
+  readonly trustedUrl: boolean;
+}
+
+/** Compiler-internal proof attached to one emitted client derive. */
+export interface EffectiveElementContextDeriveFact {
+  readonly attribute: string;
+  readonly element: string;
+  readonly exportName: string;
+  readonly reason: string;
+  readonly span: SourceSpan;
+  readonly trustedUrl: boolean;
+}
+
+/**
+ * SPEC §4.8 / §5.2 rule 10: validate the effective intrinsic tree after static spreads and
+ * primitive `asChild` composition have selected the actual element/attribute owner. The original
+ * parser model cannot see attributes moved from a primitive's `attrs` bag onto its intrinsic child;
+ * this typed IR invariant is therefore the final initial-SSR verdict for those merged controls.
+ */
+export function validateEffectiveElementContextSecurity(
+  options: { fileName: string; source: string },
+  roots: readonly JsxIrElement[],
+): { diagnostics: readonly CompilerDiagnostic[]; facts: readonly EffectiveElementContextFact[] } {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const facts: EffectiveElementContextFact[] = [];
+  const visit = (element: JsxIrElement): void => {
+    if (element.removed) return;
+    const tag = element.intrinsicTagName;
+    if (tag !== undefined) {
+      appendEffectiveElementContextAttributes(
+        options,
+        element,
+        tag,
+        element.attributes,
+        facts,
+        diagnostics,
+      );
+      appendEffectiveElementContextAttributes(
+        options,
+        element,
+        tag,
+        element.generatedAttributes,
+        facts,
+        diagnostics,
+      );
+    }
+    const childLength = compilerArrayLength(element.children, 'Effective element-context children');
+    for (let index = 0; index < childLength; index += 1) {
+      const child = outputArrayValue(
+        element.children,
+        index,
+        'Effective element-context children',
+      ) as JsxIrChild;
+      if (child.kind === 'element') visit(child);
+    }
+  };
+  const rootLength = compilerArrayLength(roots, 'Effective element-context roots');
+  for (let index = 0; index < rootLength; index += 1) {
+    visit(outputArrayValue(roots, index, 'Effective element-context roots'));
+  }
+  return { diagnostics, facts };
+}
+
+function appendEffectiveElementContextAttributes(
+  options: { fileName: string; source: string },
+  element: JsxIrElement,
+  tag: string,
+  attributes: readonly JsxIrAttribute[],
+  facts: EffectiveElementContextFact[],
+  diagnostics: CompilerDiagnostic[],
+): void {
+  const length = compilerArrayLength(attributes, 'Effective element-context attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Effective element-context attributes');
+    const control = elementContextSecurityControl(tag, attribute.name);
+    if (control === undefined || attribute.value.kind !== 'expression') continue;
+    const fact: EffectiveElementContextFact = {
+      attribute: compilerStringToLowerCase(attribute.name),
+      element: compilerStringToLowerCase(tag),
+      reason: control.reason,
+      ...(attribute.anchor === undefined
+        ? element.provenance.anchor === undefined
+          ? {}
+          : {
+              span: {
+                end: element.provenance.anchor.end,
+                start: element.provenance.anchor.start,
+              },
+            }
+        : { span: { end: attribute.anchor.end, start: attribute.anchor.start } }),
+      trustedUrl: attribute.value.trustedUrl === true,
+    };
+    compilerArrayAppend(facts, fact, 'Effective element-context facts');
+    if (fact.trustedUrl && control.acceptsTrustedUrl) continue;
+    // The original-source validator owns diagnostics for unchanged intrinsic JSX. This invariant
+    // still records those facts so emitted derives must correlate with them, while only diagnosing
+    // controls whose effective owner was created by structural composition.
+    if (element.ownership === 'author') continue;
+    compilerArrayAppend(
+      diagnostics,
+      effectiveElementContextDiagnostic(options, fact, control.reason),
+      'Effective element-context diagnostics',
+    );
+  }
+}
+
+/**
+ * Construct the typed proof for a client derive from parser-owned identity and the effective IR
+ * owner. Keeping this ledger private avoids widening CompileResult's public output-context API.
+ */
+export function effectiveElementContextDeriveFact(
+  element: string | undefined,
+  targetAttribute: string,
+  sourceAttribute: JsxAttributeModel,
+  exportName: string,
+): EffectiveElementContextDeriveFact | undefined {
+  if (element === undefined) return undefined;
+  const tag = compilerStringToLowerCase(element);
+  const attribute = compilerStringToLowerCase(targetAttribute);
+  const control = elementContextSecurityControl(tag, attribute);
+  if (control === undefined) return undefined;
+  return {
+    attribute,
+    element: tag,
+    exportName,
+    reason: control.reason,
+    span: { end: sourceAttribute.end, start: sourceAttribute.start },
+    trustedUrl: parserFactHasFrameworkTrustedUrl(sourceAttribute),
+  };
+}
+
+/**
+ * Verify that emitted live-derive facts retain the exact trustedUrl verdict from the effective
+ * initial element. Compiler-owned `data-bind:*` stamps are intentionally not treated as authored
+ * controls; the linked output fact, rather than the stamp string, owns the client-write verdict.
+ */
+export function validateEffectiveElementContextOutputFacts(
+  options: { fileName: string; source: string },
+  effectiveFacts: readonly EffectiveElementContextFact[],
+  outputFacts: readonly EffectiveElementContextDeriveFact[],
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const outputLength = compilerArrayLength(outputFacts, 'Effective element-context output facts');
+  for (let index = 0; index < outputLength; index += 1) {
+    const output = outputArrayValue(outputFacts, index, 'Effective element-context output facts');
+    const tag = output.element;
+    const attribute = output.attribute;
+    const control = elementContextSecurityControl(tag, attribute);
+    if (control === undefined) {
+      compilerArrayAppend(
+        diagnostics,
+        effectiveElementContextDiagnostic(
+          options,
+          output,
+          `emitted derive ${output.exportName} has no closed element-context registry verdict`,
+        ),
+        'Effective element-context output diagnostics',
+      );
+      continue;
+    }
+
+    let match: EffectiveElementContextFact | undefined;
+    const effectiveLength = compilerArrayLength(
+      effectiveFacts,
+      'Initial effective element-context facts',
+    );
+    for (let factIndex = 0; factIndex < effectiveLength; factIndex += 1) {
+      const fact = outputArrayValue(
+        effectiveFacts,
+        factIndex,
+        'Initial effective element-context facts',
+      );
+      if (
+        fact.element === tag &&
+        fact.attribute === attribute &&
+        fact.span?.start === output.span.start &&
+        fact.span.end === output.span.end
+      ) {
+        match = fact;
+        break;
+      }
+    }
+
+    // An exact same-span match proves that the emitted derive retained the parser verdict. Unsafe
+    // matching facts were already rejected by the original/effective initial-output validator.
+    if (match !== undefined && match.trustedUrl === output.trustedUrl) continue;
+    compilerArrayAppend(
+      diagnostics,
+      effectiveElementContextDiagnostic(
+        options,
+        output,
+        match === undefined
+          ? `emitted derive ${output.exportName} has no matching final <${tag}> ${attribute} control fact`
+          : output.trustedUrl
+            ? `emitted derive ${output.exportName} claims trustedUrl without matching exact parser provenance`
+            : `emitted derive ${output.exportName} lost its required exact trustedUrl provenance`,
+      ),
+      'Effective element-context output diagnostics',
+    );
+  }
+  return diagnostics;
+}
+
+function effectiveElementContextDiagnostic(
+  options: { fileName: string; source: string },
+  fact: EffectiveElementContextFact,
+  reason: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(
+      options.fileName,
+      'KV236',
+      options.source,
+      fact.span?.start,
+      fact.span === undefined ? undefined : fact.span.end - fact.span.start,
+    ),
+    help: compilerArrayJoin(
+      [
+        `Blocked reason: ${reason}.`,
+        'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
+        'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
+        'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed after structural lowering.',
+      ],
+      '\n',
+    ),
+    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+  };
 }
 
 /**
@@ -771,9 +1008,16 @@ function validateElementContextSecuritySinks(
           entryIndex,
           'Static element-context spread entries',
         );
+        const target = compilerStringToLowerCase(entry.key);
+        if (
+          parserFactHasFrameworkTrustedUrl(entry) &&
+          elementContextSecurityControl(tag, target)?.acceptsTrustedUrl === true
+        ) {
+          continue;
+        }
         const reason = renderedElementContextSinkIssue(
           tag,
-          compilerStringToLowerCase(entry.key),
+          target,
           staticWireSpreadAttributeValue(entry),
         );
         if (reason !== undefined) {
@@ -787,9 +1031,16 @@ function validateElementContextSecuritySinks(
       const entryLength = compilerArrayLength(entries, 'Element-context spread entries');
       for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
         const entry = outputArrayValue(entries, entryIndex, 'Element-context spread entries');
+        const target = compilerStringToLowerCase(entry.key);
+        if (
+          parserFactHasFrameworkTrustedUrl(entry) &&
+          elementContextSecurityControl(tag, target)?.acceptsTrustedUrl === true
+        ) {
+          continue;
+        }
         const reason = renderedElementContextSinkIssue(
           tag,
-          compilerStringToLowerCase(entry.key),
+          target,
           staticSpreadAttributeValue(entry),
         );
         if (reason !== undefined) {

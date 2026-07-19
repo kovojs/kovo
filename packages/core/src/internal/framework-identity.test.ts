@@ -303,6 +303,73 @@ describe('framework identity resolver', () => {
     ).toBeUndefined();
   });
 
+  it('does not grant runtime identity through type-only imports or re-exports', () => {
+    const direct = sourceFile(
+      '/app/direct.tsx',
+      [
+        "import type { trustedHtml as namedType } from '@kovojs/browser';",
+        "import { type trustedHtml as mixedType } from '@kovojs/browser';",
+        "import type * as browserTypes from '@kovojs/browser';",
+        "namedType('<b>named</b>');",
+        "mixedType('<b>mixed</b>');",
+        "browserTypes.trustedHtml('<b>namespace</b>');",
+      ].join('\n'),
+    );
+
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        direct,
+        callExpressionByText(direct, 'namedType').expression,
+      ),
+    ).toBeUndefined();
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        direct,
+        callExpressionByText(direct, 'mixedType').expression,
+      ),
+    ).toBeUndefined();
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        direct,
+        callExpressionByText(direct, 'browserTypes.trustedHtml').expression,
+      ),
+    ).toBeUndefined();
+
+    const namedBarrel = sourceFile(
+      '/app/named-barrel.ts',
+      "export type { trustedHtml as html } from '@kovojs/browser';",
+    );
+    const starBarrel = sourceFile('/app/star-barrel.ts', "export type * from '@kovojs/browser';");
+    const usage = sourceFile(
+      '/app/usage.tsx',
+      [
+        "import { html } from './named-barrel.js';",
+        "import { trustedHtml as starHtml } from './star-barrel.js';",
+        "html('<b>named barrel</b>');",
+        "starHtml('<b>star barrel</b>');",
+      ].join('\n'),
+    );
+    registerFrameworkIdentityProject(usage, [namedBarrel, starBarrel]);
+
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        usage,
+        callExpressionByText(usage, 'html').expression,
+      ),
+    ).toBeUndefined();
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        usage,
+        callExpressionByText(usage, 'starHtml').expression,
+      ),
+    ).toBeUndefined();
+  });
+
   it('resolves framework exports through local object literal members', () => {
     const usage = sourceFile(
       '/app/usage.tsx',

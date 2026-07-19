@@ -21,6 +21,7 @@ import {
   compilerCreateMap,
   compilerCreateNullRecord,
   compilerCreateSet,
+  compilerCreateWeakMap,
   compilerDefineOwnDataProperty,
   compilerJsonStringify,
   compilerMapForEach,
@@ -48,6 +49,8 @@ import {
   compilerStringToLowerCase,
   compilerStringToUpperCase,
   compilerStringTrim,
+  compilerWeakMapGet,
+  compilerWeakMapSet,
 } from '../compiler-security-intrinsics.js';
 import { deriveMutationKey } from '../mutation-names.js';
 import { mutationFormProvenanceAttributeName } from '../mutation-form-provenance.js';
@@ -82,6 +85,7 @@ import type {
   HandlerWriteSinkSurface,
   IdentifierReferenceModel,
   JsxCommentModel,
+  JsxAttributeModel,
   JsxElementChildBody,
   JsxElementModel,
   JsxExpressionModel,
@@ -115,6 +119,13 @@ export type * from './model.js';
 
 ensureTypescriptRuntime(ts);
 
+const frameworkTrustedUrlFacts = compilerCreateWeakMap<object, true>();
+
+/** @internal Exact parser-owned trustedUrl identity without widening serialized model shapes. */
+export function parserFactHasFrameworkTrustedUrl(fact: object): boolean {
+  return compilerWeakMapGet(frameworkTrustedUrlFacts, fact) === true;
+}
+
 interface ComponentFactoryBindings {
   readonly sourceFile: ts.SourceFile;
 }
@@ -145,6 +156,7 @@ const JSX_RUNTIME_FACTORY_IDENTITIES = {
   jsxDEV: frameworkExport('@kovojs/server', 'jsxDEV'),
   jsxs: frameworkExport('@kovojs/server', 'jsxs'),
 } as const;
+const TRUSTED_URL_IDENTITY = frameworkExport('@kovojs/browser', 'trustedUrl');
 const SERVER_CALL_FACTORY_IDENTITIES: readonly FrameworkExportIdentity[] = [
   ENDPOINT_FACTORY_IDENTITY,
   MUTATION_FACTORY_IDENTITY,
@@ -4956,34 +4968,32 @@ function objectLiteralEntries(
       const key = propertyNameText(property.name, { staticStringValues });
       if (!key) continue;
 
-      compilerArrayAppend(
-        result,
-        {
-          key,
-          ...(ts.isObjectLiteralExpression(property.initializer)
-            ? {
-                objectEntries: objectLiteralEntries(
-                  sourceFile,
-                  source,
-                  property.initializer,
-                  staticStringValues,
-                ),
-              }
-            : {}),
-          ...staticConstructorTypeEntry(sourceFile, property.initializer),
-          ...(ts.isStringLiteralLike(property.initializer) ||
-          ts.isNoSubstitutionTemplateLiteral(property.initializer)
-            ? { staticStringValue: property.initializer.text }
-            : {}),
-          ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
-          value: compilerStringSlice(
-            source,
-            property.initializer.getStart(sourceFile),
-            property.initializer.getEnd(),
-          ),
-        },
-        'Object literal entries',
-      );
+      const entry: ObjectLiteralEntry = {
+        key,
+        ...(ts.isObjectLiteralExpression(property.initializer)
+          ? {
+              objectEntries: objectLiteralEntries(
+                sourceFile,
+                source,
+                property.initializer,
+                staticStringValues,
+              ),
+            }
+          : {}),
+        ...staticConstructorTypeEntry(sourceFile, property.initializer),
+        ...(ts.isStringLiteralLike(property.initializer) ||
+        ts.isNoSubstitutionTemplateLiteral(property.initializer)
+          ? { staticStringValue: property.initializer.text }
+          : {}),
+        ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
+        value: compilerStringSlice(
+          source,
+          property.initializer.getStart(sourceFile),
+          property.initializer.getEnd(),
+        ),
+      };
+      recordFrameworkTrustedUrlFact(entry, sourceFile, property.initializer);
+      compilerArrayAppend(result, entry, 'Object literal entries');
       continue;
     }
 
@@ -5124,22 +5134,23 @@ function jsxAttributeModels(
     const expression = jsxAttributeExpression(sourceFile, source, property);
     const name = property.name.getText(sourceFile);
     const eventFacts = jsxAttributeEventFacts(name);
-    compilerArrayAppend(
-      result,
-      {
-        ...eventFacts,
-        ...(unreviewedComponentTag && eventFacts.domEventName !== undefined
-          ? { componentEventProp: true as const }
-          : {}),
-        end: property.getEnd(),
-        leadingStart: attributeLeadingStart(source, property.getStart(sourceFile)),
-        name,
-        start: property.getStart(sourceFile),
-        ...(expression === null ? {} : expression),
-        ...(value === undefined ? {} : { value }),
-      },
-      'JSX attributes',
-    );
+    const attribute: JsxAttributeModel = {
+      ...eventFacts,
+      ...(unreviewedComponentTag && eventFacts.domEventName !== undefined
+        ? { componentEventProp: true as const }
+        : {}),
+      end: property.getEnd(),
+      leadingStart: attributeLeadingStart(source, property.getStart(sourceFile)),
+      name,
+      start: property.getStart(sourceFile),
+      ...(expression === null ? {} : expression),
+      ...(value === undefined ? {} : { value }),
+    };
+    const initializer = property.initializer;
+    if (initializer && ts.isJsxExpression(initializer) && initializer.expression) {
+      recordFrameworkTrustedUrlFact(attribute, sourceFile, initializer.expression);
+    }
+    compilerArrayAppend(result, attribute, 'JSX attributes');
   }
   return result;
 }
@@ -5363,14 +5374,12 @@ function completeStaticJsxWireAttributeEntries(
     // own `['__proto__']` key is harmless here but keeping both shapes opaque avoids inventing an
     // own attribute for the setter spelling.
     if (!key || key === '__proto__') return undefined;
-    compilerArrayAppend(
-      entries,
-      {
-        key,
-        value: staticJsxWireAttributeValue(sourceFile, property.initializer),
-      },
-      'Static JSX wire spread entries',
-    );
+    const entry: StaticJsxWireAttributeEntry = {
+      key,
+      value: staticJsxWireAttributeValue(sourceFile, property.initializer),
+    };
+    recordFrameworkTrustedUrlFact(entry, sourceFile, property.initializer);
+    compilerArrayAppend(entries, entry, 'Static JSX wire spread entries');
   }
   return entries;
 }
@@ -6016,6 +6025,27 @@ function jsxAttributeExpression(
     ...jsxAttributeExpressionStaticValue(initializer.expression),
     ...zeroArgArrowModel(sourceFile, source, initializer.expression),
   };
+}
+
+function recordFrameworkTrustedUrlFact(
+  fact: object,
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): void {
+  const candidate = unwrapExpression(expression);
+  if (!ts.isCallExpression(candidate)) return;
+  if (
+    !frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        candidate.expression,
+      ),
+      TRUSTED_URL_IDENTITY,
+    )
+  )
+    return;
+  compilerWeakMapSet(frameworkTrustedUrlFacts, fact, true);
 }
 
 function jsxAttributeExpressionStaticValue(

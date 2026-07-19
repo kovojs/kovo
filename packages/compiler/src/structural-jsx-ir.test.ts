@@ -140,6 +140,7 @@ export const ProductPage = component({
         "primitive-spreads",
         "dynamic-spread-control-boundary",
         "primitive-composition",
+        "effective-element-context",
         "link-navigation",
         "platform-behaviors",
         "href-attributes",
@@ -148,6 +149,7 @@ export const ProductPage = component({
         "primitive-reactive-attributes",
         "inline-text-bindings",
         "static-text-escaping",
+        "effective-element-context-output-facts",
         "helper-import-insertion",
       ]
     `);

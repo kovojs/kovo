@@ -1,10 +1,11 @@
-import type {
-  ComponentModuleModel,
-  JsxAttributeModel,
-  JsxElementModel,
-  JsxExpressionModel,
-  JsxSpreadAttributeModel,
-  SourceSpan,
+import {
+  parserFactHasFrameworkTrustedUrl,
+  type ComponentModuleModel,
+  type JsxAttributeModel,
+  type JsxElementModel,
+  type JsxExpressionModel,
+  type JsxSpreadAttributeModel,
+  type SourceSpan,
 } from './scan/parse.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import {
@@ -40,7 +41,7 @@ export interface JsxIrProvenance {
 
 export type JsxIrAttributeValue =
   | { kind: 'boolean'; value: boolean }
-  | { kind: 'expression'; source: string }
+  | { kind: 'expression'; source: string; trustedUrl?: true }
   | { kind: 'number'; value: number }
   | { kind: 'string'; value: string };
 
@@ -74,6 +75,8 @@ export interface JsxIrElement {
   closingName?: string;
   element: JsxElementModel;
   generatedAttributes: JsxIrAttribute[];
+  /** Parser/lowerer-owned effective intrinsic identity after component sugar is normalized. */
+  intrinsicTagName?: string;
   kind: 'element';
   ownership: JsxIrOwnership;
   parent?: JsxIrElement;
@@ -165,6 +168,9 @@ export function createJsxIrTree(
         children: [],
         element,
         generatedAttributes: [],
+        ...(element.intrinsicTagName === undefined
+          ? {}
+          : { intrinsicTagName: element.intrinsicTagName }),
         kind: 'element',
         ownership: 'author',
         provenance: provenance('author', 'author JSX', 'source element', options, {
@@ -641,7 +647,11 @@ function jsxIrSpreadAttribute(
 function attributeValue(attribute: JsxAttributeModel): JsxIrAttributeValue {
   if (attribute.value !== undefined) return { kind: 'string', value: attribute.value };
   if (attribute.expression !== undefined)
-    return { kind: 'expression', source: attribute.expression };
+    return {
+      kind: 'expression',
+      source: attribute.expression,
+      ...(parserFactHasFrameworkTrustedUrl(attribute) ? { trustedUrl: true as const } : {}),
+    };
   return { kind: 'boolean', value: true };
 }
 

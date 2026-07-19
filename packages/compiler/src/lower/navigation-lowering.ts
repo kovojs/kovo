@@ -38,6 +38,7 @@ export function lowerNavigationLinks(
     const search = navigationObjectValue(link, 'search') ?? {};
 
     link.tag = 'a';
+    link.intrinsicTagName = 'a';
     link.closingName = 'a';
     removeJsxIrAttribute(link, 'params');
     removeJsxIrAttribute(link, 'search');
