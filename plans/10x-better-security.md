@@ -249,14 +249,13 @@ Measurements are versioned and reproducible:
     files, with the retired imperative-DOM name lexicon at zero; `pnpm run check:green-corpus`
     passes 18/18. The higher total honestly includes newly enrolled closure logic rather than
     presenting the eight deleted callback-name rows as a global P reduction.
-- [ ] Apply the substrate to OPP-28 only where principal-to-predicate correspondence is structurally
+- [x] Apply the substrate to OPP-28 only where principal-to-predicate correspondence is structurally
       provable. Re-scope the remainder to an explicit audit/engine responsibility instead of
       overclaiming full JavaScript predicate correctness.
-  - Blocking review finding: app-authored `kovoAnalyzerSummary` declarations currently promote an
-    unverified helper return to private-principal provenance. The focused OPP-28 suite passes
-    151/151, but does not yet prove the helper body/accepted-principal correspondence required by
-    SPEC §6.6; keep this item open until declaration laundering closes and the reject corpus kills
-    its reintroduction.
+  - Evidence: the independent `c8b638178` re-review accepts only the exact body-proved
+    principal/predicate subset plus reconstructed query/mutation receipts, rejects mutable `Date`
+    leaves, and keeps route params and arbitrary predicate correctness outside the proof; 138 focused
+    tests pass and all five selected producer/consumer/receipt mutants are killed.
 
 ### 2D. Runtime floor integration
 

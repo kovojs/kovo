@@ -573,6 +573,15 @@ Because the replay step precedes input parsing, the token MUST NOT be derived fr
 
 **Guards (arg-aware, normative).** A guard is a refinement run before `page`/`load`/`handler`. Beyond `req.session`, every guard receives the query's or mutation's **validated args / resolved instance key** — the same `s.*`-coerced values the loader and handler see (§9.4, §10.2). A guard may therefore express ownership over a client-visible key, not only session-wide roles. Guards run after schema parse/coerce so the args they inspect are already validated (§10.3 lifecycle).
 
+Validated query and mutation args MUST be reconstructed before providers, guards, or final
+consumers can observe them. The accepted graph is bounded primitives, plain own-data records, dense
+arrays, and exact framework-witnessed capability/file leaves. A JavaScript `Date` is not an
+immutable leaf: `Object.freeze()` and shadowed instance methods do not prevent an unchanged native
+mutator such as `Date.prototype.setTime.call(value, replacement)` from changing its internal slot.
+The receipt boundary therefore MUST reject `Date` values and direct authors to an ISO timestamp
+string or epoch number until Kovo ships an immutable temporal value. A Proxy membrane is not a
+substitute for this reconstruct-or-reject rule (SPEC §6.6 and C15 above).
+
 **`owns()` ownership combinator.** `owns((args) => args.id, table.ownerColumn)` is the sanctioned ownership guard: it passes only when the principal (`req.session`, the column declared by the table's `owner:` annotation, §10.1) owns the row the key selects. `owns()` is composable with the other combinators (`all(authed, owns(...))`) and discharges the KV414 IDOR obligation for the key it covers. The shipped runtime contract is `guards.owns(keyOf, ownsRow)` where `ownsRow(req, key)` is an app-provided ownership predicate (so `@kovojs/server` stays decoupled from the data layer); the `table.ownerColumn` column-form above is the planned compile-time sugar that lowers to it.
 
 ```ts
