@@ -406,8 +406,10 @@ the raw tagged search record straight into `load` (`query.ts:807`, `rawInput as 
 - [ ] `check:wire-input-boundary` (patterned on `check:c9-sink-inventory`): symbol-identity census of
       framework protocol header/cookie/search-param reads vs the registry. App-owned reads and reviewed
       third-party adapters are outside this grammar unless they enter through a named framework door.
-- [ ] Make `/_q/` reject-by-default: 422 when no `args` schema is declared and search input is
+- [x] Make `/_q/` reject-by-default: 422 when no `args` schema is declared and search input is
       non-empty; update SPEC §9.4 + conformance sweep.
+  - Evidence: the 47/47 query-ingress/endpoint suite returns 422 before lifecycle providers, guards,
+    or loaders run; the `query-search-requires-args-schema` C13 anchor is structurally enrolled.
 
 ---
 
