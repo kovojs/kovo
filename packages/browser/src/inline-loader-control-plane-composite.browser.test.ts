@@ -49,9 +49,20 @@ it('prevents dynamic bindings from minting mutation authority or deferred styles
   expect(stylesheet.getAttribute('data-kovo-deferred-style')).toBeNull();
   expect(form.getAttribute('data-mutation')).toBeNull();
 
+  let submitPrevented: boolean | undefined;
+  form.addEventListener(
+    'submit',
+    (event) => {
+      // Snapshot Kovo's capture-phase verdict, then cancel only the fixture's native navigation.
+      // Firefox performs the synthetic form default action and would navigate the test page away.
+      submitPrevented = event.defaultPrevented;
+      event.preventDefault();
+    },
+    { once: true },
+  );
   const submit = new SubmitEvent('submit', { bubbles: true, cancelable: true });
   form.dispatchEvent(submit);
-  expect(submit.defaultPrevented).toBe(false);
+  expect(submitPrevented).toBe(false);
   expect(fetch).not.toHaveBeenCalled();
 
   for (let frame = 0; frame < 2; frame += 1) {
