@@ -77,6 +77,45 @@ export const api = endpoint('/api', {
     );
   });
 
+  // @kovo-security-certifies C13 runtime-selected-handler-ref-closes
+  it.each([
+    ['direct lowercase', 'on:click={profile.handler}'],
+    ['direct ASCII-case variant', 'ON:CLICK={profile.handler}'],
+    ['static spread lowercase', "{...{ 'on:click': profile.handler }}"],
+    ['static spread ASCII-case variant', "{...{ 'On:Click': profile.handler }}"],
+    ['nested static spread', "{...{ ...{ 'on:click': profile.handler } }}"],
+  ])('closes a runtime-selected handler reference through %s', (_label, attributes) => {
+    const source = `
+export const DynamicRef = component({
+  render: ({ profile }) => <button ${attributes}>Run</button>,
+});
+`;
+
+    expect(kv449(source)).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'runtime-selected on:* handler reference is not compiler-authorized',
+        ),
+      }),
+    ]);
+  });
+
+  it('keeps exact static primitive handler references compiler-authorized', () => {
+    const result = compile(`
+export const StaticRefs = component({
+  render: () => (
+    <section>
+      <button on:click="/c/primitives.client.js#staticClick">Direct</button>
+      <button {...{ 'on:click': '/c/primitives.client.js#spreadClick' }}>Spread</button>
+      <button on:click={'/c/primitives.client.js#expressionClick'}>Expression</button>
+    </section>
+  ),
+});
+`);
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+  });
+
   it('accepts realistic state, delegated-event, reviewed primitive, focus, form, and timer effects', () => {
     const result = compile(`
 import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';

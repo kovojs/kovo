@@ -1960,6 +1960,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'runtime-selected-handler-reference-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 runtime-selected-handler-ref-closes',
+          'closes a runtime-selected handler reference through %s',
+          'direct ASCII-case variant',
+          'static spread ASCII-case variant',
+          'nested static spread',
+          'runtime-selected on:* handler reference is not compiler-authorized',
+          'keeps exact static primitive handler references compiler-authorized',
+        ],
+      },
+      {
         id: 'string-timer-and-unknown-browser-receiver-closure',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
