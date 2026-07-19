@@ -66,11 +66,31 @@ describe('Postgres RLS emission-door census', () => {
     expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
   });
 
+  it.each([
+    `export const policy = \`CREATE-- separator\nPOLICY rogue ON secrets USING (true)\`;`,
+    `export const policy = \`CREATE/* outer /* nested */ comment */POLICY rogue ON secrets USING (true)\`;`,
+  ])('kills adjacent PostgreSQL trivia spellings', (source) => {
+    const files = cleanFixture();
+    files.set('packages/core/src/rogue-policy.ts', source);
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
   it('kills statically joined CREATE POLICY spellings', () => {
     const files = cleanFixture();
     files.set(
       'packages/core/src/rogue-policy.ts',
       `export const policy = ['CREATE', 'POLICY rogue ON secrets USING (true)'].join(' ');`,
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it('kills const-bound arrays and concat spellings', () => {
+    const files = cleanFixture();
+    files.set(
+      'packages/core/src/rogue-policy.ts',
+      `const words = ['CREATE', 'POLICY']; export const policy = words.join(' ').concat(' rogue ON secrets');`,
     );
 
     expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
@@ -113,6 +133,16 @@ export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input
     expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
   });
 
+  it.each([
+    `export const load = () => import('./postgres-authorization-correspondence.js');`,
+    `export const load = () => require('./postgres-authorization-correspondence.js');`,
+  ])('kills dynamic access to the correspondence module', (source) => {
+    const files = cleanFixture();
+    files.set('packages/server/src/rogue-policy.ts', source);
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
   it('kills a live sixth policy installed through an alias of the private renderer', () => {
     const files = cleanFixture();
     files.set(
@@ -127,8 +157,8 @@ export { emitSixthPolicySql };
       files
         .get(runtimeFile)
         .replace(
-          "import { emitPostgresRlsPolicySql }",
-          "import { emitPostgresRlsPolicySql, emitSixthPolicySql }",
+          'import { emitPostgresRlsPolicySql }',
+          'import { emitPostgresRlsPolicySql, emitSixthPolicySql }',
         )
         .replace(
           "  emitPostgresRlsPolicySql({ site: 'admin' });",
