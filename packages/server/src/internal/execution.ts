@@ -14,6 +14,9 @@ export {
 } from '../mutation.js';
 export { invalidate, type MutationTouchSite } from '../change-record.js';
 export {
+  registerGeneratedCacheInfluenceManifest,
+} from '../generated-cache-influence-registry.js';
+export {
   registerGeneratedMutationTouchRegistry,
   type GeneratedMutationTouchRegistry,
 } from '../generated-mutation-registry.js';

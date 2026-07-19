@@ -15,8 +15,10 @@ describe('compiler cache-influence derivation', () => {
   it('derives URL and named-header axes while closing identity and dynamic-header reads', () => {
     // @kovo-security-certifies C13 cache-influence-static-closure
     const entries = cacheEntries(`
-import { publicAccess } from '@kovojs/server';
-import { query } from '@kovojs/server';
+import { guard, guards, publicAccess } from '@kovojs/server';
+import { endpoint, query } from '@kovojs/server';
+
+const authed = guards.authed();
 
 export const localized = query('localized', {
   access: publicAccess('public localized catalog'),
@@ -40,6 +42,25 @@ export const dynamic = query('dynamic', {
   access: publicAccess('negative cache-influence fixture'),
   read: { cacheControl: 'public, max-age=60' },
   load(input, { request }) { return { value: request.headers.get(input.header) }; },
+});
+export const accessGuarded = query('access-guarded', {
+  access: [guard('authed', authed)],
+  read: { cacheControl: 'public, max-age=60' },
+  load() { return { value: 'private' }; },
+});
+export const publicEndpoint = endpoint('/public-endpoint', {
+  access: publicAccess('public endpoint cache fixture'),
+  handler(request) { return request.url; },
+  method: 'GET',
+  reason: 'cache influence compiler fixture',
+  response: { appOwnedSafety: true, body: 'text', cache: 'public' },
+});
+export const cookieEndpoint = endpoint('/cookie-endpoint', {
+  access: publicAccess('negative endpoint cache fixture'),
+  handler(request) { return request.headers.get('cookie'); },
+  method: 'GET',
+  reason: 'cache influence compiler fixture',
+  response: { appOwnedSafety: true, body: 'text', cache: 'public' },
 });
 `);
 
@@ -74,12 +95,26 @@ export const dynamic = query('dynamic', {
     expect(entries.find((entry) => entry.root === 'query:dynamic')?.closedReasons).toContain(
       'unclassified-influence',
     );
+    expect(entries.find((entry) => entry.root === 'query:access-guarded')).toMatchObject({
+      verdict: 'shared-cache-closed',
+    });
+    expect(entries.find((entry) => entry.root === 'endpoint:/public-endpoint')).toMatchObject({
+      surface: 'endpoint',
+      verdict: 'public-proved',
+    });
+    expect(entries.find((entry) => entry.root === 'endpoint:/cookie-endpoint')?.axes).toContainEqual({
+      kind: 'cookie',
+      role: 'shared-cache-closed',
+    });
   });
 
   it('keeps opaque finite-IR roots closed and permits only keyed external versions', () => {
     const entries = cacheEntries(`
 import { publicAccess, query } from '@kovojs/server';
 import { importedLoad } from './opaque.js';
+import { importedSecret } from './config.js';
+
+const moduleSecret = process.env.CATALOG_SECRET;
 
 export const catalog = query('catalog', {
   access: publicAccess('public versioned catalog'),
@@ -101,6 +136,50 @@ export const opaque = query('opaque', {
   read: { cacheControl: 'public, max-age=60' },
   load: importedLoad,
 });
+export const imported = query('imported', {
+  access: publicAccess('negative imported influence fixture'),
+  read: { cacheControl: 'public, max-age=60' },
+  load() { return { value: importedSecret }; },
+});
+export const computedSession = query('computed-session', {
+  access: publicAccess('negative computed authority fixture'),
+  read: { cacheControl: 'public, max-age=60' },
+  load(_input, { request }) { return { id: request['session'].user.id }; },
+});
+export const ambientEnv = query('ambient-env', {
+  access: publicAccess('negative ambient secret fixture'),
+  read: { cacheControl: 'public, max-age=60' },
+  load() { const runtime = process; return { value: runtime.env.CATALOG_SECRET }; },
+});
+export const runtimeClock = query('runtime-clock', {
+  access: publicAccess('negative runtime-state fixture'),
+  read: { cacheControl: 'public, max-age=60' },
+  load() { return { now: Date.now() }; },
+});
+export const moduleCapture = query('module-capture', {
+  access: publicAccess('negative captured secret fixture'),
+  read: { cacheControl: 'public, max-age=60' },
+  load() { return { value: moduleSecret }; },
+});
+export const assignedAlias = query('assigned-alias', {
+  access: publicAccess('negative assigned authority fixture'),
+  read: { cacheControl: 'public, max-age=60' },
+  load(_input, { request }) {
+    let alias;
+    alias = request;
+    return { id: alias.session.user.id };
+  },
+});
+export const contextEscape = query('context-escape', {
+  access: publicAccess('negative context escape fixture'),
+  read: { cacheControl: 'public, max-age=60' },
+  load(_input, context) { return { context }; },
+});
+export const headersEscape = query('headers-escape', {
+  access: publicAccess('negative headers escape fixture'),
+  read: { cacheControl: 'public, max-age=60' },
+  load(_input, { request }) { return { headers: request.headers }; },
+});
 `);
 
     expect(entries.find((entry) => entry.root === 'query:catalog')).toMatchObject({
@@ -115,5 +194,19 @@ export const opaque = query('opaque', {
     expect(entries.find((entry) => entry.root === 'query:opaque')).toMatchObject({
       verdict: 'shared-cache-closed',
     });
+    for (const root of [
+      'query:imported',
+      'query:computed-session',
+      'query:ambient-env',
+      'query:runtime-clock',
+      'query:module-capture',
+      'query:assigned-alias',
+      'query:context-escape',
+      'query:headers-escape',
+    ]) {
+      expect(entries.find((entry) => entry.root === root), root).toMatchObject({
+        verdict: 'shared-cache-closed',
+      });
+    }
   });
 });

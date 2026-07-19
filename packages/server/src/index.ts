@@ -339,6 +339,9 @@ export type {
   ReplayMutationWireBodyOptions,
   Schema,
   Secret,
+  SharedCacheExternalDataVersion,
+  SharedCacheInfluenceDeclaration,
+  SharedCacheKeyContribution,
   // KV429 (SPEC §10.3/§11.1): the typed 409 stale-version conflict outcome.
   StaleVersionConflict,
   StoredFileSchema,

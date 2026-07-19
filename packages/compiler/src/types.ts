@@ -78,6 +78,7 @@ export interface ProductionRenderPlanGateOptions {
  */
 export type ComponentGraphFact = Pick<
   CoreGraph.ComponentExplain,
+  | 'cacheInfluence'
   | 'disambiguatedDomName'
   | 'clocks'
   | 'domName'
@@ -240,6 +241,7 @@ export type RegistryGraphInput = Pick<
   | 'authPosture'
   | 'capabilities'
   | 'capabilityClosure'
+  | 'cacheInfluence'
   | 'components'
   | 'cookieDowngrades'
   | 'endpoints'

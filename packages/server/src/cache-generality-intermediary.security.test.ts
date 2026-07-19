@@ -5,10 +5,13 @@ import type { CacheInfluenceManifest } from '@kovojs/core/internal/cache-influen
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { publicAccess } from './access.js';
+import { createApp, createRequestHandler } from './app.js';
 import {
   installGeneratedCacheInfluenceManifestForCommand,
 } from './generated-cache-influence-registry.js';
 import { query, renderQueryEndpointResponse } from './query.js';
+import { respond } from './response.js';
+import { route } from './route.js';
 import { s } from './schema.js';
 
 interface CachedRepresentation {
@@ -131,6 +134,35 @@ async function bodyAndCache(
 }
 
 describe('cache generality through a real intermediary', () => {
+  it('does not let a runtime document header widen a missing compiler verdict', async () => {
+    const handler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/public-looking-document', {
+            access: publicAccess('negative cache manifest fixture'),
+            page: () =>
+              respond.file('catalog', {
+                contentType: 'text/plain; charset=utf-8',
+                headers: { 'Cache-Control': 'public, max-age=60' },
+              }),
+          }),
+        ],
+      }),
+    );
+
+    for (const headers of [
+      undefined,
+      { authorization: 'Bearer principal-a' },
+      { cookie: 'session=principal-a' },
+    ]) {
+      const response = await handler(
+        new Request('https://cache.example.test/public-looking-document', { headers }),
+      );
+      expect(response.headers.get('cache-control')).toContain('no-store');
+      expect(response.headers.get('vary')).toContain('Cookie');
+    }
+  });
+
   it('proves prime/reuse across principals, cookies, Authorization, query variants, header variants, and branch changes', async () => {
     // @kovo-security-certifies C13 cache-influence-real-intermediary
     const manifest: CacheInfluenceManifest = {
@@ -216,11 +248,11 @@ describe('cache generality through a real intermediary', () => {
       'x-branch': 'beta',
     });
     expect(queryVariant.cache).toBe('MISS');
-    expect(queryVariant.body).toContain('&quot;item&quot;:&quot;two&quot;');
+    expect(queryVariant.body).toContain('"item":"two"');
     expect(headerVariant.cache).toBe('MISS');
-    expect(headerVariant.body).toContain('&quot;language&quot;:&quot;fr&quot;');
+    expect(headerVariant.body).toContain('"language":"fr"');
     expect(branchVariant.cache).toBe('MISS');
-    expect(branchVariant.body).toContain('&quot;branch&quot;:&quot;beta&quot;');
+    expect(branchVariant.body).toContain('"branch":"beta"');
 
     const principalA = await bodyAndCache(base, '/_q/cache-oracle?item=one', {
       cookie: 'session=principal-a',
