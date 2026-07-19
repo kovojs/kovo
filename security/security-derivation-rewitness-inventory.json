@@ -244,15 +244,23 @@
       {
         "id": "W.request-deadline-occupancy",
         "owner": "server pre-dispatch admission and effect doors",
-        "authoritativeSource": ["packages/server/src/app-load-shed.ts"],
+        "authoritativeSource": [
+          "packages/server/src/app-load-shed.ts",
+          "packages/server/src/request-deadline.ts",
+          "scripts/capability-surface-census.manifest.json"
+        ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "renewalTrigger": "not implemented",
-        "ttl": "unbounded request execution",
-        "failurePosture": "no mandatory deadline or global in-flight ceiling",
-        "costBudget": "unbudgeted",
-        "evidence": [],
-        "gap": "Owned effects do not consume one mandatory request deadline and occupancy witness.",
+        "status": "rewitnessed",
+        "renewalTrigger": "every matched app request at the pre-dispatch admission door",
+        "ttl": "until deadline, ingress disconnect, response cancellation/error/completion, or adapter transport finish/close; never beyond the 300000 ms endpoint ceiling",
+        "failurePosture": "shed over-occupancy as 503 plus Retry-After before handler work; abort owned effects and discard late responses at deadline",
+        "costBudget": "one app counter increment, one AbortController, one finite timer, bounded event listeners, and weak identity-registry entries per admitted request",
+        "evidence": [
+          "packages/server/src/request-deadline.test.ts",
+          "packages/server/src/node.test.ts",
+          "scripts/capability-surface-census-gate.test.mjs"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {

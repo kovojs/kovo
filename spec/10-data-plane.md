@@ -542,13 +542,25 @@ closed.
 **Request lifecycle (normative):**
 
 ```
-(pre-dispatch shell: max-body-size → 413 · coarse per-IP/global rate → 429 — §9.5)
+(pre-dispatch shell: max-body-size → 413 · coarse per-IP/global rate → 429
+ · app occupancy → 503 · finite deadline capability — §9.5)
 CSRF validation → replay reservation by (principal, CSRF rotation binding, derived mutation identity, idem-token) → parse+coerce input (schema)
 → guard chain → BEGIN tx → handler (receives a transaction-scoped db whose public type hides raw transaction openers)
-→ COMMIT (settle reservation, store response) → re-run invalidated queries (post-commit, same request context)
+→ in-tx deadline checkpoint → COMMIT (settle reservation, store response) → re-run invalidated queries (post-commit, same request context)
 → render <kovo-query>/<kovo-fragment> → respond
-                    ⇘ on fail(): ROLLBACK → typed error fragment, 422
+                    ⇘ on fail() or pre-commit deadline: ROLLBACK → abort replay reservation
+                    ⇘ deadline after possible COMMIT: preserve replay truth → discard response only
 ```
+
+The request deadline is a transaction-door capability, not a claim that JavaScript or a database
+driver can undo committed work. The framework checks it before opening transaction work and again
+inside the transaction callback after the mutation handler. Cooperative expiry at either checkpoint
+throws before callback success, drives the transaction's rollback path, and invokes the replay
+reservation `abort` hook because no successful callback requested commit. A timeout while an
+adapter is committing is outcome-ambiguous: Kovo MUST preserve the pending replay claim. Once commit
+is known to have succeeded, the durable settlement remains authoritative even if the request
+deadline then expires; Kovo may discard the late wire response, but MUST NOT call that a rollback,
+erase replay truth, or execute the mutation again on retry.
 
 This ordering closes the read-your-writes hazard: responses can never render pre-commit data (which would visibly revert the user's optimistic update). A replay hit does not bypass authorization: the runtime MUST re-evaluate the session-bound guard chain against the **current** principal before re-serving a stored response, so a replay never re-serves a private response after the principal's authorization changed (role revoked, ownership lost). The replay store is keyed on (principal ∧ CSRF session/rotation binding ∧ source-derived mutation identity ∧ idem-token), using canonical length framing for each identity component, so a replay can only ever return to the same principal that produced it even when an app supplies a shared rotation id. Session/rotation ids, independently resolved principals, anonymous-CSRF secrets, and mutation identities are each capped at 1,024 JavaScript code units before composition. A framework lifecycle binding embeds its pinned principal exactly once and replay rejects a later mismatch rather than appending duplicate identity. At those maxima, the canonical framework CSRF binding is 2,124 code units, the enhanced raw replay scope is 3,158, and the `nojs:` scope is 3,163 — all below the durable store's 4,096-code-unit raw-scope ceiling.
 
