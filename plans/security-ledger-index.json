@@ -22,6 +22,11 @@
       "summary": "Derived security facts, runtime re-witnessing, and prover-assurance roadmap."
     },
     {
+      "path": "plans/10x-better-security-3.md",
+      "role": "decide-certify-bound",
+      "summary": "Finite decision procedures, independently checkable evidence, and trusted-periphery bounds."
+    },
+    {
       "path": "plans/threat-matrix-plan.md",
       "role": "v1-signoff",
       "summary": "Threat-matrix coverage, external audit, and v1 freeze-gate roadmap."

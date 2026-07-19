@@ -10,6 +10,7 @@ ledger active; registration does. `pnpm run check:security-ledger-index` enforce
 | ------------------------------------ | ----------------------------------------------- |
 | `plans/10x-better-security.md`       | Security convergence and forcing gates          |
 | `plans/10x-better-security-2.md`     | Derivation, re-witnessing, and prover assurance |
+| `plans/10x-better-security-3.md`     | Finite decisions and trusted-periphery bounds   |
 | `plans/threat-matrix-plan.md`        | Coverage matrix, external audit, and v1 signoff |
 | `plans/most-secure-web-framework.md` | Strategic opportunity backlog                   |
 | `plans/secure-framework.md`          | Audit-driven implementation backlog             |
