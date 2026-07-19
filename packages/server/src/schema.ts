@@ -30,6 +30,7 @@ import {
   createWitnessSet,
   createWitnessWeakMap,
   createWitnessWeakSet,
+  witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -37,6 +38,7 @@ import {
   witnessObjectIs,
   witnessObjectKeys,
   witnessReflectApply,
+  witnessProxy,
   witnessSetAdd,
   witnessSetHas,
   witnessWeakMapGet,
@@ -149,18 +151,73 @@ export function parseDeclaredAppEnv<Value extends Record<string, unknown>>(
   source: Schema<Value>,
   input: Record<string, unknown>,
 ): Readonly<Value> {
-  const metadata = witnessWeakMapGet(schemaMetadata, source as Schema<unknown>);
-  if (metadata?.kind !== 'object') {
-    throw new TypeError(
-      'createApp({ env }) requires a genuine s.object(...) schema so undeclared operator-environment keys cannot escape (SPEC §6.6/§9.5).',
-    );
-  }
+  requireDeclaredAppEnvShape(source);
   const schema = snapshotSchemaForRuntime(source, 'createApp({ env })');
   const parsed = schema.parse(input);
   if (typeof parsed !== 'object' || parsed === null || securityArrayIsArray(parsed)) {
     throw new TypeError('createApp({ env }) must parse to a declared environment record.');
   }
   return witnessFreeze(parsed);
+}
+
+/**
+ * @internal Create the closed app-env shape used only while `kovo build` derives registry facts.
+ *
+ * No operator value is read or invented. Every declared field is a runtime secret box around a
+ * framework-owned Proxy that throws on observation, coercion, enumeration, cloning, or export.
+ * This lets the build evaluator close ordinary app declarations without production credentials,
+ * while a route, renderer, or dependency that tries to consume a value still fails instead of
+ * placing a dummy in an artifact (SPEC §6.6/§9.5).
+ */
+export function buildUnavailableDeclaredAppEnv<Value extends Record<string, unknown>>(
+  source: Schema<Value>,
+): Readonly<Value> {
+  const shape = requireDeclaredAppEnvShape(source);
+  const unavailable = witnessCreateNullRecord<unknown>();
+  const fields = witnessObjectKeys(shape);
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = fields[index]!;
+    witnessDefineProperty(unavailable, field, {
+      configurable: false,
+      enumerable: true,
+      value: secret(buildUnavailableAppEnvValue(field)),
+      writable: false,
+    });
+  }
+  return witnessFreeze(unavailable) as Readonly<Value>;
+}
+
+function requireDeclaredAppEnvShape<Value extends Record<string, unknown>>(
+  source: Schema<Value>,
+): Readonly<Record<string, Schema<unknown>>> {
+  const metadata = witnessWeakMapGet(schemaMetadata, source as Schema<unknown>);
+  if (metadata?.kind !== 'object') {
+    throw new TypeError(
+      'createApp({ env }) requires a genuine s.object(...) schema so undeclared operator-environment keys cannot escape (SPEC §6.6/§9.5).',
+    );
+  }
+  return metadata.shape;
+}
+
+function buildUnavailableAppEnvValue(field: string): object {
+  const refuse = (): never => {
+    throw new TypeError(
+      `KV435: app.env.${field} is unavailable while kovo build derives the app graph; production config values are parsed only when the emitted server boots (SPEC §6.6/§9.5).`,
+    );
+  };
+  return witnessProxy(witnessCreateNullRecord(), {
+    defineProperty: refuse,
+    deleteProperty: refuse,
+    get: refuse,
+    getOwnPropertyDescriptor: refuse,
+    getPrototypeOf: refuse,
+    has: refuse,
+    isExtensible: refuse,
+    ownKeys: refuse,
+    preventExtensions: refuse,
+    set: refuse,
+    setPrototypeOf: refuse,
+  });
 }
 
 function stableSchemaMethod(

@@ -363,6 +363,7 @@ describe('@kovojs/drizzle static build trust-fact aggregate', () => {
     expect(collectStaticBuildTrustFactsFromProject({ files })).toEqual({
       capabilities: collectCapabilityEscapesFromProject({ files }),
       cookieDowngrades: collectCookieDowngradesFromProject({ files }),
+      diagnostics: [],
       revealed: collectRuntimeRevealFactsFromProject({ files }),
       unregisteredSinks: collectUnregisteredSinksFromProject({ files }),
     });
@@ -479,6 +480,7 @@ describe('@kovojs/drizzle static build trust-fact aggregate', () => {
     const standalone = {
       capabilities: collectCapabilityEscapesFromProject({ files }),
       cookieDowngrades: collectCookieDowngradesFromProject({ files }),
+      diagnostics: [],
       revealed: collectRuntimeRevealFactsFromProject({ files }),
       unregisteredSinks: collectUnregisteredSinksFromProject({ files }),
     };

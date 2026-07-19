@@ -1536,11 +1536,99 @@ export default createApp({
     }
   });
 
-  it('merges query and runtime reveals with richer query facts winning by source site', () => {
+  it('builds a declared config-secret app without receiving the production value', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-env-unavailable-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previous = process.env.KOVO_BUILD_SENTINEL_SECRET;
+
+    try {
+      delete process.env.KOVO_BUILD_SENTINEL_SECRET;
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        [
+          "import { createApp, s } from '@kovojs/server';",
+          '',
+          'export default createApp({',
+          '  env: s.object({',
+          '    KOVO_BUILD_SENTINEL_SECRET: s.secret(s.string()),',
+          '  }),',
+          '  routes: [],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('env.KOVO_BUILD_SENTINEL_SECRET');
+
+      const graph = readFileSync(join(outDir, '.kovo/graph.json'), 'utf8');
+      expect(graph).not.toContain('[secret]');
+      expect(graph).not.toContain('production config values are parsed');
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_BUILD_SENTINEL_SECRET;
+      else process.env.KOVO_BUILD_SENTINEL_SECRET = previous;
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails build audit when an imported trustedReveal call cannot be recorded', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-runtime-reveal-dynamic-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        [
+          "import { secret, trustedReveal as reveal } from '@kovojs/core';",
+          "import { createApp } from '@kovojs/server';",
+          '',
+          "const options = { justification: 'hidden behind a binding' };",
+          "reveal(secret('build-only-payment-key'), options);",
+          'export default createApp({ routes: [] });',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(mainAsync(['build', appPath, '--out', outDir])).resolves.toBe(1);
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'ERROR KV426 app.mjs:5',
+      );
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('dedupes only one AST call identity and preserves distinct reveals on the same line', () => {
     expect(
       mergeBuildRevealFacts(
         [
           {
+            callIdentity: 'queries.ts:100:180',
             grade: 'proof',
             method: 'server-projection',
             path: 'digest',
@@ -1550,6 +1638,7 @@ export default createApp({
         ],
         [
           {
+            callIdentity: 'queries.ts:100:180',
             grade: 'audit',
             justification: 'syntactic duplicate',
             method: 'arbitrary-fn',
@@ -1558,12 +1647,13 @@ export default createApp({
             site: 'queries.ts:8',
           },
           {
+            callIdentity: 'queries.ts:181:250',
             grade: 'audit',
-            justification: 'initialize payment SDK once at boot',
+            justification: 'a distinct reveal sharing the source line',
             method: 'arbitrary-fn',
-            path: 'app.env.PAYMENT_API_KEY',
+            path: 'users.otherToken',
             query: 'runtime',
-            site: 'payment.ts:5',
+            site: 'queries.ts:8',
           },
         ],
       ),
@@ -1577,11 +1667,11 @@ export default createApp({
       },
       {
         grade: 'audit',
-        justification: 'initialize payment SDK once at boot',
+        justification: 'a distinct reveal sharing the source line',
         method: 'arbitrary-fn',
-        path: 'app.env.PAYMENT_API_KEY',
+        path: 'users.otherToken',
         query: 'runtime',
-        site: 'payment.ts:5',
+        site: 'queries.ts:8',
       },
     ]);
   });

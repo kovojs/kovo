@@ -86,12 +86,16 @@ GREEN (no longer pending).
   declared projection; undeclared raw environment keys remain internal, and `s.secret(...)` fields
   are registered runtime `SecretValue` boxes. `packages/server/src/schema.test.ts` proves template,
   JSON, structured-clone, wire, SSR, and inspected-log behavior; `packages/server/src/env.test.ts`
-  proves the boot projection and sanitized schema failures;
+  proves the boot projection, sanitized schema failures, and non-exportable build-time unavailable
+  posture; the create-kovo production-artifact test builds without the config secret and then proves
+  the emitted server refuses missing runtime configuration before serving;
   `packages/compiler/src/client-secret-capture.test.ts` proves KV437 artifact refusal. The behavioral
   mutant `server-schema/drop-runtime-secret-boxing` kills removal of the runtime box. The reviewed
   `trustedReveal` exit is visible through the existing `kovo explain --revealed` fact graph (and its
   folded `--capabilities` view); this audit trail is not a proof that revealed plaintext cannot later
-  be misused, and same-process authored code remains in the §6.6 author-trust scope.
+  be misused. Direct import aliases and reordered literal options remain visible, dynamic options
+  fail with KV426, and cross-analyzer dedupe uses exact call identity rather than line number.
+  Same-process authored code remains in the §6.6 author-trust scope.
 - **Wire × Au (A1) — GREEN.** CSRF does not rely on SameSite alone: `packages/server/src/csrf.test.ts` proves the
   Origin / `Sec-Fetch-Site` floor and synchronizer-token audience binding for unsafe requests, and
   `packages/server/src/app-dispatch.test.ts` covers the end-to-end mutation/endpoint dispatch paths that reject missing

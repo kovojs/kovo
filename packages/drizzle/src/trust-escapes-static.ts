@@ -20,6 +20,7 @@ import type {
   CapabilityExplain,
   CookieDowngradeExplain,
   RevealExplainFact,
+  StaticDiagnosticFact,
   TrustEscapeExplain,
   UnregisteredSinkFact,
 } from '@kovojs/core/internal/graph';
@@ -415,6 +416,7 @@ export function collectUnregisteredSinksFromProject(
 export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProjectOptions): {
   capabilities: CapabilityExplain[];
   cookieDowngrades: CookieDowngradeExplain[];
+  diagnostics: StaticDiagnosticFact[];
   revealed: RevealExplainFact[];
   unregisteredSinks: UnregisteredSinkFact[];
 } {
@@ -422,6 +424,7 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
   try {
     const capabilities: CapabilityExplain[] = [];
     const cookieDowngrades: CookieDowngradeExplain[] = [];
+    const diagnostics: StaticDiagnosticFact[] = [];
     const revealed: RevealExplainFact[] = [];
     const unregisteredSinks: UnregisteredSinkFact[] = [];
     for (const [index, sourceFile] of sourceFiles.entries()) {
@@ -431,8 +434,9 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
       for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
         const downgrade = cookieDowngradeForCall(file, call);
         if (downgrade) cookieDowngrades.push(downgrade);
-        const reveal = runtimeRevealFactForCall(file, call);
-        if (reveal) revealed.push(reveal);
+        const reveal = runtimeRevealAuditForCall(file, call);
+        if (reveal?.fact) revealed.push(reveal.fact);
+        if (reveal?.diagnostic) diagnostics.push(reveal.diagnostic);
       }
     }
     if (options.buildConfigEntryFileName) {
@@ -481,6 +485,7 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
         (left, right) =>
           left.name.localeCompare(right.name) || (left.site ?? '').localeCompare(right.site ?? ''),
       ),
+      diagnostics: sortRuntimeRevealDiagnostics(diagnostics),
       revealed: sortRuntimeRevealFacts(revealed),
       unregisteredSinks: unregisteredSinks.sort(
         (left, right) => left.site.localeCompare(right.site) || left.sink.localeCompare(right.sink),
@@ -38824,17 +38829,25 @@ export function collectCapabilityEscapesFromProject(
 /**
  * Collect exact runtime `trustedReveal(...)` calls into the existing reveal-fact graph
  * (SPEC §6.6, audit-only). Query projection reveals remain owned by the typed query-shape
- * analyzer; callers merge by source site so its richer proof/audit verdict wins. A runtime call is
- * always audit-grade because a syntactic call-site witness cannot prove how the revealed plaintext
- * is used afterward.
+ * analyzer; callers merge only when both passes report the exact same AST call identity, so its
+ * richer proof/audit verdict wins without dropping a second call on the same source line. A runtime
+ * call is always audit-grade because a syntactic call-site witness cannot prove how the revealed
+ * plaintext is used afterward.
  *
  * @internal
  */
-export function collectRuntimeRevealFactsFromProject(
+export interface RuntimeRevealAuditResult {
+  diagnostics: StaticDiagnosticFact[];
+  revealed: RevealExplainFact[];
+}
+
+/** @internal Collect runtime reveal facts together with fail-closed audit diagnostics. */
+export function collectRuntimeRevealAuditFromProject(
   options: TrustEscapeProjectOptions,
-): RevealExplainFact[] {
+): RuntimeRevealAuditResult {
   const { sourceFiles, dispose } = createSyntacticProject(options.files);
   try {
+    const diagnostics: StaticDiagnosticFact[] = [];
     const revealed: RevealExplainFact[] = [];
     for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
       const sourceFile = sourceFiles[fileIndex];
@@ -38842,41 +38855,147 @@ export function collectRuntimeRevealFactsFromProject(
       if (!sourceFile || !file) continue;
 
       for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-        const reveal = runtimeRevealFactForCall(file, call);
-        if (reveal) revealed.push(reveal);
+        const reveal = runtimeRevealAuditForCall(file, call);
+        if (reveal?.fact) revealed.push(reveal.fact);
+        if (reveal?.diagnostic) diagnostics.push(reveal.diagnostic);
       }
     }
-    return sortRuntimeRevealFacts(revealed);
+    return {
+      diagnostics: sortRuntimeRevealDiagnostics(diagnostics),
+      revealed: sortRuntimeRevealFacts(revealed),
+    };
   } finally {
     dispose();
   }
 }
 
-function runtimeRevealFactForCall(
+/**
+ * Compatibility fact-only view. An imported call whose audit fields cannot be recorded throws an
+ * explicit KV426 diagnostic rather than silently disappearing from `kovo explain --revealed`.
+ *
+ * @internal
+ */
+export function collectRuntimeRevealFactsFromProject(
+  options: TrustEscapeProjectOptions,
+): RevealExplainFact[] {
+  const result = collectRuntimeRevealAuditFromProject(options);
+  if (result.diagnostics.length > 0) {
+    throw new TypeError(
+      result.diagnostics
+        .map((diagnostic) => `${diagnostic.code} ${diagnostic.site} ${diagnostic.message ?? ''}`)
+        .join('\n'),
+    );
+  }
+  return result.revealed;
+}
+
+interface RuntimeRevealAuditCallResult {
+  diagnostic?: StaticDiagnosticFact;
+  fact?: RevealExplainFact;
+}
+
+function runtimeRevealAuditForCall(
   file: TrustEscapeSourceFileInput,
   call: import('ts-morph').CallExpression,
-): RevealExplainFact | undefined {
-  if (!requestCallIsExactTrustedReveal(call)) return undefined;
+): RuntimeRevealAuditCallResult | undefined {
+  if (!runtimeRevealCallUsesDirectCoreImport(call)) return undefined;
   const value = call.getArguments()[0];
   const optionsArgument = call.getArguments()[1];
-  if (!value || !optionsArgument) return undefined;
-  const revealOptions = unwrapStaticExpression(optionsArgument);
-  if (!Node.isObjectLiteralExpression(revealOptions)) return undefined;
-  const justification = objectStringProperty(revealOptions, 'justification');
-  if (justification === undefined) return undefined;
-  const requestedMethod = objectStringProperty(revealOptions, 'method');
+  if (!value || !optionsArgument || call.getArguments().length !== 2) {
+    return { diagnostic: runtimeRevealAuditDiagnostic(file, call) };
+  }
+  const fields = runtimeRevealAuditFields(optionsArgument);
+  if (!fields) return { diagnostic: runtimeRevealAuditDiagnostic(file, call) };
+  const requestedMethod = fields.method;
   const method = requestedMethod === 'server-projection' ? requestedMethod : 'arbitrary-fn';
-  const source = objectStringProperty(revealOptions, 'source') ?? shortSource(value);
+  const source = fields.source ?? shortSource(value);
   return {
-    grade: 'audit',
-    justification,
-    method,
-    path: source,
-    query: 'runtime',
-    selectedSecret: true,
-    site: siteFor(file, call),
-    source,
+    fact: {
+      callIdentity: runtimeRevealCallIdentity(file, call),
+      grade: 'audit',
+      justification: fields.justification,
+      method,
+      path: source,
+      query: 'runtime',
+      selectedSecret: true,
+      site: siteFor(file, call),
+      source,
+    },
   };
+}
+
+function runtimeRevealCallUsesDirectCoreImport(call: import('ts-morph').CallExpression): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  return requestExpressionIsDirectImportedExport(callee, '@kovojs/core', 'trustedReveal');
+}
+
+function runtimeRevealAuditFields(expression: Node):
+  | {
+      justification: string;
+      method?: 'arbitrary-fn' | 'server-projection';
+      source?: string;
+    }
+  | undefined {
+  const object = unwrapStaticExpression(expression);
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  const fields = new Map<string, string>();
+  const properties = object.getProperties();
+  if (properties.length === 0 || properties.length > 3) return undefined;
+  for (const property of properties) {
+    if (
+      !Node.isPropertyAssignment(property) ||
+      Node.isComputedPropertyName(property.getNameNode())
+    ) {
+      return undefined;
+    }
+    const name = staticMemberName(property.getNameNode());
+    const value = unwrapStaticExpression(property.getInitializer()!);
+    if (
+      !name ||
+      !['justification', 'method', 'source'].includes(name) ||
+      fields.has(name) ||
+      !isStringLiteralLike(value)
+    ) {
+      return undefined;
+    }
+    fields.set(name, value.getLiteralText());
+  }
+  const justification = fields.get('justification');
+  const method = fields.get('method');
+  const source = fields.get('source');
+  if (
+    justification === undefined ||
+    !runtimeRegExpTest(/\S/u, justification) ||
+    (method !== undefined && method !== 'arbitrary-fn' && method !== 'server-projection') ||
+    (source !== undefined && !runtimeRegExpTest(/\S/u, source))
+  ) {
+    return undefined;
+  }
+  return {
+    justification,
+    ...(method === undefined ? {} : { method }),
+    ...(source === undefined ? {} : { source }),
+  };
+}
+
+function runtimeRevealAuditDiagnostic(
+  file: TrustEscapeSourceFileInput,
+  call: import('ts-morph').CallExpression,
+): StaticDiagnosticFact {
+  return {
+    code: 'KV426',
+    message:
+      'Trust escape hatch lacks auditable provenance. trustedReveal(...) must use exactly two arguments and an inline object literal with a non-empty literal justification plus optional literal method/source fields; dynamic options cannot be recorded by kovo explain --revealed (SPEC §6.6).',
+    severity: 'error',
+    site: siteFor(file, call),
+  };
+}
+
+function runtimeRevealCallIdentity(
+  file: TrustEscapeSourceFileInput,
+  call: import('ts-morph').CallExpression,
+): string {
+  return `${file.fileName}:${call.getStart()}:${call.getEnd()}`;
 }
 
 function sortRuntimeRevealFacts(revealed: RevealExplainFact[]): RevealExplainFact[] {
@@ -38885,6 +39004,14 @@ function sortRuntimeRevealFacts(revealed: RevealExplainFact[]): RevealExplainFac
       left.site.localeCompare(right.site) ||
       left.path.localeCompare(right.path) ||
       (left.justification ?? '').localeCompare(right.justification ?? ''),
+  );
+}
+
+function sortRuntimeRevealDiagnostics(diagnostics: StaticDiagnosticFact[]): StaticDiagnosticFact[] {
+  return diagnostics.sort(
+    (left, right) =>
+      left.site.localeCompare(right.site) ||
+      (left.message ?? '').localeCompare(right.message ?? ''),
   );
 }
 

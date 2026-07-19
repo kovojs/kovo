@@ -2964,6 +2964,7 @@ function trustedRevealMetadata(
   const source = staticStringProperty(object, 'source') ?? staticTsExpressionPath(value);
 
   return {
+    callIdentity: sourceCallIdentity(call),
     grade: method === 'server-projection' && !selectedSecret && !opaque ? 'proof' : 'audit',
     justification,
     method,
@@ -3040,6 +3041,9 @@ function childQueryShapes(
       descend: false,
       items: [
         {
+          ...(current.reveal.callIdentity === undefined
+            ? {}
+            : { callIdentity: current.reveal.callIdentity }),
           grade: current.reveal.grade,
           method: current.reveal.method,
           path: path.join('.') || '$',
@@ -3257,6 +3261,15 @@ function sourcePosition(node: ts.Node): string {
     ? sourceFile.fileName.slice(prefix.length)
     : sourceFile.fileName;
   return `${fileName}:${position.line + 1}`;
+}
+
+function sourceCallIdentity(node: ts.Node): string {
+  const sourceFile = node.getSourceFile();
+  const prefix = `${DRIZZLE_STATIC_PROJECT_ROOT}/`;
+  const fileName = sourceFile.fileName.startsWith(prefix)
+    ? sourceFile.fileName.slice(prefix.length)
+    : sourceFile.fileName;
+  return `${fileName}:${node.getStart(sourceFile)}:${node.getEnd()}`;
 }
 
 /** @internal */ export function isTimeVolatileSqlProjection(expression: ts.Expression): boolean {

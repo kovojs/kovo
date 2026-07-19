@@ -9,7 +9,12 @@ import {
   runtimeEnvironmentSnapshot,
   runtimeEnvironmentValue,
 } from '@kovojs/server/internal/runtime-environment';
-import { isSchemaValidationError, parseDeclaredAppEnv } from './schema.js';
+import { currentKovoBuildContext } from './internal/build-context.js';
+import {
+  buildUnavailableDeclaredAppEnv,
+  isSchemaValidationError,
+  parseDeclaredAppEnv,
+} from './schema.js';
 import {
   securityIsUint8Array,
   securityMathLog2,
@@ -174,9 +179,17 @@ export function validateAppEnv<EnvValue extends Record<string, unknown> = Record
   validateFrameworkSecret(secrets.csrfSecret, 'csrf.secret', issues);
 
   if (options.env !== undefined) {
-    const parsed = validateAppEnvSchema(options.env, options.envSource ?? readProcessEnv(), issues);
-    if (parsed === undefined) envInvalid = true;
-    else parsedEnv = parsed;
+    if (currentKovoBuildContext()?.appEnvironment === 'unavailable') {
+      parsedEnv = buildUnavailableDeclaredAppEnv(options.env);
+    } else {
+      const parsed = validateAppEnvSchema(
+        options.env,
+        options.envSource ?? readProcessEnv(),
+        issues,
+      );
+      if (parsed === undefined) envInvalid = true;
+      else parsedEnv = parsed;
+    }
   }
 
   if (issues.length === 0) return parsedEnv;

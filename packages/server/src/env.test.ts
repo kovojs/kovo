@@ -16,6 +16,7 @@ import {
   resolveBootMode,
   validateAppEnv,
 } from './env.js';
+import { withKovoBuildContext } from './internal/build-context.js';
 import { s, SchemaValidationError } from './schema.js';
 
 // A real, length-clearing secret (~43 base64url chars ≈ 192 bits), matching what the
@@ -485,6 +486,43 @@ describe('createApp boot integration (the chokepoint)', () => {
     expect(isSecret(app.env.API_TOKEN)).toBe(true);
     expect(app.env.PUBLIC_ORIGIN).toBe('https://example.test');
     expect(() => `${app.env.API_TOKEN}`).toThrow(/KV435/u);
+  });
+
+  it('derives a build graph without operator values and keeps every sentinel off egress', async () => {
+    const app = await withKovoBuildContext(
+      { appEnvironment: 'unavailable', graphDerivation: true },
+      async () =>
+        createApp({
+          egress: ENV_TEST_EGRESS,
+          env: s.object({
+            API_TOKEN: s.secret(s.string()),
+            PUBLIC_ORIGIN: s.string(),
+          }),
+          envSource: {},
+        }),
+    );
+
+    expect(Object.keys(app.env)).toEqual(['API_TOKEN', 'PUBLIC_ORIGIN']);
+    expect(isSecret(app.env.API_TOKEN)).toBe(true);
+    expect(isSecret(app.env.PUBLIC_ORIGIN)).toBe(true);
+
+    const unavailable = trustedReveal(app.env.API_TOKEN, {
+      justification: 'prove the build sentinel cannot become an artifact value',
+      method: 'arbitrary-fn',
+      source: 'app.env.API_TOKEN',
+    }) as unknown;
+    expect(() => JSON.stringify(unavailable)).toThrow(/unavailable while kovo build/u);
+    expect(() => String(unavailable)).toThrow(/unavailable while kovo build/u);
+    expect(() => ({ ...(unavailable as object) })).toThrow(/unavailable while kovo build/u);
+    expect(() => Object.isExtensible(unavailable)).toThrow(/unavailable while kovo build/u);
+
+    expect(() =>
+      createApp({
+        egress: ENV_TEST_EGRESS,
+        env: s.object({ API_TOKEN: s.secret(s.string()) }),
+        envSource: {},
+      }),
+    ).toThrow(CreateAppBootError);
   });
 
   it('supports a reveal-once credential factory and records its audited exit', () => {

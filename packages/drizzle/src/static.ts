@@ -111,6 +111,7 @@ export {
 export {
   collectCapabilityEscapesFromProject,
   collectCookieDowngradesFromProject,
+  collectRuntimeRevealAuditFromProject,
   collectRuntimeRevealFactsFromProject,
   collectStaticBuildTrustFactsFromProject,
   collectTrustEscapesFromProject,
@@ -239,6 +240,8 @@ const AMBIGUOUS_RAW_SQL_RECEIVER_SINK_METHODS = drizzleStaticReadonlySet([
 
 /** @internal */
 /** @internal */ export interface QueryShapeReveal {
+  /** Exact authored call identity used only while merging static analyzer facts. */
+  callIdentity?: string;
   grade: 'audit' | 'proof';
   justification?: string;
   method: 'arbitrary-fn' | 'fixed-redactor' | 'server-projection';

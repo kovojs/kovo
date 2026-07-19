@@ -866,10 +866,18 @@ function runPreEvaluationBuildConfigTrustPreflight(
     buildConfigEntryFileName: slashPath(entryFileName),
     files,
   });
-  const { unregisteredSinks } = facts;
-  if (unregisteredSinks.length === 0) return { facts, files, path: configPath };
+  const { diagnostics, unregisteredSinks } = facts;
+  if (diagnostics.length === 0 && unregisteredSinks.length === 0) {
+    return { facts, files, path: configPath };
+  }
 
-  const result = kovoCheck({ unregisteredSinks }, { paranoidStaticAdvisory });
+  const result = kovoCheck(
+    {
+      ...(diagnostics.length === 0 ? {} : { diagnostics }),
+      ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
+    },
+    { paranoidStaticAdvisory },
+  );
   if (result.exitCode === 0) return { facts, files, path: configPath };
   if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
     return { facts, files, path: configPath };
@@ -911,7 +919,13 @@ function runPreEvaluationStaticTrustPreflight(
   // TASK B may consume only semantic summaries bound to these exact source bytes.
   const facts =
     files.length === 0
-      ? { capabilities: [], cookieDowngrades: [], revealed: [], unregisteredSinks: [] }
+      ? {
+          capabilities: [],
+          cookieDowngrades: [],
+          diagnostics: [],
+          revealed: [],
+          unregisteredSinks: [],
+        }
       : collectStaticBuildTrustFactsFromProject({
           compilerSecuritySemanticSources: sourceGraphFacts.compilerSecuritySemanticSources,
           files,
@@ -931,14 +945,21 @@ function runPreEvaluationStaticTrustPreflight(
     compilerSecurityDiagnostics,
     'Pre-evaluation compiler-routed security diagnostics',
   );
-  const { unregisteredSinks } = facts;
-  if (unregisteredSinks.length === 0 && preEvaluationDiagnostics.length === 0) {
+  const { diagnostics: revealDiagnostics, unregisteredSinks } = facts;
+  const allPreEvaluationDiagnostics = buildConcatDense(
+    preEvaluationDiagnostics,
+    revealDiagnostics,
+    'Pre-evaluation compiler and runtime-reveal audit diagnostics',
+  );
+  if (unregisteredSinks.length === 0 && allPreEvaluationDiagnostics.length === 0) {
     return { capabilityClosure, facts, files, sourceGraphFacts };
   }
 
   const result = kovoCheck(
     {
-      ...(preEvaluationDiagnostics.length === 0 ? {} : { diagnostics: preEvaluationDiagnostics }),
+      ...(allPreEvaluationDiagnostics.length === 0
+        ? {}
+        : { diagnostics: allPreEvaluationDiagnostics }),
       ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
     },
     { paranoidStaticAdvisory },
@@ -1383,19 +1404,34 @@ async function staticBuildCheckGraph(
   runtimeReveals: readonly CoreGraph.RevealExplainFact[],
 ): CoreGraph.RevealExplainFact[] {
   const merged: CoreGraph.RevealExplainFact[] = [];
-  const querySites = buildCreateSet<string>();
+  const queryCallIdentities = buildCreateSet<string>();
   const querySnapshot = buildSnapshotDenseArray(queryReveals, 'Build query reveal facts');
   for (let index = 0; index < querySnapshot.length; index += 1) {
     const reveal = querySnapshot[index]!;
-    buildSetAdd(querySites, reveal.site);
-    insertBuildRevealFact(merged, reveal);
+    if (reveal.callIdentity !== undefined) {
+      buildSetAdd(queryCallIdentities, reveal.callIdentity);
+    }
+    insertBuildRevealFact(merged, buildRevealFactWithoutCallIdentity(reveal));
   }
   const runtimeSnapshot = buildSnapshotDenseArray(runtimeReveals, 'Build runtime reveal facts');
   for (let index = 0; index < runtimeSnapshot.length; index += 1) {
     const reveal = runtimeSnapshot[index]!;
-    if (!buildSetHas(querySites, reveal.site)) insertBuildRevealFact(merged, reveal);
+    if (
+      reveal.callIdentity !== undefined &&
+      buildSetHas(queryCallIdentities, reveal.callIdentity)
+    ) {
+      continue;
+    }
+    insertBuildRevealFact(merged, buildRevealFactWithoutCallIdentity(reveal));
   }
   return merged;
+}
+
+function buildRevealFactWithoutCallIdentity(
+  reveal: CoreGraph.RevealExplainFact,
+): CoreGraph.RevealExplainFact {
+  const { callIdentity: _callIdentity, ...fact } = reveal;
+  return fact;
 }
 
 function insertBuildRevealFact(
@@ -2463,13 +2499,20 @@ async function loadBuildAppModule(
     const serverExecutionModule = await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/execution'), root),
     );
+    const serverBuildContextModule = (await server.ssrLoadModule(
+      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build-context'), root),
+    )) as typeof import('@kovojs/server/internal/build-context');
     const serverInternalBuildModule = await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
     );
     const trustedInternalBuild =
       serverInternalBuildModule as LoadedBuildAppModule['serverInternalBuildModule'];
-    const appModule = await trustedInternalBuild.runWithGeneratedLiveTargetRegistry(() =>
-      server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
+    const appModule = await serverBuildContextModule.withKovoBuildContext(
+      { appEnvironment: 'unavailable', graphDerivation: true },
+      () =>
+        trustedInternalBuild.runWithGeneratedLiveTargetRegistry(() =>
+          server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
+        ),
     );
     return {
       appModule,

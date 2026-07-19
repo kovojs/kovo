@@ -1277,7 +1277,7 @@ export const save = mutation('cart/save', {
       ],
     });
 
-    expect(revealed).toEqual([
+    expect(revealed).toMatchObject([
       {
         grade: 'audit',
         justification: 'initialize payment SDK once at boot',

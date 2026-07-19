@@ -498,7 +498,14 @@ schema, parse the bootstrap-pinned source once, retain only declared own fields,
 record, and expose it as the precisely inferred read-only `app.env`. The raw operator snapshot and
 undeclared keys remain framework-internal. A declared env schema failure refuses boot in every
 mode: development may warn for a weak framework signing secret, but it cannot return a typed
-`app.env` whose value never validated. `s.secret(schema)` MUST return a runtime `SecretValue`, not a
+`app.env` whose value never validated. `kovo build` is not runtime boot and MUST NOT require or
+receive the production values for this declared projection. While it evaluates the app only to
+derive the closed build graph, every declared field MUST instead be a framework-owned,
+non-coercible unavailable sentinel: the schema shape is still provenance-checked, but no operator
+value is read, parsed, rendered, serialized, cloned, or copied into an artifact. Observing or
+exporting a sentinel MUST fail closed. The emitted server then evaluates the app outside that build
+posture and MUST parse the real bootstrap-pinned source before it can serve a request.
+`s.secret(schema)` MUST return a runtime `SecretValue`, not a
 type-only `Secret<T>` cast, so interpolation, template/string coercion, JSON and wire encoding,
 structured cloning, SSR output, and artifact capture encounter the existing fail-closed
 confidentiality doors. The box's module-private runtime registration owns this invariant; its type
@@ -507,7 +514,13 @@ boot-time credential factory through `trustedReveal(..., { justification, method
 'arbitrary-fn', source })`; the static call site remains an audit-grade row in the existing
 `kovo explain --revealed` fact graph (and therefore also in its folded `--capabilities` view), while
 the bounded runtime reveal collector is observational evidence, not a complete process-lifetime
-proof. This pattern does not claim arbitrary JavaScript string
+proof. The audit collector MUST recognize a direct `@kovojs/core` named import even when locally
+aliased, and MUST accept those literal option fields in any order. A call with dynamic or otherwise
+unrecordable options MUST emit error-severity KV426 instead of disappearing from the audit. When
+the typed query analyzer and runtime audit analyzer observe the same reveal, their facts may be
+deduplicated only by the exact call span/AST identity; a shared `file:line` label is insufficient.
+These audit rules do not relax the request security classifier's stricter exact matcher. This
+pattern does not claim arbitrary JavaScript string
 comparison is constant-time; use `SecretValue.equals` only for fixed token/verifier comparisons
 whose operands fit that contract.
 

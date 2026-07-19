@@ -614,6 +614,8 @@ export interface TrustEscapeExplain {
 
 /** @internal */
 export interface RevealExplainFact {
+  /** Exact authored call identity used only to deduplicate two analyzers observing one AST node. */
+  callIdentity?: string;
   grade: 'audit' | 'proof';
   justification?: string;
   method: 'arbitrary-fn' | 'fixed-redactor' | 'server-projection';

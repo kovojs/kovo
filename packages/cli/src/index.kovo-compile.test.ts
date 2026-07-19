@@ -970,9 +970,9 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
               {
                 fileName: 'payment.ts',
                 source: [
-                  'import { trustedReveal, type SecretValue } from "@kovojs/core";',
+                  'import { trustedReveal as reveal, type SecretValue } from "@kovojs/core";',
                   'export function createPaymentClient(key: SecretValue<string>) {',
-                  '  const raw = trustedReveal(key, { justification: "initialize payment SDK once at boot", method: "arbitrary-fn", source: "app.env.PAYMENT_API_KEY" });',
+                  '  const raw = reveal(key, { source: "app.env.PAYMENT_API_KEY", method: "arbitrary-fn", justification: "initialize payment SDK once at boot" });',
                   '  return new PaymentClient(raw);',
                   '}',
                 ].join('\n'),
@@ -1015,6 +1015,56 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `WRITE drizzle-static path=${JSON.stringify(outPath)}`,
       );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails the reveal audit explicitly when trustedReveal options are dynamic', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-reveal-dynamic-'));
+    const inputPath = join(root, 'static.json');
+    const outPath = join(root, 'static-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        inputPath,
+        JSON.stringify({
+          extract: ['revealed'],
+          files: [
+            {
+              fileName: 'payment.ts',
+              source: [
+                'import { trustedReveal as reveal } from "@kovojs/core";',
+                'const options = { justification: "hidden behind a binding" };',
+                'reveal(app.env.PAYMENT_API_KEY, options);',
+              ].join('\n'),
+            },
+          ],
+        }),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(1);
+
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'ERROR KV426 payment.ts:3',
+      );
+      expect(JSON.parse(readFileSync(outPath, 'utf8'))).toMatchObject({
+        diagnostics: [
+          {
+            code: 'KV426',
+            severity: 'error',
+            site: 'payment.ts:3',
+          },
+        ],
+        revealed: [],
+      });
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

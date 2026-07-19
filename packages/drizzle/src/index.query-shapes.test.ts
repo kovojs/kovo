@@ -2255,7 +2255,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         shape: { kind: 'secret', shape: 'string' },
       },
     });
-    expect(revealFactsFromQueryFacts(facts)).toEqual([
+    expect(revealFactsFromQueryFacts(facts)).toMatchObject([
       {
         grade: 'audit',
         justification: 'one-way digest shown to admins',
@@ -2313,7 +2313,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         shape: 'string',
       },
     });
-    expect(revealFactsFromQueryFacts(facts)).toEqual([
+    expect(revealFactsFromQueryFacts(facts)).toMatchObject([
       {
         grade: 'proof',
         justification: 'server projects a public identifier',
@@ -2406,7 +2406,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(facts[0]?.shape).toMatchObject({
       realDigest: { kind: 'revealed' },
     });
-    expect(revealFactsFromQueryFacts(facts)).toEqual([
+    expect(revealFactsFromQueryFacts(facts)).toMatchObject([
       expect.objectContaining({
         justification: 'real reveal',
         path: 'realDigest',
@@ -2466,7 +2466,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         site: 'user.queries.ts:8',
       },
     ]);
-    expect(revealFactsFromQueryFacts(facts)).toEqual([
+    expect(revealFactsFromQueryFacts(facts)).toMatchObject([
       {
         grade: 'audit',
         justification: 'server projects a digest prefix',

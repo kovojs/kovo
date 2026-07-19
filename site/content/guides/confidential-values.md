@@ -28,6 +28,12 @@ export const app = createApp({
 `app.env` is frozen and contains only those two keys. A missing key stops boot, including in
 development. The raw environment snapshot never appears on the app object.
 
+`kovo build` does not need the production values. During graph derivation, Kovo substitutes
+framework-owned unavailable boxes for every declared field; trying to render, serialize, clone, or
+otherwise observe one fails instead of emitting a dummy. The generated server parses the real
+declared environment before it serves traffic. Keep deployment secrets in the runtime environment,
+not in your build command or CI artifact job.
+
 ## Mark another value
 
 Wrap the value where it first becomes sensitive:
@@ -91,7 +97,9 @@ const client = createCredentialClient(app.env.API_TOKEN);
 
 Run `kovo explain --revealed`. The `trustedReveal` call appears with its source location and
 justification. The combined `--capabilities` view folds in the same fact. This is an audit trail,
-not permission to send the raw key elsewhere.
+not permission to send the raw key elsewhere. Keep the options inline and literal; their order does
+not matter, and a direct import alias is supported. Dynamic options fail the build with KV426
+because Kovo cannot record an honest audit row for them.
 
 ## Add the production shape
 

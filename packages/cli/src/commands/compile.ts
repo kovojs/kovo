@@ -1060,7 +1060,7 @@ async function runCompileDrizzleStaticCommand(
     analyzeSqlSafetyFromProject,
     collectCapabilityEscapesFromProject,
     collectCookieDowngradesFromProject,
-    collectRuntimeRevealFactsFromProject,
+    collectRuntimeRevealAuditFromProject,
     collectTrustEscapesFromProject,
     collectUnregisteredSinksFromProject,
     deriveInvalidationRegistry,
@@ -1142,18 +1142,9 @@ async function runCompileDrizzleStaticCommand(
     }
     if (extract.has('revealed')) {
       const queryReveals = revealFactsFromQueryFacts(getQueryFacts());
-      const queryRevealSites = new Set(queryReveals.map((reveal) => reveal.site));
-      output.revealed = [
-        ...queryReveals,
-        ...collectRuntimeRevealFactsFromProject({ files }).filter(
-          (reveal) => !queryRevealSites.has(reveal.site),
-        ),
-      ].sort(
-        (left, right) =>
-          left.query.localeCompare(right.query) ||
-          left.path.localeCompare(right.path) ||
-          left.site.localeCompare(right.site),
-      );
+      const runtimeAudit = collectRuntimeRevealAuditFromProject({ files });
+      output.revealed = mergeDrizzleStaticRevealFacts(queryReveals, runtimeAudit.revealed);
+      appendDrizzleStaticDiagnostics(output, runtimeAudit.diagnostics);
     }
     if (extract.has('sqlSafetyDiagnostics')) {
       output.sqlSafetyDiagnostics = analyzeSqlSafetyFromProject({ files });
@@ -1184,7 +1175,7 @@ async function runCompileDrizzleStaticCommand(
       // identity and semantic summaries; TASK B keeps its non-handler request/process coverage.
       const compilerVerdict = await compileStaticHandlerSecurityVerdict(files);
       if (compilerVerdict.diagnostics.length > 0) {
-        output.diagnostics = compilerVerdict.diagnostics;
+        appendDrizzleStaticDiagnostics(output, compilerVerdict.diagnostics);
       }
       output.unregisteredSinks = collectUnregisteredSinksFromProject({
         compilerSecuritySemanticSources: compilerVerdict.semanticSources,
@@ -1259,15 +1250,16 @@ async function runCompileDrizzleStaticCommand(
   // and append the KV422 finding lines to the output. (`kovo check` independently re-gates these
   // via the KV422 finding family once the facts ride into the graph JSON — see graph-output.ts.)
   const sqlSafetyErrors = sqlSafetyDiagnosticErrors(output.sqlSafetyDiagnostics);
-  const sqlSafetyErrorOutput = sqlSafetyErrors
+  const revealAuditErrors = staticDiagnosticErrors(output.diagnostics, 'KV426');
+  const staticErrorOutput = [...sqlSafetyErrors, ...revealAuditErrors]
     .map((diagnostic) => `ERROR ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`)
     .join('\n');
-  const sqlSafetyExit = drizzleStaticSqlSafetyErrorExit(sqlSafetyErrors);
+  const sqlSafetyExit = drizzleStaticSqlSafetyErrorExit([...sqlSafetyErrors, ...revealAuditErrors]);
   if (sqlSafetyExit && artifact.exitCode === 0) {
     return {
       ...artifact,
       ...sqlSafetyExit,
-      output: `${(artifact.output ?? '').replace(/\n+$/, '')}\n${sqlSafetyErrorOutput}\n`,
+      output: `${(artifact.output ?? '').replace(/\n+$/, '')}\n${staticErrorOutput}\n`,
     };
   }
 
@@ -1326,6 +1318,52 @@ interface SqlSafetyDiagnosticLike {
   message?: string;
   severity?: string;
   site: string;
+}
+
+function staticDiagnosticErrors(value: unknown, code: string): SqlSafetyDiagnosticLike[] {
+  return sqlSafetyDiagnosticErrors(value).filter((diagnostic) => diagnostic.code === code);
+}
+
+function appendDrizzleStaticDiagnostics(
+  output: Record<string, unknown>,
+  diagnostics: readonly CoreGraph.StaticDiagnosticFact[],
+): void {
+  if (diagnostics.length === 0) return;
+  const existing = Array.isArray(output.diagnostics)
+    ? (output.diagnostics as readonly CoreGraph.StaticDiagnosticFact[])
+    : [];
+  output.diagnostics = [...existing, ...diagnostics];
+}
+
+function mergeDrizzleStaticRevealFacts(
+  queryReveals: readonly CoreGraph.RevealExplainFact[],
+  runtimeReveals: readonly CoreGraph.RevealExplainFact[],
+): CoreGraph.RevealExplainFact[] {
+  const queryCallIdentities = new Set(
+    queryReveals.flatMap((reveal) =>
+      reveal.callIdentity === undefined ? [] : [reveal.callIdentity],
+    ),
+  );
+  return [
+    ...queryReveals,
+    ...runtimeReveals.filter((reveal) => {
+      return reveal.callIdentity === undefined || !queryCallIdentities.has(reveal.callIdentity);
+    }),
+  ]
+    .map(withoutRevealCallIdentity)
+    .sort(
+      (left, right) =>
+        left.query.localeCompare(right.query) ||
+        left.path.localeCompare(right.path) ||
+        left.site.localeCompare(right.site),
+    );
+}
+
+function withoutRevealCallIdentity(
+  reveal: CoreGraph.RevealExplainFact,
+): CoreGraph.RevealExplainFact {
+  const { callIdentity: _callIdentity, ...fact } = reveal;
+  return fact;
 }
 
 /**

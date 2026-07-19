@@ -166,14 +166,10 @@ export function buildReusableProductionArtifact(root: string): void {
   execKovoCli(root, ['build', './src/app.tsx'], nonParanoidStarterEnv(root));
 }
 
-export function buildParanoidProductionArtifact(
-  root: string,
-  additionalEnv: NodeJS.ProcessEnv = {},
-): void {
+export function buildParanoidProductionArtifact(root: string): void {
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
   execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], {
     ...withStarterBinOnPath(root),
-    ...additionalEnv,
     KOVO_PARANOID: '1',
     NODE_OPTIONS: '--max-old-space-size=8192',
   });

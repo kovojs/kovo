@@ -8,6 +8,12 @@ export interface KovoBuildContext {
    * fail-closed check authoritatively before emitting artifacts.
    */
   readonly graphDerivation?: boolean;
+  /**
+   * Framework-owned posture used only while `kovo build` evaluates an app to derive its closed
+   * registry. Declared environment values exist as non-coercible unavailable sentinels in this
+   * posture; real operator values are parsed only when the emitted server boots (SPEC §6.6/§9.5).
+   */
+  readonly appEnvironment?: 'unavailable';
 }
 
 const kovoBuildContextStorage = new AsyncLocalStorage<KovoBuildContext>();
@@ -17,10 +23,7 @@ export function currentKovoBuildContext(): KovoBuildContext | undefined {
   return kovoBuildContextStorage.getStore();
 }
 
-/** @internal Run async work under a scoped Kovo build context. */
-export async function withKovoBuildContext<T>(
-  context: KovoBuildContext,
-  fn: () => Promise<T>,
-): Promise<T> {
-  return await kovoBuildContextStorage.run(context, fn);
+/** @internal Run work under a scoped Kovo build context. Async results retain the context. */
+export function withKovoBuildContext<T>(context: KovoBuildContext, fn: () => T): T {
+  return kovoBuildContextStorage.run(context, fn);
 }

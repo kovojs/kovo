@@ -317,9 +317,9 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofQueries).toContain('audited runtime query-wire reveal acceptance proof');
       expect(proofQueries).not.toContain('if (false)');
 
-      buildParanoidProductionArtifact(root, {
-        KOVO_CONFIG_SECRET_PROOF: 'runtime-config-secret-value',
-      });
+      // SPEC §6.6/§9.5: build derives the app graph with framework-owned unavailable
+      // sentinels. Production config values are supplied only when the emitted server boots.
+      buildParanoidProductionArtifact(root);
       migrateRuntimeSecretBoundaryProof(root, dataDir);
 
       const refusedEnv = {
