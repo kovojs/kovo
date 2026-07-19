@@ -208,6 +208,16 @@ audited-escape`, per SPEC §2 precedence) to the `spec/11-diagnostics.md` KV tab
 - [x] Promote `diagnostics-ref`'s registry equality out of the site pipeline into the root check chain.
   - Evidence: the root `check` chain invokes `check:spec-conformance-closure`, which calls the
     write-free `checkDiagnosticsRegistryEquality` comparison.
+- [ ] Inventory and bind every raw KV guard-error channel (`Error`/throw/rejection/log text) to
+      registry-derived identity, or migrate it through a dedicated raw guard-error door; gate code
+      swaps and new channels. Structured diagnostic evidence does not cover these raw strings.
+- [ ] Close `RegisteredDiagnostic` runtime provenance: record constructor outputs behind a
+      module-private sentinel/registry and make every collection and rendering sink reject
+      structurally forged records. Add cross-package negative controls; TypeScript shape alone is
+      author-time ergonomics, not the enforcement proof.
+- [ ] Bind each derived emission site and evidence witness to its actual compile/runtime/audited
+      layer, then gate that posture against the registry `enforcementClass`. Kill class-relabeling
+      mutants (for example compile-error ↔ fail-closed-runtime), not only code/site swaps.
 
 ### 1.3 Analysis-time TCB closure + reproducible rebuild
 
