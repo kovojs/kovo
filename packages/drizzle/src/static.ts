@@ -4334,11 +4334,37 @@ function runtimeManifestAuthzPolicy(
   if (policy === undefined) return undefined;
 
   const canonical = runtimeManifestCanonicalAuthzPolicy(policy, new Set(), 0);
-  if (canonical !== undefined) return canonical;
+  const tableFactory = runtimeManifestTableFactoryName(draft.initializer);
+  if (canonical !== undefined) {
+    if (tableFactory === 'pgTable' && canonical.kind === 'guard-assertion') {
+      throw new TypeError(
+        `KV414: Postgres authzPolicy for table ${draft.name} must be a compiler-bound literal SQL predicate so Kovo can install FORCE RLS; a string guard assertion is not an engine policy (SPEC \u00a710.3).`,
+      );
+    }
+    return canonical;
+  }
 
   throw new TypeError(
-    `KV414: compiler-bound authzPolicy for table ${draft.name} must be an exact string literal, a no-substitution sql template, or sql.raw(<literal>); dynamic/interpolated policy authority fails closed (SPEC \u00a76.6/\u00a710.3).`,
+    `KV414: compiler-bound authzPolicy for table ${draft.name} must be ${
+      tableFactory === 'pgTable'
+        ? 'a no-substitution sql template or sql.raw(<literal>)'
+        : 'an exact string literal, a no-substitution sql template, or sql.raw(<literal>)'
+    }; dynamic/interpolated policy authority fails closed (SPEC \u00a76.6/\u00a710.3).`,
   );
+}
+
+function runtimeManifestTableFactoryName(initializer: CallExpression): string | undefined {
+  const expression = unwrappedStaticExpressionNode(initializer.getExpression());
+  if (Node.isIdentifier(expression)) {
+    return projectDrizzleCoreIdentifierExportName(expression);
+  }
+  if (
+    Node.isPropertyAccessExpression(expression) &&
+    isDrizzleTableFactoryNamespaceMember(expression)
+  ) {
+    return expression.getName();
+  }
+  return undefined;
 }
 
 function runtimeManifestCanonicalAuthzPolicy(

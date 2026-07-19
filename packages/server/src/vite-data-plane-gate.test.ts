@@ -136,10 +136,11 @@ const DRIZZLE_RUNTIME_REGISTRY_TYPES = [
 
 const DRIZZLE_RUNTIME_REGISTRY_SOURCE = [
   'import { mutation, query } from "@kovojs/server";',
+  'import { sql } from "drizzle-orm";',
   'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
   '',
   'interface AppRequest { db: PgAsyncDatabase<any, any> }',
-  'export const contacts = pgTable("contacts", { id: text("id").primaryKey() }, kovo({ domain: "contact", key: "id", authzPolicy: "synthetic registry canary" }));',
+  'export const contacts = pgTable("contacts", { id: text("id").primaryKey() }, kovo({ domain: "contact", key: "id", authzPolicy: sql`TRUE` }));',
   '',
   'export const contactsQuery = query("contacts", {',
   '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
@@ -618,7 +619,7 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
       `registerGeneratedMutationTouchRegistry({"addContact":[{"domain":"contact","keys":null}]});`,
     );
     expect(registrySource).toContain(
-      `registerGeneratedTableSecurityManifest({"tables":[{"authzPolicy":{"justification":"synthetic registry canary","kind":"guard-assertion"},"authorizationClassifications":["authzPolicy"],"columns":[{"key":"id","name":"id"}],"governedColumnKeys":["id"],"name":"contacts","secretColumnKeys":[],"secretDeclared":false}]});`,
+      `registerGeneratedTableSecurityManifest({"tables":[{"authzPolicy":{"kind":"sql","sql":"TRUE"},"authorizationClassifications":["authzPolicy"],"columns":[{"key":"id","name":"id"}],"governedColumnKeys":["id"],"name":"contacts","secretColumnKeys":[],"secretDeclared":false}]});`,
     );
   });
 

@@ -872,7 +872,9 @@ export function addRuntimeMutationSafetyProofs(
         `export const txProofs = ${tableFactory}('tx_proofs', {`,
         "  id: text('id').primaryKey(),",
         '}, kovo({',
-        "  authzPolicy: 'transaction proof rows are fixture-controlled regression evidence',",
+        isSqlite
+          ? "  authzPolicy: 'transaction proof rows are fixture-controlled regression evidence',"
+          : '  authzPolicy: sql`TRUE`,',
         "  domain: 'tx_proof',",
         "  key: 'id',",
         '}));',
@@ -881,7 +883,9 @@ export function addRuntimeMutationSafetyProofs(
         "  id: text('id').primaryKey(),",
         "  label: text('label').notNull().default(''),",
         '}, kovo({',
-        "  authzPolicy: 'runtime drift proof rows are fixture-controlled regression evidence',",
+        isSqlite
+          ? "  authzPolicy: 'runtime drift proof rows are fixture-controlled regression evidence',"
+          : '  authzPolicy: sql`TRUE`,',
         "  domain: 'raw_runtime_drift',",
         "  key: 'id',",
         '}));',
@@ -1977,7 +1981,9 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
       "    password: text('password'),",
       '  },',
       '  kovo({',
-      "    authzPolicy: 'build-only credential wire proof is guarded by the query access decision',",
+      tableFactory === 'sqliteTable'
+        ? "    authzPolicy: 'build-only credential wire proof is guarded by the query access decision',"
+        : '    authzPolicy: sql`TRUE`,',
       "    domain: 'auth-secret-wire-proof',",
       "    key: 'id',",
       '    readOnly: true,',
@@ -2453,7 +2459,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       "    classified: text('classified').notNull(),",
       '  },',
       '  kovo({',
-      "    authzPolicy: 'runtime secret proof rows are fixture-controlled regression evidence',",
+      '    authzPolicy: sql`TRUE`,',
       "    domain: 'runtime-secret-proof',",
       "    key: 'id',",
       '    readOnly: true,',
@@ -2469,7 +2475,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       "    label: text('label').notNull(),",
       '  },',
       '  kovo({',
-      "    authzPolicy: 'runtime secret function proof rows are fixture-controlled regression evidence',",
+      '    authzPolicy: sql`TRUE`,',
       "    domain: 'runtime-secret-function-proof',",
       "    key: 'id',",
       '    readOnly: true,',
@@ -2484,7 +2490,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       "    label: text('label').notNull(),",
       '  },',
       '  kovo({',
-      "    authzPolicy: 'runtime secret whole-table proof rows are fixture-controlled regression evidence',",
+      '    authzPolicy: sql`TRUE`,',
       "    domain: 'runtime-secret-whole-proof',",
       "    key: 'id',",
       '    readOnly: true,',
@@ -3951,7 +3957,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "    label: text('label').notNull(),",
       '  },',
       '  kovo({',
-      "    authzPolicy: 'phase 5 postgres dogfood event rows are fixture-controlled evidence',",
+      '    authzPolicy: sql`TRUE`,',
       "    domain: 'phase5-pg-event',",
       "    key: 'id',",
       '  }),',

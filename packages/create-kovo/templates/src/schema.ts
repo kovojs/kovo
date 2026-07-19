@@ -19,7 +19,7 @@ export const contacts = pgTable(
     company: text('company').notNull().default(''),
   },
   kovo({
-    authzPolicy: 'signed-in users share the starter contact book through query/mutation guards',
+    authzPolicy: sql`current_setting('kovo.principal', true) <> ''`,
     domain: contact,
     key: (table) => table.id,
   }),

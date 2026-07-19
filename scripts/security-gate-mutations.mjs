@@ -98,6 +98,7 @@ const drizzleSymbolProvenancePath = path.join(
   'packages/drizzle/src/static/symbol-provenance.ts',
 );
 const drizzleTrustEscapesPath = path.join(repoRoot, 'packages/drizzle/src/trust-escapes-static.ts');
+const drizzleStaticPath = path.join(repoRoot, 'packages/drizzle/src/static.ts');
 const trustedHtmlProvenancePath = path.join(
   repoRoot,
   'packages/compiler/src/validate/trusted-html-provenance.ts',
@@ -1659,6 +1660,10 @@ const reviewedInnerJoinContinuationBranch = "  'innerJoin',";
 const removedReviewedInnerJoinContinuationBranch = "  // 'innerJoin',";
 const reviewedUnionContinuationBranch = "  'union',";
 const removedReviewedUnionContinuationBranch = "  // 'union',";
+const postgresStringAuthzPolicyClosureBranch =
+  "    if (tableFactory === 'pgTable' && canonical.kind === 'guard-assertion') {";
+const removedPostgresStringAuthzPolicyClosureBranch =
+  "    if (false && tableFactory === 'pgTable' && canonical.kind === 'guard-assertion') {";
 
 const threatMatrixMissingSinkDenominatorBranch = [
   '  const missing = [...expectedSinks.keys()].filter((sink) => !seen.has(sink));',
@@ -2849,6 +2854,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: exactTrustedAssignIdentityBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
     test: assertExactTrustedAssignIdentityBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
+      'Lets a Postgres string guard assertion reach runtime without a compiler-bound RLS predicate.',
+    expectedKiller:
+      'Postgres authzPolicy must remain a literal SQL predicate rather than a prose guard assertion',
+    name: 'drizzle-authz-policy/allow-postgres-string-without-rls',
+    replacement: removedPostgresStringAuthzPolicyClosureBranch,
+    search: postgresStringAuthzPolicyClosureBranch,
+    sourceFile: drizzleStaticPath,
+    test: assertPostgresStringAuthzPolicyClosureBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -4510,6 +4527,35 @@ function finiteIrDiagnosticSummary(diagnostics) {
   return diagnostics.length === 0
     ? '<open>'
     : diagnostics.map((diagnostic) => diagnostic.message).join(' | ');
+}
+
+function assertPostgresStringAuthzPolicyClosureBehavior(moduleUnderTest) {
+  let failure;
+  try {
+    moduleUnderTest.extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        {
+          fileName: 'src/schema.ts',
+          source: [
+            'import { kovo } from "@kovojs/drizzle";',
+            'import { pgTable, text } from "drizzle-orm/pg-core";',
+            'export const shares = pgTable("shares", { id: text("id").primaryKey() }, kovo({',
+            '  authzPolicy: "the query guard checks membership",',
+            '  domain: "share",',
+            '  key: "id",',
+            '}));',
+          ].join('\n'),
+        },
+      ],
+    });
+  } catch (error) {
+    failure = error;
+  }
+  if (!/KV414: Postgres authzPolicy.*literal SQL predicate/u.test(String(failure))) {
+    throw new Error(
+      `Postgres string authzPolicy did not fail closed through KV414: ${String(failure)}`,
+    );
+  }
 }
 
 function assertFiniteIrAllows(moduleUnderTest, source, extraFiles = []) {

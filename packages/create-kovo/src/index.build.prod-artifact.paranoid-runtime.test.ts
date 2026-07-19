@@ -1232,7 +1232,7 @@ function writeProductionEquivalentSchemaModule(root: string): void {
       "  name: text('name').notNull(),",
       "  email: text('email').notNull(),",
       "  company: text('company').notNull().default(''),",
-      "}, kovo({ authzPolicy: 'signed-in users share the starter contact book through query/mutation guards', domain: 'model/contact', key: (table) => table.id }));",
+      "}, kovo({ authzPolicy: sql`current_setting('kovo.principal', true) <> ''`, domain: 'model/contact', key: (table) => table.id }));",
       '',
       "export const user = pgTable('user', {",
       "  id: text('id').primaryKey(),",

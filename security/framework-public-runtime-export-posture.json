@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-18.2",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.1",
   "runtimeSurfaceSha256": "528e47f8a2d1446a4b5b5906d226d87081932494658338ac81debfa2d58a03be",
   "postureMemberSha256": "263b1f27d4ffa571086107668af68448aae0a8554ca7761a074aa4cedbd59b7c",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "34fc11173520f2993756fc4bb7dc7b8d9022fcb65b5eb01b0d3eb56e5f3169da",
+      "sourceTreeSha256": "a93d15af430c34995b7429ec7f932b712a82a982df375d001f6abb179a31e79f",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "8504e8ad1071d49d3c4b93ed8c2da171c466a0f8360ece1a161cd7c5f8a136b8",
+      "sourceTreeSha256": "e48146d8428e9f70660aa540c516c68a44279f4dbc3d5f06ffcb8e3346055168",
       "manifestVariants": [
         {
           "fingerprint": "sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368"
@@ -449,7 +449,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "56814e908ac383a983f04cd1e01b0f87cd60a3b7d4650f29e2ce6058173f7ea2"
+      "sourceTreeSha256": "2a45be0750754b1abb602e5f53393d19a79e775174c3869ed116bbe72563a01d"
     },
     {
       "manifestVariants": [
@@ -1941,7 +1941,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "30c05785db1a0cac549118a1dd3cff7f03b2e80d6c6ecb5756f129f38a3b9e4e"
+      "sourceTreeSha256": "98a1c3ae8632d9f8d409317098a5ff839baa5ebfbe53d635ad76553fc3c1534b"
     },
     {
       "manifestVariants": [
@@ -9627,7 +9627,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "3c56548f9fea0fdc0c56bff6099b9dc3b82338fb5019d7f6b8ed4fd5a01e8962"
+      "sourceTreeSha256": "ef6c43fcb1826789da91072d94366d01731f730de2a9b406c86af58a0494147e"
     },
     {
       "manifestVariants": [

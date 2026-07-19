@@ -37,6 +37,14 @@ GREEN (no longer pending).
   Enforced by `checkPostgresAppDbPosture`, `pnpm run test:authz-paranoid`, the grant-shape + (DEC-E) differential
   fuzzers. followup-13 landed DEC-A (write-propagation closure) + DEC-B (REPLICATION/predefined-role identity), closing
   `claude-bugz-37`; round-17 extended the identity allowlist to predefined-role membership.
+- **DB × C/I/Au — Postgres policy-form closure.** A reproduced HIGH-severity cross-tenant path let any authenticated
+  principal whose guarded query reached a `pgTable` with `authzPolicy: '<prose>'` read or mutate every row: the old
+  reader/writer grant treated the prose assertion as authorization while installing no RLS predicate. Postgres now
+  accepts only a compiler-bound literal SQL predicate; both the compiler (`KV414`) and runtime
+  (`KV433_AUTHZ_POLICY_UNSUPPORTED`) reject a string before provisioning or listener startup. SQLite's bounded
+  authorizer retains its explicitly narrower string-assertion posture. Evidence:
+  `packages/drizzle/src/static-analysis-context.test.ts`, `packages/server/src/postgres-runtime.test.ts`, and the real
+  engine policy/isolation path in `packages/server/src/postgres-external-probe.test.ts`.
 - **Auth × C (M2) — GREEN (closed).** The fail-closed reachability proof and runtime enforcement
   door are TCB-enrolled. `betterAuthRequestSecretPaths` (`internal/non-egress-proof.ts`) inventories
   every request-reachable secret path; `betterAuthCredentialConsumerContracts`

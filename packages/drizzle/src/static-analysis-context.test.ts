@@ -15,7 +15,7 @@ import {
   type TouchGraphProjectOptions,
 } from '@kovojs/drizzle/internal/static';
 import { runWithSourceFileParseCache, withParsedSourceFile } from './static/tables.js';
-import { pgDatabaseTypes } from './test-helpers.js';
+import { pgDatabaseTypes, sqliteDatabaseTypes } from './test-helpers.js';
 
 describe('@kovojs/drizzle static analysis context', () => {
   it('shares one syntactic project across the per-run source parse cache', () => {
@@ -249,6 +249,72 @@ describe('@kovojs/drizzle static analysis context', () => {
         ],
       }),
     ).toThrow(/KV414: compiler-bound authzPolicy/u);
+  });
+
+  it('rejects direct, aliased, and namespace string guard assertions on Postgres tables', () => {
+    for (const fixture of [
+      {
+        column: 'text',
+        factory: 'pgTable',
+        importLine: 'import { pgTable, text } from "drizzle-orm/pg-core";',
+      },
+      {
+        column: 'text',
+        factory: 'makeTable',
+        importLine: 'import { pgTable as makeTable, text } from "drizzle-orm/pg-core";',
+      },
+      {
+        column: 'pg.text',
+        factory: 'pg.pgTable',
+        importLine: 'import * as pg from "drizzle-orm/pg-core";',
+      },
+    ]) {
+      expect(() =>
+        extractStaticBuildAnalysisFactsFromProject({
+          files: [
+            pgDatabaseTypes([]),
+            {
+              fileName: 'src/shares.ts',
+              source: [
+                'import { kovo } from "@kovojs/drizzle";',
+                fixture.importLine,
+                '',
+                `export const shares = ${fixture.factory}("shares", { id: ${fixture.column}("id").primaryKey() }, kovo({`,
+                '  authzPolicy: "the query guard checks membership",',
+                '  domain: "share",',
+                '  key: "id",',
+                '}));',
+              ].join('\n'),
+            },
+          ],
+        }),
+      ).toThrow(/KV414: Postgres authzPolicy.*literal SQL predicate/u);
+    }
+  });
+
+  it('retains exact string guard assertions for the bounded SQLite authorizer posture', () => {
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        sqliteDatabaseTypes([]),
+        {
+          fileName: 'src/labels.ts',
+          source: [
+            'import { kovo } from "@kovojs/drizzle";',
+            'import { sqliteTable, text } from "drizzle-orm/sqlite-core";',
+            'export const labels = sqliteTable("labels", { id: text("id").primaryKey() }, kovo({',
+            '  authzPolicy: "the query guard checks membership",',
+            '  domain: "label",',
+            '  key: "id",',
+            '}));',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts.runtimeTableSecurityManifest.tables[0]?.authzPolicy).toEqual({
+      justification: 'the query guard checks membership',
+      kind: 'guard-assertion',
+    });
   });
 
   it('keeps unannotated tables in the exact runtime table-security manifest', () => {

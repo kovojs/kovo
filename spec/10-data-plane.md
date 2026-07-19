@@ -194,10 +194,12 @@ For managed Postgres/PGlite, declared write scope has an engine backstop for the
 
 **Compiler-bound custom policy authority (normative).** Generated dev/build/export paths MUST bind
 each `authzPolicy` into the compiler-owned table-security manifest as an exact discriminated value.
-A literal string is an exact guard assertion; a custom engine predicate is accepted only when static
-analysis can canonicalize it as zero-parameter literal SQL (currently a no-substitution SQL tagged
-template or `sql.raw(<literal>)`). Dynamic or interpolated policy authority is **KV414** and fails
-closed.
+A literal string is an exact guard assertion for SQLite only, where Kovo's bounded authorizer owns
+the declared guard posture. A Postgres table MUST instead supply an engine predicate that static
+analysis can canonicalize as zero-parameter literal SQL (currently a no-substitution SQL tagged
+template or `sql.raw(<literal>)`). A Postgres string assertion cannot produce row-level security and
+is **KV414** at compile time and `KV433_AUTHZ_POLICY_UNSUPPORTED` at runtime before any grant or
+listener. Dynamic or interpolated policy authority also fails closed.
 Runtime boot MUST compare the live Drizzle callback projection with that exact manifest value once,
 then derive every RLS/grant/posture sink from the immutable compiler snapshot. It MUST NOT re-read
 the callback slot after comparison; callback replacement between validation and asynchronous

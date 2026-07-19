@@ -7975,7 +7975,12 @@ function customAuthzPolicyPredicatesByTable(
       compilerBoundPolicies,
       'Postgres compiler-bound authorization policies',
       (policy, tableName) => {
-        if (policy.kind === 'guard-assertion') return;
+        if (policy.kind === 'guard-assertion') {
+          throw unsupportedAuthzPolicyError(
+            tableName,
+            'a string guard assertion cannot become a Postgres RLS predicate; provide compiler-bound literal SQL',
+          );
+        }
         if (securityStringTrim(policy.sql) === '') {
           throw unsupportedAuthzPolicyError(
             tableName,
@@ -8000,7 +8005,13 @@ function customAuthzPolicyPredicatesByTable(
       annotation === undefined
         ? undefined
         : postgresOwnDataValue(annotation as Record<PropertyKey, unknown>, 'authzPolicy');
-    if (authzPolicy === undefined || typeof authzPolicy === 'string') continue;
+    if (authzPolicy === undefined) continue;
+    if (typeof authzPolicy === 'string') {
+      throw unsupportedAuthzPolicyError(
+        tableName,
+        'a string guard assertion cannot become a Postgres RLS predicate; provide compiler-bound literal SQL',
+      );
+    }
     if (!isDrizzleSqlLike(authzPolicy)) {
       throw unsupportedAuthzPolicyError(
         tableName,

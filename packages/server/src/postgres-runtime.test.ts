@@ -64,8 +64,22 @@ const labels = pgTable(
     label: text('label').notNull(),
   },
   kovo({
-    authzPolicy: 'labels are shared app reference data in this runtime test',
     domain: 'runtime-labels',
+    key: 'id',
+    reference: true,
+  }),
+);
+
+const guardAssertionNotes = pgTable(
+  'kovo_runtime_guard_assertion_notes',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    title: text('title').notNull(),
+  },
+  kovo({
+    authzPolicy: 'the request guard checks note ownership',
+    domain: 'runtime-guard-assertion-notes',
     key: 'id',
   }),
 );
@@ -5186,6 +5200,19 @@ describe('createPostgresAppRuntimeDb', () => {
         schema: { parameterizedPolicyDocuments },
       }),
     ).toThrow(/KV433_AUTHZ_POLICY_UNSUPPORTED/);
+  });
+
+  it('refuses string-form authzPolicy before Postgres can grant predicate-free access', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-authz-assertion-'));
+    roots.push(dataDir);
+
+    expect(() =>
+      createPostgresAppRuntimeDb({
+        dataDir,
+        driver: 'pglite',
+        schema: { guardAssertionNotes },
+      }),
+    ).toThrow(/KV433_AUTHZ_POLICY_UNSUPPORTED.*string guard assertion.*RLS/u);
   });
 });
 

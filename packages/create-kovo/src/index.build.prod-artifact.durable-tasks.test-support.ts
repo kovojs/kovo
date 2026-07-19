@@ -84,7 +84,7 @@ export function addDurableTaskProofs(root: string): void {
         "    proofId: text('proofId').notNull(),",
         '  },',
         '  kovo({',
-        "    authzPolicy: 'durable task proof rows are fixture-controlled regression evidence',",
+        '    authzPolicy: sql`TRUE`,',
         "    domain: 'task-proof',",
         "    key: 'eventId',",
         '  }),',

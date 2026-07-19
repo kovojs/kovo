@@ -307,11 +307,27 @@ describeIfPostgres(
         expect(updatedHtml).toContain('4 contacts');
 
         await withPool(runtimeUrl, async (pool) => {
-          const contacts = await pool.query<{ email: string; name: string }>(
+          const anonymousContacts = await pool.query<{ email: string; name: string }>(
             'SELECT email, name FROM contacts WHERE email = $1',
             [email],
           );
-          expect(contacts.rows).toEqual([{ email, name: 'External Pat' }]);
+          expect(anonymousContacts.rows).toEqual([]);
+
+          const client = await pool.connect();
+          try {
+            await client.query('BEGIN');
+            await client.query("SELECT set_config('kovo.principal', $1, true)", [
+              'artifact-verifier',
+            ]);
+            const contacts = await client.query<{ email: string; name: string }>(
+              'SELECT email, name FROM contacts WHERE email = $1',
+              [email],
+            );
+            expect(contacts.rows).toEqual([{ email, name: 'External Pat' }]);
+          } finally {
+            await client.query('ROLLBACK');
+            client.release();
+          }
         });
       } finally {
         await stopProcess(server);
@@ -455,7 +471,7 @@ function writeProductionEquivalentSchemaModule(root: string): void {
       "  name: text('name').notNull(),",
       "  email: text('email').notNull(),",
       "  company: text('company').notNull().default(''),",
-      "}, kovo({ authzPolicy: 'signed-in users share the starter contact book through query/mutation guards', domain: 'model/contact', key: (table) => table.id }));",
+      "}, kovo({ authzPolicy: sql`current_setting('kovo.principal', true) <> ''`, domain: 'model/contact', key: (table) => table.id }));",
       '',
       "export const user = pgTable('user', {",
       "  id: text('id').primaryKey(),",

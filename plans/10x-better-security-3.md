@@ -149,18 +149,21 @@ claimant runs the same job. (~0.1 pm)
 
 ### 0.3 Reproduce or refute the `authzPolicy` string-form RLS gap
 
-**Unverified single-source claim — reproduce before acting.** One audit pass reports that the string
-form `authzPolicy: '<prose>'` (`kind: 'guard-assertion'`) causes `customAuthzPolicyPredicatesByTable`
-to early-return (`postgres-runtime.ts:7978`), so the table receives no predicate and no RLS — and
-`postgresReaderReadableTableNames` (`:7488-7491`) then admits it to the reader-readable set _because_
-it has no authz predicate. An independent pass did not confirm it.
+The claim reproduced as a HIGH-severity, authenticated cross-tenant read/write path: Postgres treated
+the prose assertion as enough to grant reader/writer access while installing no RLS predicate.
 
-- [ ] Write the red test: declare a table with a `guard-assertion` string `authzPolicy`, boot the
-      real-Postgres artifact, and assert whether cross-owner rows are readable. Record severity,
-      attacker prerequisites, and a threat-matrix cell if it reproduces; record the refutation if not.
-- [ ] If it reproduces: a classified table must never reach `postgresReaderReadableTableNames`
-      predicate-free. Make the string form a compile error unless paired with a policy term or an
-      explicit escape; verify with a mutation test.
+- [x] Reproduce the red state through compiler, runtime, and real-Postgres provisioning paths; trace
+      the predicate-free reader/writer admission; and record severity, attacker prerequisites, and
+      the DB C/I/Au threat-matrix cell.
+  - Evidence: the new cases in `static-analysis-context.test.ts` and `postgres-runtime.test.ts` failed
+    on the old behavior; `postgres-external-probe.test.ts` exercises the real engine path, and
+    `docs/security-threat-matrix.md` records the exploit chain.
+- [x] Reject Postgres string assertions at compile time (`KV414`) and again at runtime before grants
+      or listener startup (`KV433_AUTHZ_POLICY_UNSUPPORTED`); require compiler-bound literal SQL and
+      retain string assertions only for SQLite's bounded authorizer posture.
+  - Evidence: `pnpm exec vitest --run --no-file-parallelism packages/drizzle/src/static-analysis-context.test.ts packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-external-probe.test.ts`; mutant
+    `drizzle-authz-policy/allow-postgres-string-without-rls` is killed; the generated external
+    Postgres starter test passes with FORCE RLS both without and with a transaction principal.
 
 ### 0.4 Artifact identity stamp (precondition for §2 and §5 and plan-2 §4.3)
 

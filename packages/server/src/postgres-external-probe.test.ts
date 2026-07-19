@@ -80,6 +80,20 @@ const probeNotesV2 = pgTable(
 
 const schema = { probeNotes };
 const evolvedSchema = { probeNotes: probeNotesV2 };
+const guardAssertionProbeNotes = pgTable(
+  'kovo_ext_guard_assertion_notes',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    title: text('title').notNull(),
+  },
+  kovo({
+    authzPolicy: 'the request guard checks note ownership',
+    domain: 'external-postgres-guard-assertion-notes',
+    key: 'id',
+  }),
+);
+const guardAssertionSchema = { guardAssertionProbeNotes };
 const externalRateLimit = pgTable('rateLimit', {
   count: integer('count').notNull(),
   id: text('id').primaryKey(),
@@ -100,6 +114,16 @@ const createNotesMigration = {
 const addSummaryMigration = {
   id: '002-add-note-summary.sql',
   sql: 'ALTER TABLE kovo_ext_probe_notes ADD COLUMN summary text;',
+};
+const createGuardAssertionNotesMigration = {
+  id: '001-create-guard-assertion-notes.sql',
+  sql: `
+    CREATE TABLE kovo_ext_guard_assertion_notes (
+      id text PRIMARY KEY,
+      owner_id text NOT NULL,
+      title text NOT NULL
+    );
+  `,
 };
 
 const probeRun = `kovo_ext_${process.pid}_${Date.now()}`;
@@ -620,6 +644,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
 
     const defaultDb = `${probeRun}_default`;
     const adoptedDb = `${probeRun}_adopted`;
+    const guardAssertionDb = `${probeRun}_guard_assertion`;
     const staleDb = `${probeRun}_stale`;
     const defaultAdmin = `${probeRun}_admin`;
     const defaultRuntime = `${probeRun}_runtime`;
@@ -641,6 +666,9 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       );
       await admin.query(
         `CREATE DATABASE ${quoteIdent(defaultDb)} OWNER ${quoteIdent(defaultAdmin)}`,
+      );
+      await admin.query(
+        `CREATE DATABASE ${quoteIdent(guardAssertionDb)} OWNER ${quoteIdent(defaultAdmin)}`,
       );
 
       await admin.query(
@@ -668,6 +696,14 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
 
     const defaultAdminUrl = cluster.url(defaultDb, defaultAdmin);
     const defaultRuntimeUrl = cluster.url(defaultDb, defaultRuntime);
+    await expect(
+      migratePostgresAppDb({
+        databaseUrl: cluster.url(guardAssertionDb, defaultAdmin),
+        migrations: [createGuardAssertionNotesMigration],
+        runtimeDatabaseUrl: cluster.url(guardAssertionDb, defaultRuntime),
+        schema: guardAssertionSchema,
+      }),
+    ).rejects.toThrow(/KV433_AUTHZ_POLICY_UNSUPPORTED.*string guard assertion.*RLS/u);
     const defaultMigrationReport = await migratePostgresAppDb({
       crossOwnerReadTables: ['kovo_ext_probe_notes'],
       databaseUrl: defaultAdminUrl,

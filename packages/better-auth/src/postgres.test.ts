@@ -93,9 +93,9 @@ const bindingTestRows = pgTable(
   'kovo_better_auth_binding_test_rows',
   { id: text('id').primaryKey() },
   kovo({
-    authzPolicy: 'shared framework binding test fixture',
     domain: 'better-auth-binding-test',
     key: 'id',
+    reference: true,
   }),
 );
 const rateLimit = pgTable('rateLimit', {
