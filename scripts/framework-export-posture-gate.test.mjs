@@ -80,7 +80,7 @@ describe('framework public runtime export posture gate', () => {
   it('binds every manifest-public runtime value and module initializer to reviewed posture', () => {
     expect(validateFrameworkExportPosture({ actual, ledger })).toEqual([]);
     const rows = expandFrameworkExportPostureLedger(ledger);
-    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_315);
+    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_318);
     expect(rows.filter((row) => row.name === '<module>')).toHaveLength(1_838);
     expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
     expect(rows.every((row) => row.rootKind !== undefined)).toBe(true);

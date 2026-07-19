@@ -249,18 +249,26 @@ secret live-channel exit and any credential-factory migration.
 `isSecret()` is false at runtime and the KV435 wire choke, log scrub, and `structuredClone` guard
 never engage for config secrets. `validateAppEnv` returns void; `createApp` exposes no `app.env`.
 
-- [ ] Make `s.secret(schema).parse` return `secret(parsed)` (a runtime non-coercible `SecretValue`
+- [x] Make `s.secret(schema).parse` return `secret(parsed)` (a runtime non-coercible `SecretValue`
       box), mirroring `secret-read-boundary.ts` for DB columns; assert `isSecret(...) === true` and
       that the wire sink throws KV435.
-- [ ] Retain the parsed env in `createApp` and expose a frozen typed `app.env` — `s.secret` fields as
+  - Evidence: `packages/server/src/schema.test.ts` and `packages/server/src/env.test.ts` pass in the
+    integrated schema/env security suites.
+- [x] Retain the parsed env in `createApp` and expose a frozen typed `app.env` — `s.secret` fields as
       boxes, undeclared keys absent; raw pinned snapshot stays framework-internal. Land the SPEC and
       public API decision with `check:api-surface` rather than treating `app.env` as incidental plumbing.
-- [ ] Prove wire/artifact ineligibility by construction (SSR interpolation, template literal,
+  - Evidence: `packages/server/src/env.test.ts` proves the frozen declared projection and build-only
+    unavailable sentinels; the public app type is reviewed in `packages/server/src/app-types.ts`.
+- [x] Prove wire/artifact ineligibility by construction (SSR interpolation, template literal,
       `JSON.stringify`, `structuredClone`, log line all throw/redact via existing chokes — no new sink code).
-- [ ] One reveal-once credential-factory DX pattern + `kovo explain` reveal-audit, so the audited exit
+  - Evidence: the focused config-secret build/env/reveal run passes 6 tests, including a real normal
+    build without the production value and fail-closed sentinel egress.
+- [x] One reveal-once credential-factory DX pattern + `kovo explain` reveal-audit, so the audited exit
       stays legible and apps don't cargo-cult `reveal()`. Use constant-time comparison only for
       fixed-length keyed/verifier digests; do not claim general JavaScript string equality or arbitrary
       request fields are constant-time.
+  - Evidence: `packages/drizzle/src/runtime-reveals-static.test.ts` and the CLI build/explain tests
+    prove alias/order coverage, exact call identity, and KV426 for unrecordable dynamic reveals.
 
 ### 2.3 Compiler-derived browser posture manifest
 
@@ -363,21 +371,33 @@ for any app key; the durable-job unique index is `(task_key, logical_key)` with 
 (`task-queue.ts:236`), so a client-influenced `schedule(…,{key})` can debounce-replace or
 throttle-suppress another tenant's pending job. Only the DB owner fact + RLS provide isolation today.
 
-- [ ] Repro both channels as failing conformance tests (memory + Postgres queues).
-- [ ] Specify a single `ScopedKey` algebra in SPEC (storage §12, tasks §9.6, data-plane §10.3),
+- [x] Repro both channels as failing conformance tests (memory + Postgres queues).
+  - Evidence: `packages/core/src/scoped-key.test.ts`, `packages/server/src/state-key.test.ts`, and the
+    queue/Postgres replay tests are part of the integrated 30-file, 898-test green run.
+- [x] Specify a single `ScopedKey` algebra in SPEC (storage §12, tasks §9.6, data-plane §10.3),
       promoting `replay.ts`'s length-framed `(posture, principal|reason|public, app-key)` composition;
       add a KV for unscoped stateful-sink keys and named system/public escape postures.
-- [ ] Make `ScopedKey` a runtime-opaque value with a module-private witness and canonical framed bytes;
+  - Evidence: SPEC §§6.6/9.6/10.3 freeze `kovo-scoped-key-v1` and KV450.
+- [x] Make `ScopedKey` a runtime-opaque value with a module-private witness and canonical framed bytes;
       its principal scope comes from the framework request/task authority, never an app-supplied ID.
       Storage/queue doors reject strings, forged structures, and TypeScript casts before namespace use.
-- [ ] Make system/public construction capability-owned rather than `reason`-string-owned: callers use a
+  - Evidence: `packages/core/src/scoped-key.test.ts` passes forged/cast/delimiter/surrogate negatives;
+    mutant `scoped-key/drop-runtime-witness-rejection` is killed.
+- [x] Make system/public construction capability-owned rather than `reason`-string-owned: callers use a
       reviewed posture registered in the source/sink census, and the runtime records that exact posture.
-- [ ] Storage adapters (memory/fs/S3) and both queues embed the validated scope frame in the physical
+  - Evidence: reviewed public posture binds `publicScopedKey`; system postures are a closed union in
+    `packages/core/src/scoped-key.ts`.
+- [x] Storage adapters (memory/fs/S3) and both queues embed the validated scope frame in the physical
       namespace (fs sha256 digest input; queue `logical_key`) and prove cross-owner non-collision.
-- [ ] C9 inventory gains a required `keyScoping` column for every stateful op; `check:c9-sink-inventory`
+  - Evidence: the integrated storage/task/replay suite passes 898 tests across memory, filesystem, S3,
+    memory queue, and Postgres queue paths.
+- [x] C9 inventory gains a required `keyScoping` column for every stateful op; `check:c9-sink-inventory`
       fails closed on an unclassified one — future stateful sinks inherit the obligation automatically.
-- [ ] KV414-analog compile gate over key positions (`storage.*`, `signUrl({key})`, `respond.storedFile`,
+  - Evidence: `packages/core/src/internal/source-sink-registry.test.ts` passes in the integrated run.
+- [x] KV414-analog compile gate over key positions (`storage.*`, `signUrl({key})`, `respond.storedFile`,
       `schedule(…,{key})`); migrate `replay.ts` + rate-limit buckets onto the shared frame.
+  - Evidence: route-page/compiler tests pass; mutants `compiler-finite-ir/drop-scoped-key-sink-closure`
+    and `scoped-key/drop-runtime-witness-rejection` are killed.
 
 ### 3.2 One crypto authority door + purpose registry + rotation lifecycle
 

@@ -123,14 +123,19 @@ can subvert is a rumor, not evidence.
 permits `task.timeoutMs` to exceed `leaseMs`. A reaped worker keeps executing the body while a fresh
 claimant runs the same job. (~0.1 pm)
 
-- [ ] Make a false heartbeat abort the in-flight body through the existing `withTimeout`/`AbortSignal`
+- [x] Make a false heartbeat abort the in-flight body through the existing `withTimeout`/`AbortSignal`
       path; add a regression test that asserts the reaped worker's body is aborted before the second
       claimant commits.
-- [ ] Surface the discarded `markSucceeded`/`markFailed` booleans (`task-runner.ts:302,305`) as a
+  - Evidence: `packages/server/src/task-runner.test.ts` passes in the integrated 30-file, 898-test run.
+- [x] Surface the discarded `markSucceeded`/`markFailed` booleans (`task-runner.ts:302,305`) as a
       diagnostic so a stale-lease commit is observable rather than silent.
-- [ ] Add an attempt ceiling to `reapExpiredLeases` (`task-queue.ts:733`) so a process-killing task
+  - Evidence: `packages/server/src/task-observability.test.ts` and task-runner tests cover the fenced
+    stale completion/failure diagnostics.
+- [x] Add an attempt ceiling to `reapExpiredLeases` (`task-queue.ts:733`) so a process-killing task
       cannot redeliver forever; verify with a test that a task killing its runner reaches a terminal
       state.
+  - Evidence: `packages/server/src/task-queue.test.ts` proves terminal exhaustion for memory and
+    Postgres-compatible queue behavior.
 
 ### 0.2 Retire two false assurances
 
@@ -215,6 +220,10 @@ readiness` row (status `pending`) to `rules/prelaunch-checklist.md`.
       lifecycle-script execution, no network, and no reachability from the app dependency closure to
       signing material. Fail if the proof stage's process tree could have executed app-graph code.
       This is the difference between "this certificate is evidence" and "this certificate is a rumor".
+  - Current evidence: the pinned Linux/amd64 and macOS sandbox self-test closes the exact process,
+    network, mount, key, and repository vectors and kills override mutants. It prints
+    `proof-tooling=UNBOUND`; keep this item open until the real analyzer/generator/signer is forced
+    through the executor.
 
 ---
 

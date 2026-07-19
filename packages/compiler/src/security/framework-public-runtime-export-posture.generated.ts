@@ -28,7 +28,7 @@ export type FrameworkExportPostureGroup = readonly [
 ];
 
 export const frameworkExportPostureSummaryVersion =
-  'kovo-framework-public-runtime-export-posture/2026-07-19.1' as const;
+  'kovo-framework-public-runtime-export-posture/2026-07-19.3' as const;
 
 // Compact generated closed membership; expanded formatting triples parse input.
 // prettier-ignore
@@ -36,10 +36,10 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/better-auth", "0.2.0", [
     ["sha256:a3d89744a6d5c81d0fc85ccdfec578e21459c803f1b44034a8b83a910d5074cb", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:2a45be0750754b1abb602e5f53393d19a79e775174c3869ed116bbe72563a01d"]],
+    ], ["kovo-source-tree-sha256:e66ee96f0fbecd29fa238d9f2d4d512f693dcc08d143fc566b9d30a117e8bfdc"]],
     ["sha256:b612fda78ae2932fd34b06df4b5b440f25f6ee71834e329f539e8f9901c9c66c", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:5520922d2212a43901b38dba9a2734bedcdbd9ed9a52c1f507d62878a6d634d1"]],
+    ], ["kovo-packed-tree-sha256:4a307b01ca38a80463a9829b974788368c0df73668bc2b031ba7e369c1fedba8"]],
   ]],
   ["@kovojs/browser", "0.2.0", [
     ["sha256:15adc9f61802af62e281997ba39e5182d35c1dc3cf37684ac8ff7d5d708c9e90", [
@@ -54,34 +54,34 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/cli", "0.2.0", [
     ["sha256:55ced4126de7fc822390a6b2fd624a40e36d9e5571b004d0c25f1e06962b6cc9", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:777a7c5cd01344159e29c20e3e2434a367c74fd19befecb467b2e442eda2754e"]],
+    ], ["kovo-packed-tree-sha256:fe5fa4254aa5327848b2b900a585b4fdddd32b37f847c764cecb557f4bbd7664"]],
     ["sha256:be78408be21a86cbac9a8dc0fd404b3f323a33e2cbbdf32eed7dba60849ed74e", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:d378cdd2d0a148d2932054cbbd4ff079c6a3ea3d0eef420d77b097d4d0dbf276"]],
+    ], ["kovo-source-tree-sha256:1fc82bccb84e5cc3903f37b0252247bb31f11040bfa1d2675610e1c67dac64cf"]],
   ]],
   ["@kovojs/compiler", "0.2.0", [
     ["sha256:21d6efc7eb88bc768717c0e7a396abab70b204e8c0cc49c215a8885811fed018", [
 
-    ], ["kovo-compiler-self-source-tree-sha256:a93d15af430c34995b7429ec7f932b712a82a982df375d001f6abb179a31e79f"]],
+    ], ["kovo-compiler-self-source-tree-sha256:b4d8fe0e211d26ec02b0901e87133e725c9965910a0445dd7102553ea36db46f"]],
     ["sha256:ae324e67b1862da80aca7fbcce8f08ee8736916c8ee767f59093e03b6430f411", [
 
-    ], ["kovo-compiler-self-packed-tree-sha256:432473bf618e38d671cc90255208a66230cc4bacd1568ef519de45e0785b1cfa"]],
+    ], ["kovo-compiler-self-packed-tree-sha256:c151642016ac119fd9c6cb0acb96c2472e5cb32a6d1d5f16e09d868d24cc7953"]],
   ]],
   ["@kovojs/core", "0.2.0", [
     ["sha256:0a2601682508fdf9aa0e622fcff62e4e0d15c4e305fdcff4d56ef83e567e22e1", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:89d337b031e980832b55f4e3adbee0f3f07829e1ee9061791be27b1be90f8fe0"]],
+    ], ["kovo-source-tree-sha256:42f1956b72373bc329684dfd427f9e4f2cb7c26d120277758d2ffad8390598cd"]],
     ["sha256:42f1efbd3ae64906c9c27e8276e78fe611bccc0cb16ba18bde983f8a604f101f", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:a24e35fb1439dc885e839bb7950aa14e7abd2c8cd46fa63a1feea4384fc9219f"]],
+    ], ["kovo-packed-tree-sha256:059513adba5e913632009c1df069e11605d8805a6dbec68a59b54d22947a45db"]],
   ]],
   ["@kovojs/drizzle", "0.2.0", [
     ["sha256:0036ed241b94055828034de201690c38cc10e593d66c38f9aa2779fd11f76073", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:98a1c3ae8632d9f8d409317098a5ff839baa5ebfbe53d635ad76553fc3c1534b"]],
+    ], ["kovo-source-tree-sha256:9318ad7b25281e4dd076257e459a342f0aac1f63e314ff50b02f516e2f29c513"]],
     ["sha256:251d2105fefc584adb577a804eb22a6f0bfd25b72e5e92dd8c185c39a364ce4a", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:0a1158706c59ae9168ac2e0cbf0c80134410b953eaf7f6382941f183d60491a3"]],
+    ], ["kovo-packed-tree-sha256:6619c8250e7a202bae09d80a5f8adfd7c8a089c7b0fcdbc742c70edc40f2133d"]],
   ]],
   ["@kovojs/headless-ui", "0.2.0", [
     ["sha256:6a24b5584a6fa410caa4da1027e11b4cf43e1cdd0c0888894abdcae4afdbfe76", [
@@ -3649,7 +3649,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default","types"]],
       ["./testing",["default","types"]],
       ["./vite",["default","types"]],
-    ], ["kovo-packed-tree-sha256:654a5abde9bcbf05820b8481943a363f3473ee4b2fb27748d22a2e6ae82068b6"]],
+    ], ["kovo-packed-tree-sha256:4d6d13af50dd34cef102f4e545e62a9d78d00d77a3ffd32a4d84660962d38bc4"]],
     ["sha256:ddf6f53b981cd30cbee6a39ab2915cde76be0a61808fb5cbea18367d50ec7f83", [
       [".",["default"]],
       ["./build",["default"]],
@@ -3657,7 +3657,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default"]],
       ["./testing",["default"]],
       ["./vite",["default"]],
-    ], ["kovo-source-tree-sha256:ef6c43fcb1826789da91072d94366d01731f730de2a9b406c86af58a0494147e"]],
+    ], ["kovo-source-tree-sha256:a2dc345c1e888eb9a60329d96dc3802f75a33cd01fbb801a7cd52c1e98feffe7"]],
   ]],
   ["@kovojs/style", "0.2.0", [
     ["sha256:6a05257804d6e0287e3c9bfa07ba88aa48ac29abaef9458b3b6299bb21fdac86", [
@@ -3786,7 +3786,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["create-kovo", "0.2.0", [
     ["sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368", [
 
-    ], ["kovo-packed-tree-sha256:9f6d35b9ece54c56db2ada33d514477a1a76112c870a9e51f975a9543d172852","kovo-source-tree-sha256:e48146d8428e9f70660aa540c516c68a44279f4dbc3d5f06ffcb8e3346055168"]],
+    ], ["kovo-packed-tree-sha256:9f6d35b9ece54c56db2ada33d514477a1a76112c870a9e51f975a9543d172852","kovo-source-tree-sha256:d554f852e4d9ca36eab816ec7d7afdb6dd65cea0664b0b267522fcccc797425b"]],
   ]],
 ];
 
@@ -3860,7 +3860,7 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
     [".",["trustedReveal"]],
   ]],
   ["@kovojs/core", "authority-free", [], "none", null, [
-    [".",["publishToClient"]],
+    [".",["publishToClient","publicScopedKey"]],
   ]],
   ["@kovojs/core", "authority-free", [], "none", null, [
     [".",["<module>"]],
@@ -7511,7 +7511,7 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
     [".",["serverValue"]],
   ]],
   ["@kovojs/server", "authority-free", [], "none", null, [
-    [".",["publicAccess"]],
+    [".",["publicAccess","publicScopedKey"]],
   ]],
   ["@kovojs/server", "authority-free", [], "none", null, [
     [".",["unsafeRegex"]],
@@ -7649,7 +7649,7 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
     [".",["createMemoryVersionedClientModuleRegistry"]],
   ]],
   ["@kovojs/server", "authority-free", [], "none", null, [
-    [".",["verifiedAccess"]],
+    [".",["scopedKey","verifiedAccess"]],
   ]],
   ["@kovojs/server", "authority-free", [], "none", null, [
     [".",["StaleVersionError"]],

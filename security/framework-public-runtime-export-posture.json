@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.1",
-  "runtimeSurfaceSha256": "528e47f8a2d1446a4b5b5906d226d87081932494658338ac81debfa2d58a03be",
-  "postureMemberSha256": "263b1f27d4ffa571086107668af68448aae0a8554ca7761a074aa4cedbd59b7c",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.3",
+  "runtimeSurfaceSha256": "2211793f10b6b4c168fedd7d184131160c89212ec6d7e4d130d82da8c36f144e",
+  "postureMemberSha256": "b68a8fab59b3cbac968e0625a218b667b95bcb62fbe73f351d71250ffd3bc0ef",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "a93d15af430c34995b7429ec7f932b712a82a982df375d001f6abb179a31e79f",
+      "sourceTreeSha256": "b4d8fe0e211d26ec02b0901e87133e725c9965910a0445dd7102553ea36db46f",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "e48146d8428e9f70660aa540c516c68a44279f4dbc3d5f06ffcb8e3346055168",
+      "sourceTreeSha256": "d554f852e4d9ca36eab816ec7d7afdb6dd65cea0664b0b267522fcccc797425b",
       "manifestVariants": [
         {
           "fingerprint": "sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368"
@@ -449,7 +449,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "2a45be0750754b1abb602e5f53393d19a79e775174c3869ed116bbe72563a01d"
+      "sourceTreeSha256": "e66ee96f0fbecd29fa238d9f2d4d512f693dcc08d143fc566b9d30a117e8bfdc"
     },
     {
       "manifestVariants": [
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "d378cdd2d0a148d2932054cbbd4ff079c6a3ea3d0eef420d77b097d4d0dbf276"
+      "sourceTreeSha256": "1fc82bccb84e5cc3903f37b0252247bb31f11040bfa1d2675610e1c67dac64cf"
     },
     {
       "manifestVariants": [
@@ -1040,12 +1040,13 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["publishToClient"]
+            ".": ["publishToClient", "publicScopedKey"]
           },
           "review": {
-            "basis": "publishToClient exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
+            "basis": "publishToClient and publicScopedKey expose explicit audited publication/cross-principal postures and remain tied to the capability-escape proof.",
             "evidence": [
               "packages/core/src/index.ts",
+              "packages/core/src/scoped-key.ts",
               "packages/core/src/secret.ts",
               "packages/core/src/storage.ts",
               "packages/core/src/verifier.ts"
@@ -1673,7 +1674,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "89d337b031e980832b55f4e3adbee0f3f07829e1ee9061791be27b1be90f8fe0"
+      "sourceTreeSha256": "42f1956b72373bc329684dfd427f9e4f2cb7c26d120277758d2ffad8390598cd"
     },
     {
       "manifestVariants": [
@@ -1941,7 +1942,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "98a1c3ae8632d9f8d409317098a5ff839baa5ebfbe53d635ad76553fc3c1534b"
+      "sourceTreeSha256": "9318ad7b25281e4dd076257e459a342f0aac1f63e314ff50b02f516e2f29c513"
     },
     {
       "manifestVariants": [
@@ -6323,14 +6324,15 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["publicAccess"]
+            ".": ["publicAccess", "publicScopedKey"]
           },
           "review": {
-            "basis": "publicAccess exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
+            "basis": "publicAccess and publicScopedKey expose explicit audited public/cross-principal postures and remain tied to the capability-escape proof.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
               "packages/server/src/index.ts",
+              "packages/core/src/scoped-key.ts",
               "packages/server/src/node.ts",
               "packages/server/src/render-tree.ts",
               "packages/server/src/schema.ts",
@@ -7807,10 +7809,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["verifiedAccess"]
+            ".": ["scopedKey", "verifiedAccess"]
           },
           "review": {
-            "basis": "verifiedAccess is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
+            "basis": "scopedKey and verifiedAccess consume framework-owned request authority as security controls with no raw capability from the C13 vocabulary.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -7818,6 +7820,7 @@
               "packages/server/src/node.ts",
               "packages/server/src/render-tree.ts",
               "packages/server/src/schema.ts",
+              "packages/server/src/state-key.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
             "id": "first-party-runtime-posture/2026-07-18"
@@ -9627,7 +9630,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "ef6c43fcb1826789da91072d94366d01731f730de2a9b406c86af58a0494147e"
+      "sourceTreeSha256": "a2dc345c1e888eb9a60329d96dc3802f75a33cd01fbb801a7cd52c1e98feffe7"
     },
     {
       "manifestVariants": [
@@ -10505,5 +10508,5 @@
       "sourceTreeSha256": "a7ec04add8646fbd927e8179c163e0593d2abfa268f258845a7a3cd3dd2ec976"
     }
   ],
-  "classificationSha256": "dfbf93ff7c3ca9befdb0b717f0b5e1709eb4a9f24b0d33a489c7d1ab1af03338"
+  "classificationSha256": "f7869ac3bf819b0ee4087630826b94ee9d5c1b4c86f2f12b83e09a326ac55f3d"
 }
