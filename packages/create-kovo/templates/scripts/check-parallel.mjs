@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Concurrent runner for the Kovo starter `check` pipeline.
 //
-// The starter's verification has four steps that the npm `check` script used to
+// The starter's verification has five steps that the npm `check` script used to
 // run strictly sequentially:
-//   vp check && pnpm run check:sound-subset && pnpm run build:prod && pnpm run check:endpoint-posture
-// Three of those steps are independent, so this runner fans them out across
+//   lifecycle policy && vp check && sound subset && build:prod && endpoint posture
+// Four of those steps are independent, so this runner fans them out across
 // concurrent "lanes" to shorten the warm pipeline (measured ~9.5s -> ~5.9s,
 // ~38% faster) while staying FAIL-CLOSED: the process exits non-zero if ANY
 // step fails, and the failing step's output stays legible because every line is
@@ -29,6 +29,7 @@ const pm = 'pnpm';
 // Lanes run CONCURRENTLY. Steps WITHIN a lane run SEQUENTIALLY; a failed step
 // short-circuits the remaining steps in its lane (they are reported as skipped).
 const lanes = [
+  [step('lifecycle-policy', pm, ['run', 'check:lifecycle-policy'])],
   [step('vp check', 'vp', ['check'])],
   [step('sound-subset', pm, ['run', 'check:sound-subset'])],
   [

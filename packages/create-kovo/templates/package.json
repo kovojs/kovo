@@ -6,6 +6,7 @@
     "build:prod": "kovo build ./src/app.tsx",
     "check": "node scripts/check-parallel.mjs",
     "check:endpoint-posture": "vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json",
+    "check:lifecycle-policy": "node scripts/check-lifecycle-policy.mjs",
     "check:sound-subset": "node scripts/check-sound-subset.mjs",
     "dev": "kovo dev ./src/app.tsx",
     "serve": "pnpm run build:prod && NODE_ENV=production node dist/server/server.mjs",
@@ -41,8 +42,14 @@
   },
   "packageManager": "{{package_manager}}",
   "pnpm": {
+    "ignoredBuiltDependencies": [
+      "esbuild"
+    ],
     "onlyBuiltDependencies": [
       "@node-rs/argon2"
-    ]
+    ],
+    "overrides": {
+      "@node-rs/argon2": "2.0.2"
+    }
   }
 }

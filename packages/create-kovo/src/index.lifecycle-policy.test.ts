@@ -30,7 +30,12 @@ describe('create-kovo dependency lifecycle-script policy', () => {
         '@node-rs/argon2',
         reviewedMarker,
       );
-      const ignoredPackage = writeLifecyclePackage(root, 'ignored-package', 'esbuild', ignoredMarker);
+      const ignoredPackage = writeLifecyclePackage(
+        root,
+        'ignored-package',
+        'esbuild',
+        ignoredMarker,
+      );
       const hostilePackage = writeLifecyclePackage(
         root,
         'hostile-package',
@@ -76,24 +81,98 @@ describe('create-kovo dependency lifecycle-script policy', () => {
       writeKovoProject(root, { disableGit: true, name: 'Lifecycle Policy Shape' });
       const packageJson = readPackageJson(join(root, 'package.json'));
       const npmrc = readFileSync(join(root, '.npmrc'), 'utf8');
+      const workflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
 
       expect(npmrc).toContain('strict-dep-builds=true\n');
       expect(npmrc).toContain('dangerously-allow-all-builds=false\n');
       expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['@node-rs/argon2']);
       expect(packageJson.pnpm?.ignoredBuiltDependencies).toEqual(['esbuild']);
+      expect(packageJson.pnpm?.overrides).toEqual({ '@node-rs/argon2': '2.0.2' });
+      expect(packageJson.scripts?.['check:lifecycle-policy']).toBe(
+        'node scripts/check-lifecycle-policy.mjs',
+      );
+      expect(workflow).toContain('- run: node scripts/check-lifecycle-policy.mjs');
+      expect(workflow.indexOf('- run: node scripts/check-lifecycle-policy.mjs')).toBeLessThan(
+        workflow.indexOf('- run: vp install --frozen-lockfile'),
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   });
 
-  it('rejects allow-all and reviewed-allowlist weakening mutations before install', () => {
+  it('retains both exact reviewed native exceptions for the SQLite scaffold', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-lifecycle-policy-sqlite-'));
+
+    try {
+      const generatedRoot = join(root, 'generated');
+      writeKovoProject(generatedRoot, {
+        dialect: 'sqlite',
+        disableGit: true,
+        name: 'SQLite Lifecycle Policy',
+      });
+      const packageJson = readPackageJson(join(generatedRoot, 'package.json'));
+      const npmrc = readFileSync(join(generatedRoot, '.npmrc'), 'utf8');
+      const argonMarker = join(root, 'argon.marker');
+      const sqliteMarker = join(root, 'sqlite.marker');
+      const argonPackage = writeLifecyclePackage(
+        root,
+        'argon-package',
+        '@node-rs/argon2',
+        argonMarker,
+      );
+      const sqlitePackage = writeLifecyclePackage(
+        root,
+        'sqlite-package',
+        'better-sqlite3',
+        sqliteMarker,
+      );
+
+      expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual([
+        '@node-rs/argon2',
+        'better-sqlite3',
+      ]);
+      expect(packageJson.pnpm?.overrides).toEqual({
+        '@node-rs/argon2': '2.0.2',
+        'better-sqlite3': '12.11.1',
+      });
+      expect(() =>
+        execFileSync(
+          process.execPath,
+          [join(generatedRoot, 'scripts/check-lifecycle-policy.mjs')],
+          {
+            cwd: generatedRoot,
+            stdio: 'pipe',
+          },
+        ),
+      ).not.toThrow();
+
+      const installRoot = writeInstallHarness(join(root, 'sqlite-install'), {
+        dependencies: {
+          '@node-rs/argon2': `file:${argonPackage}`,
+          'better-sqlite3': `file:${sqlitePackage}`,
+        },
+        npmrc,
+        pnpm: packageJson.pnpm,
+      });
+      const result = runOfflineInstall(installRoot);
+      expect(result.status, installOutput(result)).toBe(0);
+      expect(existsSync(argonMarker)).toBe(true);
+      expect(existsSync(sqliteMarker)).toBe(true);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 20_000);
+
+  it('rejects allow-all, reviewed-allowlist, and version-override weakening before install', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-lifecycle-policy-mutations-'));
 
     try {
       writeKovoProject(root, { disableGit: true, name: 'Lifecycle Policy Mutants' });
       const checker = join(root, 'scripts/check-lifecycle-policy.mjs');
 
-      expect(() => execFileSync(process.execPath, [checker], { cwd: root, stdio: 'pipe' })).not.toThrow();
+      expect(() =>
+        execFileSync(process.execPath, [checker], { cwd: root, stdio: 'pipe' }),
+      ).not.toThrow();
 
       const npmrc = readFileSync(join(root, '.npmrc'), 'utf8');
       writeFileSync(
@@ -113,6 +192,12 @@ describe('create-kovo dependency lifecycle-script policy', () => {
       ];
       writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
       expectCheckerFailure(root, checker, /reviewed lifecycle build allowlist/u);
+
+      packageJson.pnpm.onlyBuiltDependencies = ['@node-rs/argon2'];
+      packageJson.pnpm.overrides ??= {};
+      packageJson.pnpm.overrides['@node-rs/argon2'] = '9.9.9';
+      writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
+      expectCheckerFailure(root, checker, /graph-wide override to 2\.0\.2/u);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -125,7 +210,9 @@ interface GeneratedPackageJson {
   pnpm?: {
     ignoredBuiltDependencies?: string[];
     onlyBuiltDependencies?: string[];
+    overrides?: Record<string, string>;
   };
+  scripts?: Record<string, string>;
 }
 
 function readPackageJson(path: string): GeneratedPackageJson {
@@ -174,7 +261,10 @@ function writeInstallHarness(
         dependencies: options.dependencies,
         name: 'lifecycle-policy-harness',
         packageManager: 'pnpm@10.12.1',
-        pnpm: options.pnpm,
+        pnpm: {
+          ignoredBuiltDependencies: options.pnpm?.ignoredBuiltDependencies,
+          onlyBuiltDependencies: options.pnpm?.onlyBuiltDependencies,
+        },
         private: true,
         version: '1.0.0',
       },
@@ -193,21 +283,19 @@ function writeFileTree(root: string, files: Record<string, string>): void {
 }
 
 function runOfflineInstall(root: string): ReturnType<typeof spawnSync> {
-  return spawnSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', [
-    'install',
-    '--ignore-workspace',
-    '--offline',
-    '--store-dir',
-    join(root, '.pnpm-store'),
-  ], {
-    cwd: root,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      CI: 'true',
-      NO_COLOR: '1',
+  return spawnSync(
+    process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+    ['install', '--ignore-workspace', '--offline', '--store-dir', join(root, '.pnpm-store')],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        CI: 'true',
+        NO_COLOR: '1',
+      },
     },
-  });
+  );
 }
 
 function installOutput(result: ReturnType<typeof spawnSync>): string {
