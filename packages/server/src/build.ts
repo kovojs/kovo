@@ -17,6 +17,7 @@ import {
   lockRequestSafeRuntimeRealmWithInventory,
   requestSafeRuntimeInventory,
 } from '@kovojs/core/internal/classifier-verdict';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createContentDispositionWithFilename } from './content-disposition.js';
 import {
@@ -631,11 +632,13 @@ function clientModuleRetentionDiagnostics(
   if (deploySkewRetentionProofSatisfiesFloor(options.retention)) return [];
 
   return [
-    {
-      code: 'KV417',
-      message: `The ${presetName} preset cannot prove the SPEC §14 deploy-skew retention floor for immutable /c/__v/... modules and prior-token /_q reads. Configure ${presetName}({ retention: { hours: 24, immutableClientModules: 'retained', priorTokenQueryReads: 'retained' } }) only when the serving layer retains prior build artifacts and query-read support for at least 24 hours, or use a preset/adapter that declares that support.`,
-      severity: 'error',
-    },
+    createRegisteredDiagnostic(
+      'KV417',
+      {},
+      {
+        message: `The ${presetName} preset cannot prove the SPEC §14 deploy-skew retention floor for immutable /c/__v/... modules and prior-token /_q reads. Configure ${presetName}({ retention: { hours: 24, immutableClientModules: 'retained', priorTokenQueryReads: 'retained' } }) only when the serving layer retains prior build artifacts and query-read support for at least 24 hours, or use a preset/adapter that declares that support.`,
+      },
+    ),
   ];
 }
 
@@ -709,11 +712,13 @@ function durableTaskStoreDiagnostics(
   }
 
   return [
-    {
-      code: 'KV446',
-      message: `The ${presetName} preset's default JobRunner persists durable task(s) in the Postgres _kovo_jobs store, but this build registers durable task(s): ${taskList} and the server bundle uses SQLite/better-sqlite3. SPEC §9.6 requires the node JobRunner's Postgres durable-task store; use a Postgres-compatible app db for durable tasks or remove task()/request.schedule() until a supported SQLite durable queue adapter exists.`,
-      severity: 'error',
-    },
+    createRegisteredDiagnostic(
+      'KV446',
+      {},
+      {
+        message: `The ${presetName} preset's default JobRunner persists durable task(s) in the Postgres _kovo_jobs store, but this build registers durable task(s): ${taskList} and the server bundle uses SQLite/better-sqlite3. SPEC §9.6 requires the node JobRunner's Postgres durable-task store; use a Postgres-compatible app db for durable tasks or remove task()/request.schedule() until a supported SQLite durable queue adapter exists.`,
+      },
+    ),
   ];
 }
 
@@ -724,11 +729,13 @@ function missingJobRunnerDiagnostics(
   const taskList = presetTaskList(build, `${presetName} missing JobRunner diagnostics`);
   if (taskList === undefined) return [];
   return [
-    {
-      code: 'KV445',
-      message: `The ${presetName} preset declares no JobRunner capability but this build registers durable task(s): ${taskList}. SPEC §9.6 requires presets that support task()/request.schedule() to declare a real drainer; use the node preset's in-process JobRunner, or configure a preset/adapter with a cron-drain or external queue runner before deploying.`,
-      severity: 'error',
-    },
+    createRegisteredDiagnostic(
+      'KV445',
+      {},
+      {
+        message: `The ${presetName} preset declares no JobRunner capability but this build registers durable task(s): ${taskList}. SPEC §9.6 requires presets that support task()/request.schedule() to declare a real drainer; use the node preset's in-process JobRunner, or configure a preset/adapter with a cron-drain or external queue runner before deploying.`,
+      },
+    ),
   ];
 }
 

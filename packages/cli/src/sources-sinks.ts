@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-import { diagnosticDefinitionText } from '@kovojs/core/internal/diagnostics';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   dangerousSinkTokens as registryDangerousSinkTokens,
   frameworkSourceSinkInventory as registryFrameworkSourceSinkInventory,
@@ -152,9 +152,11 @@ export function sourcesSinksCheckResult(
 }
 
 function unregisteredDriftLine(finding: SourceSinkUnregisteredFinding): string {
+  const diagnostic = createRegisteredDiagnostic('KV425', {}, { includeHelp: true });
   return [
-    `ERROR KV425 ${finding.file} token=${finding.token} count=${finding.count}`,
-    diagnosticDefinitionText('KV425', { includeHelp: true }),
+    `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${finding.file} token=${finding.token} count=${finding.count}`,
+    diagnostic.message,
+    diagnostic.help ?? '',
   ].join(' ');
 }
 

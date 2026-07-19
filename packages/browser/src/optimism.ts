@@ -1,4 +1,5 @@
 import type { Form, FormInput, InvalidationSets, QueryRegistry } from '@kovojs/core';
+import { diagnosticConstructors } from '@kovojs/core/internal/diagnostics';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { queryIdentityFromStoreKey, queryStoreKey, queryWireKey } from './query-store.js';
@@ -42,6 +43,26 @@ export interface MutationChangeRecord {
 /** A change a mutation made, carrying its input, used to key optimistic updates. */
 export interface OptimisticChange<Input = unknown> extends MutationChangeRecord {
   input: Input;
+}
+
+function reportOptimisticTransformDiagnostic(
+  onError: RuntimeErrorReporter | undefined,
+  cause: unknown,
+  phase: 'enqueue' | 'settle' | 'server-truth-rebase',
+): void {
+  // SPEC §10.4 / §11: KV313 is a real runtime diagnostic, not merely a comment label. Keep the
+  // original exception as cause/context while code, severity, message, and help come from the
+  // generated normative registry constructor.
+  reportRuntimeError(
+    onError,
+    diagnosticConstructors.KV313(
+      { cause, phase },
+      {
+        detail: `The optimistic transform failed during ${phase}; Kovo discarded the unsafe prediction and retained server truth.`,
+        includeHelp: true,
+      },
+    ),
+  );
 }
 
 /** How to derive the query-instance key an optimistic change applies to. */
@@ -224,7 +245,7 @@ export class OptimisticRebaser {
         predicted = applyOptimisticTransform(previous, change.input, transform);
       } catch (error) {
         // Phase-1 failure: nothing committed yet, so there is nothing to roll back.
-        reportRuntimeError(this.#onError, error);
+        reportOptimisticTransformDiagnostic(this.#onError, error, 'enqueue');
         return;
       }
 
@@ -306,7 +327,7 @@ export class OptimisticRebaser {
           pendingTransform.transform,
         );
       } catch (error) {
-        reportRuntimeError(this.#onError, error);
+        reportOptimisticTransformDiagnostic(this.#onError, error, 'settle');
         continue;
       }
       securityArrayAppend(survivors, pendingTransform, 'Browser optimistic surviving transforms');
@@ -369,7 +390,7 @@ export class OptimisticRebaser {
       try {
         next = applyOptimisticTransform(next, pending.change.input, pending.transform);
       } catch (error) {
-        reportRuntimeError(this.#onError, error);
+        reportOptimisticTransformDiagnostic(this.#onError, error, 'server-truth-rebase');
         continue;
       }
       securityArrayAppend(survivors, pending, 'Browser optimistic surviving transforms');

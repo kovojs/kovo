@@ -11,6 +11,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import type { SessionAuthorityFact } from '@kovojs/core/internal/graph';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
@@ -266,23 +267,26 @@ export function parseDiagnosticsForSourceFile(
     const length = diagnostic.length ?? (remainingLength > 1 ? remainingLength : 1);
     compilerArrayAppend(
       result,
-      {
-        code: 'KV245',
-        fileName: sourceFile.fileName,
-        help: compilerArrayJoin(
-          [
-            'Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.',
-            'Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.',
-            'Fixes: correct the TSX syntax at this location and re-run the compiler.',
-            'SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.',
-          ],
-          '\n',
-        ),
-        length,
-        message: `TypeScript/TSX parse failed. ${message}`,
-        severity: 'error',
-        start: offsetToPosition(source, start),
-      },
+      createRegisteredDiagnostic(
+        'KV245',
+        {
+          fileName: sourceFile.fileName,
+          length,
+          start: offsetToPosition(source, start),
+        },
+        {
+          help: compilerArrayJoin(
+            [
+              'Would lower to: typed JSX facts before generated server, client, CSS, and registry artifacts.',
+              'Blocked reason: TypeScript could not parse the authored TSX, so later compiler phases would operate on a recovery tree.',
+              'Fixes: correct the TSX syntax at this location and re-run the compiler.',
+              'SPEC §5.2 requires app source to be TSX and generated artifacts to come only from parsed compiler facts.',
+            ],
+            '\n',
+          ),
+          message: `TypeScript/TSX parse failed. ${message}`,
+        },
+      ),
       'Parse diagnostic facts',
     );
   }

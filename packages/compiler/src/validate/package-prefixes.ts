@@ -1,4 +1,7 @@
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 
 import {
   compilerArrayAppend,
@@ -35,7 +38,6 @@ interface ValidatedPackagePrefixFact {
 const prefixPattern = /^[a-z][a-z0-9-]*-$/;
 const kv234Help = diagnosticDefinitions.KV234.help;
 const kv234Message = diagnosticDefinitions.KV234.message;
-const kv234Severity = diagnosticDefinitions.KV234.severity;
 
 export function validatePackageComponentPrefixes(
   facts: readonly PackageComponentPrefixFact[] | undefined,
@@ -256,11 +258,12 @@ function packagePrefixDiagnostic(
       compilerFailClosed(`Package prefix help input[${index}] invalid.`);
     if (line) compilerArrayAppend(lines, line, 'Package prefix help');
   }
-  return {
-    code: 'KV234',
-    fileName,
-    help: compilerArrayJoin(lines, '\n'),
-    message: `${kv234Message} ${detail}`,
-    severity: kv234Severity,
-  };
+  return createRegisteredDiagnostic(
+    'KV234',
+    { fileName },
+    {
+      help: compilerArrayJoin(lines, '\n'),
+      message: `${kv234Message} ${detail}`,
+    },
+  );
 }

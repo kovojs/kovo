@@ -146,6 +146,14 @@ describe('optimistic query rebase', () => {
     // The throwing transform is dropped (KV313) and reported.
     expect(rebaser.pendingCount('cart')).toBe(0);
     expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'KV313',
+        message: expect.stringContaining('Optimistic transform settled with missing server truth'),
+        phase: 'server-truth-rebase',
+        severity: 'error',
+      }),
+    );
   });
 
   it('F2: a surviving transform still rebases after an earlier sibling throws', () => {

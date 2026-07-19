@@ -134,6 +134,7 @@ describe('core internal route pattern contract', () => {
         message:
           "Ambiguous route table: '/products/:id' and '/products/new' can both match canonical request path '/products/new'.",
         paths: ['/products/:id', '/products/new'],
+        severity: 'error',
         witnessPath: '/products/new',
       },
       {
@@ -141,6 +142,7 @@ describe('core internal route pattern contract', () => {
         message:
           "Ambiguous route table: '/docs/:slug' and '/docs/:title' can both match canonical request path '/docs/:slug'.",
         paths: ['/docs/:slug', '/docs/:title'],
+        severity: 'error',
         witnessPath: '/docs/:slug',
       },
     ]);

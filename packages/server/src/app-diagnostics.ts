@@ -1,4 +1,7 @@
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import { snapshotAuditJustification } from './audit-justification.js';
 import type { AppDiagnostic, KovoApp } from './app-types.js';
 import { findRouteAmbiguities, type RouteLike } from './match.js';
@@ -63,12 +66,13 @@ export function routeTableDiagnostics(routes: readonly RouteLike[]): readonly Ap
     }
     witnessArrayAppend(
       diagnostics,
-      witnessFreeze({
-        code: 'KV228',
-        fileName: `${left} <-> ${right}`,
-        help: diagnosticDefinitions.KV228.help,
-        message,
-      }),
+      witnessFreeze(
+        createRegisteredDiagnostic(
+          'KV228',
+          { fileName: `${left} <-> ${right}` },
+          { includeHelp: true, message },
+        ),
+      ),
       'Route table diagnostics',
     );
   }
@@ -131,12 +135,13 @@ export function routePrefetchGuardDiagnostics(
     const path = ownDiagnosticDataValue(route, 'path', 'Route diagnostic path');
     witnessArrayAppend(
       diagnostics,
-      witnessFreeze({
-        code: 'KV419' as const,
-        fileName: typeof path === 'string' ? path : '(route)',
-        help: diagnosticDefinitions.KV419.help,
-        message: diagnosticDefinitions.KV419.message,
-      }),
+      witnessFreeze(
+        createRegisteredDiagnostic(
+          'KV419',
+          { fileName: typeof path === 'string' ? path : '(route)' },
+          { includeHelp: true },
+        ),
+      ),
       'Route prefetch diagnostics',
     );
   }

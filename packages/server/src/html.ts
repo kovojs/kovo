@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   assertHtmlWireValueStable,
   isKovoControlPlaneAttribute,
@@ -488,19 +489,21 @@ export function safeRuntimeAttributeName(name: string): boolean {
 
 function rejectedAttributeNameEvent(name: string): RuntimeSinkSecurityEvent {
   const reason = 'attribute name is not a safe HTML name token';
-  return {
-    action: 'remove',
-    code: 'KV236',
-    family: 'attribute',
-    message: `KV236 runtime remove for attribute-name sink: ${reason}`,
-    reason,
-    sink: 'attribute-name',
-    value: {
-      length: name.length,
-      preview: `<redacted:${name.length}>`,
-      redacted: true,
+  return createRegisteredDiagnostic(
+    'KV236',
+    {
+      action: 'remove' as const,
+      family: 'attribute' as const,
+      reason,
+      sink: 'attribute-name',
+      value: {
+        length: name.length,
+        preview: `<redacted:${name.length}>`,
+        redacted: true as const,
+      },
     },
-  };
+    { message: `KV236 runtime remove for attribute-name sink: ${reason}` },
+  );
 }
 
 /**

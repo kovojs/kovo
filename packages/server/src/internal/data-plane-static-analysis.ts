@@ -13,7 +13,7 @@ import {
   createCompilerSourceFileSystem,
   type CompilerSourceFileSystem,
 } from '@kovojs/compiler/internal/source-filesystem';
-import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import { createRegisteredDiagnostic, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import {
   outputSchemaQueryShapeFactsFromProject,
   type QueryShape,
@@ -446,12 +446,13 @@ function dataPlaneErrorDiagnosticsFromStaticFacts(
     const fact = toctouFacts[index]!;
     staticAnalysisArrayAppend(
       raw,
-      {
-        code: 'KV429',
-        message: `${diagnosticDefinitions.KV429.message} ${fact.name ?? '<anonymous>'} writes ${fact.table}.${fact.column} without a compare-and-set/version guard.`,
-        severity: 'error',
-        site: fact.site,
-      },
+      createRegisteredDiagnostic(
+        'KV429',
+        { site: fact.site },
+        {
+          detail: `${fact.name ?? '<anonymous>'} writes ${fact.table}.${fact.column} without a compare-and-set/version guard.`,
+        },
+      ),
       'Vite data-plane diagnostics',
     );
   }

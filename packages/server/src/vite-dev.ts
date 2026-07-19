@@ -3,7 +3,10 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
 import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
@@ -1665,14 +1668,17 @@ function endpointPostureRequestDiagnostic(
   const href = context.url ?? requestHrefFromContext(context.request) ?? '/';
   return {
     diagnostics: [
-      {
-        code: 'KV423',
-        help:
-          'Raw endpoint response posture is executable audit metadata in development. ' +
-          'Make the declared response cache/body posture match the returned Response headers, ' +
-          'or update the endpoint declaration when the drift is intentional.',
-        message,
-      },
+      createRegisteredDiagnostic(
+        'KV423',
+        {},
+        {
+          help:
+            'Raw endpoint response posture is executable audit metadata in development. ' +
+            'Make the declared response cache/body posture match the returned Response headers, ' +
+            'or update the endpoint declaration when the drift is intentional.',
+          message,
+        },
+      ),
     ],
     href,
   };

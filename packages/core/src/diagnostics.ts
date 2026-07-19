@@ -1,4 +1,5 @@
 import {
+  securityDefineProperty,
   freezeSecurityValue,
   securityGetOwnPropertyDescriptor,
   securityHasOwn,
@@ -110,6 +111,60 @@ export interface DiagnosticDefinition {
   severity: DiagnosticSeverity;
   message: string;
 }
+
+/** SPEC §2 enforcement posture attached to each normative diagnostic registry row. */
+export type DiagnosticEnforcementClass = 'compile-error' | 'fail-closed-runtime' | 'audited-escape';
+
+/** @internal A diagnostic definition paired with its normative SPEC §2 enforcement posture. */
+export interface RegisteredDiagnosticDefinition extends DiagnosticDefinition {
+  enforcementClass: DiagnosticEnforcementClass;
+}
+
+/** @internal Reserved fields whose authority always comes from the diagnostic registry. */
+export interface RegisteredDiagnostic<Code extends DiagnosticCode = DiagnosticCode> {
+  code: Code;
+  help?: string;
+  message: string;
+  severity: (typeof diagnosticDefinitions)[Code]['severity'];
+}
+
+/** @internal Message/help controls accepted by generated diagnostic constructors. */
+export interface DiagnosticConstructionOptions {
+  /** Append contextual text to the registry message. */
+  detail?: string;
+  /** Include the registry help text when the target diagnostic shape carries help. */
+  includeHelp?: boolean;
+  /** Use a non-empty contextual help rendering derived from the registry help/fix posture. */
+  help?: string;
+  /** Replace the base message with a non-empty contextual rendering. Code/severity stay derived. */
+  message?: string;
+}
+
+type ReservedDiagnosticFields = {
+  code?: never;
+  help?: never;
+  message?: never;
+  severity?: never;
+};
+
+/** @internal Per-code constructor generated from the normative diagnostic registry. */
+export interface DiagnosticConstructor<Code extends DiagnosticCode> {
+  (): RegisteredDiagnostic<Code>;
+  <Fields extends object>(
+    fields: Fields & ReservedDiagnosticFields,
+    options?: DiagnosticConstructionOptions,
+  ): RegisteredDiagnostic<Code> & Fields;
+}
+
+/** @internal Exact generated constructor cell for every registered diagnostic code. */
+export type DiagnosticConstructorRegistry = {
+  readonly [Code in DiagnosticCode]: DiagnosticConstructor<Code>;
+};
+
+/** @internal Exact generated SPEC registry cell for every registered diagnostic code. */
+export type RegisteredDiagnosticRegistry = {
+  readonly [Code in DiagnosticCode]: RegisteredDiagnosticDefinition & { code: Code };
+};
 
 /**
  * Registry-side classification of the teaching fields each compiler diagnostic must expose.
@@ -1209,6 +1264,179 @@ export const diagnosticDefinitions = {
     message: 'Stateful sink key lacks framework-witnessed owner scope.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;
+
+/**
+ * @internal Build one frozen registry row whose enforcement class came from
+ * `spec/11-diagnostics.md`. The generated registry calls this once per KV code,
+ * so neither a consumer nor an emission site can supply severity authority.
+ */
+export function createRegisteredDiagnosticDefinition<Code extends DiagnosticCode>(
+  code: Code,
+  enforcementClass: DiagnosticEnforcementClass,
+): RegisteredDiagnosticDefinition & { code: Code };
+export function createRegisteredDiagnosticDefinition(
+  code: DiagnosticCode,
+  enforcementClass: DiagnosticEnforcementClass,
+): RegisteredDiagnosticDefinition {
+  if (!isDiagnosticCode(code)) {
+    throw new TypeError('Diagnostic code must be a registered Kovo diagnostic.');
+  }
+  if (
+    enforcementClass !== 'compile-error' &&
+    enforcementClass !== 'fail-closed-runtime' &&
+    enforcementClass !== 'audited-escape'
+  ) {
+    throw new TypeError('Diagnostic enforcement class must be a normative SPEC §2 posture.');
+  }
+  const definition = diagnosticDefinitions[code];
+  return freezeDiagnosticRegistryValue({
+    ...definition,
+    code,
+    enforcementClass,
+  });
+}
+
+/**
+ * @internal Create a structured diagnostic through the shared validating door.
+ * Code and severity always come from `diagnosticDefinitions`; call sites may add
+ * own-data context and a contextual message, but cannot override registry-owned
+ * fields. This is the runtime half of SPEC §11's generated constructor binding.
+ */
+export function createRegisteredDiagnostic<Code extends DiagnosticCode>(
+  code: Code,
+): RegisteredDiagnostic<Code>;
+export function createRegisteredDiagnostic<Code extends DiagnosticCode, Fields extends object>(
+  code: Code,
+  fields: Fields & ReservedDiagnosticFields,
+  options?: DiagnosticConstructionOptions,
+): RegisteredDiagnostic<Code> & Fields;
+export function createRegisteredDiagnostic<Code extends DiagnosticCode, Fields extends object>(
+  code: Code,
+  fields?: Fields & ReservedDiagnosticFields,
+  options: DiagnosticConstructionOptions = {},
+): RegisteredDiagnostic<Code> & Fields {
+  if (!isDiagnosticCode(code)) {
+    throw new TypeError('Diagnostic code must be a registered Kovo diagnostic.');
+  }
+  if (fields !== undefined && (typeof fields !== 'object' || fields === null)) {
+    throw new TypeError('Diagnostic context fields must be an object.');
+  }
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('Diagnostic construction options must be an object.');
+  }
+
+  const definition = diagnosticDefinitions[code];
+  const detail = ownOptionalDiagnosticConstructionString(options, 'detail');
+  const contextualHelp = ownOptionalDiagnosticConstructionString(options, 'help');
+  const contextualMessage = ownOptionalDiagnosticConstructionString(options, 'message');
+  const includeHelp = ownOptionalDiagnosticConstructionBoolean(options, 'includeHelp') ?? false;
+  if (detail !== undefined && contextualMessage !== undefined) {
+    throw new TypeError('Diagnostic construction accepts detail or message, not both.');
+  }
+  const message =
+    contextualMessage ??
+    (detail === undefined ? definition.message : `${definition.message} ${detail}`);
+  if (message.length === 0) {
+    throw new TypeError('Diagnostic message must be non-empty.');
+  }
+
+  const diagnostic: RegisteredDiagnostic<Code> & Record<string, unknown> = {
+    code,
+    message,
+    severity: definition.severity,
+  };
+  if (contextualHelp !== undefined && contextualHelp.length === 0) {
+    throw new TypeError('Diagnostic help must be non-empty.');
+  }
+  if (includeHelp || contextualHelp !== undefined) {
+    const help = securityGetOwnPropertyDescriptor(definition, 'help');
+    const helpValue =
+      contextualHelp ??
+      (help !== undefined && 'value' in help && typeof help.value === 'string'
+        ? help.value
+        : undefined);
+    if (helpValue !== undefined) {
+      securityDefineProperty(diagnostic, 'help', {
+        configurable: true,
+        enumerable: true,
+        value: helpValue,
+        writable: true,
+      });
+    }
+  }
+
+  if (fields !== undefined) {
+    const keys = securityObjectKeys(fields);
+    for (let index = 0; index < keys.length; index += 1) {
+      const entry = securityOwnArrayEntry(keys, index);
+      if (!entry.ok) throw new TypeError('Diagnostic context keys must be dense.');
+      const key = entry.value;
+      if (key === 'code' || key === 'help' || key === 'message' || key === 'severity') {
+        throw new TypeError(`Diagnostic context cannot override registry-owned field ${key}.`);
+      }
+      const descriptor = securityGetOwnPropertyDescriptor(fields, key);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('Diagnostic context must use own data properties.');
+      }
+      securityDefineProperty(diagnostic, key, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true,
+      });
+    }
+  }
+
+  // The overload is backed by the reserved-field runtime checks above; the cast
+  // only retains the caller's already-validated own-data field types.
+  return diagnostic as RegisteredDiagnostic<Code> & Fields;
+}
+
+/** @internal Create one generated, code-specific diagnostic constructor. */
+export function createDiagnosticConstructor<Code extends DiagnosticCode>(
+  code: Code,
+): DiagnosticConstructor<Code> {
+  if (!isDiagnosticCode(code)) {
+    throw new TypeError('Diagnostic constructor code must be registered.');
+  }
+  return ((fields?: object, options?: DiagnosticConstructionOptions) =>
+    fields === undefined
+      ? createRegisteredDiagnostic(code)
+      : createRegisteredDiagnostic(code, fields, options)) as DiagnosticConstructor<Code>;
+}
+
+/** @internal Freeze a generated registry or constructor map after exact-key construction. */
+export function freezeGeneratedDiagnosticMap<Value extends object>(value: Value): Value {
+  return freezeDiagnosticRegistryValue(value);
+}
+
+function ownOptionalDiagnosticConstructionString(
+  options: DiagnosticConstructionOptions,
+  key: 'detail' | 'help' | 'message',
+): string | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(options, key);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor) || typeof descriptor.value !== 'string') {
+    throw new TypeError(
+      `Diagnostic construction option ${key} must be an own string data property.`,
+    );
+  }
+  return descriptor.value;
+}
+
+function ownOptionalDiagnosticConstructionBoolean(
+  options: DiagnosticConstructionOptions,
+  key: 'includeHelp',
+): boolean | undefined {
+  const descriptor = securityGetOwnPropertyDescriptor(options, key);
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor) || typeof descriptor.value !== 'boolean') {
+    throw new TypeError(
+      `Diagnostic construction option ${key} must be an own boolean data property.`,
+    );
+  }
+  return descriptor.value;
+}
 
 freezeDiagnosticRegistryValue(compilerDiagnosticTeachingSchemas);
 freezeDiagnosticRegistryValue(diagnosticDefinitions);

@@ -35,6 +35,7 @@ describe('server static export diagnostic boundary', () => {
           'Fixes: move the value into component/query state via ctx.',
         ].join('\n'),
         routePath: 'src/cart.tsx',
+        severity: 'error',
       },
     ]);
   });

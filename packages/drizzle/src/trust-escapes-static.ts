@@ -24,6 +24,7 @@ import type {
   TrustEscapeExplain,
   UnregisteredSinkFact,
 } from '@kovojs/core/internal/graph';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   securityOperationDoorForKind,
   serverSecurityOperationKinds,
@@ -38982,13 +38983,14 @@ function runtimeRevealAuditDiagnostic(
   file: TrustEscapeSourceFileInput,
   call: import('ts-morph').CallExpression,
 ): StaticDiagnosticFact {
-  return {
-    code: 'KV426',
-    message:
-      'Trust escape hatch lacks auditable provenance. trustedReveal(...) must use exactly two arguments and an inline object literal with a non-empty literal justification plus optional literal method/source fields; dynamic options cannot be recorded by kovo explain --revealed (SPEC §6.6).',
-    severity: 'error',
-    site: siteFor(file, call),
-  };
+  return createRegisteredDiagnostic(
+    'KV426',
+    { site: siteFor(file, call) },
+    {
+      detail:
+        'trustedReveal(...) must use exactly two arguments and an inline object literal with a non-empty literal justification plus optional literal method/source fields; dynamic options cannot be recorded by kovo explain --revealed (SPEC §6.6).',
+    },
+  );
 }
 
 function runtimeRevealCallIdentity(

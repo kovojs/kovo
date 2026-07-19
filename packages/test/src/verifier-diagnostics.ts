@@ -1,5 +1,5 @@
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 import {
@@ -73,14 +73,13 @@ export function diagnosticsForObservations(
     if (touch === undefined) continue;
     verifierArrayPush(
       diagnostics,
-      verifierFreeze({
-        branch: touch.branch,
-        code: 'KV405' as const,
-        domain: touch.domain,
-        message: diagnosticDefinitions.KV405.message,
-        severity: diagnosticDefinitions.KV405.severity,
-        site: touch.site,
-      }),
+      verifierFreeze(
+        createRegisteredDiagnostic('KV405', {
+          branch: touch.branch,
+          domain: touch.domain,
+          site: touch.site,
+        }),
+      ),
     );
   }
   const declaredDomains = verifierSetValues(declaredWrites);
@@ -88,15 +87,7 @@ export function diagnosticsForObservations(
   for (let index = 0; index < declaredDomains.length; index += 1) {
     const domain = declaredDomains[index];
     if (domain === undefined || verifierSetHas(observedWrites, domain)) continue;
-    verifierArrayPush(
-      diagnostics,
-      verifierFreeze({
-        code: 'KV403' as const,
-        domain,
-        message: diagnosticDefinitions.KV403.message,
-        severity: diagnosticDefinitions.KV403.severity,
-      }),
-    );
+    verifierArrayPush(diagnostics, verifierFreeze(createRegisteredDiagnostic('KV403', { domain })));
   }
   return diagnostics;
 }
@@ -188,7 +179,8 @@ export function assertObservedReadsCovered(
 
 /** @internal Format a `KVxxx` diagnostic code and detail into a verification error message. */
 export function diagnosticMessage(code: DiagnosticCode, detail: string): string {
-  return `${code} ${trimDiagnosticSentence(diagnosticDefinitions[code].message)}: ${detail}`;
+  const diagnostic = createRegisteredDiagnostic(code);
+  return `${diagnostic.code} ${trimDiagnosticSentence(diagnostic.message)}: ${detail}`;
 }
 
 function assertKeyedWritesObserved(

@@ -10,6 +10,7 @@ import type {
 } from '@kovojs/core';
 import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
   assertHtmlElementWireValueStable,
@@ -1001,19 +1002,21 @@ function runtimeElementSinkEvent(
   value: string,
   reason: string,
 ): RuntimeSinkSecurityEvent {
-  return {
-    action: 'remove',
-    code: 'KV236',
-    family,
-    message: `KV236 runtime remove for ${family} sink "${sink}": ${reason}`,
-    reason,
-    sink,
-    value: {
-      length: value.length,
-      preview: `<redacted:${value.length}>`,
-      redacted: true,
+  return createRegisteredDiagnostic(
+    'KV236',
+    {
+      action: 'remove' as const,
+      family,
+      reason,
+      sink,
+      value: {
+        length: value.length,
+        preview: `<redacted:${value.length}>`,
+        redacted: true as const,
+      },
     },
-  };
+    { message: `KV236 runtime remove for ${family} sink "${sink}": ${reason}` },
+  );
 }
 
 function attributeText(name: string, value: unknown): string {

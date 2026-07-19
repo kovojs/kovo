@@ -3935,12 +3935,14 @@ function authzCensusDiagnosticsFromTables(
       classifications.length === 0
         ? 'is request-reachable but has no authorization classification'
         : `has multiple authorization classifications (${classifications.join(', ')})`;
-    diagnostics.set(name, {
-      code: 'KV414',
-      message: `${diagnosticDefinitions.KV414.message} Authorization census table ${name} ${reason}; declare exactly one of owned/ownedVia/authzPolicy/public/reference.`,
-      severity: diagnosticDefinitions.KV414.severity,
-      site,
-    });
+    diagnostics.set(
+      name,
+      drizzleDiagnostic({
+        code: 'KV414',
+        detail: `Authorization census table ${name} ${reason}; declare exactly one of owned/ownedVia/authzPolicy/public/reference.`,
+        site,
+      }),
+    );
   }
   return [...diagnostics.values()].sort((left, right) => left.site.localeCompare(right.site));
 }

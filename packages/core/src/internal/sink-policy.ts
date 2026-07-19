@@ -21,6 +21,7 @@ import {
   securityWeakSetAdd,
   securityWeakSetHas,
 } from '#security-witness-intrinsics';
+import { createRegisteredDiagnostic } from '../diagnostics.js';
 import { isGeneratedOnlySemanticAttribute } from './semantic-attributes.js';
 
 /**
@@ -824,6 +825,7 @@ export interface RuntimeSinkSecurityEvent {
   family: RuntimeSinkFamily;
   message: string;
   reason: string;
+  severity: 'error';
   sink: string;
   value: {
     length: number;
@@ -1315,19 +1317,21 @@ function runtimeSinkSecurityEvent(
   action: Exclude<RuntimeSinkAction, 'allow'>,
   reason: string,
 ): RuntimeSinkSecurityEvent {
-  return {
-    action,
-    code: 'KV236',
-    family,
-    message: `KV236 runtime ${action} for ${family} sink "${sink}": ${reason}`,
-    reason,
-    sink,
-    value: {
-      length: value.length,
-      preview: redactedPreview(value),
-      redacted: true,
+  return createRegisteredDiagnostic(
+    'KV236',
+    {
+      action,
+      family,
+      reason,
+      sink,
+      value: {
+        length: value.length,
+        preview: redactedPreview(value),
+        redacted: true as const,
+      },
     },
-  };
+    { message: `KV236 runtime ${action} for ${family} sink "${sink}": ${reason}` },
+  );
 }
 
 function redactedPreview(value: string): string {

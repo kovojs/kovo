@@ -1,6 +1,9 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls pin KV330 diagnostic policy. */
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
-import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type { DerivationProof } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
@@ -43,28 +46,19 @@ export function diagnosticSeverity(
 
 export function diagnosticsForTouchGraph(graph: CoreGraph.TouchGraph): TouchGraphDiagnosticFact[] {
   return Object.values(graph).flatMap((entry) => [
-    ...entry.unresolved.map((unresolved) => ({
-      code: unresolved.code,
-      message: unresolved.message,
-      severity: diagnosticDefinitions[unresolved.code].severity,
-      site: unresolved.site,
-    })),
+    ...entry.unresolved.map((unresolved) =>
+      createRegisteredDiagnostic(
+        unresolved.code,
+        { site: unresolved.site },
+        { message: unresolved.message },
+      ),
+    ),
     ...entry.touches
       .filter((touch) => touch.predicate === 'non-eq')
-      .map((touch) => ({
-        code: 'KV409' as const,
-        message: diagnosticDefinitions.KV409.message,
-        severity: diagnosticDefinitions.KV409.severity,
-        site: touch.site,
-      })),
+      .map((touch) => createRegisteredDiagnostic('KV409', { site: touch.site })),
     ...(entry.reads ?? [])
       .filter((read) => read.predicate === 'non-eq')
-      .map((read) => ({
-        code: 'KV409' as const,
-        message: diagnosticDefinitions.KV409.message,
-        severity: diagnosticDefinitions.KV409.severity,
-        site: read.site,
-      })),
+      .map((read) => createRegisteredDiagnostic('KV409', { site: read.site })),
   ]);
 }
 
@@ -156,9 +150,11 @@ export function sqlSafetyKv422Line(diagnostic: TouchGraphDiagnosticFact): string
 
 export function unregisteredSinkLine(sink: CoreGraph.UnregisteredSinkFact): string {
   const source = sink.source ? ` source=${sink.source}` : '';
+  const diagnostic = createRegisteredDiagnostic('KV424', {}, { includeHelp: true });
   return [
-    `ERROR KV424 ${sink.site} sink=${sink.sink}${source} safe=${sink.safePath}`,
-    diagnosticDefinitionText('KV424', { includeHelp: true }),
+    `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${sink.site} sink=${sink.sink}${source} safe=${sink.safePath}`,
+    diagnostic.message,
+    diagnostic.help ?? '',
   ].join(' ');
 }
 
@@ -1373,13 +1369,14 @@ export function renderOnceInvalidationConflictLine(
   conflict: RenderOnceInvalidationConflict,
 ): string {
   const { fact, invalidators } = conflict;
+  const diagnostic = createRegisteredDiagnostic('KV314');
   return [
-    'ERROR KV314',
+    `${diagnostic.severity.toUpperCase()} ${diagnostic.code}`,
     `component=${fact.component}`,
     `query=${fact.query}`,
     `position=${JSON.stringify(fact.position)}`,
     `invalidatedBy=${invalidators.join(',')}`,
-    diagnosticDefinitions.KV314.message,
+    diagnostic.message,
   ].join(' ');
 }
 
@@ -1502,8 +1499,9 @@ export function unscopedKv414Line(fact: CoreGraph.ScopeAuditFact): string {
 
 /** The enforced KV438 (mass-assignment) error line for an input-reaching governed column write (SPEC §11.1). */
 export function massAssignmentKv438Line(fact: CoreGraph.MassAssignmentFact): string {
+  const diagnostic = createRegisteredDiagnostic('KV438');
   return [
-    'ERROR KV438',
+    `${diagnostic.severity.toUpperCase()} ${diagnostic.code}`,
     'WRITE',
     fact.name,
     `domain=${fact.domain}`,
@@ -1511,7 +1509,7 @@ export function massAssignmentKv438Line(fact: CoreGraph.MassAssignmentFact): str
     `via=${fact.via}`,
     `provenance=${fact.provenance}`,
     `site=${fact.site}`,
-    diagnosticDefinitions.KV438.message,
+    diagnostic.message,
     fact.detail ? `value=${fact.detail}` : '',
   ]
     .filter(Boolean)
@@ -1576,14 +1574,15 @@ export function queryWriteReachabilityExplainLine(
 export function queryWriteReachabilityKv433Line(
   fact: CoreGraph.QueryWriteReachabilityFact,
 ): string {
+  const diagnostic = createRegisteredDiagnostic('KV433');
   return [
-    'ERROR KV433',
+    `${diagnostic.severity.toUpperCase()} ${diagnostic.code}`,
     'QUERY',
     fact.query,
     `operation=${fact.operationKind ?? fact.operation}`,
     `table=${fact.canonicalTarget?.identity ?? fact.table}`,
     `site=${fact.site}`,
-    diagnosticDefinitions.KV433.message,
+    diagnostic.message,
   ].join(' ');
 }
 

@@ -1,5 +1,5 @@
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { generatedOffsetToOriginal, type SourceOffsetMap } from './shared.js';
 
@@ -60,21 +60,19 @@ export function diagnosticFor(
   offset?: number,
   length?: number,
 ): CompilerDiagnostic {
-  const definition = diagnosticDefinitions[code];
-  const help = 'help' in definition ? definition.help : undefined;
-  return {
+  return createRegisteredDiagnostic(
     code,
-    fileName,
-    ...(help === undefined ? {} : { help }),
-    ...(source !== undefined && offset !== undefined
-      ? {
-          ...(length === undefined ? {} : { length }),
-          start: offsetToPosition(source, offset),
-        }
-      : {}),
-    message: definition.message,
-    severity: definition.severity,
-  };
+    {
+      fileName,
+      ...(source !== undefined && offset !== undefined
+        ? {
+            ...(length === undefined ? {} : { length }),
+            start: offsetToPosition(source, offset),
+          }
+        : {}),
+    },
+    { includeHelp: true },
+  );
 }
 
 /**
@@ -93,26 +91,23 @@ export function createDiagnosticFactory(
   return {
     fileName,
     at(code, span, detail) {
-      const definition = diagnosticDefinitions[code];
-      const help = 'help' in definition ? definition.help : undefined;
       const rawStart = span?.start;
       const offset =
         offsetMap === undefined ? rawStart : generatedOffsetToOriginal(offsetMap, rawStart);
       const length = span?.length;
-      const message = detail === undefined ? definition.message : `${definition.message} ${detail}`;
-      return {
+      return createRegisteredDiagnostic(
         code,
-        fileName,
-        ...(help === undefined ? {} : { help }),
-        ...(offset !== undefined
-          ? {
-              ...(length === undefined ? {} : { length }),
-              start: positionFor(offset),
-            }
-          : {}),
-        message,
-        severity: definition.severity,
-      };
+        {
+          fileName,
+          ...(offset !== undefined
+            ? {
+                ...(length === undefined ? {} : { length }),
+                start: positionFor(offset),
+              }
+            : {}),
+        },
+        { ...(detail === undefined ? {} : { detail }), includeHelp: true },
+      );
     },
   };
 }

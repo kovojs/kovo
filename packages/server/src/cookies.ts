@@ -1,4 +1,7 @@
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 import { snapshotAuditJustification } from './audit-justification.js';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
@@ -327,10 +330,12 @@ export function drainCookieDowngradeFacts(): readonly CookieDowngradeFact[] {
  * the by-construction enforcement: an insecure credential cookie cannot be expressed by default.
  */
 export class CookieDowngradeError extends Error {
-  readonly code = 'KV432' as const;
+  readonly code: 'KV432';
 
   constructor(message: string) {
-    super(`KV432 ${message}`);
+    const diagnostic = createRegisteredDiagnostic('KV432', {}, { message });
+    super(`${diagnostic.code} ${diagnostic.message}`);
+    this.code = diagnostic.code;
     this.name = 'CookieDowngradeError';
   }
 }

@@ -15,6 +15,7 @@ import {
   securityWeakMapGet,
   securityWeakMapSet,
 } from '#security-witness-intrinsics';
+import { createRegisteredDiagnostic } from '../diagnostics.js';
 
 /**
  * @internal Shared route pattern parser, normalizer, matcher, and href builder.
@@ -246,12 +247,16 @@ export function findRouteAmbiguities(routes: readonly RouteLike[]): readonly Rou
       const witnessPath = routeAmbiguityWitness(left, right);
       if (!witnessPath) continue;
 
-      securityArrayAppend(ambiguities, {
-        code: 'KV228',
-        message: `Ambiguous route table: '${left.path}' and '${right.path}' can both match canonical request path '${witnessPath}'.`,
-        paths: [left.path, right.path],
-        witnessPath,
-      });
+      securityArrayAppend(
+        ambiguities,
+        createRegisteredDiagnostic(
+          'KV228',
+          { paths: [left.path, right.path] as const, witnessPath },
+          {
+            message: `Ambiguous route table: '${left.path}' and '${right.path}' can both match canonical request path '${witnessPath}'.`,
+          },
+        ),
+      );
     }
   }
 

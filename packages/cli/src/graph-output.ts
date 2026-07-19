@@ -1,5 +1,8 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import { diagnosticDefinitionText } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitionText,
+} from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
@@ -940,9 +943,9 @@ export function kovoCheck(
       // session auth safe, so a session-dependent endpoint that opts out of it is a contradiction.
       // A signature/verifier-authed webhook (auth:'verifier:*') is the legitimate exempt pattern.
       if (endpoint.csrf === 'exempt' && endpointReferencesSessionAuthority(graph, endpoint)) {
-        const message = diagnosticDefinitionText('KV418', { includeHelp: true });
+        const diagnostic = createRegisteredDiagnostic('KV418', {}, { includeHelp: true });
         pushFinding(
-          `ERROR KV418 ENDPOINT ${endpointName(endpoint)} csrf-exempt endpoint runs a session-derived guard. ${message}`,
+          `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ENDPOINT ${endpointName(endpoint)} csrf-exempt endpoint runs a session-derived guard. ${diagnostic.message} ${diagnostic.help ?? ''}`,
           true,
         );
       }
@@ -960,9 +963,9 @@ export function kovoCheck(
       // with no ambient session (cookies uninterpreted). Truly non-browser writes belong in
       // endpoint()/webhook(). Fails closed — any session-authority signal raises KV418.
       if (mutation.csrf === 'exempt' && mutationReferencesSessionAuthority(graph, mutation)) {
-        const message = diagnosticDefinitionText('KV418', { includeHelp: true });
+        const diagnostic = createRegisteredDiagnostic('KV418', {}, { includeHelp: true });
         pushFinding(
-          `ERROR KV418 MUTATION ${mutation.key} csrf-exempt mutation references ambient session authority. ${message}`,
+          `${diagnostic.severity.toUpperCase()} ${diagnostic.code} MUTATION ${mutation.key} csrf-exempt mutation references ambient session authority. ${diagnostic.message} ${diagnostic.help ?? ''}`,
           true,
         );
       }

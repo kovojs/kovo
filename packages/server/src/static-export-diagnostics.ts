@@ -1,5 +1,9 @@
-import type { DiagnosticCode } from '@kovojs/core';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+  isDiagnosticCode,
+} from '@kovojs/core/internal/diagnostics';
 import { snapshotBuildArray } from './build-security-intrinsics.js';
 import { witnessArrayAppend } from './security-witness-intrinsics.js';
 
@@ -19,6 +23,7 @@ export interface StaticExportDiagnostic {
   concretePath?: string;
   message: string;
   routePath: string;
+  severity: DiagnosticSeverity;
 }
 
 /** Severity label used when formatting static-export diagnostics. */
@@ -61,8 +66,8 @@ export function staticExportDiagnostic(
   concretePath?: string,
 ): StaticExportDiagnostic {
   return concretePath === undefined
-    ? { code: 'KV229', message, routePath }
-    : { code: 'KV229', concretePath, message, routePath };
+    ? createRegisteredDiagnostic('KV229', { routePath }, { message })
+    : createRegisteredDiagnostic('KV229', { concretePath, routePath }, { message });
 }
 
 /**
@@ -70,12 +75,14 @@ export function staticExportDiagnostic(
  */
 export function isStaticExportDiagnostic(value: unknown): value is StaticExportDiagnostic {
   const concretePath = (value as StaticExportDiagnostic | null)?.concretePath;
+  const code = (value as StaticExportDiagnostic | null)?.code;
   return (
     typeof value === 'object' &&
     value !== null &&
-    typeof (value as StaticExportDiagnostic).code === 'string' &&
+    isDiagnosticCode(code) &&
     typeof (value as StaticExportDiagnostic).message === 'string' &&
     typeof (value as StaticExportDiagnostic).routePath === 'string' &&
+    (value as StaticExportDiagnostic).severity === diagnosticDefinitions[code].severity &&
     (concretePath === undefined || typeof concretePath === 'string')
   );
 }
@@ -145,11 +152,11 @@ export function blockingStaticExportDiagnostics(
     if (diagnosticDefinitions[diagnostic.code].severity !== 'error') continue;
     witnessArrayAppend(
       blocking,
-      {
-        code: diagnostic.code,
-        message: staticExportCompileDiagnosticMessage(diagnostic),
-        routePath: diagnostic.fileName,
-      },
+      createRegisteredDiagnostic(
+        diagnostic.code,
+        { routePath: diagnostic.fileName },
+        { message: staticExportCompileDiagnosticMessage(diagnostic) },
+      ),
       'Server packages/server/src/static-export-diagnostics.ts collection',
     );
   }

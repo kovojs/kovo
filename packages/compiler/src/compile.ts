@@ -5,7 +5,7 @@ import {
   encodeRenderPlanFrame,
   type RenderPlanFingerprintInput,
 } from '@kovojs/core/internal/render-plan-token';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   callExpressionAtSpan,
   expressionResolvesToFrameworkExport,
@@ -1891,14 +1891,11 @@ function productionRenderPlanGateDiagnostics(
 }
 
 function kv416Diagnostic(reason: string, detail: string, fileName = '<production-build>') {
-  const definition = diagnosticDefinitions.KV416;
-  return {
-    code: 'KV416' as const,
-    fileName,
-    help: definition.help,
-    message: `${definition.message} ${reason}. ${detail}`,
-    severity: definition.severity,
-  };
+  return createRegisteredDiagnostic(
+    'KV416',
+    { fileName },
+    { detail: `${reason}. ${detail}`, includeHelp: true },
+  );
 }
 
 function renderPlanFingerprintInputForOptions(

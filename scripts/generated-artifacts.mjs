@@ -9,6 +9,7 @@ export const GENERATED_ARTIFACT_CATEGORIES = Object.freeze({
 });
 
 export const GENERATED_ARTIFACT_GENERATORS = Object.freeze({
+  diagnosticRegistry: 'diagnostic-registry',
   frameworkExportPosture: 'framework-export-posture',
   icons: 'icons',
   uiRegistry: 'ui-registry',
@@ -68,6 +69,19 @@ export const generatedArtifactInventory = Object.freeze([
       /^packages\/compiler\/src\/security\/framework-public-runtime-export-posture\.generated\.ts$/,
     ]),
     spec: 'SPEC.md §6.6 first-party least-authority package posture',
+  },
+  {
+    id: 'diagnostic-registry-generated-source',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.diagnosticRegistry,
+    generatorCheckCommand: Object.freeze(['node', 'scripts/generate-diagnostic-registry.mjs']),
+    pathPatterns: Object.freeze([
+      /^packages\/core\/src\/internal\/diagnostic-registry\.generated\.ts$/,
+    ]),
+    spec: 'SPEC.md §2/§11 diagnostic registry and enforcement classes',
   },
   {
     id: 'icon-generated-components',

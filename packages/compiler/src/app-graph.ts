@@ -1,6 +1,9 @@
 import { dirname, join } from 'node:path';
 
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import {
   deriveAccessExplainFacts,
   deriveAuthPostureFacts,
@@ -912,13 +915,14 @@ export function routeFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnos
     if (count < 2) continue;
     compilerArrayAppend(
       diagnostics,
-      {
-        code: 'KV228',
-        fileName: 'app graph route table',
-        help: diagnosticDefinitions.KV228.help,
-        message: `${diagnosticDefinitions.KV228.message} duplicate route path "${route}" appears ${count} times in graph pages.`,
-        severity: diagnosticDefinitions.KV228.severity,
-      },
+      createRegisteredDiagnostic(
+        'KV228',
+        { fileName: 'app graph route table' },
+        {
+          detail: `duplicate route path "${route}" appears ${count} times in graph pages.`,
+          includeHelp: true,
+        },
+      ),
       'Compiler packages/compiler/src/app-graph.ts collection',
     );
   }
@@ -952,13 +956,14 @@ export function mutationFactDiagnostics(graph: RegistryGraphInput): CompilerDiag
     if (count < 2) continue;
     compilerArrayAppend(
       diagnostics,
-      {
-        code: 'KV421',
-        fileName: 'app graph mutation table',
-        help: diagnosticDefinitions.KV421.help,
-        message: `${diagnosticDefinitions.KV421.message} mutation key "${key}" appears ${count} times in graph mutations.`,
-        severity: diagnosticDefinitions.KV421.severity,
-      },
+      createRegisteredDiagnostic(
+        'KV421',
+        { fileName: 'app graph mutation table' },
+        {
+          detail: `mutation key "${key}" appears ${count} times in graph mutations.`,
+          includeHelp: true,
+        },
+      ),
       'Compiler packages/compiler/src/app-graph.ts collection',
     );
   }
@@ -994,21 +999,22 @@ export function queryReadSetFactDiagnostics(graph: RegistryGraphInput): Compiler
     if (count < 2) continue;
     compilerArrayAppend(
       diagnostics,
-      {
-        code: 'KV240',
-        fileName: 'app graph query table',
-        help: joinStrings(
-          [
-            'Would lower to: one query read-set fact per source-derived query key for the generated query registry, /_q dispatch, kovo-query hydration, kovo-deps, and mutation invalidation graph.',
-            'Blocked reason: two query declarations share one key, so graph indexing can silently collapse read sets and generated wire artifacts before the server read endpoint sees the ambiguity.',
-            'Fixes: emit exactly one query fact per query key, or rename/move one exported query so its source-derived key is unique across the app graph.',
-            'SPEC §4.1 derives query registry identities from source, §10.2 makes each query key a typed read surface, and §10.3 relies on those stable query identities when mutations compute invalidated reads.',
-          ],
-          '\n',
-        ),
-        message: `Duplicate query key. query key "${query}" appears ${count} times in graph queries.`,
-        severity: diagnosticDefinitions.KV240.severity,
-      },
+      createRegisteredDiagnostic(
+        'KV240',
+        { fileName: 'app graph query table' },
+        {
+          help: joinStrings(
+            [
+              'Would lower to: one query read-set fact per source-derived query key for the generated query registry, /_q dispatch, kovo-query hydration, kovo-deps, and mutation invalidation graph.',
+              'Blocked reason: two query declarations share one key, so graph indexing can silently collapse read sets and generated wire artifacts before the server read endpoint sees the ambiguity.',
+              'Fixes: emit exactly one query fact per query key, or rename/move one exported query so its source-derived key is unique across the app graph.',
+              'SPEC §4.1 derives query registry identities from source, §10.2 makes each query key a typed read surface, and §10.3 relies on those stable query identities when mutations compute invalidated reads.',
+            ],
+            '\n',
+          ),
+          message: `Duplicate query key. query key "${query}" appears ${count} times in graph queries.`,
+        },
+      ),
       'Compiler packages/compiler/src/app-graph.ts collection',
     );
   }
@@ -1090,22 +1096,23 @@ function registryTypeDriftDiagnostic(
 ): CompilerDiagnostic {
   const code = kind === 'mutation' ? 'KV246' : 'KV247';
   const definition = diagnosticDefinitions[code];
-  return {
+  return createRegisteredDiagnostic(
     code,
-    fileName: `app graph ${kind} table`,
-    help: joinStrings(
-      [
-        definition.help,
-        `Previous registry key: ${previousKey}`,
-        `Current registry key: ${currentKey}`,
-        `Registry type: ${typeSource}`,
-        `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
-      ],
-      '\n',
-    ),
-    message: `${definition.message} ${previousKey} -> ${currentKey}.`,
-    severity: definition.severity,
-  };
+    { fileName: `app graph ${kind} table` },
+    {
+      help: joinStrings(
+        [
+          definition.help,
+          `Previous registry key: ${previousKey}`,
+          `Current registry key: ${currentKey}`,
+          `Registry type: ${typeSource}`,
+          `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
+        ],
+        '\n',
+      ),
+      message: `${definition.message} ${previousKey} -> ${currentKey}.`,
+    },
+  );
 }
 
 function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {

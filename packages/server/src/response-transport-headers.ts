@@ -1,4 +1,7 @@
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 
 /** @internal Exact app-forbidden response names owned by HTTP transport adapters. */
 export type TransportOwnedResponseHeaderName =
@@ -93,10 +96,12 @@ export function createTransportResponseHeaderClassifier(
 
 /** KV415 runtime error for a response-header channel that cannot safely reach an adapter. */
 export class ResponseHeaderChannelError extends Error {
-  readonly code = 'KV415' as const;
+  readonly code: 'KV415';
 
   constructor(message: string) {
-    super(`KV415 ${message}`);
+    const diagnostic = createRegisteredDiagnostic('KV415', {}, { message });
+    super(`${diagnostic.code} ${diagnostic.message}`);
+    this.code = diagnostic.code;
     this.name = 'ResponseHeaderChannelError';
   }
 }

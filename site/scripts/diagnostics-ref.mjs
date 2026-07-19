@@ -284,15 +284,26 @@ function renderPage(definitions) {
 export async function generateDiagnosticsReference({
   outDir = path.join(siteRoot, 'gen/reference'),
 } = {}) {
-  const definitions = await loadDiagnosticDefinitions();
+  const { codes, page } = await checkDiagnosticsRegistryEquality();
   await mkdir(outDir, { recursive: true });
-  const page = renderPage(definitions);
-  await assertCatalogCoversFrameworkCodes(definitions, page);
   await writeFile(path.join(outDir, 'diagnostics.md'), page, 'utf8');
 
+  process.stdout.write(`diagnostics-ref/v1 codes=${codes}\n`);
+  return { codes };
+}
+
+/**
+ * Root-checkable, write-free equality proof for the normative SPEC registry, core definitions,
+ * package KV references, and the generated diagnostics reference page. Keeping this separate from
+ * site generation promotes registry drift detection into `pnpm run check` (SPEC §11).
+ */
+export async function checkDiagnosticsRegistryEquality() {
+  const definitions = await loadDiagnosticDefinitions();
+  const page = renderPage(definitions);
+  await assertCatalogCoversFrameworkCodes(definitions, page);
+
   const count = Object.keys(definitions).length;
-  process.stdout.write(`diagnostics-ref/v1 codes=${count}\n`);
-  return { codes: count };
+  return { codes: count, page };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

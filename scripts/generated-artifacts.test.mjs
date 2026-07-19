@@ -36,6 +36,10 @@ describe('generated-artifacts policy manifest', () => {
         categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
       },
       {
+        path: 'packages/core/src/internal/diagnostic-registry.generated.ts',
+        categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
+      },
+      {
         path: 'packages/icons/src/arrow-right.tsx',
         categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
       },
@@ -96,6 +100,15 @@ describe('generated-artifacts policy manifest', () => {
   });
 
   it('routes committed generated framework artifacts to their generator checks', () => {
+    expect(
+      generatedArtifactPoliciesForGenerator(GENERATED_ARTIFACT_GENERATORS.diagnosticRegistry).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(['diagnostic-registry-generated-source']);
+    expect(
+      generatedArtifactGeneratorCheckCommand(GENERATED_ARTIFACT_GENERATORS.diagnosticRegistry),
+    ).toEqual(['node', 'scripts/generate-diagnostic-registry.mjs']);
+
     expect(
       generatedArtifactPoliciesForGenerator(
         GENERATED_ARTIFACT_GENERATORS.frameworkExportPosture,

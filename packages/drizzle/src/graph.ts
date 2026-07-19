@@ -1,5 +1,8 @@
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import type {
   QueryProjectedColumn,
   QueryReadScopeProvenance,
@@ -223,29 +226,32 @@ function serializeProjectedColumn(column: QueryProjectedColumn): string {
 /** @internal */
 export function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnostic[] {
   return Object.values(graph).flatMap((entry) => [
-    ...entry.unresolved.map((unresolved) => ({
-      code: unresolved.code,
-      message: unresolved.message,
-      severity: diagnosticDefinitions[unresolved.code].severity,
-      site: unresolved.site,
-    })),
+    ...entry.unresolved.map(unresolvedTouchGraphDiagnostic),
     ...entry.touches
       .filter((touch) => touch.predicate === 'non-eq')
-      .map((touch) => ({
-        code: 'KV409' as const,
-        message: diagnosticDefinitions.KV409.message,
-        severity: diagnosticDefinitions.KV409.severity,
-        site: touch.site,
-      })),
+      .map((touch) => createRegisteredDiagnostic('KV409', { site: touch.site })),
     ...(entry.reads ?? [])
       .filter((read) => read.predicate === 'non-eq')
-      .map((read) => ({
-        code: 'KV409' as const,
-        message: diagnosticDefinitions.KV409.message,
-        severity: diagnosticDefinitions.KV409.severity,
-        site: read.site,
-      })),
+      .map((read) => createRegisteredDiagnostic('KV409', { site: read.site })),
   ]);
+}
+
+function unresolvedTouchGraphDiagnostic(
+  unresolved: TouchGraphEntry['unresolved'][number],
+): TouchGraphDiagnostic {
+  const fields = { site: unresolved.site };
+  const options = { message: unresolved.message };
+  // SPEC §11.1: keep the finite unresolved-summary lattice code-specific. Besides making an
+  // unrecognized value impossible to emit, these cases bind every producer-owned error to the
+  // generated registry door for the SPEC↔implementation conformance census.
+  switch (unresolved.code) {
+    case 'KV404':
+      return createRegisteredDiagnostic('KV404', fields, options);
+    case 'KV406':
+      return createRegisteredDiagnostic('KV406', fields, options);
+    case 'KV413':
+      return createRegisteredDiagnostic('KV413', fields, options);
+  }
 }
 
 function compareTouchSites(left: TouchSite, right: TouchSite): number {

@@ -1,4 +1,5 @@
 import type { ScopedKey, StorageReadCapability } from '@kovojs/core';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import {
   createBoundedRuntimeAuditCollector,
@@ -884,19 +885,23 @@ export const redirectLocationHeaderValue = wireEmitter(
     const text = securityArrayIsArray(value)
       ? securityArrayJoin(snapshotStringArray(value), ', ')
       : securityString(value);
-    drainRuntimeSinkSecurityEvent({
-      action: 'neutralize',
-      code: 'KV236',
-      family: 'header',
-      message: 'Blocked unblessed redirect Location header at the server response boundary',
-      reason: '3xx Location headers must be minted by the framework redirect-location sink',
-      sink: 'Location',
-      value: {
-        length: text.length,
-        preview: securityStringSlice(text, 0, 80),
-        redacted: true,
-      },
-    });
+    drainRuntimeSinkSecurityEvent(
+      createRegisteredDiagnostic(
+        'KV236',
+        {
+          action: 'neutralize' as const,
+          family: 'header' as const,
+          reason: '3xx Location headers must be minted by the framework redirect-location sink',
+          sink: 'Location',
+          value: {
+            length: text.length,
+            preview: securityStringSlice(text, 0, 80),
+            redacted: true as const,
+          },
+        },
+        { message: 'Blocked unblessed redirect Location header at the server response boundary' },
+      ),
+    );
     return '/';
   },
 );

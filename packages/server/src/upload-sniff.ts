@@ -1,3 +1,4 @@
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
 import { snapshotAuditJustification } from './audit-justification.js';
@@ -414,10 +415,12 @@ export function drainUnverifiedMimeFacts(): readonly UnverifiedMimeFact[] {
  * inline rather than rendering attacker-controlled active content same-origin.
  */
 export class InlineUnverifiedUploadError extends Error {
-  readonly code = 'KV428' as const;
+  readonly code: 'KV428';
 
   constructor(message: string) {
-    super(`KV428 ${message}`);
+    const diagnostic = createRegisteredDiagnostic('KV428', {}, { message });
+    super(`${diagnostic.code} ${diagnostic.message}`);
+    this.code = diagnostic.code;
     this.name = 'InlineUnverifiedUploadError';
   }
 }

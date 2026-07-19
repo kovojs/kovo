@@ -1,5 +1,5 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import { scanCapabilityClosureModules } from '../scan/capability-closure.js';
@@ -1104,15 +1104,17 @@ function capabilityDiagnostic(
   path: readonly string[],
 ): CompilerDiagnostic {
   const parsedSite = parseSite(site);
-  const definition = diagnosticDefinitions.KV448;
-  return {
-    code: 'KV448',
-    fileName: parsedSite.fileName,
-    help: definition.help,
-    message: `${definition.message} root=${root.kind}:${root.name}; reason=${reason}; provenance=${path.join(' -> ')}`,
-    severity: 'error',
-    start: { column: parsedSite.column, line: parsedSite.line },
-  };
+  return createRegisteredDiagnostic(
+    'KV448',
+    {
+      fileName: parsedSite.fileName,
+      start: { column: parsedSite.column, line: parsedSite.line },
+    },
+    {
+      detail: `root=${root.kind}:${root.name}; reason=${reason}; provenance=${path.join(' -> ')}`,
+      includeHelp: true,
+    },
+  );
 }
 
 function rootFact(root: CapabilityRoot): CoreGraph.CapabilityClosureExplainFact {

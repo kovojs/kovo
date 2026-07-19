@@ -1,5 +1,8 @@
 import type { DiagnosticCode } from '@kovojs/core';
-import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitionText,
+} from '@kovojs/core/internal/diagnostics';
 import type { Node } from 'ts-morph';
 import type { TouchGraphDiagnostic } from '../graph.js';
 
@@ -23,21 +26,23 @@ const NO_DIAGNOSTIC_SITE = '';
 
 /** @internal */
 export function drizzleDiagnostic(input: DrizzleDiagnosticInput): TouchGraphDiagnostic {
-  const definition = diagnosticDefinitions[input.code];
   const message = input.preferHelp
     ? diagnosticDefinitionText(input.code, { preferHelp: true })
-    : definition.message;
+    : undefined;
   const site =
     'node' in input && input.node !== undefined
       ? sourceSiteForNode(input.node)
       : nonEmptyDiagnosticSite(input.site);
 
-  return {
-    code: input.code,
-    message: input.detail ? `${message} ${input.detail}` : message,
-    severity: definition.severity,
-    site,
-  };
+  return createRegisteredDiagnostic(
+    input.code,
+    { site },
+    message === undefined
+      ? input.detail === undefined
+        ? undefined
+        : { detail: input.detail }
+      : { message: input.detail ? `${message} ${input.detail}` : message },
+  );
 }
 
 /** @internal */
@@ -46,17 +51,19 @@ export function drizzleDiagnosticWithoutSite(input: {
   detail?: string;
   preferHelp?: boolean;
 }): TouchGraphDiagnostic {
-  const definition = diagnosticDefinitions[input.code];
   const message = input.preferHelp
     ? diagnosticDefinitionText(input.code, { preferHelp: true })
-    : definition.message;
+    : undefined;
 
-  return {
-    code: input.code,
-    message: input.detail ? `${message} ${input.detail}` : message,
-    severity: definition.severity,
-    site: NO_DIAGNOSTIC_SITE,
-  };
+  return createRegisteredDiagnostic(
+    input.code,
+    { site: NO_DIAGNOSTIC_SITE },
+    message === undefined
+      ? input.detail === undefined
+        ? undefined
+        : { detail: input.detail }
+      : { message: input.detail ? `${message} ${input.detail}` : message },
+  );
 }
 
 /** @internal */
