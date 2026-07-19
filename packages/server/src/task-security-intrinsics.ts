@@ -48,6 +48,8 @@ import {
  */
 
 const NativeArray = globalThis.Array;
+const NativeAbortController = globalThis.AbortController;
+const NativeAbortSignal = globalThis.AbortSignal;
 const NativeDate = globalThis.Date;
 const NativeError = globalThis.Error;
 const NativeFunction = globalThis.Function;
@@ -66,6 +68,18 @@ const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayReverse = NativeArray.prototype.reverse;
 const nativeArraySlice = NativeArray.prototype.slice;
 const nativeArraySort = NativeArray.prototype.sort;
+const nativeAbortControllerAbort = witnessGetOwnPropertyDescriptor(
+  NativeAbortController.prototype,
+  'abort',
+)?.value;
+const nativeAbortControllerSignal = witnessGetOwnPropertyDescriptor(
+  NativeAbortController.prototype,
+  'signal',
+)?.get;
+const nativeAbortSignalAborted = witnessGetOwnPropertyDescriptor(
+  NativeAbortSignal.prototype,
+  'aborted',
+)?.get;
 const nativeDateGetTime = NativeDate.prototype.getTime;
 const nativeDateGetUTCDate = NativeDate.prototype.getUTCDate;
 const nativeDateGetUTCDay = NativeDate.prototype.getUTCDay;
@@ -184,6 +198,18 @@ function commitTaskArrayValue<Value>(values: Value[], value: Value, label: strin
 function capturedTaskControlsAreSound(): boolean {
   try {
     assertSecurityWitnessIntrinsics();
+    if (
+      typeof nativeAbortControllerAbort !== 'function' ||
+      typeof nativeAbortControllerSignal !== 'function' ||
+      typeof nativeAbortSignalAborted !== 'function'
+    ) {
+      return false;
+    }
+    const abortControl = new NativeAbortController();
+    const abortSignal = apply<AbortSignal>(nativeAbortControllerSignal, abortControl, []);
+    if (apply<boolean>(nativeAbortSignalAborted, abortSignal, []) !== false) return false;
+    apply(nativeAbortControllerAbort, abortControl, []);
+    if (apply<boolean>(nativeAbortSignalAborted, abortSignal, []) !== true) return false;
     if (
       realmSetTimeout !== nodeSetTimeout ||
       realmClearTimeout !== nodeClearTimeout ||
@@ -588,14 +614,47 @@ export function taskNewDate(value?: string | number | Date): Date {
   return value === undefined ? new DateConstructor() : new DateConstructor(value);
 }
 
-export function taskInternalRequest(seed: Request): Request {
+export function taskInternalRequest(seed: Request, signal?: AbortSignal): Request {
   assertTaskSecurityIntrinsics();
   if (typeof nativeRequestUrl !== 'function' || typeof nativeUrlHref !== 'function') {
     throw new TypeError('Kovo durable-task URL controls are unavailable.');
   }
   const seedUrl = apply<string>(nativeRequestUrl, seed, []);
   const url = new NativeURL('/_kovo/task', seedUrl);
-  return new NativeRequest(apply<string>(nativeUrlHref, url, []), { method: 'POST' });
+  const href = apply<string>(nativeUrlHref, url, []);
+  return new NativeRequest(
+    href,
+    signal === undefined ? { method: 'POST' } : { method: 'POST', signal },
+  );
+}
+
+export function taskCreateAbortController(): AbortController {
+  assertTaskSecurityIntrinsics();
+  return new NativeAbortController();
+}
+
+export function taskAbortControllerSignal(controller: AbortController): AbortSignal {
+  assertTaskSecurityIntrinsics();
+  if (typeof nativeAbortControllerSignal !== 'function') {
+    throw new TypeError('Kovo durable-task abort controls are unavailable.');
+  }
+  return apply(nativeAbortControllerSignal, controller, []);
+}
+
+export function taskAbortController(controller: AbortController, reason?: unknown): void {
+  assertTaskSecurityIntrinsics();
+  if (typeof nativeAbortControllerAbort !== 'function') {
+    throw new TypeError('Kovo durable-task abort controls are unavailable.');
+  }
+  apply(nativeAbortControllerAbort, controller, [reason]);
+}
+
+export function taskAbortSignalIsAborted(signal: AbortSignal): boolean {
+  assertTaskSecurityIntrinsics();
+  if (typeof nativeAbortSignalAborted !== 'function') {
+    throw new TypeError('Kovo durable-task abort controls are unavailable.');
+  }
+  return apply(nativeAbortSignalAborted, signal, []);
 }
 
 export function taskInternalUrl(seed: Request): string {

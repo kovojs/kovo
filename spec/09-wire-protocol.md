@@ -396,10 +396,19 @@ returns whether cancellation happened.
 
 The default node `JobRunner` drains the queue from Postgres with `FOR UPDATE SKIP LOCKED`, leases,
 retry/backoff, and dead-letter rows. Multiple nodes may run the same drainer; row locks make claims
-disjoint. A lease reaper returns expired `running` jobs to `ready`, so delivery is at-least-once.
-Exactly-once effects are obtained by idempotency: Kovo derives a stable idempotency key per scheduled
-job and exposes the job id as the key a task passes to non-idempotent external APIs. A retry must not
-double-charge, double-send, or otherwise commit an effect without an idempotency key.
+disjoint. Each job persists the declaration's positive `maxAttempts` ceiling. A lease reaper returns
+an expired `running` job to `ready` only while its claimed-attempt count remains below that ceiling;
+at the ceiling it moves the job to `dead`, so a task that repeatedly kills its worker cannot redeliver
+forever. A false or failed heartbeat means the worker lost its lease: the runner aborts the
+`AbortSignal` delivered as `ctx.signal`, propagates that signal through framework query/mutation
+ingress, and refuses later framework state operations from that context. Task-authored external I/O
+must likewise carry `ctx.signal`; arbitrary JavaScript cannot be forcibly preempted. Completion and
+failure writes remain fenced by the claim's owner/token, and a rejected `markSucceeded` or
+`markFailed` settlement is reported through task-runner diagnostics rather than silently discarded.
+Delivery is therefore at-least-once. Exactly-once effects are obtained by idempotency: Kovo derives a
+stable idempotency key per scheduled job and exposes the job id as the key a task passes to
+non-idempotent external APIs. A retry must not double-charge, double-send, or otherwise commit an
+effect without an idempotency key.
 
 Every preset that supports `task()` MUST declare a `JobRunner` capability. The node preset's
 in-process runner is on by default; a runner-only mode may drain jobs without serving HTTP. A preset

@@ -19,6 +19,7 @@ import {
   taskMapGet,
   taskMapHas,
   taskMapSet,
+  taskMax,
   taskMin,
   taskNewDate,
   taskNumber,
@@ -35,6 +36,7 @@ import {
   taskStringSplit,
   taskStringStartsWith,
   taskStringTrim,
+  taskTrunc,
 } from './task-security-intrinsics.js';
 
 export const DEFAULT_TASK_CRON_BACKFILL_LIMIT = 16;
@@ -103,6 +105,7 @@ export function createRecurringTaskMaterializer(options: {
             args: task.cronArgs ?? {},
             runAt: occurrence,
             key: frameworkScopedKey('durable-task-cron', occurrenceKey(task.key, occurrence)),
+            maxAttempts: taskMax(1, taskTrunc(task.retry?.maxAttempts ?? 1)),
             coalesce: 'throttle',
           });
           await occurrenceStore.bindJob(task.key, occurrence, handle.id);

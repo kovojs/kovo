@@ -66,6 +66,8 @@ export interface DurableTaskJob {
   readonly priority: number;
   readonly status: DurableTaskJobStatus;
   readonly attempts: number;
+  /** Persisted crash/redelivery ceiling owned by the task declaration. */
+  readonly maxAttempts: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly leasedUntil?: Date;
@@ -85,6 +87,8 @@ export interface DurableTaskEnqueueInput {
   readonly priority?: number;
   readonly status?: 'ready' | 'dead';
   readonly lastError?: string;
+  /** Persisted so lease reaping cannot redeliver a process-killing task forever. */
+  readonly maxAttempts?: number;
 }
 
 export interface DurableTaskClaimOptions {
@@ -206,6 +210,7 @@ interface DurableTaskJobRow {
   priority: number | null;
   status: DurableTaskJobStatus;
   attempts: number;
+  max_attempts: number;
   created_at: Date | string;
   updated_at: Date | string;
   leased_until: Date | string | null;
@@ -223,6 +228,7 @@ export const KOVO_JOBS_TABLE_SQL: readonly DurableTaskSqlStatement[] = [
   logical_key text null,
   status text not null check (status in ('ready', 'running', 'succeeded', 'failed', 'dead', 'cancelled')),
   attempts integer not null default 0,
+  max_attempts integer not null default 1 check (max_attempts > 0),
   lineage text null,
   generation integer not null default 0,
   priority integer not null default 0,
@@ -236,6 +242,11 @@ export const KOVO_JOBS_TABLE_SQL: readonly DurableTaskSqlStatement[] = [
   completed_at timestamptz null,
   cancelled_at timestamptz null
 )`,
+    values: [],
+  },
+  {
+    text: `alter table _kovo_jobs
+add column if not exists max_attempts integer not null default 1 check (max_attempts > 0)`,
     values: [],
   },
   {
@@ -331,6 +342,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     const lineage = input.lineage ?? id;
     const generation = normalizeNonNegativeInteger(input.generation, 0);
     const priority = normalizePriority(input.priority);
+    const maxAttempts = normalizePositiveInteger(input.maxAttempts, 1);
     const status = input.status ?? 'ready';
     const lastError = input.lastError === undefined ? null : scrubErrorMessage(input.lastError);
     const logicalKeyFrame = input.key === undefined ? null : scopedKeyFactsFor(input.key).frame;
@@ -349,6 +361,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
           priority,
           status,
           lastError,
+          maxAttempts,
         ]),
       );
       const row = result.rows[0];
@@ -370,6 +383,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
         priority,
         status,
         lastError,
+        maxAttempts,
       ]),
     );
     const row = result.rows[0];
@@ -477,6 +491,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     const lineage = input.lineage ?? id;
     const generation = normalizeNonNegativeInteger(input.generation, 0);
     const priority = normalizePriority(input.priority);
+    const maxAttempts = normalizePositiveInteger(input.maxAttempts, 1);
     const status = input.status ?? 'ready';
     if (input.key !== undefined) scopedKeyFactsFor(input.key);
 
@@ -498,6 +513,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
           ready.runAt = copyDate(runAt);
           ready.updatedAt = now;
         }
+        ready.maxAttempts = maxAttempts;
         return { id: ready.id, task: ready.task };
       }
     }
@@ -512,6 +528,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
       priority,
       status,
       attempts: 0,
+      maxAttempts,
       createdAt: now,
       updatedAt: now,
     };
@@ -628,7 +645,10 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
         job.leasedUntil !== undefined &&
         taskDateGetTime(job.leasedUntil) <= nowMs
       ) {
-        job.status = 'ready';
+        job.status = job.attempts >= job.maxAttempts ? 'dead' : 'ready';
+        if (job.status === 'dead') {
+          job.lastError ??= `Durable task lease expired at maxAttempts ${job.maxAttempts}.`;
+        }
         delete job.leasedUntil;
         delete job.leaseOwner;
         delete job.leaseToken;
@@ -657,6 +677,7 @@ interface MutableDurableTaskJob {
   priority: number;
   status: DurableTaskJobStatus;
   attempts: number;
+  maxAttempts: number;
   createdAt: Date;
   updatedAt: Date;
   leasedUntil?: Date;
@@ -668,25 +689,27 @@ interface MutableDurableTaskJob {
 const taskQueueSql = {
   enqueueUnkeyed: `insert into _kovo_jobs (
   id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at,
-  lineage, generation, priority, last_error
-) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11)
+  lineage, generation, priority, last_error, max_attempts
+) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11, $12)
 returning id`,
   enqueueDebounce: `insert into _kovo_jobs (
   id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at,
-  lineage, generation, priority, last_error
-) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11)
+  lineage, generation, priority, last_error, max_attempts
+) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11, $12)
 on conflict (task_key, logical_key) where status = 'ready' and logical_key is not null
 do update set args = excluded.args,
   run_at = excluded.run_at,
   priority = excluded.priority,
+  max_attempts = excluded.max_attempts,
   updated_at = excluded.updated_at
 returning id`,
   enqueueThrottle: `insert into _kovo_jobs (
   id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at,
-  lineage, generation, priority, last_error
-) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11)
+  lineage, generation, priority, last_error, max_attempts
+) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11, $12)
 on conflict (task_key, logical_key) where status = 'ready' and logical_key is not null
-do update set updated_at = _kovo_jobs.updated_at
+do update set updated_at = _kovo_jobs.updated_at,
+  max_attempts = excluded.max_attempts
 returning id`,
   cancelReady: `update _kovo_jobs
 set status = 'cancelled', cancelled_at = $2, updated_at = $2
@@ -706,7 +729,7 @@ set status = 'running',
   lease_token = $5,
   updated_at = $1
 where id in (select id from claimed)
-returning id, task_key, args, run_at, logical_key, status, attempts, created_at, updated_at,
+returning id, task_key, args, run_at, logical_key, status, attempts, max_attempts, created_at, updated_at,
   leased_until, lease_owner, lease_token, last_error, lineage, generation, priority`,
   heartbeat: `update _kovo_jobs
 set leased_until = $3,
@@ -739,7 +762,11 @@ where id = $1
   and ($6::text is null or lease_owner = $6)
   and ($7::text is null or lease_token = $7)`,
   reapExpiredLeases: `update _kovo_jobs
-set status = 'ready',
+set status = case when attempts >= max_attempts then 'dead' else 'ready' end,
+  last_error = case
+    when attempts >= max_attempts then coalesce(last_error, 'Durable task lease expired at its maxAttempts ceiling.')
+    else last_error
+  end,
   leased_until = null,
   lease_owner = null,
   lease_token = null,
@@ -758,6 +785,7 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
   const priority = taskJobRowValue(row, 'priority');
   const status = taskJobRowValue(row, 'status');
   const attempts = taskJobRowValue(row, 'attempts');
+  const maxAttempts = taskJobRowValue(row, 'max_attempts');
   const createdAt = taskJobRowValue(row, 'created_at');
   const updatedAt = taskJobRowValue(row, 'updated_at');
   const leasedUntil = taskJobRowValue(row, 'leased_until');
@@ -777,6 +805,8 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
     !isDurableTaskJobStatus(status) ||
     !taskNumberIsSafeInteger(attempts) ||
     attempts < 0 ||
+    !taskNumberIsSafeInteger(maxAttempts) ||
+    maxAttempts < 1 ||
     (generation !== null && (!taskNumberIsSafeInteger(generation) || generation < 0)) ||
     (priority !== null && !taskNumberIsSafeInteger(priority))
   ) {
@@ -792,6 +822,7 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
     priority: priority ?? 0,
     status,
     attempts,
+    maxAttempts,
     createdAt: validTaskRowDate(createdAt),
     updatedAt: validTaskRowDate(updatedAt),
     ...(logicalKey === null ? {} : { key: restoreScopedKey(logicalKey) }),
@@ -912,6 +943,7 @@ function readonlyJob(job: MutableDurableTaskJob): DurableTaskJob {
     priority: job.priority,
     status: job.status,
     attempts: job.attempts,
+    maxAttempts: job.maxAttempts,
     createdAt: copyDate(job.createdAt),
     updatedAt: copyDate(job.updatedAt),
     ...(job.key === undefined ? {} : { key: job.key }),
@@ -962,6 +994,11 @@ function normalizePriority(value: number | undefined): number {
 function normalizeNonNegativeInteger(value: number | undefined, fallback: number): number {
   if (value === undefined || !taskNumberIsFinite(value)) return fallback;
   return taskMax(0, taskTrunc(value));
+}
+
+function normalizePositiveInteger(value: number | undefined, fallback: number): number {
+  if (value === undefined || !taskNumberIsFinite(value)) return fallback;
+  return taskMax(1, taskTrunc(value));
 }
 
 function normalizeCompletionOptions(

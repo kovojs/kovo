@@ -89,7 +89,12 @@ describe('durable task queue store (SPEC §9.6)', () => {
     try {
       Date.now = () => 1;
       Math.random = () => 0.5;
-      const first = await store.enqueue({ task: 'first', args: {}, runAt: new Date(0) });
+      const first = await store.enqueue({
+        task: 'first',
+        args: {},
+        runAt: new Date(0),
+        maxAttempts: 2,
+      });
       const second = await store.enqueue({ task: 'second', args: {}, runAt: new Date(0) });
 
       expect(first.id).toMatch(/^job_[0-9a-f]{32}$/u);
@@ -143,7 +148,10 @@ describe('durable task queue store (SPEC §9.6)', () => {
     expect(statements[0]!.text).toContain('priority integer not null default 0');
     expect(statements[0]!.text).toContain('lease_token text null');
     expect(statements[0]!.text).toContain('leased_until timestamptz null');
-    expect(statements[1]!.text).toContain("where status = 'ready'");
+    expect(statements[1]!.text).toContain('add column if not exists max_attempts');
+    expect(statements.some((statement) => statement.text.includes("where status = 'ready'"))).toBe(
+      true,
+    );
     expect(statements.every((statement) => Array.isArray(statement.values))).toBe(true);
   });
 
@@ -224,7 +232,7 @@ describe('durable task queue store (SPEC §9.6)', () => {
     const store = new MemoryDurableTaskQueue();
     const due = new Date('2026-06-30T10:00:00.000Z');
     const later = new Date('2026-06-30T10:05:00.000Z');
-    await store.enqueue({ task: 'due', args: { n: 1 }, runAt: due });
+    await store.enqueue({ task: 'due', args: { n: 1 }, runAt: due, maxAttempts: 2 });
     await store.enqueue({ task: 'later', args: { n: 2 }, runAt: later });
 
     const claimed = await store.claimDue({
@@ -273,6 +281,87 @@ describe('durable task queue store (SPEC §9.6)', () => {
 
     expect(claimed.map((job) => job.task)).toEqual(['high', 'low']);
   });
+
+  it.each([
+    [
+      'memory',
+      async () => {
+        const store = new MemoryDurableTaskQueue();
+        return {
+          store,
+          async readJob(id: string) {
+            const job = store.snapshot().find((candidate) => candidate.id === id);
+            return { lastError: job?.lastError, status: job?.status };
+          },
+        };
+      },
+    ],
+    [
+      'Postgres/PGlite',
+      async () => {
+        const client = new PGlite();
+        const executor = {
+          async execute(statement: DurableTaskSqlStatement) {
+            const result = await client.query(statement.text, [...statement.values]);
+            return { rowCount: result.affectedRows, rows: result.rows };
+          },
+        };
+        await ensureDurableTaskSchema(executor);
+        const store = new PostgresDurableTaskQueue(executor);
+        return {
+          store,
+          async readJob(id: string) {
+            const result = await client.query<{ last_error: string | null; status: string }>(
+              'select status, last_error from _kovo_jobs where id = $1',
+              [id],
+            );
+            const row = result.rows[0];
+            return { lastError: row?.last_error, status: row?.status };
+          },
+        };
+      },
+    ],
+  ] as const)(
+    'dead-letters a process-killing task at its persisted attempt ceiling through %s',
+    async (_name, createStore) => {
+      const { readJob, store } = await createStore();
+      const firstRunAt = new Date('2026-06-30T10:00:00.000Z');
+      const firstLeaseEnd = new Date('2026-06-30T10:00:00.010Z');
+      const secondLeaseEnd = new Date('2026-06-30T10:00:00.020Z');
+      const handle = await store.enqueue({
+        args: {},
+        maxAttempts: 2,
+        runAt: firstRunAt,
+        task: 'process.killer',
+      });
+
+      const [first] = await store.claimDue({
+        leaseMs: 10,
+        limit: 1,
+        now: firstRunAt,
+        owner: 'runner-first',
+      });
+      expect(first).toMatchObject({ attempts: 1, maxAttempts: 2, status: 'running' });
+      await expect(store.reapExpiredLeases(firstLeaseEnd)).resolves.toBe(1);
+
+      const [second] = await store.claimDue({
+        leaseMs: 10,
+        limit: 1,
+        now: firstLeaseEnd,
+        owner: 'runner-second',
+      });
+      expect(second).toMatchObject({ attempts: 2, maxAttempts: 2, status: 'running' });
+      await expect(store.reapExpiredLeases(secondLeaseEnd)).resolves.toBe(1);
+
+      await expect(
+        store.claimDue({ leaseMs: 10, limit: 1, now: secondLeaseEnd, owner: 'runner-third' }),
+      ).resolves.toEqual([]);
+      await expect(readJob(handle.id)).resolves.toMatchObject({
+        lastError: expect.stringContaining('maxAttempts'),
+        status: 'dead',
+      });
+    },
+  );
 
   it('retries failed jobs with backoff until maxAttempts moves them to dead-letter', async () => {
     const store = new MemoryDurableTaskQueue();
@@ -323,7 +412,12 @@ describe('durable task queue store (SPEC §9.6)', () => {
 
   it('rejects stale duplicate completions after a lease has been reclaimed', async () => {
     const store = new MemoryDurableTaskQueue();
-    await store.enqueue({ task: 'effect', args: {}, runAt: new Date('2026-06-30T10:00:00.000Z') });
+    await store.enqueue({
+      task: 'effect',
+      args: {},
+      runAt: new Date('2026-06-30T10:00:00.000Z'),
+      maxAttempts: 2,
+    });
     const [first] = await store.claimDue({
       now: new Date('2026-06-30T10:00:00.000Z'),
       limit: 1,
@@ -387,6 +481,7 @@ describe('durable task queue store (SPEC §9.6)', () => {
       0,
       'ready',
       null,
+      1,
     ]);
     expect(statements[1]!.text).toContain('for update skip locked');
     expect(statements[1]!.values).toHaveLength(6);

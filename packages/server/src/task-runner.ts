@@ -27,11 +27,15 @@ import type {
   DurableTaskQueueStore,
 } from './task-queue.js';
 import {
+  taskAbortController,
+  taskAbortControllerSignal,
+  taskAbortSignalIsAborted,
   taskArrayPush,
   taskApply,
   taskClearInterval,
   taskClearTimeout,
   taskCreateMap,
+  taskCreateAbortController,
   taskCreatePromise,
   taskDateGetTime,
   taskDateIsDate,
@@ -84,7 +88,7 @@ export interface DurableTaskRunnerHooks {
 
 export interface DurableTaskRunnerErrorContext {
   readonly job: DurableTaskJob;
-  readonly phase: 'unknown-task' | 'task-run';
+  readonly phase: 'lease-settlement' | 'unknown-task' | 'task-run';
   readonly task?: TaskDefinition<string, any, any>;
 }
 
@@ -108,6 +112,29 @@ export class UnknownDurableTaskError extends Error {
   constructor(readonly taskKey: string) {
     super(`No durable task is registered for key "${taskKey}".`);
     this.name = 'UnknownDurableTaskError';
+  }
+}
+
+export class DurableTaskLeaseLostError extends Error {
+  constructor(
+    readonly jobId: string,
+    readonly bodySettled: Promise<void>,
+    readonly heartbeatError?: unknown,
+  ) {
+    super(`Durable task lease was lost while job "${jobId}" was still running.`);
+    this.name = 'DurableTaskLeaseLostError';
+  }
+}
+
+export class DurableTaskLeaseSettlementDiscardedError extends Error {
+  constructor(
+    readonly jobId: string,
+    readonly operation: 'markFailed' | 'markSucceeded',
+  ) {
+    super(
+      `Durable task ${operation} settlement for job "${jobId}" was discarded because its lease fence no longer matched.`,
+    );
+    this.name = 'DurableTaskLeaseSettlementDiscardedError';
   }
 }
 
@@ -291,10 +318,11 @@ export class DurableTaskRunner {
     const task = taskMapGet(this.tasks, job.task);
     if (task === undefined) {
       const error = new UnknownDurableTaskError(job.task);
-      await this.store.markFailed(job.id, error, {
+      const persisted = await this.store.markFailed(job.id, error, {
         ...completionOptions(job),
         maxAttempts: 1,
       });
+      if (!persisted) await this.reportDiscardedSettlement(job, 'markFailed');
       await this.reportError(error, { job, phase: 'unknown-task' });
       return { releaseWhenSettled: taskPromiseResolve(undefined) };
     }
@@ -304,14 +332,16 @@ export class DurableTaskRunner {
       const args = task.input.parse(job.args);
       const result = await this.runWithDeadline(job, task, args);
       bodySettled = result.bodySettled;
-      await this.store.markSucceeded(job.id, completionOptions(job));
+      const persisted = await this.store.markSucceeded(job.id, completionOptions(job));
+      if (!persisted) await this.reportDiscardedSettlement(job, 'markSucceeded', task);
     } catch (error) {
-      if (isDurableTaskTimeoutError(error)) bodySettled = error.bodySettled;
-      await this.store.markFailed(job.id, error, {
+      if (isDurableTaskRunInterruptedError(error)) bodySettled = error.bodySettled;
+      const persisted = await this.store.markFailed(job.id, error, {
         ...completionOptions(job),
         maxAttempts: taskMaxAttempts(task),
         retryAt: retryRunAt(job, task),
       });
+      if (!persisted) await this.reportDiscardedSettlement(job, 'markFailed', task);
       await this.reportError(error, { job, phase: 'task-run', task });
     }
     return { releaseWhenSettled: bodySettled };
@@ -326,43 +356,83 @@ export class DurableTaskRunner {
     }
   }
 
+  private async reportDiscardedSettlement(
+    job: DurableTaskJob,
+    operation: 'markFailed' | 'markSucceeded',
+    task?: TaskDefinition<string, any, any>,
+  ): Promise<void> {
+    await this.reportError(new DurableTaskLeaseSettlementDiscardedError(job.id, operation), {
+      job,
+      phase: 'lease-settlement',
+      ...(task === undefined ? {} : { task }),
+    });
+  }
+
   private async runWithDeadline(
     job: DurableTaskJob,
     task: TaskDefinition<string, any, any>,
     args: unknown,
   ): Promise<{ bodySettled: Promise<void> }> {
     const timeoutMs = taskTimeoutMs(task, this.leaseMs, this.hardTimeoutMs);
+    const abortController = taskCreateAbortController();
+    const signal = taskAbortControllerSignal(abortController);
     let settled = false;
-    const heartbeat = taskSetInterval(
-      () => {
-        if (settled) return;
-        const now = taskNewDate();
-        void this.store.heartbeat(job.id, {
-          ...completionOptions(job),
-          leaseMs: taskMin(this.leaseMs, timeoutMs),
-          now,
-        });
-      },
-      taskMin(this.heartbeatIntervalMs, timeoutMs),
-    );
-    taskTimerUnref(heartbeat);
+    let heartbeatPending = false;
+    let rejectLeaseLost: (error: DurableTaskLeaseLostError) => void = () => undefined;
 
     const bodyPromise = taskPromiseThen(taskPromiseResolve(undefined), () =>
-      task.run(args, this.createContext(job)),
+      task.run(args, this.createContext(job, signal)),
     );
     const bodySettled = taskPromiseThen(
       bodyPromise,
       () => undefined,
       () => undefined,
     );
+    const leaseLost = taskCreatePromise<never>((_resolve, reject) => {
+      rejectLeaseLost = reject;
+    });
+    const abortForLeaseLoss = (heartbeatError?: unknown): void => {
+      if (settled || taskAbortSignalIsAborted(signal)) return;
+      const error = new DurableTaskLeaseLostError(job.id, bodySettled, heartbeatError);
+      rejectLeaseLost(error);
+      taskAbortController(abortController, error);
+    };
+    const heartbeat = taskSetInterval(
+      () => {
+        if (settled || heartbeatPending) return;
+        heartbeatPending = true;
+        const now = taskNewDate();
+        const result = taskPromiseThen(taskPromiseResolve(undefined), () =>
+          this.store.heartbeat(job.id, {
+            ...completionOptions(job),
+            leaseMs: taskMin(this.leaseMs, timeoutMs),
+            now,
+          }),
+        );
+        void taskPromiseThen(
+          result,
+          (retained) => {
+            heartbeatPending = false;
+            if (!retained) abortForLeaseLoss();
+          },
+          (error) => {
+            heartbeatPending = false;
+            abortForLeaseLoss(error);
+          },
+        );
+      },
+      taskMin(this.heartbeatIntervalMs, timeoutMs),
+    );
+    taskTimerUnref(heartbeat);
 
     try {
       const timeoutMessage = `Durable task "${task.key}" exceeded timeoutMs ${timeoutMs}.`;
       await withTimeout(
-        bodyPromise,
+        taskPromiseRace([bodyPromise, leaseLost]),
         timeoutMs,
         timeoutMessage,
         () => new DurableTaskTimeoutError(timeoutMessage, bodySettled),
+        (error) => taskAbortController(abortController, error),
       );
       return { bodySettled };
     } finally {
@@ -371,12 +441,13 @@ export class DurableTaskRunner {
     }
   }
 
-  private createContext(job: DurableTaskJob): TaskRunContext {
+  private createContext(job: DurableTaskJob, signal: AbortSignal): TaskRunContext {
     const runMutation = this.hooks.runMutation;
     const runQuery = this.hooks.runQuery;
     const context: TaskRunContext = {
       jobId: job.id,
       idempotencyKey: job.id,
+      signal,
       // SPEC §6.6: task code receives exactly the framework-owned positive egress capability.
       // Runner hooks may adapt persistence/query execution, but cannot replace the network door.
       fetch: frameworkEgressFetch,
@@ -387,6 +458,7 @@ export class DurableTaskRunner {
           actAsNonRequestPrincipal(principalId, taskPrincipalAudit(job, 'write')),
           runQuery,
           runMutation,
+          signal,
         ),
       declareSystemRead: (reason: string): TaskPrincipalReadScope =>
         this.createPrincipalScope(
@@ -395,6 +467,7 @@ export class DurableTaskRunner {
           undefined,
           runQuery,
           runMutation,
+          signal,
         ),
       declareSystemWrite: (reason: string): TaskPrincipalWriteScope =>
         this.createPrincipalScope(
@@ -403,6 +476,7 @@ export class DurableTaskRunner {
           declareSystemPrincipal(reason, taskPrincipalAudit(job, 'write')),
           runQuery,
           runMutation,
+          signal,
         ),
       systemStateKey: (key: string) => frameworkScopedKey('durable-task-system', key),
       runMutation: async () => {
@@ -415,6 +489,7 @@ export class DurableTaskRunner {
         // SPEC §9.6: task-body scheduling has one chokepoint. Registry checks, lineage,
         // maxGenerations, and the self-reschedule delay floor are computed here before any queue
         // write, so runtime hooks cannot replace the backstopped ctx.schedule contract.
+        assertActiveTaskLease(job, signal);
         return this.store.enqueue(
           durableTaskScheduleInput({
             args,
@@ -430,7 +505,11 @@ export class DurableTaskRunner {
     // The type is readonly for authors, but the runtime invariant must survive JavaScript and
     // casts too. Close the delivered capability property itself after constructing the context;
     // task code cannot swap in ambient fetch or a proxy dispatcher (SPEC §6.6).
-    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);
+    return taskDefineDataProperty(
+      taskDefineDataProperty(context, 'signal', signal),
+      'fetch',
+      frameworkEgressFetch,
+    );
   }
 
   private createPrincipalScope(
@@ -439,6 +518,7 @@ export class DurableTaskRunner {
     writePosture: NonRequestPrincipalPosture | undefined,
     runQuery: DurableTaskRunnerHooks['runQuery'],
     runMutation: DurableTaskRunnerHooks['runMutation'],
+    signal: AbortSignal,
   ): TaskPrincipalScope {
     const principalPosture = readPosture ?? writePosture;
     const stateKey = (key: string) =>
@@ -448,18 +528,20 @@ export class DurableTaskRunner {
     return {
       stateKey,
       runMutation: async (definition, input) => {
+        assertActiveTaskLease(job, signal);
         if (writePosture === undefined) throw missingTaskPrincipalPostureError(job, 'write');
         if (runMutation === undefined) {
           throw new Error('Task runner runMutation hook is not configured.');
         }
-        return runMutation(definition, input, { principalPosture: writePosture });
+        return runMutation(definition, input, { principalPosture: writePosture, signal });
       },
       runQuery: async (definition, input) => {
+        assertActiveTaskLease(job, signal);
         if (readPosture === undefined) throw missingTaskPrincipalPostureError(job, 'read');
         if (runQuery === undefined) {
           throw new Error('Task runner runQuery hook is not configured.');
         }
-        return runQuery(definition, input, { principalPosture: readPosture });
+        return runQuery(definition, input, { principalPosture: readPosture, signal });
       },
     };
   }
@@ -616,6 +698,7 @@ function snapshotDurableTaskJob(source: unknown, index: number): DurableTaskJob 
   const priority = taskOwnDataValue(source, 'priority');
   const status = taskOwnDataValue(source, 'status');
   const attempts = taskOwnDataValue(source, 'attempts');
+  const maxAttempts = taskOwnDataValue(source, 'maxAttempts');
   const createdAt = taskOwnDataValue(source, 'createdAt');
   const updatedAt = taskOwnDataValue(source, 'updatedAt');
   const key = taskOptionalOwnDataValue(source, 'key');
@@ -636,6 +719,8 @@ function snapshotDurableTaskJob(source: unknown, index: number): DurableTaskJob 
     !taskNumberIsSafeInteger(priority) ||
     !taskNumberIsSafeInteger(attempts) ||
     attempts < 0 ||
+    !taskNumberIsSafeInteger(maxAttempts) ||
+    maxAttempts < 1 ||
     !isDurableRunnerJobStatus(status) ||
     (leaseOwner !== undefined && typeof leaseOwner !== 'string') ||
     (leaseToken !== undefined && typeof leaseToken !== 'string') ||
@@ -653,6 +738,7 @@ function snapshotDurableTaskJob(source: unknown, index: number): DurableTaskJob 
     priority,
     status,
     attempts,
+    maxAttempts,
     createdAt: snapshotRunnerDate(createdAt, `${label}.createdAt`),
     updatedAt: snapshotRunnerDate(updatedAt, `${label}.updatedAt`),
     ...(key === undefined ? {} : { key: key as NonNullable<DurableTaskJob['key']> }),
@@ -802,6 +888,7 @@ export function durableTaskScheduleInput(input: {
           ...generationStatus(parent, input.definition),
         }),
     ...(input.definition.priority === undefined ? {} : { priority: input.definition.priority }),
+    maxAttempts: taskMaxAttempts(input.definition),
     ...(scheduleOptions?.key === undefined ? {} : { key: scheduleOptions.key }),
     ...(scheduleOptions?.coalesce === undefined ? {} : { coalesce: scheduleOptions.coalesce }),
   };
@@ -861,8 +948,19 @@ class DurableTaskTimeoutError extends Error {
   }
 }
 
-function isDurableTaskTimeoutError(error: unknown): error is DurableTaskTimeoutError {
-  return taskInstanceOf(error, DurableTaskTimeoutError);
+function isDurableTaskRunInterruptedError(
+  error: unknown,
+): error is DurableTaskTimeoutError | DurableTaskLeaseLostError {
+  return (
+    taskInstanceOf(error, DurableTaskTimeoutError) ||
+    taskInstanceOf(error, DurableTaskLeaseLostError)
+  );
+}
+
+function assertActiveTaskLease(job: DurableTaskJob, signal: AbortSignal): void {
+  if (taskAbortSignalIsAborted(signal)) {
+    throw new DurableTaskLeaseLostError(job.id, taskPromiseResolve(undefined));
+  }
 }
 
 function scheduleRunAt(options: TaskScheduleOptions | undefined): Date {
@@ -947,10 +1045,15 @@ async function withTimeout<T>(
   timeoutMs: number,
   message: string,
   createTimeoutError: () => Error = () => new Error(message),
+  onTimeout: (error: Error) => void = () => undefined,
 ): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = taskCreatePromise<never>((_, reject) => {
-    timeout = taskSetTimeout(() => reject(createTimeoutError()), timeoutMs);
+    timeout = taskSetTimeout(() => {
+      const error = createTimeoutError();
+      reject(error);
+      onTimeout(error);
+    }, timeoutMs);
     taskTimerUnref(timeout);
   });
   try {

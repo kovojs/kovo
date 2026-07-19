@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { frameworkScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import { createApp, createRequestHandler } from './app.js';
 import { mutation, runMutation } from './mutation.js';
@@ -52,7 +53,11 @@ describe('durable task runtime (SPEC §9.6)', () => {
     );
     expect(enqueue?.values[1]).toBe('nightly.cleanup');
     expect(enqueue?.values[2]).toBe('{}');
-    expect(enqueue?.values[3]).toBe('cron:nightly.cleanup:2026-06-30T02:00:00.000Z');
+    expect(enqueue?.values[3]).toBe(
+      scopedKeyFactsFor(
+        frameworkScopedKey('durable-task-cron', 'cron:nightly.cleanup:2026-06-30T02:00:00.000Z'),
+      ).frame,
+    );
     expect(enqueue?.values[4]).toEqual(new Date('2026-06-30T02:00:00.000Z'));
   });
 
@@ -231,6 +236,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
                   leased_until: '2026-06-30T07:16:00.000Z',
                   lineage: 'job_fail',
                   logical_key: null,
+                  max_attempts: 1,
                   priority: 0,
                   run_at: '2026-06-30T07:15:30.000Z',
                   status: 'running',
@@ -301,6 +307,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
                   leased_until: '2026-06-30T10:00:30.000Z',
                   lineage: 'lineage_parent',
                   logical_key: null,
+                  max_attempts: 1,
                   priority: 0,
                   run_at: '2026-06-30T10:00:00.000Z',
                   status: 'running',

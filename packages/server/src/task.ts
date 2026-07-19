@@ -72,6 +72,8 @@ export type TaskRunnableQueryInput<Query> = Query extends { args: Schema<infer I
 /** @internal Principal posture threaded from task ctx helpers to framework-owned ingress hooks. */
 export interface TaskIngressRunOptions {
   readonly principalPosture: NonRequestPrincipalPosture;
+  /** Cooperative lease/timeout fence propagated into the framework request ingress. */
+  readonly signal: AbortSignal;
 }
 
 /**
@@ -121,6 +123,8 @@ export interface TaskRunContext {
   readonly jobId: string;
   /** Stable idempotency key for external APIs; equal to the durable job id (SPEC §9.6). */
   readonly idempotencyKey: string;
+  /** Aborts when the runner loses this lease or reaches the task deadline. */
+  readonly signal: AbortSignal;
   readonly fetch: typeof globalThis.fetch;
   /**
    * SPEC §10.3 DEC-G: choose the owner principal for scoped background work. Payload fields do

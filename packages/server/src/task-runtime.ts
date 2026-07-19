@@ -118,7 +118,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
           const result = await runMutation(
             definition as never,
             input,
-            taskInternalRequest(request) as never,
+            taskInternalRequest(request, ingressOptions.signal) as never,
             {
               csrf: false,
               ...(this.app.db === undefined ? {} : { db: this.app.db }),
@@ -141,7 +141,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
           const result = await runQuery(
             definition as never,
             input,
-            taskInternalRequest(request) as never,
+            taskInternalRequest(request, ingressOptions.signal) as never,
             {
               ...(this.app.db === undefined ? {} : { db: this.app.db }),
               maxListItems: this.app.requestLimits.maxQueryListItems,

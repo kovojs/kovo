@@ -13,8 +13,12 @@ import { mutation, runMutation } from './mutation.js';
 import { query, runQuery } from './query.js';
 import { s } from './schema.js';
 import { task } from './task.js';
-import { createDurableTaskRunner } from './task-runner.js';
-import { MemoryDurableTaskQueue } from './task-queue.js';
+import {
+  createDurableTaskRunner,
+  DurableTaskLeaseLostError,
+  DurableTaskLeaseSettlementDiscardedError,
+} from './task-runner.js';
+import { MemoryDurableTaskQueue, type DurableTaskQueueStore } from './task-queue.js';
 import { assertNonRequestPrincipalPosture } from './auth-principal.js';
 import { registerFrameworkManagedDbHooks } from './managed-db.js';
 
@@ -435,6 +439,130 @@ describe('durable task runner (SPEC §9.6)', () => {
     }
   });
 
+  it('aborts a reaped worker body before the replacement claimant commits', async () => {
+    vi.useFakeTimers();
+    try {
+      const startedAt = new Date('2026-06-30T10:00:00.000Z');
+      const leaseExpiredAt = new Date('2026-06-30T10:00:00.020Z');
+      vi.setSystemTime(startedAt);
+      const queue = new MemoryDurableTaskQueue();
+      const events: string[] = [];
+      const diagnostics: Array<{ error: unknown; phase: string }> = [];
+      let firstSignal: AbortSignal | undefined;
+      let resolveStarted!: () => void;
+      const firstStarted = new Promise<void>((resolve) => {
+        resolveStarted = resolve;
+      });
+      let invocation = 0;
+      const fenced = task('lease.fenced', {
+        input: s.object({}),
+        retry: { maxAttempts: 2 },
+        async run(_args, context) {
+          invocation += 1;
+          if (invocation === 2) {
+            events.push('replacement-commit');
+            return;
+          }
+          firstSignal = context.signal;
+          events.push('stale-start');
+          resolveStarted();
+          await new Promise<void>((resolve) => {
+            context.signal.addEventListener(
+              'abort',
+              () => {
+                events.push('stale-abort');
+                resolve();
+              },
+              { once: true },
+            );
+          });
+        },
+      });
+      await queue.enqueue({ args: {}, maxAttempts: 2, runAt: startedAt, task: fenced.key });
+      const staleRunner = createDurableTaskRunner({
+        heartbeatIntervalMs: 10,
+        hooks: {
+          onError(error, context) {
+            diagnostics.push({ error, phase: context.phase });
+          },
+        },
+        leaseMs: 20,
+        owner: 'stale-runner',
+        store: memoryTaskStoreAdapter(queue),
+        tasks: [fenced],
+      });
+
+      const staleRun = staleRunner.runOnce(startedAt);
+      await firstStarted;
+      await expect(queue.reapExpiredLeases(leaseExpiredAt)).resolves.toBe(1);
+      await vi.advanceTimersByTimeAsync(10);
+      await staleRun;
+
+      expect(firstSignal?.aborted).toBe(true);
+      expect(events).toEqual(['stale-start', 'stale-abort']);
+      expect(diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            error: expect.any(DurableTaskLeaseLostError),
+            phase: 'task-run',
+          }),
+          expect.objectContaining({
+            error: expect.objectContaining({ operation: 'markFailed' }),
+            phase: 'lease-settlement',
+          }),
+        ]),
+      );
+
+      const replacementRunner = createDurableTaskRunner({
+        heartbeatIntervalMs: 10,
+        leaseMs: 20,
+        owner: 'replacement-runner',
+        store: memoryTaskStoreAdapter(queue),
+        tasks: [fenced],
+      });
+      await replacementRunner.runOnce(leaseExpiredAt);
+
+      expect(events).toEqual(['stale-start', 'stale-abort', 'replacement-commit']);
+      expect(queue.snapshot()[0]).toMatchObject({ attempts: 2, status: 'succeeded' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a false successful settlement as a discarded lease-fence diagnostic', async () => {
+    const queue = new MemoryDurableTaskQueue();
+    const diagnostics: Array<{ error: unknown; phase: string }> = [];
+    const succeeds = task('settlement.succeeds', {
+      input: s.object({}),
+      run() {},
+    });
+    await queue.enqueue({ args: {}, task: succeeds.key });
+    const store = memoryTaskStoreAdapter(queue, {
+      async markSucceeded() {
+        return false;
+      },
+    });
+    const runner = createDurableTaskRunner({
+      hooks: {
+        onError(error, context) {
+          diagnostics.push({ error, phase: context.phase });
+        },
+      },
+      store,
+      tasks: [succeeds],
+    });
+
+    await runner.runOnce(new Date());
+
+    expect(diagnostics).toEqual([
+      {
+        error: expect.any(DurableTaskLeaseSettlementDiscardedError),
+        phase: 'lease-settlement',
+      },
+    ]);
+    expect(diagnostics[0]!.error).toMatchObject({ operation: 'markSucceeded' });
+  });
+
   it('bounds claims by maxInFlight and per-task concurrency while respecting priority lanes', async () => {
     const store = new MemoryDurableTaskQueue();
     const order: string[] = [];
@@ -830,3 +958,21 @@ describe('durable task runner (SPEC §9.6)', () => {
     ).rejects.toThrow(/claimDue result must not exceed the requested bounded limit/);
   });
 });
+
+function memoryTaskStoreAdapter(
+  queue: MemoryDurableTaskQueue,
+  overrides: Partial<
+    Pick<DurableTaskQueueStore, 'heartbeat' | 'markFailed' | 'markSucceeded'>
+  > = {},
+): DurableTaskQueueStore {
+  return {
+    cancel: (handle) => queue.cancel(handle),
+    claimDue: (options) => queue.claimDue(options),
+    enqueue: (input) => queue.enqueue(input),
+    heartbeat: overrides.heartbeat ?? ((id, options) => queue.heartbeat(id, options)),
+    markFailed:
+      overrides.markFailed ?? ((id, error, options) => queue.markFailed(id, error, options)),
+    markSucceeded: overrides.markSucceeded ?? ((id, options) => queue.markSucceeded(id, options)),
+    reapExpiredLeases: (now) => queue.reapExpiredLeases(now),
+  };
+}
