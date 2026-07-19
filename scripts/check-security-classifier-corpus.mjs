@@ -646,6 +646,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: ["['outbound egress request', 'own']"],
       },
       {
+        id: 'stateful-key-scoping-regression',
+        file: 'packages/core/src/internal/source-sink-registry.test.ts',
+        snippets: [
+          'classifies every C9 row and requires ScopedKey at non-DB keyed state doors',
+          "expect(keyScoping.get('blob/file write')).toBe('runtime-opaque-scoped-key')",
+          'downgraded stateful key door',
+        ],
+      },
+      {
         id: 'raw-filesystem-reject-corpus',
         file: 'scripts/check-sink-policy-gate.test.mjs',
         snippets: [

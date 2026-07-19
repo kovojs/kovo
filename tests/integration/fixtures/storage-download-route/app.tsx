@@ -1,7 +1,7 @@
 // plans/open-design-areas.md storage capability floor: a storage-backed download route authorizes by app data first,
 // then serves bytes through the swappable StorageCapability.
 import { createMemoryStorage } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, guards, notFound, respond, route, s } from '@kovojs/server';
+import { createApp, guards, notFound, publicScopedKey, respond, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface StorageSession {
@@ -42,7 +42,7 @@ const downloadRoute = route('/files/download', {
 
     let stored: Awaited<ReturnType<typeof storage.stream>>;
     try {
-      stored = await storage.stream(row.storage_key);
+      stored = await storage.stream(publicScopedKey(row.storage_key));
     } catch {
       return notFound();
     }
@@ -68,12 +68,12 @@ export default defineFixture({
   )`,
   seed: async (db) => {
     storage = createMemoryStorage({ now: () => new Date('2026-06-16T12:00:00.000Z') });
-    await storage.put('receipts/u1/order-1.txt', 'paid by u1\n', {
+    await storage.put(publicScopedKey('receipts/u1/order-1.txt'), 'paid by u1\n', {
       contentType: 'text/plain; charset=utf-8',
       etag: '"receipt-u1-v1"',
       metadata: { owner: 'u1' },
     });
-    await storage.put('receipts/u2/order-2.txt', 'paid by u2\n', {
+    await storage.put(publicScopedKey('receipts/u2/order-2.txt'), 'paid by u2\n', {
       contentType: 'text/plain; charset=utf-8',
       etag: '"receipt-u2-v1"',
       metadata: { owner: 'u2' },

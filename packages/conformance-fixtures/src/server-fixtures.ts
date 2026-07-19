@@ -591,13 +591,13 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
   const firstRateLimit = await guarded(authenticatedRequest);
   const secondRateLimit = await guarded(authenticatedRequest);
 
-  const storedObjects = new Map<string, Record<string, unknown>>();
+  const storedObjects = new Map<unknown, Record<string, unknown>>();
   const storage = {
-    async get(key: string) {
+    async get(key: unknown) {
       return storedObjects.get(key);
     },
     async put(
-      key: string,
+      key: unknown,
       body: ArrayBuffer | ArrayBufferView | string,
       options: { contentType?: string; metadata?: unknown } = {},
     ) {
@@ -617,23 +617,25 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
       storedObjects.set(key, stored);
       return stored;
     },
-    async stat(key: string) {
+    async stat(key: unknown) {
       return storedObjects.get(key);
     },
-    async stream(key: string) {
+    async stream(key: unknown) {
       const stored = storedObjects.get(key);
       return stored ? { ...stored, body: new Blob([stored.body as BlobPart]).stream() } : undefined;
     },
   };
+  let uploadedReceiptStorage: Record<string, unknown> | undefined;
   const uploadReceipt = runtime.mutation('order/receipt', {
     csrf: false,
     csrfJustification: 'conformance fixture uses a non-browser caller',
-    handler(input: any, request: unknown) {
+    async handler(input: any, request: unknown) {
       const session = commerceSession.parse(request) as { user: { id: string } };
+      uploadedReceiptStorage = await storage.stat(input.receipt.storage.key);
       return {
         orderId: input.orderId,
         session: session.user.id,
-        storageKey: input.receipt.storage.key,
+        stored: uploadedReceiptStorage !== undefined,
       };
     },
     input: runtime.s.object({
@@ -800,13 +802,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
         value: progressElement.getAttribute('value'),
       },
       result: uploadResult,
-      stored: await storage.stat(uploadedReceiptKey(uploadResult)),
+      stored: uploadedReceiptStorage,
     },
   };
-}
-
-/** Extract the server-minted receipt key from the upload mutation result (KV428). */
-function uploadedReceiptKey(result: unknown): string {
-  const value = (result as { value?: { storageKey?: unknown } })?.value;
-  return typeof value?.storageKey === 'string' ? value.storageKey : 'receipts/missing';
 }

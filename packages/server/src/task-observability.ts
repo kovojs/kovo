@@ -1,4 +1,10 @@
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
+import {
+  isScopedKey,
+  restoreScopedKey,
+  scopedKeyFactsFor,
+  type ScopedKey,
+} from '@kovojs/core/internal/storage';
 import { scrubSecretLifecycleValue } from './logging.js';
 import type { TaskHandle } from './task.js';
 import {
@@ -111,7 +117,7 @@ export interface DurableTaskStatusJob {
   readonly attempts: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
-  readonly key?: string;
+  readonly key?: string | ScopedKey;
   readonly lastError?: string;
   readonly leasedUntil?: Date;
   readonly leaseOwner?: string;
@@ -396,6 +402,12 @@ limit ${limitPlaceholder} offset ${offsetPlaceholder}`,
 }
 
 function statusRecord(job: DurableTaskStatusJob, includeArgs: boolean): DurableTaskStatusRecord {
+  const logicalKey =
+    job.key === undefined
+      ? undefined
+      : isScopedKey(job.key)
+        ? scopedKeyFactsFor(job.key).key
+        : job.key;
   return {
     id: job.id,
     task: job.task,
@@ -411,7 +423,7 @@ function statusRecord(job: DurableTaskStatusJob, includeArgs: boolean): DurableT
           }),
         }
       : {}),
-    ...(job.key === undefined ? {} : { key: job.key }),
+    ...(logicalKey === undefined ? {} : { key: logicalKey }),
     ...(includeArgs && job.lastError !== undefined
       ? { lastError: taskString(scrubSecretLifecycleValue(job.lastError)) }
       : {}),
@@ -458,7 +470,7 @@ function jobFromRow(row: DurableTaskJobRow, includeArgs: boolean): DurableTaskSt
       attempts,
       createdAt: dateFrom(createdAt),
       updatedAt: dateFrom(updatedAt),
-      ...(logicalKey === null ? {} : { key: logicalKey }),
+      ...(logicalKey === null ? {} : { key: restoreScopedKey(logicalKey) }),
       ...(leasedUntil === null ? {} : { leasedUntil: dateFrom(leasedUntil) }),
       ...(leaseOwner === null ? {} : { leaseOwner }),
       ...(lastError === null ? {} : { lastError }),
@@ -502,8 +514,16 @@ function snapshotStatusJob(job: DurableTaskStatusJob, includeArgs: boolean): Dur
   if (!taskDateIsDate(runAt) || !taskDateIsDate(createdAt) || !taskDateIsDate(updatedAt)) {
     throw new TypeError('Durable task status snapshot job timestamps must be Date values.');
   }
-  if (key !== undefined && typeof key !== 'string') {
-    throw new TypeError('Durable task status snapshot job key must be a string.');
+  const logicalKey =
+    key === undefined
+      ? undefined
+      : isScopedKey(key)
+        ? scopedKeyFactsFor(key).key
+        : typeof key === 'string'
+          ? key
+          : undefined;
+  if (key !== undefined && logicalKey === undefined) {
+    throw new TypeError('Durable task status snapshot job key must be a string or ScopedKey.');
   }
   if (leasedUntil !== undefined && !taskDateIsDate(leasedUntil)) {
     throw new TypeError('Durable task status snapshot job lease timestamp must be a Date value.');
@@ -523,7 +543,7 @@ function snapshotStatusJob(job: DurableTaskStatusJob, includeArgs: boolean): Dur
     attempts,
     createdAt: copyDate(createdAt),
     updatedAt: copyDate(updatedAt),
-    ...(key === undefined ? {} : { key }),
+    ...(logicalKey === undefined ? {} : { key: logicalKey }),
     ...(lastError === undefined
       ? {}
       : { lastError: taskString(scrubSecretLifecycleValue(lastError)) }),

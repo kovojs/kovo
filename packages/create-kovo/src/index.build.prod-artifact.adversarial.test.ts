@@ -1275,6 +1275,7 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
         '  createMemoryStorage,',
         '  createSigningKeyRing,',
         '  createStorageDownloadEndpoint,',
+        '  publicScopedKey,',
       ].join('\n'),
     )
     .replace('  redirect,\n  route,', '  redirect,\n  respond,\n  route,')
@@ -1299,7 +1300,7 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
         '  ],',
         '});',
         'const m1CapabilityStorage = createMemoryStorage();',
-        "await m1CapabilityStorage.put('receipts/m1.txt', 'm1 capability secret\\n', {",
+        "await m1CapabilityStorage.put(publicScopedKey('receipts/m1.txt'), 'm1 capability secret\\n', {",
         "  contentType: 'text/plain',",
         "  metadata: { filename: 'm1.txt' },",
         '});',
@@ -1346,7 +1347,7 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
         "      access: publicAccess('public M1 capability URL proof'),",
         '      async page(context) {',
         "        if (!context.signUrl) throw new Error('missing M1 signUrl');",
-        "        const signed = await context.signUrl({ key: 'receipts/m1.txt', expiresIn: 60_000 });",
+        "        const signed = await context.signUrl({ key: publicScopedKey('receipts/m1.txt'), expiresIn: 60_000 });",
         '        return <main><a id="m1-capability-link" href={signed.url}>M1 capability</a></main>;',
         '      },',
         '    }),',

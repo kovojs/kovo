@@ -241,7 +241,7 @@ export function addStorageQueryWriteProof(root: string): void {
   queries = replaceRequired(
     queries,
     "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { publicAccess, query, type JsonValue, type QueryLoadContext, type Reader, type StorageCapability } from '@kovojs/server';",
+    "import { publicAccess, publicScopedKey, query, type JsonValue, type QueryLoadContext, type Reader, type StorageCapability } from '@kovojs/server';",
     'storage query write proof import',
   );
   queries = replaceRequired(
@@ -263,7 +263,7 @@ export function addStorageQueryWriteProof(root: string): void {
       '    storage?: AppStorageWriteQueryLoadContext,',
       '  ): Promise<{ ok: true }> {',
       "    if (!storage) throw new Error('storage query proof requires loader context');",
-      "    await storage.put('receipts/query-write-proof.txt', 'bad');",
+      "    await storage.put(publicScopedKey('receipts/query-write-proof.txt'), 'bad');",
       '    return { ok: true };',
       '  },',
       '});',
@@ -276,7 +276,7 @@ export function addStorageQueryWriteProof(root: string): void {
       '    storage?: AppStorageWriteQueryLoadContext,',
       '  ): Promise<{ ok: true }> {',
       "    if (!storage) throw new Error('storage query proof requires loader context');",
-      "    await storage.delete('receipts/query-delete-proof.txt');",
+      "    await storage.delete(publicScopedKey('receipts/query-delete-proof.txt'));",
       '    return { ok: true };',
       '  },',
       '});',

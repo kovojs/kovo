@@ -655,9 +655,9 @@ export const respond = witnessFreeze({
     return routeResponseOutcome(body, options, 'attachment');
   },
   /**
-   * Serve a stored upload by its (server-generated, opaque) storage key. KV428 (SPEC §6.6/§9.1):
-   * this path takes a BARE STRING key, so there is no compile-visible verification that the bytes
-   * are inline-safe — the static brand degrades to a RUNTIME SIDECAR-MARKER, fail-closed:
+   * Serve a stored upload by its server-generated, runtime-opaque `ScopedKey`. KV428/KV450
+   * (SPEC §6.6/§9.1): the key retains owner provenance while the bytes' inline-safety brand
+   * degrades to a RUNTIME SIDECAR-MARKER, fail-closed:
    *
    *  - Defaults to `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`.
    *  - The served `Content-Type` is minted from the SNIFFED stored bytes (server truth), NOT the

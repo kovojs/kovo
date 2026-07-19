@@ -1,3 +1,17 @@
+import {
+  freezeSecurityValue,
+  securityArrayAppend,
+  securityNullRecord,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
+  securityStringCharCodeAt,
+  securityStringSlice,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
+} from './internal/security-witness-intrinsics.js';
+
 /**
  * Runtime-opaque owner provenance for non-database stateful sinks (SPEC §6.6 C9).
  *
@@ -12,7 +26,7 @@ export interface ScopedKey {
   readonly [scopedKeyBrand]: 'kovo-scoped-key';
 }
 
-/** Closed framework system namespaces. App-authored reason strings are deliberately absent. */
+/** @internal Closed framework system namespaces. App-authored reason strings are absent. */
 export type FrameworkScopedKeyPosture =
   | 'durable-task-cron'
   | 'durable-task-system'
@@ -42,7 +56,7 @@ securitySetAdd(systemPostures, 'security-test');
  *
  * Principal-owned state should instead use `scopedKey(request, key)` from `@kovojs/server` (or a
  * task principal scope). This named public posture is a visible capability choice, not a reason
- * string that can accidentally masquerade as authority.
+ * string that can accidentally masquerade as authority (SPEC §6.6).
  */
 export function publicScopedKey(key: string): ScopedKey {
   return mintScopedKey('public', 'public', key);
@@ -193,16 +207,3 @@ function parseFrame(frame: unknown): string[] {
   }
   return components;
 }
-import {
-  freezeSecurityValue,
-  securityArrayAppend,
-  securityNullRecord,
-  securitySet,
-  securitySetAdd,
-  securitySetHas,
-  securityStringCharCodeAt,
-  securityStringSlice,
-  securityWeakMap,
-  securityWeakMapGet,
-  securityWeakMapSet,
-} from './internal/security-witness-intrinsics.js';

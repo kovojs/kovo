@@ -68,6 +68,7 @@ const compilerStructuralJsxPath = path.join(
   'packages/compiler/src/lower/structural-jsx.ts',
 );
 const coreSinkPolicyPath = path.join(repoRoot, 'packages/core/src/internal/sink-policy.ts');
+const coreScopedKeyPath = path.join(repoRoot, 'packages/core/src/scoped-key.ts');
 const semanticAttributeManifestPath = path.join(
   repoRoot,
   'packages/core/src/internal/semantic-attribute-manifest.ts',
@@ -197,6 +198,9 @@ const generatedDeferredStyleControlManifestEntry =
   "  'data-kovo-deferred-style', // fixed high-impact denominator witness";
 const removedGeneratedDeferredStyleControlManifestEntry =
   '  // data-kovo-deferred-style generated-control entry removed by mutant';
+
+const scopedKeyRuntimeWitnessBranch = '  if (facts === undefined) {';
+const removedScopedKeyRuntimeWitnessBranch = '  if (false && facts === undefined) {';
 
 const safeIframeSandboxAllowFormsEntry = "  'allow-forms',";
 const removedSafeIframeSandboxAllowFormsEntry = '  // allow-forms sandbox token removed by mutant';
@@ -1707,6 +1711,16 @@ const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
 ].join('\n');
 
 export const SECURITY_GATE_MUTANTS = [
+  {
+    description: 'Lets an unwitnessed structure pass the ScopedKey runtime authority lookup.',
+    expectedKiller: 'stateful sink keys must retain the module-private runtime witness',
+    name: 'scoped-key/drop-runtime-witness-rejection',
+    replacement: removedScopedKeyRuntimeWitnessBranch,
+    search: scopedKeyRuntimeWitnessBranch,
+    sourceFile: coreScopedKeyPath,
+    sourceOnly: true,
+    test: assertScopedKeyRuntimeWitnessIsPinned,
+  },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
     behavioralTypeScript: true,
@@ -6330,6 +6344,12 @@ async function assertAnalyzerSummaryConditionalEffectClosureIsEnforced(moduleUnd
 async function assertServerValueMissingInputClosureIsPinned(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(serverValueMissingInputClosureBranch)) {
     throw new Error('serverValue no longer rejects a missing provenance input');
+  }
+}
+
+async function assertScopedKeyRuntimeWitnessIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(scopedKeyRuntimeWitnessBranch)) {
+    throw new Error('ScopedKey no longer rejects a missing module-private runtime witness');
   }
 }
 

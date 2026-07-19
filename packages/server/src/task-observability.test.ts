@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { secret } from '@kovojs/core';
+import { principalScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import {
   createDurableTaskStatus,
@@ -226,6 +227,7 @@ describe('durable task observability (SPEC §9.6)', () => {
 
   it('queries a Postgres-compatible executor with parameterized filters', async () => {
     const statements: DurableTaskStatusSqlStatement[] = [];
+    const persistedKey = principalScopedKey('tenant-1', 'order-1');
     const status = createDurableTaskStatus({
       async execute(statement) {
         statements.push(statement);
@@ -239,7 +241,7 @@ describe('durable task observability (SPEC §9.6)', () => {
               last_error: 'boom',
               lease_owner: null,
               leased_until: null,
-              logical_key: 'order-1',
+              logical_key: scopedKeyFactsFor(persistedKey).frame,
               run_at: '2026-06-30T10:00:00.000Z',
               status: 'dead',
               task_key: 'email.send',
@@ -266,6 +268,57 @@ describe('durable task observability (SPEC §9.6)', () => {
     expect(statements[0]!.text).toContain('NULL AS args');
     expect(statements[0]!.text).toContain('NULL AS last_error');
     expect(statements[0]!.values).toEqual(['email.send', ['failed', 'dead'], 5, 0]);
+  });
+
+  it('reports only the logical component of an opaque principal-scoped queue key', async () => {
+    const now = new Date('2026-06-30T10:00:00.000Z');
+    const status = createDurableTaskStatus({
+      snapshot: () => [
+        {
+          args: {},
+          attempts: 0,
+          createdAt: now,
+          id: 'job_scoped_key',
+          key: principalScopedKey('private-principal', 'order-1'),
+          runAt: now,
+          status: 'ready',
+          task: 'email.send',
+          updatedAt: now,
+        },
+      ],
+    });
+
+    const record = await status.get('job_scoped_key');
+
+    expect(record).toMatchObject({ key: 'order-1' });
+    expect(JSON.stringify(record)).not.toContain('private-principal');
+  });
+
+  it('rejects legacy bare Postgres logical keys instead of guessing a scope', async () => {
+    const status = createDurableTaskStatus({
+      async execute() {
+        return {
+          rows: [
+            {
+              attempts: 0,
+              args: null,
+              created_at: '2026-06-30T10:00:00.000Z',
+              id: 'job_legacy_key',
+              last_error: null,
+              lease_owner: null,
+              leased_until: null,
+              logical_key: 'order-1',
+              run_at: '2026-06-30T10:00:00.000Z',
+              status: 'ready',
+              task_key: 'email.send',
+              updated_at: '2026-06-30T10:00:00.000Z',
+            },
+          ],
+        };
+      },
+    });
+
+    await expect(status.list()).rejects.toThrow(/KV450/u);
   });
 
   it('bounds operator selectors and pagination before invoking the SQL executor', async () => {

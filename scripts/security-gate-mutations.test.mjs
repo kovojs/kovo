@@ -8,7 +8,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after finite browser-control enrollment', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(245);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(246);
   });
 
   it('enrolls behavioral request-body shape, allocation, and FormData mutants', () => {

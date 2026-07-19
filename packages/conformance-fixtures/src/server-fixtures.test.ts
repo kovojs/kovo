@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import {
   domain,
   errorBoundary,
@@ -360,10 +361,15 @@ describe('@kovojs/test server fixture facts', () => {
       firstRateLimitPasses: true,
       secondRateLimitFailure: 'rateLimited',
     });
-    // KV428 (SPEC §6.6/§9.1): the storage key is a server-minted opaque UUID under the `receipts`
-    // namespace (never the client filename), and the served contentType is SNIFFED (`%PDF-` →
-    // application/pdf), not the client-declared type.
-    const receiptKey = expect.stringMatching(/^receipts\/[0-9a-f-]{36}$/u) as unknown as string;
+    // KV428/KV450 (SPEC §6.6/§9.1): the storage key is a server-minted runtime-opaque ScopedKey
+    // whose logical component is a UUID under `receipts` (never the client filename), and the
+    // served contentType is SNIFFED (`%PDF-` → application/pdf), not the client-declared type.
+    const receiptKey = (fact.upload.result as any).changes[0].input.receipt.key;
+    expect(scopedKeyFactsFor(receiptKey)).toMatchObject({
+      key: expect.stringMatching(/^receipts\/[0-9a-f-]{36}$/u),
+      posture: 'system',
+      systemPosture: 'framework-upload',
+    });
     const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e]);
     expect(fact.upload.result).toEqual({
       changes: [
@@ -390,7 +396,7 @@ describe('@kovojs/test server fixture facts', () => {
       value: {
         orderId: 'o1',
         session: 'u1',
-        storageKey: receiptKey,
+        stored: true,
       },
     });
     expect(fact.upload.stored).toEqual({
