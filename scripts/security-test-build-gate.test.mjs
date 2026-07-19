@@ -645,6 +645,67 @@ describe('security-test-build-gate', () => {
     ).toBe(true);
   });
 
+  it('keeps the honest Postgres floor and explicit Secret proofs enrolled after retiring unreachable read-boundary claims', () => {
+    const testName =
+      'distinguishes Postgres reader-role denials from runtime Secret wire refusal and audited reveal acceptance';
+    const proofsByClaim = new Map(SECURITY_BUILD_PROOFS.map((proof) => [proof.claimId, proof]));
+
+    expect(proofsByClaim.get('postgres-reader-role-secret-grant-floor')).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      code: 'KV435',
+      requiredNeedles: expect.arrayContaining([
+        'migrateRuntimeSecretBoundaryProof(root, dataDir)',
+        'queries/runtime-secret-column-engine-denial-query',
+        '/permission denied for table runtime_secret_proof/u',
+        "expect(requestOutput).not.toContain('KV435')",
+      ]),
+      testName,
+    });
+    expect(proofsByClaim.get('postgres-reader-role-secret-view-floor')).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      code: 'KV435',
+      requiredNeedles: expect.arrayContaining([
+        'CREATE VIEW runtime_secret_proof_view WITH (security_invoker=true)',
+        'queries/runtime-secret-view-engine-denial-query',
+        '/permission denied for view runtime_secret_proof_view/u',
+      ]),
+      testName,
+    });
+    expect(proofsByClaim.get('runtime-secret-explicit-box-egress')).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      code: 'KV435',
+      requiredNeedles: expect.arrayContaining([
+        "const boxed = secret('runtime-secret-value')",
+        'queries/runtime-secret-explicit-box-egress-query',
+        'expect(boxResponse.status, boxBody).toBe(500)',
+        "expect(requestOutput).toContain('KV435')",
+      ]),
+      testName,
+    });
+    expect(proofsByClaim.get('runtime-secret-audited-reveal-acceptance')).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      code: 'KV435',
+      requiredNeedles: expect.arrayContaining([
+        "trustedReveal(secret('runtime-secret-value'), {",
+        'queries/runtime-secret-reveal-acceptance-query',
+        'expect(revealResponse.status, revealBody).toBe(200)',
+        "expect(output().slice(revealOutputOffset)).not.toContain('KV435')",
+      ]),
+      testName,
+    });
+
+    for (const retiredClaim of [
+      'runtime-secret-db-read-boundary',
+      'runtime-secret-raw-sql-read-boundary',
+      'runtime-secret-computed-read-boundary',
+      'runtime-secret-reader-raw-sql-refusal',
+      'runtime-secret-declared-read-capability',
+      'runtime-secret-audited-reveal-egress',
+    ]) {
+      expect(proofsByClaim.has(retiredClaim), retiredClaim).toBe(false);
+    }
+  });
+
   it('keeps the KV426 export-star resolver proof enrolled in the real build gate', () => {
     expect(
       SECURITY_BUILD_PROOFS.find(

@@ -27,34 +27,31 @@ ledger, but it must not add a broader guarantee outside the block.
   },
   "guarantees": [
     {
-      "id": "secret-column-query-wire-egress",
-      "statement": "In a KOVO_PARANOID production artifact, a runtime value boxed from a schema-declared secret column is refused before it crosses the Kovo query-wire egress unless the app explicitly reveals or redacts it before egress.",
+      "id": "pglite-secret-column-reader-role-test-floor",
+      "statement": "In Kovo's PGlite-backed Postgres-role test posture for a KOVO_PARANOID production build, framework query reads run as the least-privilege reader role: declared public columns remain readable, while direct, raw-SQL, computed, function-backed, and whole-table reads that require declared secret columns are denied before a row reaches JavaScript. This proof does not claim an external-Postgres execution of the same secret-column fixture.",
       "tcbChokes": [
-        "core.secret.poison-box",
-        "core.secret.secret",
-        "core.secret.is-secret",
-        "core.secret.reveal-secret",
-        "server.secret-egress.assert-no-secret",
-        "server.response-posture.emit-to-wire"
+        "server.postgres-runtime.capability-closure-audit",
+        "server.postgres-runtime.request-scoped-db",
+        "server.postgres-runtime.pglite-request-scoped-db",
+        "server.managed-db.postgres-scoped-client"
       ],
-      "runtimeProofs": ["runtime-secret-db-read-boundary"]
+      "runtimeProofs": ["postgres-reader-role-secret-grant-floor"]
     },
     {
-      "id": "secret-raw-sql-query-wire-egress",
-      "statement": "In a KOVO_PARANOID production artifact, a runtime value boxed from a raw-SQL read of a secret table is refused before it crosses the Kovo query-wire egress unless the app explicitly reveals or redacts it before egress.",
+      "id": "pglite-secret-view-reader-role-test-floor",
+      "statement": "In Kovo's PGlite-backed Postgres-role test posture for a KOVO_PARANOID production build, a security-invoker view cannot restore reader access to an underlying declared secret column; the reader-role query is denied before a row reaches JavaScript. This proof does not claim an external-Postgres execution of the same secret-view fixture.",
       "tcbChokes": [
-        "core.secret.poison-box",
-        "core.secret.secret",
-        "core.secret.is-secret",
-        "core.secret.reveal-secret",
-        "server.secret-egress.assert-no-secret",
-        "server.response-posture.emit-to-wire"
+        "server.postgres-runtime.capability-closure-audit",
+        "server.postgres-runtime.reachable-view-audit",
+        "server.postgres-runtime.request-scoped-db",
+        "server.postgres-runtime.pglite-request-scoped-db",
+        "server.managed-db.postgres-scoped-client"
       ],
-      "runtimeProofs": ["runtime-secret-raw-sql-read-boundary"]
+      "runtimeProofs": ["postgres-reader-role-secret-view-floor"]
     },
     {
-      "id": "secret-view-query-wire-egress",
-      "statement": "In a KOVO_PARANOID production artifact, a runtime Secret read through a Drizzle view is refused at Kovo query-wire egress unless the app explicitly reveals or redacts it before egress.",
+      "id": "explicit-secret-query-wire-egress",
+      "statement": "In a KOVO_PARANOID production artifact, a framework Secret value created with the validating secret constructor is refused at Kovo query-wire egress; an explicitly audited trusted reveal is accepted.",
       "tcbChokes": [
         "core.secret.poison-box",
         "core.secret.secret",
@@ -63,13 +60,18 @@ ledger, but it must not add a broader guarantee outside the block.
         "server.secret-egress.assert-no-secret",
         "server.response-posture.emit-to-wire"
       ],
-      "runtimeProofs": ["runtime-secret-view-egress"]
+      "runtimeProofs": [
+        "runtime-secret-explicit-box-egress",
+        "runtime-secret-audited-reveal-acceptance"
+      ]
     }
   ],
   "nonGoals": [
     "Kovo does not sandbox an app author from their own server code, filesystem access, child processes, or arbitrary network calls.",
     "Kovo does not claim timing-side-channel resistance except for the documented constant-time comparison helpers on runtime poison boxes.",
     "Kovo does not guarantee availability or denial-of-service resistance.",
+    "The Postgres engine-denial proofs do not claim that denied database values were boxed at Kovo query-wire egress; Postgres refuses those reads before a secret row reaches JavaScript.",
+    "The explicit Secret egress guarantee begins at a framework-owned Secret value and does not claim that arbitrary app strings are automatically runtime-tainted as secrets.",
     "Kovo does not yet claim that every database reader handle is engine-enforced read-only or that every declared-table write is engine-enforced; those remain Phase 1 guarantees until their paranoid-mode proofs are enrolled.",
     "Kovo does not yet claim complete contextual renderer default-deny coverage for every executable render position; that remains a Phase 3 guarantee until its paranoid-mode proofs are enrolled.",
     "Static diagnostics are defense-in-depth and author feedback. The guarantees above do not depend on static classifiers being complete."
@@ -79,10 +81,13 @@ ledger, but it must not add a broader guarantee outside the block.
 
 ## Current Guarantee Shape
 
-Kovo's current published guarantee is confidentiality at the framework query-wire egress
-for runtime `Secret` values proven in paranoid production artifacts. The load-bearing
-runtime chokes are the non-coercible `Secret` box, the `isSecret` guard, the audited
-`revealSecret` path, the secret-egress refusal helper, and `emitToWire`.
+Kovo's current published confidentiality guarantees have two distinct floors. Postgres
+secret-column and security-invoker-view shapes are denied at the database engine under
+the least-privilege reader role in the PGlite-backed test posture. Those two guarantees
+are deliberately not external-Postgres execution claims. Separately, an explicit
+runtime `Secret` is refused at the framework query-wire unless it passes through the
+audited reveal path. The production-artifact proofs keep those claims separate so an
+engine denial cannot be misreported as runtime value boxing.
 
 Broader plan language such as "secure by construction", "one choke per property", or
 "runtime chokes close the class" is architectural direction unless and until a precise

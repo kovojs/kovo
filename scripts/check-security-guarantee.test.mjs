@@ -34,7 +34,7 @@ function securityRegister(overrides = {}) {
         id: 'secret-egress',
         statement: 'A runtime Secret is refused at query-wire egress in paranoid mode.',
         tcbChokes: ['server.response-posture.emit-to-wire'],
-        runtimeProofs: ['runtime-secret-db-read-boundary'],
+        runtimeProofs: ['runtime-secret-explicit-box-egress'],
       },
     ],
     nonGoals: ['availability'],
@@ -53,10 +53,10 @@ function run(files, options = {}) {
     exists: (relativePath) => Object.hasOwn(files, relativePath),
     proofEntries: [
       {
-        claimId: 'runtime-secret-db-read-boundary',
+        claimId: 'runtime-secret-explicit-box-egress',
         requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
         testName:
-          'boxes schema-declared secret reads and raw SQL aliases before query-wire egress in paranoid mode',
+          'distinguishes Postgres reader-role denials from runtime Secret wire refusal and audited reveal acceptance',
       },
       {
         claimId: 'readonly-managed-handle-prod-artifact',
@@ -118,7 +118,7 @@ describe('security guarantee gate', () => {
             id: 'secret-egress',
             statement: 'A runtime Secret is refused at query-wire egress in paranoid mode.',
             tcbChokes: [],
-            runtimeProofs: ['runtime-secret-db-read-boundary'],
+            runtimeProofs: ['runtime-secret-explicit-box-egress'],
           },
         ],
       }),
@@ -160,7 +160,7 @@ describe('security guarantee gate', () => {
     );
   });
 
-  it('rejects a missing runtime proof', () => {
+  it('rejects a retired runtime read-boundary claim after its honest proof rename', () => {
     const result = run({
       [guaranteePath]: securityRegister({
         guarantees: [
@@ -168,7 +168,7 @@ describe('security guarantee gate', () => {
             id: 'secret-egress',
             statement: 'A runtime Secret is refused at query-wire egress in paranoid mode.',
             tcbChokes: ['server.response-posture.emit-to-wire'],
-            runtimeProofs: ['missing-proof'],
+            runtimeProofs: ['runtime-secret-db-read-boundary'],
           },
         ],
       }),
@@ -184,7 +184,7 @@ describe('security guarantee gate', () => {
     });
 
     expect(result.findings).toContain(
-      'SECURITY.md: secret-egress references unknown runtime/paranoid proof missing-proof',
+      'SECURITY.md: secret-egress references unknown runtime/paranoid proof runtime-secret-db-read-boundary',
     );
   });
 
@@ -219,9 +219,9 @@ describe('security guarantee gate', () => {
   it('recognizes paranoid runtime proof entries mechanically', () => {
     expect(
       isParanoidRuntimeProof({
-        claimId: 'runtime-secret-db-read-boundary',
+        claimId: 'runtime-secret-explicit-box-egress',
         requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
-        testName: 'boxes runtime secret values in paranoid mode',
+        testName: 'refuses an explicit runtime Secret value in paranoid mode',
       }),
     ).toBe(true);
 
