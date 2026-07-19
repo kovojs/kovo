@@ -664,7 +664,12 @@ function privateScopeCarrierBindingIsStableAtUse(
     // `const alias = request` and `const guard = request.guard` still close every proof.
     if (exactPrivateScopeScalarProjection(initializer, parameterKey)) continue;
     if (
-      privateScopeCarrierReferencesHaveReviewedConsumers(initializer, parameterKey, body, auditedUse)
+      privateScopeCarrierReferencesHaveReviewedConsumers(
+        initializer,
+        parameterKey,
+        body,
+        auditedUse,
+      )
     ) {
       continue;
     }
@@ -695,7 +700,8 @@ function privateScopeCarrierBindingIsStableAtUse(
       symbolForIdentifierReference(reference) ?? reference.getSymbol(),
     );
     if (referenceKey !== parameterKey || nodeContains(auditedUse, reference)) continue;
-    if (!privateScopeCarrierReferenceHasReviewedConsumer(reference, parameterKey, body)) return false;
+    if (!privateScopeCarrierReferenceHasReviewedConsumer(reference, parameterKey, body))
+      return false;
   }
 
   return true;

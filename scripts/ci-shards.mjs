@@ -228,8 +228,7 @@ const STARTER_ENTRIES = [
   {
     id: 'transaction-readonly-runtime-floor',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
-    testName:
-      'keeps query writes KV449-closed when the dedicated KV433 finding is advisory',
+    testName: 'keeps query writes KV449-closed when the dedicated KV433 finding is advisory',
     seconds: 60,
   },
   {

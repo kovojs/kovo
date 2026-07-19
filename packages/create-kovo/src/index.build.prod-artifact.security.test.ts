@@ -259,9 +259,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         join(root, 'migrations/001_runtime_secret_boundary.sql'),
         'utf8',
       );
-      expect(proofQueries).toContain(
-        "import { secret, trustedReveal } from '@kovojs/core';",
-      );
+      expect(proofQueries).toContain("import { secret, trustedReveal } from '@kovojs/core';");
       expect(proofQueries).not.toContain("from './_kovo/app-runtime-db.js'");
       expect(generatedRuntimeDb).not.toContain('declareSecretReadCapability');
       expect(proofQueries).not.toContain('declareSecretReadCapability');

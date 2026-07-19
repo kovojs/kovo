@@ -55,12 +55,7 @@ export function validateAuthoringSurface(
   const diagnostics: CompilerDiagnostic[] = [];
 
   if (model !== null) {
-    appendCompilerJsxRuntimeImportDiagnostics(
-      diagnostics,
-      options.fileName,
-      options.source,
-      model,
-    );
+    appendCompilerJsxRuntimeImportDiagnostics(diagnostics, options.fileName, options.source, model);
     appendAuthoredExecutableReferenceDiagnostics(
       diagnostics,
       options.fileName,
@@ -141,10 +136,7 @@ export function validateAuthoringSurface(
           'Authoring-surface diagnostics',
         );
       }
-      if (
-        !hasCompilerJsxRuntimeImport &&
-        sourceCall.frameworkJsxRuntimeFactory !== undefined
-      ) {
+      if (!hasCompilerJsxRuntimeImport && sourceCall.frameworkJsxRuntimeFactory !== undefined) {
         compilerArrayAppend(
           diagnostics,
           compilerJsxRuntimeCallDiagnostic({
@@ -173,24 +165,16 @@ function appendCompilerJsxRuntimeImportDiagnostics(
   const imports = model.compilerJsxRuntimeImports;
   const length = compilerArrayLength(imports, 'Compiler JSX-runtime imports');
   for (let index = 0; index < length; index += 1) {
-    const imported = compilerOwnDataValue(
-      imports,
-      index,
-      'Compiler JSX-runtime imports',
-    ) as ComponentModuleModel['compilerJsxRuntimeImports'][number] | undefined;
+    const imported = compilerOwnDataValue(imports, index, 'Compiler JSX-runtime imports') as
+      | ComponentModuleModel['compilerJsxRuntimeImports'][number]
+      | undefined;
     if (!imported) {
       throw new TypeError(`Compiler JSX-runtime imports[${index}] must be dense.`);
     }
     compilerArrayAppend(
       diagnostics,
       {
-        ...diagnosticFor(
-          fileName,
-          'KV235',
-          source,
-          imported.start,
-          imported.end - imported.start,
-        ),
+        ...diagnosticFor(fileName, 'KV235', source, imported.start, imported.end - imported.start),
         help: compilerArrayJoin(
           [
             `Blocked reason: app source imports compiler-owned JSX construction ABI ${compilerJsonStringify(imported.factories)} from \`${imported.specifier}\`.`,
@@ -200,8 +184,7 @@ function appendCompilerJsxRuntimeImportDiagnostics(
           ],
           '\n',
         ),
-        message:
-          'App source imports the compiler-owned JSX runtime; author TSX/JSX instead.',
+        message: 'App source imports the compiler-owned JSX runtime; author TSX/JSX instead.',
       },
       'Authoring-surface diagnostics',
     );

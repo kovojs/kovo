@@ -1424,8 +1424,7 @@ export const unsafe = buildNode('script', { src: request.url });
           expect.objectContaining({
             code: 'KV235',
             help: expect.stringContaining(`compiler-owned JSX construction ABI ["${factory}"]`),
-            message:
-              'App source imports the compiler-owned JSX runtime; author TSX/JSX instead.',
+            message: 'App source imports the compiler-owned JSX runtime; author TSX/JSX instead.',
           }),
         ]),
       );
@@ -1447,8 +1446,7 @@ export const values = [runtime, lazy, common];
     expect(
       result.diagnostics.filter(
         (diagnostic) =>
-          diagnostic.code === 'KV235' &&
-          diagnostic.message.includes('compiler-owned JSX runtime'),
+          diagnostic.code === 'KV235' && diagnostic.message.includes('compiler-owned JSX runtime'),
       ),
     ).toHaveLength(4);
   });
@@ -1479,8 +1477,8 @@ export const unsafe = buildNode('script', { src: request.url });
       ]),
     );
     expect(
-      result.diagnostics.filter(
-        (diagnostic) => diagnostic.message.includes('compiler-owned JSX constructor'),
+      result.diagnostics.filter((diagnostic) =>
+        diagnostic.message.includes('compiler-owned JSX constructor'),
       ),
     ).toHaveLength(1);
   });

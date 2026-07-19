@@ -261,8 +261,7 @@ function finiteBrowserControlTupleDeletionMutants() {
 }
 
 const disabledBrowserControlClosureBranch = "  if (control.staticPolicy === 'disabled') {";
-const invertedDisabledBrowserControlClosureBranch =
-  "  if (control.staticPolicy !== 'disabled') {";
+const invertedDisabledBrowserControlClosureBranch = "  if (control.staticPolicy !== 'disabled') {";
 
 const blockedActiveEmbedEntry = "  'embed',";
 const removedBlockedActiveEmbedEntry = '  // embed denominator entry removed by mutant';
@@ -3764,7 +3763,9 @@ function assertResidualBrowserControlPolicyBehavior(moduleUnderTest) {
       posture: 'dynamic-binding',
     });
     if (decision.action !== 'preserve') {
-      throw new Error(`dynamic browser control did not preserve reviewed value: ${tag}[${attribute}]`);
+      throw new Error(
+        `dynamic browser control did not preserve reviewed value: ${tag}[${attribute}]`,
+      );
     }
   }
 

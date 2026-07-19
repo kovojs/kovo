@@ -118,16 +118,8 @@ describe('element-context execution and isolation sinks', () => {
       '<geolocation autolocate={state.value} />',
       'geolocation',
     ],
-    [
-      'geolocation continuous acquisition',
-      '<geolocation watch={state.value} />',
-      'geolocation',
-    ],
-    [
-      'geolocation accuracy selection',
-      '<geolocation accuracymode={state.value} />',
-      'geolocation',
-    ],
+    ['geolocation continuous acquisition', '<geolocation watch={state.value} />', 'geolocation'],
+    ['geolocation accuracy selection', '<geolocation accuracymode={state.value} />', 'geolocation'],
   ])('rejects an unreviewed dynamic %s control', (_label, markup, reason) => {
     expect(
       kv236Diagnostics(`

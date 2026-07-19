@@ -73,11 +73,11 @@ C13, and every residual must have a named door or explicit out-of-scope disposit
 The three static options are complementary, not interchangeable. Kovo therefore adopts the
 layered design above rather than asking one mechanism to carry the entire proof:
 
-| Mechanism | What it proves best | Cost accepted | Boundary it must not cross |
-| --- | --- | --- | --- |
-| Capability-closed module graph | A reachable module cannot acquire an undeclared authority | Versioned package summaries, conditional-export closure, and graph maintenance | Possessing a reviewed capability does not prove that every use of it is safe |
-| Finite compiler-owned IR | The ordinary security-critical effect is one exact reviewed operation | A deliberately smaller authoring language and explicit exceptional doors | It does not model arbitrary JavaScript or admit hand-authored lowered IR |
-| Narrow abstract interpretation | Residual cross-helper data/provenance facts over normalized semantics | Budgets, conservative closed verdicts, and some false positives | It must not become a general JavaScript verifier or a new raw-AST pattern treadmill |
+| Mechanism                      | What it proves best                                                   | Cost accepted                                                                  | Boundary it must not cross                                                          |
+| ------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Capability-closed module graph | A reachable module cannot acquire an undeclared authority             | Versioned package summaries, conditional-export closure, and graph maintenance | Possessing a reviewed capability does not prove that every use of it is safe        |
+| Finite compiler-owned IR       | The ordinary security-critical effect is one exact reviewed operation | A deliberately smaller authoring language and explicit exceptional doors       | It does not model arbitrary JavaScript or admit hand-authored lowered IR            |
+| Narrow abstract interpretation | Residual cross-helper data/provenance facts over normalized semantics | Budgets, conservative closed verdicts, and some false positives                | It must not become a general JavaScript verifier or a new raw-AST pattern treadmill |
 
 Routing is mechanical: first remove unavailable authority with the module graph; then require each
 ordinary security-critical effect to lower to finite IR; then interpret only the residual normalized
