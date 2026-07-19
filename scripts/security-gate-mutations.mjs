@@ -10,6 +10,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import dns from 'node:dns';
+import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -105,6 +107,25 @@ const requestIngressPolicyPath = path.join(
   'packages/server/src/request-ingress-policy.ts',
 );
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
+
+const serverEgressBehavioralInstrumentation = [
+  '',
+  "export { installUndiciFloor as __securityMutationInstallUndiciFloor } from './egress-undici.js';",
+].join('\n');
+const taskEgressBehavioralInstrumentation = [
+  '',
+  "export { s as __securityMutationSchema } from './schema.js';",
+  "export { task as __securityMutationTask } from './task.js';",
+  "export { MemoryDurableTaskQueue as __securityMutationTaskQueue } from './task-queue.js';",
+].join('\n');
+const webhookEgressBehavioralInstrumentation = [
+  '',
+  "export { s as __securityMutationSchema } from './schema.js';",
+].join('\n');
+const serverBuildBehavioralInstrumentation = [
+  '',
+  'export const __securityMutationVercelFunctionSource = vercelFunctionSource;',
+].join('\n');
 
 const runtimeSelectedExecutableReferenceClosureBranch =
   '      appendRuntimeSelectedExecutableReferenceDiagnostics(found, diagnostics, element);';
@@ -2351,13 +2372,13 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertRenderEquivalenceProjectIdentityIsPinned,
   },
   {
+    behavioralTypeScript: true,
     description: 'Allows computed or optional framework-context fetch invocation shapes.',
     expectedKiller: 'framework egress calls must retain exact direct context.fetch provenance',
     name: 'drizzle-egress/allow-inexact-context-fetch-call',
     replacement: weakenedExactContextFetchInvocationBranch,
     search: exactContextFetchInvocationBranch,
     sourceFile: drizzleTrustEscapesPath,
-    sourceOnly: true,
     test: assertExactContextFetchInvocationIsPinned,
   },
   {
@@ -2652,6 +2673,8 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertFixtureOnlyProofIsCaught,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description:
       'Weakens KV426 call/new expression value-flow so unknown call results are treated as clean.',
     expectedKiller: 'KV426 trusted-output value-flow must fail closed for unknown call results',
@@ -2659,7 +2682,6 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: weakenedTrustedHtmlCallTaintFailClosedBranch,
     search: trustedHtmlCallTaintFailClosedBranch,
     sourceFile: trustedHtmlProvenancePath,
-    sourceOnly: true,
     test: assertTrustedHtmlProvenanceKeepsCallResultFailClosed,
   },
   {
@@ -2693,13 +2715,13 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertManagedDbThrowInvariantIsCaught,
   },
   {
+    behavioralTypeScript: true,
     description: 'Deletes the managed raw-driver escape denial before nested handle wrapping.',
     expectedKiller: 'H/I managed raw-driver escapes must be denied before Reflect.get',
     name: 'sql-safe-handle/drop-managed-raw-driver-escape-denial',
     replacement: removedManagedRawDriverEscapeBranch,
     search: managedRawDriverEscapeBranch,
     sourceFile: sqlSafeHandlePath,
-    sourceOnly: true,
     test: assertManagedRawDriverEscapeDenialPrecedesNestedWrapping,
   },
   {
@@ -2714,16 +2736,17 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertResponseFragmentTrustedHtmlRouteCountIsCaught,
   },
   {
+    behavioralTypeScript: true,
     description: 'Deletes HTML escaping from the /_q query response wire body sink.',
     expectedKiller: 'C2 /_q query wire bodies must HTML-escape serialized values',
     name: 'server-wire-html/drop-query-wire-body-escaping',
     replacement: removedQueryWireHtmlEscapeBranch,
     search: queryWireHtmlEscapeBranch,
     sourceFile: queryWireHtmlPath,
-    sourceOnly: true,
     test: assertQueryWireHtmlBodyEscapingIsCaught,
   },
   {
+    behavioralTypeScript: true,
     description:
       'Deletes exact same-consumer identity from the Better Auth credential result refusal.',
     expectedKiller:
@@ -2732,10 +2755,10 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedBetterAuthCredentialResultIdentityBranch,
     search: betterAuthCredentialResultIdentityBranch,
     sourceFile: betterAuthCredentialRuntimeGatePath,
-    sourceOnly: true,
     test: assertBetterAuthCredentialResultIdentityIsPinned,
   },
   {
+    behavioralTypeScript: true,
     description: 'Lets any Better Auth consumer token invoke a different raw credential source.',
     expectedKiller:
       'M2 Better Auth raw callables must require a contract whose exact source matches the invocation',
@@ -2743,7 +2766,6 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedBetterAuthCredentialSourceIdentityBranch,
     search: betterAuthCredentialSourceIdentityBranch,
     sourceFile: betterAuthCredentialRuntimeGatePath,
-    sourceOnly: true,
     test: assertBetterAuthCredentialSourceIsPinned,
   },
   {
@@ -2819,13 +2841,14 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertRequestIngressVercelClientIsClosed,
   },
   {
+    behavioralInstrumentation: serverBuildBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Recomputes Vercel request ingress after the accepted prepared snapshot.',
     expectedKiller: 'generated Vercel dispatch must consume exactly one prepared ingress verdict',
     name: 'request-ingress/recompute-vercel-prepared-verdict',
     replacement: weakenedPreparedVercelIngressBranch,
     search: preparedVercelIngressBranch,
     sourceFile: serverBuildPath,
-    sourceOnly: true,
     test: assertGeneratedVercelPreparedIngressIsSingle,
   },
   {
@@ -2959,43 +2982,47 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertViteSourceKeepsJsToTsSiblingCandidates,
   },
   {
+    behavioralInstrumentation: serverEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Deletes the positive origin decision before framework-owned DNS resolution.',
     expectedKiller: 'framework egress must reject an undeclared origin before DNS',
     name: 'server-egress/drop-origin-before-dns',
     replacement: removedFrameworkEgressOriginCheck,
     search: frameworkEgressOriginCheck,
     sourceFile: serverEgressPath,
-    sourceOnly: true,
-    test: assertFrameworkEgressSourceKeepsPositiveCapability,
+    test: assertFrameworkEgressRejectsUndeclaredOriginBeforeDns,
   },
   {
+    behavioralInstrumentation: serverEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: "Deletes rebinding of Request private state to Kovo's installed dispatcher.",
     expectedKiller: 'framework egress must replace application dispatcher authority',
     name: 'server-egress/drop-dispatcher-pin',
     replacement: removedFrameworkEgressDispatcherPin,
     search: frameworkEgressDispatcherPin,
     sourceFile: serverEgressPath,
-    sourceOnly: true,
-    test: assertFrameworkEgressSourceKeepsPositiveCapability,
+    test: assertFrameworkEgressPinsInstalledDispatcher,
   },
   {
+    behavioralInstrumentation: taskEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Makes the durable-task contextual fetch capability replaceable after delivery.',
     expectedKiller: 'task ctx.fetch must be an exact non-replaceable own capability',
     name: 'server-egress/drop-task-context-fetch-seal',
     replacement: removedTaskEgressCapabilitySeal,
     search: taskEgressCapabilitySeal,
     sourceFile: taskRunnerPath,
-    sourceOnly: true,
     test: assertTaskEgressContextKeepsCapabilitySeal,
   },
   {
+    behavioralInstrumentation: webhookEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Makes the webhook contextual fetch capability replaceable after verification.',
     expectedKiller: 'webhook ctx.fetch must be an exact non-replaceable own capability',
     name: 'server-egress/drop-webhook-context-fetch-seal',
     replacement: removedWebhookEgressCapabilitySeal,
     search: webhookEgressCapabilitySeal,
     sourceFile: webhookPath,
-    sourceOnly: true,
     test: assertWebhookEgressContextKeepsCapabilitySeal,
   },
 ];
@@ -3227,9 +3254,9 @@ export const Raw = component({
     )
   ) {
     throw new Error(
-      `app-authored executable reference did not close through KV235: ${diagnostics
-        .map((diagnostic) => diagnostic.message)
-        .join(' | ') || '<open>'}`,
+      `app-authored executable reference did not close through KV235: ${
+        diagnostics.map((diagnostic) => diagnostic.message).join(' | ') || '<open>'
+      }`,
     );
   }
 }
@@ -4176,9 +4203,28 @@ async function assertSemanticTableNamespaceClosureIsEnforced(moduleUnderTest) {
   }
 }
 
-async function assertExactContextFetchInvocationIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(exactContextFetchInvocationBranch)) {
-    throw new Error('framework egress no longer requires exact direct context.fetch provenance');
+async function assertExactContextFetchInvocationIsPinned(moduleUnderTest) {
+  const facts = moduleUnderTest.collectUnregisteredSinksFromProject({
+    files: [
+      {
+        fileName: 'optional-context-fetch.ts',
+        source: `
+import { query } from '@kovojs/server';
+export const remote = query({ async load(_input, context) {
+  await context.fetch?.('https://api.example.test/optional');
+  return { ok: true };
+} });
+`,
+      },
+    ],
+  });
+  if (
+    !facts.some(
+      (fact) =>
+        fact.sink === 'request-handler.opaque-call' && fact.source?.includes('context.fetch'),
+    )
+  ) {
+    throw new Error('optional context.fetch invocation escaped the opaque-call runtime boundary');
   }
 }
 
@@ -5331,17 +5377,57 @@ async function assertRequestIngressVercelClientIsClosed(moduleUnderTest) {
   }
 }
 
-async function assertGeneratedVercelPreparedIngressIsSingle(_moduleUnderTest, { sourceText }) {
-  const start = sourceText.indexOf('function vercelFunctionSource(): string {');
-  const end = sourceText.indexOf('function vercelIngressMiddlewareSource(): string {', start);
-  if (start < 0 || end < 0) throw new Error('generated Vercel function source boundary is absent');
-  const vercelSource = sourceText.slice(start, end);
-  const matches = vercelSource.match(/prepareVercelRequestIngress\(nodeRequest\)/gu) ?? [];
-  if (matches.length !== 1) {
-    throw new Error(`generated Vercel dispatch has ${matches.length} prepared-ingress evaluations`);
+async function assertGeneratedVercelPreparedIngressIsSingle(moduleUnderTest) {
+  const generate = moduleUnderTest.__securityMutationVercelFunctionSource;
+  if (typeof generate !== 'function') {
+    throw new Error('behavioral Vercel function generator seam was not bundled');
   }
-  if (!vercelSource.includes(preparedVercelIngressBranch)) {
-    throw new Error('generated Vercel dispatch no longer routes one prepared verdict to rejection');
+
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-vercel-ingress-mutant-'));
+  try {
+    writeFileSync(path.join(tempRoot, 'index.cjs'), generate(), 'utf8');
+    writeFileSync(
+      path.join(tempRoot, 'node-adapter.mjs'),
+      [
+        'let prepareCount = 0;',
+        'export function armIncompleteNodeRequestClose() {}',
+        'export function prepareVercelRequestIngress() { prepareCount += 1; return Object.freeze({ id: prepareCount }); }',
+        'export function rejectPreparedNodeRequestIngress() { return false; }',
+        "export function preparedNodeRequestTransportMetadata() { return { httpVersion: '1.1', method: 'GET' }; }",
+        "export function preparedNodeRequestToWebRequest() { return new Request('https://app.example.test/'); }",
+        'export async function writeWebResponseToNode() {}',
+        'export function securityMutationPrepareCount() { return prepareCount; }',
+      ].join('\n'),
+      'utf8',
+    );
+    writeFileSync(
+      path.join(tempRoot, 'handler.mjs'),
+      "export default async function handler() { return new Response('ok'); }\n",
+      'utf8',
+    );
+    writeFileSync(
+      path.join(tempRoot, 'run.mjs'),
+      [
+        "import kovoVercelFunction from './index.cjs';",
+        "import { securityMutationPrepareCount } from './node-adapter.mjs';",
+        'const nodeResponse = { destroy() {}, end() {}, headersSent: false, writeHead() {} };',
+        'await kovoVercelFunction({}, nodeResponse);',
+        'if (securityMutationPrepareCount() !== 1) process.exitCode = 7;',
+      ].join('\n'),
+      'utf8',
+    );
+    const result = spawnSync(process.execPath, [path.join(tempRoot, 'run.mjs')], {
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(
+        `generated Vercel dispatch did not reuse one prepared ingress verdict (status ${result.status}): ${result.stderr ?? ''}`,
+      );
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
   }
 }
 
@@ -5795,13 +5881,20 @@ async function assertKv330WebhookContextTxEscapeProofEnrollmentIsPinned(moduleUn
   }
 }
 
-async function assertTrustedHtmlProvenanceKeepsCallResultFailClosed(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  const needle = "return firstProvenance([argumentProvenance, calleeProvenance]) ?? 'unprovable';";
-  if (!sourceText.includes(needle)) {
-    throw new Error(`KV426 value-flow must keep call/new results fail-closed via ${needle}`);
+async function assertTrustedHtmlProvenanceKeepsCallResultFailClosed(moduleUnderTest) {
+  const result = moduleUnderTest.compileComponentModule({
+    fileName: 'trusted-html-static-callee-call.tsx',
+    source: `
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  render: () => (
+    <article>{trustedHtml((0 as unknown as () => string)())}</article>
+  ),
+});
+`,
+  });
+  if (!result.diagnostics.some((diagnostic) => diagnostic.code === 'KV426')) {
+    throw new Error('KV426 admitted a call result whose callee and arguments prove no provenance');
   }
 }
 
@@ -5901,23 +5994,23 @@ async function assertManagedDbThrowInvariantIsCaught(moduleUnderTest) {
   );
 }
 
-async function assertManagedRawDriverEscapeDenialPrecedesNestedWrapping(
-  _moduleUnderTest,
-  { sourceText },
-) {
-  const denial = sourceText.indexOf(
-    'if (writePolicy !== undefined && isManagedRawDriverEscapeProperty(prop))',
-  );
-  if (denial === -1) {
-    throw new Error('managed raw-driver escape denial branch is missing');
+async function assertManagedRawDriverEscapeDenialPrecedesNestedWrapping(moduleUnderTest) {
+  const raw = { $client: { futureStatement() {} } };
+  const policy = moduleUnderTest.managedSqlExecutionPolicy({
+    capability: 'write',
+    dialect: 'sqlite',
+    tables: ['products'],
+    touches: ['product'],
+  });
+  const handle = moduleUnderTest.wrapManagedDbForSqlSafety(raw, 'enforce', policy);
+  let rejected = false;
+  try {
+    void handle.$client;
+  } catch (error) {
+    rejected = String(error).includes('KV422') && String(error).includes('raw driver escape');
   }
-  const firstReflectGet = sourceText.indexOf('witnessReflectGet(target, prop, receiver)');
-  const nestedWrap = sourceText.indexOf('isNestedSqlHandleProperty(prop)');
-  if (firstReflectGet === -1 || nestedWrap === -1) {
-    throw new Error('managed SQL handle wrapping landmarks are missing');
-  }
-  if (denial > firstReflectGet || denial > nestedWrap) {
-    throw new Error('managed raw-driver escape denial must run before Reflect.get/nested wrapping');
+  if (!rejected) {
+    throw new Error('managed $client raw-driver authority escaped the KV422 denial');
   }
 }
 
@@ -5952,29 +6045,58 @@ async function assertResponseFragmentTrustedHtmlRouteCountIsCaught(moduleUnderTe
   );
 }
 
-async function assertQueryWireHtmlBodyEscapingIsCaught(_moduleUnderTest, { sourceText } = {}) {
-  const findings = sinkPolicyGate.queryWireHtmlInvariantFindings('wire-html.ts', sourceText ?? '');
-  if (findings.includes('wire-html.ts: /_q query wire body must HTML-escape serialized values')) {
-    throw new Error('/_q query wire body escaping invariant was removed');
+async function assertQueryWireHtmlBodyEscapingIsCaught(moduleUnderTest) {
+  const html = moduleUnderTest.renderQueryWireHtml({
+    name: 'cart',
+    value: { html: '</kovo-query><script>globalThis.pwned=true</script>' },
+  });
+  if (
+    html.includes('{"html":"</kovo-query>') ||
+    !html.includes('&lt;/kovo-query&gt;&lt;script&gt;')
+  ) {
+    throw new Error('/_q query wire body emitted executable markup instead of escaped text');
   }
 }
 
-async function assertBetterAuthCredentialResultIdentityIsPinned(
-  _moduleUnderTest,
-  { sourceText } = {},
-) {
-  if (!sourceText?.includes(betterAuthCredentialResultIdentityBranch)) {
-    throw new Error(
-      'Better Auth credential results no longer require exact same-consumer registry identity',
+async function assertBetterAuthCredentialResultIdentityIsPinned(moduleUnderTest) {
+  const projection = moduleUnderTest.betterAuthCredentialConsumers.sessionProjection;
+  const sealed = moduleUnderTest.runBetterAuthCredentialConsumer(projection, () => ({
+    session: {},
+    user: {},
+  }));
+  let rejected = false;
+  try {
+    moduleUnderTest.consumeBetterAuthCredentialResult(
+      moduleUnderTest.betterAuthCredentialConsumers.getSession,
+      sealed,
     );
+  } catch (error) {
+    rejected = String(error).includes('mismatched Better Auth credential consumer result');
+  }
+  if (!rejected) {
+    throw new Error('a Better Auth result was opened by a different registered consumer');
   }
 }
 
-async function assertBetterAuthCredentialSourceIsPinned(_moduleUnderTest, { sourceText } = {}) {
-  if (!sourceText?.includes(betterAuthCredentialSourceIdentityBranch)) {
-    throw new Error(
-      'Better Auth raw callables no longer require the exact consumer/source contract',
+async function assertBetterAuthCredentialSourceIsPinned(moduleUnderTest) {
+  let invoked = false;
+  let rejected = false;
+  try {
+    await moduleUnderTest.runBetterAuthCredentialSourceCallableAsync(
+      moduleUnderTest.betterAuthCredentialConsumers.passwordHash,
+      'better-auth.callable',
+      () => {
+        invoked = true;
+        return '$argon2id$behavioral-mutation-witness';
+      },
+      Object.freeze({ owner: 'wrong-source-witness' }),
+      [],
     );
+  } catch (error) {
+    rejected = String(error).includes('cannot invoke raw source better-auth.callable');
+  }
+  if (!rejected || invoked) {
+    throw new Error('a Better Auth consumer invoked raw authority from another source contract');
   }
 }
 
@@ -6121,38 +6243,151 @@ async function assertViteSourceKeepsJsToTsSiblingCandidates(_moduleUnderTest, { 
   }
 }
 
-async function assertFrameworkEgressSourceKeepsPositiveCapability(
-  _moduleUnderTest,
-  { sourceText } = {},
-) {
-  const fetchStart = sourceText?.indexOf('export const frameworkEgressFetch') ?? -1;
-  const dispatcherPin = sourceText?.indexOf(frameworkEgressDispatcherPin, fetchStart) ?? -1;
-  const originCheck = sourceText?.indexOf(frameworkEgressOriginCheck, fetchStart) ?? -1;
-  const dnsLookup = sourceText?.indexOf('lookupAllAddresses(host)', fetchStart) ?? -1;
+async function assertFrameworkEgressRejectsUndeclaredOriginBeforeDns(moduleUnderTest) {
+  const policy = moduleUnderTest.resolveEgressPolicy({ allowDestinations: [] }, () => {});
+  const uninstall = installBehavioralFrameworkEgressFloor(moduleUnderTest, policy);
+  const originalLookup = dns.lookup;
+  let lookupCalls = 0;
+  dns.lookup = () => {
+    lookupCalls += 1;
+    throw new Error('undeclared origin reached DNS');
+  };
+  try {
+    const error = await moduleUnderTest
+      .frameworkEgressFetch('https://undeclared.example.test/runtime-boundary')
+      .catch((caught) => caught);
+    if (
+      !(error instanceof moduleUnderTest.EgressBlockedError) ||
+      error.reason !== 'destination-allowlist' ||
+      lookupCalls !== 0
+    ) {
+      throw new Error('framework egress did not reject an undeclared origin before DNS');
+    }
+  } finally {
+    dns.lookup = originalLookup;
+    uninstall();
+  }
+}
+
+async function assertFrameworkEgressPinsInstalledDispatcher(moduleUnderTest) {
+  const server = http.createServer((_request, response) => response.end('framework-door'));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    server.close();
+    throw new Error('behavioral framework-egress server did not bind a TCP port');
+  }
+  const port = address.port;
+  const policy = moduleUnderTest.resolveEgressPolicy(
+    {
+      allowDestinations: [`http://127.0.0.1:${port}`],
+      allowInternal: [`127.0.0.1:${port}`],
+    },
+    () => {},
+  );
+  const uninstall = installBehavioralFrameworkEgressFloor(moduleUnderTest, policy);
+  let attackerDispatches = 0;
+  const attackerDispatcher = {
+    dispatch() {
+      attackerDispatches += 1;
+      throw new Error('application dispatcher gained egress authority');
+    },
+  };
+  try {
+    let response;
+    try {
+      response = await moduleUnderTest.frameworkEgressFetch(
+        `http://127.0.0.1:${port}/runtime-boundary`,
+        {
+          dispatcher: attackerDispatcher,
+        },
+      );
+    } catch (error) {
+      if (attackerDispatches !== 0) {
+        throw new Error('framework egress retained an application-supplied dispatcher');
+      }
+      throw error;
+    }
+    if ((await response.text()) !== 'framework-door' || attackerDispatches !== 0) {
+      throw new Error('framework egress retained an application-supplied dispatcher');
+    }
+  } finally {
+    uninstall();
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+function installBehavioralFrameworkEgressFloor(moduleUnderTest, policy) {
+  const installUndici = moduleUnderTest.__securityMutationInstallUndiciFloor;
+  if (typeof installUndici !== 'function') {
+    throw new Error('behavioral Undici floor installation seam was not bundled');
+  }
+  const uninstallNet = moduleUnderTest.installNetConnectFloor(policy);
+  const uninstallUndici = installUndici(policy);
+  return () => {
+    uninstallUndici();
+    uninstallNet();
+  };
+}
+
+async function assertTaskEgressContextKeepsCapabilitySeal(moduleUnderTest) {
+  const Queue = moduleUnderTest.__securityMutationTaskQueue;
+  const task = moduleUnderTest.__securityMutationTask;
+  const schema = moduleUnderTest.__securityMutationSchema;
+  if (typeof Queue !== 'function' || typeof task !== 'function' || !schema) {
+    throw new Error('behavioral durable-task fixture seams were not bundled');
+  }
+  const store = new Queue();
+  let observedContext;
+  const definition = task('security.mutation.task-egress', {
+    input: schema.object({}),
+    run(_input, context) {
+      observedContext = context;
+    },
+  });
+  await store.enqueue({ task: definition.key, args: {} });
+  const runner = moduleUnderTest.createDurableTaskRunner({ store, tasks: [definition] });
+  await runner.runOnce(new Date());
+  const descriptor = Object.getOwnPropertyDescriptor(observedContext, 'fetch');
   if (
-    fetchStart < 0 ||
-    dispatcherPin < fetchStart ||
-    originCheck < dispatcherPin ||
-    dnsLookup < originCheck
+    descriptor?.configurable !== false ||
+    descriptor.enumerable !== true ||
+    descriptor.writable !== false ||
+    typeof descriptor.value !== 'function'
   ) {
-    throw new Error(
-      'framework egress no longer pins its dispatcher and rejects undeclared origins before DNS',
-    );
+    throw new Error('durable-task ctx.fetch is not an exact non-replaceable own capability');
   }
 }
 
-async function assertTaskEgressContextKeepsCapabilitySeal(_moduleUnderTest, { sourceText } = {}) {
-  if (!sourceText?.includes(taskEgressCapabilitySeal)) {
-    throw new Error('durable-task ctx.fetch is no longer an exact non-replaceable own property');
-  }
-}
-
-async function assertWebhookEgressContextKeepsCapabilitySeal(
-  _moduleUnderTest,
-  { sourceText } = {},
-) {
-  if (!sourceText?.includes(webhookEgressCapabilitySeal)) {
-    throw new Error('webhook ctx.fetch is no longer an exact non-replaceable own property');
+async function assertWebhookEgressContextKeepsCapabilitySeal(moduleUnderTest) {
+  const schema = moduleUnderTest.__securityMutationSchema;
+  if (!schema) throw new Error('behavioral webhook schema fixture seam was not bundled');
+  let observedContext;
+  const declaration = moduleUnderTest.webhook('/webhooks/security-mutation-egress', {
+    handler(_input, context) {
+      observedContext = context;
+    },
+    input: schema.object({ id: schema.string() }),
+    verify: 'none',
+    verifyJustification: 'behavioral security mutation fixture',
+  });
+  const result = await moduleUnderTest.runWebhook(
+    declaration,
+    new Request('https://app.example.test/webhooks/security-mutation-egress', {
+      body: JSON.stringify({ id: 'evt_runtime_boundary' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }),
+  );
+  const descriptor = Object.getOwnPropertyDescriptor(observedContext, 'fetch');
+  if (
+    result.response.status !== 200 ||
+    descriptor?.configurable !== false ||
+    descriptor.enumerable !== true ||
+    descriptor.writable !== false ||
+    typeof descriptor.value !== 'function'
+  ) {
+    throw new Error('webhook ctx.fetch is not an exact non-replaceable own capability');
   }
 }
 
