@@ -1,0 +1,251 @@
+{
+  "schema": "kovo-security-abstract-interpreter-census/v1",
+  "version": 1,
+  "provenanceRelationSchema": "kovo-security-provenance-relation/v1",
+  "lattice": {
+    "top": "unknown-authority",
+    "elements": [
+      "context",
+      "database",
+      "database-read-namespace",
+      "database-relational-query-namespace",
+      "database-relational-table-namespace",
+      "database-table-namespace",
+      "database-write-namespace",
+      "headers",
+      "global-object",
+      "foreign-executable",
+      "intrinsic-identity-call",
+      "intrinsic-object",
+      "local",
+      "respond",
+      "request",
+      "response-constructor",
+      "response-outcome",
+      "safe-call",
+      "scoped-key-call",
+      "scope-call",
+      "storage",
+      "unknown-authority",
+      "operation:server.authority.scope",
+      "operation:server.database.read",
+      "operation:server.database.trusted-sql",
+      "operation:server.database.write",
+      "operation:server.egress.request",
+      "operation:server.handler.root",
+      "operation:server.helper.call",
+      "operation:server.output.trusted-html",
+      "operation:server.response.cookie",
+      "operation:server.response.header",
+      "operation:server.response.outcome",
+      "operation:server.response.raw",
+      "operation:server.response.redirect",
+      "operation:server.storage.read",
+      "operation:server.storage.write",
+      "operation:server.task.compose"
+    ]
+  },
+  "resourceBounds": {
+    "callDepth": 16,
+    "nodes": 50000,
+    "operations": 4096,
+    "summaries": 256
+  },
+  "language": {
+    "schema": "kovo-security-analyzer-language/v1",
+    "seedAlgorithm": "mulberry32",
+    "defaultSeed": "0x4b564149",
+    "generatedProgramBudget": 96,
+    "maxAliasDepth": 3,
+    "maxHelperDepth": 4,
+    "maxStatements": 12,
+    "observation": "explicit framework effect-door stubs; no Proxy or ambient-object interception",
+    "effectDoors": [
+      "ctx.actAs",
+      "ctx.db.insert",
+      "ctx.db.select",
+      "ctx.fetch",
+      "ctx.headers.set",
+      "ctx.schedule",
+      "ctx.setCookie",
+      "ctx.storage.get",
+      "ctx.storage.put"
+    ],
+    "excludedJavaScriptSemantics": [
+      "general heap aliasing or mutation outside generated bindings",
+      "dynamic property names, getters, setters, Proxy traps, and implicit object protocols",
+      "imported executable semantics other than the endpoint registration stub",
+      "exceptions, promises, event-loop scheduling, concurrency, and ambient global mutation",
+      "browser provenance and operations",
+      "runtime values or calls outside the explicit generated grammar"
+    ]
+  },
+  "transfers": [
+    {
+      "id": "alias.fixed-point",
+      "production": "alias-fixed-point",
+      "semantics": "repeat generated binding joins until no lattice element changes"
+    },
+    {
+      "id": "alias.const-preserve",
+      "production": "const-alias",
+      "semantics": "an immutable alias preserves the expression lattice element"
+    },
+    {
+      "id": "alias.mutable-authority-top",
+      "production": "mutable-alias",
+      "semantics": "a mutable authority-bearing alias widens to unknown-authority"
+    },
+    {
+      "id": "alias.join",
+      "production": "repeated-alias-binding",
+      "semantics": "equal bindings are stable; unequal bindings join at unknown-authority"
+    },
+    {
+      "id": "binding.static-member",
+      "production": "static-destructure",
+      "semantics": "a non-rest binding projects through the finite member relation"
+    },
+    {
+      "id": "binding.rest",
+      "production": "rest-destructure",
+      "semantics": "a rest binding over authority widens to unknown-authority"
+    },
+    {
+      "id": "binding.default-join",
+      "production": "binding-default",
+      "semantics": "authority in either branch joins at top unless both branches are equal"
+    },
+    {
+      "id": "expression.identifier",
+      "production": "identifier-expression",
+      "semantics": "look up the immutable alias environment and default an absent name to local"
+    },
+    {
+      "id": "expression.implicit-protocol",
+      "production": "implicit-protocol-object",
+      "semantics": "an object with a generated implicit protocol shape closes at unknown-authority"
+    },
+    {
+      "id": "expression.new",
+      "production": "new-expression",
+      "semantics": "Response construction yields response-outcome; foreign or authority inputs remain closed"
+    },
+    {
+      "id": "expression.call-scope",
+      "production": "scope-call",
+      "semantics": "a finite principal-scope call returns context"
+    },
+    {
+      "id": "expression.call-scoped-key",
+      "production": "scoped-key-call",
+      "semantics": "a validated scoped-key constructor returns local data"
+    },
+    {
+      "id": "expression.call-intrinsic-identity",
+      "production": "intrinsic-identity-call",
+      "semantics": "the single argument keeps its lattice element; other arities close at top"
+    },
+    {
+      "id": "expression.call-response",
+      "production": "response-call",
+      "semantics": "a finite Response call returns response-outcome"
+    },
+    {
+      "id": "expression.call-unknown-authority",
+      "production": "unknown-authority-call",
+      "semantics": "calling unknown authority remains unknown-authority"
+    },
+    {
+      "id": "expression.call-local",
+      "production": "local-call",
+      "semantics": "other generated calls return local data after their call-site verdict"
+    },
+    {
+      "id": "expression.binary-join",
+      "production": "binary-expression",
+      "semantics": "authority in either operand joins at top; foreign executable otherwise dominates local"
+    },
+    {
+      "id": "expression.conditional-join",
+      "production": "conditional-expression",
+      "semantics": "equal arms are preserved; authority joins at top; foreign executable dominates local"
+    },
+    {
+      "id": "expression.static-member",
+      "production": "static-member-expression",
+      "semantics": "project the receiver through the total finite member relation"
+    },
+    {
+      "id": "expression.fallthrough-foreign",
+      "production": "foreign-containment",
+      "semantics": "the bounded containment oracle reports foreign-executable before authority"
+    },
+    {
+      "id": "expression.fallthrough-authority",
+      "production": "authority-containment",
+      "semantics": "the bounded containment oracle reports unknown-authority or local"
+    },
+    {
+      "id": "helper.call-map",
+      "production": "helper-call",
+      "label": "local:{callable}[{authorityInputs}]",
+      "semantics": "map generated arguments by position into one exact same-file helper summary"
+    },
+    {
+      "id": "helper.spread-close",
+      "production": "authority-spread-call",
+      "semantics": "an authority-bearing spread has no finite positional map and closes"
+    },
+    {
+      "id": "helper.rest-argument-close",
+      "production": "authority-rest-argument",
+      "semantics": "an authority-bearing argument entering a rest position closes"
+    },
+    {
+      "id": "helper.extra-argument-close",
+      "production": "authority-extra-argument",
+      "semantics": "an authority-bearing extra argument with no parameter closes"
+    },
+    {
+      "id": "helper.rest-parameter-close",
+      "production": "authority-rest-parameter",
+      "semantics": "an authority-bearing rest parameter closes"
+    },
+    {
+      "id": "helper.arguments-close",
+      "production": "arguments-object-recovery",
+      "semantics": "arguments-object authority recovery is outside the finite language and closes"
+    },
+    {
+      "id": "helper.cycle-close",
+      "production": "helper-cycle",
+      "semantics": "an active summary signature reached again closes as a helper cycle"
+    },
+    {
+      "id": "budget.call-depth-close",
+      "production": "call-depth-edge",
+      "semantics": "a generated helper edge beyond callDepth closes"
+    },
+    {
+      "id": "budget.node-count-close",
+      "production": "node-count-edge",
+      "semantics": "a generated callable exceeding nodes closes"
+    },
+    {
+      "id": "budget.operation-count-close",
+      "production": "operation-count-edge",
+      "semantics": "a generated callable exceeding operations closes"
+    },
+    {
+      "id": "budget.summary-count-close",
+      "production": "summary-count-edge",
+      "semantics": "a generated graph exceeding summaries closes"
+    },
+    {
+      "id": "effect.invoke",
+      "production": "effect-door-call",
+      "semantics": "a finite operation provenance invokes its exact reviewed framework effect door"
+    }
+  ]
+}

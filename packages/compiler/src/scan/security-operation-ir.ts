@@ -51,12 +51,21 @@ import type {
   ServerSecurityOperationModel,
 } from './model.js';
 import {
-  securitySemanticBudgets,
   serverMemberProvenanceFromRelation,
   serverProvenanceAtOrBelowAuthorityTop,
   type BrowserValueProvenance,
   type ServerValueProvenance,
 } from './security-provenance-relation.js';
+import {
+  securityAbstractHelperTransfer,
+  securityAbstractInterpreterBudgets,
+  securityAbstractTransfer,
+  serverAliasJoinTransfer,
+  serverBinaryTransfer,
+  serverBindingDefaultTransfer,
+  serverBindingProjectionTransfer,
+  serverConditionalTransfer,
+} from './security-abstract-interpreter.js';
 
 interface SecurityOperationScanResult<Operation> {
   readonly operations: readonly Operation[];
@@ -1490,10 +1499,10 @@ function classifyBrowserCall(
 }
 
 /** Scanner/source-text boundary for structured server effects. */
-const SECURITY_SEMANTIC_CALL_DEPTH_BUDGET = securitySemanticBudgets.callDepth;
-const SECURITY_SEMANTIC_NODE_BUDGET = securitySemanticBudgets.nodes;
-const SECURITY_SEMANTIC_OPERATION_BUDGET = securitySemanticBudgets.operations;
-const SECURITY_SEMANTIC_SUMMARY_BUDGET = securitySemanticBudgets.summaries;
+const SECURITY_SEMANTIC_CALL_DEPTH_BUDGET = securityAbstractInterpreterBudgets.callDepth;
+const SECURITY_SEMANTIC_NODE_BUDGET = securityAbstractInterpreterBudgets.nodes;
+const SECURITY_SEMANTIC_OPERATION_BUDGET = securityAbstractInterpreterBudgets.operations;
+const SECURITY_SEMANTIC_SUMMARY_BUDGET = securityAbstractInterpreterBudgets.summaries;
 
 interface SecuritySemanticState {
   readonly active: Set<string>;
@@ -1650,6 +1659,7 @@ function analyzeServerSecurityCallable(options: {
       : `${surface}\0${callable.name}\0${compilerArrayJoin(authorityInputs, ',')}`;
 
   if (signature !== undefined && compilerSetHas(state.active, signature)) {
+    securityAbstractTransfer('helper.cycle-close');
     appendSemanticClosure(
       sourceFile,
       callable?.declaration ?? body,
@@ -1688,6 +1698,7 @@ function analyzeServerSecurityCallable(options: {
       compilerSetAdd(state.summaryKeys, signature);
       state.summaries += 1;
       if (state.summaries > SECURITY_SEMANTIC_SUMMARY_BUDGET) {
+        securityAbstractTransfer('budget.summary-count-close');
         appendSemanticClosure(
           sourceFile,
           callable.declaration,
@@ -1727,6 +1738,7 @@ function analyzeServerSecurityCallable(options: {
       state.nodes += semanticNodeCount(regionSnapshot[index]!);
     }
     if (state.nodes > SECURITY_SEMANTIC_NODE_BUDGET) {
+      securityAbstractTransfer('budget.node-count-close');
       appendSemanticClosure(
         sourceFile,
         callable?.declaration ?? body,
@@ -1773,6 +1785,7 @@ function analyzeServerSecurityCallable(options: {
       appendServerOperations(operations, direct.operations);
       state.operations += direct.operations.length;
       if (state.operations > SECURITY_SEMANTIC_OPERATION_BUDGET) {
+        securityAbstractTransfer('budget.operation-count-close');
         appendSemanticClosure(
           sourceFile,
           callable?.declaration ?? body,
@@ -1907,6 +1920,7 @@ function analyzeServerSecurityCallable(options: {
             continue;
           }
           if (depth + 1 > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) {
+            securityAbstractTransfer('budget.call-depth-close');
             appendSemanticClosure(
               sourceFile,
               helper.call,
@@ -2106,10 +2120,13 @@ function semanticHelperInvocation(
         'Semantic helper authority inputs',
       );
       if (spread) {
+        securityAbstractTransfer('helper.spread-close');
         unsupportedDetail = `authority-bearing spread argument into local:${callable.name} has no finite parameter mapping`;
       } else if (restParameterIndex !== undefined && index >= restParameterIndex) {
+        securityAbstractTransfer('helper.rest-argument-close');
         unsupportedDetail = `authority-bearing rest argument into local:${callable.name} is outside the finite summary semantics`;
       } else if (index >= parameterSnapshot.length) {
+        securityAbstractTransfer('helper.extra-argument-close');
         unsupportedDetail = `authority-bearing extra argument into local:${callable.name} has no finite parameter mapping`;
       }
     }
@@ -2124,14 +2141,16 @@ function semanticHelperInvocation(
   for (let index = 0; index < parameterSnapshot.length; index += 1) {
     const parameter = parameterSnapshot[index]!;
     if (parameter.dotDotDotToken && serverProvenanceCarriesAuthority(parameterProvenances[index])) {
+      securityAbstractTransfer('helper.rest-parameter-close');
       unsupportedDetail = `authority-bearing rest parameter in local:${callable.name} is outside the finite summary semantics`;
     }
   }
   if (authorityInputs.length > 0 && semanticBodyUsesArguments(callable.body)) {
+    securityAbstractTransfer('helper.arguments-close');
     unsupportedDetail = `arguments-object authority recovery in local:${callable.name} is outside the finite summary semantics`;
   }
 
-  const transfer = `local:${callable.name}[${compilerArrayJoin(authorityInputs, ',')}]`;
+  const transfer = securityAbstractHelperTransfer(callable.name, authorityInputs);
   return {
     authorityInputs,
     call,
@@ -4332,14 +4351,17 @@ function classifyServerProvenanceCall(
     return true;
   }
   if (provenance === 'scope-call') {
+    securityAbstractTransfer('effect.invoke');
     appendOperation('server.authority.scope', call, target);
     return true;
   }
   if (provenance === 'database-read-namespace') {
+    securityAbstractTransfer('effect.invoke');
     appendOperation('server.database.read', call, target);
     return true;
   }
   if (provenance === 'database-write-namespace') {
+    securityAbstractTransfer('effect.invoke');
     appendOperation('server.database.write', call, target);
     if (surface === 'query') {
       appendViolation(
@@ -4362,6 +4384,7 @@ function classifyServerProvenanceCall(
     return false;
   }
   const kind = compilerStringSlice(provenance, 'operation:'.length) as ServerSecurityOperationKind;
+  securityAbstractTransfer('effect.invoke');
   if (surface === 'query' && kind === 'server.database.write') {
     appendOperation(kind, call, target);
     appendViolation(
@@ -4416,6 +4439,7 @@ function serverAliasProvenance(
     }
   }
 
+  securityAbstractTransfer('alias.fixed-point');
   let changed = true;
   while (changed) {
     changed = false;
@@ -4426,12 +4450,13 @@ function serverAliasProvenance(
         if (initializer) {
           const derived = serverExpressionProvenance(initializer, aliases);
           const authority = derived;
-          provenance =
-            isConstVariableDeclaration(node) || authority === 'foreign-executable'
-              ? authority
-              : serverProvenanceCarriesAuthority(authority)
-                ? 'unknown-authority'
-                : 'local';
+          if (isConstVariableDeclaration(node) || authority === 'foreign-executable') {
+            securityAbstractTransfer('alias.const-preserve');
+            provenance = authority;
+          } else if (serverProvenanceCarriesAuthority(authority)) {
+            securityAbstractTransfer('alias.mutable-authority-top');
+            provenance = 'unknown-authority';
+          }
         }
         if (bindServerAliasPattern(node.name, provenance, aliases)) changed = true;
       }
@@ -4674,11 +4699,11 @@ function bindServerAliasPattern(
       staticPropertyName(
         element.propertyName ?? (ts.isIdentifier(element.name) ? element.name : undefined),
       ) ?? 'computed';
-    const projectedProvenance = element.dotDotDotToken
-      ? serverProvenanceCarriesAuthority(provenance)
-        ? 'unknown-authority'
-        : 'local'
-      : serverMemberProvenance(provenance, property);
+    const projectedProvenance = serverBindingProjectionTransfer(
+      provenance,
+      property,
+      element.dotDotDotToken !== undefined,
+    );
     const elementProvenance = serverProvenanceWithBindingDefault(
       projectedProvenance,
       element.initializer,
@@ -4706,11 +4731,11 @@ function setServerAliasPattern(
       staticPropertyName(
         element.propertyName ?? (ts.isIdentifier(element.name) ? element.name : undefined),
       ) ?? 'computed';
-    const projectedProvenance = element.dotDotDotToken
-      ? serverProvenanceCarriesAuthority(provenance)
-        ? 'unknown-authority'
-        : 'local'
-      : serverMemberProvenance(provenance, property);
+    const projectedProvenance = serverBindingProjectionTransfer(
+      provenance,
+      property,
+      element.dotDotDotToken !== undefined,
+    );
     const elementProvenance = serverProvenanceWithBindingDefault(
       projectedProvenance,
       element.initializer,
@@ -4727,12 +4752,7 @@ function serverProvenanceWithBindingDefault(
 ): ServerValueProvenance {
   if (!initializer) return projected;
   const fallback = serverExpressionProvenance(initializer, aliases);
-  if (serverProvenanceCarriesAuthority(projected) || serverProvenanceCarriesAuthority(fallback)) {
-    return projected === fallback ? projected : 'unknown-authority';
-  }
-  return projected === 'foreign-executable' || fallback === 'foreign-executable'
-    ? 'foreign-executable'
-    : projected;
+  return serverBindingDefaultTransfer(projected, fallback);
 }
 
 function joinServerAlias(
@@ -4741,8 +4761,9 @@ function joinServerAlias(
   aliases: Map<string, ServerValueProvenance>,
 ): boolean {
   const previous = compilerMapGet(aliases, name);
-  if (previous === provenance || previous === 'unknown-authority') return false;
-  compilerMapSet(aliases, name, previous === undefined ? provenance : 'unknown-authority');
+  const joined = serverAliasJoinTransfer(previous, provenance);
+  if (joined === undefined) return false;
+  compilerMapSet(aliases, name, joined);
   return true;
 }
 
@@ -4751,11 +4772,16 @@ function serverExpressionProvenance(
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): ServerValueProvenance {
   const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) return compilerMapGet(aliases, current.text) ?? 'local';
+  if (ts.isIdentifier(current)) {
+    securityAbstractTransfer('expression.identifier');
+    return compilerMapGet(aliases, current.text) ?? 'local';
+  }
   if (ts.isObjectLiteralExpression(current) && serverObjectLiteralHasImplicitCallable(current)) {
+    securityAbstractTransfer('expression.implicit-protocol');
     return 'unknown-authority';
   }
   if (ts.isNewExpression(current)) {
+    securityAbstractTransfer('expression.new');
     const constructor = serverExpressionProvenance(current.expression, aliases);
     if (constructor === 'response-constructor') return 'response-outcome';
     if (constructor === 'foreign-executable') return 'foreign-executable';
@@ -4769,48 +4795,53 @@ function serverExpressionProvenance(
   }
   if (ts.isCallExpression(current)) {
     const callee = serverExpressionProvenance(current.expression, aliases);
-    if (callee === 'scope-call') return 'context';
-    if (callee === 'scoped-key-call') return 'local';
+    if (callee === 'scope-call') {
+      securityAbstractTransfer('expression.call-scope');
+      return 'context';
+    }
+    if (callee === 'scoped-key-call') {
+      securityAbstractTransfer('expression.call-scoped-key');
+      return 'local';
+    }
     if (callee === 'intrinsic-identity-call') {
+      securityAbstractTransfer('expression.call-intrinsic-identity');
       return current.arguments.length === 1
         ? serverExpressionProvenance(current.arguments[0]!, aliases)
         : 'unknown-authority';
     }
     if (callee === 'response-constructor' || callee === 'operation:server.response.raw') {
+      securityAbstractTransfer('expression.call-response');
       return 'response-outcome';
     }
-    if (callee === 'unknown-authority') return 'unknown-authority';
+    if (callee === 'unknown-authority') {
+      securityAbstractTransfer('expression.call-unknown-authority');
+      return 'unknown-authority';
+    }
+    securityAbstractTransfer('expression.call-local');
     return 'local';
   }
   if (ts.isBinaryExpression(current)) {
     const left = serverExpressionProvenance(current.left, aliases);
     const right = serverExpressionProvenance(current.right, aliases);
-    if (serverProvenanceCarriesAuthority(left) || serverProvenanceCarriesAuthority(right)) {
-      return 'unknown-authority';
-    }
-    return left === 'foreign-executable' || right === 'foreign-executable'
-      ? 'foreign-executable'
-      : 'local';
+    return serverBinaryTransfer(left, right);
   }
   if (ts.isConditionalExpression(current)) {
     const whenTrue = serverExpressionProvenance(current.whenTrue, aliases);
     const whenFalse = serverExpressionProvenance(current.whenFalse, aliases);
-    if (whenTrue === whenFalse) return whenTrue;
-    if (serverProvenanceCarriesAuthority(whenTrue) || serverProvenanceCarriesAuthority(whenFalse)) {
-      return 'unknown-authority';
-    }
-    return whenTrue === 'foreign-executable' || whenFalse === 'foreign-executable'
-      ? 'foreign-executable'
-      : 'local';
+    return serverConditionalTransfer(whenTrue, whenFalse);
   }
   const member = staticMember(current);
   if (member) {
+    securityAbstractTransfer('expression.static-member');
     return serverMemberProvenance(
       serverExpressionProvenance(member.receiver, aliases),
       member.name,
     );
   }
-  if (expressionContainsServerForeignExecutable(current, aliases)) return 'foreign-executable';
+  if (expressionContainsServerForeignExecutable(current, aliases)) {
+    securityAbstractTransfer('expression.fallthrough-foreign');
+    return 'foreign-executable';
+  }
   return expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local';
 }
 
@@ -4887,6 +4918,7 @@ function expressionContainsServerAuthority(
   expression: ts.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
+  securityAbstractTransfer('expression.fallthrough-authority');
   let found = false;
   const visit = (node: ts.Node): void => {
     if (found) return;

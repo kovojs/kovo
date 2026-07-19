@@ -24,7 +24,7 @@ describe('deterministic security fuzz campaign contract', () => {
     expect(validateDefaultSecurityFuzzCampaign({ rootDir })).toMatchObject({
       findings: [],
       ok: true,
-      summary: { caseCount: 17, familyCount: 6 },
+      summary: { caseCount: 21, familyCount: 7 },
     });
   });
 

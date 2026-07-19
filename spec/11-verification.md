@@ -116,6 +116,25 @@ The artifact publishes those exclusions, the four semantic-analysis resource bou
 remaining extraction gaps beside the relation so a finite proof cannot be mistaken for a whole-
 JavaScript soundness claim.
 
+**Differential analyzer-soundness oracle (normative evidence boundary).** The server semantic
+analyzer MUST consume the versioned `kovo-security-abstract-interpreter-census/v1` lattice,
+resource bounds, and transfer vocabulary. `check:analyzer-soundness-oracle` MUST bind every census
+transfer to a production marker and one seeded generator production, fail on an uncensused
+production transfer, and witness every declared lattice element. The generated language is the
+finite `kovo-security-analyzer-language/v1` grammar recorded beside the census; its declared
+JavaScript exclusions and generation bounds are part of the claim, not implementation notes.
+
+For every accepted generated program, an independent concrete interpreter predicts the reviewed
+effect-door calls without consuming the analyzer's provenance relation. The compiler-emitted server
+module is then executed with explicit framework-door stubs (never general `Proxy` observation), and
+the oracle requires both concrete/emitted agreement and `observed ⊆ abstract-predicted`. A
+counterexample MUST be minimized and persisted as `kovo.security-fuzz-counterexample/v1`; canaries
+that delete one abstract prediction or one effect observation MUST fail. The fixed-seed
+`analyzer-soundness` family runs in the nightly security campaign. Passing this falsification search
+is evidence for only the declared finite language. It does not prove soundness for general
+JavaScript, imported executable semantics, dynamic properties, implicit protocols, browser
+provenance, asynchronous scheduling, or behavior beyond the published resource bounds.
+
 ### 11.4 The verification surface (the Keppo contract)
 
 For a Kovo app, the following are checkable **without executing a browser**:

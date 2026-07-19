@@ -35,7 +35,8 @@
           "generatedInputBudget": 5000
         },
         "headers": { "maxWallMs": 180000, "caseExecutionBudget": 1 },
-        "mutations": { "maxWallMs": 720000, "caseExecutionBudget": 1 }
+        "mutations": { "maxWallMs": 720000, "caseExecutionBudget": 1 },
+        "analyzer-soundness": { "maxWallMs": 180000, "caseExecutionBudget": 4 }
       }
     },
     "release": {
@@ -55,7 +56,8 @@
           "generatedInputBudget": 100000
         },
         "headers": { "maxWallMs": 360000, "caseExecutionBudget": 1 },
-        "mutations": { "maxWallMs": 1800000, "caseExecutionBudget": 1 }
+        "mutations": { "maxWallMs": 1800000, "caseExecutionBudget": 1 },
+        "analyzer-soundness": { "maxWallMs": 360000, "caseExecutionBudget": 4 }
       }
     }
   },
@@ -312,6 +314,55 @@
           "kind": "mutation-harness",
           "decisionRole": "normative",
           "covers": ["all-enrolled-mutants"]
+        }
+      ]
+    },
+    {
+      "id": "analyzer-soundness",
+      "seed": { "algorithm": "mulberry32", "value": "0x4b564149", "version": 1 },
+      "coverage": {
+        "unit": "normative-obligation",
+        "denominator": 5,
+        "obligations": [
+          "transfer-production-superset",
+          "independent-emitted-effect-observation",
+          "observed-subset-abstract",
+          "missed-transfer-canary",
+          "missing-observation-canary"
+        ]
+      },
+      "cases": [
+        {
+          "id": "transfer-production-superset",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/compiler/src/security-analyzer-soundness-oracle.test.ts",
+          "testName": "derives one generator production per transfer and witnesses every lattice element",
+          "covers": ["transfer-production-superset"]
+        },
+        {
+          "id": "observed-subset-abstract",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/compiler/src/security-analyzer-soundness-oracle.test.ts",
+          "testName": "keeps instrumented emitted effects inside abstract predictions for the seeded finite language",
+          "covers": ["independent-emitted-effect-observation", "observed-subset-abstract"]
+        },
+        {
+          "id": "missed-transfer-canary",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/compiler/src/security-analyzer-soundness-oracle.test.ts",
+          "testName": "persists and fails on a missed abstract transfer canary",
+          "covers": ["missed-transfer-canary"]
+        },
+        {
+          "id": "missing-observation-canary",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/compiler/src/security-analyzer-soundness-oracle.test.ts",
+          "testName": "persists and fails on a missing effect-door observation canary",
+          "covers": ["missing-observation-canary"]
         }
       ]
     }

@@ -2047,6 +2047,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/compiler/src/output-context-security.test.ts',
       'packages/compiler/src/route-pages.test.ts',
       'packages/compiler/src/security-operation-ir.security.test.ts',
+      'packages/compiler/src/security-analyzer-soundness-oracle.test.ts',
       'packages/compiler/src/executable-reference-attributes.test.ts',
       'packages/compiler/src/execution-triggers.test.ts',
       'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
@@ -2056,6 +2057,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'finite-analyzer-differential-soundness',
+        file: 'packages/compiler/src/security-analyzer-soundness-oracle.test.ts',
+        snippets: [
+          'derives one generator production per transfer and witnesses every lattice element',
+          'keeps instrumented emitted effects inside abstract predictions for the seeded finite language',
+          'persists and fails on a missed abstract transfer canary',
+          'persists and fails on a missing effect-door observation canary',
+          'analyzerSoundnessCounterexampleSchema',
+        ],
+      },
       {
         id: 'finite-scoped-key-sink-provenance',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',

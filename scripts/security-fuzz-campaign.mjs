@@ -21,6 +21,7 @@ const expectedFamilyOrder = Object.freeze([
   'redos',
   'headers',
   'mutations',
+  'analyzer-soundness',
 ]);
 
 const expectedSeeds = Object.freeze({
@@ -40,6 +41,11 @@ const expectedSeeds = Object.freeze({
   mutations: Object.freeze({
     algorithm: 'enrolled-branch-deletion',
     value: 'security-gate-mutants/v1',
+    version: 1,
+  }),
+  'analyzer-soundness': Object.freeze({
+    algorithm: 'mulberry32',
+    value: '0x4b564149',
     version: 1,
   }),
 });
@@ -74,6 +80,13 @@ const expectedCoverage = Object.freeze({
     'control-output-rejection',
     'malformed-input-rejection',
   ]),
+  'analyzer-soundness': Object.freeze([
+    'transfer-production-superset',
+    'independent-emitted-effect-observation',
+    'observed-subset-abstract',
+    'missed-transfer-canary',
+    'missing-observation-canary',
+  ]),
 });
 
 const expectedCaseSeeds = Object.freeze({
@@ -88,6 +101,7 @@ const expectedSourceSeedAnchors = Object.freeze({
   'egress/undeclared-before-dns': "?? '0x6b6f766f'",
   'redos/full-ceiling-hostile-corpus': 'seed: 0x4b56_3433',
   'redos/supported-grammar-differential': "?? '0x00000434'",
+  'analyzer-soundness/observed-subset-abstract': 'seed: 0x4b56_4149',
 });
 
 const expectedDifferentialMarkers = Object.freeze({
@@ -114,6 +128,10 @@ const expectedProfiles = Object.freeze({
       }),
       headers: Object.freeze({ maxWallMs: 180_000, caseExecutionBudget: 1 }),
       mutations: Object.freeze({ maxWallMs: 720_000, caseExecutionBudget: 1 }),
+      'analyzer-soundness': Object.freeze({
+        maxWallMs: 180_000,
+        caseExecutionBudget: 4,
+      }),
     }),
   }),
   release: Object.freeze({
@@ -134,6 +152,10 @@ const expectedProfiles = Object.freeze({
       }),
       headers: Object.freeze({ maxWallMs: 360_000, caseExecutionBudget: 1 }),
       mutations: Object.freeze({ maxWallMs: 1_800_000, caseExecutionBudget: 1 }),
+      'analyzer-soundness': Object.freeze({
+        maxWallMs: 360_000,
+        caseExecutionBudget: 4,
+      }),
     }),
   }),
 });

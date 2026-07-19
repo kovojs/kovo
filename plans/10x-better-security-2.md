@@ -147,22 +147,32 @@ Today the analyzer "deliberately does not execute or model general JavaScript"
 declared transfer registry exists to read (transfer identities are computed as inline strings, e.g.
 `local:${callable.name}`), so step 1 is to _build_ that registry and refactor the analyzer to consume it.
 
-- [ ] Extract the lattice elements + transfer functions into a versioned JSON census; gate fails if a
+- [x] Extract the lattice elements + transfer functions into a versioned JSON census; gate fails if a
       transfer is added without a census entry (plant one, watch it fail). Define the exact generated
       language, excluded JavaScript semantics, and resource bounds beside the census.
-- [ ] Seeded program generator whose productions derive 1:1 from that census (every element/transfer,
+  - Evidence: `pnpm run check:analyzer-soundness-oracle` validates the 38-element/33-transfer census,
+    declared language bounds/exclusions, and uncensused/deleted-transfer mutants.
+- [x] Seeded program generator whose productions derive 1:1 from that census (every element/transfer,
       including alias/helper-call/budget-edge shapes); assert productions ⊇ transfers in the generator's
       own test — the load-bearing anti-corpus safeguard.
-- [ ] Implement an independent concrete interpreter for the finite generated language. Cross-check it
+  - Evidence: the oracle gate/test proves 33/33 transfer productions, 38/38 lattice witnesses, and
+    materialized alias, helper, and over-bound budget-edge sources.
+- [x] Implement an independent concrete interpreter for the finite generated language. Cross-check it
       against compiled emitted modules through instrumented framework effect doors, not arbitrary Proxy
       observation; seeded canaries prove that both a missed transfer and a missing effect observation
       fail the harness.
-- [ ] Subset oracle: assert `observed ⊆ abstract-predicted` per program; on violation minimize and
+  - Evidence: the focused oracle test executes emitted server modules through nine explicit door stubs;
+    the missed-transfer and missing-observation canaries both fail.
+- [x] Subset oracle: assert `observed ⊆ abstract-predicted` per program; on violation minimize and
       persist under the existing `kovo.security-fuzz-counterexample/v1` schema; weakening one transfer
       must produce a persisted counterexample + CI failure.
-- [ ] Enroll as a seventh `analyzer-soundness` family in `scripts/security-fuzz-campaign.mjs`, fixed
+  - Evidence: canary tests minimize and persist v1 counterexamples, then fail the weakened prediction
+    on `observed ⊄ abstract-predicted`.
+- [x] Enroll as a seventh `analyzer-soundness` family in `scripts/security-fuzz-campaign.mjs`, fixed
       seed, running in `test:security-fuzz-nightly` (the campaign already runs cross-implementation
       differential families for redos/headers; none targets the interpreter — that is the gap).
+  - Evidence: the campaign check reports 7 families/21 cases, and the fixed-seed nightly-profile oracle
+    passes all 96 generated programs.
 
 ### 1.2 Spec↔implementation conformance closure
 
