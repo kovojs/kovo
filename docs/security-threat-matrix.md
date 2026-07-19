@@ -96,6 +96,16 @@ GREEN (no longer pending).
   be misused. Direct import aliases and reordered literal options remain visible, dynamic options
   fail with KV426, and cross-analyzer dedupe uses exact call identity rather than line number.
   Same-process authored code remains in the §6.6 author-trust scope.
+- **Runtime stateful namespaces × C/I/Au — GREEN.** A remotely influenced app key can no longer
+  address another principal's blob, replay/rate-limit bucket, or pending durable task. Every
+  app-addressable key reaches these sinks only as a runtime-witnessed `ScopedKey` whose canonical
+  frame includes the principal/public/system posture; memory, filesystem, S3-compatible storage,
+  memory queues, and Postgres queues embed that frame in the physical namespace. The original red
+  channels and the cross-owner green controls live in `packages/core/src/storage.test.ts` and
+  `packages/server/src/task-queue.test.ts`; C9's required `keyScoping` column, KV450 compile/runtime
+  rejects, and the `scoped-key/drop-runtime-witness-rejection` plus
+  `compiler-finite-ir/drop-scoped-key-sink-closure` mutants prevent a string/cast bypass. Public and
+  finite system sharing are explicit reviewed postures, not principal inference from app input.
 - **Wire × Au (A1) — GREEN.** CSRF does not rely on SameSite alone: `packages/server/src/csrf.test.ts` proves the
   Origin / `Sec-Fetch-Site` floor and synchronizer-token audience binding for unsafe requests, and
   `packages/server/src/app-dispatch.test.ts` covers the end-to-end mutation/endpoint dispatch paths that reject missing

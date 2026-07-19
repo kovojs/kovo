@@ -92,12 +92,21 @@ or served artifact.
 - [ ] Rebase every §-item premise on the exact current `main` SHA (plan-1 has advanced through
       Phase 2C/3C partials since this plan's audit). For each item, re-confirm the cited file:line
       still holds or update it; drop any item plan-1 has since closed. Record the baseline SHA.
-- [ ] Reproduce the storage-key blob read/overwrite channel at the baseline across every supported
+- [x] Reproduce the storage-key blob read/overwrite channel at the baseline across every supported
       storage adapter; record attacker prerequisites, severity, threat-matrix cell, and exact red test.
-- [ ] Reproduce durable-job cross-principal coalescing for both memory and Postgres queues; record
+  - Evidence: red commit `b9c5a4daf` captures same-app-key cross-owner overwrite/read; the focused
+    conformance run now passes for memory, filesystem, and S3-compatible adapters, and the Runtime
+    C/I/Au matrix cell records the remotely influenced-key prerequisite and KV450/ScopedKey door.
+- [x] Reproduce durable-job cross-principal coalescing for both memory and Postgres queues; record
       debounce/throttle behavior, attacker prerequisites, severity, threat-matrix cell, and red test.
-- [ ] Reproduce `s.secret(...).parse` returning `isSecret() === false`, then prove which wire, log,
+  - Evidence: red commit `b9c5a4daf` covers both debounce replacement and throttle suppression;
+    `task-queue.test.ts` now preserves four distinct jobs across memory and Postgres/PGlite queues,
+    and the same Runtime C/I/Au matrix cell records the shared-key prerequisite and scoped door.
+- [x] Reproduce `s.secret(...).parse` returning `isSecret() === false`, then prove which wire, log,
       clone, and artifact channels remain reachable; give this distinct class its own matrix cell.
+  - Evidence: red commit `43c87c159`; `schema.test.ts` proves the repaired value is a runtime box and
+    blocks template, JSON, structured-clone, wire, SSR, and inspected-log egress, while the production
+    artifact/client-capture proofs and the Config-secret C matrix cell cover build/client channels.
 - [ ] Land architecture decision records before production work for: cache-key/influence semantics,
       runtime `ScopedKey` representation and escape authority, principal-epoch source/freshness,
       single-context-envelope vs shared ALS contract, cooperative vs hard deadlines, explicit
