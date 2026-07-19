@@ -169,6 +169,18 @@ type RootStaticExportDiagnostic = import('../index.js').StaticExportDiagnostic;
 type RootStaticExportDiagnosticSeverity = import('../index.js').StaticExportDiagnosticSeverity;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootEncryptedAtRest = import('../index.js').EncryptedAtRest;
+type RootSigningKeyRing = import('../index.js').SigningKeyRing;
+
+declare const opaqueSigningRing: RootSigningKeyRing;
+// @ts-expect-error SPEC §6.6: public rings configure roots; they never expose generic signing.
+opaqueSigningRing.sign({ audience: 'attacker', payload: 'payload', purpose: 'attacker' });
+// @ts-expect-error SPEC §6.6: public rings never expose generic verification.
+opaqueSigningRing.verify({
+  audience: 'attacker',
+  payload: 'payload',
+  purpose: 'attacker',
+  signature: 'forged',
+});
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootEncryptAtRestOptions = import('../index.js').EncryptAtRestOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.

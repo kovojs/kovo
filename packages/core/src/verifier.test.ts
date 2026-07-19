@@ -235,6 +235,18 @@ describe('webhook verifier kit', () => {
     expect(await import('./index.js')).not.toHaveProperty('isFrameworkHmacSignatureVerifier');
   });
 
+  it('keeps webhook signing material only in the verify authority, not public config', () => {
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: 'configured-payload',
+      secret: snapshotSecret,
+    });
+    expect(verifier).not.toHaveProperty('config');
+    expect(verifier.resolved).not.toHaveProperty('secret');
+    expect(JSON.stringify(verifier)).not.toContain(snapshotSecret);
+  });
+
   it('uses captured validated SubtleCrypto methods after ambient prototype poisoning', async () => {
     const secretList = [postImportSecret];
     const originalArrayMap = Array.prototype.map;

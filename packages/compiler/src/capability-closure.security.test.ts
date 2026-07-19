@@ -1042,4 +1042,59 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(raw.diagnostics).toHaveLength(1);
     expect(raw.diagnostics[0]!.message).toContain('raw database-driver authority');
   });
+
+  // @kovo-security-classifier-corpus C13 crypto-acquisition-vs-digest-capability
+  it('classifies exact named non-keyed digests separately from secret crypto acquisition', () => {
+    const digest = analyze([
+      {
+        fileName: 'digest.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import { createHash } from 'node:crypto';
+          export const page = route('/digest', { render() { return createHash('sha256'); } });
+        `,
+      },
+    ]);
+    expect(digest.diagnostics).toHaveLength(1);
+    expect(digest.facts).toContainEqual(
+      expect.objectContaining({ capability: 'digest', kind: 'closed' }),
+    );
+
+    for (const source of [
+      `import { createHmac } from 'node:crypto'; export const value = createHmac;`,
+      `import * as crypto from 'node:crypto'; export const value = crypto;`,
+      `import argon2 from '@node-rs/argon2'; export const value = argon2;`,
+      `export const value = globalThis.crypto.subtle;`,
+      `const platform = globalThis; export const value = platform.crypto;`,
+    ]) {
+      const result = analyze([
+        {
+          fileName: 'crypto.ts',
+          source: `
+            import { route } from '@kovojs/server';
+            ${source}
+            export const page = route('/crypto', { render() { return value; } });
+          `,
+        },
+      ]);
+      expect(result.diagnostics).not.toEqual([]);
+      expect(result.facts).toContainEqual(
+        expect.objectContaining({ capability: 'crypto-acquisition', kind: 'closed' }),
+      );
+    }
+  });
+
+  it('does not turn type-only Node crypto imports into runtime authority', () => {
+    const result = analyze([
+      {
+        fileName: 'types.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import type { KeyObject } from 'node:crypto';
+          export const page = route('/types', { render() { return null; } });
+        `,
+      },
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
 });

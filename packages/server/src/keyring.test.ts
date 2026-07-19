@@ -17,6 +17,25 @@ const NEW_SECRET = 'new-signing-secret-at-least-32-bytes';
 const DIFFERENT_SECRET = 'different-signing-secret-at-least-32-bytes';
 
 describe('SigningKeyRing', () => {
+  it('is an opaque configuration carrier rather than a generic signer', () => {
+    const ring = createSigningKeyRing({
+      keys: [{ id: 'current', secret: NEW_SECRET, state: 'active' }],
+    });
+    expect(Object.isFrozen(ring)).toBe(true);
+    expect(Reflect.ownKeys(ring)).toEqual(['currentKeyId']);
+    expect(ring).not.toHaveProperty('sign');
+    expect(ring).not.toHaveProperty('verify');
+    expect(ring).not.toHaveProperty('secret');
+    expect(isSigningKeyRing(ring)).toBe(true);
+    expect(
+      isSigningKeyRing({
+        currentKeyId: 'current',
+        sign: () => ({ keyId: 'current', signature: 'forged' }),
+        verify: () => ({ keyId: 'current', ok: true }),
+      }),
+    ).toBe(false);
+  });
+
   it('keeps framework CSRF authority opaque and refuses generic signing sinks', async () => {
     const source = createSigningKeyRing({
       keys: [{ id: 'auth', secret: NEW_SECRET, state: 'active' }],
