@@ -72,11 +72,15 @@ describe('finite analyzer transfer/lattice census gate', () => {
     drifted.lattice.elements.pop();
     drifted.resourceBounds.callDepth += 1;
     drifted.language.excludedJavaScriptSemantics = [];
+    drifted.language.transferWitnessExecution = 'strings only';
+    drifted.language.latticeWitnessExecution = 'labels only';
     expect(validateAnalyzerSoundnessCensus({ census: drifted, rootDir }).findings).toEqual(
       expect.arrayContaining([
         expect.stringContaining('lattice.elements'),
         expect.stringContaining('resourceBounds'),
         expect.stringContaining('six explicit'),
+        expect.stringContaining('compiled transfer programs'),
+        expect.stringContaining('behavioral materialization'),
       ]),
     );
 

@@ -59,6 +59,8 @@
     "maxAliasDepth": 3,
     "maxHelperDepth": 4,
     "maxStatements": 12,
+    "transferWitnessExecution": "compile every census transfer program; execute every accepted emitted module and require the declared exact closed reason for intended fail-closed programs",
+    "latticeWitnessExecution": "materialize all lattice elements through alias, binary, conditional, and default transfer behavior checked against independent expectations",
     "observation": "explicit framework effect-door stubs; no Proxy or ambient-object interception",
     "effectDoors": [
       "ctx.actAs",
@@ -73,7 +75,7 @@
     ],
     "excludedJavaScriptSemantics": [
       "general heap aliasing or mutation outside generated bindings",
-      "dynamic property names, getters, setters, Proxy traps, and implicit object protocols",
+      "dynamic property names, getters, setters, Proxy traps, and implicit object protocols beyond the explicit object-literal close production",
       "imported executable semantics other than the endpoint registration stub",
       "exceptions, promises, event-loop scheduling, concurrency, and ambient global mutation",
       "browser provenance and operations",

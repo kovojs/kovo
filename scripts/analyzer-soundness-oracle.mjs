@@ -279,6 +279,24 @@ function validateLanguage(language, findings) {
     findings.push('language.observation must require explicit effect-door stubs and forbid Proxy');
   }
   if (
+    typeof language.transferWitnessExecution !== 'string' ||
+    !language.transferWitnessExecution.includes('compile every census transfer program') ||
+    !language.transferWitnessExecution.includes('exact closed reason')
+  ) {
+    findings.push(
+      'language.transferWitnessExecution must require compiled transfer programs and exact closed reasons',
+    );
+  }
+  if (
+    typeof language.latticeWitnessExecution !== 'string' ||
+    !language.latticeWitnessExecution.includes('materialize all lattice elements') ||
+    !language.latticeWitnessExecution.includes('independent expectations')
+  ) {
+    findings.push(
+      'language.latticeWitnessExecution must require behavioral materialization against independent expectations',
+    );
+  }
+  if (
     !Array.isArray(language.excludedJavaScriptSemantics) ||
     language.excludedJavaScriptSemantics.length < 6 ||
     language.excludedJavaScriptSemantics.some(

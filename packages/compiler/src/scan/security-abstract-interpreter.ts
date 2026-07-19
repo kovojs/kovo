@@ -1,11 +1,15 @@
 import type { SecuritySemanticBudgets } from '@kovojs/core/internal/security-operation-ir';
 
 import {
+  compilerArrayAppend,
   compilerArrayJoin,
   compilerCreateMap,
+  compilerCreateSet,
   compilerMapGet,
   compilerMapSet,
   compilerMapSize,
+  compilerSetAdd,
+  compilerSetHas,
   compilerSnapshotDenseArray,
 } from '../compiler-security-intrinsics.js';
 import censusDocument from './security-abstract-interpreter-census.v1.json' with { type: 'json' };
@@ -73,12 +77,14 @@ export interface SecurityAbstractInterpreterCensus {
     readonly effectDoors: readonly string[];
     readonly excludedJavaScriptSemantics: readonly string[];
     readonly generatedProgramBudget: number;
+    readonly latticeWitnessExecution: string;
     readonly maxAliasDepth: number;
     readonly maxHelperDepth: number;
     readonly maxStatements: number;
     readonly observation: string;
     readonly schema: 'kovo-security-analyzer-language/v1';
     readonly seedAlgorithm: 'mulberry32';
+    readonly transferWitnessExecution: string;
   };
   readonly lattice: {
     readonly elements: readonly ServerValueProvenance[];
@@ -93,6 +99,18 @@ export interface SecurityAbstractInterpreterCensus {
 
 export const securityAbstractInterpreterCensus =
   censusDocument as SecurityAbstractInterpreterCensus;
+
+interface SecurityAbstractTransferCapture {
+  readonly seen: Set<SecurityAbstractTransferId>;
+  readonly weakenTransferId?: 'effect.invoke';
+}
+
+export interface SecurityAbstractTransferCaptureResult<Result> {
+  readonly result: Result;
+  readonly witnessedTransfers: readonly SecurityAbstractTransferId[];
+}
+
+let activeTransferCapture: SecurityAbstractTransferCapture | undefined;
 
 const transferRules = compilerCreateMap<SecurityAbstractTransferId, SecurityAbstractTransferRule>();
 const transferRuleSnapshot = compilerSnapshotDenseArray(
@@ -127,11 +145,73 @@ export const securityAbstractInterpreterBudgets: SecuritySemanticBudgets = {
 export function securityAbstractTransfer(
   id: SecurityAbstractTransferId,
 ): SecurityAbstractTransferRule {
+  if (activeTransferCapture !== undefined) compilerSetAdd(activeTransferCapture.seen, id);
   const transfer = compilerMapGet(transferRules, id);
   if (transfer === undefined) {
     throw new TypeError(`Unknown security abstract transfer: ${id}`);
   }
   return transfer;
+}
+
+/**
+ * Synchronously witness the exact production transfer markers reached by one compiler invocation.
+ *
+ * Compilation is synchronous, so the module-private scope cannot leak across an await boundary. The
+ * optional weakening is a planted falsification canary and is consumed only by explicit transfer
+ * functions; ordinary compiler callers never enter this scope (SPEC §11.2).
+ */
+export function captureSecurityAbstractTransfers<Result>(
+  operation: () => Result,
+  options: { readonly weakenTransferId?: 'effect.invoke' } = {},
+): SecurityAbstractTransferCaptureResult<Result> {
+  if (activeTransferCapture !== undefined) {
+    throw new TypeError('Security abstract transfer capture cannot be nested.');
+  }
+  const capture: SecurityAbstractTransferCapture = {
+    seen: compilerCreateSet<SecurityAbstractTransferId>(),
+    ...(options.weakenTransferId === undefined
+      ? {}
+      : { weakenTransferId: options.weakenTransferId }),
+  };
+  activeTransferCapture = capture;
+  try {
+    const result = operation();
+    const witnessedTransfers: SecurityAbstractTransferId[] = [];
+    for (let index = 0; index < securityAbstractTransferIds.length; index += 1) {
+      const id = securityAbstractTransferIds[index]!;
+      if (compilerSetHas(capture.seen, id)) {
+        compilerArrayAppend(witnessedTransfers, id, 'Security abstract transfer witnesses');
+      }
+    }
+    return { result, witnessedTransfers };
+  } finally {
+    activeTransferCapture = undefined;
+  }
+}
+
+function securityAbstractTransferIsWeakened(id: 'effect.invoke'): boolean {
+  return activeTransferCapture?.weakenTransferId === id;
+}
+
+export function serverAliasDeclarationTransfer(
+  authority: ServerValueProvenance,
+  immutable: boolean,
+): ServerValueProvenance {
+  if (immutable || authority === 'foreign-executable') {
+    securityAbstractTransfer('alias.const-preserve');
+    return authority;
+  }
+  if (serverProvenanceAtOrBelowAuthorityTop(authority)) {
+    securityAbstractTransfer('alias.mutable-authority-top');
+    return 'unknown-authority';
+  }
+  return 'local';
+}
+
+/** Actual effect-invocation transfer, with one scoped planted weakening for the oracle. */
+export function securityAbstractEffectInvocationTransfer(): boolean {
+  securityAbstractTransfer('effect.invoke');
+  return !securityAbstractTransferIsWeakened('effect.invoke');
 }
 
 export function serverAliasJoinTransfer(

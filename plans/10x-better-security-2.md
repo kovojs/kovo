@@ -155,19 +155,22 @@ declared transfer registry exists to read (transfer identities are computed as i
 - [x] Seeded program generator whose productions derive 1:1 from that census (every element/transfer,
       including alias/helper-call/budget-edge shapes); assert productions ⊇ transfers in the generator's
       own test — the load-bearing anti-corpus safeguard.
-  - Evidence: the oracle gate/test proves 33/33 transfer productions, 38/38 lattice witnesses, and
-    materialized alias, helper, and over-bound budget-edge sources.
+  - Evidence: the oracle compiles one canonical program per 33/33 transfer rows, proves each intended
+    production marker actually ran, and behavior-checks all 38 lattice values against independent
+    alias/binary/conditional/default expectations.
 - [x] Implement an independent concrete interpreter for the finite generated language. Cross-check it
       against compiled emitted modules through instrumented framework effect doors, not arbitrary Proxy
       observation; seeded canaries prove that both a missed transfer and a missing effect observation
       fail the harness.
-  - Evidence: the focused oracle test executes emitted server modules through nine explicit door stubs;
-    the missed-transfer and missing-observation canaries both fail.
+  - Evidence: accepted canonical programs execute emitted server modules through nine explicit door
+    stubs, while helper/opaque/budget programs prove their exact intended closed reasons.
 - [x] Subset oracle: assert `observed ⊆ abstract-predicted` per program; on violation minimize and
       persist under the existing `kovo.security-fuzz-counterexample/v1` schema; weakening one transfer
       must produce a persisted counterexample + CI failure.
-  - Evidence: canary tests minimize and persist v1 counterexamples, then fail the weakened prediction
-    on `observed ⊄ abstract-predicted`.
+  - Evidence: a scoped `effect.invoke` production-transfer weakening makes its executable witness miss
+    a concrete effect, then minimizes and persists a v1 counterexample. The artifact remains
+    unconfirmed until its exact serialized seed/program/canary replay reproduces the disagreement;
+    program/weakening tamper tests fail replay and a non-reproducing organic probe stays unconfirmed.
 - [x] Enroll as a seventh `analyzer-soundness` family in `scripts/security-fuzz-campaign.mjs`, fixed
       seed, running in `test:security-fuzz-nightly` (the campaign already runs cross-implementation
       differential families for redos/headers; none targets the interpreter — that is the gap).

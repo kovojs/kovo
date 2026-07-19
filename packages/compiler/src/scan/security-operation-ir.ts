@@ -58,9 +58,11 @@ import {
 } from './security-provenance-relation.js';
 import {
   securityAbstractHelperTransfer,
+  securityAbstractEffectInvocationTransfer,
   securityAbstractInterpreterBudgets,
   securityAbstractTransfer,
   serverAliasJoinTransfer,
+  serverAliasDeclarationTransfer,
   serverBinaryTransfer,
   serverBindingDefaultTransfer,
   serverBindingProjectionTransfer,
@@ -4351,17 +4353,19 @@ function classifyServerProvenanceCall(
     return true;
   }
   if (provenance === 'scope-call') {
-    securityAbstractTransfer('effect.invoke');
-    appendOperation('server.authority.scope', call, target);
+    if (securityAbstractEffectInvocationTransfer()) {
+      appendOperation('server.authority.scope', call, target);
+    }
     return true;
   }
   if (provenance === 'database-read-namespace') {
-    securityAbstractTransfer('effect.invoke');
-    appendOperation('server.database.read', call, target);
+    if (securityAbstractEffectInvocationTransfer()) {
+      appendOperation('server.database.read', call, target);
+    }
     return true;
   }
   if (provenance === 'database-write-namespace') {
-    securityAbstractTransfer('effect.invoke');
+    if (!securityAbstractEffectInvocationTransfer()) return true;
     appendOperation('server.database.write', call, target);
     if (surface === 'query') {
       appendViolation(
@@ -4384,7 +4388,7 @@ function classifyServerProvenanceCall(
     return false;
   }
   const kind = compilerStringSlice(provenance, 'operation:'.length) as ServerSecurityOperationKind;
-  securityAbstractTransfer('effect.invoke');
+  if (!securityAbstractEffectInvocationTransfer()) return true;
   if (surface === 'query' && kind === 'server.database.write') {
     appendOperation(kind, call, target);
     appendViolation(
@@ -4450,13 +4454,7 @@ function serverAliasProvenance(
         if (initializer) {
           const derived = serverExpressionProvenance(initializer, aliases);
           const authority = derived;
-          if (isConstVariableDeclaration(node) || authority === 'foreign-executable') {
-            securityAbstractTransfer('alias.const-preserve');
-            provenance = authority;
-          } else if (serverProvenanceCarriesAuthority(authority)) {
-            securityAbstractTransfer('alias.mutable-authority-top');
-            provenance = 'unknown-authority';
-          }
+          provenance = serverAliasDeclarationTransfer(authority, isConstVariableDeclaration(node));
         }
         if (bindServerAliasPattern(node.name, provenance, aliases)) changed = true;
       }
