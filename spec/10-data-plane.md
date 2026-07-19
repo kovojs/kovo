@@ -303,6 +303,54 @@ Two corollaries are mandatory:
   a runtime box, a reconstructed carrier, or a framework-owned sink that is named in the proof
   inventory and hostile-value tests.
 
+#### Principal-indexed label lattice and bounded non-interference (normative)
+
+Kovo's data-plane obligations use one product label `L = Conf × Integ × Owner`. This is a statement
+about the statically analyzable fragment and the named framework runtime doors in this specification,
+not arbitrary JavaScript, termination, timing, resource use, or code behind an audited escape.
+
+- `Conf = public | secret`, ordered `public ⊑ secret`; join selects `secret` when either input is
+  secret.
+- `Integ = literal | server | input | unknown`, ordered from least to greatest uncertainty in that
+  sequence. Its join is the least upper bound. This is the normative kind-level meaning of
+  `joinSymbolProvenance`: `unknown` dominates, then `input`, then `server`, then `literal`. Equal
+  input/server paths remain precise; different paths join to the same kind with an unknown path.
+- `Owner = public | principal(p) | framework`. `public` is bottom, `framework` is top, equal
+  principal labels join to themselves, and labels for two different principals join to `framework`.
+  The product join is componentwise. `framework` means that no ordinary principal inherits
+  visibility or write authority merely because differently-owned values were combined.
+
+The following clause IDs are stable machine-readable obligations consumed by
+`check:label-clause-map`:
+
+- **NI-C1 — Confidentiality confinement.** A `secret` value cannot influence a public/client/log
+  observation except through an explicit framework-owned reveal or redaction door recorded as an
+  audited declassification.
+- **NI-I1 — Integrity confinement.** An `input` or `unknown` value cannot influence a governed,
+  credential, authorization, or other security-sensitive sink that admits only `literal`/`server`
+  provenance unless a framework-owned validator or guard reconstructs and re-witnesses a new fact.
+- **NI-I2 — Semantic integrity and freshness.** Opaque reads must declare enough source and shape
+  facts to preserve the query's freshness and wire contract; a source that cannot participate in
+  invalidation cannot silently enter a live query read set.
+- **NI-O1 — Principal isolation.** A value or effect labeled `principal(q)` is not observable by or
+  writable for principal `p` when `p ≠ q`; row selection and engine policy must preserve that owner
+  label at every supported authorization door.
+- **NI-E1 — Audited exception visibility.** Any deliberate exception to NI-C1, NI-I1, NI-I2, or
+  NI-O1 must pass a named escape with stable provenance, source span, and obligation text and remain
+  visible to `kovo explain`; missing or unrecordable escape evidence fails closed.
+
+**Termination-insensitive statement.** For any principal `p`, take two supported executions that
+start from equal `p`-observable state and differ only in values whose confidentiality/owner labels
+make them unobservable to `p`. If both executions terminate, their `p`-observable framework outputs
+and governed/authorization effects are equal. Likewise, changing only `input`/`unknown` values does
+not change a sink protected by NI-I1 unless a named validator, guard, or audited exception admits the
+change. This statement excludes termination, timing, allocation, arbitrary app effects, unanalyzed
+JavaScript, and the truth of author assertions; those are retained obligations, not implied claims.
+
+The diagnostic clause denominator is exactly KV410, KV411, KV414, KV426, KV435, KV438, and KV439.
+Their mapping is versioned in `security/label-clause-map.json`; a missing, duplicate, unknown, or
+class-relabelled row is a root-check failure.
+
 **C10 — security sets are closures or allowlists, never subsets or denylists (normative).** Any set
 used for an authorization, confidentiality, or privileged-execution decision MUST be computed from
 the boundary relation it represents: a reachability set is the complete closure over the relevant

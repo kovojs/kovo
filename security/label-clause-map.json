@@ -1,0 +1,37 @@
+{
+  "$comment": "Normative diagnostic-to-clause binding for SPEC section 10.3 bounded non-interference. The gate rejects missing rows, unknown clauses, class relabeling, and integrity-join drift.",
+  "schema": "kovo-label-clause-map/v1",
+  "specPath": "spec/10-data-plane.md",
+  "dimensions": {
+    "confidentiality": ["public", "secret"],
+    "integrity": ["literal", "server", "input", "unknown"],
+    "owner": ["public", "principal", "framework"]
+  },
+  "integrityJoin": {
+    "literal": { "literal": "literal", "server": "server", "input": "input", "unknown": "unknown" },
+    "server": { "literal": "server", "server": "server", "input": "input", "unknown": "unknown" },
+    "input": { "literal": "input", "server": "input", "input": "input", "unknown": "unknown" },
+    "unknown": {
+      "literal": "unknown",
+      "server": "unknown",
+      "input": "unknown",
+      "unknown": "unknown"
+    }
+  },
+  "clauses": [
+    { "id": "NI-C1", "dimension": "confidentiality" },
+    { "id": "NI-I1", "dimension": "integrity" },
+    { "id": "NI-I2", "dimension": "integrity" },
+    { "id": "NI-O1", "dimension": "owner" },
+    { "id": "NI-E1", "dimension": "cross-cutting" }
+  ],
+  "diagnostics": [
+    { "code": "KV410", "clauses": ["NI-I1", "NI-I2"] },
+    { "code": "KV411", "clauses": ["NI-I2"] },
+    { "code": "KV414", "clauses": ["NI-O1"] },
+    { "code": "KV426", "clauses": ["NI-E1"] },
+    { "code": "KV435", "clauses": ["NI-C1", "NI-E1"] },
+    { "code": "KV438", "clauses": ["NI-I1", "NI-E1"] },
+    { "code": "KV439", "clauses": ["NI-C1", "NI-O1"] }
+  ]
+}

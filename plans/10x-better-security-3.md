@@ -386,12 +386,16 @@ Kovo has three unrelated de facto label systems: confidentiality (`secret.ts` �
 and authority (`security-operation-ir.ts:72/82`). SPEC states confidentiality purely as a sink rule
 (`spec/10-data-plane.md:277`); there is no execution-level property anywhere. (~1.5 pm)
 
-- [ ] Publish SPEC §10.x "label lattice + intended non-interference statement": define
+- [x] Publish SPEC §10.x "label lattice + intended non-interference statement": define
       `L = Conf × Integ × Owner`, promote `joinSymbolProvenance` to the normative integrity join, and
       write the principal-indexed termination-insensitive sentence.
-- [ ] `check:label-clause-map`: every confidentiality/integrity diagnostic (KV435, KV426, KV438,
+  - Evidence: `spec/10-data-plane.md` defines the product lattice, exact integrity join, five stable
+    clauses, principal-indexed termination-insensitive statement, and explicit non-claims.
+- [x] `check:label-clause-map`: every confidentiality/integrity diagnostic (KV435, KV426, KV438,
       KV439, KV414, KV410, KV411) maps to a clause of the theorem; an unmapped one fails the gate.
       This converts "per-sink chokes" into "sinks that discharge a stated obligation".
+  - Evidence: `pnpm run check:label-clause-map` passes 8/8 gate and implementation-binding tests,
+    including missing-map, unknown-clause, class-relabel, SPEC-deletion, and join-drift mutants.
 
 ---
 
