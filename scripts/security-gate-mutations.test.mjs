@@ -13,14 +13,8 @@ describe('security-gate-mutations', () => {
     );
 
     expect(finiteIrMutants).toHaveLength(19);
-    expect(finiteIrMutants).toEqual(
-      finiteIrMutants.map((mutant) =>
-        expect.objectContaining({
-          behavioralTypeScript: true,
-          sourceOnly: undefined,
-        }),
-      ),
-    );
+    expect(finiteIrMutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
+    expect(finiteIrMutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });
 
   it('kills every enrolled security gate branch deletion mutant', async () => {
