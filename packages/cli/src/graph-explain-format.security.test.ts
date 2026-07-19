@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import {
   hasStaticHandlerWriteSinkDiagnostic,
@@ -14,6 +15,26 @@ import {
 import { kovoCheck } from './graph-output.js';
 
 describe('CLI graph security diagnostic authority', () => {
+  // @kovo-security-certifies C13 registered-diagnostic-verifier-snapshot
+  it('preserves constructor-owned diagnostic provenance across the verifier snapshot', () => {
+    const result = kovoCheck({
+      diagnostics: [
+        createRegisteredDiagnostic(
+          'KV414',
+          {
+            detail: 'owner predicate does not consume the accepted principal',
+            site: 'src/queries/orders.ts:12',
+          },
+          { message: 'Owner predicate is not proven to match the accepted principal.' },
+        ),
+      ],
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain('ERROR KV414 src/queries/orders.ts:12');
+    expect(result.output).not.toContain('ERROR SECURITY');
+  });
+
   it('keeps KV330 handler-write findings visible after late Set.has poisoning', () => {
     const originalHas = Set.prototype.has;
     let observed = false;
