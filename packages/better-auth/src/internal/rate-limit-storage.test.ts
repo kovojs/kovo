@@ -55,6 +55,34 @@ describe('bounded Better Auth credential rate-limit storage', () => {
     expect([...buckets].every((key) => /^000[0-3]$/u.test(key))).toBe(true);
   });
 
+  it('never reacquires ambient WebCrypto after the server crypto authority bootstraps', async () => {
+    const originalCrypto = globalThis.crypto;
+    let poisonedCalls = 0;
+    try {
+      vi.stubGlobal('crypto', {
+        subtle: {
+          importKey() {
+            poisonedCalls += 1;
+            throw new Error('late ambient crypto acquisition');
+          },
+          sign() {
+            poisonedCalls += 1;
+            throw new Error('late ambient crypto acquisition');
+          },
+        },
+      });
+      const options = createBetterAuthBoundedRateLimitStorage(secret, async () => true, {
+        bucketCount: 4,
+      });
+      await expect(
+        options.customStorage?.consume('198.51.100.2|/sign-in/email', rule),
+      ).resolves.toEqual({ allowed: true, retryAfter: null });
+      expect(poisonedCalls).toBe(0);
+    } finally {
+      vi.stubGlobal('crypto', originalCrypto);
+    }
+  });
+
   it('aggregates HMAC collisions so the shared ceiling fails closed', async () => {
     const counts = new Map<string, number>();
     const frames = new Set<string>();

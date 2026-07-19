@@ -11,7 +11,9 @@ export const packageCapabilitySummarySchema = 'kovo-package-capabilities/v1' as 
 
 /** @internal */
 export type RawCapabilityKind =
+  | 'crypto-acquisition'
   | 'database-driver'
+  | 'digest'
   | 'dynamic-loader'
   | 'filesystem'
   | 'network'
@@ -58,14 +60,43 @@ const rawDatabasePackages = new Set([
   'sqlite3',
 ]);
 
+const exactDigestOnlyCryptoExports = new Set(['createHash', 'hash']);
+
+/**
+ * Binding-sensitive raw import classifier (SPEC §6.6).
+ *
+ * A crypto namespace is itself high authority. Only an exact non-empty set of named, non-keyed
+ * digest exports receives the lower `digest` classification; a mixed import canonicalizes to the
+ * stronger verdict.
+ * @internal
+ */
+export function classifyRawCapabilityImport(
+  specifier: string,
+  importedNames: readonly string[],
+): RawCapabilityKind | undefined {
+  const withoutNode = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier;
+  if (withoutNode === 'crypto') {
+    return importedNames.length > 0 &&
+      importedNames.every((name) => exactDigestOnlyCryptoExports.has(name))
+      ? 'digest'
+      : 'crypto-acquisition';
+  }
+  if (capabilityPackageNameForSpecifier(specifier) === '@node-rs/argon2') {
+    return 'crypto-acquisition';
+  }
+  return classifyRawCapabilityModuleSpecifier(specifier);
+}
+
 /** @internal One C13-enrolled raw-module classifier shared by scanner and graph analysis. */
 export function classifyRawCapabilityModuleSpecifier(
   specifier: string,
 ): RawCapabilityKind | undefined {
   const withoutNode = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier;
+  if (withoutNode === 'crypto') return 'crypto-acquisition';
   const builtin = rawModuleCapabilities.get(withoutNode.split('/')[0]!);
   if (builtin !== undefined) return builtin;
   const packageName = capabilityPackageNameForSpecifier(specifier);
+  if (packageName === '@node-rs/argon2') return 'crypto-acquisition';
   if (rawDatabasePackages.has(packageName)) return 'database-driver';
   if (
     packageName === 'drizzle-orm' &&

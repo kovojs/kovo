@@ -61,13 +61,13 @@ import {
   createCapabilityMap,
 } from './capability-intrinsics.js';
 import { resolveBootMode } from './env.js';
-import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
+import { createCapabilityCryptoHandle } from './crypto-authority.js';
+import type { SigningSecret } from './keyring.js';
 
 // SPEC §6.6: v3 is the first capability/replay domain backed by a durable reclamation watermark.
 // Pre-watermark v2 tokens are deliberately not accepted: old runtimes may already have deleted
 // their one-time replay row, and no migration can reconstruct that missing maximum expiry safely.
 const TOKEN_VERSION = 'v3';
-const CAPABILITY_SIGNING_PURPOSE = 'capability-url';
 const DEFAULT_CAPABILITY_AUDIENCE = 'storage-download';
 const DEFAULT_CAPABILITY_REPLAY_MAX_ENTRIES = 10_000;
 /** @internal Fixed allocation/retention ceilings for capability claims and wire tokens. */
@@ -266,7 +266,6 @@ export const signCapability = wireEmitter(
       );
     }
     const now = configuredNow ?? capabilityNow();
-    const ring = signingKeyRingFromSecret(secret);
     const key = capabilityOwnDataValue(options, 'key');
     const configuredMethod = capabilityOwnDataValue(options, 'method');
     const scope = capabilityOwnDataValue(options, 'scope');
@@ -296,6 +295,7 @@ export const signCapability = wireEmitter(
     ) {
       throw capabilityTypeError('Capability signing options must contain valid, bounded claims.');
     }
+    const signer = createCapabilityCryptoHandle(secret, audience);
     const claims: CapabilityClaims = {
       key,
       method,
@@ -305,17 +305,13 @@ export const signCapability = wireEmitter(
     const oneTime = configuredOneTime === true;
     // A per-token nonce gives one-time tokens a stable replay id even when claims are identical.
     const nonce = oneTime ? capabilityBase64Url(capabilityRandomBytes(12)) : '';
-    const signedBytes = canonicalizeWithNonce(claims, oneTime, nonce, ring.currentKeyId);
-    const signedResult = ring.sign({
-      audience,
-      payload: signedBytes,
-      purpose: CAPABILITY_SIGNING_PURPOSE,
-    });
+    const signedBytes = canonicalizeWithNonce(claims, oneTime, nonce, signer.currentKeyId);
+    const signedResult = signer.sign(signedBytes);
     const signedKeyId = capabilityOwnDataValue(signedResult, 'keyId');
     const signature = capabilityOwnDataValue(signedResult, 'signature');
     if (
       typeof signedKeyId !== 'string' ||
-      signedKeyId !== ring.currentKeyId ||
+      signedKeyId !== signer.currentKeyId ||
       !isSafeKeyIdText(signedKeyId) ||
       typeof signature !== 'string' ||
       !isCanonicalSignature(signature)
@@ -420,13 +416,11 @@ export const verifyCapability = securityClassifier(
 
       // Recompute the signature over every received authority field, including key id and replay
       // posture. The keyring owns the constant-time signature comparison.
-      const verification = signingKeyRingFromSecret(secret).verify({
-        audience,
-        keyId: payload.keyId,
-        payload: canonicalizeWithNonce(claims, payload.oneTime, payload.nonce, payload.keyId),
-        purpose: CAPABILITY_SIGNING_PURPOSE,
+      const verification = createCapabilityCryptoHandle(secret, audience).verify(
+        canonicalizeWithNonce(claims, payload.oneTime, payload.nonce, payload.keyId),
         signature,
-      });
+        payload.keyId,
+      );
       if (!verification.ok) return { ok: false, reason: 'bad-signature' };
 
       if (now >= claims.expiry) return { ok: false, reason: 'expired' };

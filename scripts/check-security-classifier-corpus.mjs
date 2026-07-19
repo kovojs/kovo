@@ -2027,6 +2027,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'scripts/capability-surface-census-gate.test.mjs',
       'scripts/wire-input-boundary-gate.test.mjs',
       'scripts/framework-export-posture-gate.test.mjs',
+      'scripts/check-crypto-boundary.test.mjs',
     ],
     verdictAnchors: [
       {
@@ -2061,6 +2062,27 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'requires every owned request effect door to consume the canonical deadline capability',
           'composeCurrentRequestDeadlineSignal as consumeDeadline',
           'frameworkEgressFetch does not consume composeCurrentRequestDeadlineSignal from request-deadline',
+        ],
+      },
+      {
+        id: 'crypto-acquisition-and-purpose-closure',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          '@kovo-security-classifier-corpus C13 crypto-acquisition-vs-digest-capability',
+          'classifies exact named non-keyed digests separately from secret crypto acquisition',
+          "capability: 'digest'",
+          "capability: 'crypto-acquisition'",
+          'does not turn type-only Node crypto imports into runtime authority',
+        ],
+      },
+      {
+        id: 'crypto-acquisition-repository-ratchet',
+        file: 'scripts/check-crypto-boundary.test.mjs',
+        snippets: [
+          '@kovo-security-classifier-corpus C13 crypto-acquisition-ratchet',
+          'accepts only the exact reviewed path, class, and operation set',
+          'rejects unreviewed WebCrypto, namespace, and argon2 acquisition',
+          'forces stale high-authority rows to shrink and enforces the numeric ceiling',
         ],
       },
       {

@@ -2,7 +2,6 @@ import {
   freezeSecurityValue,
   securityArrayAppend,
   securityApply,
-  securityDefineProperty,
   securityGetOwnPropertyDescriptor,
   securityGetPrototypeOf,
   securityHasInstance,
@@ -22,6 +21,10 @@ import {
   securityWeakSetAdd,
   securityWeakSetHas,
 } from '#security-witness-intrinsics';
+import {
+  createProviderWebhookHmacVerifyHandle,
+  type ProviderWebhookHmacVerifyHandle,
+} from './internal/crypto-authority.js';
 
 const IntrinsicArrayBuffer = ArrayBuffer;
 const IntrinsicDate = Date;
@@ -65,12 +68,8 @@ const intrinsicDataViewByteLength = securityGetOwnPropertyDescriptor(
 const intrinsicHeadersGet = IntrinsicHeaders?.prototype.get;
 const intrinsicDateGetTime = IntrinsicDate.prototype.getTime;
 const intrinsicDateNow = IntrinsicDate.now;
-const capturedSubtleCrypto = globalThis.crypto?.subtle;
-const capturedSubtleImportKey = capturedSubtleCrypto?.importKey;
-const capturedSubtleSign = capturedSubtleCrypto?.sign;
 const capturedHmacByteControlsSound = verifyCapturedHmacByteControls();
 const capturedVerifierScalarControlsSound = verifyCapturedVerifierScalarControls();
-const capturedHmacCryptoControl = verifyCapturedHmacCryptoControls();
 
 /** The raw request body a webhook verifier signs over: a string or raw bytes. */
 export type WebhookPayload = string | ArrayBuffer | ArrayBufferView;
@@ -161,6 +160,23 @@ export interface HmacSignatureOptions {
   tolerance?: HmacSignatureTolerance;
 }
 
+/**
+ * Non-secret inspection metadata for an HMAC verifier.
+ *
+ * Provider signing material is intentionally absent and remains owned by the private verify-only
+ * crypto authority (SPEC §6.6). This snapshot preserves the payload/tolerance metadata consumed by
+ * Kovo's static and runtime verifier audits without making the provider key public.
+ */
+export interface HmacSignatureInspectionConfig {
+  encoding: HmacSignatureEncoding;
+  header: string;
+  multiSig?: HmacMultiSignature;
+  name?: string;
+  payload: HmacSignaturePayload;
+  scheme?: string;
+  tolerance?: HmacSignatureTolerance;
+}
+
 /** The resolved, defaults-applied view of an HMAC verifier's configuration. */
 export interface ResolvedHmacSignatureConfig {
   encoding: HmacSignatureEncoding;
@@ -173,9 +189,9 @@ export interface ResolvedHmacSignatureConfig {
   toleranceSeconds?: number;
 }
 
-/** A configured HMAC-signature verifier: its options, resolved config, and an async `verify` of the request. */
+/** A configured HMAC-signature verifier: sanitized inspection metadata, resolved config, and async verification. */
 export interface HmacSignatureVerifier {
-  config: HmacSignatureOptions;
+  config: HmacSignatureInspectionConfig;
   kind: 'hmac';
   name: string;
   resolved: ResolvedHmacSignatureConfig;
@@ -211,6 +227,10 @@ type HmacTimestampBinding = typeof payloadBindsTimestamp | undefined;
 type ResolvedHmacToleranceTimestamp = {
   parsedSeconds: number;
   signedValue: number | string;
+};
+type SnapshotHmacSignatureOptions = {
+  authority: ProviderWebhookHmacVerifyHandle;
+  config: HmacSignatureInspectionConfig;
 };
 
 /** @internal Unforgeable provenance check for framework-constructed HMAC verifiers. */
@@ -255,26 +275,27 @@ function createHmacSignature(
   // verifier on a private semantic snapshot so later writes through either the
   // caller-owned options object or the public audit config cannot change which
   // bytes, secrets, or timestamp posture authenticate an already-declared app.
-  const runtimeOptions = snapshotHmacSignatureOptions(options);
-  const config = snapshotHmacSignatureOptions(runtimeOptions);
-  const name = runtimeOptions.name ?? 'hmac';
-  const scheme = runtimeOptions.scheme ?? `hmac-sha256:${runtimeOptions.encoding}`;
+  const snapshot = snapshotHmacSignatureOptions(options);
+  const runtimeConfig = snapshot.config;
+  const config = snapshotHmacSignatureInspectionConfig(runtimeConfig);
+  const name = runtimeConfig.name ?? 'hmac';
+  const scheme = runtimeConfig.scheme ?? `hmac-sha256:${runtimeConfig.encoding}`;
   const resolved: ResolvedHmacSignatureConfig = freezeSecurityValue({
-    encoding: runtimeOptions.encoding,
-    header: runtimeOptions.header,
+    encoding: runtimeConfig.encoding,
+    header: runtimeConfig.header,
     kind: 'hmac',
-    multiSig: runtimeOptions.multiSig !== undefined && runtimeOptions.multiSig !== false,
+    multiSig: runtimeConfig.multiSig !== undefined && runtimeConfig.multiSig !== false,
     name,
     scheme,
     timestampBinding:
-      runtimeOptions.tolerance === undefined
+      runtimeConfig.tolerance === undefined
         ? 'none'
         : timestampBinding === payloadBindsTimestamp
           ? 'payload'
           : 'automatic',
-    ...(runtimeOptions.tolerance === undefined
+    ...(runtimeConfig.tolerance === undefined
       ? {}
-      : { toleranceSeconds: runtimeOptions.tolerance.seconds }),
+      : { toleranceSeconds: runtimeConfig.tolerance.seconds }),
   });
 
   const verifier: HmacSignatureVerifier = {
@@ -284,14 +305,14 @@ function createHmacSignature(
     resolved,
     scheme,
     async verify(request: WebhookVerificationRequest) {
-      return verifyHmacSignature(runtimeOptions, request, timestampBinding);
+      return verifyHmacSignature(runtimeConfig, snapshot.authority, request, timestampBinding);
     },
   };
   securityWeakSetAdd(frameworkHmacSignatureVerifiers, verifier);
   return freezeSecurityValue(verifier);
 }
 
-function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignatureOptions {
+function snapshotHmacSignatureOptions(options: HmacSignatureOptions): SnapshotHmacSignatureOptions {
   const encoding = ownHmacOption<HmacSignatureEncoding>(
     options,
     'encoding',
@@ -348,15 +369,35 @@ function snapshotHmacSignatureOptions(options: HmacSignatureOptions): HmacSignat
   }
   const tolerance =
     sourceTolerance === undefined ? undefined : snapshotHmacSignatureTolerance(sourceTolerance);
-  return freezeSecurityValue({
+  const config = freezeSecurityValue({
     encoding,
     header,
     ...(multiSig === undefined ? {} : { multiSig }),
     ...(name === undefined ? {} : { name }),
     payload: snapshotWebhookPayload(payload),
     ...(scheme === undefined ? {} : { scheme }),
-    secret: snapshotHmacSecrets(secret),
     ...(tolerance === undefined ? {} : { tolerance }),
+  });
+  const secretBytes = snapshotHmacSecretBytes(secret);
+  return freezeSecurityValue({
+    authority: createProviderWebhookHmacVerifyHandle(secretBytes),
+    config,
+  });
+}
+
+function snapshotHmacSignatureInspectionConfig(
+  config: HmacSignatureInspectionConfig,
+): HmacSignatureInspectionConfig {
+  return freezeSecurityValue({
+    encoding: config.encoding,
+    header: config.header,
+    ...(config.multiSig === undefined ? {} : { multiSig: config.multiSig }),
+    ...(config.name === undefined ? {} : { name: config.name }),
+    payload: snapshotWebhookPayload(config.payload),
+    ...(config.scheme === undefined ? {} : { scheme: config.scheme }),
+    ...(config.tolerance === undefined
+      ? {}
+      : { tolerance: snapshotHmacSignatureTolerance(config.tolerance) }),
   });
 }
 
@@ -419,25 +460,27 @@ function snapshotWebhookPayload(payload: HmacSignaturePayload): HmacSignaturePay
   return copyBytes(new IntrinsicUint8Array(view.buffer, view.byteOffset, view.byteLength));
 }
 
-function snapshotHmacSecrets(
-  secret: HmacSignatureOptions['secret'],
-): HmacSignatureOptions['secret'] {
+function snapshotHmacSecretBytes(secret: HmacSignatureOptions['secret']): readonly Uint8Array[] {
+  const snapshots: Uint8Array[] = [];
   if (securityIsArray(secret)) {
     const length = exactArrayLength(secret, 'HMAC secret array', maximumHmacSecrets);
     if (length === 0) {
       throw new TypeError('HMAC signature configuration requires at least one signing secret.');
     }
-    const snapshot: HmacSecret[] = [];
     for (let index = 0; index < length; index += 1) {
       const descriptor = securityGetOwnPropertyDescriptor(secret, index);
       if (descriptor === undefined || !('value' in descriptor)) {
         throw new TypeError('HMAC secret arrays require stable own-data entries.');
       }
-      securityArrayAppend(snapshot, snapshotHmacSecret(descriptor.value as HmacSecret));
+      securityArrayAppend(
+        snapshots,
+        secretToBytes(snapshotHmacSecret(descriptor.value as HmacSecret)),
+      );
     }
-    return freezeSecurityValue(snapshot);
+  } else {
+    securityArrayAppend(snapshots, secretToBytes(snapshotHmacSecret(secret as HmacSecret)));
   }
-  return snapshotHmacSecret(secret as HmacSecret);
+  return freezeSecurityValue(snapshots);
 }
 
 function snapshotHmacSecret(secret: HmacSecret): HmacSecret {
@@ -608,11 +651,12 @@ export function standardWebhooks(options: StandardWebhooksOptions): HmacSignatur
 }
 
 async function verifyHmacSignature(
-  options: HmacSignatureOptions,
+  config: HmacSignatureInspectionConfig,
+  authority: ProviderWebhookHmacVerifyHandle,
   request: WebhookVerificationRequest,
   timestampBinding?: HmacTimestampBinding,
 ): Promise<boolean> {
-  const signatureHeader = getHeader(request.headers, options.header);
+  const signatureHeader = getHeader(request.headers, config.header);
   if (
     signatureHeader === undefined ||
     signatureHeader.length === 0 ||
@@ -622,7 +666,7 @@ async function verifyHmacSignature(
   }
 
   const headerCache = securityMap<string, string | undefined>();
-  securityMapSet(headerCache, securityStringToLowerCase(options.header), signatureHeader);
+  securityMapSet(headerCache, securityStringToLowerCase(config.header), signatureHeader);
   const context: HmacSignaturePayloadContext = {
     header: (name) => {
       const cacheKey = securityStringToLowerCase(name);
@@ -634,13 +678,11 @@ async function verifyHmacSignature(
     signatureHeader,
   };
 
-  const toleranceTimestamp = resolveToleranceTimestamp(options.tolerance, request, context);
-  if (!isWithinTolerance(options.tolerance, toleranceTimestamp, request)) return false;
+  const toleranceTimestamp = resolveToleranceTimestamp(config.tolerance, request, context);
+  if (!isWithinTolerance(config.tolerance, toleranceTimestamp, request)) return false;
 
   const signedPayload =
-    typeof options.payload === 'function'
-      ? await options.payload(request, context)
-      : options.payload;
+    typeof config.payload === 'function' ? await config.payload(request, context) : config.payload;
 
   // SPEC §9.1.1:846 (B5): when `tolerance` is configured, fold the timestamp into
   // the signed bytes so a captured (signature, body) cannot
@@ -648,7 +690,7 @@ async function verifyHmacSignature(
   // carry the private payload-binding sentinel when the provider protocol already
   // fixes the timestamp at another position in the signed payload.
   let signedPayloadBytes: Uint8Array;
-  if (options.tolerance !== undefined && timestampBinding !== payloadBindsTimestamp) {
+  if (config.tolerance !== undefined && timestampBinding !== payloadBindsTimestamp) {
     if (toleranceTimestamp === undefined) return false;
     const prefix = `${toleranceTimestamp.signedValue}.`;
     const prefixBytes = encodeUtf8(prefix);
@@ -661,7 +703,7 @@ async function verifyHmacSignature(
     signedPayloadBytes = payloadToBytes(signedPayload);
   }
   assertHmacPayloadByteBound(signedPayloadBytes);
-  const parsedSignatures = parseSignatures(options.multiSig, signatureHeader);
+  const parsedSignatures = parseSignatures(config.multiSig, signatureHeader);
   if (!securityIsArray(parsedSignatures)) return false;
   const parsedSignatureLength = exactArrayLength(
     parsedSignatures,
@@ -680,32 +722,16 @@ async function verifyHmacSignature(
     }
     const signature = descriptor.value;
     if (signature.length > maximumHmacSignatureCandidateCharacters) continue;
-    const decoded = decodeSignature(signature, options.encoding);
+    const decoded = decodeSignature(signature, config.encoding);
     if (decoded !== undefined && byteLengthOf(decoded) === 32) {
       securityArrayAppend(signatures, decoded);
     }
   }
   if (signatures.length === 0) return false;
-
-  const secrets = securityIsArray(options.secret) ? options.secret : [options.secret];
-  for (let secretIndex = 0; secretIndex < secrets.length; secretIndex += 1) {
-    const descriptor = securityGetOwnPropertyDescriptor(secrets, secretIndex);
-    if (descriptor === undefined || !('value' in descriptor) || descriptor.value === undefined) {
-      continue;
-    }
-    const secret = descriptor.value;
-    const expected = await hmacSha256(secretToBytes(secret), signedPayloadBytes);
-    for (let signatureIndex = 0; signatureIndex < signatures.length; signatureIndex += 1) {
-      const descriptor = securityGetOwnPropertyDescriptor(signatures, signatureIndex);
-      if (descriptor === undefined || !('value' in descriptor) || descriptor.value === undefined) {
-        continue;
-      }
-      const signature = descriptor.value;
-      if (constantTimeEqual(expected, signature)) return true;
-    }
-  }
-
-  return false;
+  // SPEC §6.6/§9.1: provider-owned signing material lives only in the core-realm verify authority.
+  // Native SubtleCrypto.verify owns fixed-width signature comparison; this layer never computes a
+  // public expected MAC or performs a hand-written XOR comparison.
+  return authority.verify(signedPayloadBytes, signatures);
 }
 
 function parseSignatures(
@@ -1085,38 +1111,6 @@ function hexToBytes(value: string): Uint8Array | undefined {
   return bytes;
 }
 
-async function hmacSha256(secret: Uint8Array, payload: Uint8Array): Promise<Uint8Array> {
-  if (!(await capturedHmacCryptoControl)) {
-    throw new TypeError(
-      'Kovo HMAC verifier crypto controls were modified before framework initialization.',
-    );
-  }
-  if (
-    capturedSubtleCrypto === undefined ||
-    capturedSubtleImportKey === undefined ||
-    capturedSubtleSign === undefined
-  ) {
-    throw new TypeError('Kovo HMAC verifier requires Web Crypto SubtleCrypto support.');
-  }
-  // Node's Web Crypto BufferSource conversion consults mutable public view
-  // accessors before entering the native implementation. Pin exact own data
-  // fields on fresh private copies so late TypedArray/ArrayBuffer prototype
-  // poisoning cannot collapse the authenticated key or payload to empty bytes.
-  const secretBytes = pinCryptoByteView(copyBytes(secret));
-  const payloadBytes = pinCryptoByteView(copyBytes(payload));
-  const key = await securityApply<Promise<CryptoKey>>(
-    capturedSubtleImportKey,
-    capturedSubtleCrypto,
-    ['raw', secretBytes, { hash: 'SHA-256', name: 'HMAC' }, false, ['sign']],
-  );
-  const signature = await securityApply<Promise<ArrayBuffer>>(
-    capturedSubtleSign,
-    capturedSubtleCrypto,
-    ['HMAC', key, payloadBytes],
-  );
-  return new IntrinsicUint8Array(signature);
-}
-
 function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
   // Do not dispatch to bytes.slice(): Node Buffer is a Uint8Array subclass whose
   // slice() shares backing memory, which would retain caller-owned signing material.
@@ -1212,47 +1206,6 @@ function verifyCapturedVerifierScalarControls(): boolean {
   }
 }
 
-async function verifyCapturedHmacCryptoControls(): Promise<boolean> {
-  if (
-    capturedSubtleCrypto === undefined ||
-    capturedSubtleImportKey === undefined ||
-    capturedSubtleSign === undefined
-  ) {
-    return false;
-  }
-  try {
-    const keyBytes = encodeUtf8('kovo-hmac-control-key');
-    const payloadBytes = encodeUtf8('kovo-hmac-control-payload');
-    const key = await securityApply<Promise<CryptoKey>>(
-      capturedSubtleImportKey,
-      capturedSubtleCrypto,
-      ['raw', keyBytes, { hash: 'SHA-256', name: 'HMAC' }, false, ['sign']],
-    );
-    const signature = await securityApply<Promise<ArrayBuffer>>(
-      capturedSubtleSign,
-      capturedSubtleCrypto,
-      ['HMAC', key, payloadBytes],
-    );
-    return bytesEqualHex(
-      new IntrinsicUint8Array(signature),
-      '0822211b3d7ed77d25825fa1873c00ea4809fde1dc06e95f71d5a891ca453a0b',
-    );
-  } catch {
-    return false;
-  }
-}
-
-function bytesEqualHex(bytes: Uint8Array, hex: string): boolean {
-  const byteLength = byteLengthOf(bytes);
-  if (byteLength * 2 !== hex.length) return false;
-  for (let index = 0; index < byteLength; index += 1) {
-    const high = hexNibble(securityStringCharCodeAt(hex, index * 2));
-    const low = hexNibble(securityStringCharCodeAt(hex, index * 2 + 1));
-    if (high < 0 || low < 0 || bytes[index] !== (high << 4) + low) return false;
-  }
-  return true;
-}
-
 function hexNibble(code: number): number {
   if (code >= 48 && code <= 57) return code - 48;
   if (code >= 65 && code <= 70) return code - 55;
@@ -1276,22 +1229,6 @@ function floorNumber(value: number): number {
 
 function isFiniteNumber(value: number): boolean {
   return value === value && value !== Infinity && value !== -Infinity;
-}
-
-function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
-  // SPEC §6.6/§9.1: signature equality is an authorization boundary. Read exact
-  // byte lengths through the boot-witnessed typed-array intrinsic so late realm
-  // poisoning cannot collapse the comparison loop to zero bytes.
-  const leftLength = byteLengthOf(left);
-  const rightLength = byteLengthOf(right);
-  const length = leftLength > rightLength ? leftLength : rightLength;
-  let difference = leftLength ^ rightLength;
-
-  for (let index = 0; index < length; index += 1) {
-    difference |= (left[index] ?? 0) ^ (right[index] ?? 0);
-  }
-
-  return difference === 0;
 }
 
 interface SnapshotByteView {
@@ -1331,29 +1268,6 @@ function byteLengthOf(value: Uint8Array): number {
     throw new TypeError('Kovo HMAC verifier byte-length controls are unavailable.');
   }
   return securityApply<number>(intrinsicTypedArrayByteLength, value, []);
-}
-
-function pinCryptoByteView(value: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
-  const view = snapshotByteView(value, 'Kovo HMAC crypto input');
-  securityDefineProperty(value, 'buffer', {
-    configurable: false,
-    enumerable: false,
-    value: view.buffer,
-    writable: false,
-  });
-  securityDefineProperty(value, 'byteOffset', {
-    configurable: false,
-    enumerable: false,
-    value: view.byteOffset,
-    writable: false,
-  });
-  securityDefineProperty(value, 'byteLength', {
-    configurable: false,
-    enumerable: false,
-    value: view.byteLength,
-    writable: false,
-  });
-  return value;
 }
 
 function exactArrayLength(value: readonly unknown[], label: string, maximum: number): number {

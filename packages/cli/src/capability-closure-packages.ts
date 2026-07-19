@@ -40,7 +40,9 @@ const frameworkCompilerSourceCatalogFile =
 const frameworkCompilerPackedCatalogFiles = new Set(['dist/internal.mjs', 'dist/internal.mjs.map']);
 
 const capabilityKinds = new Set<RawCapabilityKind>([
+  'crypto-acquisition',
   'database-driver',
+  'digest',
   'dynamic-loader',
   'filesystem',
   'network',

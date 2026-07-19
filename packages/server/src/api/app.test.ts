@@ -169,6 +169,20 @@ type RootStaticExportDiagnostic = import('../index.js').StaticExportDiagnostic;
 type RootStaticExportDiagnosticSeverity = import('../index.js').StaticExportDiagnosticSeverity;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootEncryptedAtRest = import('../index.js').EncryptedAtRest;
+type RootSigningKeyRing = import('../index.js').SigningKeyRing;
+
+function assertOpaqueSigningRingSurface(opaqueSigningRing: RootSigningKeyRing): void {
+  // @ts-expect-error SPEC §6.6: public rings configure roots; they never expose generic signing.
+  opaqueSigningRing.sign({ audience: 'attacker', payload: 'payload', purpose: 'attacker' });
+  // @ts-expect-error SPEC §6.6: public rings never expose generic verification.
+  opaqueSigningRing.verify({
+    audience: 'attacker',
+    payload: 'payload',
+    purpose: 'attacker',
+    signature: 'forged',
+  });
+}
+void assertOpaqueSigningRingSurface;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootEncryptAtRestOptions = import('../index.js').EncryptAtRestOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
@@ -657,7 +671,10 @@ describe('server app-shell public API barrels', () => {
       serverValue: writeGovernanceApi.serverValue,
       // SPEC.md §6.6 / plans/most-secure-web-framework.md OPP-04: app authors
       // satisfy confidential-at-rest write gates with this authenticated-encryption sink.
+      createConfidentialAtRestCipher: confidentialAtRestApi.createConfidentialAtRestCipher,
+      decryptAtRest: confidentialAtRestApi.decryptAtRest,
       encryptAtRest: confidentialAtRestApi.encryptAtRest,
+      rewrapAtRest: confidentialAtRestApi.rewrapAtRest,
       mintCsrfField: dataApi.mintCsrfField,
       mintCsrfToken: dataApi.mintCsrfToken,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,

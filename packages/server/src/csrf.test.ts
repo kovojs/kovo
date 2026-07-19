@@ -400,7 +400,12 @@ describe('csrf helpers', () => {
       secret: {
         keys: [
           { id: 'new', secret: current, state: 'active' as const },
-          { id: 'old', secret: previous, state: 'previous' as const },
+          {
+            acceptUntil: Date.now() + 60_000,
+            id: 'old',
+            secret: previous,
+            state: 'previous' as const,
+          },
         ],
       },
     };
@@ -420,6 +425,7 @@ describe('csrf helpers', () => {
           keys: [
             { id: 'new', secret: current, state: 'active' as const },
             {
+              acceptUntil: Date.now() + 60_000,
               id: 'older',
               secret: 'older-secret-at-least-32-characters-long',
               state: 'previous' as const,
@@ -438,7 +444,12 @@ describe('csrf helpers', () => {
       secret: {
         keys: [
           { id: 'new', secret: current, state: 'active' as const },
-          { id: 'old', secret: previous, state: 'previous' as const },
+          {
+            acceptUntil: Date.now() + 60_000,
+            id: 'old',
+            secret: previous,
+            state: 'previous' as const,
+          },
         ],
       },
     };

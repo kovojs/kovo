@@ -505,21 +505,30 @@ portion of D; it must not become one generic signer available to every caller.
 ~27 non-test modules import `node:crypto`/`crypto.subtle`/argon2 directly, each with its own (or no)
 boot-pinning ritual; zero production zeroization anywhere; no gate polices raw crypto acquisition.
 
-- [ ] Add a `crypto-acquisition` capability to the module-graph closure: importing the primitives
+- [x] Add a `crypto-acquisition` capability to the module-graph closure: importing the primitives
       outside a declared door fails the build (seed the door list with today's ~27 modules; the list
       must monotonically shrink or it degenerates into a census manifest). Classify build-time
       non-secret hashing as a separate low-privilege `digest` capability.
-- [ ] `crypto-authority.ts`: one boot pinning + known-answer self-test, but distribute only
+  - Evidence: `pnpm run check:crypto-boundary` closes 56 exact rows with a non-increasing
+    31-file high-authority ceiling and keeps non-secret hashing in the separate `digest` class.
+- [x] `crypto-authority.ts`: one boot pinning + known-answer self-test, but distribute only
       purpose-bound opaque handles exposing the minimum operation for that purpose—not a generic
       signer/sealer or raw key. Retire `verifier.ts`'s hand XOR compare in favor of fixed-length
       digest comparison through the authority door.
-- [ ] Closed purpose registry: every derivation is `HKDF(root, purpose, audience)` where `purpose` is
+  - Evidence: the 12-file, 243-test crypto integration suite proves boot KATs, opaque minimal
+    handles, and the Core verifier's authority-backed fixed-length comparison.
+- [x] Closed purpose registry: every derivation is `HKDF(root, purpose, audience)` where `purpose` is
       a checked-in literal; an unregistered purpose cannot derive a key (cross-purpose reuse in
       `html.ts` and rate-limit becomes inexpressible).
-- [ ] Extend the active/previous/revoked ring to at-rest AEAD (`confidential-at-rest.ts` already
+  - Evidence: `crypto-authority.test.ts`, `csrf.test.ts`, `capability-url.test.ts`, and
+    `rate-limit-storage.test.ts` reject unknown purposes and cross-purpose/audience reuse.
+- [x] Extend the active/previous/revoked ring to at-rest AEAD (`confidential-at-rest.ts` already
       stores `keyId` — wire it to a ring with overlap-window decrypt); spec the envelope-contract
       change in SPEC §6.6 first. Treat Buffer overwrite on revocation as best-effort memory hygiene,
       not a JavaScript zeroization guarantee, and record unavoidable copies in the threat model.
+  - Evidence: SPEC §6.6 plus `confidential-at-rest-rotation.test.ts` prove authenticated v2
+    envelopes, active/expiring/revoked rings, rewrap, nonce replay rejection, and the zeroization
+    non-claim.
 
 ### 3.3 Principal-epoch revocation propagation
 

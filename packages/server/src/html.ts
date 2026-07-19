@@ -1,6 +1,3 @@
-import { Buffer } from 'node:buffer';
-import { createHmac, timingSafeEqual } from 'node:crypto';
-
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
@@ -20,12 +17,14 @@ import {
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
 import { capabilityRandomBytes } from './capability-intrinsics.js';
+import { createRenderedHtmlCryptoHandle } from './crypto-authority.js';
 import {
+  securityBufferFrom,
+  securityBufferToString,
   securityStringIncludes,
   securityStringIndexOf,
   securityStringLastIndexOf,
   securityStringSlice,
-  securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
@@ -34,7 +33,6 @@ import {
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
-  witnessReflectApply,
   witnessRegExpTest,
   witnessString,
   witnessStringReplaceAll,
@@ -46,15 +44,6 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
-
-const intrinsicBufferFrom = Buffer.from;
-const intrinsicBufferToString = Buffer.prototype.toString;
-const intrinsicCreateHmac = createHmac;
-const intrinsicTimingSafeEqual = timingSafeEqual;
-const hmacMethodProbe = intrinsicCreateHmac('sha256', 'kovo-method-probe');
-const intrinsicHmacUpdate = hmacMethodProbe.update;
-const intrinsicHmacDigest = hmacMethodProbe.digest;
-const capturedHtmlCryptoControlsSound = verifyCapturedHtmlCryptoControls();
 
 /**
  * @internal HTML-coercion helper the compiler injects into emitted server modules
@@ -94,6 +83,7 @@ export function escapeWireAttribute(
 const coercedRenderedHtmlPrefix = '\uE000kovo-rendered-html:v2:';
 const coercedRenderedHtmlSuffix = '\uE001';
 const coercedRenderedHtmlSecret = capabilityRandomBytes(32);
+const coercedRenderedHtmlCrypto = createRenderedHtmlCryptoHandle(coercedRenderedHtmlSecret);
 const renderedHtmlValues = createWitnessWeakSet<object>();
 const renderedHtmlSnapshots = createWitnessWeakMap<object, string>();
 const maxCoercedRenderedHtmlDepth = 32;
@@ -231,7 +221,7 @@ function coerceRenderedHtml(html: string): string {
   // coercion forever. Carry the bytes in an authenticated, self-contained marker instead. The
   // per-process HMAC preserves the old non-forgeable capability property while leaving no strong
   // reference behind after the composed string becomes unreachable.
-  const payload = capturedBufferToString(capturedBufferFrom(html, 'utf8'), 'base64url');
+  const payload = securityBufferToString(securityBufferFrom(html, 'utf8'), 'base64url');
   const signature = coercedRenderedHtmlSignature(payload);
   return `${coercedRenderedHtmlPrefix}${payload}.${signature}${coercedRenderedHtmlSuffix}`;
 }
@@ -283,7 +273,7 @@ export function renderedHtmlContent(value: RenderedHtml): string {
 }
 
 function coercedRenderedHtmlSignature(payload: string): string {
-  return capturedHmacDigest(coercedRenderedHtmlSecret, payload, 'base64url');
+  return coercedRenderedHtmlCrypto.sign(payload).signature;
 }
 
 function decodeCoercedRenderedHtml(marker: string): string | undefined {
@@ -303,80 +293,10 @@ function decodeCoercedRenderedHtml(marker: string): string | undefined {
     return undefined;
   }
 
-  const expected = capturedBufferFrom(coercedRenderedHtmlSignature(payload), 'base64url');
-  const received = capturedBufferFrom(signature, 'base64url');
-  if (
-    securityUint8ArrayLength(expected) !== securityUint8ArrayLength(received) ||
-    !witnessReflectApply(intrinsicTimingSafeEqual, undefined, [expected, received])
-  ) {
+  if (!coercedRenderedHtmlCrypto.verify(payload, signature).ok) {
     return undefined;
   }
-  return capturedBufferToString(capturedBufferFrom(payload, 'base64url'), 'utf8');
-}
-
-function assertHtmlCryptoControls(): void {
-  if (!capturedHtmlCryptoControlsSound) {
-    throw new TypeError(
-      'Kovo rendered HTML crypto controls were modified before framework initialization.',
-    );
-  }
-}
-
-function capturedBufferFrom(value: string | Uint8Array, encoding?: BufferEncoding): Buffer {
-  assertHtmlCryptoControls();
-  return encoding === undefined
-    ? witnessReflectApply(intrinsicBufferFrom, Buffer, [value])
-    : witnessReflectApply(intrinsicBufferFrom, Buffer, [value, encoding]);
-}
-
-function capturedBufferToString(value: Buffer, encoding: BufferEncoding): string {
-  assertHtmlCryptoControls();
-  return witnessReflectApply(intrinsicBufferToString, value, [encoding]);
-}
-
-function capturedHmacDigest(
-  key: string | Uint8Array,
-  payload: string,
-  encoding: 'base64url' | 'hex',
-): string {
-  assertHtmlCryptoControls();
-  const hmac = intrinsicCreateHmac('sha256', key);
-  if (witnessReflectApply(intrinsicHmacUpdate, hmac, [payload]) !== hmac) {
-    throw new TypeError('Kovo rendered HTML HMAC update control failed.');
-  }
-  return witnessReflectApply(intrinsicHmacDigest, hmac, [encoding]);
-}
-
-function verifyCapturedHtmlCryptoControls(): boolean {
-  try {
-    const encoded = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, ['Kovo', 'utf8']);
-    if (witnessReflectApply(intrinsicBufferToString, encoded, ['hex']) !== '4b6f766f') return false;
-    const decoded = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, [
-      'S292bw',
-      'base64url',
-    ]);
-    if (witnessReflectApply(intrinsicBufferToString, decoded, ['utf8']) !== 'Kovo') return false;
-
-    const hmac = intrinsicCreateHmac('sha256', 'kovo-control-key');
-    if (witnessReflectApply(intrinsicHmacUpdate, hmac, ['kovo-control-payload']) !== hmac) {
-      return false;
-    }
-    if (
-      witnessReflectApply(intrinsicHmacDigest, hmac, ['hex']) !==
-      '557d532657c49d16a9f5024f40ed1fdd00fb0b5c53484e258dc5dd4af6b3ad23'
-    ) {
-      return false;
-    }
-    const left = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, ['safe']);
-    const same = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, ['safe']);
-    const other = witnessReflectApply<Buffer>(intrinsicBufferFrom, Buffer, ['evil']);
-    return (
-      witnessReflectApply(intrinsicTimingSafeEqual, undefined, [left, same]) === true &&
-      witnessReflectApply(intrinsicTimingSafeEqual, undefined, [left, other]) === false
-    );
-  } catch {
-    return false;
-  }
+  return securityBufferToString(securityBufferFrom(payload, 'base64url'), 'utf8');
 }
 
 /**
