@@ -290,6 +290,11 @@ function validateElementAttributes(
   }
   appendOutputItems(
     found,
+    validateDocumentNavigationElements(diagnostics, element),
+    'Document navigation element diagnostics',
+  );
+  appendOutputItems(
+    found,
     validateCrossAttributeWireSemantics(diagnostics, element),
     'Cross-attribute wire diagnostics',
   );
@@ -473,6 +478,163 @@ function validateElementAttributes(
   );
 
   return found;
+}
+
+/**
+ * SPEC §4.8 / §5.2 rule 10: `<base>` and meta refresh are document-wide navigation
+ * capabilities, not ordinary URL/text attributes. Per-attribute URL sanitization cannot prove the
+ * pair semantics of `meta[http-equiv=refresh] content`, and a safe-scheme `<base href>` can still
+ * retarget every later relative URL in the document. Kovo therefore keeps both effects outside
+ * the finite authored output surface. Static aliases/spreads are inspected from parser-owned wire
+ * facts; an opaque meta spread closes because it could mint the forbidden pair.
+ */
+function validateDocumentNavigationElements(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  if (element.intrinsicTagName === 'base') {
+    return [
+      documentNavigationDiagnostic(
+        diagnostics,
+        element,
+        '<base> is disabled because it changes document-wide relative URL resolution',
+        [
+          'Fixes: configure the deployment/router base through Kovo and emit root-relative application URLs.',
+          'Escape: there is no app-authored <base> suppression.',
+        ],
+      ),
+    ];
+  }
+  if (element.intrinsicTagName !== 'meta') return [];
+
+  const attributes = element.attributes;
+  const attributeLength = compilerArrayLength(attributes, 'Meta navigation attributes');
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Meta navigation attributes');
+    const issue = metaRefreshAttributeIssue(attribute);
+    if (issue === undefined) continue;
+    return [documentNavigationDiagnostic(diagnostics, element, issue, metaRefreshFixes)];
+  }
+
+  const spreads = element.spreadAttributes;
+  const spreadLength = compilerArrayLength(spreads, 'Meta navigation spreads');
+  for (let index = 0; index < spreadLength; index += 1) {
+    const spread = outputArrayValue(spreads, index, 'Meta navigation spreads');
+    if (spread.staticWireAttributeEntries !== undefined) {
+      const entries = spread.staticWireAttributeEntries;
+      const entryLength = compilerArrayLength(entries, 'Static meta navigation spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(
+          entries,
+          entryIndex,
+          'Static meta navigation spread entries',
+        );
+        const issue = metaRefreshWireEntryIssue(entry);
+        if (issue !== undefined) {
+          return [documentNavigationDiagnostic(diagnostics, element, issue, metaRefreshFixes)];
+        }
+      }
+      continue;
+    }
+    if (spread.objectEntries !== undefined) {
+      const entries = spread.objectEntries;
+      const entryLength = compilerArrayLength(entries, 'Meta navigation spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(entries, entryIndex, 'Meta navigation spread entries');
+        const folded = compilerStringToLowerCase(entry.key);
+        if (folded !== 'http-equiv' && folded !== 'httpequiv') continue;
+        const value = staticSpreadAttributeValue(entry);
+        if (value.kind === 'unknown' || metaRefreshValue(value)) {
+          return [
+            documentNavigationDiagnostic(
+              diagnostics,
+              element,
+              value.kind === 'unknown'
+                ? 'an unproved meta http-equiv spread could create refresh navigation'
+                : 'meta refresh is disabled because its content is an executable navigation sink',
+              metaRefreshFixes,
+            ),
+          ];
+        }
+      }
+      continue;
+    }
+    // Opaque spreads are reconstructed by kovoSafeJsxSpread and classified by the server's
+    // element-aware pair sink. This is one of the inherently runtime facts assigned to the real
+    // sink by SPEC §6.6; do not guess at its keys here.
+  }
+  return [];
+}
+
+const metaRefreshFixes = [
+  'Fixes: perform navigation through Kovo response/router outcomes, or use ordinary non-refresh metadata with a statically proved http-equiv value.',
+  'Escape: there is no app-authored meta-refresh suppression.',
+] as const;
+
+function metaRefreshAttributeIssue(attribute: JsxAttributeModel): string | undefined {
+  const foldedName = compilerStringToLowerCase(attribute.name);
+  if (compilerStringStartsWith(foldedName, 'data-bind:')) {
+    const target = compilerStringSlice(foldedName, 'data-bind:'.length);
+    return target === 'http-equiv' || target === 'httpequiv'
+      ? 'a dynamic meta http-equiv binding could create refresh navigation'
+      : undefined;
+  }
+  if (foldedName === 'data-derive-attr') {
+    const target =
+      typeof attribute.value === 'string'
+        ? compilerStringToLowerCase(attribute.value)
+        : undefined;
+    return target === 'http-equiv' || target === 'httpequiv'
+      ? 'a dynamic meta http-equiv derive could create refresh navigation'
+      : undefined;
+  }
+  if (foldedName !== 'http-equiv' && foldedName !== 'httpequiv') return undefined;
+  const value = staticDirectAttributeValue(attribute);
+  if (value.kind === 'unknown') {
+    return 'a dynamic meta http-equiv value could create refresh navigation';
+  }
+  return metaRefreshValue(value)
+    ? 'meta refresh is disabled because its content is an executable navigation sink'
+    : undefined;
+}
+
+function metaRefreshWireEntryIssue(entry: StaticJsxWireAttributeEntry): string | undefined {
+  const folded = compilerStringToLowerCase(entry.key);
+  if (folded !== 'http-equiv' && folded !== 'httpequiv') return undefined;
+  const value = staticWireSpreadAttributeValue(entry);
+  if (value.kind === 'unknown') {
+    return 'an unproved meta http-equiv spread could create refresh navigation';
+  }
+  return metaRefreshValue(value)
+    ? 'meta refresh is disabled because its content is an executable navigation sink'
+    : undefined;
+}
+
+function metaRefreshValue(value: StaticRenderedAttributeValue): boolean {
+  return (
+    value.kind === 'known' &&
+    compilerStringToLowerCase(compilerStringTrim(value.value)) === 'refresh'
+  );
+}
+
+function documentNavigationDiagnostic(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+  reason: string,
+  fixes: readonly string[],
+): CompilerDiagnostic {
+  return {
+    ...diagnostics.at('KV236', {
+      start: element.start,
+      length: element.openingEnd - element.start,
+    }),
+    help: [
+      `Blocked reason: ${reason}.`,
+      ...fixes,
+      'SPEC §4.8 and §5.2 rule 10 require security-sensitive browser output contexts to fail closed.',
+    ].join('\n'),
+    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+  };
 }
 
 type StaticRenderedAttributeValue =

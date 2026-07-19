@@ -44,4 +44,50 @@ export const Base = component({
       ]),
     );
   });
+
+  it('disables the document-wide base element even without a currently visible href', () => {
+    expect(kv236Diagnostics(`
+export const BaseTarget = component({
+  render: () => <base target="_self" />,
+});
+`)).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('<base> is disabled') }),
+    ]);
+  });
+
+  it.each([
+    '<meta HTTP-EQUIV=" ReFrEsH " content="0; url=/account" />',
+    '<meta {...{ "http-equiv": "refresh", content: "0; url=/account" }} />',
+    '<meta http-equiv={state.kind} content="0; url=/account" />',
+    '<meta data-bind:http-equiv="state.kind" content="0; url=/account" />',
+    '<meta data-derive="profile.kind" data-derive-attr="HTTP-EQUIV" content="0; url=/account" />',
+  ])('closes direct, spread, and dynamic meta-refresh construction: %s', (markup) => {
+    const diagnostics = kv236Diagnostics(`
+export const Meta = component({
+  state: () => ({ kind: 'refresh' }),
+  render: (_queries, state) => (${markup}),
+});
+`);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('refresh') }),
+    ]);
+  });
+
+  it('preserves ordinary metadata and a statically non-refresh http-equiv value', () => {
+    const diagnostics = kv236Diagnostics(`
+export const Metadata = component({
+  state: () => ({ description: 'Account overview' }),
+  render: (_queries, state) => (
+    <>
+      <meta name="description" content={state.description} />
+      <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
+      <meta {...{ name: 'theme-color', content: '#112233' }} />
+    </>
+  ),
+});
+`);
+
+    expect(diagnostics).toEqual([]);
+  });
 });
