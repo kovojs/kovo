@@ -1991,6 +1991,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'authored-executable-reference-provenance-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 authored-executable-ref-provenance-closes',
+          'closes app-authored static lowered executable references through %s',
+          'static-spread handler ASCII-case variant',
+          'property derive module ref',
+          'stream renderer module ref',
+          'module allowlist authority',
+          'closes app-authored static lowered %s merged through primitive attrs',
+          'keeps typed event and execution-trigger inputs on compiler-owned lowering',
+        ],
+      },
+      {
         id: 'string-timer-and-unknown-browser-receiver-closure',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
