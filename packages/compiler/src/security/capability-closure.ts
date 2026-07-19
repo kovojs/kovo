@@ -131,7 +131,9 @@ const frameworkDispositions = new Set<FrameworkExportPostureDisposition>([
   'request-closed',
 ]);
 const frameworkRawCapabilities = new Set<RawCapabilityKind>([
+  'crypto-acquisition',
   'database-driver',
+  'digest',
   'dynamic-loader',
   'filesystem',
   'network',

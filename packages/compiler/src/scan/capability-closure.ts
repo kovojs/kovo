@@ -12,15 +12,17 @@ import type {
   ScannedImportBindingFact,
   ScannedImportFact,
 } from '../security/capability-closure-model.js';
-import { classifyRawCapabilityModuleSpecifier } from '../security/capability-closure-model.js';
+import { classifyRawCapabilityImport } from '../security/capability-closure-model.js';
 
 const globalCapabilities = new Map<string, RawCapabilityKind>([
   ['Bun', 'process'],
+  ['Crypto', 'crypto-acquisition'],
   ['Deno', 'process'],
   ['EventSource', 'network'],
   ['Function', 'vm'],
   ['RTCPeerConnection', 'network'],
   ['SharedWorker', 'worker'],
+  ['SubtleCrypto', 'crypto-acquisition'],
   ['ShadowRealm', 'vm'],
   ['WebAssembly', 'vm'],
   ['WebSocket', 'network'],
@@ -29,6 +31,7 @@ const globalCapabilities = new Map<string, RawCapabilityKind>([
   ['Worker', 'worker'],
   ['XMLHttpRequest', 'network'],
   ['eval', 'vm'],
+  ['crypto', 'crypto-acquisition'],
   ['fetch', 'network'],
   ['importScripts', 'dynamic-loader'],
   ['module', 'dynamic-loader'],
@@ -38,11 +41,13 @@ const globalCapabilities = new Map<string, RawCapabilityKind>([
 
 const globalNamespaceMembers = new Map<string, RawCapabilityKind>([
   ['Bun', 'process'],
+  ['Crypto', 'crypto-acquisition'],
   ['Deno', 'process'],
   ['EventSource', 'network'],
   ['Function', 'vm'],
   ['RTCPeerConnection', 'network'],
   ['SharedWorker', 'worker'],
+  ['SubtleCrypto', 'crypto-acquisition'],
   ['ShadowRealm', 'vm'],
   ['WebAssembly', 'vm'],
   ['WebSocket', 'network'],
@@ -51,6 +56,7 @@ const globalNamespaceMembers = new Map<string, RawCapabilityKind>([
   ['Worker', 'worker'],
   ['XMLHttpRequest', 'network'],
   ['eval', 'vm'],
+  ['crypto', 'crypto-acquisition'],
   ['fetch', 'network'],
   ['importScripts', 'dynamic-loader'],
   ['module', 'dynamic-loader'],
@@ -104,7 +110,7 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
 
   for (const imported of imports) {
     if (imported.specifier === undefined) continue;
-    const capability = classifyRawCapabilityModuleSpecifier(imported.specifier);
+    const capability = classifyRawCapabilityImport(imported.specifier, imported.importedNames);
     if (capability === undefined) continue;
     globals.push({
       capability,
@@ -230,6 +236,15 @@ function collectBindingAliases(
   aliases: ScannedBindingAliasFact[],
 ): void {
   visitWithScopes(sourceFile, [], (node, scopes) => {
+    if (ts.isParameter(node) && node.initializer) {
+      collectAliasFromBindingName(
+        node.name,
+        expressionBindingKey(node.initializer),
+        sourceSite(sourceFile, node.getStart(sourceFile)),
+        expressionStartsAtUnshadowedGlobalNamespace(node.initializer, scopes),
+        aliases,
+      );
+    }
     if (ts.isVariableDeclaration(node) && node.initializer) {
       collectAliasFromBindingName(
         node.name,

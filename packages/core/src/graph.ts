@@ -874,7 +874,9 @@ export interface CapabilityExplain {
  */
 export interface CapabilityClosureExplainFact {
   capability?:
+    | 'crypto-acquisition'
     | 'database-driver'
+    | 'digest'
     | 'dynamic-loader'
     | 'filesystem'
     | 'network'

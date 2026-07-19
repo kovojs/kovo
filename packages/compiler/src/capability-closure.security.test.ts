@@ -1066,6 +1066,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       `import argon2 from '@node-rs/argon2'; export const value = argon2;`,
       `export const value = globalThis.crypto.subtle;`,
       `const platform = globalThis; export const value = platform.crypto;`,
+      `function pick(platform = globalThis) { return platform.crypto; } export const value = pick;`,
     ]) {
       const result = analyze([
         {

@@ -40,7 +40,9 @@ const FRAMEWORK_COMPILER_PACKED_CATALOG_FILES = new Set([
 ]);
 
 const rawCapabilities = new Set([
+  'crypto-acquisition',
   'database-driver',
+  'digest',
   'dynamic-loader',
   'filesystem',
   'network',
