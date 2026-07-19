@@ -1,0 +1,22 @@
+{
+  "schema": "kovo.ipv4-grammar-relations/v1",
+  "domain": "ASCII URL host tokens without surrounding whitespace",
+  "relations": [
+    {
+      "subset": "rfc3986-IPv4address",
+      "superset": "kovo-parseLooseIpv4",
+      "holds": true
+    },
+    {
+      "subset": "kovo-parseLooseIpv4",
+      "superset": "traditional-inet_aton-envelope",
+      "holds": true
+    },
+    {
+      "subset": "traditional-inet_aton-envelope",
+      "superset": "kovo-parseLooseIpv4",
+      "holds": false,
+      "counterexample": "4294967296"
+    }
+  ]
+}

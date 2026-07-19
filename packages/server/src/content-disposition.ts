@@ -9,6 +9,7 @@
  * @internal
  */
 export interface ContentDispositionStringOperations {
+  assertSafeHeader(value: string, label: string): string;
   charCodeAt(value: string, index: number): number;
   encodeURIComponent(value: string): string;
   slice(value: string, start: number, end?: number): string;
@@ -20,6 +21,7 @@ export function createContentDispositionWithFilename(
   operations: ContentDispositionStringOperations,
 ): (disposition: 'attachment' | 'inline', filename: string) => string {
   const charCodeAt = operations.charCodeAt;
+  const assertSafeHeader = operations.assertSafeHeader;
   const encodeURIComponentValue = operations.encodeURIComponent;
   const slice = operations.slice;
   const trim = operations.trim;
@@ -106,20 +108,24 @@ export function createContentDispositionWithFilename(
       else escapedFallback += slice(asciiFallback, index, index + 1);
     }
     const fallbackParameter = `${disposition}; filename="${escapedFallback}"`;
-    if (asciiFallback === normalized) return fallbackParameter;
-
-    // RFC 5987 / RFC 8187: retain normalized UTF-8 in filename*. encodeURIComponent leaves
-    // ['()*] unescaped even though they are not attr-char, so close those residues explicitly.
-    const encoded = encodeURIComponentValue(normalized);
-    let extended = '';
-    for (let index = 0; index < encoded.length; index += 1) {
-      const code = charCodeAt(encoded, index);
-      if (code === 0x27) extended += '%27';
-      else if (code === 0x28) extended += '%28';
-      else if (code === 0x29) extended += '%29';
-      else if (code === 0x2a) extended += '%2A';
-      else extended += slice(encoded, index, index + 1);
+    let output = fallbackParameter;
+    if (asciiFallback !== normalized) {
+      // RFC 5987 / RFC 8187: retain normalized UTF-8 in filename*. encodeURIComponent leaves
+      // ['()*] unescaped even though they are not attr-char, so close those residues explicitly.
+      const encoded = encodeURIComponentValue(normalized);
+      let extended = '';
+      for (let index = 0; index < encoded.length; index += 1) {
+        const code = charCodeAt(encoded, index);
+        if (code === 0x27) extended += '%27';
+        else if (code === 0x28) extended += '%28';
+        else if (code === 0x29) extended += '%29';
+        else if (code === 0x2a) extended += '%2A';
+        else extended += slice(encoded, index, index + 1);
+      }
+      output = `${fallbackParameter}; filename*=UTF-8''${extended}`;
     }
-    return `${fallbackParameter}; filename*=UTF-8''${extended}`;
+    // Successful outputs are mechanically confined even if a future escaping edit drifts away from
+    // the declared envelope. The generated Node server executes this same postcondition.
+    return assertSafeHeader(output, 'Content-Disposition');
   };
 }

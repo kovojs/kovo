@@ -108,6 +108,11 @@ describe('SSRF normalization bypasses (decimal/octal/hex/IPv4-mapped/NAT64)', ()
       expect(normalizeIpLiteral(input), input).not.toBeNull();
       expect(normalizeFastPathIpLiteral(input), input).toBeNull();
     }
+
+    // Supported resolver/libc variants may truncate this one-part overflow to 0.0.0.0. Kovo does
+    // not guess that interpretation; it forces the resolver-and-pin path and classifies the result.
+    expect(normalizeIpLiteral('4294967296')).toBeNull();
+    expect(normalizeFastPathIpLiteral('4294967296')).toBeNull();
   });
 
   it('classifyHost returns null for a real DNS name (needs resolution)', () => {

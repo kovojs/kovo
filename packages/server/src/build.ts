@@ -21,6 +21,11 @@ import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createContentDispositionWithFilename } from './content-disposition.js';
 import {
+  createSerializedHeaderSafetyAssertion,
+  serializedHeaderSafetyTransition,
+  serializedHeaderTerminalIsDangerous,
+} from './serialized-header-safety.js';
+import {
   registerKovoBuildPreset,
   type KovoBuildJobRunnerCapability as JobRunnerCapability,
   type KovoBuildPreset as InternalKovoPreset,
@@ -3683,6 +3688,15 @@ const generatedNodeDiagnosticFactorySource = buildSecurityFunctionSource(
 const generatedContentDispositionFactorySource = buildSecurityFunctionSource(
   createContentDispositionWithFilename,
 );
+const generatedSerializedHeaderSafetyAssertionSource = buildSecurityFunctionSource(
+  createSerializedHeaderSafetyAssertion,
+);
+const generatedSerializedHeaderSafetyTransitionSource = buildSecurityFunctionSource(
+  serializedHeaderSafetyTransition,
+);
+const generatedSerializedHeaderTerminalVerdictSource = buildSecurityFunctionSource(
+  serializedHeaderTerminalIsDangerous,
+);
 const generatedTransportResponseHeaderClassifierSource = buildSecurityFunctionSource(
   createTransportResponseHeaderClassifier,
 );
@@ -3804,7 +3818,17 @@ const fsRegularFileType = fsConstants.S_IFREG;
 const fsReadOnlyNoFollowFlags = fsConstants.O_RDONLY |
   (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0);
 const createNodeDiagnosticRecord = (${generatedNodeDiagnosticFactorySource})();
+const serializedHeaderSafetyTransition = (${generatedSerializedHeaderSafetyTransitionSource});
+const serializedHeaderTerminalIsDangerous = (${generatedSerializedHeaderTerminalVerdictSource});
+const assertSafeSerializedHeader = (${generatedSerializedHeaderSafetyAssertionSource})({
+  charCodeAt(value, index) {
+    return apply(nativeStringCharCodeAt, value, [index]);
+  },
+  terminalIsDangerous: serializedHeaderTerminalIsDangerous,
+  transition: serializedHeaderSafetyTransition,
+});
 const contentDispositionWithFilename = (${generatedContentDispositionFactorySource})({
+  assertSafeHeader: assertSafeSerializedHeader,
   charCodeAt(value, index) {
     return apply(nativeStringCharCodeAt, value, [index]);
   },

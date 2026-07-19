@@ -13,6 +13,11 @@ import {
 
 import { snapshotAuditJustification, snapshotAuditReason } from './audit-justification.js';
 import { createContentDispositionWithFilename } from './content-disposition.js';
+import {
+  createSerializedHeaderSafetyAssertion,
+  serializedHeaderSafetyTransition,
+  serializedHeaderTerminalIsDangerous,
+} from './serialized-header-safety.js';
 import { InlineUnverifiedUploadError, sniffUploadBytes } from './upload-sniff.js';
 import { finalizeServerResponse } from './response-posture.js';
 import { assertNoSecretEgressValue } from './secret-egress.js';
@@ -1133,7 +1138,13 @@ function assertSafeAppRouteHeaders(headers: Readonly<Record<string, string>> | u
   assertAllowedAppResponseHeaders(entries, classifyRouteAppResponseHeaders);
 }
 
+const assertSafeSerializedHeader = createSerializedHeaderSafetyAssertion({
+  charCodeAt: securityStringCharCodeAt,
+  terminalIsDangerous: serializedHeaderTerminalIsDangerous,
+  transition: serializedHeaderSafetyTransition,
+});
 const contentDispositionWithFilename = createContentDispositionWithFilename({
+  assertSafeHeader: assertSafeSerializedHeader,
   charCodeAt: securityStringCharCodeAt,
   encodeURIComponent: securityEncodeURIComponent,
   slice: securityStringSlice,

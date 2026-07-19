@@ -1,5 +1,11 @@
 import type { Ast, CharRange } from './linear-regex/index.js';
 import {
+  SERIALIZED_HEADER_SAFETY_START_STATE,
+  SERIALIZED_HEADER_SAFETY_STATE_COUNT,
+  serializedHeaderSafetyTransition,
+  serializedHeaderTerminalIsDangerous,
+} from '../serialized-header-safety.js';
+import {
   decideDisjointness,
   defineDfa,
   determinizeAst,
@@ -162,21 +168,18 @@ export const forwardedSetCookieSerializerLanguage: Ast = sequence(
 export const contentDispositionSerializerDfa = determinizeAst(contentDispositionSerializerLanguage);
 export const forwardedSetCookieSerializerDfa = determinizeAst(forwardedSetCookieSerializerLanguage);
 
-/** The reviewed danger language has exactly five states; keep this count mutation-visible. */
-export const DANGEROUS_HEADER_DFA_STATE_COUNT = 5;
-
-const CLEAN = 0;
-const QUOTED = 1;
-const QUOTED_ESCAPE = 2;
-const CLOSED_QUOTE = 3;
-const DANGER = 4;
+/** The reviewed production postcondition has exactly five states; keep this mutation-visible. */
+export const DANGEROUS_HEADER_DFA_STATE_COUNT = SERIALIZED_HEADER_SAFETY_STATE_COUNT;
 
 /**
  * Five-state scanner for CR/LF/NUL and quote-escape confusion. A safe header has either no DQUOTE
  * field or exactly one balanced DQUOTE field whose only quoted-pairs are `\"` and `\\`.
  */
 export const dangerousHeaderDfa: DeterministicFiniteAutomaton = defineDfa({
-  accepting: [QUOTED, QUOTED_ESCAPE, DANGER],
+  accepting: Array.from(
+    { length: SERIALIZED_HEADER_SAFETY_STATE_COUNT },
+    (_unused, state) => state,
+  ).filter(serializedHeaderTerminalIsDangerous),
   alphabet: [
     { from: 0x00, to: 0x00 },
     { from: 0x01, to: 0x09 },
@@ -189,17 +192,9 @@ export const dangerousHeaderDfa: DeterministicFiniteAutomaton = defineDfa({
     { from: 0x5c, to: 0x5c },
     { from: 0x5d, to: 0xffff },
   ],
-  start: CLEAN,
+  start: SERIALIZED_HEADER_SAFETY_START_STATE,
   stateCount: DANGEROUS_HEADER_DFA_STATE_COUNT,
-  transition(state, code) {
-    if (state === DANGER || code === 0x00 || code === 0x0a || code === 0x0d) return DANGER;
-    const quote = code === 0x22;
-    const slash = code === 0x5c;
-    if (state === CLEAN) return quote ? QUOTED : slash ? DANGER : CLEAN;
-    if (state === QUOTED) return quote ? CLOSED_QUOTE : slash ? QUOTED_ESCAPE : QUOTED;
-    if (state === QUOTED_ESCAPE) return quote || slash ? QUOTED : DANGER;
-    return quote || slash ? DANGER : CLOSED_QUOTE;
-  },
+  transition: serializedHeaderSafetyTransition,
 });
 
 /** Run both first-obligation proofs with the caller's hard state budget. */

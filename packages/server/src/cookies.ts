@@ -32,6 +32,11 @@ import {
   securityStringTrim,
 } from './response-security-intrinsics.js';
 import {
+  createSerializedHeaderSafetyAssertion,
+  serializedHeaderSafetyTransition,
+  serializedHeaderTerminalIsDangerous,
+} from './serialized-header-safety.js';
+import {
   createWitnessWeakMap,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -808,8 +813,14 @@ export function forwardSetCookie(raw: string, posture: ForwardSetCookiePosture):
   appendForwardedAttribute(parts, securityMapGet(byName, 'priority'), 'Priority');
   if (securityMapHas(byName, 'partitioned')) securityArrayPush(parts, 'Partitioned');
 
-  return securityArrayJoin(parts, '; ');
+  return assertSafeForwardedSetCookieHeader(securityArrayJoin(parts, '; '), 'Set-Cookie');
 }
+
+const assertSafeForwardedSetCookieHeader = createSerializedHeaderSafetyAssertion({
+  charCodeAt: securityStringCharCodeAt,
+  terminalIsDangerous: serializedHeaderTerminalIsDangerous,
+  transition: serializedHeaderSafetyTransition,
+});
 
 function forwardedSameSite(value: string | undefined): 'lax' | 'none' | 'strict' | undefined {
   const normalized = value === undefined ? undefined : securityStringToLowerCase(value);

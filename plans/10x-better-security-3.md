@@ -348,13 +348,20 @@ budget that throws. (~0.5 pm for substrate + first obligation)
       `L(serializer output) ∩ L({CR, LF, NUL, quote-escape confusion}) = ∅` for `content-disposition.ts`
       and the `cookies.ts` `Set-Cookie` forwarding path — a 5-state dangerous DFA, no numeric grammar,
       no availability risk, retiring a review argument that today lives only in comments.
-  - Evidence: `pnpm run check:grammar-containment` proves both envelopes disjoint and passes 15/15
-    substrate, exhaustive UTF-16/ASCII binding, shortest-witness, and planted-mutant tests.
-- [ ] **Then IPv4 only**: declare `rfc3986-IPv4address`, a hand-derived POSIX `inet_aton` grammar, and
+  - Evidence: `pnpm run check:grammar-containment` proves both envelopes disjoint, exhaustively binds
+    the production postcondition's five states over every UTF-16 code unit, and rejects planted
+    quote/control drift; `spec/09-wire-protocol.md` makes it normative and `build.test.ts` pins that
+    same postcondition in the emitted Node artifact.
+- [x] **Then IPv4 only**: declare `rfc3986-IPv4address`, a hand-derived POSIX `inet_aton` grammar, and
       a declared model of what `parseLooseIpv4` accepts (`egress.ts:1101` knowingly accepts non-RFC
       spellings because the OS resolver does — currently a prose comment). Decide **both** directions,
       especially `L(inet_aton) \ L(kovo) = ∅`, the direct SSRF-to-metadata bypass nothing in the repo
       states today.
+  - Evidence: `pnpm run check:grammar-containment` binds the live parser to the declared model over
+    boundaries plus 50,000 deterministic hostile words and commits
+    `security/ipv4-grammar-relations.json`. The conservative supported-resolver envelope is **not** a
+    subset of Kovo's parser (`4294967296` is the shortest witness); the synchronous sink remains safe
+    because this token is forced through resolver-and-pin and the resolved address is classified.
 - [ ] Run as an **analysis gate against the declared model** for at least one green release before any
       generated recognizer is swapped into the SSRF floor. Swapping into the floor on an unproven
       substrate inverts the risk.

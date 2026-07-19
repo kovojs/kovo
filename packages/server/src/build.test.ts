@@ -2229,6 +2229,11 @@ export default async function handler(request) {
         },
       });
 
+      const generatedServerSource = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
+      expect(generatedServerSource).toContain('function assertSafeSerializedHeader');
+      expect(generatedServerSource).toContain('return assertSafeHeader(output,');
+      expect(generatedServerSource).toContain('Content-Disposition');
+
       const fileName = 'safe\u0001\u007f.js';
       await mkdir(join(nodeOutDir, 'client', 'assets'), { recursive: true });
       await writeFile(join(nodeOutDir, 'client', 'assets', fileName), 'safe-asset');

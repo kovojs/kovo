@@ -3,8 +3,20 @@ import { validateHeaderValue } from 'node:http';
 import { describe, expect, it } from 'vitest';
 
 import { createContentDispositionWithFilename } from './content-disposition.js';
+import {
+  createSerializedHeaderSafetyAssertion,
+  serializedHeaderSafetyTransition,
+  serializedHeaderTerminalIsDangerous,
+} from './serialized-header-safety.js';
+
+const assertSafeHeader = createSerializedHeaderSafetyAssertion({
+  charCodeAt: (value, index) => value.charCodeAt(index),
+  terminalIsDangerous: serializedHeaderTerminalIsDangerous,
+  transition: serializedHeaderSafetyTransition,
+});
 
 const contentDispositionWithFilename = createContentDispositionWithFilename({
+  assertSafeHeader,
   charCodeAt: (value, index) => value.charCodeAt(index),
   encodeURIComponent: (value) => encodeURIComponent(value),
   slice: (value, start, end) => value.slice(start, end),

@@ -1,7 +1,14 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { createContentDispositionWithFilename } from '../content-disposition.js';
 import { forwardSetCookie } from '../cookies.js';
+import {
+  createSerializedHeaderSafetyAssertion,
+  serializedHeaderSafetyTransition,
+  serializedHeaderTerminalIsDangerous,
+} from '../serialized-header-safety.js';
 import {
   contentDispositionSerializerDfa,
   DANGEROUS_HEADER_DFA_STATE_COUNT,
@@ -17,7 +24,14 @@ import {
   FiniteAutomataStateBudgetError,
 } from './linear-regex/automata.js';
 
+const assertSafeHeader = createSerializedHeaderSafetyAssertion({
+  charCodeAt: (value, index) => value.charCodeAt(index),
+  terminalIsDangerous: serializedHeaderTerminalIsDangerous,
+  transition: serializedHeaderSafetyTransition,
+});
+
 const contentDispositionWithFilename = createContentDispositionWithFilename({
+  assertSafeHeader,
   charCodeAt: (value, index) => value.charCodeAt(index),
   encodeURIComponent: (value) => encodeURIComponent(value),
   slice: (value, start, end) => value.slice(start, end),
@@ -48,6 +62,19 @@ function assertModeledForwardedCookie(raw: string): void {
   }
 }
 
+function transitionForCode(state: number, code: number): number {
+  let low = 0;
+  let high = dangerousHeaderDfa.alphabet.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >>> 1;
+    const range = dangerousHeaderDfa.alphabet[middle]!;
+    if (code < range.from) high = middle - 1;
+    else if (code > range.to) low = middle + 1;
+    else return dangerousHeaderDfa.transitions[state]![middle]!;
+  }
+  throw new TypeError('test code unit is outside the DFA alphabet');
+}
+
 describe('header serializer grammar-containment gate', () => {
   it('proves both declared serializer envelopes disjoint from the five-state danger DFA', () => {
     expect(HEADER_SERIALIZER_GRAMMAR_VERSION).toBe('kovo.header-serializer-grammar/v1');
@@ -58,6 +85,55 @@ describe('header serializer grammar-containment gate', () => {
       forwardedSetCookie: { exploredStates: expect.any(Number), holds: true },
       version: 'kovo.header-serializer-grammar/v1',
     });
+  });
+
+  it('binds every production postcondition transition and terminal verdict to the danger DFA', () => {
+    for (let state = 0; state < DANGEROUS_HEADER_DFA_STATE_COUNT; state += 1) {
+      expect(dangerousHeaderDfa.accepting[state], `terminal state ${state}`).toBe(
+        serializedHeaderTerminalIsDangerous(state),
+      );
+      for (let code = 0; code <= 0xffff; code += 1) {
+        expect(transitionForCode(state, code), `state ${state}, U+${code.toString(16)}`).toBe(
+          serializedHeaderSafetyTransition(state, code),
+        );
+      }
+    }
+  });
+
+  it('rejects planted serializer drift at the successful-output postcondition', () => {
+    for (const unsafe of [
+      'attachment; filename="unterminated',
+      'attachment; filename="bad\\q"',
+      'attachment; filename="closed""',
+      'sid=token\\confused; Path=/',
+      'sid=token\r\nX-Evil: yes; Path=/',
+    ]) {
+      expect(() => assertSafeHeader(unsafe, 'planted serializer mutant'), unsafe).toThrow(
+        /serializer produced/u,
+      );
+      expect(dfaAccepts(dangerousHeaderDfa, unsafe), unsafe).toBe(true);
+    }
+  });
+
+  it('pins the postcondition at both live serializers and the generated Node artifact', () => {
+    const root = new URL('../../../../', import.meta.url);
+    const contentDisposition = readFileSync(
+      new URL('packages/server/src/content-disposition.ts', root),
+      'utf8',
+    );
+    const cookies = readFileSync(new URL('packages/server/src/cookies.ts', root), 'utf8');
+    const response = readFileSync(new URL('packages/server/src/response.ts', root), 'utf8');
+    const build = readFileSync(new URL('packages/server/src/build.ts', root), 'utf8');
+
+    expect(contentDisposition).toContain("return assertSafeHeader(output, 'Content-Disposition');");
+    expect(cookies).toContain(
+      "return assertSafeForwardedSetCookieHeader(securityArrayJoin(parts, '; '), 'Set-Cookie');",
+    );
+    expect(response).toContain('assertSafeHeader: assertSafeSerializedHeader,');
+    expect(build).toContain(
+      'const assertSafeSerializedHeader = (${generatedSerializedHeaderSafetyAssertionSource})({',
+    );
+    expect(build).toContain('assertSafeHeader: assertSafeSerializedHeader,');
   });
 
   it('binds every single UTF-16 input unit and boundary-state pair to the Content-Disposition model', () => {

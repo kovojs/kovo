@@ -1102,8 +1102,11 @@ function isCanonicalIpv4Literal(input: string): boolean {
 }
 
 /**
- * Parse the loose IPv4 forms `inet_aton`/`URL` historically accept: 1–4 dotted parts, each in
- * decimal, octal (`0NNN`), or hex (`0xNN`), with the final part absorbing the remaining bytes.
+ * Parse the bounded loose IPv4 forms `inet_aton`/`URL` historically accept: 1–4 dotted parts, each
+ * in decimal, octal (`0NNN`), or hex (`0xNN`), with the final part absorbing the remaining bytes.
+ * Some resolver/libc variants also truncate an oversized one-part value; this parser deliberately
+ * rejects that larger language. Such raw host tokens stay out of `normalizeFastPathIpLiteral`, so
+ * the socket-owned resolver's actual address is classified and pinned before the sink (SPEC §6.6).
  * Returns canonical dotted-quad or null.
  */
 export function parseLooseIpv4(input: string): string | null {
