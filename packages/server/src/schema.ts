@@ -4,10 +4,12 @@ import {
   secret,
   type JsonValue,
   type SecretValue,
+  type ScopedKey,
   type StorageObjectInfo,
   type StoragePutCapability,
 } from '@kovojs/core';
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
+import { frameworkScopedKey } from '@kovojs/core/internal/storage';
 
 import {
   type UnverifiedAcceptance,
@@ -722,7 +724,7 @@ export interface FileSchemaOptions {
 /** Result of a stored upload produced by `s.file().store(...)` (SPEC.md §6). */
 export interface StoredFileUpload {
   file: FileLike;
-  key: string;
+  key: ScopedKey;
   storage: StorageObjectInfo;
 }
 
@@ -1336,7 +1338,10 @@ class StoredFileSchemaImpl implements StoredFileSchema {
     // KV428 (SPEC §6.6/§9.1): the storage key is SERVER-GENERATED and opaque (random UUID), never
     // derived from the client filename. This kills path traversal / overwrite by construction — an
     // attacker `../../etc/passwd` name can no longer become the storage key.
-    const key = mintStorageKey(this.#storageOptions.keyPrefix);
+    const key = frameworkScopedKey(
+      'framework-upload',
+      mintStorageKey(this.#storageOptions.keyPrefix),
+    );
 
     // KV428: mint the stored contentType from the SNIFFED bytes (server truth overrides the client
     // lie). The audited `accept.unverified(...)` escape trusts the client-declared `file.type`

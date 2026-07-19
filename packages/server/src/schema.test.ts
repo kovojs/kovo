@@ -5,11 +5,16 @@ import {
   isSecret,
   revealSecret,
   type JsonValue,
+  type ScopedKey,
   type Secret,
   type StorageCapability,
   type StorageReadCapability,
 } from '@kovojs/core';
-import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
+import {
+  createMemoryStorage,
+  scopedKeyFactsFor,
+  storageBodyToBytes,
+} from '@kovojs/core/internal/storage';
 import { stringifyWireValue } from '@kovojs/core/internal/wire-json';
 
 import { runMutation } from './mutation.js';
@@ -579,15 +584,17 @@ describe('server schemas', () => {
   // client `file.type`; the client filename is sanitized download metadata only.
   it('stores multipart file fields under a server-minted key with a sniffed content type', async () => {
     const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
+    let storedKey: ScopedKey | undefined;
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
         // Client lies "image/jpeg" but the bytes are a real PNG — the sniffer overrides the lie.
         avatar: s.file({ maxBytes: 64 }).store({ keyPrefix: 'avatars', storage }),
       }),
       handler(input) {
+        storedKey = input.avatar.key;
         return {
           contentType: input.avatar.storage.contentType,
-          key: input.avatar.key,
+          key: scopedKeyFactsFor(input.avatar.key).key,
           name: input.avatar.file.name,
         };
       },
@@ -597,14 +604,17 @@ describe('server schemas', () => {
 
     const result = await runMutation(uploadAvatar, form, {});
     expect(result).toMatchObject({ ok: true });
-    const value = (result as { value: { contentType: string; key: string } }).value;
+    const value = (result as unknown as { value: { contentType: string; key: string } }).value;
     // Server truth: sniffed PNG, not the client "image/jpeg" lie.
     expect(value.contentType).toBe('image/png');
     // Opaque server key under the namespace — the traversal filename never became the key.
-    expect(value.key).toMatch(/^avatars\/[0-9a-f-]{36}$/u);
-    expect(value.key).not.toContain('..');
+    const keyFacts = scopedKeyFactsFor(storedKey);
+    expect(keyFacts).toMatchObject({ posture: 'system', systemPosture: 'framework-upload' });
+    expect(keyFacts.key).toMatch(/^avatars\/[0-9a-f-]{36}$/u);
+    expect(keyFacts.key).not.toContain('..');
 
-    const stored = await storage.get(value.key);
+    if (storedKey === undefined) throw new Error('missing stored upload key');
+    const stored = await storage.get(storedKey);
     expect(stored?.contentType).toBe('image/png');
     // The client filename survives only as sanitized download metadata (no path segments).
     expect(stored?.metadata?.filename).toBe('passwd.png');
@@ -651,6 +661,7 @@ describe('server schemas', () => {
 
   it('keeps accept.unverified as the audited client-MIME escape for stored uploads', async () => {
     const storage = createMemoryStorage();
+    let storedKey: ScopedKey | undefined;
     const uploadDocument = mutation('profile/document-unverified', {
       input: s.object({
         document: s
@@ -659,9 +670,9 @@ describe('server schemas', () => {
           .store({ keyPrefix: 'documents', storage }),
       }),
       handler(input) {
+        storedKey = input.document.key;
         return {
           contentType: input.document.storage.contentType,
-          key: input.document.key,
         };
       },
     });
@@ -670,8 +681,8 @@ describe('server schemas', () => {
 
     const result = await runMutation(uploadDocument, form, {});
     expect(result).toMatchObject({ ok: true, value: { contentType: 'text/plain' } });
-    const key = (result as { value: { key: string } }).value.key;
-    await expect(storage.get(key)).resolves.toMatchObject({ contentType: 'text/plain' });
+    if (storedKey === undefined) throw new Error('missing stored document key');
+    await expect(storage.get(storedKey)).resolves.toMatchObject({ contentType: 'text/plain' });
   });
 
   it('rejects structurally forged unverified upload acceptances', () => {
@@ -686,6 +697,7 @@ describe('server schemas', () => {
 
   it('reserves stored-file filename metadata after app metadata is merged', async () => {
     const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
+    let storedKey: ScopedKey | undefined;
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
         avatar: s.file().store({
@@ -698,7 +710,8 @@ describe('server schemas', () => {
         }),
       }),
       handler(input) {
-        return input.avatar.key;
+        storedKey = input.avatar.key;
+        return { stored: true };
       },
     });
     const form = new FormData();
@@ -706,8 +719,8 @@ describe('server schemas', () => {
 
     const result = await runMutation(uploadAvatar, form, {});
     expect(result).toMatchObject({ ok: true });
-    const key = (result as { value: string }).value;
-    const stored = await storage.get(key);
+    if (storedKey === undefined) throw new Error('missing stored avatar key');
+    const stored = await storage.get(storedKey);
 
     expect(stored?.metadata).toMatchObject({
       filename: 'passwd.png',
@@ -898,19 +911,22 @@ describe('server schemas', () => {
     form.append('photos', pngFile('../../etc/evil.png', 'image/png'));
 
     const parsed = (await parseSchemaAsync(schema, form)) as {
-      photos: Array<{ key: string }>;
+      photos: Array<{ key: ScopedKey }>;
     };
 
     // `storage.put` was attempted once per file with an opaque server key (was 0 before the M1 fix).
     expect(put).toHaveBeenCalledTimes(2);
     for (const call of put.mock.calls) {
-      expect(call[0]).toMatch(/^gallery\/[0-9a-f-]{36}$/u);
-      expect(call[0]).not.toContain('..');
+      const facts = scopedKeyFactsFor(call[0]);
+      expect(facts.key).toMatch(/^gallery\/[0-9a-f-]{36}$/u);
+      expect(facts.key).not.toContain('..');
     }
     // Distinct opaque keys; both files landed (no overwrite via a colliding traversal name).
     expect(parsed.photos[0]?.key).not.toBe(parsed.photos[1]?.key);
-    await expect(memory.get(parsed.photos[0]?.key ?? '')).resolves.toMatchObject({
-      key: parsed.photos[0]?.key,
+    const firstKey = parsed.photos[0]?.key;
+    if (firstKey === undefined) throw new Error('missing first stored upload key');
+    await expect(memory.get(firstKey)).resolves.toMatchObject({
+      key: scopedKeyFactsFor(firstKey).key,
     });
   });
 
@@ -930,8 +946,8 @@ describe('server schemas', () => {
 
     expect(put).toHaveBeenCalledTimes(2);
     expect(Object.keys(parsed).sort()).toEqual(['invoice', 'receipt']);
-    expect(parsed.invoice?.key).toMatch(/^attachments\/[0-9a-f-]{36}$/u);
-    expect(parsed.receipt?.key).toMatch(/^attachments\/[0-9a-f-]{36}$/u);
+    expect(scopedKeyFactsFor(parsed.invoice?.key).key).toMatch(/^attachments\/[0-9a-f-]{36}$/u);
+    expect(scopedKeyFactsFor(parsed.receipt?.key).key).toMatch(/^attachments\/[0-9a-f-]{36}$/u);
     expect(parsed.invoice?.key).not.toBe(parsed.receipt?.key);
   });
 

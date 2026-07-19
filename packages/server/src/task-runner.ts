@@ -1,6 +1,11 @@
 import { frameworkEgressFetch } from './egress.js';
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 import {
+  frameworkScopedKey,
+  principalScopedKey,
+  scopedKeyFactsFor,
+} from '@kovojs/core/internal/storage';
+import {
   actAsNonRequestPrincipal,
   declareSystemPrincipal,
   type NonRequestPrincipalPosture,
@@ -399,6 +404,7 @@ export class DurableTaskRunner {
           runQuery,
           runMutation,
         ),
+      systemStateKey: (key: string) => frameworkScopedKey('durable-task-system', key),
       runMutation: async () => {
         throw missingTaskPrincipalPostureError(job, 'write');
       },
@@ -434,7 +440,13 @@ export class DurableTaskRunner {
     runQuery: DurableTaskRunnerHooks['runQuery'],
     runMutation: DurableTaskRunnerHooks['runMutation'],
   ): TaskPrincipalScope {
+    const principalPosture = readPosture ?? writePosture;
+    const stateKey = (key: string) =>
+      principalPosture?.kind === 'act-as'
+        ? principalScopedKey(principalPosture.principal, key)
+        : frameworkScopedKey('durable-task-system', key);
     return {
+      stateKey,
       runMutation: async (definition, input) => {
         if (writePosture === undefined) throw missingTaskPrincipalPostureError(job, 'write');
         if (runMutation === undefined) {
@@ -611,6 +623,7 @@ function snapshotDurableTaskJob(source: unknown, index: number): DurableTaskJob 
   const leaseOwner = taskOptionalOwnDataValue(source, 'leaseOwner');
   const leaseToken = taskOptionalOwnDataValue(source, 'leaseToken');
   const lastError = taskOptionalOwnDataValue(source, 'lastError');
+  if (key !== undefined) scopedKeyFactsFor(key);
   if (
     typeof id !== 'string' ||
     taskStringTrim(id) === '' ||
@@ -624,7 +637,6 @@ function snapshotDurableTaskJob(source: unknown, index: number): DurableTaskJob 
     !taskNumberIsSafeInteger(attempts) ||
     attempts < 0 ||
     !isDurableRunnerJobStatus(status) ||
-    (key !== undefined && typeof key !== 'string') ||
     (leaseOwner !== undefined && typeof leaseOwner !== 'string') ||
     (leaseToken !== undefined && typeof leaseToken !== 'string') ||
     (lastError !== undefined && typeof lastError !== 'string')
@@ -643,7 +655,7 @@ function snapshotDurableTaskJob(source: unknown, index: number): DurableTaskJob 
     attempts,
     createdAt: snapshotRunnerDate(createdAt, `${label}.createdAt`),
     updatedAt: snapshotRunnerDate(updatedAt, `${label}.updatedAt`),
-    ...(key === undefined ? {} : { key }),
+    ...(key === undefined ? {} : { key: key as NonNullable<DurableTaskJob['key']> }),
     ...(leasedUntil === undefined
       ? {}
       : { leasedUntil: snapshotRunnerDate(leasedUntil, `${label}.leasedUntil`) }),
@@ -820,9 +832,7 @@ function snapshotTaskScheduleOptions(
   if (at !== undefined && typeof at !== 'string' && typeof at !== 'number' && !taskDateIsDate(at)) {
     throw new TypeError('Task schedule at must be a Date, string, or number.');
   }
-  if (key !== undefined && (typeof key !== 'string' || key.length === 0 || key.length > 1_024)) {
-    throw new TypeError('Task schedule key must be a non-empty bounded string.');
-  }
+  if (key !== undefined) scopedKeyFactsFor(key);
   if (coalesce !== undefined && coalesce !== 'debounce' && coalesce !== 'throttle') {
     throw new TypeError('Task schedule coalesce must be debounce or throttle.');
   }
@@ -836,7 +846,7 @@ function snapshotTaskScheduleOptions(
   return taskFreeze({
     ...(afterMs === undefined ? {} : { afterMs }),
     ...(pinnedAt === undefined ? {} : { at: pinnedAt }),
-    ...(key === undefined ? {} : { key }),
+    ...(key === undefined ? {} : { key: key as NonNullable<TaskScheduleOptions['key']> }),
     ...(coalesce === undefined ? {} : { coalesce }),
   });
 }

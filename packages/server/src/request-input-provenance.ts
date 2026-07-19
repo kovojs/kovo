@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { isScopedKey } from '@kovojs/core/internal/storage';
 import {
   witnessArrayAppend,
   createWitnessWeakMap,
@@ -104,6 +105,10 @@ function trackRequestInputValue(
   path: string,
   state: RequestInputProvenanceState,
 ): unknown {
+  // SPEC §6.6 C9: a schema-produced ScopedKey is framework authority, not request provenance.
+  // Preserve the exact module-private witness; proxying would create an unwitnessed lookalike and
+  // correctly make every stateful door fail closed inside the mutation handler.
+  if (isScopedKey(value)) return value;
   if (!isTrackableObject(value)) {
     if (isPrimitiveValue(value)) {
       witnessArrayAppend(

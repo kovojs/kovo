@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { describe, expect, it } from 'vitest';
-import { secret } from '@kovojs/core';
+import { publicScopedKey, secret } from '@kovojs/core';
+import { principalScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import {
   KOVO_JOBS_TABLE_SQL,
@@ -44,26 +45,26 @@ describe('durable task queue store (SPEC §9.6)', () => {
       await store.enqueue({
         task: 'email.send',
         args: { principal: 'victim', value: 'victim-first' },
-        key: 'account-email',
+        key: principalScopedKey('victim', 'account-email'),
         runAt,
       });
       await store.enqueue({
         task: 'email.send',
         args: { principal: 'attacker', value: 'attacker-debounce' },
-        key: 'account-email',
+        key: principalScopedKey('attacker', 'account-email'),
         runAt,
       });
       await store.enqueue({
         task: 'digest.send',
         args: { principal: 'victim', value: 'victim-first' },
-        key: 'account-digest',
+        key: principalScopedKey('victim', 'account-digest'),
         runAt,
         coalesce: 'throttle',
       });
       await store.enqueue({
         task: 'digest.send',
         args: { principal: 'attacker', value: 'attacker-throttled' },
-        key: 'account-digest',
+        key: principalScopedKey('attacker', 'account-digest'),
         runAt,
         coalesce: 'throttle',
       });
@@ -155,13 +156,13 @@ describe('durable task queue store (SPEC §9.6)', () => {
       task: 'email.send',
       args: { orderId: 'old' },
       runAt: firstRunAt,
-      key: 'order-1',
+      key: publicScopedKey('order-1'),
     });
     const second = await store.enqueue({
       task: 'email.send',
       args: { orderId: 'new' },
       runAt: secondRunAt,
-      key: 'order-1',
+      key: publicScopedKey('order-1'),
     });
 
     expect(second.id).toBe(first.id);
@@ -171,11 +172,12 @@ describe('durable task queue store (SPEC §9.6)', () => {
         task: 'email.send',
         args: { orderId: 'new' },
         runAt: secondRunAt,
-        key: 'order-1',
+        key: expect.any(Object),
         status: 'ready',
         attempts: 0,
       },
     ]);
+    expect(scopedKeyFactsFor(store.snapshot()[0]!.key).key).toBe('order-1');
   });
 
   it('throttles keyed ready jobs by keeping the first args and run_at', async () => {
@@ -187,14 +189,14 @@ describe('durable task queue store (SPEC §9.6)', () => {
       task: 'email.send',
       args: { orderId: 'first' },
       runAt: firstRunAt,
-      key: 'order-1',
+      key: publicScopedKey('order-1'),
       coalesce: 'throttle',
     });
     const second = await store.enqueue({
       task: 'email.send',
       args: { orderId: 'second' },
       runAt: secondRunAt,
-      key: 'order-1',
+      key: publicScopedKey('order-1'),
       coalesce: 'throttle',
     });
 
@@ -366,7 +368,7 @@ describe('durable task queue store (SPEC §9.6)', () => {
     const handle = await store.enqueue({
       task: 'email.send',
       args: { orderId: 'ord_1' },
-      key: 'order-1',
+      key: publicScopedKey('order-1'),
       runAt: new Date('2026-06-30T10:00:00.000Z'),
     });
     await store.claimDue({ limit: 1, leaseMs: 10_000, now: new Date(), owner: 'runner-1' });
@@ -377,7 +379,7 @@ describe('durable task queue store (SPEC §9.6)', () => {
       handle.id,
       'email.send',
       JSON.stringify({ orderId: 'ord_1' }),
-      'order-1',
+      scopedKeyFactsFor(publicScopedKey('order-1')).frame,
       new Date('2026-06-30T10:00:00.000Z'),
       expect.any(Date),
       handle.id,

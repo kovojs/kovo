@@ -2,6 +2,7 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
+import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import './sql-parser-authority-bootstrap.js';
@@ -281,7 +282,7 @@ describe('durable task runner (SPEC §9.6)', () => {
         await ctx.schedule(
           child,
           { parent: args.id },
-          { key: `child:${args.id}`, coalesce: 'throttle' },
+          { key: ctx.actAs(args.id).stateKey(`child:${args.id}`), coalesce: 'throttle' },
         );
       },
     });
@@ -296,11 +297,17 @@ describe('durable task runner (SPEC §9.6)', () => {
         expect.objectContaining({
           task: 'child.task',
           args: { parent: 'p1' },
-          key: 'child:p1',
+          key: expect.any(Object),
           status: 'ready',
         }),
       ]),
     );
+    const childJob = store.snapshot().find((job) => job.task === 'child.task');
+    expect(scopedKeyFactsFor(childJob?.key)).toMatchObject({
+      authority: 'p1',
+      key: 'child:p1',
+      posture: 'principal',
+    });
   });
 
   it('exposes stable job idempotency keys and retries with backoff until success', async () => {

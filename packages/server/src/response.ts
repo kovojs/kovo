@@ -1,4 +1,5 @@
-import type { StorageReadCapability } from '@kovojs/core';
+import type { ScopedKey, StorageReadCapability } from '@kovojs/core';
+import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import {
   createBoundedRuntimeAuditCollector,
   wireEmitter,
@@ -669,9 +670,10 @@ export const respond = witnessFreeze({
    */
   async storedFile(
     storage: StorageReadCapability,
-    key: string,
+    key: ScopedKey,
     options: RouteStoredFileOptions = {},
   ) {
+    const keyFacts = scopedKeyFactsFor(key);
     const storedDisposition = stableOwnDataValue(options, 'disposition');
     const storedFilename = stableOwnDataValue(options, 'filename');
     if (
@@ -721,7 +723,7 @@ export const respond = witnessFreeze({
     const sniffed = sniffUploadBytes(bodySnapshot);
     if (disposition === 'inline' && !sniffed.inlineSafe) {
       throw new InlineUnverifiedUploadError(
-        `Refusing to serve stored object "${key}" inline: its sniffed content type is not a ` +
+        `Refusing to serve stored object "${keyFacts.key}" inline: its sniffed content type is not a ` +
           'known-passive type. Serve as an attachment, or rasterize/re-encode the bytes.',
       );
     }

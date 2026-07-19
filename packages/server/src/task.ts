@@ -1,4 +1,5 @@
 import { snapshotSchemaForRuntime, type InferSchema, type Schema } from './schema.js';
+import type { ScopedKey } from '@kovojs/core';
 import type { NonRequestPrincipalPosture } from './auth-principal.js';
 import { validateCronExpression } from './task-cron.js';
 import {
@@ -29,7 +30,7 @@ export interface TaskScheduleOptions {
   /** Run no earlier than this wall-clock time. Mutually exclusive with `afterMs`. */
   at?: Date | string | number;
   /** Logical identity for replacing or throttling a still-ready pending job. */
-  key?: string;
+  key?: ScopedKey;
   /** Key coalescing mode. Defaults to debounce: latest args and latest run time win. */
   coalesce?: 'debounce' | 'throttle';
 }
@@ -80,6 +81,8 @@ export interface TaskIngressRunOptions {
  * name an explicit principal or audited system posture before entering the query runtime.
  */
 export interface TaskPrincipalReadScope {
+  /** Bind a stateful-sink key to this framework-minted principal scope. */
+  stateKey(key: string): ScopedKey;
   runQuery<const Query extends TaskRunnableQuery<any>>(
     definition: Query,
     input: TaskRunnableQueryInput<Query>,
@@ -93,6 +96,8 @@ export interface TaskPrincipalReadScope {
  * name an explicit principal or audited system posture before entering the mutation runtime.
  */
 export interface TaskPrincipalWriteScope {
+  /** Bind a stateful-sink key to this framework-minted principal scope. */
+  stateKey(key: string): ScopedKey;
   runMutation<const Mutation extends TaskRunnableMutation<any>>(
     definition: Mutation,
     input: TaskRunnableMutationInput<Mutation>,
@@ -126,6 +131,8 @@ export interface TaskRunContext {
   declareSystemRead(reason: string): TaskPrincipalReadScope;
   /** SPEC §10.3 DEC-G: audited cross-owner write posture for genuine system work. */
   declareSystemWrite(reason: string): TaskPrincipalWriteScope;
+  /** Bind genuine cross-principal task state to the finite durable-task-system posture. */
+  systemStateKey(key: string): ScopedKey;
   runMutation<const Mutation extends TaskRunnableMutation<any>>(
     definition: Mutation,
     input: TaskRunnableMutationInput<Mutation>,

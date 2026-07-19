@@ -1,4 +1,5 @@
 import type { TaskDefinition } from './task.js';
+import { frameworkScopedKey } from '@kovojs/core/internal/storage';
 import type {
   DurableTaskQueueStore,
   DurableTaskSqlExecutor,
@@ -101,7 +102,7 @@ export function createRecurringTaskMaterializer(options: {
             task: task.key,
             args: task.cronArgs ?? {},
             runAt: occurrence,
-            key: occurrenceKey(task.key, occurrence),
+            key: frameworkScopedKey('durable-task-cron', occurrenceKey(task.key, occurrence)),
             coalesce: 'throttle',
           });
           await occurrenceStore.bindJob(task.key, occurrence, handle.id);

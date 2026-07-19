@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { publicScopedKey } from '@kovojs/core';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 import { setRuntimeSinkSecurityEventHandler } from '@kovojs/core/internal/sink-policy';
 
@@ -863,32 +864,33 @@ describe('server response adapters', () => {
     ).toThrow(/KV415.*Content-Disposition.*filename\/disposition options/u);
   });
 
-  // KV428: respond.storedFile takes a bare string key (no compile-visible verification), so it is
-  // the runtime sidecar-marker path — defaults to attachment + nosniff + sniffed type, and refuses
-  // inline for non-passive bytes.
+  // KV428: respond.storedFile takes a runtime-witnessed ScopedKey and still enforces the content
+  // sidecar floor — attachment + nosniff + sniffed type, refusing active bytes inline.
   it('serves a stored file as attachment with a sniffed content type (KV428)', async () => {
     const storage = createMemoryStorage();
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1]);
-    await storage.put('avatars/k', png, { contentType: 'text/html' }); // stored type is a lie.
+    await storage.put(publicScopedKey('avatars/k'), png, { contentType: 'text/html' }); // stored type is a lie.
 
-    const outcome = await respond.storedFile(storage, 'avatars/k', { filename: 'a.png' });
+    const outcome = await respond.storedFile(storage, publicScopedKey('avatars/k'), {
+      filename: 'a.png',
+    });
     expect(outcome?.contentType).toBe('image/png'); // server truth, not the stored "text/html".
     expect(outcome?.contentDisposition).toBe('attachment; filename="a.png"');
 
-    expect(await respond.storedFile(storage, 'missing')).toBeUndefined();
+    expect(await respond.storedFile(storage, publicScopedKey('missing'))).toBeUndefined();
   });
 
   it('uses stored filename metadata by default for stored file downloads', async () => {
     const storage = createMemoryStorage();
-    await storage.put('uploads/note', 'note', {
+    await storage.put(publicScopedKey('uploads/note'), 'note', {
       contentType: 'text/plain',
       metadata: { filename: 'note.txt' },
     });
 
-    const outcome = await respond.storedFile(storage, 'uploads/note');
+    const outcome = await respond.storedFile(storage, publicScopedKey('uploads/note'));
     expect(outcome?.contentDisposition).toBe('attachment; filename="note.txt"');
 
-    const overridden = await respond.storedFile(storage, 'uploads/note', {
+    const overridden = await respond.storedFile(storage, publicScopedKey('uploads/note'), {
       filename: 'download.txt',
     });
     expect(overridden?.contentDisposition).toBe('attachment; filename="download.txt"');
@@ -896,12 +898,12 @@ describe('server response adapters', () => {
 
   it('normalizes control characters before serializing Content-Disposition filenames', async () => {
     const storage = createMemoryStorage();
-    await storage.put('uploads/note', 'note', {
+    await storage.put(publicScopedKey('uploads/note'), 'note', {
       contentType: 'text/plain',
       metadata: { filename: 'note.txt\r\nX-Kovo-Dogfood: injected' },
     });
 
-    const outcome = await respond.storedFile(storage, 'uploads/note');
+    const outcome = await respond.storedFile(storage, publicScopedKey('uploads/note'));
     expect(outcome?.contentDisposition).toBe(
       'attachment; filename="note.txt__X-Kovo-Dogfood: injected"',
     );
@@ -915,12 +917,12 @@ describe('server response adapters', () => {
 
   it('neutralizes stored and explicit bidi filename controls at the response sink', async () => {
     const storage = createMemoryStorage();
-    await storage.put('uploads/bidi', 'MZ harmless repro', {
+    await storage.put(publicScopedKey('uploads/bidi'), 'MZ harmless repro', {
       contentType: 'application/octet-stream',
       metadata: { filename: 'invoice\u202efdp.exe' },
     });
 
-    const stored = await respond.storedFile(storage, 'uploads/bidi');
+    const stored = await respond.storedFile(storage, publicScopedKey('uploads/bidi'));
     expect(stored?.contentDisposition).toBe('attachment; filename="invoice_fdp.exe"');
 
     const explicit = respond.file('MZ harmless repro', {
@@ -932,10 +934,10 @@ describe('server response adapters', () => {
 
   it('serializes Unicode and malformed-surrogate filenames without a persistent header failure', async () => {
     const storage = createMemoryStorage();
-    await storage.put('uploads/unicode', '%PDF-1.7', {
+    await storage.put(publicScopedKey('uploads/unicode'), '%PDF-1.7', {
       metadata: { filename: 'invoice-💣.pdf' },
     });
-    const stored = await respond.storedFile(storage, 'uploads/unicode');
+    const stored = await respond.storedFile(storage, publicScopedKey('uploads/unicode'));
     if (stored === undefined) throw new Error('missing stored object');
     expect(stored.contentDisposition).toBe(
       'attachment; filename="invoice-_.pdf"; filename*=UTF-8\'\'invoice-%F0%9F%92%A3.pdf',
@@ -962,20 +964,24 @@ describe('server response adapters', () => {
 
   it('refuses to serve stored SVG/PDF active-document containers inline (KV428)', async () => {
     const storage = createMemoryStorage();
-    await storage.put('uploads/evil', new TextEncoder().encode('<svg onload="x"/>'), {
-      contentType: 'image/svg+xml',
-    });
     await storage.put(
-      'uploads/active.pdf',
+      publicScopedKey('uploads/evil'),
+      new TextEncoder().encode('<svg onload="x"/>'),
+      {
+        contentType: 'image/svg+xml',
+      },
+    );
+    await storage.put(
+      publicScopedKey('uploads/active.pdf'),
       '%PDF-1.7\n1 0 obj << /OpenAction 2 0 R /S /JavaScript >> endobj\n%%EOF\n',
       { contentType: 'application/pdf' },
     );
 
     await expect(
-      respond.storedFile(storage, 'uploads/evil', { disposition: 'inline' }),
+      respond.storedFile(storage, publicScopedKey('uploads/evil'), { disposition: 'inline' }),
     ).rejects.toThrow(/KV428/u);
     await expect(
-      respond.storedFile(storage, 'uploads/active.pdf', { disposition: 'inline' }),
+      respond.storedFile(storage, publicScopedKey('uploads/active.pdf'), { disposition: 'inline' }),
     ).rejects.toThrow(/KV428/u);
   });
 
@@ -1003,7 +1009,7 @@ describe('server response adapters', () => {
     };
 
     await expect(
-      respond.storedFile(storage, 'uploads/swap', { disposition: 'inline' }),
+      respond.storedFile(storage, publicScopedKey('uploads/swap'), { disposition: 'inline' }),
     ).rejects.toThrow(/body must be an own data property/u);
     expect(bodyReads).toBe(0);
   });

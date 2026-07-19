@@ -1,6 +1,7 @@
 import { createHash, randomUUID as builtinRandomUuid } from 'node:crypto';
 
 import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
+import { restoreScopedKey, scopedKeyFactsFor, type ScopedKey } from './scoped-key.js';
 import {
   securityArrayAppend,
   securityApply,
@@ -95,19 +96,19 @@ export interface StorageStreamResult extends StorageObjectInfo {
 
 /** Read-only object-storage authority: fetch, stat, and stream objects by key. */
 export interface StorageReadCapability {
-  get(key: string): Promise<StorageGetResult | undefined>;
-  stat(key: string): Promise<StorageObjectInfo | undefined>;
-  stream(key: string): Promise<StorageStreamResult | undefined>;
+  get(key: ScopedKey): Promise<StorageGetResult | undefined>;
+  stat(key: ScopedKey): Promise<StorageObjectInfo | undefined>;
+  stream(key: ScopedKey): Promise<StorageStreamResult | undefined>;
 }
 
 /** Write authority for storing upload bytes by key. */
 export interface StoragePutCapability {
-  put(key: string, body: StorageBody, options?: StoragePutOptions): Promise<StoragePutResult>;
+  put(key: ScopedKey, body: StorageBody, options?: StoragePutOptions): Promise<StoragePutResult>;
 }
 
 /** Write authority for deleting stored objects by key. */
 export interface StorageDeleteCapability {
-  delete(key: string): Promise<void>;
+  delete(key: ScopedKey): Promise<void>;
 }
 
 /** The full object-storage interface an app wires into upload, delete, and download surfaces. */
@@ -209,7 +210,7 @@ interface FileSystemMetadataRecord {
   etag?: string;
   generation: string;
   lastModified: string;
-  logicalKey: string;
+  scopedKeyFrame: string;
   metadata?: Readonly<Record<string, string>>;
   size: number;
 }
@@ -221,6 +222,19 @@ const storageRandomUuid = builtinRandomUuid;
 const IntrinsicDate = globalThis.Date;
 const intrinsicDateGetTime = IntrinsicDate.prototype.getTime;
 const intrinsicDateToISOString = IntrinsicDate.prototype.toISOString;
+
+interface StorageKeyIdentity {
+  frame: string;
+  logicalKey: string;
+}
+
+function storageKeyIdentity(value: unknown): StorageKeyIdentity {
+  const facts = scopedKeyFactsFor(value);
+  return fileSystemFreeze({
+    frame: facts.frame,
+    logicalKey: normalizeStorageKey(facts.key),
+  });
+}
 
 /**
  * Create an in-memory object store implementing `StorageCapability`.
@@ -245,39 +259,39 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
 
   return {
     async delete(key) {
-      fileSystemMapDelete(objects, normalizeStorageKey(key));
+      fileSystemMapDelete(objects, storageKeyIdentity(key).frame);
     },
     async get(key) {
-      const normalizedKey = normalizeStorageKey(key);
-      const object = fileSystemMapGet(objects, normalizedKey);
+      const identity = storageKeyIdentity(key);
+      const object = fileSystemMapGet(objects, identity.frame);
       if (object === undefined) return undefined;
 
       return storageReadResult(copyInfo(object.info), copyBytes(object.body));
     },
     async put(key, body, putOptions = {}) {
-      const normalizedKey = normalizeStorageKey(key);
+      const identity = storageKeyIdentity(key);
       const optionsSnapshot = snapshotStoragePutOptions(putOptions);
       const bytes = await storageBodyToBytes(body);
       const info = objectInfo(
-        normalizedKey,
+        identity.logicalKey,
         fileSystemArrayBufferViewByteLength(bytes),
         optionsSnapshot,
         readNow(),
       );
-      fileSystemMapSet(objects, normalizedKey, {
+      fileSystemMapSet(objects, identity.frame, {
         body: copyBytes(bytes),
         info,
       });
       return copyInfo(info);
     },
     async stat(key) {
-      const normalizedKey = normalizeStorageKey(key);
-      const object = fileSystemMapGet(objects, normalizedKey);
+      const identity = storageKeyIdentity(key);
+      const object = fileSystemMapGet(objects, identity.frame);
       return object === undefined ? undefined : copyInfo(object.info);
     },
     async stream(key) {
-      const normalizedKey = normalizeStorageKey(key);
-      const object = fileSystemMapGet(objects, normalizedKey);
+      const identity = storageKeyIdentity(key);
+      const object = fileSystemMapGet(objects, identity.frame);
       if (object === undefined) return undefined;
 
       return storageReadResult(copyInfo(object.info), bytesToReadableStream(object.body));
@@ -302,14 +316,14 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
 
   return {
     async delete(key) {
-      const normalizedKey = normalizeStorageKey(key);
-      const physicalKey = fileSystemStorageKey(normalizedKey);
+      const identity = storageKeyIdentity(key);
+      const physicalKey = fileSystemStorageKey(identity.frame);
       const filePath = storageFilePath(fileSystem, physicalKey);
       await withFileSystemObjectLock(filePath, async () => {
         const record = await readFileSystemMetadataRecord(fileSystem, physicalKey);
         // SPEC §6.6 object-exact capability binding: deletion is a sink too. A missing, malformed,
         // or differently-owned sidecar cannot authorize removing bytes from an aliased host path.
-        if (record?.logicalKey !== normalizedKey) return;
+        if (record?.scopedKeyFrame !== identity.frame) return;
         try {
           // Unpublish the atomic pointer before reclaiming its immutable generation. If the
           // filesystem reports failure after committing this unlink, verification below still
@@ -326,7 +340,8 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
           }
           if (
             observedReadSucceeded &&
-            (observed?.logicalKey !== normalizedKey || observed.generation !== record.generation)
+            (observed?.scopedKeyFrame !== identity.frame ||
+              observed.generation !== record.generation)
           ) {
             await reclaimUnpublishedFileSystemGeneration(fileSystem, physicalKey, record);
           }
@@ -341,25 +356,25 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       });
     },
     async get(key) {
-      const normalizedKey = normalizeStorageKey(key);
-      const physicalKey = fileSystemStorageKey(normalizedKey);
+      const identity = storageKeyIdentity(key);
+      const physicalKey = fileSystemStorageKey(identity.frame);
       const filePath = storageFilePath(fileSystem, physicalKey);
       return withFileSystemObjectLock(filePath, async () => {
-        const object = await readFileSystemObject(fileSystem, normalizedKey, physicalKey);
+        const object = await readFileSystemObject(fileSystem, identity, physicalKey);
         return object === undefined
           ? undefined
           : storageReadResult(object.info, copyBytes(object.bytes));
       });
     },
     async put(key, body, putOptions = {}) {
-      const normalizedKey = normalizeStorageKey(key);
-      const physicalKey = fileSystemStorageKey(normalizedKey);
+      const identity = storageKeyIdentity(key);
+      const physicalKey = fileSystemStorageKey(identity.frame);
       const filePath = storageFilePath(fileSystem, physicalKey);
       const optionsSnapshot = snapshotStoragePutOptions(putOptions);
       const bytes = await storageBodyToBytes(body);
       const lastModified = new IntrinsicDate();
       const info = objectInfo(
-        normalizedKey,
+        identity.logicalKey,
         fileSystemArrayBufferViewByteLength(bytes),
         optionsSnapshot,
         lastModified,
@@ -369,7 +384,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
         const previous = await assertFileSystemStorageSlotOwnership(
           fileSystem,
           physicalKey,
-          normalizedKey,
+          identity.frame,
         );
         // SPEC §12/§13: immutable generation bytes are committed first, then one atomically-renamed
         // sidecar publishes body + metadata together. A crash/failure before the sidecar commit can
@@ -380,7 +395,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
         try {
           await fileSystem.writeFile(
             metadataStorageKey(physicalKey),
-            fileSystemJsonStringify(metadataRecord(info, generation)),
+            fileSystemJsonStringify(metadataRecord(info, generation, identity.frame)),
           );
         } catch (error) {
           // Best-effort orphan cleanup. If the atomic sidecar write did commit before reporting an
@@ -394,7 +409,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
             observed = undefined;
           }
           if (observedReadSucceeded) {
-            if (observed?.generation === generation && observed.logicalKey === normalizedKey) {
+            if (observed?.generation === generation && observed.scopedKeyFrame === identity.frame) {
               // The pointer read proves the supposedly-failed commit published this generation.
               // Retire the previous immutable body just as the normal success path would.
               if (previous !== undefined && previous.generation !== generation) {
@@ -420,19 +435,19 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       return info;
     },
     async stat(key) {
-      const normalizedKey = normalizeStorageKey(key);
-      const physicalKey = fileSystemStorageKey(normalizedKey);
+      const identity = storageKeyIdentity(key);
+      const physicalKey = fileSystemStorageKey(identity.frame);
       const filePath = storageFilePath(fileSystem, physicalKey);
       return withFileSystemObjectLock(filePath, () =>
-        fileSystemStat(fileSystem, normalizedKey, physicalKey),
+        fileSystemStat(fileSystem, identity, physicalKey),
       );
     },
     async stream(key) {
-      const normalizedKey = normalizeStorageKey(key);
-      const physicalKey = fileSystemStorageKey(normalizedKey);
+      const identity = storageKeyIdentity(key);
+      const physicalKey = fileSystemStorageKey(identity.frame);
       const filePath = storageFilePath(fileSystem, physicalKey);
       return withFileSystemObjectLock(filePath, async () => {
-        const object = await readFileSystemObject(fileSystem, normalizedKey, physicalKey);
+        const object = await readFileSystemObject(fileSystem, identity, physicalKey);
         return object === undefined
           ? undefined
           : storageReadResult(object.info, bytesToReadableStream(object.bytes));
@@ -495,29 +510,31 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
 
   return fileSystemFreeze({
     async delete(key) {
-      const normalizedKey = normalizeStorageKey(key);
+      const identity = storageKeyIdentity(key);
       await fileSystemReflectApply<ReturnType<S3CompatibleObjectClient['deleteObject']>>(
         deleteObject,
         client,
-        [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }],
+        [{ bucket, key: s3ObjectKey(prefix, scopedStoragePhysicalKey(identity.frame)) }],
       );
     },
     async get(key) {
-      const normalizedKey = normalizeStorageKey(key);
+      const identity = storageKeyIdentity(key);
       const output = await fileSystemReflectApply<
         ReturnType<S3CompatibleObjectClient['getObject']>
-      >(getObject, client, [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }]);
+      >(getObject, client, [
+        { bucket, key: s3ObjectKey(prefix, scopedStoragePhysicalKey(identity.frame)) },
+      ]);
       if (output === undefined) return undefined;
 
       const outputBody = s3OutputBody(output);
       const body = await storageBodyToBytes(outputBody);
       return storageReadResult(
-        s3ObjectInfo(normalizedKey, output, fileSystemArrayBufferViewByteLength(body)),
+        s3ObjectInfo(identity.logicalKey, output, fileSystemArrayBufferViewByteLength(body)),
         body,
       );
     },
     async put(key, body, putOptions = {}) {
-      const normalizedKey = normalizeStorageKey(key);
+      const identity = storageKeyIdentity(key);
       const optionsSnapshot = snapshotStoragePutOptions(putOptions);
       // SPEC §6.6/§12: snapshot every accepted carrier through boot-pinned byte controls before
       // handing it to an adapter. The client must never observe bytes different from the body Kovo
@@ -529,7 +546,7 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
       >(putObject, client, [
         {
           bucket,
-          key: s3ObjectKey(prefix, normalizedKey),
+          key: s3ObjectKey(prefix, scopedStoragePhysicalKey(identity.frame)),
           body: bytes,
           ...(optionsSnapshot.contentType === undefined
             ? {}
@@ -543,32 +560,38 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
       // `size` (the materialized body length) is the out-of-band fallback; `s3ObjectInfo` prefers the
       // client's `contentLength`. Caller etag is honored uniformly (Part 3 bug L2).
       return s3ObjectInfo(
-        normalizedKey,
+        identity.logicalKey,
         output,
         s3PutFallbackSize(output, size),
         optionsSnapshot.etag,
       );
     },
     async stat(key) {
-      const normalizedKey = normalizeStorageKey(key);
+      const identity = storageKeyIdentity(key);
       const output = await fileSystemReflectApply<
         ReturnType<S3CompatibleObjectClient['headObject']>
-      >(headObject, client, [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }]);
+      >(headObject, client, [
+        { bucket, key: s3ObjectKey(prefix, scopedStoragePhysicalKey(identity.frame)) },
+      ]);
       // No body is materialized on a head, so size is whatever the client reports; never fabricate 0
       // for a content-length-blind client (Part 3 bug L2-storage-3).
-      return output === undefined ? undefined : s3ObjectInfo(normalizedKey, output, undefined);
+      return output === undefined
+        ? undefined
+        : s3ObjectInfo(identity.logicalKey, output, undefined);
     },
     async stream(key) {
-      const normalizedKey = normalizeStorageKey(key);
+      const identity = storageKeyIdentity(key);
       const output = await fileSystemReflectApply<
         ReturnType<S3CompatibleObjectClient['getObject']>
-      >(getObject, client, [{ bucket, key: s3ObjectKey(prefix, normalizedKey) }]);
+      >(getObject, client, [
+        { bucket, key: s3ObjectKey(prefix, scopedStoragePhysicalKey(identity.frame)) },
+      ]);
       if (output === undefined) return undefined;
 
       // Streaming does not pre-buffer the body, so size is the client-reported length or unknown
       // (undefined) — never a fabricated 0 (Part 3 bug L2-storage-3).
       return storageReadResult(
-        s3ObjectInfo(normalizedKey, output, undefined),
+        s3ObjectInfo(identity.logicalKey, output, undefined),
         storageBodyToReadableStream(s3OutputBody(output)),
       );
     },
@@ -603,15 +626,15 @@ export function createReadOnlyStorageCapability(
     );
   };
   const readOnly = fileSystemFreeze({
-    get(key: string) {
+    get(key: ScopedKey) {
       return fileSystemReflectApply<ReturnType<StorageReadCapability['get']>>(get, storage, [key]);
     },
-    stat(key: string) {
+    stat(key: ScopedKey) {
       return fileSystemReflectApply<ReturnType<StorageReadCapability['stat']>>(stat, storage, [
         key,
       ]);
     },
-    stream(key: string) {
+    stream(key: ScopedKey) {
       return fileSystemReflectApply<ReturnType<StorageReadCapability['stream']>>(stream, storage, [
         key,
       ]);
@@ -841,8 +864,12 @@ function objectInfo(
   );
 }
 
-function metadataRecord(info: StorageObjectInfo, generation: string): FileSystemMetadataRecord {
-  const key = storageRequiredOwnData(info, 'key', 'Storage object key');
+function metadataRecord(
+  info: StorageObjectInfo,
+  generation: string,
+  scopedKeyFrame: string,
+): FileSystemMetadataRecord {
+  storageRequiredOwnData(info, 'key', 'Storage object key');
   const size = storageRequiredOwnData(info, 'size', 'Storage object size');
   if (typeof size !== 'number' || !storageIsSafeInteger(size) || size < 0) {
     throw new TypeError('Filesystem storage object size must be a non-negative safe integer.');
@@ -859,7 +886,7 @@ function metadataRecord(info: StorageObjectInfo, generation: string): FileSystem
     ),
   );
   defineStorageData(record, 'generation', generation);
-  defineStorageData(record, 'logicalKey', key);
+  defineStorageData(record, 'scopedKeyFrame', scopedKeyFrame);
   defineStorageData(record, 'size', size);
   copyOptionalStorageInfoProperty(record, info, 'contentType');
   copyOptionalStorageInfoProperty(record, info, 'etag');
@@ -869,22 +896,24 @@ function metadataRecord(info: StorageObjectInfo, generation: string): FileSystem
 
 async function fileSystemStat(
   fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
-  key: string,
-  physicalKey = fileSystemStorageKey(key),
+  identity: StorageKeyIdentity,
+  physicalKey = fileSystemStorageKey(identity.frame),
 ): Promise<StorageObjectInfo | undefined> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const record = await readFileSystemMetadataRecord(fileSystem, physicalKey);
-    // The lowercase ASCII physical name is only an index. The exact logical key in the atomic
+    // The lowercase ASCII physical name is only an index. The exact ScopedKey frame in the atomic
     // sidecar is the authority that closes digest/host aliasing and selects one immutable body.
-    if (record?.logicalKey !== key) return undefined;
+    if (record?.scopedKeyFrame !== identity.frame) return undefined;
     const fileStats = await fileSystem.statFile(
       generationStorageKey(physicalKey, record.generation),
     );
     if (fileStats !== undefined && record.size === fileStats.size) {
-      return fileSystemInfoFromRecord(key, fileStats.size, record);
+      return fileSystemInfoFromRecord(identity.logicalKey, fileStats.size, record);
     }
     const latest = await readFileSystemMetadataRecord(fileSystem, physicalKey);
-    if (latest?.logicalKey === key && latest.generation !== record.generation) continue;
+    if (latest?.scopedKeyFrame === identity.frame && latest.generation !== record.generation) {
+      continue;
+    }
     return undefined;
   }
   return undefined;
@@ -892,20 +921,22 @@ async function fileSystemStat(
 
 async function readFileSystemObject(
   fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
-  key: string,
+  identity: StorageKeyIdentity,
   physicalKey: string,
 ): Promise<{ bytes: Uint8Array; info: StorageObjectInfo } | undefined> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const record = await readFileSystemMetadataRecord(fileSystem, physicalKey);
-    if (record?.logicalKey !== key) return undefined;
+    if (record?.scopedKeyFrame !== identity.frame) return undefined;
     const bytes = await fileSystem.fileBytes(generationStorageKey(physicalKey, record.generation));
     if (bytes !== undefined) {
       const size = fileSystemArrayBufferViewByteLength(bytes);
       if (record.size !== size) return undefined;
-      return { bytes, info: fileSystemInfoFromRecord(key, size, record) };
+      return { bytes, info: fileSystemInfoFromRecord(identity.logicalKey, size, record) };
     }
     const latest = await readFileSystemMetadataRecord(fileSystem, physicalKey);
-    if (latest?.logicalKey === key && latest.generation !== record.generation) continue;
+    if (latest?.scopedKeyFrame === identity.frame && latest.generation !== record.generation) {
+      continue;
+    }
     return undefined;
   }
   return undefined;
@@ -947,6 +978,10 @@ function fileSystemStorageKey(key: string): string {
     digest,
     2,
   )}`;
+}
+
+function scopedStoragePhysicalKey(frame: string): string {
+  return `${fileSystemObjectPrefix}/${storageSha256Hex(fileSystemUtf8Encode(frame))}`;
 }
 
 function storageSha256Hex(value: Uint8Array): string {
@@ -1012,10 +1047,10 @@ async function readFileSystemMetadataRecord(
 
 function parseFileSystemMetadataRecord(value: unknown): FileSystemMetadataRecord | undefined {
   if (typeof value !== 'object' || value === null || securityIsArray(value)) return undefined;
-  const logicalKey = fileSystemOwnDataProperty(
+  const scopedKeyFrame = fileSystemOwnDataProperty(
     value,
-    'logicalKey',
-    'Filesystem metadata logicalKey',
+    'scopedKeyFrame',
+    'Filesystem metadata ScopedKey frame',
   );
   const generation = fileSystemOwnDataProperty(
     value,
@@ -1039,7 +1074,12 @@ function parseFileSystemMetadataRecord(value: unknown): FileSystemMetadataRecord
     'metadata',
     'Filesystem metadata custom metadata',
   );
-  if (!logicalKey.found || typeof logicalKey.value !== 'string') return undefined;
+  if (!scopedKeyFrame.found || typeof scopedKeyFrame.value !== 'string') return undefined;
+  try {
+    scopedKeyFactsFor(restoreScopedKey(scopedKeyFrame.value));
+  } catch {
+    return undefined;
+  }
   if (!generation.found || !isFileSystemStorageGeneration(generation.value)) return undefined;
   if (!lastModified.found || typeof lastModified.value !== 'string') {
     return undefined;
@@ -1072,7 +1112,7 @@ function parseFileSystemMetadataRecord(value: unknown): FileSystemMetadataRecord
   }
   const record = securityNullRecord<unknown>();
   defineStorageData(record, 'generation', generation.value);
-  defineStorageData(record, 'logicalKey', logicalKey.value);
+  defineStorageData(record, 'scopedKeyFrame', scopedKeyFrame.value);
   defineStorageData(record, 'lastModified', lastModified.value);
   if (contentType.found && contentType.value !== undefined) {
     defineStorageData(record, 'contentType', contentType.value);
@@ -1086,14 +1126,14 @@ function parseFileSystemMetadataRecord(value: unknown): FileSystemMetadataRecord
 async function assertFileSystemStorageSlotOwnership(
   fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
   physicalKey: string,
-  logicalKey: string,
+  scopedKeyFrame: string,
 ): Promise<FileSystemMetadataRecord | undefined> {
   const fileStats = await fileSystem.statFile(physicalKey);
   const sidecarBytes = await fileSystem.fileBytes(metadataStorageKey(physicalKey));
   if (fileStats === undefined && sidecarBytes === undefined) return undefined;
 
   const record = await readFileSystemMetadataRecord(fileSystem, physicalKey);
-  if (record?.logicalKey === logicalKey) return record;
+  if (record?.scopedKeyFrame === scopedKeyFrame) return record;
   throw new Error(
     'Filesystem storage physical-key collision or metadata ownership mismatch; refusing to overwrite.',
   );

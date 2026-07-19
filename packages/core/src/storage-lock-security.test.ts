@@ -2,6 +2,36 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { afterEach, expect, it, vi } from 'vitest';
 
+import type { ScopedKey } from './scoped-key.js';
+import type { StorageBody, StorageCapability, StoragePutOptions } from './storage.js';
+
+type StringKeyStorage = Omit<StorageCapability, 'delete' | 'get' | 'put' | 'stat' | 'stream'> & {
+  delete(key: string | ScopedKey): Promise<void>;
+  get(key: string | ScopedKey): ReturnType<StorageCapability['get']>;
+  put(
+    key: string | ScopedKey,
+    body: StorageBody,
+    options?: StoragePutOptions,
+  ): ReturnType<StorageCapability['put']>;
+  stat(key: string | ScopedKey): ReturnType<StorageCapability['stat']>;
+  stream(key: string | ScopedKey): ReturnType<StorageCapability['stream']>;
+};
+
+function testStorage(
+  storage: StorageCapability,
+  publicScopedKey: (key: string) => ScopedKey,
+): StringKeyStorage {
+  const key = (value: string | ScopedKey) =>
+    typeof value === 'string' ? publicScopedKey(value) : value;
+  return {
+    delete: (value) => storage.delete(key(value)),
+    get: (value) => storage.get(key(value)),
+    put: (value, body, options) => storage.put(key(value), body, options),
+    stat: (value) => storage.stat(key(value)),
+    stream: (value) => storage.stream(key(value)),
+  };
+}
+
 afterEach(() => {
   vi.doUnmock('./internal/filesystem.js');
   vi.resetModules();
@@ -58,7 +88,8 @@ it('keeps exact storage-key writes serialized after late Promise.prototype.then 
   }));
 
   const { createFileSystemStorage } = await import('./storage.js');
-  const storage = createFileSystemStorage({ root: '/reviewed-root' });
+  const { publicScopedKey } = await import('./scoped-key.js');
+  const storage = testStorage(createFileSystemStorage({ root: '/reviewed-root' }), publicScopedKey);
   const first = storage.put('same-key.txt', 'first');
   await firstStarted;
 
@@ -136,8 +167,9 @@ it('publishes one body and metadata generation across independent same-root capa
   }));
 
   const { createFileSystemStorage, storageBodyToBytes } = await import('./storage.js');
-  const writer = createFileSystemStorage({ root: '/shared-root' });
-  const reader = createFileSystemStorage({ root: '/shared-root' });
+  const { publicScopedKey } = await import('./scoped-key.js');
+  const writer = testStorage(createFileSystemStorage({ root: '/shared-root' }), publicScopedKey);
+  const reader = testStorage(createFileSystemStorage({ root: '/shared-root' }), publicScopedKey);
   await writer.put('same.txt', 'old', { contentType: 'text/old', etag: 'old' });
 
   const replacing = writer.put('same.txt', 'new', { contentType: 'text/new', etag: 'new' });
@@ -196,8 +228,9 @@ it('keeps the prior generation readable when publishing the new sidecar fails', 
   }));
 
   const { createFileSystemStorage } = await import('./storage.js');
-  const first = createFileSystemStorage({ root: '/failure-root' });
-  const second = createFileSystemStorage({ root: '/failure-root' });
+  const { publicScopedKey } = await import('./scoped-key.js');
+  const first = testStorage(createFileSystemStorage({ root: '/failure-root' }), publicScopedKey);
+  const second = testStorage(createFileSystemStorage({ root: '/failure-root' }), publicScopedKey);
   await first.put('same.txt', 'old', { contentType: 'text/old', etag: 'old' });
   failNewSidecar = true;
   await expect(
@@ -247,8 +280,15 @@ it('reclaims the prior generation when a reported failure is proven committed', 
   }));
 
   const { createFileSystemStorage } = await import('./storage.js');
-  const writer = createFileSystemStorage({ root: '/known-commit-root' });
-  const reader = createFileSystemStorage({ root: '/known-commit-root' });
+  const { publicScopedKey } = await import('./scoped-key.js');
+  const writer = testStorage(
+    createFileSystemStorage({ root: '/known-commit-root' }),
+    publicScopedKey,
+  );
+  const reader = testStorage(
+    createFileSystemStorage({ root: '/known-commit-root' }),
+    publicScopedKey,
+  );
   await writer.put('same.txt', 'old', { contentType: 'text/old' });
   commitThenThrow = true;
   await expect(writer.put('same.txt', 'new', { contentType: 'text/new' })).rejects.toThrow(
@@ -304,8 +344,9 @@ it('retains a possibly-published generation when commit verification also fails'
   }));
 
   const { createFileSystemStorage } = await import('./storage.js');
-  const first = createFileSystemStorage({ root: '/uncertain-root' });
-  const second = createFileSystemStorage({ root: '/uncertain-root' });
+  const { publicScopedKey } = await import('./scoped-key.js');
+  const first = testStorage(createFileSystemStorage({ root: '/uncertain-root' }), publicScopedKey);
+  const second = testStorage(createFileSystemStorage({ root: '/uncertain-root' }), publicScopedKey);
   await first.put('same.txt', 'old', { contentType: 'text/old', etag: 'old' });
   commitThenThrow = true;
   await expect(
@@ -363,7 +404,8 @@ it('keeps deletion retryable across reported pointer and generation commit failu
   }));
 
   const { createFileSystemStorage } = await import('./storage.js');
-  const storage = createFileSystemStorage({ root: '/delete-root' });
+  const { publicScopedKey } = await import('./scoped-key.js');
+  const storage = testStorage(createFileSystemStorage({ root: '/delete-root' }), publicScopedKey);
   await storage.put('same.txt', 'old', { contentType: 'text/old' });
 
   failSidecarDelete = true;

@@ -83,11 +83,19 @@ export interface SourceSinkRuntimeEvidence {
 /** @internal DEC-E boundary-crossing mechanism taxonomy for C9 sink inventory. */
 export type BoundaryCrossingMechanism = 'reconstruct' | 'box' | 'own';
 
+/** @internal C9 owner-provenance posture for app-addressable stateful keys. */
+export type BoundaryKeyScoping =
+  | 'database-principal-policy'
+  | 'runtime-opaque-scoped-key'
+  | 'not-stateful-keyed';
+
 /** @internal Canonical proof-surface row for C9 boundary-crossing sinks. */
 export interface BoundaryCrossingSinkInventoryEntry {
   /** Complete source/sink census families discharged by this reviewed boundary row. */
   censusFamilies: readonly SourceSinkInventoryEntry['sink'][];
   hostileValueEvidence: readonly string[];
+  /** Mandatory classification of how this door isolates app-addressable persisted state. */
+  keyScoping: BoundaryKeyScoping;
   mechanism: BoundaryCrossingMechanism;
   mechanismDetail: string;
   /** Stable team/module ownership for gaps and incident follow-up. */
@@ -936,6 +944,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
   {
     censusFamilies: ['sql.executable'],
     hostileValueEvidence: ['packages/server/src/managed-db.test.ts'],
+    keyScoping: 'database-principal-policy',
     mechanism: 'reconstruct',
     mechanismDetail:
       'The managed SQL boundary snapshots every accepted statement carrier into one immutable statement artifact before validation, classification, instrumentation, and driver execution.',
@@ -960,6 +969,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/wire-html.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'reconstruct',
     mechanismDetail:
       'Framework wire helpers reconstruct fragment/query/error bodies from normalized values and escaped text instead of forwarding caller-owned body strings through privileged response paths.',
@@ -987,6 +997,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/static-export-response.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'own',
     mechanismDetail:
       'Direct app inputs pass an exact metadata allowlist before framework fields are assembled; static export rejects durable browser-state instructions, while typed, raw, live-adapter, and generated-adapter finalization own the browser-state private/no-store floor and the transport-owned framing/hop-by-hop deny set before transport mutation.',
@@ -1015,6 +1026,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/response-posture.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'reconstruct',
     mechanismDetail:
       'Redirect targets are normalized back into same-origin path-form values before Location is emitted.',
@@ -1037,6 +1049,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
       'scripts/check-csrf-mint-delivery.test.mjs',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'own',
     mechanismDetail:
       'Cookie values cross through the typed serializer; first-anonymous CSRF authority additionally requires a private response-lifecycle receipt whose atomic seal/snapshot is consumed only by an authorized response finalizer.',
@@ -1059,42 +1072,49 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
   {
     censusFamilies: ['file.storage.static-export'],
     hostileValueEvidence: [
+      'packages/core/src/scoped-key.test.ts',
       'packages/core/src/storage.test.ts',
       'packages/server/src/static-export-output.test.ts',
     ],
+    keyScoping: 'runtime-opaque-scoped-key',
     mechanism: 'own',
     mechanismDetail:
-      'Storage keys, file paths, and static-export outputs cross through framework-owned containment and reserved-reference gates.',
+      'Storage object keys cross only as runtime-witnessed ScopedKey frames before adapters derive physical namespaces; file paths and static-export outputs additionally cross through framework-owned containment and reserved-reference gates.',
     operationKinds: ['server.storage.read', 'server.storage.write'],
     owner: '@kovojs/core/storage',
     proofEvidence: [
+      'packages/core/src/scoped-key.test.ts',
       'packages/core/src/storage.test.ts',
       'packages/server/src/static-export-output.test.ts',
     ],
     proofGate: 'pnpm run check:filesystem-boundary',
     sink: 'blob/file write',
-    soleDoor: 'storage adapter key validation + static export writer containment checks',
+    soleDoor:
+      'ScopedKey runtime witness + storage adapter frame namespace + static export writer containment checks',
     specAnchor: 'spec/11-verification.md §11.4; plans/sources-sinks.md Phase 2',
   },
   {
     censusFamilies: ['transport.query.live.broadcast'],
     hostileValueEvidence: [
+      'packages/server/src/task-queue.test.ts',
       'packages/server/src/task-observability.test.ts',
       'packages/server/src/task-runner.test.ts',
     ],
+    keyScoping: 'runtime-opaque-scoped-key',
     mechanism: 'own',
     mechanismDetail:
-      'Durable-task args and status payloads cross process/store boundaries through framework-owned queue envelopes and redaction-aware observability views.',
+      'Durable-task coalescing keys cross as runtime-witnessed ScopedKey frames; args and status payloads cross process/store boundaries through framework-owned queue envelopes and redaction-aware observability views.',
     operationKinds: ['server.task.compose'],
     owner: '@kovojs/server/task-runner',
     proofEvidence: [
+      'packages/server/src/task-queue.test.ts',
       'packages/server/src/task-observability.test.ts',
       'packages/server/src/task-runner.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts',
     ],
     proofGate: 'pnpm run check:security-test-builds',
     sink: 'durable-task payload',
-    soleDoor: 'task queue envelope + observability redaction/export helpers',
+    soleDoor: 'ScopedKey frame + task queue envelope + observability redaction/export helpers',
     specAnchor: 'spec/09-wire-protocol.md §9.6; spec/11-verification.md §11.4',
   },
   {
@@ -1106,6 +1126,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/node.test.ts',
       'packages/server/src/build.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'reconstruct',
     mechanismDetail:
       'Each adapter snapshots only its transport-owned method, authority, and scheme sources; one finite classifier rejects ambiguous or lossy values and reconstructs the Web Request method, URL authority, and app-visible Host from the same decision.',
@@ -1131,6 +1152,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/webhook.test.ts',
       'tests/integration/specs/webhook-hmac.spec.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'own',
     mechanismDetail:
       'Webhook payload bytes remain framework-owned until verifier-before-parse and replay posture accept them.',
@@ -1156,6 +1178,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/jsx-runtime.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'reconstruct',
     mechanismDetail:
       'Renderer and browser output helpers reconstruct HTML/DOM output from contextual encoders or explicit trustedHtml/trustedUrl escapes.',
@@ -1194,6 +1217,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/task-observability.test.ts',
       'packages/server/src/query-endpoint.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'box',
     mechanismDetail:
       'Secret and redacted runtime boxes refuse accidental coercion and are normalized to redacted or empty error payloads before logs, status views, or wire-visible error shells.',
@@ -1217,6 +1241,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'own',
     mechanismDetail:
       'Task and verified-webhook code receives the exact non-replaceable ctx.fetch capability. It canonicalizes a positive origin allowlist at boot, rejects every undeclared initial/redirect origin before DNS, classifies every DNS answer, and leaves selected-address pinning to the exact dial sink.',
@@ -1242,6 +1267,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/postgres-authz.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'own',
     mechanismDetail:
       'The served Postgres path derives one pinned principal and delegates row/column authority to the least-privilege runtime-role privilege graph, FORCE-RLS policies, and closure-audited reachable objects.',
@@ -1264,6 +1290,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/better-auth/src/index.credential-mutations.test.ts',
       'packages/better-auth/src/index.session.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'own',
     mechanismDetail:
       'The package-private gate owns every supported Better Auth secret and credential consumer, invokes captured dependency callables inside the door, admits only exact registered consumer/source identity, validates the contract result, and seals it for one opening by that same consumer.',
@@ -1288,6 +1315,7 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/compiler/src/security-operation-ir.security.test.ts',
       'packages/cli/src/index.kovo-build.test.ts',
     ],
+    keyScoping: 'not-stateful-keyed',
     mechanism: 'own',
     mechanismDetail:
       'Compiler-owned versioned handler modules and reviewed build/runtime capability doors own dynamic loading and process authority. Handler-root census records and exact same-file helper-call edges keep supported roots and unresolved semantic-summary obligations visible; they do not claim a downstream runtime effect.',

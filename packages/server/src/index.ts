@@ -132,6 +132,7 @@ export {
   createFileSystemStorage,
   createMemoryStorage,
   createS3CompatibleStorage,
+  publicScopedKey,
 } from '@kovojs/core';
 export type {
   FileSystemStorageOptions,
@@ -144,6 +145,7 @@ export type {
   S3CompatiblePutObjectInput,
   S3CompatiblePutObjectOutput,
   S3CompatibleStorageOptions,
+  ScopedKey,
   StorageBody,
   StorageCapability,
   StorageDeleteCapability,
@@ -264,6 +266,7 @@ export {
   replayMutationWireBody,
   s,
   SchemaValidationError,
+  scopedKey,
   // KV429 (SPEC §10.3/§11.1): thrown by a mutation handler when a CAS predicate matches
   // 0 rows; the lifecycle converts this into a typed HTTP 409 (STALE_VERSION) response
   // distinct from the IDEMPOTENCY_CONFLICT 409 produced by the replay path.

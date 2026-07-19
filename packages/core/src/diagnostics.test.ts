@@ -151,6 +151,7 @@ describe('diagnostic registry', () => {
       'KV447',
       'KV448',
       'KV449',
+      'KV450',
     ]);
   });
 
@@ -923,6 +924,14 @@ describe('diagnostic registry', () => {
       SPEC §4.3, §5.2, §6.6, and §9.1 make the finite compiler-owned operation set and its bounded helper summaries fail closed. Server diagnostics name root, ordered transfers, sink, and the exact closed reason. There is no general raw-DOM/capability or hand-authored lowered-IR escape; only the named exceptional doors documented by their owning sink are accepted.
       Escape: trustedSql, trustedHtml, and endpoint/webhook raw Response are the only exceptional IR operations, and each remains visible in kovo explain with its justification/posture.",
           "message": "Security-critical operation is outside the compiler-owned finite IR.",
+          "severity": "error",
+        },
+        "KV450": {
+          "code": "KV450",
+          "help": "Blocked reason: a non-database stateful sink received a bare string, forged structure, proxy, unregistered system posture, or malformed persisted scope frame, so owner provenance is absent or ambiguous.
+      Fixes: derive a principal key with scopedKey(request, key) or task actAs(id).stateKey(key); use publicScopedKey(key) only for deliberately shared state; framework internals must use a finite reviewed system posture.
+      SPEC §6.6, §9.6, and §10.3 require storage objects and durable-task coalescing keys to carry one canonical runtime-witnessed ScopedKey frame before namespace use.",
+          "message": "Stateful sink key lacks framework-witnessed owner scope.",
           "severity": "error",
         },
       }

@@ -1,4 +1,6 @@
 export type { Secret } from '@kovojs/core';
+export { publicScopedKey } from '@kovojs/core';
+export type { ScopedKey } from '@kovojs/core';
 export { publicAccess, verifiedAccess } from '../access.js';
 export type { AccessDecision, PublicAccess, VerifiedMachineAccess } from '../access.js';
 import {
@@ -130,6 +132,7 @@ export const query = queryImplementation as unknown as QueryFactory;
  * `request.schedule(...)` and drained by the node JobRunner (SPEC §9.6).
  */
 export const task = taskImplementation as unknown as TaskFactory;
+export { scopedKey } from '../state-key.js';
 export type {
   TaskCronCatchUp,
   TaskDefinition,

@@ -380,9 +380,16 @@ caller mutation's transactional `db`.
 post-commit work. Scheduling writes a durable job row in the same transaction as the mutation's data:
 commit means the job is ready to run, rollback means the job was never enqueued. The scheduled args
 are validated by the task's `input` schema and serialized data, not captured process state.
-`opts.afterMs` / `opts.at` set `run_at`; `opts.key` gives a logical pending-job identity. The default
-keyed behavior is debounce: a ready job with the same key has its `run_at` and args replaced by the
-latest schedule. `coalesce: 'throttle'` keeps the earliest ready job and its first args. A running or
+`opts.afterMs` / `opts.at` set `run_at`; `opts.key` gives a witnessed `ScopedKey` pending-job
+identity (§6.6). Principal work derives it from `ctx.actAs(id).stateKey(appKey)` (or the equivalent
+framework request authority); deliberately shared work uses the named public posture, and framework
+recurrence/system work uses only a finite registered posture. Strings, casts, proxies, forged
+structures, malformed persisted frames, and reason-string system namespaces fail KV450 before the
+queue is consulted. The queue persists the complete canonical scope frame in `logical_key`, and the
+unique ready-job identity is `(task_key, scoped-key-frame)`. The default keyed behavior is debounce:
+a ready job with the same complete frame has its `run_at` and args replaced by the latest schedule.
+`coalesce: 'throttle'` keeps the earliest ready job and its first args. Equal app keys under different
+principal/public/system authority never coalesce. A running or
 already-finished job is never mutated; re-scheduling creates a new ready job. `request.schedule`
 returns a typed handle, and `request.cancel(handle)` transactionally cancels a still-ready job and
 returns whether cancellation happened.

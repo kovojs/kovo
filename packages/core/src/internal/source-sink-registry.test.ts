@@ -43,6 +43,11 @@ const requiredC9SinkNames = [
   'dynamic module/process execution',
 ] as const;
 const allowedBoundaryCrossingMechanisms = new Set(['reconstruct', 'box', 'own']);
+const allowedKeyScoping = new Set([
+  'database-principal-policy',
+  'runtime-opaque-scoped-key',
+  'not-stateful-keyed',
+]);
 const exactFiniteBrowserControlKeys = [
   'script[src]',
   'script[href]',
@@ -153,6 +158,20 @@ function assertC9SinkInventoryComplete(
     if (!allowedBoundaryCrossingMechanisms.has(entry.mechanism)) {
       throw new Error(
         `${entry.sink} has an unknown boundary-crossing mechanism: ${entry.mechanism}.`,
+      );
+    }
+    if (!allowedKeyScoping.has(entry.keyScoping)) {
+      throw new Error(`${entry.sink} has an unknown or missing keyScoping posture.`);
+    }
+    const requiredKeyScoping =
+      entry.sink === 'db driver statement'
+        ? 'database-principal-policy'
+        : entry.sink === 'blob/file write' || entry.sink === 'durable-task payload'
+          ? 'runtime-opaque-scoped-key'
+          : 'not-stateful-keyed';
+    if (entry.keyScoping !== requiredKeyScoping) {
+      throw new Error(
+        `${entry.sink} keyScoping must be ${requiredKeyScoping}, got ${entry.keyScoping}.`,
       );
     }
     assertNonBlank(entry.mechanismDetail, `${entry.sink} mechanism detail`);
@@ -280,6 +299,7 @@ describe('boundary crossing sink inventory', () => {
       expect(entry.proofGate).toMatch(/^pnpm run [a-z0-9:-]+$/u);
       expect(entry.soleDoor).not.toBe('');
       expect(entry.hostileValueEvidence.length, entry.sink).toBeGreaterThan(0);
+      expect(entry.keyScoping, entry.sink).toBeDefined();
       expect(entry.proofEvidence.length, entry.sink).toBeGreaterThan(0);
       expect(entry.specAnchor, entry.sink).not.toBe('');
     }
@@ -309,6 +329,26 @@ describe('boundary crossing sink inventory', () => {
         ['dynamic module/process execution', 'own'],
       ]),
     );
+  });
+
+  it('classifies every C9 row and requires ScopedKey at non-DB keyed state doors', () => {
+    const keyScoping = new Map(
+      boundaryCrossingSinkInventory().map((entry) => [entry.sink, entry.keyScoping]),
+    );
+
+    expect(keyScoping.get('db driver statement')).toBe('database-principal-policy');
+    expect(keyScoping.get('blob/file write')).toBe('runtime-opaque-scoped-key');
+    expect(keyScoping.get('durable-task payload')).toBe('runtime-opaque-scoped-key');
+    for (const [sink, posture] of keyScoping) {
+      if (
+        sink === 'db driver statement' ||
+        sink === 'blob/file write' ||
+        sink === 'durable-task payload'
+      ) {
+        continue;
+      }
+      expect(posture, sink).toBe('not-stateful-keyed');
+    }
   });
 
   it('mechanically covers the complete source/sink census with no unknown family', () => {
@@ -374,6 +414,30 @@ describe('boundary crossing sink inventory', () => {
   });
 
   it.each([
+    {
+      expected: /unknown or missing keyScoping posture/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => {
+        Reflect.deleteProperty(inventory[0]!, 'keyScoping');
+        return inventory;
+      },
+      name: 'missing key-scoping posture',
+    },
+    {
+      expected: /unknown or missing keyScoping posture/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) => [
+        { ...inventory[0]!, keyScoping: 'reason-string' as never },
+        ...inventory.slice(1),
+      ],
+      name: 'unknown key-scoping posture',
+    },
+    {
+      expected: /blob\/file write keyScoping must be runtime-opaque-scoped-key/u,
+      mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) =>
+        inventory.map((entry) =>
+          entry.sink === 'blob/file write' ? { ...entry, keyScoping: 'not-stateful-keyed' } : entry,
+        ),
+      name: 'downgraded stateful key door',
+    },
     {
       expected: /missing sink rows: Set-Cookie/u,
       mutate: (inventory: BoundaryCrossingSinkInventoryEntry[]) =>

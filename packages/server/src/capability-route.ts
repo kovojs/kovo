@@ -31,8 +31,12 @@
  * Every mint is observed by a bounded runtime capability collector (SF-WIRE below).
  */
 
-import type { StorageReadCapability } from '@kovojs/core';
-import { normalizeStorageKey } from '@kovojs/core/internal/storage';
+import type { ScopedKey, StorageReadCapability } from '@kovojs/core';
+import {
+  normalizeStorageKey,
+  restoreScopedKey,
+  scopedKeyFactsFor,
+} from '@kovojs/core/internal/storage';
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
 import { verifiedAccess } from './access.js';
@@ -90,8 +94,8 @@ export const DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH = '/_kovo/storage';
 
 /** Options accepted by `ctx.signUrl(...)`: the storage key plus the capability claims to mint. */
 export interface SignUrlOptions {
-  /** The storage object key to authorize (e.g. `receipts/ord_1.pdf`). Canonicalized before signing. */
-  key: string;
+  /** Framework-minted storage object key. Bare strings and forged structures are refused. */
+  key: ScopedKey;
   /** The HTTP method the URL authorizes. Downloads are reads; defaults to `GET`. */
   method?: CapabilityMethod;
   /** Optional scope binding (tenant/principal id) folded into the signature and re-checked at the sink. */
@@ -109,7 +113,7 @@ export interface SignedUrl {
   /** The opaque capability token embedded in {@link url}. */
   token: string;
   /** The storage object key (canonicalized) the URL authorizes. */
-  key: string;
+  key: ScopedKey;
   /** Whether the URL is single-use. */
   oneTime: boolean;
 }
@@ -129,6 +133,8 @@ export interface SignUrlContext {
 export interface CapabilityMintFact {
   /** The canonicalized storage key the minted URL authorizes. */
   readonly key: string;
+  /** Exact finite owner posture carried by the key witness. */
+  readonly keyPosture: string;
   /** The HTTP method the URL authorizes. */
   readonly method: CapabilityMethod;
   /** The optional scope binding folded into the signature. */
@@ -222,13 +228,13 @@ export function createSignUrl(options: {
   return capabilityFreeze({
     async signUrl(signOptions: SignUrlOptions): Promise<SignedUrl> {
       const sourceKey = capabilityOwnDataValue(signOptions, 'key');
+      const keyFacts = scopedKeyFactsFor(sourceKey);
       const configuredMethod = capabilityOwnDataValue(signOptions, 'method');
       const configuredScope = capabilityOwnDataValue(signOptions, 'scope');
       const configuredExpiresIn = capabilityOwnDataValue(signOptions, 'expiresIn');
       const configuredOneTime = capabilityOwnDataValue(signOptions, 'oneTime');
       if (
-        typeof sourceKey !== 'string' ||
-        sourceKey.length > MAX_CAPABILITY_KEY_LENGTH ||
+        keyFacts.frame.length > MAX_CAPABILITY_KEY_LENGTH ||
         (configuredMethod !== undefined &&
           configuredMethod !== 'GET' &&
           configuredMethod !== 'HEAD') ||
@@ -246,7 +252,8 @@ export function createSignUrl(options: {
       }
       // Canonicalize-before-sign: normalize the key the same way the storage adapters + the route
       // do, so the signed key is byte-identical to what the sink re-derives from the request path.
-      const key = normalizeStorageKey(sourceKey);
+      const logicalKey = normalizeStorageKey(keyFacts.key);
+      const key = keyFacts.frame;
       const method = configuredMethod ?? 'GET';
       const scope = configuredScope ?? defaultScope;
       const expiresIn = configuredExpiresIn ?? DEFAULT_CAPABILITY_TTL_MS;
@@ -282,7 +289,11 @@ export function createSignUrl(options: {
       // Audit (SPEC §6.6): record every mint of a bearer download URL for `kovo explain
       // --capabilities`. Surfacing informs review; it enforces nothing.
       capabilityMintFacts.record({
-        key,
+        key: logicalKey,
+        keyPosture:
+          keyFacts.posture === 'system'
+            ? `system:${keyFacts.systemPosture ?? 'unregistered'}`
+            : keyFacts.posture,
         method,
         ...(scope === undefined ? {} : { scope }),
         oneTime,
@@ -291,7 +302,7 @@ export function createSignUrl(options: {
       return {
         url: buildCapabilityUrl(basePath, key, signed.token),
         token: signed.token,
-        key,
+        key: sourceKey as ScopedKey,
         oneTime,
       };
     },
@@ -332,13 +343,13 @@ function snapshotStorageReadCapability(source: unknown): StorageReadCapability {
     );
   }
   return capabilityFreeze({
-    get(key: string): ReturnType<StorageReadCapability['get']> {
+    get(key: ScopedKey): ReturnType<StorageReadCapability['get']> {
       return capabilityReflectApply(get, source, [key]);
     },
-    stat(key: string): ReturnType<StorageReadCapability['stat']> {
+    stat(key: ScopedKey): ReturnType<StorageReadCapability['stat']> {
       return capabilityReflectApply(stat, source, [key]);
     },
-    stream(key: string): ReturnType<StorageReadCapability['stream']> {
+    stream(key: ScopedKey): ReturnType<StorageReadCapability['stream']> {
       return capabilityReflectApply(stream, source, [key]);
     },
   });
@@ -391,7 +402,7 @@ function downloadRejected(method = 'GET'): Response {
  * through `normalizeStorageKey` so it is byte-identical to the signed (canonicalized) key — a
  * traversal/odd-segment key throws there and is treated as a miss (fail closed, no read).
  */
-export function deriveDownloadKey(pathname: string, basePath: string): string | undefined {
+export function deriveDownloadKey(pathname: string, basePath: string): ScopedKey | undefined {
   if (typeof pathname !== 'string' || typeof basePath !== 'string') return undefined;
   let base: string;
   try {
@@ -413,7 +424,9 @@ export function deriveDownloadKey(pathname: string, basePath: string): string | 
     return undefined;
   }
   try {
-    return normalizeStorageKey(decoded);
+    const key = restoreScopedKey(decoded);
+    normalizeStorageKey(scopedKeyFactsFor(key).key);
+    return key;
   } catch {
     return undefined;
   }
@@ -479,7 +492,7 @@ export function createStorageDownloadEndpoint(
   const handler = async (request: Request): Promise<Response> => {
     let method = 'GET';
     let expectedMethod: CapabilityMethod;
-    let key: string;
+    let key: ScopedKey;
     try {
       method = capabilityStringToUpperCase(capabilityRequestMethod(request));
       if (method !== 'GET' && method !== 'HEAD') return downloadRejected(method);
@@ -492,10 +505,11 @@ export function createStorageDownloadEndpoint(
       // Derive the EXPECTED claims FROM THE REQUEST — never from the token. This is the load-bearing
       // step: the route, not the token, says which object/method/scope is being authorized.
       const requestedKey = deriveDownloadKey(capabilityUrlPathname(url), basePath);
-      if (requestedKey === undefined || requestedKey.length > MAX_CAPABILITY_KEY_LENGTH) {
+      if (requestedKey === undefined) {
         return downloadRejected(method);
       }
       key = requestedKey;
+      const keyFrame = scopedKeyFactsFor(key).frame;
       const scope =
         scopeForRequest === undefined
           ? undefined
@@ -513,7 +527,7 @@ export function createStorageDownloadEndpoint(
         secret,
         token,
         {
-          key,
+          key: keyFrame,
           method: expectedMethod,
           ...(scope === undefined ? {} : { scope }),
         },

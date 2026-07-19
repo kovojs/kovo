@@ -6,9 +6,10 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-  createFileSystemStorage,
-  createMemoryStorage,
-  createS3CompatibleStorage,
+  createFileSystemStorage as createFileSystemStorageCapability,
+  createMemoryStorage as createMemoryStorageCapability,
+  createS3CompatibleStorage as createS3CompatibleStorageCapability,
+  publicScopedKey,
   type S3CompatibleDeleteObjectInput,
   type S3CompatibleGetObjectInput,
   type S3CompatibleGetObjectOutput,
@@ -18,17 +19,67 @@ import {
   type S3CompatiblePutObjectInput,
   type S3CompatiblePutObjectOutput,
   type StorageCapability,
+  type ScopedKey,
   type StorageReadCapability,
 } from './index.js';
 import {
   createReadOnlyStorageCapability,
+  principalScopedKey,
   normalizeStorageKey,
+  scopedKeyFactsFor,
   storageBodyToBytes,
 } from './internal/storage.js';
 
 interface StorageHarness {
   cleanup?: () => Promise<void>;
-  storage: StorageCapability;
+  storage: TestStorageCapability;
+}
+
+type TestStorageCapability = Omit<
+  StorageCapability,
+  'delete' | 'get' | 'put' | 'stat' | 'stream'
+> & {
+  delete(key: ScopedKey | string): Promise<void>;
+  get(key: ScopedKey | string): ReturnType<StorageCapability['get']>;
+  put(
+    key: ScopedKey | string,
+    body: Parameters<StorageCapability['put']>[1],
+    options?: Parameters<StorageCapability['put']>[2],
+  ): ReturnType<StorageCapability['put']>;
+  stat(key: ScopedKey | string): ReturnType<StorageCapability['stat']>;
+  stream(key: ScopedKey | string): ReturnType<StorageCapability['stream']>;
+};
+
+function testKey(key: ScopedKey | string): ScopedKey {
+  return typeof key === 'string' ? publicScopedKey(key) : key;
+}
+
+function testStorage(storage: StorageCapability): TestStorageCapability {
+  return {
+    delete: (key) => storage.delete(testKey(key)),
+    get: (key) => storage.get(testKey(key)),
+    put: (key, body, options) => storage.put(testKey(key), body, options),
+    stat: (key) => storage.stat(testKey(key)),
+    stream: (key) => storage.stream(testKey(key)),
+  };
+}
+
+function createMemoryStorage(
+  ...args: Parameters<typeof createMemoryStorageCapability>
+): TestStorageCapability {
+  return testStorage(createMemoryStorageCapability(...args));
+}
+
+function createFileSystemStorage(
+  ...args: Parameters<typeof createFileSystemStorageCapability>
+): TestStorageCapability {
+  return testStorage(createFileSystemStorageCapability(...args));
+}
+
+function createS3CompatibleStorage(
+  ...args: Parameters<typeof createS3CompatibleStorageCapability>
+): TestStorageCapability {
+  return testStorage(createS3CompatibleStorageCapability(...args));
 }
 
 interface MockS3Object {
@@ -44,8 +95,20 @@ const textEncoder = new TextEncoder();
 const fileSystemSidecarSuffix = '.kovo-storage.json';
 
 function fileSystemPhysicalStorageKey(key: string): string {
-  const digest = createHash('sha256').update(textEncoder.encode(key)).digest('hex');
+  const frame = testKeyFrame(key);
+  const digest = createHash('sha256').update(textEncoder.encode(frame)).digest('hex');
   return path.join('kovo-storage-v1', digest.slice(0, 2), digest.slice(2));
+}
+
+function s3PhysicalStorageKey(key: string): string {
+  const digest = createHash('sha256')
+    .update(textEncoder.encode(testKeyFrame(key)))
+    .digest('hex');
+  return `kovo-storage-v1/${digest}`;
+}
+
+function testKeyFrame(key: string): string {
+  return scopedKeyFactsFor(publicScopedKey(key)).frame;
 }
 
 function storageConformance(name: string, createHarness: () => Promise<StorageHarness>) {
@@ -119,11 +182,14 @@ function storageConformance(name: string, createHarness: () => Promise<StorageHa
       const harness = await createHarness();
       try {
         const appKey = 'avatars/current.png';
+        const victimKey = principalScopedKey('victim', appKey);
+        const attackerKey = principalScopedKey('attacker', appKey);
 
-        await harness.storage.put(appKey, 'victim bytes');
-        await harness.storage.put(appKey, 'attacker bytes');
+        await harness.storage.put(victimKey, 'victim bytes');
+        await harness.storage.put(attackerKey, 'attacker bytes');
 
-        expect(bytesToText((await harness.storage.get(appKey))?.body)).toBe('victim bytes');
+        expect(bytesToText((await harness.storage.get(victimKey))?.body)).toBe('victim bytes');
+        expect(bytesToText((await harness.storage.get(attackerKey))?.body)).toBe('attacker bytes');
       } finally {
         await harness.cleanup?.();
       }
@@ -504,7 +570,7 @@ describe('storage constructor and metadata authority', () => {
       await storage.put(key, 'plain text');
       await writeFile(
         path.join(root, `${fileSystemPhysicalStorageKey(key)}${fileSystemSidecarSuffix}`),
-        JSON.stringify({ lastModified: 'not-a-date', logicalKey: key }),
+        JSON.stringify({ lastModified: 'not-a-date', scopedKeyFrame: testKeyFrame(key) }),
         'utf8',
       );
       Date.parse = () => 0;
@@ -557,7 +623,7 @@ describe('storage read/write authority split', () => {
     await storage.put('receipts/order-1.txt', 'paid');
 
     const readOnly: StorageReadCapability = createReadOnlyStorageCapability(storage);
-    await expect(readOnly.get('receipts/order-1.txt')).resolves.toMatchObject({
+    await expect(readOnly.get(publicScopedKey('receipts/order-1.txt'))).resolves.toMatchObject({
       key: 'receipts/order-1.txt',
     });
 
@@ -567,8 +633,10 @@ describe('storage read/write authority split', () => {
     void readOnly.delete;
 
     const forged = readOnly as unknown as StorageCapability;
-    await expect(forged.put('receipts/evil.txt', 'evil')).rejects.toThrow(/KV433/u);
-    await expect(forged.delete('receipts/order-1.txt')).rejects.toThrow(/KV433/u);
+    await expect(forged.put(publicScopedKey('receipts/evil.txt'), 'evil')).rejects.toThrow(
+      /KV433/u,
+    );
+    await expect(forged.delete(publicScopedKey('receipts/order-1.txt'))).rejects.toThrow(/KV433/u);
     await expect(
       (readOnly as unknown as Record<'store', (key: string, body: string) => Promise<unknown>>)[
         'store'
@@ -592,7 +660,7 @@ describe('storage read/write authority split', () => {
       Function.prototype.bind = function turnReadIntoWrite(thisArg, ...args) {
         if (this.name === 'get' && thisArg === storage) {
           bindHits += 1;
-          return async (key: string) => {
+          return async (key: ScopedKey) => {
             await storage.put('receipts/evil.txt', 'evil');
             return Reflect.apply(storage.get, storage, [key]);
           };
@@ -604,7 +672,7 @@ describe('storage read/write authority split', () => {
       Function.prototype.bind = nativeBind;
     }
 
-    await expect(readOnly!.get('receipts/order-1.txt')).resolves.toMatchObject({
+    await expect(readOnly!.get(publicScopedKey('receipts/order-1.txt'))).resolves.toMatchObject({
       key: 'receipts/order-1.txt',
     });
     await expect(storage.stat('receipts/evil.txt')).resolves.toBeUndefined();
@@ -743,7 +811,7 @@ describe('storage adapters', () => {
       'X.KOVO-STORAGE.JSON', // case-insensitive
     ];
 
-    async function adapters(): Promise<Array<{ name: string; storage: StorageCapability }>> {
+    async function adapters(): Promise<Array<{ name: string; storage: TestStorageCapability }>> {
       const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-reserved-'));
       return [
         {
@@ -937,7 +1005,7 @@ describe('storage adapters', () => {
         return Reflect.apply(originalEncode, this, [value === attacker ? victim : value]);
       };
       TextDecoder.prototype.decode = () =>
-        `{"lastModified":"2026-07-11T00:00:00.000Z","logicalKey":"${attacker}"}`;
+        `{"lastModified":"2026-07-11T00:00:00.000Z","scopedKeyFrame":"${testKeyFrame(attacker)}"}`;
 
       await expect(storage.get(attacker)).resolves.toBeUndefined();
       TextEncoder.prototype.encode = originalEncode;
@@ -1054,8 +1122,8 @@ describe('storage adapters', () => {
           path.join(root, `${fileSystemPhysicalStorageKey(firstKey)}${fileSystemSidecarSuffix}`),
           'utf8',
         ),
-      ) as { logicalKey?: unknown };
-      expect(sidecar.logicalKey).toBe(firstKey);
+      ) as { scopedKeyFrame?: unknown };
+      expect(sidecar.scopedKeyFrame).toBe(testKeyFrame(firstKey));
 
       await expect(storage.get(collidingKey)).resolves.toBeUndefined();
       await expect(storage.stat(collidingKey)).resolves.toBeUndefined();
@@ -1128,9 +1196,10 @@ describe('storage adapters', () => {
     });
     const get = await storage.get('docs/report.bin');
 
+    const objectKey = s3PhysicalStorageKey('docs/report.bin');
     expect(client.calls).toEqual([
-      'put bucket-a/tenant-a/docs/report.bin',
-      'get bucket-a/tenant-a/docs/report.bin',
+      `put bucket-a/tenant-a/${objectKey}`,
+      `get bucket-a/tenant-a/${objectKey}`,
     ]);
     expect(put.etag).toBe('"mock-13"');
     expect(get?.etag).toBe('"mock-13"');

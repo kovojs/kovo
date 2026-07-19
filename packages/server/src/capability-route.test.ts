@@ -3,14 +3,25 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
-import type { StorageReadCapability } from '@kovojs/core';
-import { createFileSystemStorage, createMemoryStorage } from '@kovojs/core/internal/storage';
+import {
+  publicScopedKey,
+  type ScopedKey,
+  type StorageBody,
+  type StorageCapability,
+  type StoragePutOptions,
+  type StorageReadCapability,
+} from '@kovojs/core';
+import {
+  createFileSystemStorage as createFileSystemStorageCapability,
+  createMemoryStorage as createMemoryStorageCapability,
+  scopedKeyFactsFor,
+} from '@kovojs/core/internal/storage';
 
 import { createApp, createRequestHandler } from './app.js';
 import {
   CAPABILITY_TOKEN_PARAM,
   DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
-  createSignUrl,
+  createSignUrl as createSignUrlCapability,
   createStorageDownloadEndpoint,
   deriveDownloadKey,
   drainCapabilityMintFacts,
@@ -19,9 +30,8 @@ import {
 import {
   createMemoryCapabilityReplayStore,
   MAX_CAPABILITY_AUDIENCE_LENGTH,
-  MAX_CAPABILITY_KEY_LENGTH,
   MAX_CAPABILITY_SCOPE_LENGTH,
-  signCapability,
+  signCapability as signCapabilityPrimitive,
   verifyCapability,
 } from './capability-url.js';
 import { runEndpoint } from './endpoint.js';
@@ -30,6 +40,77 @@ import { route } from './route.js';
 
 const SECRET = 'capability-route-test-secret-at-least-32-characters-long';
 const BASE = DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH;
+
+type TestStorageCapability = Omit<
+  StorageCapability,
+  'delete' | 'get' | 'put' | 'stat' | 'stream'
+> & {
+  delete(key: ScopedKey | string): Promise<void>;
+  get(key: ScopedKey | string): ReturnType<StorageCapability['get']>;
+  put(
+    key: ScopedKey | string,
+    body: StorageBody,
+    options?: StoragePutOptions,
+  ): ReturnType<StorageCapability['put']>;
+  stat(key: ScopedKey | string): ReturnType<StorageCapability['stat']>;
+  stream(key: ScopedKey | string): ReturnType<StorageCapability['stream']>;
+};
+
+function testScopedKey(key: ScopedKey | string): ScopedKey {
+  return typeof key === 'string' ? publicScopedKey(key) : key;
+}
+
+function testKeyFrame(key: string): string {
+  return scopedKeyFactsFor(publicScopedKey(key)).frame;
+}
+
+function encodedTestKeyFrame(key: string): string {
+  return testKeyFrame(key).split('/').map(encodeURIComponent).join('/');
+}
+
+function testStorage(storage: StorageCapability): TestStorageCapability {
+  return {
+    delete: (key) => storage.delete(testScopedKey(key)),
+    get: (key) => storage.get(testScopedKey(key)),
+    put: (key, body, options) => storage.put(testScopedKey(key), body, options),
+    stat: (key) => storage.stat(testScopedKey(key)),
+    stream: (key) => storage.stream(testScopedKey(key)),
+  };
+}
+
+function createMemoryStorage(
+  ...args: Parameters<typeof createMemoryStorageCapability>
+): TestStorageCapability {
+  return testStorage(createMemoryStorageCapability(...args));
+}
+
+function createFileSystemStorage(
+  ...args: Parameters<typeof createFileSystemStorageCapability>
+): TestStorageCapability {
+  return testStorage(createFileSystemStorageCapability(...args));
+}
+
+function createSignUrl(...args: Parameters<typeof createSignUrlCapability>) {
+  const signer = createSignUrlCapability(...args);
+  return {
+    signUrl(
+      options: Omit<Parameters<typeof signer.signUrl>[0], 'key'> & { key: ScopedKey | string },
+    ) {
+      return signer.signUrl({ ...options, key: testScopedKey(options.key) });
+    },
+  };
+}
+
+function signCapability(
+  secret: Parameters<typeof signCapabilityPrimitive>[0],
+  options: Parameters<typeof signCapabilityPrimitive>[1],
+  now?: Parameters<typeof signCapabilityPrimitive>[2],
+) {
+  const framedOptions = { ...options, key: testKeyFrame(options.key) };
+  return now === undefined
+    ? signCapabilityPrimitive(secret, framedOptions)
+    : signCapabilityPrimitive(secret, framedOptions, now);
+}
 
 /** Seed a memory storage with one object so the route has something to (potentially) read. */
 async function storageWith(key: string, body: string, metadata?: Readonly<Record<string, string>>) {
@@ -50,8 +131,8 @@ function recordingStorage(inner: ReturnType<typeof createMemoryStorage>) {
   return {
     reads,
     storage: {
-      get(key: string) {
-        reads.push(key);
+      get(key: ScopedKey) {
+        reads.push(scopedKeyFactsFor(key).key);
         return inner.get(key);
       },
       put: inner.put.bind(inner),
@@ -62,7 +143,7 @@ function recordingStorage(inner: ReturnType<typeof createMemoryStorage>) {
 }
 
 function downloadUrl(token: string, key = 'receipts/ord_1.pdf'): string {
-  const encoded = key.split('/').map(encodeURIComponent).join('/');
+  const encoded = encodedTestKeyFrame(key);
   return `https://app.example${BASE}/${encoded}?${CAPABILITY_TOKEN_PARAM}=${encodeURIComponent(token)}`;
 }
 
@@ -535,11 +616,16 @@ describe('capability download route: verify-before-read sink', () => {
 
 describe('deriveDownloadKey: request-derived expected key', () => {
   it('extracts and normalizes the key after the mount base', () => {
-    expect(deriveDownloadKey(`${BASE}/receipts/ord_1.pdf`, BASE)).toBe('receipts/ord_1.pdf');
+    const key = deriveDownloadKey(`${BASE}/${encodedTestKeyFrame('receipts/ord_1.pdf')}`, BASE);
+    expect(scopedKeyFactsFor(key).key).toBe('receipts/ord_1.pdf');
   });
 
   it('normalizes a trailing slash on the mount base before deriving the key', () => {
-    expect(deriveDownloadKey(`${BASE}/receipts/ord_1.pdf`, `${BASE}/`)).toBe('receipts/ord_1.pdf');
+    const key = deriveDownloadKey(
+      `${BASE}/${encodedTestKeyFrame('receipts/ord_1.pdf')}`,
+      `${BASE}/`,
+    );
+    expect(scopedKeyFactsFor(key).key).toBe('receipts/ord_1.pdf');
   });
 
   it('returns undefined for a path not under the mount', () => {
@@ -568,10 +654,10 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     drainCapabilityMintFacts();
     const ctx = createSignUrl({ secret: SECRET });
     const { url, token, key, oneTime } = await ctx.signUrl({ key: 'receipts/ord_1.pdf' });
-    expect(url.startsWith(`${BASE}/receipts/ord_1.pdf?`)).toBe(true);
+    expect(url.startsWith(`${BASE}/${encodedTestKeyFrame('receipts/ord_1.pdf')}?`)).toBe(true);
     expect(url).toContain(`${CAPABILITY_TOKEN_PARAM}=`);
     expect(url).toContain(encodeURIComponent(token));
-    expect(key).toBe('receipts/ord_1.pdf');
+    expect(scopedKeyFactsFor(key).key).toBe('receipts/ord_1.pdf');
     expect(oneTime).toBe(false);
   });
 
@@ -591,12 +677,12 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     configuration.secret = 'attacker-capability-secret-at-least-32-bytes';
 
     const signed = await signer.signUrl({ expiresIn: 5, key: 'a.pdf', oneTime: true });
-    expect(signed.url.startsWith('/downloads/a.pdf?')).toBe(true);
+    expect(signed.url.startsWith(`/downloads/${encodedTestKeyFrame('a.pdf')}?`)).toBe(true);
     await expect(
       verifyCapability(
         SECRET,
         signed.token,
-        { key: 'a.pdf', method: 'GET', scope: 'tenant_original' },
+        { key: testKeyFrame('a.pdf'), method: 'GET', scope: 'tenant_original' },
         { audience: 'storage-download:/downloads', now: 16 },
       ),
     ).resolves.toMatchObject({ ok: false, reason: 'expired' });
@@ -605,7 +691,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
       verifyCapability(
         SECRET,
         signed.token,
-        { key: 'a.pdf', method: 'GET', scope: 'tenant_original' },
+        { key: testKeyFrame('a.pdf'), method: 'GET', scope: 'tenant_original' },
         { audience: 'storage-download:/downloads', now: 11, replayStore },
       ),
     ).resolves.toMatchObject({ ok: true });
@@ -686,15 +772,13 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
 
   it('bounds signer configuration and retained capability-mint claim text', async () => {
     drainCapabilityMintFacts();
-    const key = 'k'.repeat(MAX_CAPABILITY_KEY_LENGTH);
+    const key = 'k'.repeat(1024);
     const scope = 's'.repeat(MAX_CAPABILITY_SCOPE_LENGTH);
     const ctx = createSignUrl({ secret: SECRET });
 
     await ctx.signUrl({ key, scope });
     expect(drainCapabilityMintFacts()).toEqual([expect.objectContaining({ key, scope })]);
-    await expect(ctx.signUrl({ key: 'k'.repeat(MAX_CAPABILITY_KEY_LENGTH + 1) })).rejects.toThrow(
-      /stable, typed values/,
-    );
+    expect(() => ctx.signUrl({ key: 'k'.repeat(1025) })).toThrow(/1\.\.1024/);
     expect(() =>
       createSignUrl({
         defaultScope: 's'.repeat(MAX_CAPABILITY_SCOPE_LENGTH + 1),
@@ -749,7 +833,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
         route('/', {
           async page(context) {
             if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
-            const signed = await context.signUrl({ key });
+            const signed = await context.signUrl({ key: publicScopedKey(key) });
             return renderedHtml(`<a href="${signed.url}">Download</a>`);
           },
         }),
@@ -761,7 +845,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     const html = await document.text();
     const href = html.match(/href="([^"]+)"/)?.[1];
 
-    expect(href?.startsWith('/downloads/receipts/custom.txt?')).toBe(true);
+    expect(href?.startsWith(`/downloads/${encodedTestKeyFrame(key)}?`)).toBe(true);
     const response = await handler(new Request(`https://app.example${href}`));
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="custom.txt"');
@@ -797,8 +881,9 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(response.status).toBe(500);
     expect(onError).toHaveBeenCalledTimes(1);
     const [, context] = onError.mock.calls[0]!;
-    expect(context.url).toBe('/downloads/receipts/failing.txt?kovo-cap');
-    expect(context.request.url).toBe('https://app.example/downloads/receipts/failing.txt?kovo-cap');
+    const redactedPath = `/downloads/${encodedTestKeyFrame(key)}?kovo-cap`;
+    expect(context.url).toBe(redactedPath);
+    expect(context.request.url).toBe(`https://app.example${redactedPath}`);
     expect(JSON.stringify(onError.mock.calls)).not.toContain(token);
   });
 
@@ -813,7 +898,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
         route('/', {
           async page(context) {
             if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
-            const signed = await context.signUrl({ key });
+            const signed = await context.signUrl({ key: publicScopedKey(key) });
             return renderedHtml(`<a href="${signed.url}">Download</a>`);
           },
         }),
@@ -824,7 +909,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     const document = await handler(new Request('https://app.example/'));
     const href = (await document.text()).match(/href="([^"]+)"/)?.[1];
 
-    expect(href?.startsWith('/downloads/receipts/no-csrf.txt?')).toBe(true);
+    expect(href?.startsWith(`/downloads/${encodedTestKeyFrame(key)}?`)).toBe(true);
     const response = await handler(new Request(`https://app.example${href}`));
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('download-without-csrf');
@@ -846,7 +931,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
         route('/', {
           async page(context) {
             if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
-            const signed = await context.signUrl({ key });
+            const signed = await context.signUrl({ key: publicScopedKey(key) });
             return renderedHtml(`<a href="${signed.url}">Download</a>`);
           },
         }),
@@ -859,7 +944,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     );
     const href = (await document.text()).match(/href="([^"]+)"/)?.[1];
 
-    expect(href?.startsWith('/downloads/receipts/scoped.txt?')).toBe(true);
+    expect(href?.startsWith(`/downloads/${encodedTestKeyFrame(key)}?`)).toBe(true);
     const response = await handler(
       new Request(`https://app.example${href}`, {
         headers: { 'x-machine-tenant': 'tenant_1' },
@@ -886,7 +971,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
         route('/', {
           async page(context) {
             if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
-            await context.signUrl({ key });
+            await context.signUrl({ key: publicScopedKey(key) });
             return renderedHtml('<main>unreachable</main>');
           },
         }),
@@ -930,7 +1015,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
         route('/', {
           async page(context) {
             if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
-            const signed = await context.signUrl({ key });
+            const signed = await context.signUrl({ key: publicScopedKey(key) });
             return renderedHtml(`<a href="${signed.url}">Download</a>`);
           },
         }),
@@ -979,7 +1064,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
         route('/', {
           async page(context) {
             if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
-            const signed = await context.signUrl({ key: 'receipts/public.txt' });
+            const signed = await context.signUrl({ key: publicScopedKey('receipts/public.txt') });
             return renderedHtml(`<a href="${signed.url}">Download</a>`);
           },
         }),
@@ -1008,7 +1093,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     const document = await documentResponse!.text();
     const href = document.match(/href="([^"]+)"/)?.[1];
     expect(documentResponse!.status).toBe(200);
-    expect(href).toContain('/downloads/receipts/public.txt?');
+    expect(href).toContain(`/downloads/${encodedTestKeyFrame('receipts/public.txt')}?`);
     expect(bindHits).toBe(0);
     const download = await handler(new Request(`https://app.example${href}`));
     expect(await download.text()).toBe('public-download');

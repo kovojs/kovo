@@ -80,11 +80,13 @@ export type {
   StorageReadCapability,
   StorageStreamResult,
 } from './storage.js';
+export type { ScopedKey } from './scoped-key.js';
 export {
   createFileSystemStorage,
   createMemoryStorage,
   createS3CompatibleStorage,
 } from './storage.js';
+export { publicScopedKey } from './scoped-key.js';
 export type {
   CustomWebhookVerifier,
   HmacMultiSignature,

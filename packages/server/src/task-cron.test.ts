@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import { s } from './schema.js';
 import { task } from './task.js';
@@ -88,11 +89,16 @@ describe('durable recurring task materialization (SPEC §9.6)', () => {
       {
         task: 'nightly.cleanup',
         args: {},
-        key: 'cron:nightly.cleanup:2026-06-30T02:00:00.000Z',
+        key: expect.any(Object),
         runAt: new Date('2026-06-30T02:00:00.000Z'),
         status: 'ready',
       },
     ]);
+    expect(scopedKeyFactsFor(store.snapshot()[0]?.key)).toMatchObject({
+      key: 'cron:nightly.cleanup:2026-06-30T02:00:00.000Z',
+      posture: 'system',
+      systemPosture: 'durable-task-cron',
+    });
   });
 
   it('pins cron parsing, UTC occurrence matching, and occurrence collection after late poisoning', async () => {

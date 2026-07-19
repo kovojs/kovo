@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { publicScopedKey } from './scoped-key.js';
 import {
   createS3CompatibleStorage,
   type S3CompatibleObjectClient,
@@ -32,9 +33,10 @@ describe('S3 storage authority snapshot', () => {
     options.client = client('attacker-client', 'attacker bytes');
     victimClient.getObject = client('substituted-method', 'substituted bytes').getObject;
 
-    const result = await storage.get('private.pdf');
+    const result = await storage.get(publicScopedKey('private.pdf'));
     expect(new TextDecoder().decode(result?.body)).toBe('victim bytes');
-    expect(reads).toEqual(['victim-client:victim-bucket:private.pdf']);
+    expect(reads).toHaveLength(1);
+    expect(reads[0]).toMatch(/^victim-client:victim-bucket:kovo-storage-v1\/[a-f0-9]{64}$/u);
   });
 
   it('rejects accessor and inherited construction authority', () => {

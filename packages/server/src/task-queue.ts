@@ -1,4 +1,10 @@
 import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
+import type { ScopedKey } from '@kovojs/core';
+import {
+  restoreScopedKey,
+  scopedKeyFactsFor,
+  scopedKeysEqual,
+} from '@kovojs/core/internal/storage';
 import type { TaskHandle, TaskScheduleOptions } from './task.js';
 import type {
   DurableTaskStatusSqlExecutor,
@@ -54,7 +60,7 @@ export interface DurableTaskJob {
   readonly task: string;
   readonly args: unknown;
   readonly runAt: Date;
-  readonly key?: string;
+  readonly key?: ScopedKey;
   readonly lineage: string;
   readonly generation: number;
   readonly priority: number;
@@ -72,7 +78,7 @@ export interface DurableTaskEnqueueInput {
   readonly task: string;
   readonly args: unknown;
   readonly runAt?: Date;
-  readonly key?: string;
+  readonly key?: ScopedKey;
   readonly coalesce?: TaskScheduleOptions['coalesce'];
   readonly generation?: number;
   readonly lineage?: string;
@@ -327,6 +333,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     const priority = normalizePriority(input.priority);
     const status = input.status ?? 'ready';
     const lastError = input.lastError === undefined ? null : scrubErrorMessage(input.lastError);
+    const logicalKeyFrame = input.key === undefined ? null : scopedKeyFactsFor(input.key).frame;
 
     if (input.key !== undefined && coalesce === 'throttle') {
       const result = await this.executor.execute<{ id: string }>(
@@ -334,7 +341,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
           id,
           input.task,
           argsJson,
-          input.key,
+          logicalKeyFrame,
           runAt,
           now,
           lineage,
@@ -355,7 +362,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
         id,
         input.task,
         argsJson,
-        input.key ?? null,
+        logicalKeyFrame,
         runAt,
         now,
         lineage,
@@ -471,6 +478,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     const generation = normalizeNonNegativeInteger(input.generation, 0);
     const priority = normalizePriority(input.priority);
     const status = input.status ?? 'ready';
+    if (input.key !== undefined) scopedKeyFactsFor(input.key);
 
     if (input.key !== undefined) {
       let ready: MutableDurableTaskJob | undefined;
@@ -479,7 +487,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
           ready === undefined &&
           job.status === 'ready' &&
           job.task === input.task &&
-          job.key === input.key
+          scopedKeysEqual(job.key, input.key)
         ) {
           ready = job;
         }
@@ -643,7 +651,7 @@ interface MutableDurableTaskJob {
   task: string;
   args: unknown;
   runAt: Date;
-  key?: string;
+  key?: ScopedKey;
   lineage: string;
   generation: number;
   priority: number;
@@ -786,7 +794,7 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
     attempts,
     createdAt: validTaskRowDate(createdAt),
     updatedAt: validTaskRowDate(updatedAt),
-    ...(logicalKey === null ? {} : { key: logicalKey }),
+    ...(logicalKey === null ? {} : { key: restoreScopedKey(logicalKey) }),
     ...(leasedUntil === null ? {} : { leasedUntil: validTaskRowDate(leasedUntil) }),
     ...(leaseOwner === null ? {} : { leaseOwner }),
     ...(leaseToken === null ? {} : { leaseToken }),

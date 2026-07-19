@@ -14,6 +14,7 @@ export type {
   StoragePutCapability,
   StorageReadCapability,
 } from '../storage.js';
+export type { FrameworkScopedKeyPosture, ScopedKey, ScopedKeyFacts } from '../scoped-key.js';
 export {
   createReadOnlyStorageCapability,
   createFileSystemStorage,
@@ -22,3 +23,11 @@ export {
   normalizeStorageKey,
   storageBodyToBytes,
 } from '../storage.js';
+export {
+  frameworkScopedKey,
+  isScopedKey,
+  principalScopedKey,
+  restoreScopedKey,
+  scopedKeyFactsFor,
+  scopedKeysEqual,
+} from '../scoped-key.js';
