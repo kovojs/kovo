@@ -61,6 +61,41 @@ function readSanitizedAttribute(element: Element | null, name: string): string |
 const fragmentHtml = (html: string): RenderedFragmentHtml => createRenderedFragmentHtml(html);
 
 describe('browser response fragment apply', () => {
+  it('keeps live feImage/style activation reviewed and disables undelegated geolocation', async () => {
+    const root = document.createElement('section');
+    root.innerHTML = [
+      '<svg><feImage data-case="feimage" href="/victim.svg" crossorigin="anonymous"',
+      ' data-bind:crossorigin="state.credentialMode"></feImage></svg>',
+      '<style data-case="style" type="text/plain" media="not all"',
+      ' data-bind:type="state.styleType" data-bind:media="state.styleMedia">',
+      'body { color: red }',
+      '</style>',
+      '<geolocation data-case="location"',
+      ' data-bind:autolocate="state.autolocate" data-bind:watch="state.watch"',
+      ' data-bind:accuracymode="state.accuracyMode"></geolocation>',
+    ].join('');
+    document.body.append(root);
+
+    await applyStateBindings(root, {
+      accuracyMode: 'precise',
+      autolocate: true,
+      credentialMode: 'use-credentials',
+      styleMedia: 'all',
+      styleType: 'text/css',
+      watch: true,
+    });
+
+    const feImage = root.querySelector('[data-case="feimage"]');
+    expect(feImage?.getAttribute('crossorigin')).toBe('anonymous');
+    const style = root.querySelector('[data-case="style"]');
+    expect(style?.getAttribute('type')).toBe('text/plain');
+    expect(style?.getAttribute('media')).toBe('not all');
+    const geolocation = root.querySelector('[data-case="location"]');
+    expect(geolocation?.hasAttribute('autolocate')).toBe(false);
+    expect(geolocation?.hasAttribute('watch')).toBe(false);
+    expect(geolocation?.hasAttribute('accuracymode')).toBe(false);
+  });
+
   for (const kind of ['object', 'embed'] as const) {
     it(`does not activate remotely selected same-origin HTML through <${kind}> during fragment morph`, async () => {
       const root = document.createElement('main');

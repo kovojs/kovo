@@ -255,6 +255,10 @@ describe('browser inline loader response apply', () => {
       '<script kovo-key="script" type="application/json" integrity="sha384-reviewed"',
       ' nonce="forbidden" language="javascript"></script>',
       '<iframe kovo-key="frame" src="/reviewed" sandbox="allow-scripts"></iframe>',
+      '<svg><feImage kovo-key="feimage" href="/reviewed.svg"',
+      ' crossorigin="anonymous"></feImage></svg>',
+      '<style kovo-key="style" type="text/plain" media="not all">body { color: red }</style>',
+      '<geolocation kovo-key="geolocation"></geolocation>',
       '<meta kovo-key="meta" name="description" content="reviewed">',
       '</section>',
     ].join('');
@@ -271,6 +275,11 @@ describe('browser inline loader response apply', () => {
         ' nonce="attacker" language="vbscript"></script>',
         '<iframe kovo-key="frame" src="/attacker"',
         ' sandbox="allow-scripts allow-same-origin"></iframe>',
+        '<svg><feImage kovo-key="feimage" href="/attacker.svg"',
+        ' crossorigin="use-credentials"></feImage></svg>',
+        '<style kovo-key="style" type="text/css" media="all">body { color: blue }</style>',
+        '<geolocation kovo-key="geolocation" autolocate watch',
+        ' accuracymode="precise"></geolocation>',
         '<meta kovo-key="meta" name="referrer" content="unsafe-url">',
         '</section>',
         '</kovo-fragment>',
@@ -280,6 +289,9 @@ describe('browser inline loader response apply', () => {
     const anchor = root.querySelector('[kovo-key="anchor"]');
     const script = root.querySelector('[kovo-key="script"]');
     const frame = root.querySelector('[kovo-key="frame"]');
+    const feImage = root.querySelector('[kovo-key="feimage"]');
+    const style = root.querySelector('[kovo-key="style"]');
+    const geolocation = root.querySelector('[kovo-key="geolocation"]');
     const meta = root.querySelector('[kovo-key="meta"]');
     expect(anchor?.getAttribute('target')).toBe('_blank');
     expect(anchor?.getAttribute('rel')).toBe('noopener');
@@ -291,6 +303,12 @@ describe('browser inline loader response apply', () => {
     expect(script?.getAttribute('language')).toBeNull();
     expect(frame?.getAttribute('src')).toBe('/reviewed');
     expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(feImage?.getAttribute('crossorigin')).toBe('anonymous');
+    expect(style?.getAttribute('type')).toBe('text/plain');
+    expect(style?.getAttribute('media')).toBe('not all');
+    expect(geolocation?.hasAttribute('autolocate')).toBe(false);
+    expect(geolocation?.hasAttribute('watch')).toBe(false);
+    expect(geolocation?.hasAttribute('accuracymode')).toBe(false);
     expect(meta?.getAttribute('name')).toBe('description');
     expect(meta?.getAttribute('content')).toBeNull();
   });

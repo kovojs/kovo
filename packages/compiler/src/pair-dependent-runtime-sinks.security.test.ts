@@ -97,6 +97,75 @@ export const Metadata = component({
 });
 
 describe('element-context execution and isolation sinks', () => {
+  it.each([
+    [
+      'Firefox SVG feImage credential mode',
+      '<svg><feImage href="/reviewed.svg" crossorigin={state.value} /></svg>',
+      'credential mode',
+    ],
+    [
+      'style MIME activation',
+      '<style type={state.value}>{`body { color: red }`}</style>',
+      'style MIME type',
+    ],
+    [
+      'style media activation',
+      '<style media={state.value}>{`body { color: red }`}</style>',
+      'style media activation',
+    ],
+    [
+      'geolocation automatic acquisition',
+      '<geolocation autolocate={state.value} />',
+      'geolocation',
+    ],
+    [
+      'geolocation continuous acquisition',
+      '<geolocation watch={state.value} />',
+      'geolocation',
+    ],
+    [
+      'geolocation accuracy selection',
+      '<geolocation accuracymode={state.value} />',
+      'geolocation',
+    ],
+  ])('rejects an unreviewed dynamic %s control', (_label, markup, reason) => {
+    expect(
+      kv236Diagnostics(`
+export const NewlyEnrolledBrowserControl = component({
+  state: () => ({ value: 'attacker-selected' }),
+  render: (_queries, state) => (${markup}),
+});
+`),
+    ).toEqual([expect.objectContaining({ message: expect.stringContaining(reason) })]);
+  });
+
+  it.each([
+    '<geolocation autolocate />',
+    '<geolocation watch />',
+    '<geolocation accuracymode="precise" />',
+  ])('disables a geolocation capability until a named policy door exists: %s', (markup) => {
+    expect(
+      kv236Diagnostics(`
+export const DisabledGeolocationControl = component({ render: () => (${markup}) });
+`),
+    ).toEqual([expect.objectContaining({ message: expect.stringContaining('geolocation') })]);
+  });
+
+  it('preserves reviewed static feImage credentials and inert style activation posture', () => {
+    expect(
+      kv236Diagnostics(`
+export const ReviewedNewBrowserControls = component({
+  render: () => (
+    <>
+      <svg><feImage href="/reviewed.svg" crossorigin="anonymous" /></svg>
+      <style type="text/plain" media="not all">{'body { color: red }'}</style>
+    </>
+  ),
+});
+`),
+    ).toEqual([]);
+  });
+
   // @kovo-security-certifies C13 compiler-finite-browser-control-tuples
   it('rejects a direct dynamic write for every one of the 60 finite browser controls', () => {
     expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(60);
