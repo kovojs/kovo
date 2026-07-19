@@ -37,6 +37,7 @@ import {
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
 import { mintMutationIdemToken } from './mutation-idem.js';
+import { createPostgresPostureDigest } from './postgres-posture-lease.js';
 import { isDurableMutationReplayStore, mutationReplayScopedKey } from './replay.js';
 import { replayMutationWireBody } from './response.js';
 import { isDurableWebhookReplayStore } from './webhook.js';
@@ -5446,6 +5447,207 @@ describe('createPostgresAppRuntimeDb', () => {
         schema: { guardAssertionNotes },
       }),
     ).toThrow(/KV433_AUTHZ_POLICY_UNSUPPORTED.*string guard assertion.*RLS/u);
+  });
+
+  it('derives the bounded posture-lease digest from two pooler statements and catalog subsets', async () => {
+    let poolerQuery = 0;
+    const runtimeClient = {
+      async exec() {},
+      async query() {
+        return { rows: [] };
+      },
+      async transaction<Result>(
+        callback: (tx: {
+          exec(statement: string): Promise<void>;
+          query<Row>(statement: string, params?: unknown[]): Promise<{ rows: Row[] }>;
+        }) => Promise<Result>,
+      ) {
+        return callback({
+          async exec() {},
+          async query<Row>(statement: string, params?: unknown[]) {
+            poolerQuery += 1;
+            const probe = String(params?.[0] ?? '');
+            return {
+              rows: [
+                {
+                  backend_pid: '41',
+                  current_database: 'app',
+                  current_user: 'app_login',
+                  probe_value: poolerQuery === 1 ? probe : 'lease-probe',
+                  session_user: 'app_login',
+                } as Row,
+              ],
+            };
+          },
+        });
+      },
+    };
+    const postureClient = {
+      async exec() {},
+      async query() {
+        return { rows: [] };
+      },
+      async transaction<Result>(
+        callback: (tx: {
+          exec(statement: string): Promise<void>;
+          query<Row>(statement: string): Promise<{ rows: Row[] }>;
+        }) => Promise<Result>,
+      ) {
+        return callback({
+          async exec() {},
+          async query<Row>(statement: string) {
+            if (statement.includes('kovo-posture-lease:roles')) {
+              return {
+                rows: [
+                  {
+                    key: 'app_login',
+                    kind: 'role',
+                    value: 'login=true;super=false;bypassrls=false',
+                  } as Row,
+                ],
+              };
+            }
+            if (statement.includes('kovo-posture-lease:relations')) {
+              return {
+                rows: [
+                  {
+                    key: 'public.notes',
+                    kind: 'relation',
+                    value: 'rls=true;force=true',
+                  } as Row,
+                ],
+              };
+            }
+            if (statement.includes('kovo-posture-lease:grants')) {
+              return {
+                rows: [
+                  {
+                    key: 'public.notes:app_login',
+                    kind: 'table-grant',
+                    value: 'SELECT:false',
+                  } as Row,
+                ],
+              };
+            }
+            if (statement.includes('kovo-posture-lease:freshness')) {
+              return {
+                rows: [
+                  { key: '001-initial', kind: 'migration', value: 'sha256:aaa' } as Row,
+                  { key: 'posture_epoch', kind: 'posture-epoch', value: '7' } as Row,
+                ],
+              };
+            }
+            throw new Error(`unexpected posture lease query: ${statement}`);
+          },
+        });
+      },
+    };
+
+    const witness = await __testPostgresRuntimeInternals.derivePostgresPostureLeaseWitness(
+      runtimeClient as never,
+      postureClient as never,
+      {
+        probeValue: 'lease-probe',
+        relations: [{ schemaName: 'public', tableName: 'notes' }],
+        roles: ['app_login', 'kovo_reader'],
+      },
+    );
+
+    expect(witness.freshness).toEqual({
+      migrationHead: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      postureEpoch: '7',
+    });
+    expect(witness.facts).toEqual(
+      expect.arrayContaining([
+        { key: 'app_login', kind: 'role', value: 'login=true;super=false;bypassrls=false' },
+        { key: 'public.notes', kind: 'relation', value: 'rls=true;force=true' },
+      ]),
+    );
+    expect(createPostgresPostureDigest(witness)).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(poolerQuery).toBe(2);
+  });
+
+  it('fails the mechanized pooler witness when one transaction moves backend sessions', async () => {
+    let poolerQuery = 0;
+    const runtimeClient = {
+      async transaction<Result>(
+        callback: (tx: {
+          exec(statement: string): Promise<void>;
+          query<Row>(statement: string, params?: unknown[]): Promise<{ rows: Row[] }>;
+        }) => Promise<Result>,
+      ) {
+        return callback({
+          async exec() {},
+          async query<Row>(_statement: string, params?: unknown[]) {
+            poolerQuery += 1;
+            return {
+              rows: [
+                {
+                  backend_pid: String(40 + poolerQuery),
+                  current_database: 'app',
+                  current_user: 'app_login',
+                  probe_value: String(params?.[0] ?? 'lease-probe'),
+                  session_user: 'app_login',
+                } as Row,
+              ],
+            };
+          },
+        });
+      },
+    };
+    const postureClient = {
+      async transaction<Result>(callback: (tx: never) => Promise<Result>) {
+        return callback({} as never);
+      },
+    };
+
+    await expect(
+      __testPostgresRuntimeInternals.derivePostgresPostureLeaseWitness(
+        runtimeClient as never,
+        postureClient as never,
+        { probeValue: 'lease-probe', relations: [], roles: ['app_login'] },
+      ),
+    ).rejects.toThrow(/KV433.*pooler.*backend/isu);
+  });
+
+  it('observes 42501 once and destroys idle node-postgres sessions during lease drain', async () => {
+    const permissionError = Object.assign(new Error('permission denied'), { code: '42501' });
+    const observed: unknown[] = [];
+    let idleCount = 1;
+    let destroyed = 0;
+    const client = {
+      async query() {
+        return { rows: [] };
+      },
+      release(error?: Error | boolean) {
+        if (error !== undefined) destroyed += 1;
+      },
+    };
+    const pool = {
+      async connect() {
+        idleCount = 0;
+        return client;
+      },
+      async end() {},
+      get idleCount() {
+        return idleCount;
+      },
+      async query() {
+        throw permissionError;
+      },
+    };
+    const runtimeClient = __testPostgresRuntimeInternals.createNodePostgresRuntimeClient(
+      pool as never,
+      (error) => observed.push(error),
+    ) as unknown as {
+      drain(): Promise<void>;
+      query(statement: string): Promise<unknown>;
+    };
+
+    await expect(runtimeClient.query('SELECT 1')).rejects.toBe(permissionError);
+    expect(observed).toEqual([permissionError]);
+    await runtimeClient.drain();
+    expect(destroyed).toBe(1);
   });
 });
 
