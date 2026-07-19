@@ -17,6 +17,10 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'compiler-finite-ir/drop-runtime-executable-reference-closure',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'compiler-finite-ir/drop-reviewed-command-door',
           status: 'killed',
         }),

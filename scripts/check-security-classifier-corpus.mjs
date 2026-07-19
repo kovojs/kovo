@@ -1967,7 +1967,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'closes a runtime-selected handler reference through %s',
           'direct ASCII-case variant',
           'static spread ASCII-case variant',
-          'closes a runtime-selected handler reference merged through primitive attrs',
+          'closes a runtime-selected %s merged through primitive attrs',
           'runtime-selected on:* handler reference is not compiler-authorized',
           'closes a runtime-selected executable selector through %s',
           'derive property ref (static-key spread)',

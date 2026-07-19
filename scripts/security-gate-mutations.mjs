@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -8,6 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -41,6 +43,10 @@ const compilerVitePath = path.join(repoRoot, 'packages/compiler/src/vite.ts');
 const compilerSecuritySemanticGraphPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/security-operation-ir.ts',
+);
+const compilerFiniteSecurityValidatorPath = path.join(
+  repoRoot,
+  'packages/compiler/src/validate/security-operation-ir.ts',
 );
 const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
@@ -76,6 +82,11 @@ const requestIngressPolicyPath = path.join(
   'packages/server/src/request-ingress-policy.ts',
 );
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
+
+const runtimeSelectedExecutableReferenceClosureBranch =
+  '      appendRuntimeSelectedExecutableReferenceDiagnostics(found, diagnostics, element);';
+const removedRuntimeSelectedExecutableReferenceClosureBranch =
+  '      // runtime-selected executable-reference closure removed by mutant';
 
 const browserRtcNetworkCapabilityBranch = [
   'const globalCapabilities = new Map<string, RawCapabilityKind>([',
@@ -1235,6 +1246,18 @@ const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
 ].join('\n');
 
 export const SECURITY_GATE_MUTANTS = [
+  {
+    description:
+      'Deletes compiler closure for request/query-selected executable module/export references.',
+    expectedKiller:
+      'finite browser IR must reject runtime-selected executable references before emission',
+    name: 'compiler-finite-ir/drop-runtime-executable-reference-closure',
+    replacement: removedRuntimeSelectedExecutableReferenceClosureBranch,
+    search: runtimeSelectedExecutableReferenceClosureBranch,
+    sourceFile: compilerFiniteSecurityValidatorPath,
+    sourceOnly: true,
+    test: assertRuntimeSelectedExecutableReferenceClosureBehavior,
+  },
   {
     description: 'Trusts an app analyzer declaration without proving the helper body.',
     expectedKiller: 'private analyzer summaries must retain exact same-file structural proof',
@@ -2559,6 +2582,61 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertWebhookEgressContextKeepsCapabilitySeal,
   },
 ];
+
+async function assertRuntimeSelectedExecutableReferenceClosureBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-finite-ir-behavior-'));
+  try {
+    const compilerRoot = path.join(tempRoot, 'packages', 'compiler');
+    mkdirSync(compilerRoot, { recursive: true });
+    cpSync(path.join(repoRoot, 'packages/compiler/src'), path.join(compilerRoot, 'src'), {
+      recursive: true,
+    });
+    cpSync(
+      path.join(repoRoot, 'packages/compiler/package.json'),
+      path.join(compilerRoot, 'package.json'),
+    );
+    symlinkSync(
+      path.join(repoRoot, 'packages/compiler/node_modules'),
+      path.join(compilerRoot, 'node_modules'),
+      'dir',
+    );
+    writeFileSync(
+      path.join(compilerRoot, 'src/validate/security-operation-ir.ts'),
+      sourceText,
+      'utf8',
+    );
+    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'node_modules/vitest/vitest.mjs'),
+        '--run',
+        'packages/compiler/src/security-operation-ir.security.test.ts',
+        '--testNamePattern',
+        'runtime-selected handler reference|runtime-selected executable selector|exact static reviewed executable references',
+        '--reporter=dot',
+      ],
+      {
+        cwd: tempRoot,
+        encoding: 'utf8',
+        env: { ...process.env, FORCE_COLOR: '0' },
+        timeout: 60_000,
+      },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(
+        `finite browser IR behavioral regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      );
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+}
 
 export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_MUTANTS } = {}) {
   const results = [];

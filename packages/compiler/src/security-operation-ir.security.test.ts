@@ -99,25 +99,52 @@ export const DynamicRef = component({
     ]);
   });
 
-  it('closes a runtime-selected handler reference merged through primitive attrs', () => {
-    const source = `
+  it.each([
+    [
+      'handler ref',
+      "'on:click': profile.executableRef",
+      'runtime-selected on:* handler reference is not compiler-authorized',
+    ],
+    [
+      'derive ref',
+      "'data-bind:hidden': profile.executableRef",
+      'runtime-selected executable reference is not compiler-authorized',
+    ],
+    [
+      'derive property ref',
+      "'data-bind-prop:checked': profile.executableRef",
+      'runtime-selected executable reference is not compiler-authorized',
+    ],
+    [
+      'stream renderer ref',
+      "'data-stream-renderer': profile.executableRef",
+      'runtime-selected executable reference is not compiler-authorized',
+    ],
+    [
+      'module allowlist authority',
+      "'data-kovo-module-allowlist': profile.executableRef",
+      'runtime-selected executable reference is not compiler-authorized',
+    ],
+  ])(
+    'closes a runtime-selected %s merged through primitive attrs',
+    (_label, attribute, message) => {
+      const source = `
 export const DynamicPrimitiveRef = component({
   render: ({ profile }) => (
-    <Tooltip.Trigger asChild attrs={{ 'on:click': profile.handler }}>
+    <Tooltip.Trigger asChild attrs={{ ${attribute} }}>
       <button>Run</button>
     </Tooltip.Trigger>
   ),
 });
 `;
 
-    expect(kv449(source)).toEqual([
-      expect.objectContaining({
-        message: expect.stringContaining(
-          'runtime-selected on:* handler reference is not compiler-authorized',
-        ),
-      }),
-    ]);
-  });
+      expect(kv449(source)).toEqual([
+        expect.objectContaining({
+          message: expect.stringContaining(message),
+        }),
+      ]);
+    },
+  );
 
   it.each([
     ['derive text ref (direct)', 'data-bind={profile.executableRef}'],
@@ -142,7 +169,7 @@ export const DynamicPrimitiveRef = component({
     ],
     [
       'stream renderer ref (static-key spread)',
-      "data-stream-text=\"assistant:a1\" {...{ 'data-stream-renderer': profile.executableRef }}",
+      'data-stream-text="assistant:a1" {...{ \'data-stream-renderer\': profile.executableRef }}',
     ],
     [
       'module allowlist authority (static-key spread)',
@@ -597,7 +624,11 @@ export const report = query({ async load(_input, context) {
       `alias = input.alias;
        return alias(input.table, 'accounts');`,
     ],
-    ['a computed managed-read continuation', ``, `return context.db.select()[input.operation](input.value);`],
+    [
+      'a computed managed-read continuation',
+      ``,
+      `return context.db.select()[input.operation](input.value);`,
+    ],
     [
       'authority passed to a managed innerJoin continuation',
       ``,

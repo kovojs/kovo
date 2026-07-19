@@ -13,6 +13,8 @@ import {
   compilerFailClosed,
   compilerOwnDataValue,
   compilerSetHas,
+  compilerStringStartsWith,
+  compilerStringToLowerCase,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
@@ -21,10 +23,13 @@ import type {
   CallExpressionModel,
   JsxAttributeModel,
   JsxElementModel,
+  JsxSpreadAttributeModel,
   MutationHandlerModel,
+  ObjectLiteralEntry,
   SecurityOperationViolationModel,
   ServerSecurityOperationModel,
   SourceSpan,
+  StaticJsxWireAttributeEntry,
 } from '../scan/model.js';
 import { analyzeClientCaptures } from './client-capture.js';
 
@@ -44,6 +49,7 @@ export const validateFiniteBrowserSecurityOperations = securityClassifier(
         | JsxElementModel
         | undefined;
       if (!element) compilerFailClosed(`Security-IR JSX elements[${elementIndex}] must be dense.`);
+      appendRuntimeSelectedExecutableReferenceDiagnostics(found, diagnostics, element);
       const attributeLength = compilerArrayLength(element.attributes, 'Security-IR JSX attributes');
       for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
         const attribute = compilerOwnDataValue(
@@ -135,6 +141,164 @@ export const validateFiniteBrowserSecurityOperations = securityClassifier(
     return found;
   },
 );
+
+/**
+ * SPEC §4.3/§4.8/§5.2/§6.6: handler, derive, stream-renderer, and client-module allowlist
+ * attributes select executable authority; they are not ordinary rendered data. Compiler and
+ * headless-primitive references are exact static strings. A request/query-derived value could
+ * otherwise replay or swap to a sibling export in an already allowlisted client module, or widen
+ * the module allowlist itself, bypassing the exact source root reviewed during compilation.
+ */
+function appendRuntimeSelectedExecutableReferenceDiagnostics(
+  found: CompilerDiagnostic[],
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+): void {
+  const attributeLength = compilerArrayLength(
+    element.attributes,
+    'Runtime-selected executable-ref JSX attributes',
+  );
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'Runtime-selected executable-ref JSX attributes',
+    ) as JsxAttributeModel | undefined;
+    if (!attribute) {
+      compilerFailClosed(`Runtime-selected executable-ref JSX attributes[${index}] must be dense.`);
+    }
+    const kind = kovoExecutableReferenceAttributeKind(attribute.name);
+    if (
+      kind === undefined ||
+      attribute.expression === undefined ||
+      attribute.expressionStaticValue !== undefined
+    ) {
+      continue;
+    }
+    appendRuntimeSelectedExecutableReferenceDiagnostic(
+      found,
+      diagnostics,
+      attribute.name,
+      kind,
+      attribute,
+    );
+  }
+
+  const spreadLength = compilerArrayLength(
+    element.spreadAttributes,
+    'Runtime-selected executable-ref JSX spreads',
+  );
+  for (let index = 0; index < spreadLength; index += 1) {
+    const spread = compilerOwnDataValue(
+      element.spreadAttributes,
+      index,
+      'Runtime-selected executable-ref JSX spreads',
+    ) as JsxSpreadAttributeModel | undefined;
+    if (!spread) {
+      compilerFailClosed(`Runtime-selected executable-ref JSX spreads[${index}] must be dense.`);
+    }
+    if (spread.staticWireAttributeEntries !== undefined) {
+      appendRuntimeSelectedStaticWireSpreadDiagnostics(found, diagnostics, spread);
+      continue;
+    }
+    if (spread.objectEntries !== undefined) {
+      appendRuntimeSelectedLegacySpreadDiagnostics(found, diagnostics, spread);
+    }
+    // An unresolved dynamic spread is reconstructed through kovoSafeJsxSpread(), whose runtime
+    // control-attribute census strips every ASCII-case executable-selector spelling before JSX
+    // serialization.
+  }
+}
+
+function appendRuntimeSelectedStaticWireSpreadDiagnostics(
+  found: CompilerDiagnostic[],
+  diagnostics: DiagnosticFactory,
+  spread: JsxSpreadAttributeModel,
+): void {
+  const entries = spread.staticWireAttributeEntries;
+  if (entries === undefined) return;
+  const length = compilerArrayLength(entries, 'Static executable-ref wire spread entries');
+  for (let index = 0; index < length; index += 1) {
+    const entry = compilerOwnDataValue(
+      entries,
+      index,
+      'Static executable-ref wire spread entries',
+    ) as StaticJsxWireAttributeEntry | undefined;
+    if (!entry) {
+      compilerFailClosed(`Static executable-ref wire spread entries[${index}] must be dense.`);
+    }
+    const kind = kovoExecutableReferenceAttributeKind(entry.key);
+    if (kind === undefined || entry.value.kind !== 'unknown') {
+      continue;
+    }
+    appendRuntimeSelectedExecutableReferenceDiagnostic(found, diagnostics, entry.key, kind, spread);
+  }
+}
+
+function appendRuntimeSelectedLegacySpreadDiagnostics(
+  found: CompilerDiagnostic[],
+  diagnostics: DiagnosticFactory,
+  spread: JsxSpreadAttributeModel,
+): void {
+  const entries = spread.objectEntries;
+  if (entries === undefined) return;
+  const length = compilerArrayLength(entries, 'Legacy executable-ref spread entries');
+  for (let index = 0; index < length; index += 1) {
+    const entry = compilerOwnDataValue(entries, index, 'Legacy executable-ref spread entries') as
+      | ObjectLiteralEntry
+      | undefined;
+    if (!entry) {
+      compilerFailClosed(`Legacy executable-ref spread entries[${index}] must be dense.`);
+    }
+    const kind = kovoExecutableReferenceAttributeKind(entry.key);
+    if (kind === undefined || entry.staticStringValue !== undefined) {
+      continue;
+    }
+    appendRuntimeSelectedExecutableReferenceDiagnostic(found, diagnostics, entry.key, kind, spread);
+  }
+}
+
+type KovoExecutableReferenceAttributeKind =
+  | 'derive'
+  | 'handler'
+  | 'module-allowlist'
+  | 'stream-renderer';
+
+function kovoExecutableReferenceAttributeKind(
+  name: string,
+): KovoExecutableReferenceAttributeKind | undefined {
+  const lower = compilerStringToLowerCase(name);
+  if (compilerStringStartsWith(lower, 'on:')) return 'handler';
+  if (
+    lower === 'data-bind' ||
+    compilerStringStartsWith(lower, 'data-bind:') ||
+    compilerStringStartsWith(lower, 'data-bind-prop:')
+  ) {
+    return 'derive';
+  }
+  if (lower === 'data-stream-renderer') return 'stream-renderer';
+  if (lower === 'data-kovo-module-allowlist') return 'module-allowlist';
+  return undefined;
+}
+
+function appendRuntimeSelectedExecutableReferenceDiagnostic(
+  found: CompilerDiagnostic[],
+  diagnostics: DiagnosticFactory,
+  name: string,
+  kind: KovoExecutableReferenceAttributeKind,
+  span: SourceSpan,
+): void {
+  const description =
+    kind === 'handler'
+      ? 'runtime-selected on:* handler reference'
+      : 'runtime-selected executable reference';
+  appendFiniteIrDiagnostic(
+    found,
+    diagnostics,
+    span,
+    `${description} is not compiler-authorized; semantic root=rendered-${kind}-ref:${name}@${span.start}; transfers=<runtime-value>; sink=${name}; verdict=closed:opaque-transfer.`,
+  );
+}
 
 /** SPEC §6.6 finite structured-server effect boundary and named exceptional doors. */
 export const validateFiniteServerSecurityOperations = securityClassifier(
