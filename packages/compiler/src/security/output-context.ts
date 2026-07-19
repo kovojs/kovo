@@ -6,6 +6,8 @@ import {
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
 import {
   elementContextSecurityControl,
+  elementContextSecurityStaticValueIssue,
+  elementHasContextSecurityControls,
   isBlockedActiveEmbedElementName,
   isBlockedDeclarativeShadowDomAttributeName,
   isBlockedSvgSmilElementName,
@@ -1084,12 +1086,9 @@ function renderedElementContextSinkIssue(
   target: string,
   value: StaticRenderedAttributeValue,
 ): string | undefined {
-  if (value.kind !== 'unknown') return undefined;
-  return elementContextSecurityControl(tag, target)?.reason;
-}
-
-function elementHasContextSecurityControls(tag: string): boolean {
-  return tag === 'script' || tag === 'link' || tag === 'iframe' || tag === 'annotation-xml';
+  if (value.kind === 'omitted') return undefined;
+  if (value.kind === 'unknown') return elementContextSecurityControl(tag, target)?.reason;
+  return elementContextSecurityStaticValueIssue(tag, target, value.value);
 }
 
 function attributeExpressionIsTrustedUrlBrand(

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES } from '@kovojs/core/internal/sink-policy';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
 import { validateEffectiveElementContextOutputFacts } from './security/output-context.js';
@@ -96,6 +97,23 @@ export const Metadata = component({
 });
 
 describe('element-context execution and isolation sinks', () => {
+  // @kovo-security-certifies C13 compiler-finite-browser-control-tuples
+  it('rejects a direct dynamic write for every one of the 39 finite browser controls', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(39);
+    for (const [tag, attribute] of ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES) {
+      const markup = `<${tag} ${attribute}={state.value} />`;
+      expect(
+        kv236Diagnostics(`
+export const BrowserControl = component({
+  state: () => ({ value: '' }),
+  render: (_queries, state) => (${markup}),
+});
+`),
+        `${tag}[${attribute}]`,
+      ).toHaveLength(1);
+    }
+  });
+
   it.each([
     ['object', '<object data="/safe/account" type="text/html">fallback</object>'],
     ['embed', '<embed src="/safe/account" type="text/html" />'],
@@ -498,5 +516,46 @@ export const ObsoleteFrame = component({
 });
 `),
     ).toEqual([expect.objectContaining({ message: expect.stringContaining('sandbox boundary') })]);
+  });
+
+  it.each([
+    ['unsafe referrer policy', '<a referrerpolicy="unsafe-url" />'],
+    ['downgrade referrer policy', '<img referrerPolicy="no-referrer-when-downgrade" />'],
+    ['named opener target', '<a target="attacker-window" />'],
+    ['whitespace-named target lookalike', '<a target=" _blank " />'],
+    ['explicit opener', '<area rel="nofollow OPENER noreferrer" />'],
+    ['anchor ping', '<a ping="/collect" />'],
+    ['area ping spread', '<area {...{ ping: "/collect" }} />'],
+    ['script nonce', '<script nonce="reused-nonce" />'],
+    ['link nonce spread', '<link {...{ nonce: "reused-nonce" }} />'],
+    ['obsolete script language', '<script language="javascript" />'],
+    ['meta referrer', '<meta name="referrer" content="unsafe-url" />'],
+  ])('rejects static unsafe browser control: %s', (_label, markup) => {
+    expect(
+      kv236Diagnostics(`
+export const StaticUnsafeControl = component({ render: () => (${markup}) });
+`),
+    ).toHaveLength(1);
+  });
+
+  it('accepts only the reviewed static control vocabulary and leaves scheduling controls dynamic', () => {
+    expect(
+      kv236Diagnostics(`
+export const StaticControls = component({
+  state: () => ({ schedule: true }),
+  render: (_queries, state) => (
+    <>
+      <script type="module" nomodule={false} integrity="sha384-reviewed" crossorigin="anonymous" referrerpolicy="strict-origin" charset="utf-8" async={state.schedule} defer={state.schedule} fetchpriority={state.schedule} />
+      <link href="/app.css" rel="stylesheet" type="text/css" media="screen" disabled={false} integrity="sha384-reviewed" crossorigin="anonymous" referrerpolicy="no-referrer" as="style" />
+      <iframe src="/profile" sandbox="allow-forms" allow="fullscreen" credentialless csp="default-src 'none'" referrerpolicy="same-origin" name="profile-frame" />
+      <a target="_blank" rel="noopener noreferrer" referrerpolicy="strict-origin-when-cross-origin" />
+      <area target="_self" rel="noreferrer" referrerpolicy="no-referrer" />
+      <img referrerpolicy="strict-origin" />
+      <meta name="description" content="Account" />
+    </>
+  ),
+});
+`),
+    ).toEqual([]);
   });
 });

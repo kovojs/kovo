@@ -1211,6 +1211,64 @@ describe('server jsx runtime', () => {
     ).toBe('<meta httpEquiv="ReFrEsH">');
   });
 
+  it('enforces static browser-control values at the direct and opaque-spread JSX floor', () => {
+    expect(
+      html(
+        jsx('script', {
+          charset: 'utf-8',
+          crossorigin: 'anonymous',
+          integrity: 'sha384-reviewed',
+          language: 'javascript',
+          nonce: 'reused-nonce',
+          referrerpolicy: 'strict-origin',
+          src: '/runtime.js',
+          type: 'module',
+        }),
+      ),
+    ).toBe(
+      '<script charset="utf-8" crossorigin="anonymous" integrity="sha384-reviewed" referrerpolicy="strict-origin" src="/runtime.js" type="module"></script>',
+    );
+    expect(
+      html(
+        jsx('a', {
+          ...kovoSafeJsxSpread({
+            href: 'https://outside.example/',
+            ping: '/collect',
+            referrerpolicy: 'unsafe-url',
+            rel: 'nofollow OPENER',
+            target: 'attacker-window',
+            title: 'kept',
+          }),
+          children: 'Go',
+        }),
+      ),
+    ).toBe('<a href="https://outside.example/" title="kept">Go</a>');
+    expect(
+      html(
+        jsx('area', {
+          ping: '/collect',
+          referrerPolicy: 'no-referrer',
+          rel: 'noopener',
+          target: '_blank',
+        }),
+      ),
+    ).toBe('<area referrerPolicy="no-referrer" rel="noopener" target="_blank">');
+  });
+
+  it('disables meta referrer policy at the runtime JSX floor', () => {
+    expect(html(jsx('meta', { name: 'referrer', content: 'unsafe-url' }))).toBe('');
+    expect(
+      html(
+        jsx('META', {
+          ...kovoSafeJsxSpread({ content: 'no-referrer', name: ' ReFeRrEr ' }),
+        }),
+      ),
+    ).toBe('');
+    expect(html(jsx('meta', { name: 'description', content: 'Account' }))).toBe(
+      '<meta name="description" content="Account">',
+    );
+  });
+
   it('drops the document-wide base element at the runtime JSX floor', () => {
     const events: RuntimeSinkSecurityEvent[] = [];
     const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));

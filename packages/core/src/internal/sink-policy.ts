@@ -130,7 +130,295 @@ export function isBlockedDeclarativeShadowDomAttributeName(name: string): boolea
 export interface ElementContextSecurityControl {
   readonly acceptsTrustedUrl: boolean;
   readonly reason: string;
+  readonly staticPolicy:
+    | 'allow'
+    | 'disabled'
+    | 'meta-referrer-name'
+    | 'referrer-policy'
+    | 'rel-no-opener'
+    | 'target-keyword';
 }
+
+/**
+ * @internal Canonical finite denominator for browser activation, isolation, and navigation
+ * controls. The compiler, modular browser runtime, fragment morph, and generated inline loader
+ * all consume this manifest; adding a browser control in only one path is a security regression.
+ */
+export const ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES = freezeSecurityValue([
+  freezeSecurityValue([
+    'script',
+    'src',
+    true,
+    'allow',
+    'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'href',
+    true,
+    'allow',
+    'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'xlink:href',
+    true,
+    'allow',
+    'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'type',
+    false,
+    'allow',
+    'a dynamic script type can turn an inert data block into executable JavaScript',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'nomodule',
+    false,
+    'allow',
+    'script nomodule posture must be fixed before parser-time execution selection',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'integrity',
+    false,
+    'allow',
+    'script integrity must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'crossorigin',
+    false,
+    'allow',
+    'script credential mode must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'script referrer policy must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'charset',
+    false,
+    'allow',
+    'script decoding posture must be fixed before fetched bytes are decoded',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'nonce',
+    false,
+    'disabled',
+    'script nonces are framework-owned authority; Kovo documents use hash-locked CSP',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'language',
+    false,
+    'disabled',
+    'the obsolete script language switch is disabled',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'href',
+    true,
+    'allow',
+    'a dynamic stylesheet URL can apply attacker-controlled CSS',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'rel',
+    false,
+    'allow',
+    'a dynamic link relationship can turn an inert resource into an active stylesheet',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'type',
+    false,
+    'allow',
+    'link resource type must be fixed before the parser chooses the resource destination',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'media',
+    false,
+    'allow',
+    'link media activation must be fixed before the resource is selected',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'disabled',
+    false,
+    'allow',
+    'link disabled posture must be fixed before stylesheet activation',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'integrity',
+    false,
+    'allow',
+    'link integrity must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'crossorigin',
+    false,
+    'allow',
+    'link credential mode must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'link referrer policy must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'as',
+    false,
+    'allow',
+    'link destination classification must be fixed before preload policy is selected',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'nonce',
+    false,
+    'disabled',
+    'link nonces are framework-owned authority; Kovo documents use hash-locked CSP',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'src',
+    true,
+    'allow',
+    'a dynamic iframe source can load same-origin attacker-controlled active content',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'sandbox',
+    false,
+    'allow',
+    'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'allow',
+    false,
+    'allow',
+    'iframe permissions policy must be fixed before embedded content receives capabilities',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'credentialless',
+    false,
+    'allow',
+    'iframe credentialless posture must be fixed before the navigation starts',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'csp',
+    false,
+    'allow',
+    'iframe embedded CSP must be fixed before the navigation starts',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'iframe referrer policy must be fixed before the navigation starts',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'name',
+    false,
+    'allow',
+    'iframe browsing-context identity must remain compiler-reviewed',
+  ] as const),
+  freezeSecurityValue([
+    'annotation-xml',
+    'encoding',
+    false,
+    'allow',
+    'a dynamic MathML annotation encoding can activate inert descendants as HTML',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'target',
+    false,
+    'target-keyword',
+    'anchor target must not mint an opener-bearing named browsing context',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'rel',
+    false,
+    'rel-no-opener',
+    'anchor relationship must not opt back into window.opener authority',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'anchor referrer policy must not weaken the document confidentiality floor',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'ping',
+    false,
+    'disabled',
+    'anchor ping reporting is disabled because Ping-From can disclose the source URL',
+  ] as const),
+  freezeSecurityValue([
+    'area',
+    'target',
+    false,
+    'target-keyword',
+    'area target must not mint an opener-bearing named browsing context',
+  ] as const),
+  freezeSecurityValue([
+    'area',
+    'rel',
+    false,
+    'rel-no-opener',
+    'area relationship must not opt back into window.opener authority',
+  ] as const),
+  freezeSecurityValue([
+    'area',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'area referrer policy must not weaken the document confidentiality floor',
+  ] as const),
+  freezeSecurityValue([
+    'area',
+    'ping',
+    false,
+    'disabled',
+    'area ping reporting is disabled because Ping-From can disclose the source URL',
+  ] as const),
+  freezeSecurityValue([
+    'img',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'image referrer policy must be fixed before the request starts',
+  ] as const),
+  freezeSecurityValue([
+    'meta',
+    'name',
+    false,
+    'meta-referrer-name',
+    'meta referrer policy is disabled because it can weaken the document response header',
+  ] as const),
+] as const);
 
 /**
  * @internal Finite registry for attributes whose safety depends on their owning element.
@@ -144,56 +432,73 @@ export function elementContextSecurityControl(
 ): ElementContextSecurityControl | undefined {
   const tag = securityStringToLowerCase(elementName);
   const attribute = securityStringToLowerCase(attributeName);
-  if (tag === 'script') {
-    if (attribute === 'src' || attribute === 'href' || attribute === 'xlink:href') {
-      return {
-        acceptsTrustedUrl: true,
-        reason: 'a dynamic script source can execute same-origin attacker-controlled JavaScript',
-      };
-    }
-    if (attribute === 'type') {
-      return {
-        acceptsTrustedUrl: false,
-        reason: 'a dynamic script type can turn an inert data block into executable JavaScript',
-      };
-    }
-  }
-  if (tag === 'link') {
-    if (attribute === 'href') {
-      return {
-        acceptsTrustedUrl: true,
-        reason: 'a dynamic stylesheet URL can apply attacker-controlled CSS',
-      };
-    }
-    if (attribute === 'rel') {
-      return {
-        acceptsTrustedUrl: false,
-        reason: 'a dynamic link relationship can turn an inert resource into an active stylesheet',
-      };
-    }
-  }
-  if (tag === 'iframe') {
-    if (attribute === 'src') {
-      return {
-        acceptsTrustedUrl: true,
-        reason: 'a dynamic iframe source can load same-origin attacker-controlled active content',
-      };
-    }
-    if (attribute === 'sandbox') {
-      return {
-        acceptsTrustedUrl: false,
-        reason:
-          'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
-      };
-    }
-  }
-  if (tag === 'annotation-xml' && attribute === 'encoding') {
+  for (let index = 0; index < ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.length; index += 1) {
+    const control = ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES[index];
+    if (control === undefined || control[0] !== tag || control[1] !== attribute) continue;
     return {
-      acceptsTrustedUrl: false,
-      reason: 'a dynamic MathML annotation encoding can activate inert descendants as HTML',
+      acceptsTrustedUrl: control[2],
+      staticPolicy: control[3],
+      reason: control[4],
     };
   }
   return undefined;
+}
+
+/** @internal True when an element participates in the finite browser-control denominator. */
+export function elementHasContextSecurityControls(elementName: string): boolean {
+  const tag = securityStringToLowerCase(elementName);
+  for (let index = 0; index < ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.length; index += 1) {
+    if (ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES[index]?.[0] === tag) return true;
+  }
+  return false;
+}
+
+/** @internal Validate a compiler/server/fragment-reviewed static control value. */
+export function elementContextSecurityStaticValueIssue(
+  elementName: string,
+  attributeName: string,
+  value: string,
+): string | undefined {
+  const control = elementContextSecurityControl(elementName, attributeName);
+  if (control === undefined || control.staticPolicy === 'allow') return undefined;
+  if (control.staticPolicy === 'disabled') return control.reason;
+
+  const exact = securityStringToLowerCase(value);
+  const normalized = securityStringToLowerCase(securityStringTrim(value));
+  if (control.staticPolicy === 'meta-referrer-name') {
+    return normalized === 'referrer' ? control.reason : undefined;
+  }
+  if (control.staticPolicy === 'referrer-policy') {
+    return normalized === 'no-referrer' ||
+      normalized === 'same-origin' ||
+      normalized === 'strict-origin' ||
+      normalized === 'strict-origin-when-cross-origin'
+      ? undefined
+      : `${control.reason}; allowed values are no-referrer, same-origin, strict-origin, and strict-origin-when-cross-origin`;
+  }
+  if (control.staticPolicy === 'target-keyword') {
+    // Target keywords are not whitespace-token values. Whitespace around `_blank` creates a named
+    // browsing context rather than spelling the keyword, so it must not normalize into allowlist.
+    return exact === '_blank' || exact === '_self' || exact === '_parent' || exact === '_top'
+      ? undefined
+      : `${control.reason}; only _blank, _self, _parent, and _top are allowed`;
+  }
+  if (control.staticPolicy === 'rel-no-opener') {
+    return asciiWhitespaceTokenListContains(normalized, 'opener') ? control.reason : undefined;
+  }
+  return control.reason;
+}
+
+function asciiWhitespaceTokenListContains(value: string, expected: string): boolean {
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const code = index < value.length ? securityStringCharCodeAt(value, index) : 0x20;
+    const whitespace = code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
+    if (!whitespace) continue;
+    if (start < index && securityStringSlice(value, start, index) === expected) return true;
+    start = index + 1;
+  }
+  return false;
 }
 
 /**
@@ -565,6 +870,7 @@ function decideRuntimeElementContextWrite(
       );
     }
     if (
+      options.posture === 'dynamic-binding' &&
       (attribute === 'http-equiv' || attribute === 'httpequiv') &&
       securityStringToLowerCase(securityStringTrim(value)) === 'refresh'
     ) {
@@ -577,9 +883,15 @@ function decideRuntimeElementContextWrite(
     }
   }
 
-  if (options.posture !== 'dynamic-binding') return undefined;
   const control = elementContextSecurityControl(tag, attribute);
   if (control === undefined) return undefined;
+  if (options.posture !== 'dynamic-binding') {
+    const issue = elementContextSecurityStaticValueIssue(tag, attribute, value);
+    return issue === undefined ? undefined : blockedDecision(name, family, value, issue);
+  }
+  if (control.staticPolicy === 'disabled') {
+    return blockedDecision(name, family, value, control.reason);
+  }
   if (control.acceptsTrustedUrl && options.trustedUrl === true) return undefined;
   return preservedDecision(name, family, value, control.reason);
 }

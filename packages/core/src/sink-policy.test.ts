@@ -8,6 +8,10 @@ import {
   createFragmentHtml,
   createRenderedFragmentHtml,
   decideRuntimeAttributeWrite,
+  ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+  elementContextSecurityControl,
+  elementContextSecurityStaticValueIssue,
+  elementHasContextSecurityControls,
   FRAMEWORK_BLESSED_SINK_KINDS,
   fragmentHtmlContent,
   hasUnsafeCssText,
@@ -314,6 +318,113 @@ describe('shared runtime sink policy', () => {
         posture: 'dynamic-binding',
       }),
     ).toMatchObject({ action: 'allow', value: 'Profile' });
+  });
+
+  // @kovo-security-certifies C13 finite-browser-control-tuple-denominator
+  it('owns one exact non-vacuous 39-tuple browser-control denominator', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(39);
+    const keys = new Set(
+      ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.map(([tag, attribute]) => `${tag}[${attribute}]`),
+    );
+    expect(keys.size).toBe(39);
+    for (const witness of [
+      'script[integrity]',
+      'script[nonce]',
+      'link[as]',
+      'iframe[credentialless]',
+      'a[target]',
+      'area[ping]',
+      'img[referrerpolicy]',
+      'meta[name]',
+    ]) {
+      expect(keys.has(witness), witness).toBe(true);
+    }
+
+    for (const [
+      tag,
+      attribute,
+      acceptsTrustedUrl,
+      staticPolicy,
+    ] of ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES) {
+      expect(elementHasContextSecurityControls(tag), tag).toBe(true);
+      expect(
+        elementContextSecurityControl(tag.toUpperCase(), attribute.toUpperCase()),
+      ).toMatchObject({ acceptsTrustedUrl, staticPolicy });
+      expect(
+        decideRuntimeAttributeWrite(attribute, '/attacker-selected', {
+          elementName: tag,
+          posture: 'dynamic-binding',
+        }).action,
+        `${tag}[${attribute}] dynamic`,
+      ).toBe(staticPolicy === 'disabled' ? 'remove' : 'preserve');
+      if (acceptsTrustedUrl) {
+        expect(
+          decideRuntimeAttributeWrite(attribute, 'data:text/html,attacker', {
+            elementName: tag,
+            posture: 'dynamic-binding',
+            trustedUrl: true,
+          }).action,
+          `${tag}[${attribute}] trusted URL`,
+        ).toBe('allow');
+      }
+    }
+    for (const schedulingOnly of ['async', 'defer', 'fetchpriority']) {
+      expect(elementContextSecurityControl('script', schedulingOnly)).toBeUndefined();
+    }
+  });
+
+  it('applies finite static policy to referrers, browsing contexts, opener, and reporting', () => {
+    for (const policy of [
+      'no-referrer',
+      'same-origin',
+      'strict-origin',
+      'strict-origin-when-cross-origin',
+    ]) {
+      expect(elementContextSecurityStaticValueIssue('a', 'referrerpolicy', policy)).toBeUndefined();
+    }
+    for (const policy of [
+      'unsafe-url',
+      'no-referrer-when-downgrade',
+      'origin',
+      'origin-when-cross-origin',
+      'invalid',
+      '',
+    ]) {
+      expect(
+        elementContextSecurityStaticValueIssue('img', 'referrerpolicy', policy),
+        policy,
+      ).toContain('allowed values');
+    }
+    for (const target of ['_blank', '_self', '_parent', '_top']) {
+      expect(elementContextSecurityStaticValueIssue('a', 'target', target)).toBeUndefined();
+    }
+    expect(elementContextSecurityStaticValueIssue('a', 'target', 'attacker-window')).toContain(
+      'named browsing context',
+    );
+    for (const namedLookalike of [' _blank ', '\u00a0_blank\u00a0']) {
+      expect(elementContextSecurityStaticValueIssue('a', 'target', namedLookalike)).toContain(
+        'named browsing context',
+      );
+    }
+    expect(
+      elementContextSecurityStaticValueIssue('area', 'rel', 'nofollow OPENER noreferrer'),
+    ).toContain('window.opener');
+    expect(
+      elementContextSecurityStaticValueIssue('a', 'rel', 'noopener noreferrer'),
+    ).toBeUndefined();
+    expect(elementContextSecurityStaticValueIssue('a', 'ping', '/telemetry')).toContain(
+      'Ping-From',
+    );
+    expect(elementContextSecurityStaticValueIssue('script', 'nonce', 'reused')).toContain(
+      'framework-owned',
+    );
+    expect(elementContextSecurityStaticValueIssue('script', 'language', 'javascript')).toContain(
+      'obsolete',
+    );
+    expect(elementContextSecurityStaticValueIssue('meta', 'name', 'referrer')).toContain(
+      'response header',
+    );
+    expect(elementContextSecurityStaticValueIssue('meta', 'name', 'description')).toBeUndefined();
   });
 
   it('parses srcset and drops unsafe candidates without dropping safe candidates', () => {

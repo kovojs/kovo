@@ -18,7 +18,9 @@ import {
   htmlTextWireValuePosture,
 } from '@kovojs/core/internal/semantic-attributes';
 import {
+  decideRuntimeAttributeWrite,
   drainRuntimeSinkSecurityEvent,
+  elementContextSecurityStaticValueIssue,
   isBlockedActiveEmbedElementName,
   isBlockedDeclarativeShadowDomAttributeName,
   isBlockedSvgSmilElementName,
@@ -39,7 +41,6 @@ import {
   escapeWireAttribute,
   renderedHtml,
   type RenderedHtml,
-  safeRuntimeAttribute,
   safeRuntimeAttributeName,
 } from './html.js';
 import {
@@ -237,6 +238,17 @@ export function jsx(
         'url',
         intrinsicType,
         'HTML base elements are disabled because they change document-wide URL resolution',
+      ),
+    );
+    return renderedHtml('');
+  }
+  if (isDisabledMetaReferrerElement(intrinsicType, intrinsicProps)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        'meta[name=referrer]',
+        'header',
+        'referrer',
+        'meta referrer policy is disabled because it can weaken the document response header',
       ),
     );
     return renderedHtml('');
@@ -932,9 +944,18 @@ function renderContextualAttributeValue(
   const text = attributeText(name, value);
   const posture = htmlAttributeWireValuePosture(type, name);
   if (posture !== undefined) assertHtmlWireValueStable(text, posture, `<${type}>[${name}]`);
-  return isKovoTrustedUrl(value) && isUrlAttributeName(name)
-    ? escapeAttribute(text)
-    : safeRuntimeAttribute(name, text);
+  if (isKovoTrustedUrl(value) && isUrlAttributeName(name)) return escapeAttribute(text);
+  const decision = decideRuntimeAttributeWrite(name, text, { elementName: type });
+  drainRuntimeSinkSecurityEvent(decision.event);
+  return decision.action === 'remove' ? null : escapeAttribute(decision.value ?? text);
+}
+
+function isDisabledMetaReferrerElement(type: string, props: JsxProps): boolean {
+  if (!formHelperAsciiCaseInsensitiveEqual(type, 'meta')) return false;
+  const name = firstRenderedAttributeValue(props, 'name');
+  return (
+    name !== undefined && elementContextSecurityStaticValueIssue('meta', 'name', name) !== undefined
+  );
 }
 
 function isDeclarativeShadowDomRuntimeControl(type: string, name: string, value: unknown): boolean {
