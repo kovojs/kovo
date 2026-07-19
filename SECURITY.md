@@ -1,10 +1,11 @@
 # Kovo Security Guarantees
 
-This document is Kovo's current security guarantee register. It is deliberately narrow:
-the guarantees below are only the invariants backed by an enrolled TCB choke in
-`security/TCB.md` and by a runtime/paranoid-mode proof in the production-artifact test
-registry. Roadmap items in `plans/` are not guarantees until they appear in the register
-and pass `pnpm run check:security-guarantee`.
+This document is Kovo's current security guarantee register. It is deliberately narrow.
+A `current` guarantee below is an invariant backed by an enrolled TCB choke in
+`security/TCB.md` and by a runtime/paranoid-mode proof in the production-artifact test registry.
+Withdrawn and superseded records stay in the ledger with the advisory that retracts them. Roadmap
+items in `plans/` are not guarantees until they appear in the register and pass
+`pnpm run check:security-guarantee`.
 
 The JSON block is the normative guarantee ledger. Prose in this file may explain the
 ledger, but it must not add a broader guarantee outside the block.
@@ -28,6 +29,7 @@ ledger, but it must not add a broader guarantee outside the block.
   "guarantees": [
     {
       "id": "pglite-secret-column-reader-role-test-floor",
+      "state": "current",
       "statement": "In Kovo's PGlite-backed Postgres-role test posture for a KOVO_PARANOID production build, framework query reads run as the least-privilege reader role: declared public columns remain readable, while direct, raw-SQL, computed, function-backed, and whole-table reads that require declared secret columns are denied before a row reaches JavaScript. This proof does not claim an external-Postgres execution of the same secret-column fixture.",
       "tcbChokes": [
         "server.postgres-runtime.capability-closure-audit",
@@ -39,6 +41,7 @@ ledger, but it must not add a broader guarantee outside the block.
     },
     {
       "id": "pglite-secret-view-reader-role-test-floor",
+      "state": "current",
       "statement": "In Kovo's PGlite-backed Postgres-role test posture for a KOVO_PARANOID production build, a security-invoker view cannot restore reader access to an underlying declared secret column; the reader-role query is denied before a row reaches JavaScript. This proof does not claim an external-Postgres execution of the same secret-view fixture.",
       "tcbChokes": [
         "server.postgres-runtime.capability-closure-audit",
@@ -51,6 +54,7 @@ ledger, but it must not add a broader guarantee outside the block.
     },
     {
       "id": "explicit-secret-query-wire-egress",
+      "state": "current",
       "statement": "In a KOVO_PARANOID production artifact, a framework Secret value created with the validating secret constructor is refused at Kovo query-wire egress; an explicitly audited trusted reveal is accepted.",
       "tcbChokes": [
         "core.secret.poison-box",
@@ -66,6 +70,7 @@ ledger, but it must not add a broader guarantee outside the block.
       ]
     }
   ],
+  "advisories": [],
   "nonGoals": [
     "Kovo does not sandbox an app author from their own server code, filesystem access, child processes, or arbitrary network calls.",
     "Kovo does not claim timing-side-channel resistance except for the documented constant-time comparison helpers on runtime poison boxes.",
@@ -93,8 +98,25 @@ Broader plan language such as "secure by construction", "one choke per property"
 "runtime chokes close the class" is architectural direction unless and until a precise
 invariant appears in the JSON ledger with TCB entries and paranoid/runtime proof IDs.
 
-## Reporting
+## Report a Vulnerability
 
-Please report suspected Kovo framework security issues privately to the maintainers. Do
-not include live secrets, credentials, production customer data, or exploit payloads that
-target third-party systems.
+Private contact: <https://github.com/kovojs/kovo/security/advisories/new>
+
+That URL is Kovo's intended GitHub private vulnerability reporting route. Repository evidence on
+2026-07-19 shows that GitHub private vulnerability reporting is **disabled**, so the route is not yet
+an operational or monitored intake channel. Do not put vulnerability details in a public issue.
+There is no verified private fallback address in this repository. The pre-launch checklist keeps
+security response readiness pending until an administrator enables the route, assigns monitored
+ownership, and completes a private-report drill.
+
+After a report is successfully received through the enabled private route, the response targets are:
+
+- acknowledge receipt within 3 business days;
+- complete initial severity and affected-version triage within 10 business days; and
+- coordinate a fix and release within 90 calendar days, or agree on a revised disclosure date with
+  the reporter when the fix needs more time.
+
+Please keep the report and exploit details under embargo until the fix is released or both sides
+agree on a disclosure date. Kovo maintainers will coordinate status updates through the private
+advisory. Do not include live secrets, credentials, production customer data, or exploit payloads
+that target third-party systems.

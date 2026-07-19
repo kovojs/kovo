@@ -11,6 +11,12 @@ export const repoRoot = findRepoRoot();
 export const defaultGuaranteePath = 'SECURITY.md';
 export const defaultTcbManifestPath = 'security/TCB.md';
 export const guaranteeSchema = 'kovo.security.guarantees/v1';
+export const privateVulnerabilityReportUrl =
+  'https://github.com/kovojs/kovo/security/advisories/new';
+export const privateVulnerabilityReportContactLine = `Private contact: <${privateVulnerabilityReportUrl}>`;
+
+const guaranteeStates = new Set(['current', 'superseded', 'withdrawn']);
+const advisoryStatuses = new Set(['open', 'resolved']);
 
 export function checkSecurityGuarantee(options = {}) {
   const root = options.repoRoot ?? repoRoot;
@@ -27,7 +33,9 @@ export function checkSecurityGuarantee(options = {}) {
     return result(findings);
   }
 
-  const register = loadGuaranteeRegister({ guaranteePath, readText });
+  const guaranteeDocument = readText(guaranteePath);
+  const register = loadGuaranteeRegister({ guaranteePath, text: guaranteeDocument });
+  findings.push(...validateSecurityReportingSection(guaranteeDocument, guaranteePath));
   findings.push(...validateRegisterShape(register, guaranteePath));
   if (findings.length > 0) return result(findings);
 
@@ -40,11 +48,15 @@ export function checkSecurityGuarantee(options = {}) {
   );
 
   const guaranteeIds = new Set();
+  const guaranteesById = new Map();
   for (const guarantee of register.guarantees) {
     if (guaranteeIds.has(guarantee.id)) {
       findings.push(`${guaranteePath}: duplicate guarantee id ${guarantee.id}`);
     }
     guaranteeIds.add(guarantee.id);
+    if (!guaranteesById.has(guarantee.id)) guaranteesById.set(guarantee.id, guarantee);
+
+    if (guarantee.state !== 'current') continue;
 
     for (const chokeId of guarantee.tcbChokes) {
       const entry = tcbEntries.get(chokeId);
@@ -71,16 +83,107 @@ export function checkSecurityGuarantee(options = {}) {
     }
   }
 
-  return result(findings, register.guarantees.length);
+  const retractedByAdvisories = new Map();
+  const advisoryIds = new Set();
+  for (const advisory of register.advisories) {
+    if (advisoryIds.has(advisory.id)) {
+      findings.push(`${guaranteePath}: duplicate advisory id ${advisory.id}`);
+    }
+    advisoryIds.add(advisory.id);
+
+    const retractedGuaranteeIds = new Set();
+    for (const guaranteeId of advisory.retracts) {
+      if (retractedGuaranteeIds.has(guaranteeId)) {
+        findings.push(
+          `${guaranteePath}: advisory ${advisory.id} repeats retracts target ${guaranteeId}`,
+        );
+        continue;
+      }
+      retractedGuaranteeIds.add(guaranteeId);
+
+      const guarantee = guaranteesById.get(guaranteeId);
+      if (!guarantee) {
+        findings.push(
+          `${guaranteePath}: advisory ${advisory.id} retracts unknown guarantee ${guaranteeId}`,
+        );
+        continue;
+      }
+
+      const advisoryBindings = retractedByAdvisories.get(guaranteeId) ?? [];
+      advisoryBindings.push(advisory);
+      retractedByAdvisories.set(guaranteeId, advisoryBindings);
+
+      if (advisory.status === 'open' && guarantee.state === 'current') {
+        findings.push(
+          `${guaranteePath}: current guarantee ${guaranteeId} is retracted by open advisory ${advisory.id}`,
+        );
+      }
+    }
+  }
+
+  for (const guarantee of register.guarantees) {
+    if (guarantee.state === 'current') continue;
+
+    if (!retractedByAdvisories.has(guarantee.id)) {
+      findings.push(
+        `${guaranteePath}: ${guarantee.state} guarantee ${guarantee.id} must be bound by an advisory retracts entry`,
+      );
+    }
+
+    if (guarantee.state !== 'superseded') continue;
+    const replacement = guaranteesById.get(guarantee.supersededBy);
+    if (!replacement) {
+      findings.push(
+        `${guaranteePath}: superseded guarantee ${guarantee.id} references unknown replacement ${guarantee.supersededBy}`,
+      );
+    } else if (replacement.state !== 'current') {
+      findings.push(
+        `${guaranteePath}: superseded guarantee ${guarantee.id} replacement ${guarantee.supersededBy} must be current`,
+      );
+    }
+  }
+
+  const currentGuaranteeCount = register.guarantees.filter(
+    (guarantee) => guarantee.state === 'current',
+  ).length;
+  return result(findings, currentGuaranteeCount);
 }
 
-export function loadGuaranteeRegister({ guaranteePath = defaultGuaranteePath, readText } = {}) {
-  const text = readText(guaranteePath);
-  const match = text.match(/```json security-guarantees\s*\n([\s\S]*?)\n```/u);
+export function loadGuaranteeRegister({
+  guaranteePath = defaultGuaranteePath,
+  readText,
+  text,
+} = {}) {
+  const guaranteeDocument = text ?? readText(guaranteePath);
+  const match = guaranteeDocument.match(/```json security-guarantees\s*\n([\s\S]*?)\n```/u);
   if (!match) {
     throw new Error(`${guaranteePath}: missing \`\`\`json security-guarantees fenced register`);
   }
   return JSON.parse(match[1]);
+}
+
+export function validateSecurityReportingSection(text, guaranteePath = defaultGuaranteePath) {
+  const registerMatch = text.match(/```json security-guarantees\s*\n[\s\S]*?\n```/u);
+  if (!registerMatch || registerMatch.index === undefined) return [];
+
+  const proseAfterRegister = text.slice(registerMatch.index + registerMatch[0].length);
+  const heading = '## Report a Vulnerability';
+  const headingIndex = proseAfterRegister.indexOf(heading);
+  if (headingIndex === -1) {
+    return [`${guaranteePath}: ${heading} section must appear outside the guarantee register`];
+  }
+
+  const followingProse = proseAfterRegister.slice(headingIndex);
+  const nextHeadingIndex = followingProse.indexOf('\n## ', heading.length);
+  const reportingSection =
+    nextHeadingIndex === -1 ? followingProse : followingProse.slice(0, nextHeadingIndex);
+  if (!reportingSection.includes(privateVulnerabilityReportContactLine)) {
+    return [
+      `${guaranteePath}: ${heading} must retain the private contact line ${privateVulnerabilityReportContactLine}`,
+    ];
+  }
+
+  return [];
 }
 
 export function isParanoidRuntimeProof(proof) {
@@ -121,6 +224,9 @@ function validateRegisterShape(register, guaranteePath) {
     findings.push(`${guaranteePath}: guarantees must list at least one stated invariant`);
     return findings;
   }
+  if (!Array.isArray(register?.advisories)) {
+    findings.push(`${guaranteePath}: advisories must be an array (empty when none are open)`);
+  }
 
   for (const [index, guarantee] of register.guarantees.entries()) {
     const label =
@@ -133,6 +239,20 @@ function validateRegisterShape(register, guaranteePath) {
     if (typeof guarantee?.statement !== 'string' || guarantee.statement.trim() === '') {
       findings.push(`${guaranteePath}: ${label}.statement must be a non-empty string`);
     }
+    if (!guaranteeStates.has(guarantee?.state)) {
+      findings.push(`${guaranteePath}: ${label}.state must be current, withdrawn, or superseded`);
+      continue;
+    }
+    if (guarantee.state === 'superseded') {
+      if (typeof guarantee.supersededBy !== 'string' || guarantee.supersededBy === '') {
+        findings.push(
+          `${guaranteePath}: ${label}.supersededBy must name the current replacement guarantee`,
+        );
+      } else if (guarantee.supersededBy === guarantee.id) {
+        findings.push(`${guaranteePath}: ${label}.supersededBy must not reference itself`);
+      }
+    }
+    if (guarantee.state !== 'current') continue;
     if (!Array.isArray(guarantee?.tcbChokes) || guarantee.tcbChokes.length === 0) {
       findings.push(`${guaranteePath}: ${label}.tcbChokes must name at least one TCB choke`);
     } else {
@@ -152,6 +272,30 @@ function validateRegisterShape(register, guaranteePath) {
           findings.push(
             `${guaranteePath}: ${label}.runtimeProofs entries must be non-empty strings`,
           );
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(register?.advisories)) {
+    for (const [index, advisory] of register.advisories.entries()) {
+      const label =
+        typeof advisory?.id === 'string' && advisory.id !== ''
+          ? advisory.id
+          : `advisories[${index}]`;
+      if (typeof advisory?.id !== 'string' || advisory.id === '') {
+        findings.push(`${guaranteePath}: ${label}.id must be a non-empty string`);
+      }
+      if (!advisoryStatuses.has(advisory?.status)) {
+        findings.push(`${guaranteePath}: ${label}.status must be open or resolved`);
+      }
+      if (!Array.isArray(advisory?.retracts) || advisory.retracts.length === 0) {
+        findings.push(`${guaranteePath}: ${label}.retracts must name at least one guarantee id`);
+      } else {
+        for (const guaranteeId of advisory.retracts) {
+          if (typeof guaranteeId !== 'string' || guaranteeId === '') {
+            findings.push(`${guaranteePath}: ${label}.retracts entries must be non-empty strings`);
+          }
         }
       }
     }

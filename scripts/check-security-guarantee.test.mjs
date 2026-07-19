@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkSecurityGuarantee, isParanoidRuntimeProof } from './check-security-guarantee.mjs';
+import {
+  checkSecurityGuarantee,
+  isParanoidRuntimeProof,
+  privateVulnerabilityReportContactLine,
+} from './check-security-guarantee.mjs';
 
 const manifestPath = 'security/TCB.md';
 const guaranteePath = 'SECURITY.md';
@@ -32,11 +36,13 @@ function securityRegister(overrides = {}) {
     guarantees: [
       {
         id: 'secret-egress',
+        state: 'current',
         statement: 'A runtime Secret is refused at query-wire egress in paranoid mode.',
         tcbChokes: ['server.response-posture.emit-to-wire'],
         runtimeProofs: ['runtime-secret-explicit-box-egress'],
       },
     ],
+    advisories: [],
     nonGoals: ['availability'],
     ...overrides,
   };
@@ -45,6 +51,10 @@ function securityRegister(overrides = {}) {
 \`\`\`json security-guarantees
 ${JSON.stringify(register, null, 2)}
 \`\`\`
+
+## Report a Vulnerability
+
+${privateVulnerabilityReportContactLine}
 `;
 }
 
@@ -110,12 +120,24 @@ describe('security guarantee gate', () => {
     );
   });
 
+  it('fails if the private vulnerability reporting contact line disappears', () => {
+    const result = run({
+      [guaranteePath]: securityRegister().replace(privateVulnerabilityReportContactLine, ''),
+      [manifestPath]: tcbManifest([]),
+    });
+
+    expect(result.findings).toContain(
+      `SECURITY.md: ## Report a Vulnerability must retain the private contact line ${privateVulnerabilityReportContactLine}`,
+    );
+  });
+
   it('rejects a guarantee without a TCB choke', () => {
     const result = run({
       [guaranteePath]: securityRegister({
         guarantees: [
           {
             id: 'secret-egress',
+            state: 'current',
             statement: 'A runtime Secret is refused at query-wire egress in paranoid mode.',
             tcbChokes: [],
             runtimeProofs: ['runtime-secret-explicit-box-egress'],
@@ -166,6 +188,7 @@ describe('security guarantee gate', () => {
         guarantees: [
           {
             id: 'secret-egress',
+            state: 'current',
             statement: 'A runtime Secret is refused at query-wire egress in paranoid mode.',
             tcbChokes: ['server.response-posture.emit-to-wire'],
             runtimeProofs: ['runtime-secret-db-read-boundary'],
@@ -194,6 +217,7 @@ describe('security guarantee gate', () => {
         guarantees: [
           {
             id: 'readonly',
+            state: 'current',
             statement: 'A reader handle performs no writes.',
             tcbChokes: ['server.response-posture.emit-to-wire'],
             runtimeProofs: ['readonly-managed-handle-prod-artifact'],
@@ -232,5 +256,149 @@ describe('security guarantee gate', () => {
         testName: 'blocks a readonly mutation attempt',
       }),
     ).toBe(false);
+  });
+
+  it('rejects silently reasserting a current guarantee over an open advisory', () => {
+    const result = run({
+      [guaranteePath]: securityRegister({
+        advisories: [
+          {
+            id: 'GHSA-test-open',
+            retracts: ['secret-egress'],
+            status: 'open',
+          },
+        ],
+      }),
+      [manifestPath]: tcbManifest([
+        {
+          classification: 'tcb',
+          file: 'packages/server/src/response-posture.ts',
+          id: 'server.response-posture.emit-to-wire',
+          kind: 'wire-emitter',
+          name: 'emitToWire',
+        },
+      ]),
+    });
+
+    expect(result.findings).toContain(
+      'SECURITY.md: current guarantee secret-egress is retracted by open advisory GHSA-test-open',
+    );
+  });
+
+  it('requires withdrawn guarantees to retain their advisory retracts binding', () => {
+    const result = run({
+      [guaranteePath]: securityRegister({
+        guarantees: [
+          {
+            id: 'secret-egress',
+            state: 'withdrawn',
+            statement: 'The former runtime Secret egress guarantee is withdrawn.',
+          },
+        ],
+      }),
+      [manifestPath]: tcbManifest([]),
+    });
+
+    expect(result.findings).toContain(
+      'SECURITY.md: withdrawn guarantee secret-egress must be bound by an advisory retracts entry',
+    );
+  });
+
+  it('accepts an advisory-bound withdrawal without requiring stale proof references', () => {
+    const result = run({
+      [guaranteePath]: securityRegister({
+        advisories: [
+          {
+            id: 'GHSA-test-open',
+            retracts: ['secret-egress'],
+            status: 'open',
+          },
+        ],
+        guarantees: [
+          {
+            id: 'secret-egress',
+            state: 'withdrawn',
+            statement: 'The former runtime Secret egress guarantee is withdrawn.',
+          },
+        ],
+      }),
+      [manifestPath]: tcbManifest([]),
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(result.summary).toContain('OK 0 security guarantee');
+  });
+
+  it('requires a superseded guarantee to bind to an advisory and a current replacement', () => {
+    const result = run({
+      [guaranteePath]: securityRegister({
+        advisories: [
+          {
+            id: 'GHSA-test-resolved',
+            retracts: ['secret-egress-v1'],
+            status: 'resolved',
+          },
+        ],
+        guarantees: [
+          {
+            id: 'secret-egress-v1',
+            state: 'superseded',
+            statement: 'The original runtime Secret egress guarantee was incomplete.',
+            supersededBy: 'secret-egress-v2',
+          },
+          {
+            id: 'secret-egress-v2',
+            state: 'withdrawn',
+            statement: 'The replacement has not become current.',
+          },
+        ],
+      }),
+      [manifestPath]: tcbManifest([]),
+    });
+
+    expect(result.findings).toContain(
+      'SECURITY.md: superseded guarantee secret-egress-v1 replacement secret-egress-v2 must be current',
+    );
+  });
+
+  it('accepts a resolved advisory with a superseded guarantee and current replacement', () => {
+    const result = run({
+      [guaranteePath]: securityRegister({
+        advisories: [
+          {
+            id: 'GHSA-test-resolved',
+            retracts: ['secret-egress-v1'],
+            status: 'resolved',
+          },
+        ],
+        guarantees: [
+          {
+            id: 'secret-egress-v1',
+            state: 'superseded',
+            statement: 'The original runtime Secret egress guarantee was incomplete.',
+            supersededBy: 'secret-egress-v2',
+          },
+          {
+            id: 'secret-egress-v2',
+            state: 'current',
+            statement: 'The corrected runtime Secret is refused at query-wire egress.',
+            tcbChokes: ['server.response-posture.emit-to-wire'],
+            runtimeProofs: ['runtime-secret-explicit-box-egress'],
+          },
+        ],
+      }),
+      [manifestPath]: tcbManifest([
+        {
+          classification: 'tcb',
+          file: 'packages/server/src/response-posture.ts',
+          id: 'server.response-posture.emit-to-wire',
+          kind: 'wire-emitter',
+          name: 'emitToWire',
+        },
+      ]),
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(result.summary).toContain('OK 1 security guarantee');
   });
 });

@@ -39,6 +39,18 @@ Unfinished surface that ships before it is frozen is marked: a `experimental_` n
 prefix or an `@experimental` JSDoc tag means "public, but exempt from the SemVer
 guarantee until the marker is removed."
 
+## Security Support Window
+
+Kovo is in technical preview. Only the latest published `0.x` minor receives security fixes. The
+project does not backport fixes to older minor lines during the preview, so upgrade to the latest
+minor before relying on a security fix. A security fix for the supported minor ships as a patch when
+the public API contract can remain intact; the technical-preview minor-bump rule still applies when
+the safest correction requires a breaking change.
+
+This is a support window, not a claim that private vulnerability response is operational. See
+[`SECURITY.md`](SECURITY.md) and the pending security-response readiness check before relying on the
+reporting targets.
+
 ## Deprecation
 
 A public symbol is removed only after a deprecation cycle: it is first marked

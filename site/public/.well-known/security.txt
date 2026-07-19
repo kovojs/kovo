@@ -1,0 +1,7 @@
+# GitHub private vulnerability reporting for kovojs/kovo was disabled on 2026-07-19.
+# Read the policy before using this intended contact route.
+Contact: https://github.com/kovojs/kovo/security/advisories/new
+Expires: 2027-01-19T23:59:59Z
+Preferred-Languages: en
+Canonical: https://kovo.sh/.well-known/security.txt
+Policy: https://github.com/kovojs/kovo/security/policy
