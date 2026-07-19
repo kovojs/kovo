@@ -187,7 +187,7 @@ export const PayloadCard = component({
 
       export const PayloadCard$queryUpdatePlans = {
         "product"(root, value, context = {}) {
-          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "aria-description", selector: "[data-bind:aria-description=\\"product.PayloadCard$article_aria_description_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_description_derive.run(value); } }, { attr: "aria-label", selector: "[data-bind:aria-label=\\"product.PayloadCard$article_aria_label_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_label_derive.run(value); } }, { attr: "title", selector: "[data-bind:title=\\"product.PayloadCard$article_title_derive\\"]", select(value, root, context) { return PayloadCard$article_title_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
+          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "aria-description", selector: "[data-bind\\\\:aria-description=\\"product.PayloadCard$article_aria_description_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_description_derive.run(value); } }, { attr: "aria-label", selector: "[data-bind\\\\:aria-label=\\"product.PayloadCard$article_aria_label_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_label_derive.run(value); } }, { attr: "title", selector: "[data-bind\\\\:title=\\"product.PayloadCard$article_title_derive\\"]", select(value, root, context) { return PayloadCard$article_title_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
         },
       };",
         "clientText": "<img src=x onerror=alert(1)> & "quoted"",
@@ -262,9 +262,9 @@ export const PayloadCard = component({
                   "input": "product",
                   "name": "PayloadCard$article_aria_description_derive",
                   "param": "product",
-                  "selector": "[data-bind:aria-description="product.PayloadCard$article_aria_description_derive"]",
+                  "selector": "[data-bind\\:aria-description="product.PayloadCard$article_aria_description_derive"]",
                 },
-                "selector": "[data-bind:aria-description="product.PayloadCard$article_aria_description_derive"]",
+                "selector": "[data-bind\\:aria-description="product.PayloadCard$article_aria_description_derive"]",
               },
               {
                 "attr": "aria-label",
@@ -274,9 +274,9 @@ export const PayloadCard = component({
                   "input": "product",
                   "name": "PayloadCard$article_aria_label_derive",
                   "param": "product",
-                  "selector": "[data-bind:aria-label="product.PayloadCard$article_aria_label_derive"]",
+                  "selector": "[data-bind\\:aria-label="product.PayloadCard$article_aria_label_derive"]",
                 },
-                "selector": "[data-bind:aria-label="product.PayloadCard$article_aria_label_derive"]",
+                "selector": "[data-bind\\:aria-label="product.PayloadCard$article_aria_label_derive"]",
               },
               {
                 "attr": "title",
@@ -286,9 +286,9 @@ export const PayloadCard = component({
                   "input": "product",
                   "name": "PayloadCard$article_title_derive",
                   "param": "product",
-                  "selector": "[data-bind:title="product.PayloadCard$article_title_derive"]",
+                  "selector": "[data-bind\\:title="product.PayloadCard$article_title_derive"]",
                 },
-                "selector": "[data-bind:title="product.PayloadCard$article_title_derive"]",
+                "selector": "[data-bind\\:title="product.PayloadCard$article_title_derive"]",
               },
             ],
           },
