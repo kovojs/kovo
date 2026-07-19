@@ -145,6 +145,56 @@ export const OpaqueBrowserControlSpread = component({
     }
   });
 
+  it('accepts the exact framework mutation form helper as a closed form spread', () => {
+    expect(
+      kv236Diagnostics(`
+import { mutationFormAttributes } from '@kovojs/server';
+
+export const AddContactForm = component({
+  mutations: { addContact },
+  render: () => <form {...mutationFormAttributes(addContact)}>Add contact</form>,
+});
+`),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'same-named local helper',
+      `
+function mutationFormAttributes(value) {
+  return value;
+}
+
+export const ForgedFormSpread = component({
+  state: () => ({ attributes: {} }),
+  render: (_queries, state) => (
+    <form {...mutationFormAttributes(state.attributes)}>Save</form>
+  ),
+});
+`,
+    ],
+    [
+      'unreviewed carrier helper',
+      `
+function formAttributes(value) {
+  return value;
+}
+
+export const OpaqueFormSpread = component({
+  state: () => ({ attributes: {} }),
+  render: (_queries, state) => <form {...formAttributes(state.attributes)}>Save</form>,
+});
+`,
+    ],
+  ])('keeps arbitrary form spread calls closed: %s', (_name, source) => {
+    expect(kv236Diagnostics(source)).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('opaque <form> spread'),
+      }),
+    ]);
+  });
+
   it.each([
     ['object', '<object data="/safe/account" type="text/html">fallback</object>'],
     ['embed', '<embed src="/safe/account" type="text/html" />'],
