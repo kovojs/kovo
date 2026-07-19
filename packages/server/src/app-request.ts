@@ -18,6 +18,7 @@ import type {
 import { appSystemResponse } from './app-system-response.js';
 import {
   pinRequestIngressSurface,
+  frameworkLoadShedErrorResponse,
   MAX_APP_REQUEST_BODY_BYTES,
   preDispatchLoadShedResponse,
   requestWithBodyLimit,
@@ -132,6 +133,12 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
         surface,
       });
     }
+    const frameworkLoadShed = frameworkLoadShedErrorResponse(error, {
+      ...(buildToken === undefined ? {} : { buildToken }),
+      method,
+      surface,
+    });
+    if (frameworkLoadShed !== undefined) return frameworkLoadShed;
     reportServerError(app.onError, error, {
       operation: 'app-request',
       request: limitedRequest,

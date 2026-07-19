@@ -80,6 +80,19 @@ interface RateLimitDecision {
   retryAfterSeconds: number;
 }
 
+interface FrameworkLoadShedFact {
+  readonly code: 'KV433';
+  readonly reason: string;
+  readonly retryAfterMs: number;
+}
+
+/** Framework-only input for a provenance-registered app admission failure. */
+export interface FrameworkLoadShedErrorInput {
+  readonly code: 'KV433';
+  readonly reason: string;
+  readonly retryAfterMs: number;
+}
+
 const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_MAX_RATE_KEYS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
@@ -128,6 +141,63 @@ const DEFAULT_QUERY_PER_IP_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
 const requestPeerAddressProperty = '__kovoPeerAddress';
 const NativeHeaders = globalThis.Headers;
 const NativeRequest = globalThis.Request;
+const frameworkLoadShedErrors = createWitnessWeakMap<Error, FrameworkLoadShedFact>();
+
+/** @internal Mint a fail-closed admission error that the outer app shell may render as 503. */
+export function mintFrameworkLoadShedError(input: FrameworkLoadShedErrorInput): Error {
+  if (input.code !== 'KV433') {
+    throw new TypeError('Framework load-shed errors require the KV433 database authority code.');
+  }
+  if (typeof input.reason !== 'string' || input.reason.length < 1 || input.reason.length > 1_024) {
+    throw new TypeError('Framework load-shed errors require a bounded non-empty reason.');
+  }
+  if (
+    !requestStateIsSafeInteger(input.retryAfterMs) ||
+    input.retryAfterMs < 1 ||
+    input.retryAfterMs > MAX_APP_REQUEST_RATE_WINDOW_MS
+  ) {
+    throw new TypeError(
+      `Framework load-shed retryAfterMs must be an integer from 1..${MAX_APP_REQUEST_RATE_WINDOW_MS}.`,
+    );
+  }
+  const error = new Error(`${input.code}: ${input.reason}`);
+  error.name = 'KovoFrameworkLoadShedError';
+  witnessWeakMapSet(
+    frameworkLoadShedErrors,
+    error,
+    witnessFreeze({
+      code: input.code,
+      reason: input.reason,
+      retryAfterMs: input.retryAfterMs,
+    }),
+  );
+  return error;
+}
+
+/** @internal Render only a framework-minted admission failure through the app load-shed shell. */
+export function frameworkLoadShedErrorResponse(
+  error: unknown,
+  options: {
+    buildToken?: string;
+    method: string;
+    surface: LoadShedSurface;
+  },
+): Response | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const fact = witnessWeakMapGet(frameworkLoadShedErrors, error);
+  if (fact === undefined) return undefined;
+  return appSystemResponse('Service Unavailable', {
+    ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Retry-After': requestStateString(requestStateRetryAfterSeconds(fact.retryAfterMs)),
+    },
+    method: options.method,
+    status: 503,
+    surface: options.surface,
+  });
+}
 const NativeUint8Array = globalThis.Uint8Array;
 const readNativeRequestBody = requestIntrinsicGetter<ReadableStream<Uint8Array> | null>('body');
 const readNativeRequestHeaders = requestIntrinsicGetter<Headers>('headers');
