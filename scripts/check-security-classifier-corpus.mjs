@@ -2016,9 +2016,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: [
       'packages/compiler/src/capability-closure.security.test.ts',
       'packages/cli/src/capability-closure-packages.test.ts',
+      'scripts/capability-surface-census-gate.test.mjs',
       'scripts/framework-export-posture-gate.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'capability-mint-symbol-identity-census',
+        file: 'scripts/capability-surface-census-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 capability-mint-symbol-identity-census',
+          'discovers witness registries and systemDb mints by TypeScript symbol identity',
+          "api: 'createWitnessWeakMap'",
+          "api: 'systemDb'",
+          'fails closed when a discovered mint is absent, stale, or lacks a reviewed reason',
+        ],
+      },
       {
         id: 'complete-root-census',
         file: 'packages/compiler/src/capability-closure.security.test.ts',
@@ -2116,8 +2128,29 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
       'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
       'packages/server/src/guard-args-receipt-security.test.ts',
+      'scripts/security-coverage.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'security-coverage-denominator-closure',
+        file: 'scripts/security-coverage.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 security-coverage-denominator-closure',
+          'derives one stable coverage cell per exact finite decision-surface member',
+          'browser-operation:browser.scratch',
+          'fails closed on missing, unknown, or unsubstantiated coverage cells',
+        ],
+      },
+      {
+        id: 'historical-classifier-anchor-carrier-grammar',
+        file: 'scripts/security-coverage.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 historical-classifier-anchor-carrier-grammar',
+          'maps every historical classifier anchor through one closed carrier production',
+          'missing historical witness mapping',
+          "schema: 'kovo-security-carrier-grammar/v1'",
+        ],
+      },
       {
         id: 'finite-analyzer-differential-soundness',
         file: 'packages/compiler/src/security-analyzer-soundness-oracle.test.ts',
