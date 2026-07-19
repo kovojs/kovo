@@ -49,6 +49,18 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
       ]),
     );
 
+    const escaped = validTranslation();
+    artifact(escaped, 'registry').source += '\ninterface Leak { password\\u0048ash: string }\n';
+    expect(verifyEmittedTranslation(escaped).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactKind: 'registry',
+          code: 'secret-field-emitted',
+          relation: 'secret-field-absence',
+        }),
+      ]),
+    );
+
     for (const kind of ['client', 'registry'] as const) {
       const input = validTranslation();
       artifact(input, kind).source += '\ninterface Leak { passwordHash: string }\n';
@@ -102,6 +114,61 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'operation-decision-mismatch',
+          relation: 'operation-serialization',
+        }),
+      ]),
+    );
+
+    const extendedClient = validTranslation();
+    artifact(extendedClient, 'client').source = artifact(extendedClient, 'client').source.replace(
+      '}], (_event',
+      '}].concat([]), (_event',
+    );
+    expect(verifyEmittedTranslation(extendedClient).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'operation-handler-shape',
+          relation: 'operation-serialization',
+        }),
+      ]),
+    );
+
+    const extendedServer = validTranslation();
+    artifact(extendedServer, 'server').source = artifact(extendedServer, 'server').source.replace(
+      '}]), schema:',
+      '}].concat([])), schema:',
+    );
+    expect(verifyEmittedTranslation(extendedServer).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'operation-manifest-shape',
+          relation: 'operation-serialization',
+        }),
+      ]),
+    );
+
+    const nestedDecoy = validTranslation();
+    artifact(nestedDecoy, 'server').source = artifact(nestedDecoy, 'server')
+      .source.replace('{ operations:', '{ decoy: { operations:')
+      .replace(']), schema:', ']) }, schema:');
+    expect(verifyEmittedTranslation(nestedDecoy).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'operation-manifest-shape',
+          relation: 'operation-serialization',
+        }),
+      ]),
+    );
+
+    const duplicateOverride = validTranslation();
+    artifact(duplicateOverride, 'server').source = artifact(
+      duplicateOverride,
+      'server',
+    ).source.replace(']), schema:', ']), operations: [], schema:');
+    expect(verifyEmittedTranslation(duplicateOverride).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'operation-manifest-shape',
           relation: 'operation-serialization',
         }),
       ]),

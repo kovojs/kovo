@@ -155,6 +155,11 @@ interface NormalizedOperation {
   target?: string;
 }
 
+interface ParsedOperationArray {
+  end: number;
+  operations: NormalizedOperation[];
+}
+
 interface SourceToken {
   end: number;
   kind: 'identifier' | 'punctuator' | 'string';
@@ -569,8 +574,18 @@ function sourceCarriesField(
   tokens: readonly SourceToken[],
   field: string,
 ): boolean {
-  if (identifier(field)) return identifierWords(source).includes(field);
+  if (identifier(field)) return identifierWords(decodeIdentifierEscapes(source)).includes(field);
   return tokens.some((token) => token.kind === 'string' && token.value === field);
+}
+
+function decodeIdentifierEscapes(source: string): string {
+  return source.replace(/\\u(?:\{([0-9A-Fa-f]+)\}|([0-9A-Fa-f]{4}))/gu, (match, braced, fixed) => {
+    try {
+      return String.fromCodePoint(parseEscapeDigits((braced ?? fixed) as string));
+    } catch {
+      return match;
+    }
+  });
 }
 
 function identifierWords(value: string): string[] {
@@ -689,16 +704,26 @@ function extractClientHandlerOperations(
       );
       continue;
     }
-    const operations = parseOperationArray(
+    const parsed = parseOperationArray(
       artifact,
       open.start,
       'client',
       `handler ${tokens[index + 2]!.value}`,
       findings,
     );
-    if (operations !== undefined) {
-      result.push({ exportName: tokens[index + 2]!.value, operations });
+    if (parsed === undefined) continue;
+    const tokenAfterArray = tokenAtOrAfterSourceOffset(tokens, parsed.end);
+    if (!tokenIs(tokenAfterArray, 'punctuator', ',')) {
+      pushFinding(
+        findings,
+        'operation-serialization',
+        'operation-handler-shape',
+        `${artifact.fileName} handler ${tokens[index + 2]!.value} operation JSON is not the complete first argument`,
+        artifact.kind,
+      );
+      continue;
     }
+    result.push({ exportName: tokens[index + 2]!.value, operations: parsed.operations });
   }
   for (const [index, token] of tokens.entries()) {
     if (
@@ -794,21 +819,29 @@ function extractServerOperationsFromTokens(
       );
       continue;
     }
-    const operationsIndex = findTokenSequence(tokens, index + 7, [
-      ['identifier', 'operations'],
-      ['punctuator', ':'],
-      ['identifier', 'Object'],
-      ['punctuator', '.'],
-      ['identifier', 'freeze'],
-      ['punctuator', '('],
-      ['punctuator', '['],
-    ]);
-    const schemaIndex = findTokenSequence(tokens, index + 7, [
-      ['identifier', 'schema'],
-      ['punctuator', ':'],
-      ['string', securityOperationSchema],
-    ]);
-    if (operationsIndex === -1 || schemaIndex === -1) {
+    const manifestCloseIndex = matchingPunctuatorIndex(tokens, index + 6, '{', '}');
+    if (manifestCloseIndex === -1 || !tokenIs(tokens[manifestCloseIndex + 1], 'punctuator', ')')) {
+      pushFinding(
+        findings,
+        'operation-serialization',
+        'operation-manifest-shape',
+        `${artifact.fileName} has an unbounded server security-operation manifest`,
+        artifact.kind,
+      );
+      continue;
+    }
+    const operationsIndex = index + 7;
+    if (
+      !tokenSequenceAt(tokens, operationsIndex, [
+        ['identifier', 'operations'],
+        ['punctuator', ':'],
+        ['identifier', 'Object'],
+        ['punctuator', '.'],
+        ['identifier', 'freeze'],
+        ['punctuator', '('],
+        ['punctuator', '['],
+      ])
+    ) {
       pushFinding(
         findings,
         'operation-serialization',
@@ -820,31 +853,127 @@ function extractServerOperationsFromTokens(
     }
     const open = tokens[operationsIndex + 6]!;
     const parsed = parseOperationArray(artifact, open.start, 'server', 'server manifest', findings);
-    if (parsed !== undefined) operations.push(...parsed);
+    if (parsed === undefined) continue;
+    const tokenAfterArrayIndex = tokenIndexAtOrAfterSourceOffset(tokens, parsed.end);
+    if (tokenAfterArrayIndex === -1 || !tokenIs(tokens[tokenAfterArrayIndex], 'punctuator', ')')) {
+      pushFinding(
+        findings,
+        'operation-serialization',
+        'operation-manifest-shape',
+        `${artifact.fileName} server operation JSON is not the complete Object.freeze argument`,
+        artifact.kind,
+      );
+      continue;
+    }
+    const manifestTailIndex = tokenAfterArrayIndex + 1;
+    if (
+      !tokenSequenceAt(tokens, manifestTailIndex, [
+        ['punctuator', ','],
+        ['identifier', 'schema'],
+        ['punctuator', ':'],
+        ['string', securityOperationSchema],
+        ['punctuator', ','],
+        ['identifier', 'semanticGraph'],
+        ['punctuator', ':'],
+      ])
+    ) {
+      pushFinding(
+        findings,
+        'operation-serialization',
+        'operation-manifest-shape',
+        `${artifact.fileName} has duplicate, reordered, or incomplete server manifest fields`,
+        artifact.kind,
+      );
+      continue;
+    }
+    const semanticGraphToken = tokens[manifestTailIndex + 7];
+    const manifestClose = tokens[manifestCloseIndex]!;
+    if (
+      semanticGraphToken === undefined ||
+      semanticGraphToken.start >= manifestClose.start ||
+      !isOwnDataJsonOrUndefined(
+        artifact.source.slice(semanticGraphToken.start, manifestClose.start).trim(),
+      )
+    ) {
+      pushFinding(
+        findings,
+        'operation-serialization',
+        'operation-manifest-shape',
+        `${artifact.fileName} has a non-data semantic graph or trailing manifest fields`,
+        artifact.kind,
+      );
+      continue;
+    }
+    operations.push(...parsed.operations);
   }
   return { manifests, operations };
 }
 
-function findTokenSequence(
+function tokenSequenceAt(
   tokens: readonly SourceToken[],
   start: number,
   sequence: readonly (readonly [SourceToken['kind'], string])[],
+): boolean {
+  return sequence.every(([kind, value], offset) => tokenIs(tokens[start + offset], kind, value));
+}
+
+function isOwnDataJsonOrUndefined(source: string): boolean {
+  if (source === 'undefined') return true;
+  try {
+    JSON.parse(source);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function matchingPunctuatorIndex(
+  tokens: readonly SourceToken[],
+  openIndex: number,
+  open: string,
+  close: string,
 ): number {
-  for (let index = start; index + sequence.length <= tokens.length; index += 1) {
-    if (sequence.every(([kind, value], offset) => tokenIs(tokens[index + offset], kind, value))) {
-      return index;
+  if (!tokenIs(tokens[openIndex], 'punctuator', open)) return -1;
+  let depth = 0;
+  for (let index = openIndex; index < tokens.length; index += 1) {
+    if (tokenIs(tokens[index], 'punctuator', open)) depth += 1;
+    else if (tokenIs(tokens[index], 'punctuator', close)) {
+      depth -= 1;
+      if (depth === 0) return index;
     }
   }
   return -1;
 }
 
+function tokenAtOrAfterSourceOffset(
+  tokens: readonly SourceToken[],
+  sourceOffset: number,
+): SourceToken | undefined {
+  const index = tokenIndexAtOrAfterSourceOffset(tokens, sourceOffset);
+  return index === -1 ? undefined : tokens[index];
+}
+
+function tokenIndexAtOrAfterSourceOffset(
+  tokens: readonly SourceToken[],
+  sourceOffset: number,
+): number {
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]!.start >= sourceOffset) return index;
+  }
+  return -1;
+}
+
+/*
+ * Keep the operation array parser below separate from manifest-shape parsing: JSON ownership and
+ * vocabulary are one obligation; proving that exact JSON is the runtime argument is another.
+ */
 function parseOperationArray(
   artifact: KovoEmittedTranslationArtifact,
   start: number,
   context: 'client' | 'server',
   label: string,
   findings: KovoEmittedTranslationFinding[],
-): NormalizedOperation[] | undefined {
+): ParsedOperationArray | undefined {
   const end = jsonArrayEnd(artifact.source, start);
   if (end === undefined) {
     pushFinding(
@@ -886,7 +1015,7 @@ function parseOperationArray(
     );
     if (operation !== undefined) operations.push(operation);
   }
-  return operations;
+  return { end, operations };
 }
 
 function normalizeOperation(
