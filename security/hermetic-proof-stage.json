@@ -1,0 +1,34 @@
+{
+  "$comment": "Reviewed isolation contract for proof analysis, unsigned certificate generation, and signing. SPEC.md §6.6; plans/10x-better-security-3.md §0.6.",
+  "schema": "kovo.hermetic-proof-stage/v1",
+  "toolingBinding": "sandbox-self-test-unbound",
+  "linuxRunner": {
+    "image": "docker.io/library/node@sha256:d45d78e7929b46875bbd4e29bea672d5bc48186c6c3588306521c815e78352d6",
+    "network": "none",
+    "pull": "never",
+    "readOnlyRoot": true
+  },
+  "stages": [
+    {
+      "childProcess": "denied",
+      "name": "analysis",
+      "reads": ["sealed framework analyzer", "inert subject snapshot"],
+      "secrets": [],
+      "writes": ["analysis output"]
+    },
+    {
+      "childProcess": "denied",
+      "name": "certificate-generation",
+      "reads": ["sealed certificate generator", "analysis output"],
+      "secrets": [],
+      "writes": ["unsigned certificate"]
+    },
+    {
+      "childProcess": "denied",
+      "name": "signing",
+      "reads": ["sealed dependency-free signer", "unsigned certificate", "signing key"],
+      "secrets": ["signing key"],
+      "writes": ["detached signature"]
+    }
+  ]
+}

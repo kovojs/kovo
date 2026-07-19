@@ -30,6 +30,20 @@ jobs:
         run: vp exec pnpm run check
       - run: git diff --check
 
+  hermetic-proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+        with:
+          node-version: 24.18.0
+      - name: Pull pinned hermetic Node image before proof isolation
+        run: docker pull docker.io/library/node@sha256:d45d78e7929b46875bbd4e29bea672d5bc48186c6c3588306521c815e78352d6
+      - name: Hermetic proof sandbox self-test
+        run: vp exec node scripts/hermetic-proof-stage.mjs
+
   paranoid:
     runs-on: ubuntu-latest
     steps:
