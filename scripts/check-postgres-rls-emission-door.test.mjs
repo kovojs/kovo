@@ -1,5 +1,14 @@
 // @kovo-security-classifier-corpus postgres-identity-posture
-import { readFileSync } from 'node:fs';
+import {
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -167,7 +176,9 @@ export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input
 
   it.each([
     `export const load = () => import('./postgres-authorization-correſpondence.js');`,
+    `export const load = () => import('../../../pacKages/server/src/postgres-authorization-correspondence.js');`,
     `const { emitPostgresRlsPolicySql: rogue } = module.require('./poſtgres-authorization-correspondence.js'); export const sql = rogue({ site: 'admin' });`,
+    `const { emitPostgresRlsPolicySql: rogue } = module.require('./postgres-authorization-correspondence.jſ'); export const sql = rogue({ site: 'admin' });`,
   ])('kills Unicode filesystem case-fold aliases in runtime loaders', (source) => {
     const files = cleanFixture();
     files.set('packages/server/src/rogue-policy.ts', source);
@@ -201,6 +212,41 @@ export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input
 
     expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
   });
+
+  it.runIf(process.platform !== 'win32')(
+    'kills inode aliases through every literal POSIX CJS path interpretation',
+    () => {
+      const rootDir = mkdtempSync(path.join(tmpdir(), 'kovo-rls-loader-identity-'));
+      const sourceDir = path.join(rootDir, 'packages/server/src');
+      const emitterPath = path.join(sourceDir, 'postgres-authorization-correspondence.ts');
+      mkdirSync(sourceDir, { recursive: true });
+      writeFileSync(emitterPath, 'export const emitter = true;\n');
+      const cases = [
+        { fileName: 'opaque%ZZ.js', specifier: './opaque%ZZ.js' },
+        { fileName: 'opaque-query.js?x', specifier: './opaque-query.js?x' },
+        { fileName: 'opaque-fragment.js#x', specifier: './opaque-fragment.js#x' },
+        { fileName: String.raw`opaque\alias.js`, specifier: String.raw`./opaque\\alias.js` },
+      ];
+      try {
+        const results = [];
+        for (const entry of cases) {
+          linkSync(emitterPath, path.join(sourceDir, entry.fileName));
+          const files = cleanFixture();
+          files.set(
+            'packages/server/src/rogue-policy.ts',
+            `const { emitPostgresRlsPolicySql: rogue } = module.require('${entry.specifier}'); export const sql = rogue({ site: 'admin' });`,
+          );
+          results.push({
+            ok: checkPostgresRlsEmissionDoor({ files, rootDir }).ok,
+            specifier: entry.specifier,
+          });
+        }
+        expect(results).toEqual(cases.map((entry) => ({ ok: false, specifier: entry.specifier })));
+      } finally {
+        rmSync(rootDir, { force: true, recursive: true });
+      }
+    },
+  );
 
   it('uses symbol identity rather than rejecting an unrelated same-spelled local', () => {
     const files = cleanFixture();
