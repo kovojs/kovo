@@ -14,6 +14,10 @@ function kv449(source: string) {
   return compile(source).diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
 }
 
+function kv235(source: string) {
+  return compile(source).diagnostics.filter((diagnostic) => diagnostic.code === 'KV235');
+}
+
 function kv449Project(
   source: string,
   extraFiles: readonly { readonly fileName: string; readonly source: string }[],
@@ -234,6 +238,101 @@ export const RuntimeFiltered = component({
     expect(
       runtimeFilteredNestedSpread.files.find((file) => file.kind === 'server')?.source,
     ).toContain('kovoSafeJsxSpread');
+  });
+
+  // @kovo-security-certifies C13 authored-executable-ref-provenance-closes
+  it.each([
+    ['direct handler', 'on:click="/c/other.client.js#privileged"'],
+    ['direct handler ASCII-case variant', 'ON:CLICK={\'/c/other.client.js#privileged\'}'],
+    [
+      'static-spread handler',
+      "{...{ 'on:click': '/c/other.client.js#privileged' }}",
+    ],
+    [
+      'static-spread handler ASCII-case variant',
+      "{...{ 'On:Click': '/c/other.client.js#privileged' }}",
+    ],
+    ['text derive module ref', 'data-bind="/c/other.client.js#privileged"'],
+    ['attribute derive module ref', 'data-bind:hidden="/c/other.client.js#privileged"'],
+    [
+      'property derive module ref',
+      'data-bind-prop:checked="/c/other.client.js#privileged"',
+    ],
+    [
+      'stream renderer module ref',
+      'data-stream-text="assistant:a1" data-stream-renderer="/c/other.client.js#privileged"',
+    ],
+    [
+      'module allowlist authority',
+      'data-kovo-module-allowlist="/c/other.client.js"',
+    ],
+  ])('closes app-authored static lowered executable references through %s', (_label, attributes) => {
+    const source = `
+import { component } from '@kovojs/core';
+export const Raw = component({
+  render: () => <button ${attributes}>Run</button>,
+});
+`;
+
+    expect(kv235(source)).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'App source hand-authors an executable lowered-IR reference',
+        ),
+      }),
+    ]);
+  });
+
+  it.each([
+    ['handler ref', "'on:click': '/c/other.client.js#privileged'"],
+    ['derive ref', "'data-bind:hidden': '/c/other.client.js#privileged'"],
+    ['derive property ref', "'data-bind-prop:checked': '/c/other.client.js#privileged'"],
+    ['stream renderer ref', "'data-stream-renderer': '/c/other.client.js#privileged'"],
+    ['module allowlist authority', "'data-kovo-module-allowlist': '/c/other.client.js'"],
+  ])(
+    'closes app-authored static lowered %s merged through primitive attrs',
+    (_label, attribute) => {
+      const source = `
+import { component } from '@kovojs/core';
+export const RawPrimitive = component({
+  render: () => (
+    <Tooltip.Trigger asChild attrs={{ ${attribute} }}>
+      <button>Run</button>
+    </Tooltip.Trigger>
+  ),
+});
+`;
+
+      expect(kv235(source)).toEqual([
+        expect.objectContaining({
+          message: expect.stringContaining(
+            'App source hand-authors an executable lowered-IR reference',
+          ),
+        }),
+      ]);
+    },
+  );
+
+  it('keeps typed event and execution-trigger inputs on compiler-owned lowering', () => {
+    const result = compile(`
+import { component } from '@kovojs/core';
+export const Typed = component({
+  state: () => ({ ready: false }),
+  render: () => (
+    <section>
+      <button onClick={() => { state.ready = true; }}>Run</button>
+      <output onIdle={() => { state.ready = true; }}>Idle</output>
+      <output onVisible={() => { state.ready = true; }}>Visible</output>
+    </section>
+  ),
+});
+`);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toEqual([]);
+    expect(serverSource).toContain('on:click=');
+    expect(serverSource).toContain('on:idle=');
+    expect(serverSource).toContain('on:visible=');
   });
 
   it('accepts realistic state, delegated-event, reviewed primitive, focus, form, and timer effects', () => {
