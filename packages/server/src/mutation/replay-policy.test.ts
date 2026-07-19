@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ScopedKey } from '@kovojs/core';
+
 // @kovo-security-classifier-corpus mutation-idem
 
 import { registerFrameworkSessionPrincipalSnapshot } from '../auth-principal.js';
@@ -161,7 +163,7 @@ describe('mutation replay response authority', () => {
   it('admits one canonical fresh token to replay storage', async () => {
     let observedIdem: string | undefined;
     const replayStore = {
-      get(_scope: string, idem: string) {
+      get(_key: ScopedKey, _scope: string, idem: string) {
         observedIdem = idem;
         return undefined;
       },
@@ -206,7 +208,7 @@ describe('mutation replay response authority', () => {
     const idem = mintMutationIdemToken();
     let observedScope: string | undefined;
     const replayStore = {
-      get(scope: string) {
+      get(_key: ScopedKey, scope: string) {
         observedScope = scope;
         return undefined;
       },

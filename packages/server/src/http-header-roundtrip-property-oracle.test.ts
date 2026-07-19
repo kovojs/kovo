@@ -218,6 +218,10 @@ function parseHttpResponse(wire: string): ParsedHttpResponse {
     const colon = line.indexOf(':');
     if (colon < 1) continue;
     const name = line.slice(0, colon).toLowerCase();
+    // Node owns this wall-clock transport field, not Kovo's header reconstruction. The live and
+    // generated servers run sequentially, so comparing their automatic Date seconds turns the
+    // cross-implementation security oracle into a clock-boundary flake.
+    if (name === 'date') continue;
     (headers[name] ??= []).push(line.slice(colon + 1).trim());
   }
   return { headers, status };

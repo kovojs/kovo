@@ -106,7 +106,10 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
       import('./live-target-registry.ts'),
       import('./mutation-wire.ts?operator-environment-production-live-target'),
       import('./response.ts?operator-environment-production-response'),
-      import('./schema.ts?operator-environment-production-schema'),
+      // Keep the schema constructor on the same canonical module instance used by env.ts. The
+      // private metadata registry intentionally rejects schemas minted by a duplicate module
+      // instance; this test is about the pinned operator snapshot, not duplicate-package trust.
+      import('./schema.ts'),
     ]);
 
     expect(env.resolveBootMode()).toBe('production');
