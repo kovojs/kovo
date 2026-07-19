@@ -17,6 +17,11 @@
       "summary": "Class-kill, forcing-gate, and measurable security-convergence roadmap."
     },
     {
+      "path": "plans/10x-better-security-2.md",
+      "role": "derive-and-rewitness",
+      "summary": "Derived security facts, runtime re-witnessing, and prover-assurance roadmap."
+    },
+    {
       "path": "plans/threat-matrix-plan.md",
       "role": "v1-signoff",
       "summary": "Threat-matrix coverage, external audit, and v1 freeze-gate roadmap."
