@@ -1,7 +1,7 @@
 // @kovo-security-classifier-corpus finite-security-operation-ir
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from './index.js';
+import { assertFixpoint, compileComponentModule } from './index.js';
 
 function compile(source: string) {
   return compileComponentModule({
@@ -195,40 +195,33 @@ export const DynamicExecutableRef = component({
     ]);
   });
 
-  it('keeps exact static reviewed executable references compiler-authorized', () => {
+  it('keeps compiler-emitted executable references accepted only through fixpoint provenance', () => {
     const result = compile(`
-export const StaticRefs = component({
+import { component } from '@kovojs/core';
+export const TypedRefs = component({
+  state: () => ({ checked: false }),
   render: () => (
-    <section>
-      <button on:click="/c/primitives.client.js#staticClick">Direct</button>
-      <button {...{ 'on:click': '/c/primitives.client.js#spreadClick' }}>Spread</button>
-      <button on:click={'/c/primitives.client.js#expressionClick'}>Expression</button>
-      <output data-bind="/c/primitives.client.js#textDerive">Text derive</output>
-      <output data-bind:hidden={'/c/primitives.client.js#hiddenDerive'}>Attr derive</output>
-      <input data-bind-prop:checked="/c/primitives.client.js#checkedDerive" />
-      <p
-        data-stream-text="assistant:a1"
-        {...{ 'data-stream-renderer': '/c/primitives.client.js#streamRenderer' }}
-      >Stream</p>
-      <meta data-kovo-module-allowlist="/c/primitives.client.js" />
-    </section>
+    <button checked={state.checked} onClick={() => { state.checked = !state.checked; }}>
+      Toggle
+    </button>
   ),
 });
 `);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toEqual([]);
+    expect(serverSource).toContain('on:click=');
+    expect(serverSource).toContain('data-bind:checked=');
+    expect(serverSource).toContain('data-bind-prop:checked=');
+    expect(serverSource).toContain('data-kovo-module-allowlist=');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
 
+  it('keeps opaque app spreads behind runtime executable-selector stripping', () => {
     const runtimeFilteredNestedSpread = compile(`
 export const RuntimeFiltered = component({
   render: ({ profile }) => (
-    <button {...{ ...{
-      'on:click': profile.handler,
-      'data-bind': profile.derive,
-      'data-bind:hidden': profile.derive,
-      'data-bind-prop:checked': profile.derive,
-      'data-stream-renderer': profile.renderer,
-      'data-kovo-module-allowlist': profile.module,
-    } }}>Nested spread</button>
+    <button {...profile.attrs}>Opaque spread</button>
   ),
 });
 `);
@@ -258,6 +251,7 @@ export const RuntimeFiltered = component({
       'property derive module ref',
       'data-bind-prop:checked="/c/other.client.js#privileged"',
     ],
+    ['property binding path', 'data-bind-prop:checked="state.checked"'],
     [
       'stream renderer module ref',
       'data-stream-text="assistant:a1" data-stream-renderer="/c/other.client.js#privileged"',
@@ -287,6 +281,7 @@ export const Raw = component({
     ['handler ref', "'on:click': '/c/other.client.js#privileged'"],
     ['derive ref', "'data-bind:hidden': '/c/other.client.js#privileged'"],
     ['derive property ref', "'data-bind-prop:checked': '/c/other.client.js#privileged'"],
+    ['derive property path', "'data-bind-prop:checked': 'cart.checked'"],
     ['stream renderer ref', "'data-stream-renderer': '/c/other.client.js#privileged'"],
     ['module allowlist authority', "'data-kovo-module-allowlist': '/c/other.client.js'"],
   ])(
@@ -312,6 +307,65 @@ export const RawPrimitive = component({
       ]);
     },
   );
+
+  it('closes duplicate and nested static-spread executable selectors by authored provenance', () => {
+    const diagnostics = kv235(`
+import { component } from '@kovojs/core';
+export const Nested = component({
+  render: () => (
+    <button {...{
+      'on:click': '/c/other.client.js#first',
+      ...{ 'On:Click': '/c/other.client.js#second' },
+      'data-bind-prop:checked': 'cart.checked',
+    }}>Run</button>
+  ),
+});
+`);
+
+    expect(diagnostics).toHaveLength(3);
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('on:click'),
+        expect.stringContaining('On:Click'),
+        expect.stringContaining('data-bind-prop:checked'),
+      ]),
+    );
+  });
+
+  it('closes duplicate and nested primitive attrs without trusting the carrier tag', () => {
+    const diagnostics = kv235(`
+import { component } from '@kovojs/core';
+export const NestedPrimitive = component({
+  render: () => (
+    <Tooltip.Trigger {...{ attrs: {
+      'on:click': '/c/other.client.js#first',
+      'On:Click': '/c/other.client.js#second',
+      'data-bind-prop:checked': 'state.checked',
+    } }}>
+      <button>Run</button>
+    </Tooltip.Trigger>
+  ),
+});
+`);
+
+    expect(diagnostics).toHaveLength(3);
+  });
+
+  it('preserves data-only query and state binding paths while closing module refs', () => {
+    const result = compile(`
+import { component } from '@kovojs/core';
+export const DataBindings = component({
+  render: () => (
+    <section>
+      <output data-bind="cart.count">Count</output>
+      <output data-bind:hidden="state.hidden">Hidden</output>
+    </section>
+  ),
+});
+`);
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toEqual([]);
+  });
 
   it('keeps typed event and execution-trigger inputs on compiler-owned lowering', () => {
     const result = compile(`

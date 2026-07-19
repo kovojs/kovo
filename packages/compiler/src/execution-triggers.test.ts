@@ -16,8 +16,8 @@ import { component } from '@kovojs/core';
 export const Search = component({
   render: () => (
     <section>
-      <search-index on:idle="/c/components/search.client.js#Search$warm"></search-index>
-      <sales-chart on:visible="/c/components/search.client.js#Search$mount"></sales-chart>
+      <search-index onIdle={() => {}}></search-index>
+      <sales-chart onVisible={() => {}}></sales-chart>
     </section>
   ),
 });
@@ -25,12 +25,12 @@ export const Search = component({
     });
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
     expect(serverSource).toMatch(
-      /on:idle="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/search\.client\.js#Search\$warm"/,
+      /on:idle="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/search\.client\.js#Search\$search-index_idle"/,
     );
     expect(serverSource).toMatch(
-      /on:visible="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/search\.client\.js#Search\$mount"/,
+      /on:visible="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/search\.client\.js#Search\$sales-chart_visible"/,
     );
     expect(serverSource).not.toContain('on:idle="/c/components/search.client.js');
     expect(serverSource).not.toContain('on:visible="/c/components/search.client.js');
@@ -43,18 +43,44 @@ export const Search = component({
 export const ExecutionTriggers = component({
   render: () => (
     <section>
-      <button on:click="/c/cart.client.js#Cart$add">Add</button>
-      <search-index on:idle="/c/search.client.js#Search$warm"></search-index>
-      <sales-chart on:visible="/c/chart.client.js#SalesChart$mount"></sales-chart>
+      <button onClick={() => {}}>Add</button>
+      <search-index onIdle={() => {}}></search-index>
+      <sales-chart onVisible={() => {}}></sales-chart>
       {/* KV211: stock ticker intentionally starts at parse for market-open pages. */}
-      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+      <stock-ticker onLoad={() => {}}></stock-ticker>
     </section>
   ),
 });
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV211')).toEqual([]);
+  });
+
+  it('pins typed events to the exact runtime-installed delegation vocabulary', () => {
+    const result = compileComponentModule({
+      fileName: 'execution-triggers.tsx',
+      source: `
+export const RuntimeEvents = component({
+  render: () => (
+    <section>
+      <output onAnimationEnd={() => {}}>Animation</output>
+      <output onBeforeToggle={() => {}}>Toggle</output>
+      <output onCancel={() => {}}>Cancel</output>
+      <output onPaste={() => {}}>Paste</output>
+      <output onPointerEnter={() => {}}>Enter</output>
+      <output onScroll={() => {}}>Scroll</output>
+      <output onDblClick={() => {}}>Not installed</output>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV212')).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('on:dblclick') }),
+    ]);
   });
 
   it('reports KV211 and KV212 for unjustified eager execution and unknown triggers', () => {
@@ -64,15 +90,19 @@ export const ExecutionTriggers = component({
 export const ExecutionTriggers = component({
   render: () => (
     <section>
-      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
-      <video-player on:media="/c/video.client.js#Video$mount"></video-player>
+      <stock-ticker onLoad={() => {}}></stock-ticker>
+      <video-player onMedia={() => {}}></video-player>
     </section>
   ),
 });
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(
+      result.diagnostics.filter(
+        (diagnostic) => diagnostic.code === 'KV211' || diagnostic.code === 'KV212',
+      ),
+    ).toMatchObject([
       {
         code: 'KV211',
         fileName: 'execution-triggers.tsx',
@@ -92,7 +122,7 @@ export const ExecutionTriggers = component({
     ]);
   });
 
-  it('ignores malformed on-colon attribute names before trigger validation', () => {
+  it('closes malformed app-authored on-colon lowered attributes before trigger validation', () => {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',
       source: `
@@ -106,7 +136,9 @@ export const ExecutionTriggers = component({
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: 'KV235', message: expect.stringContaining('on:Click') }),
+    ]);
   });
 
   it('ignores execution trigger text inside strings and comments', () => {
@@ -117,13 +149,13 @@ export const ExecutionTriggers = component({
   render: () => {
     const sample = '<stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>';
     // <video-player on:media="/c/video.client.js#Video$mount"></video-player>
-    return <button on:click="/c/cart.client.js#Cart$add">Add</button>;
+    return <button onClick={() => {}}>Add</button>;
   },
 });
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
   });
 
   it('requires KV211 justification to be attached to the eager trigger', () => {
@@ -134,15 +166,15 @@ export const ExecutionTriggers = component({
   render: () => (
     <section>
       {/* KV211: this explains another trigger. */}
-      <button on:click="/c/cart.client.js#Cart$add">Add</button>
-      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+      <button onClick={() => {}}>Add</button>
+      <stock-ticker onLoad={() => {}}></stock-ticker>
     </section>
   ),
 });
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV211')).toMatchObject([
       {
         code: 'KV211',
         fileName: 'execution-triggers.tsx',
@@ -162,14 +194,14 @@ export const ExecutionTriggers = component({
   render: () => (
     <section>
       <p>{/* KV211: paragraph text explains something else. */}</p>
-      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+      <stock-ticker onLoad={() => {}}></stock-ticker>
     </section>
   ),
 });
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV211')).toMatchObject([
       {
         code: 'KV211',
         fileName: 'execution-triggers.tsx',
