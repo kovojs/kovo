@@ -29,6 +29,25 @@ describe('security-gate-mutations', () => {
     expect(analyzerSummaryMutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });
 
+  it('executes framework-identity and compiler-resolution mutants against behavioral verdicts', () => {
+    const behavioralNames = [
+      'compiler-capability-closure/drop-webrtc-network-global',
+      'compiler-compile/drop-framework-identity-project-registration',
+      'compiler-render-equivalence/drop-project-identity-files',
+      'compiler-vite/drop-js-to-ts-sibling-candidates',
+      'core-framework-identity/drop-element-access-canonicalization',
+      'core-framework-identity/drop-element-access-kind-resolution',
+      'core-framework-identity/drop-export-star-resolution',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
+      behavioralNames.includes(mutant.name),
+    );
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(behavioralNames.sort());
+    expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
+    expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
+  });
+
   it('kills every enrolled security gate branch deletion mutant', async () => {
     const results = await runSecurityGateMutationHarness();
 
