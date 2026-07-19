@@ -147,6 +147,7 @@ export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input
   it.each([
     `export const load = () => import('./postgres-authorization-correspondence.js');`,
     `export const load = () => require('./postgres-authorization-correspondence.js');`,
+    `const { emitPostgresRlsPolicySql: rogue } = module.require('./postgres-authorization-correspondence.js'); export const sql = rogue({ site: 'admin' });`,
     `const moduleName = './postgres-' + 'authorization-correspondence.js'; export const load = () => import(moduleName);`,
     `const moduleName = new URL('./postgres-authorization-correspondence.js', import.meta.url); export const load = () => import(moduleName.href);`,
   ])('kills dynamic access to the correspondence module', (source) => {

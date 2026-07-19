@@ -1729,6 +1729,37 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('checks the exact policy posture after provisioning rather than trusting policy reset names', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-reprovision-'));
+    roots.push(dataDir);
+    const baseline = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await baseline.ready;
+    } finally {
+      await baseline.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE POLICY attacker_open ON public.kovo_runtime_notes',
+        'FOR ALL TO PUBLIC USING (true) WITH CHECK (true)',
+      ].join(' '),
+    );
+    const reprovisioned = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheck: { onBoot: true },
+      provisionOnBoot: true,
+      schema,
+    });
+    try {
+      await expect(reprovisioned.ready).rejects.toThrow('KV433_POLICY_SET');
+    } finally {
+      await reprovisioned.close();
+    }
+  });
+
   it('refuses expected policy names with substituted role, command, or permissiveness', async () => {
     const variants = [
       {
@@ -5095,6 +5126,17 @@ describe('createPostgresAppRuntimeDb', () => {
     } finally {
       await privilegedClient.close();
     }
+  });
+
+  it('defaults the external Postgres posture audit on even when boot provisioning is enabled', () => {
+    const config = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+      databaseUrl: 'postgres://app-runtime@127.0.0.1:5432/kovo',
+      driver: 'node-postgres',
+      provisionOnBoot: true,
+      schema,
+    });
+
+    expect(config).toMatchObject({ postureCheckOnBoot: true, provisionOnBoot: true });
   });
 
   it('does not dispatch a late Promise.all replacement while closing external role pools', async () => {
