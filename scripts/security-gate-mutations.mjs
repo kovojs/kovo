@@ -20,6 +20,7 @@ import * as fundamentalFixesCensusGate from './fundamental-fixes-census-gate.mjs
 import * as securityTestBuildGate from './security-test-build-gate.mjs';
 import * as threatMatrixGate from './threat-matrix-gate.mjs';
 import * as requestIngressPolicy from '../packages/server/src/request-ingress-policy.ts';
+import * as frameworkImplementationDigest from '../packages/compiler/src/security/framework-implementation-digest.ts';
 
 const repoRoot = findRepoRoot();
 const scriptsDir = path.join(repoRoot, 'scripts');
@@ -45,6 +46,10 @@ const compilerSecuritySemanticGraphPath = path.join(
 const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/capability-closure.ts',
+);
+const frameworkImplementationDigestPath = path.join(
+  repoRoot,
+  'packages/compiler/src/security/framework-implementation-digest.ts',
 );
 const threatMatrixGatePath = path.join(scriptsDir, 'threat-matrix-gate.mjs');
 const drizzleSessionProvenancePath = path.join(
@@ -92,6 +97,12 @@ const weakenedBrowserRtcNetworkCapabilityBranch = [
   "  ['EventSource', 'network'],",
   "  ['Function', 'vm'],",
 ].join('\n');
+
+const exactFrameworkImplementationDigestBranch =
+  '  return installedDigest !== undefined && reviewedDigests.includes(installedDigest);';
+const deletedFrameworkImplementationDigestBranch = '  return true;';
+const invertedFrameworkImplementationDigestBranch =
+  '  return installedDigest === undefined || !reviewedDigests.includes(installedDigest);';
 
 const canonicalPostMethodBranch =
   "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
@@ -1235,6 +1246,28 @@ const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
 ].join('\n');
 
 export const SECURITY_GATE_MUTANTS = [
+  {
+    baseModule: frameworkImplementationDigest,
+    description: 'Deletes exact installed first-party implementation identity comparison.',
+    expectedKiller:
+      'same-manifest implementation drift must not match the compiler-owned reviewed digest',
+    name: 'compiler-capability-closure/delete-installed-implementation-digest-comparison',
+    replacement: deletedFrameworkImplementationDigestBranch,
+    search: exactFrameworkImplementationDigestBranch,
+    sourceFile: frameworkImplementationDigestPath,
+    test: assertFrameworkImplementationDigestComparisonIsClosed,
+  },
+  {
+    baseModule: frameworkImplementationDigest,
+    description: 'Inverts exact installed first-party implementation identity comparison.',
+    expectedKiller:
+      'an exact installed implementation must match while drift and absence remain closed',
+    name: 'compiler-capability-closure/invert-installed-implementation-digest-comparison',
+    replacement: invertedFrameworkImplementationDigestBranch,
+    search: exactFrameworkImplementationDigestBranch,
+    sourceFile: frameworkImplementationDigestPath,
+    test: assertFrameworkImplementationDigestComparisonIsClosed,
+  },
   {
     description: 'Trusts an app analyzer declaration without proving the helper body.',
     expectedKiller: 'private analyzer summaries must retain exact same-file structural proof',
@@ -4090,6 +4123,20 @@ async function assertCoreResolverSourceKeepsElementAccess(_moduleUnderTest, { so
     throw new Error(
       'core resolver no longer routes literal ElementAccessExpression through namespace member identity',
     );
+  }
+}
+
+async function assertFrameworkImplementationDigestComparisonIsClosed(moduleUnderTest) {
+  const reviewed = `kovo-source-tree-sha256:${'a'.repeat(64)}`;
+  const drifted = `kovo-source-tree-sha256:${'b'.repeat(64)}`;
+  if (!moduleUnderTest.frameworkImplementationDigestMatches([reviewed], reviewed)) {
+    throw new Error('exact installed framework implementation digest did not match');
+  }
+  if (moduleUnderTest.frameworkImplementationDigestMatches([reviewed], drifted)) {
+    throw new Error('same-manifest framework implementation drift matched reviewed identity');
+  }
+  if (moduleUnderTest.frameworkImplementationDigestMatches([reviewed], undefined)) {
+    throw new Error('missing installed framework implementation digest matched reviewed identity');
   }
 }
 

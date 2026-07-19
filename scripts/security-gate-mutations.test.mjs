@@ -13,6 +13,14 @@ describe('security-gate-mutations', () => {
     expect(results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          name: 'compiler-capability-closure/delete-installed-implementation-digest-comparison',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-capability-closure/invert-installed-implementation-digest-comparison',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'compiler-capability-closure/drop-webrtc-network-global',
           status: 'killed',
         }),

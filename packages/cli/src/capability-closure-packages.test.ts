@@ -4,6 +4,8 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -63,7 +65,9 @@ function fixtureRoot(): { importer: string; root: string } {
 
 function firstPartyImplementationFixture(layout: 'packed-dist' | 'workspace-source'): {
   importer: string;
-  mutateImplementation: () => void;
+  implementationFiles: readonly { fileName: string; label: string }[];
+  manifestPath: string;
+  packageRoot: string;
   source: string;
 } {
   const root = mkdtempSync(join(tmpdir(), `kovo-first-party-${layout}-`));
@@ -77,12 +81,10 @@ function firstPartyImplementationFixture(layout: 'packed-dist' | 'workspace-sour
   const workspaceManifest = JSON.parse(
     readFileSync(join(workspaceStyleRoot, 'package.json'), 'utf8'),
   ) as Record<string, unknown> & { publishConfig?: Record<string, unknown> };
+  const manifestPath = join(installedStyleRoot, 'package.json');
   if (layout === 'workspace-source') {
     cpSync(join(workspaceStyleRoot, 'src'), join(installedStyleRoot, 'src'), { recursive: true });
-    writeFileSync(
-      join(installedStyleRoot, 'package.json'),
-      `${JSON.stringify(workspaceManifest, null, 2)}\n`,
-    );
+    writeFileSync(manifestPath, `${JSON.stringify(workspaceManifest, null, 2)}\n`);
   } else {
     execFileSync('pnpm', ['--filter', '@kovojs/style', 'build:dist'], {
       cwd: repoRoot,
@@ -92,7 +94,7 @@ function firstPartyImplementationFixture(layout: 'packed-dist' | 'workspace-sour
       recursive: true,
     });
     writeFileSync(
-      join(installedStyleRoot, 'package.json'),
+      manifestPath,
       `${JSON.stringify({ ...workspaceManifest, ...workspaceManifest.publishConfig }, null, 2)}\n`,
     );
   }
@@ -105,34 +107,95 @@ function firstPartyImplementationFixture(layout: 'packed-dist' | 'workspace-sour
     export const page = route('/theme', { render() { return tokens; } });
   `;
   writeFileSync(importer, source);
-  const implementationFile = join(
-    installedStyleRoot,
-    layout === 'workspace-source' ? 'src/index.ts' : 'dist/index.mjs',
-  );
+  const implementationFiles =
+    layout === 'workspace-source'
+      ? [{ fileName: join(installedStyleRoot, 'src/index.ts'), label: 'resolved source entry' }]
+      : packedImplementationMutationFiles(installedStyleRoot);
   return {
     importer,
-    mutateImplementation: () => {
-      writeFileSync(
-        implementationFile,
-        `${readFileSync(implementationFile, 'utf8')}\nexport const sameVersionDrift = true;\n`,
-      );
-    },
+    implementationFiles,
+    manifestPath,
+    packageRoot: installedStyleRoot,
     source,
   };
 }
 
+function packedImplementationMutationFiles(
+  packageRoot: string,
+): readonly { fileName: string; label: string }[] {
+  const distRoot = join(packageRoot, 'dist');
+  const files = readdirSync(distRoot).sort();
+  const named = (label: string, predicate: (fileName: string) => boolean) => {
+    const fileName = files.find(predicate);
+    if (fileName === undefined) throw new Error(`packed fixture has no ${label}`);
+    return { fileName: join(distRoot, fileName), label };
+  };
+  return [
+    { fileName: join(distRoot, 'index.mjs'), label: 'resolved entry' },
+    named(
+      'non-entry chunk',
+      (fileName) => fileName.endsWith('.mjs') && !['index.mjs', 'internal.mjs'].includes(fileName),
+    ),
+    named('non-entry source map', (fileName) => fileName.endsWith('.mjs.map')),
+    named(
+      'non-entry declaration',
+      (fileName) =>
+        fileName.endsWith('.d.mts') && !['index.d.mts', 'internal.d.mts'].includes(fileName),
+    ),
+  ];
+}
+
 function analyzeFirstPartyFixture(importer: string, source: string) {
-  const packages = resolveCapabilityPackages(
+  return analyzeCapabilityClosure({
+    files: [{ fileName: 'app.ts', source }],
+    packages: resolveFirstPartyFixture(importer),
+  });
+}
+
+function resolveFirstPartyFixture(importer: string) {
+  return resolveCapabilityPackages(
     [
       { importedNames: ['route'], specifier: '@kovojs/server' },
       { importedNames: ['tokens'], specifier: '@kovojs/style' },
     ],
     importer,
   );
-  return analyzeCapabilityClosure({
-    files: [{ fileName: 'app.ts', source }],
-    packages,
+}
+
+function firstPartyCompilerCatalogFixture(): {
+  catalogFile: string;
+  importer: string;
+  source: string;
+} {
+  const root = mkdtempSync(join(tmpdir(), 'kovo-first-party-compiler-catalog-'));
+  roots.push(root);
+  const scopeRoot = join(root, 'node_modules/@kovojs');
+  const installedCompilerRoot = join(scopeRoot, 'compiler');
+  mkdirSync(installedCompilerRoot, { recursive: true });
+  writeFileSync(join(root, 'package.json'), '{"type":"module"}\n');
+  cpSync(join(repoRoot, 'packages/compiler/src'), join(installedCompilerRoot, 'src'), {
+    recursive: true,
   });
+  cpSync(
+    join(repoRoot, 'packages/compiler/package.json'),
+    join(installedCompilerRoot, 'package.json'),
+  );
+  symlinkSync(join(repoRoot, 'packages/server'), join(scopeRoot, 'server'), 'dir');
+  const importer = join(root, 'app.mjs');
+  const source = `
+    import { route } from '@kovojs/server';
+    import { analyzeCapabilityClosure as compilerInternal } from '@kovojs/compiler/internal';
+    export const page = route('/compiler', { render() { return compilerInternal; } });
+  `;
+  writeFileSync(importer, source);
+  return {
+    catalogFile: join(
+      installedCompilerRoot,
+      'src/security/framework-public-runtime-export-posture.generated.ts',
+    ),
+    importer,
+    source,
+  };
 }
 
 describe('capability package resolution', () => {
@@ -140,17 +203,173 @@ describe('capability package resolution', () => {
     'binds the actual first-party compiler verdict to %s implementation bytes',
     (layout) => {
       const fixture = firstPartyImplementationFixture(layout);
+      const baselinePackages = resolveFirstPartyFixture(fixture.importer);
+      expect(
+        analyzeCapabilityClosure({
+          files: [{ fileName: 'app.ts', source: fixture.source }],
+          packages: baselinePackages,
+        }).diagnostics,
+      ).toEqual([]);
+
+      const manifest = JSON.parse(readFileSync(fixture.manifestPath, 'utf8')) as Record<
+        string,
+        unknown
+      >;
+      manifest.implementationDigest = baselinePackages.find(
+        (fact) => fact.packageName === '@kovojs/style',
+      )?.implementationDigest;
+      writeFileSync(fixture.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
       expect(analyzeFirstPartyFixture(fixture.importer, fixture.source).diagnostics).toEqual([]);
 
-      fixture.mutateImplementation();
+      for (const implementation of fixture.implementationFiles) {
+        const baseline = readFileSync(implementation.fileName);
+        writeFileSync(
+          implementation.fileName,
+          Buffer.concat([
+            baseline,
+            Buffer.from(`\n// same-version ${implementation.label} drift\n`),
+          ]),
+        );
 
-      const drifted = analyzeFirstPartyFixture(fixture.importer, fixture.source);
+        const drifted = analyzeFirstPartyFixture(fixture.importer, fixture.source);
+        expect(drifted.diagnostics, implementation.label).toHaveLength(1);
+        expect(drifted.diagnostics[0]?.message, implementation.label).toContain(
+          'installed implementation digest does not match',
+        );
+
+        writeFileSync(implementation.fileName, baseline);
+        expect(
+          analyzeFirstPartyFixture(fixture.importer, fixture.source).diagnostics,
+          implementation.label,
+        ).toEqual([]);
+      }
+
+      const implementationRoot = join(
+        fixture.packageRoot,
+        layout === 'workspace-source' ? 'src' : 'dist',
+      );
+      const movedImplementationRoot = `${implementationRoot}-symlink-target`;
+      renameSync(implementationRoot, movedImplementationRoot);
+      symlinkSync(movedImplementationRoot, implementationRoot, 'dir');
+      const linkedRoot = analyzeFirstPartyFixture(fixture.importer, fixture.source);
+      expect(linkedRoot.diagnostics).toHaveLength(1);
+      expect(linkedRoot.diagnostics[0]?.message).toContain(
+        'no compiler-derived installed implementation digest',
+      );
+      rmSync(implementationRoot);
+      renameSync(movedImplementationRoot, implementationRoot);
+
+      if (layout === 'workspace-source') {
+        const runtimeAsset = join(fixture.packageRoot, 'src/runtime-template.json');
+        writeFileSync(runtimeAsset, '{"template":"drift"}\n');
+        const assetDrift = analyzeFirstPartyFixture(fixture.importer, fixture.source);
+        expect(assetDrift.diagnostics).toHaveLength(1);
+        expect(assetDrift.diagnostics[0]?.message).toContain(
+          'installed implementation digest does not match',
+        );
+        rmSync(runtimeAsset);
+
+        const runtimeLink = join(fixture.packageRoot, 'src/runtime-link.ts');
+        symlinkSync(join(fixture.packageRoot, 'src/index.ts'), runtimeLink);
+        const linked = analyzeFirstPartyFixture(fixture.importer, fixture.source);
+        expect(linked.diagnostics).toHaveLength(1);
+        expect(linked.diagnostics[0]?.message).toContain(
+          'no compiler-derived installed implementation digest',
+        );
+        rmSync(runtimeLink);
+
+        rmSync(join(fixture.packageRoot, 'src'), { recursive: true });
+        const missingSource = analyzeFirstPartyFixture(fixture.importer, fixture.source);
+        expect(missingSource.diagnostics).toHaveLength(1);
+        expect(missingSource.diagnostics[0]?.message).toContain(
+          'could not be resolved to one exact installed manifest',
+        );
+      }
+    },
+  );
+
+  it('hashes repeated first-party subpaths once and never walks third-party dist trees', () => {
+    const firstParty = firstPartyImplementationFixture('workspace-source');
+    const firstPartyWalks: string[] = [];
+    const facts = resolveCapabilityPackages(
+      [
+        { importedNames: ['tokens'], specifier: '@kovojs/style' },
+        { importedNames: ['style'], specifier: '@kovojs/style/internal' },
+      ],
+      firstParty.importer,
+      {
+        onImplementationTreeWalk(packageRoot, layout) {
+          firstPartyWalks.push(`${packageRoot}:${layout}`);
+        },
+      },
+    );
+    expect(facts).toHaveLength(2);
+    expect(new Set(facts.map((fact) => fact.implementationDigest)).size).toBe(1);
+    expect(firstPartyWalks).toHaveLength(1);
+
+    const thirdParty = fixtureRoot();
+    const packageRoot = join(thirdParty.root, 'node_modules/safe-parser');
+    const manifestPath = join(packageRoot, 'package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
+    manifest.exports = { '.': { default: './dist/index.js', import: './dist/index.js' } };
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    mkdirSync(join(packageRoot, 'dist'));
+    writeFileSync(join(packageRoot, 'dist/index.js'), 'export const value = 1;\n');
+    const thirdPartyWalks: string[] = [];
+    const [thirdPartyFact] = resolveCapabilityPackages(
+      [{ importedNames: ['value'], specifier: 'safe-parser' }],
+      thirdParty.importer,
+      {
+        onImplementationTreeWalk(packageRoot, layout) {
+          thirdPartyWalks.push(`${packageRoot}:${layout}`);
+        },
+      },
+    );
+    expect(thirdPartyFact).toMatchObject({ exportStatus: 'resolved', packageName: 'safe-parser' });
+    expect(thirdPartyFact).not.toHaveProperty('implementationDigest');
+    expect(thirdPartyWalks).toEqual([]);
+  });
+
+  it('closes source compiler catalog permission and non-self digest drift', () => {
+    const fixture = firstPartyCompilerCatalogFixture();
+    const requests = [
+      { importedNames: ['route'], specifier: '@kovojs/server' },
+      {
+        importedNames: ['analyzeCapabilityClosure'],
+        specifier: '@kovojs/compiler/internal',
+      },
+    ];
+    const analyzeFixture = () =>
+      analyzeCapabilityClosure({
+        files: [{ fileName: 'app.ts', source: fixture.source }],
+        packages: resolveCapabilityPackages(requests, fixture.importer),
+      });
+    const baseline = analyzeFixture();
+    expect(baseline.diagnostics).toHaveLength(1);
+    expect(baseline.diagnostics[0]?.message).toContain(
+      'does not classify public subpath ./internal',
+    );
+
+    const catalog = readFileSync(fixture.catalogFile, 'utf8');
+    const mutations = [
+      catalog.replace('"authority-free"', '"request-closed"'),
+      catalog.replace(
+        /kovo-source-tree-sha256:[a-f0-9]{64}/u,
+        `kovo-source-tree-sha256:${'0'.repeat(64)}`,
+      ),
+    ];
+    for (const mutation of mutations) {
+      expect(mutation).not.toBe(catalog);
+      writeFileSync(fixture.catalogFile, mutation);
+      const drifted = analyzeFixture();
       expect(drifted.diagnostics).toHaveLength(1);
+      expect(drifted.diagnostics[0]?.code).toBe('KV448');
       expect(drifted.diagnostics[0]?.message).toContain(
         'installed implementation digest does not match',
       );
-    },
-  );
+      writeFileSync(fixture.catalogFile, catalog);
+    }
+  });
 
   it('keeps Node built-ins out of filesystem package-metadata resolution', () => {
     const { importer } = fixtureRoot();

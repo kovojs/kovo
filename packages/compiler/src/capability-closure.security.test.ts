@@ -9,6 +9,7 @@ import {
   type ResolvedCapabilityPackage,
 } from './security/capability-closure.js';
 import { frameworkExportPosturePackages } from './security/framework-public-runtime-export-posture.generated.js';
+import { canonicalFrameworkImplementationDigest } from './security/framework-implementation-digest.js';
 
 const FRAMEWORK_VERSION = '0.2.0';
 
@@ -17,6 +18,7 @@ function resolved(
   options: {
     conditions?: readonly string[];
     fingerprint?: string;
+    implementationDigest?: string | null;
     packageVersion?: string;
   } = {},
 ): ResolvedCapabilityPackage {
@@ -32,9 +34,18 @@ function resolved(
   const frameworkConditions = frameworkVariant?.[1].find(
     ([candidate]) => candidate === subpath,
   )?.[1];
+  const reviewedImplementationDigest =
+    frameworkVariant?.[2][0] === undefined
+      ? undefined
+      : canonicalFrameworkImplementationDigest(packageName, frameworkVariant[2][0]);
+  const implementationDigest =
+    options.implementationDigest === null
+      ? undefined
+      : (options.implementationDigest ?? reviewedImplementationDigest);
   return {
     conditions: options.conditions ?? frameworkConditions ?? ['default', 'import'],
     exportStatus: 'resolved',
+    ...(implementationDigest === undefined ? {} : { implementationDigest }),
     manifestFingerprint: options.fingerprint ?? frameworkVariant?.[0] ?? `manifest:${packageName}`,
     packageName,
     packageVersion:
@@ -513,6 +524,41 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(contradictory.diagnostics[0]!.message).toContain('2 contradictory summaries');
   });
 
+  it('binds first-party verdicts to exact installed source or packed implementation identity', () => {
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          export const page = route('/identity', { render() { return null; } });
+        `,
+      },
+    ];
+    const reviewed = resolved('@kovojs/server');
+    expect(analyze(files, { packages: [reviewed] }).diagnostics).toEqual([]);
+
+    const drifted = analyze(files, {
+      packages: [
+        {
+          ...reviewed,
+          implementationDigest: `kovo-source-tree-sha256:${'0'.repeat(64)}`,
+        },
+      ],
+    });
+    expect(drifted.diagnostics).toHaveLength(1);
+    expect(drifted.diagnostics[0]!.message).toContain(
+      'installed implementation digest does not match',
+    );
+
+    const missing = analyze(files, {
+      packages: [resolved('@kovojs/server', { implementationDigest: null })],
+    });
+    expect(missing.diagnostics).toHaveLength(1);
+    expect(missing.diagnostics[0]!.message).toContain(
+      'no compiler-derived installed implementation digest',
+    );
+  });
+
   it('requires package summaries to classify side-effect module initialization explicitly', () => {
     const files = [
       {
@@ -916,6 +962,10 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     const packageFact = resolved('@kovojs/compiler/internal', {
       conditions: ['default'],
       fingerprint: compilerPackage[2][0]![0],
+      implementationDigest: canonicalFrameworkImplementationDigest(
+        '@kovojs/compiler',
+        compilerPackage[2][0]![2][0]!,
+      )!,
     });
     const summary: PackageCapabilitySummary = {
       entries: [

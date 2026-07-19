@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -22,6 +23,20 @@ export const FRAMEWORK_EXPORT_POSTURE_GENERATED = path.join(
   repoRoot,
   'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
 );
+
+const FRAMEWORK_SOURCE_IMPLEMENTATION_PREFIX = 'kovo-source-tree-sha256:';
+const FRAMEWORK_PACKED_IMPLEMENTATION_PREFIX = 'kovo-packed-tree-sha256:';
+const FRAMEWORK_COMPILER_SELF_SOURCE_IMPLEMENTATION_PREFIX =
+  'kovo-compiler-self-source-tree-sha256:';
+const FRAMEWORK_COMPILER_SELF_PACKED_IMPLEMENTATION_PREFIX =
+  'kovo-compiler-self-packed-tree-sha256:';
+const FRAMEWORK_COMPILER_PACKAGE = '@kovojs/compiler';
+const FRAMEWORK_COMPILER_SOURCE_CATALOG_FILE =
+  'src/security/framework-public-runtime-export-posture.generated.ts';
+const FRAMEWORK_COMPILER_PACKED_CATALOG_FILES = new Set([
+  'dist/internal.mjs',
+  'dist/internal.mjs.map',
+]);
 
 const rawCapabilities = new Set([
   'database-driver',
@@ -72,7 +87,10 @@ export function readFrameworkExportPostureLedger(fileName = FRAMEWORK_EXPORT_POS
  * Runtime membership comes from TypeScript symbol value flags, not text or naming conventions.
  * Every public subpath also gets an explicit `<module>` member for evaluation/side-effect posture.
  */
-export function computeFrameworkRuntimeSurface() {
+export function computeFrameworkRuntimeSurface({
+  compilerPackedTreeSha256,
+  includePackedImplementation = false,
+} = {}) {
   const reportByPackage = new Map(exportedSymbolsReport().packages.map((pkg) => [pkg.name, pkg]));
   const packages = [];
   const emptyPackages = [];
@@ -90,10 +108,21 @@ export function computeFrameworkRuntimeSurface() {
         `${declared.name}: public-packages.json public boundary differs from manifest-declared public exports`,
       );
     }
+    const sourceTreeSha256 = productionSourceTreeSha256(
+      path.join(repoRoot, 'packages', declared.dir),
+      declared.name,
+    );
     const identity = {
+      implementationVariants: frameworkImplementationVariants(
+        manifest,
+        path.join(repoRoot, 'packages', declared.dir),
+        sourceTreeSha256,
+        includePackedImplementation,
+        compilerPackedTreeSha256,
+      ),
       packageName: declared.name,
       packageVersion: manifest.version,
-      sourceTreeSha256: productionSourceTreeSha256(path.join(repoRoot, 'packages', declared.dir)),
+      sourceTreeSha256,
     };
     if (publicSubpaths.length === 0) {
       emptyPackages.push({ ...identity, manifestVariants: manifestVariants(manifest) });
@@ -257,7 +286,7 @@ export function validateFrameworkExportPosture({
 }
 
 /** Render the compiler-owned, package-local index derived only from the reviewed ledger. */
-export function renderFrameworkExportPostureGenerated(ledger) {
+export function renderFrameworkExportPostureGenerated(ledger, actual) {
   const groups = arrayOrEmpty(ledger.packages).flatMap((pkg) =>
     arrayOrEmpty(pkg.postureGroups).map((group) => [
       pkg.packageName,
@@ -266,6 +295,12 @@ export function renderFrameworkExportPostureGenerated(ledger) {
       group.rootKind,
       group.reason ?? null,
       Object.entries(group.members ?? {}).sort(([left], [right]) => compareStrings(left, right)),
+    ]),
+  );
+  const actualByPackage = new Map(
+    [...arrayOrEmpty(actual?.packages), ...arrayOrEmpty(actual?.emptyPackages)].map((pkg) => [
+      pkg.packageName,
+      pkg,
     ]),
   );
   const packages = [
@@ -280,6 +315,11 @@ export function renderFrameworkExportPostureGenerated(ledger) {
           ),
         ),
       ].sort(compareStrings);
+      const implementationByFingerprint = new Map(
+        arrayOrEmpty(actualByPackage.get(pkg.packageName)?.implementationVariants).map(
+          (variant) => [variant.fingerprint, variant.digests],
+        ),
+      );
       return [
         pkg.packageName,
         pkg.packageVersion,
@@ -289,6 +329,7 @@ export function renderFrameworkExportPostureGenerated(ledger) {
             subpath,
             exportArmEvidence(variant.exports, subpath).conditions,
           ]),
+          implementationByFingerprint.get(variant.fingerprint) ?? [],
         ]),
       ];
     })
@@ -311,6 +352,7 @@ export function renderFrameworkExportPostureGenerated(ledger) {
     '  manifestVariants: readonly (readonly [',
     '    fingerprint: string,',
     '    subpaths: readonly (readonly [subpath: string, conditions: readonly string[]])[],',
+    '    implementationDigests: readonly string[],',
     '  ])[],',
     '];',
     'export type FrameworkExportPostureGroup = readonly [',
@@ -344,10 +386,10 @@ function quoteTypeScriptString(value) {
 function renderGeneratedPackages(packages) {
   const rendered = packages.map(([name, version, variants]) => {
     const renderedVariants = variants.map(
-      ([fingerprint, subpaths]) =>
+      ([fingerprint, subpaths, implementationDigests]) =>
         `    [${JSON.stringify(fingerprint)}, [\n${subpaths
           .map((row) => `      ${JSON.stringify(row)},`)
-          .join('\n')}\n    ]],`,
+          .join('\n')}\n    ], ${JSON.stringify(implementationDigests)}],`,
     );
     return `  [${JSON.stringify(name)}, ${JSON.stringify(version)}, [\n${renderedVariants.join('\n')}\n  ]],`;
   });
@@ -487,17 +529,58 @@ function validateMatrixPosture(matrix, label, findings) {
 }
 
 function manifestVariants(manifest) {
-  const published = {
-    ...manifest,
-    ...(isRecord(manifest.publishConfig) ? manifest.publishConfig : {}),
-  };
-  const variants = [manifest, published].map((variant) => ({
+  const variants = manifestVariantCandidates(manifest).map((variant) => ({
     exports: variant.exports,
     fingerprint: capabilityManifestFingerprint(variant),
   }));
   return [...new Map(variants.map((variant) => [variant.fingerprint, variant])).values()].sort(
     (left, right) => compareStrings(left.fingerprint, right.fingerprint),
   );
+}
+
+function manifestVariantCandidates(manifest) {
+  return [
+    manifest,
+    {
+      ...manifest,
+      ...(isRecord(manifest.publishConfig) ? manifest.publishConfig : {}),
+    },
+  ];
+}
+
+function frameworkImplementationVariants(
+  manifest,
+  packageRoot,
+  sourceTreeSha256,
+  includePackedImplementation,
+  compilerPackedTreeSha256,
+) {
+  const candidates = manifestVariantCandidates(manifest);
+  const packedTreeSha256 = includePackedImplementation
+    ? manifest.name === FRAMEWORK_COMPILER_PACKAGE && compilerPackedTreeSha256 !== undefined
+      ? compilerPackedTreeSha256
+      : productionPackedTreeSha256(packageRoot, manifest.name)
+    : undefined;
+  const byFingerprint = new Map();
+  for (const [index, candidate] of candidates.entries()) {
+    const fingerprint = capabilityManifestFingerprint(candidate);
+    const digest =
+      index === 0
+        ? `${manifest.name === FRAMEWORK_COMPILER_PACKAGE ? FRAMEWORK_COMPILER_SELF_SOURCE_IMPLEMENTATION_PREFIX : FRAMEWORK_SOURCE_IMPLEMENTATION_PREFIX}${sourceTreeSha256}`
+        : packedTreeSha256 === undefined
+          ? undefined
+          : `${manifest.name === FRAMEWORK_COMPILER_PACKAGE ? FRAMEWORK_COMPILER_SELF_PACKED_IMPLEMENTATION_PREFIX : FRAMEWORK_PACKED_IMPLEMENTATION_PREFIX}${packedTreeSha256}`;
+    if (digest === undefined) continue;
+    const digests = byFingerprint.get(fingerprint) ?? new Set();
+    digests.add(digest);
+    byFingerprint.set(fingerprint, digests);
+  }
+  return [...byFingerprint.entries()]
+    .map(([fingerprint, digests]) => ({
+      digests: [...digests].sort(compareStrings),
+      fingerprint,
+    }))
+    .sort((left, right) => compareStrings(left.fingerprint, right.fingerprint));
 }
 
 function capabilityManifestFingerprint(manifest) {
@@ -513,25 +596,28 @@ function capabilityManifestFingerprint(manifest) {
   return `sha256:${createHash('sha256').update(canonicalJson(securityShape)).digest('hex')}`;
 }
 
-export function productionSourceTreeSha256(packageRoot, readSourceFile = readFileSync) {
+export function productionSourceTreeSha256(
+  packageRoot,
+  packageName,
+  readSourceFile = readFileSync,
+) {
   const sourceRoot = path.join(packageRoot, 'src');
-  if (!existsSync(sourceRoot)) return stringDigest([]);
+  if (!existsSync(sourceRoot)) {
+    throw new Error(`framework source implementation is missing ${sourceRoot}`);
+  }
+  if (!lstatSync(sourceRoot).isDirectory()) {
+    throw new Error(`framework source implementation root is not a directory ${sourceRoot}`);
+  }
   const files = [];
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (/^(?:__tests__|specs?|tests?)$/u.test(entry.name)) continue;
         visit(absolute);
         continue;
       }
-      if (!entry.isFile() || !/\.(?:c|m)?(?:j|t)sx?$/u.test(entry.name)) continue;
-      if (/\.(?:spec|test)\.(?:c|m)?(?:j|t)sx?$/u.test(entry.name)) continue;
-      if (
-        path.relative(packageRoot, absolute).split(path.sep).join('/') ===
-        'src/security/framework-public-runtime-export-posture.generated.ts'
-      ) {
-        continue;
+      if (!entry.isFile()) {
+        throw new Error(`framework source implementation contains non-file entry ${absolute}`);
       }
       files.push(absolute);
     }
@@ -539,13 +625,177 @@ export function productionSourceTreeSha256(packageRoot, readSourceFile = readFil
   visit(sourceRoot);
   files.sort(compareStrings);
   const hash = createHash('sha256');
+  let normalizedCompilerCatalog = false;
   for (const fileName of files) {
-    hash.update(path.relative(packageRoot, fileName).split(path.sep).join('/'));
+    const relativeFileName = path.relative(packageRoot, fileName).split(path.sep).join('/');
+    const input = readSourceFile(fileName);
+    let sourceBytes = Buffer.isBuffer(input) ? Buffer.from(input) : Buffer.from(input);
+    if (
+      packageName === FRAMEWORK_COMPILER_PACKAGE &&
+      relativeFileName === FRAMEWORK_COMPILER_SOURCE_CATALOG_FILE
+    ) {
+      const normalized = normalizeCompilerCatalogSelfDigestBytes(sourceBytes);
+      requireExactCompilerSelfDigestMarkers(normalized, relativeFileName);
+      sourceBytes = normalized.bytes;
+      normalizedCompilerCatalog = true;
+    } else if (countFrameworkImplementationDigestMarkers(sourceBytes) > 0) {
+      throw new Error(
+        `framework implementation digest marker escaped the compiler's exact generated catalog artifact: ${relativeFileName}`,
+      );
+    }
+    hash.update(relativeFileName);
     hash.update('\0');
-    hash.update(readSourceFile(fileName));
+    hash.update(sourceBytes);
     hash.update('\0');
   }
+  if (packageName === FRAMEWORK_COMPILER_PACKAGE && !normalizedCompilerCatalog) {
+    throw new Error(
+      'compiler source implementation is missing its exact generated catalog artifact',
+    );
+  }
   return hash.digest('hex');
+}
+
+/**
+ * Exact packed-package implementation identity. Every shipped dist byte participates. Only the
+ * reviewed compiler catalog artifact census receives the two self-payload normalizations; the
+ * whole-package marker scan rejects those payloads anywhere else.
+ */
+export function productionPackedTreeSha256(
+  packageRoot,
+  packageName,
+  readImplementationFile = readFileSync,
+) {
+  const distRoot = path.join(packageRoot, 'dist');
+  if (!existsSync(distRoot)) {
+    throw new Error(`packed framework implementation is missing ${distRoot}`);
+  }
+  if (!lstatSync(distRoot).isDirectory()) {
+    throw new Error(`packed framework implementation root is not a directory ${distRoot}`);
+  }
+  const files = [];
+  const visit = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolute);
+        continue;
+      }
+      if (!entry.isFile()) {
+        throw new Error(`packed framework implementation contains non-file entry ${absolute}`);
+      }
+      files.push(absolute);
+    }
+  };
+  visit(distRoot);
+  files.sort(compareStrings);
+  const hash = createHash('sha256');
+  const normalizedCompilerCatalogs = new Set();
+  for (const fileName of files) {
+    const relativeFileName = path.relative(packageRoot, fileName).split(path.sep).join('/');
+    const input = readImplementationFile(fileName);
+    let implementationBytes = Buffer.isBuffer(input) ? Buffer.from(input) : Buffer.from(input);
+    const isCompilerCatalog =
+      packageName === FRAMEWORK_COMPILER_PACKAGE &&
+      FRAMEWORK_COMPILER_PACKED_CATALOG_FILES.has(relativeFileName);
+    if (isCompilerCatalog) {
+      const normalized = normalizeCompilerCatalogSelfDigestBytes(implementationBytes);
+      requireExactCompilerSelfDigestMarkers(normalized, relativeFileName);
+      implementationBytes = normalized.bytes;
+      normalizedCompilerCatalogs.add(relativeFileName);
+    } else if (countFrameworkImplementationDigestMarkers(implementationBytes) > 0) {
+      throw new Error(
+        `framework implementation digest marker escaped the compiler's exact generated catalog artifact: ${relativeFileName}`,
+      );
+    }
+    hash.update(relativeFileName);
+    hash.update('\0');
+    hash.update(implementationBytes);
+    hash.update('\0');
+  }
+  if (
+    packageName === FRAMEWORK_COMPILER_PACKAGE &&
+    normalizedCompilerCatalogs.size !== FRAMEWORK_COMPILER_PACKED_CATALOG_FILES.size
+  ) {
+    throw new Error(
+      'compiler packed implementation is missing a reviewed generated catalog artifact',
+    );
+  }
+  return hash.digest('hex');
+}
+
+function normalizeCompilerCatalogSelfDigestBytes(input) {
+  const bytes = Buffer.from(input);
+  const sourceMatches = normalizeDigestPayloads(
+    bytes,
+    FRAMEWORK_COMPILER_SELF_SOURCE_IMPLEMENTATION_PREFIX,
+  );
+  const packedMatches = normalizeDigestPayloads(
+    bytes,
+    FRAMEWORK_COMPILER_SELF_PACKED_IMPLEMENTATION_PREFIX,
+  );
+  return { bytes, packedMatches, sourceMatches };
+}
+
+function requireExactCompilerSelfDigestMarkers(normalized, relativeFileName) {
+  if (normalized.sourceMatches !== 1 || normalized.packedMatches !== 1) {
+    throw new Error(
+      `compiler catalog ${relativeFileName} contains source=${normalized.sourceMatches} packed=${normalized.packedMatches} self-digest payloads; expected exactly one each`,
+    );
+  }
+}
+
+function normalizeDigestPayloads(bytes, prefix) {
+  const prefixBytes = Buffer.from(prefix);
+  let matches = 0;
+  let offset = 0;
+  while (offset < bytes.length) {
+    const found = bytes.indexOf(prefixBytes, offset);
+    if (found < 0) break;
+    const start = found + prefixBytes.length;
+    const end = start + 64;
+    const candidate = bytes.subarray(start, end).toString('ascii');
+    const next = bytes[end];
+    if (/^[a-f0-9]{64}$/u.test(candidate) && (next === undefined || !isLowerHexByte(next))) {
+      bytes.fill(0x30, start, end);
+      matches += 1;
+    }
+    offset = Math.max(end, found + 1);
+  }
+  return matches;
+}
+
+function countFrameworkImplementationDigestMarkers(input) {
+  return [
+    FRAMEWORK_SOURCE_IMPLEMENTATION_PREFIX,
+    FRAMEWORK_PACKED_IMPLEMENTATION_PREFIX,
+    FRAMEWORK_COMPILER_SELF_SOURCE_IMPLEMENTATION_PREFIX,
+    FRAMEWORK_COMPILER_SELF_PACKED_IMPLEMENTATION_PREFIX,
+  ].reduce((count, prefix) => count + countDigestPayloads(input, prefix), 0);
+}
+
+function countDigestPayloads(input, prefix) {
+  const bytes = Buffer.from(input);
+  const prefixBytes = Buffer.from(prefix);
+  let matches = 0;
+  let offset = 0;
+  while (offset < bytes.length) {
+    const found = bytes.indexOf(prefixBytes, offset);
+    if (found < 0) break;
+    const start = found + prefixBytes.length;
+    const end = start + 64;
+    const candidate = bytes.subarray(start, end).toString('ascii');
+    const next = bytes[end];
+    if (/^[a-f0-9]{64}$/u.test(candidate) && (next === undefined || !isLowerHexByte(next))) {
+      matches += 1;
+    }
+    offset = Math.max(end, found + 1);
+  }
+  return matches;
+}
+
+function isLowerHexByte(value) {
+  return (value >= 0x30 && value <= 0x39) || (value >= 0x61 && value <= 0x66);
 }
 
 function exportArmEvidence(exportsValue, subpath) {
@@ -704,24 +954,99 @@ function byPackageName(left, right) {
   return compareStrings(left.packageName, right.packageName);
 }
 
+function buildFrameworkPackedArtifacts(packageNames) {
+  for (const packageName of packageNames) {
+    try {
+      execFileSync('pnpm', ['--filter', packageName, 'run', 'build:dist'], {
+        cwd: repoRoot,
+        stdio: 'pipe',
+      });
+    } catch (error) {
+      const stderr = Buffer.isBuffer(error?.stderr)
+        ? error.stderr.toString('utf8').trim()
+        : String(error?.stderr ?? '').trim();
+      throw new Error(
+        `failed to build exact packed implementation for ${packageName}${stderr === '' ? '' : `: ${stderr}`}`,
+      );
+    }
+  }
+}
+
+function generatedPostureState(ledger) {
+  const actual = computeFrameworkRuntimeSurface({ includePackedImplementation: true });
+  return {
+    actual,
+    findings: validateFrameworkExportPosture({ actual, ledger }),
+    generated: renderFrameworkExportPostureGenerated(ledger, actual),
+  };
+}
+
 export function run(args = process.argv.slice(2)) {
   const ledger = readFrameworkExportPostureLedger();
-  const actual = computeFrameworkRuntimeSurface();
-  const findings = validateFrameworkExportPosture({ actual, ledger });
-  const generated = renderFrameworkExportPostureGenerated(ledger);
-  if (args.includes('--write-generated')) {
-    if (findings.length > 0) {
-      process.stderr.write(`${findings.join('\n')}\n`);
-      return 1;
+  const writeGenerated = args.includes('--write-generated');
+  const packageNames = loadPublicPackages()
+    .filter((pkg) => pkg.visibility === 'public')
+    .map((pkg) => pkg.name)
+    .sort(compareStrings);
+  let state;
+  const findings = [];
+  if (writeGenerated) {
+    const sourceActual = computeFrameworkRuntimeSurface();
+    findings.push(...validateFrameworkExportPosture({ actual: sourceActual, ledger }));
+    if (findings.length === 0) {
+      try {
+        buildFrameworkPackedArtifacts(
+          packageNames.filter((packageName) => packageName !== FRAMEWORK_COMPILER_PACKAGE),
+        );
+        const bootstrapActual = computeFrameworkRuntimeSurface({
+          compilerPackedTreeSha256: '0'.repeat(64),
+          includePackedImplementation: true,
+        });
+        writeFileSync(
+          FRAMEWORK_EXPORT_POSTURE_GENERATED,
+          renderFrameworkExportPostureGenerated(ledger, bootstrapActual),
+        );
+        buildFrameworkPackedArtifacts([FRAMEWORK_COMPILER_PACKAGE]);
+        state = generatedPostureState(ledger);
+        findings.push(...state.findings);
+      } catch (error) {
+        findings.push(error instanceof Error ? error.message : String(error));
+      }
     }
-    writeFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, generated);
-  } else if (
-    !existsSync(FRAMEWORK_EXPORT_POSTURE_GENERATED) ||
-    readFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, 'utf8') !== generated
-  ) {
-    findings.push(
-      'generated compiler posture index is stale; review the ledger, then run node scripts/framework-export-posture-gate.mjs --write-generated',
-    );
+    if (state === undefined) state = { actual: sourceActual, findings, generated: '' };
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (findings.length > 0) break;
+      const current = existsSync(FRAMEWORK_EXPORT_POSTURE_GENERATED)
+        ? readFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, 'utf8')
+        : '';
+      if (current === state.generated) break;
+      writeFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, state.generated);
+      buildFrameworkPackedArtifacts(['@kovojs/compiler']);
+      state = generatedPostureState(ledger);
+      findings.push(...state.findings);
+    }
+    if (
+      findings.length === 0 &&
+      readFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, 'utf8') !== state.generated
+    ) {
+      findings.push('generated compiler posture implementation digest did not reach a fixed point');
+    }
+  } else {
+    try {
+      buildFrameworkPackedArtifacts(packageNames);
+      state = generatedPostureState(ledger);
+      findings.push(...state.findings);
+      if (
+        !existsSync(FRAMEWORK_EXPORT_POSTURE_GENERATED) ||
+        readFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, 'utf8') !== state.generated
+      ) {
+        findings.push(
+          'generated compiler posture index is stale; review the ledger, then run node scripts/framework-export-posture-gate.mjs --write-generated',
+        );
+      }
+    } catch (error) {
+      findings.push(error instanceof Error ? error.message : String(error));
+    }
   }
   if (findings.length > 0) {
     process.stderr.write(`${findings.sort(compareStrings).join('\n')}\n`);
@@ -730,7 +1055,7 @@ export function run(args = process.argv.slice(2)) {
   const rows = expandFrameworkExportPostureLedger(ledger);
   const runtimeCount = rows.filter((row) => row.name !== '<module>').length;
   process.stdout.write(
-    `framework-export-posture/v1 packages=${actual.packages.length} subpaths=${rows.length - runtimeCount} runtime=${runtimeCount} OK\n`,
+    `framework-export-posture/v1 packages=${state?.actual.packages.length ?? 0} subpaths=${rows.length - runtimeCount} runtime=${runtimeCount} OK\n`,
   );
   return 0;
 }

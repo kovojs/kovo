@@ -181,6 +181,8 @@ export interface ScannedCapabilityModule {
 export interface ResolvedCapabilityPackage {
   readonly conditions: readonly string[];
   readonly exportStatus: 'resolved' | 'unresolved';
+  /** Exact compiler-derived source or packed implementation identity; never package metadata. */
+  readonly implementationDigest?: string;
   readonly manifestFingerprint: string;
   readonly packageName: string;
   readonly packageVersion: string;
