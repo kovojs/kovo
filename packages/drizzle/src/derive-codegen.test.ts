@@ -715,6 +715,39 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
 // SPEC.md §6.1/§10.6/§11.1 — the generated `@kovojs/core` registry augmentation drives KV310 /
 // `OptimisticFor` exhaustiveness without a hand-authored `declare module` (capability-gaps §3).
 describe('serializeCoreRegistryModule', () => {
+  it('confines a hostile invalidation key to one parse-tree string leaf (C13)', () => {
+    // Plan 3 §2.3 red oracle: this reaches the raw union interpolation that was at
+    // derive-codegen.ts:179 when the plan was written. A string search is insufficient here;
+    // the security claim is that attacker-controlled data cannot become sibling TS syntax.
+    const hostile = "cart'; injected: 'owned";
+    const source = serializeCoreRegistryModule({
+      invalidations: { voteUp: [hostile] },
+      queries: [{ name: 'cart', type: 'unknown' }],
+    });
+    const parsed = ts.createSourceFile(
+      'generated/core-registry.d.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const hostileLeaves: ts.StringLiteral[] = [];
+    const visit = (node: ts.Node): void => {
+      if (ts.isStringLiteral(node) && node.text === hostile) hostileLeaves.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+
+    expect(parsed.parseDiagnostics).toEqual([]);
+    expect(hostileLeaves).toHaveLength(1);
+    expect(hostileLeaves[0]?.getChildCount(parsed)).toBe(0);
+    expect(
+      parsed.statements.some(
+        (statement) => ts.isInterfaceDeclaration(statement) && statement.name.text === 'injected',
+      ),
+    ).toBe(false);
+  });
+
   it('emits a module-augmentation .d.ts with sorted QueryRegistry + InvalidationSets', () => {
     const source = serializeCoreRegistryModule({
       headerImports: [`import type { QueryResult } from '@kovojs/server';`],
