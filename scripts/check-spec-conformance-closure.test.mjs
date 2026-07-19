@@ -121,6 +121,45 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
     expect(findings).toContain('generated registry enforcement audited-escape disagrees');
   });
 
+  it('C13 anchor: rejects coherent compile/runtime relabels against actual-layer evidence', () => {
+    const mutants = [
+      {
+        code: 'KV201',
+        from: 'compile-error',
+        to: 'fail-closed-runtime',
+      },
+      {
+        code: 'KV415',
+        from: 'fail-closed-runtime',
+        to: 'compile-error',
+      },
+    ];
+
+    for (const mutant of mutants) {
+      const specMarkdown = baseline.specMarkdown.replace(
+        new RegExp(`^(\\| ${mutant.code} \\| error\\s+\\| )${mutant.from}(\\s+\\|)`, 'mu'),
+        `$1${mutant.to}$2`,
+      );
+      const generatedSource = baseline.generatedSource.replace(
+        `createRegisteredDiagnosticDefinition('${mutant.code}', '${mutant.from}')`,
+        `createRegisteredDiagnosticDefinition('${mutant.code}', '${mutant.to}')`,
+      );
+      const runtimeRegistry = {
+        ...baseline.runtimeRegistry,
+        [mutant.code]: {
+          ...baseline.runtimeRegistry[mutant.code],
+          enforcementClass: mutant.to,
+        },
+      };
+
+      expect(
+        evaluate({ generatedSource, runtimeRegistry, specMarkdown }).findings.join('\n'),
+      ).toContain(
+        `${mutant.code}: independently bound primary actual layer ${mutant.from} disagrees with SPEC enforcement ${mutant.to}`,
+      );
+    }
+  });
+
   it('C13 mutation: executes every runtime registry row and requires exact frozen semantics', () => {
     const findings = evaluate({
       runtimeDefinitionFactory(code) {
