@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { repoRoot } from './lib/repo-root.mjs';
 import {
   classifySecurityFuzzFailure,
+  createSecurityFuzzChildEnvironment,
   loadSecurityFuzzCampaign,
   parseMutationOutcome,
   parseMutationScore,
@@ -221,6 +222,26 @@ describe('deterministic security fuzz campaign contract', () => {
     expect(validateSecurityFuzzCampaignDocument(campaignDrift, { rootDir }).findings).toContain(
       'releaseCommand must be pnpm run test:security-fuzz-release',
     );
+  });
+
+  it('strips ambient replay controls before enforcing the fixed profile budget', () => {
+    expect(
+      createSecurityFuzzChildEnvironment(
+        {
+          KOVO_EGRESS_FUZZ_REPLAY_FILE: 'manifest-replay.json',
+          KOVO_SECURITY_FUZZ_SEED: 'fixed-seed',
+        },
+        {
+          KOVO_EGRESS_FUZZ_REPLAY_FILE: 'ambient-egress-replay.json',
+          KOVO_LINEAR_REGEX_FUZZ_REPLAY_FILE: 'ambient-redos-replay.json',
+          KOVO_SECURITY_FUZZ_SEED: 'ambient-seed',
+          SAFE_AMBIENT_VALUE: 'preserved',
+        },
+      ),
+    ).toEqual({
+      KOVO_SECURITY_FUZZ_SEED: 'fixed-seed',
+      SAFE_AMBIENT_VALUE: 'preserved',
+    });
   });
 });
 
