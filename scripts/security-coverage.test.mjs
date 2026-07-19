@@ -4,6 +4,8 @@ import {
   buildSecurityCoverageCells,
   evaluateSecurityCarrierGrammar,
   evaluateSecurityCoverageManifest,
+  extractSecurityCoverageVocabularyFromCoreSource,
+  securityCarrierProductions,
 } from './security-coverage.mjs';
 
 const vocabulary = {
@@ -42,8 +44,48 @@ it('derives one stable coverage cell per exact finite decision-surface member', 
     browserOperationKinds: [...vocabulary.browserOperationKinds, 'browser.scratch'],
   });
   expect(withScratchKind).toHaveLength(cells.length + 1);
-  expect(withScratchKind.slice(0, cells.length)).toEqual(cells);
-  expect(withScratchKind.at(-1)?.id).toBe('browser-operation:browser.scratch');
+  expect(withScratchKind.filter((cell) => cell.id !== 'browser-operation:browser.scratch')).toEqual(
+    cells,
+  );
+  expect(withScratchKind).toContainEqual({
+    id: 'browser-operation:browser.scratch',
+    surface: 'browser-operation',
+    value: 'browser.scratch',
+  });
+});
+
+it('independently parses a scratch source kind as exactly one added denominator cell', () => {
+  const source = `
+    export const browserSecurityOperationKinds = freezeSecurityValue([
+      'browser.state.read',
+      'browser.state.write',
+    ] as const);
+    export const serverSecurityOperationKinds = freezeSecurityValue([
+      'server.handler.root',
+    ] as const);
+    export const securityRootKinds = freezeSecurityValue(['application', 'route'] as const);
+    export const securitySemanticClosedReasons = freezeSecurityValue([
+      'opaque-transfer',
+      'unknown-operation',
+    ] as const);
+  `;
+  const before = buildSecurityCoverageCells(
+    extractSecurityCoverageVocabularyFromCoreSource(source),
+  );
+  const after = buildSecurityCoverageCells(
+    extractSecurityCoverageVocabularyFromCoreSource(
+      source.replace("'browser.state.write',", "'browser.state.write', 'browser.scratch',"),
+    ),
+  );
+  expect(before).toHaveLength(7);
+  expect(after).toHaveLength(8);
+  expect(after.filter((cell) => !before.some((prior) => prior.id === cell.id))).toEqual([
+    {
+      id: 'browser-operation:browser.scratch',
+      surface: 'browser-operation',
+      value: 'browser.scratch',
+    },
+  ]);
 });
 
 it('fails closed on missing, unknown, or unsubstantiated coverage cells', () => {
@@ -59,9 +101,7 @@ it('fails closed on missing, unknown, or unsubstantiated coverage cells', () => 
       },
     ],
   }));
-  rows.at(-1).witnesses = [
-    { anchor: 'closed-witness', corpus: 'finite-security-operation-ir' },
-  ];
+  rows.at(-1).witnesses = [{ anchor: 'closed-witness', corpus: 'finite-security-operation-ir' }];
   rows.splice(1, 1);
   rows.push({
     disposition: 'inapplicable',
@@ -90,6 +130,7 @@ it('fails closed on missing, unknown, or unsubstantiated coverage cells', () => 
 // @kovo-security-certifies C13 historical-classifier-anchor-carrier-grammar
 it('maps every historical classifier anchor through one closed carrier production', () => {
   const document = {
+    authority: 'none',
     mappings: [
       {
         anchor: 'operation-witness',
@@ -106,15 +147,12 @@ it('maps every historical classifier anchor through one closed carrier productio
       {
         anchor: 'closed-witness',
         corpus: 'finite-security-operation-ir',
-        production: 'closed-verdict',
+        production: 'exact-operation',
         reason: 'Exact fail-closed verdict witness.',
       },
     ],
-    productions: [
-      { id: 'exact-operation', meaning: 'Direct finite operation.' },
-      { id: 'root-registration', meaning: 'Root registration or rejection.' },
-      { id: 'closed-verdict', meaning: 'Named closed verdict.' },
-    ],
+    productions: securityCarrierProductions,
+    purpose: 'coverage-metadata-only',
     schema: 'kovo-security-carrier-grammar/v1',
   };
 
@@ -125,9 +163,7 @@ it('maps every historical classifier anchor through one closed carrier productio
   };
   expect(
     evaluateSecurityCarrierGrammar({ corpora, document: missingHistoricalAnchor }).findings,
-  ).toContain(
-    'missing historical witness mapping finite-security-operation-ir:operation-witness',
-  );
+  ).toContain('missing historical witness mapping finite-security-operation-ir:operation-witness');
 });
 
 describe('reviewed inapplicable cells', () => {
@@ -137,15 +173,16 @@ describe('reviewed inapplicable cells', () => {
       disposition: 'witness',
       reason: null,
       review: null,
-      witnesses: [
-        { anchor: 'operation-witness', corpus: 'finite-security-operation-ir' },
-      ],
+      witnesses: [{ anchor: 'operation-witness', corpus: 'finite-security-operation-ir' }],
     }));
     cells[0] = {
       ...cells[0],
       disposition: 'inapplicable',
       reason: 'The deferred root has no shipping constructor in the reviewed public surface.',
-      review: { id: 'DEC-COV-1', basis: 'packages/compiler/src/capability-closure.security.test.ts' },
+      review: {
+        id: 'DEC-COV-1',
+        basis: 'packages/compiler/src/capability-closure.security.test.ts',
+      },
       witnesses: [],
     };
 

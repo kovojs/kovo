@@ -78,6 +78,27 @@ export const securityOperationKinds: readonly SecurityOperationKind[] = freezeSe
   ...serverSecurityOperationKinds,
 ]);
 
+/**
+ * @internal Closed capability-root inventory shared by compiler closure, public-export posture,
+ * and the decision-surface coverage denominator. `none` is a posture, not a generated root.
+ */
+export const securityRootKinds = freezeSecurityValue([
+  'agent-tool-callback',
+  'application',
+  'durable-task',
+  'endpoint',
+  'layout',
+  'mutation',
+  'query',
+  'route',
+  'scheduled-task',
+  'serialized-browser-handler',
+  'webhook',
+] as const);
+
+/** @internal */
+export type SecurityRootKind = (typeof securityRootKinds)[number];
+
 /** @internal */
 export type SecurityOperationDoor =
   | 'Response'
@@ -123,15 +144,19 @@ export interface SecuritySemanticBudgets {
 }
 
 /** @internal Every non-proved semantic path closes under one stable reason. */
-export type SecuritySemanticClosedReason =
-  | 'budget-call-depth'
-  | 'budget-node-count'
-  | 'budget-operation-count'
-  | 'budget-summary-count'
-  | 'helper-cycle'
-  | 'opaque-transfer'
-  | 'unknown-operation'
-  | 'unsupported-authority-use';
+export const securitySemanticClosedReasons = freezeSecurityValue([
+  'budget-call-depth',
+  'budget-node-count',
+  'budget-operation-count',
+  'budget-summary-count',
+  'helper-cycle',
+  'opaque-transfer',
+  'unknown-operation',
+  'unsupported-authority-use',
+] as const);
+
+/** @internal */
+export type SecuritySemanticClosedReason = (typeof securitySemanticClosedReasons)[number];
 
 /** @internal One finite reviewed operation reached through the normalized helper graph. */
 export interface SecuritySemanticProvedTrace {

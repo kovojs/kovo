@@ -285,19 +285,28 @@ The two hand-maintained artifacts still grow by observation: `check-security-cla
 (3,616 lines of pinned snippet anchors) and `capability-surface-census-gate.mjs` (11 hand rows + ~30
 regex pins over 12 files, silently missing new mints among 46 witness-registry files).
 
-- [ ] Emit `kovo-security-coverage/v1`, a decision-surface manifest generated from
+- [x] Emit `kovo-security-coverage/v1`, a decision-surface manifest generated from
       `browserSecurityOperationKinds`/`serverSecurityOperationKinds` + posture `rootKinds` + the
       closed verdict set; independently verify the cell count and that appending a scratch kind adds
       exactly its cells.
-- [ ] Flip `check:security-classifier-corpus` to require each cell to carry a witness or a reviewed
+  - Evidence: `pnpm run check:security-coverage` passed with 47 independently counted cells (46
+    witnessed, one reviewed inapplicable), and `scripts/security-coverage.test.mjs` proves a scratch
+    kind adds exactly one cell.
+- [x] Flip `check:security-classifier-corpus` to require each cell to carry a witness or a reviewed
       `inapplicable` row with reason (fail-closed on unclassified); a new IR operation/root kind
       without coverage becomes a build error.
-- [ ] Replace the capability-census regex pins with a TS-symbol-identity walk over every
+  - Evidence: `scripts/check-security-classifier-corpus.test.mjs` passes operation/root/closed-verdict
+    mutation cases before the corpus runner can execute.
+- [x] Replace the capability-census regex pins with a TS-symbol-identity walk over every
       `createWitnessWeakMap`/`systemDb` mint site, fail-closed classifying each as mint vs internal
-      registry with reason (46 sites today); missing census row → fail.
-- [ ] Sequence the encoding/carrier grammar generator LAST as a versioned closed grammar (weakest
+      registry with reason (98 resolved sites at closure); missing census row → fail.
+  - Evidence: `pnpm run check:capability-surface-census` passed for 98 resolved sites (4 mints and 94
+    internal registries), including the retained structural C13 rejects.
+- [x] Sequence the encoding/carrier grammar generator LAST as a versioned closed grammar (weakest
       component; must not become a denylist). Keep all historical anchors as mapped witnesses so C13
       is never weakened during cutover.
+  - Evidence: `pnpm run check:security-coverage` passed with all 237 historical anchors mapped to the
+    12-production grammar declared `coverage-metadata-only` with `authority: none`.
 
 ### 2.2 Config-secret env door
 

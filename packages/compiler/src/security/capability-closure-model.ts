@@ -86,17 +86,7 @@ function capabilityPackageNameForSpecifier(specifier: string): string {
 
 /** @internal */
 export type CapabilityRootKind =
-  | 'agent-tool-callback'
-  | 'application'
-  | 'durable-task'
-  | 'endpoint'
-  | 'layout'
-  | 'mutation'
-  | 'query'
-  | 'route'
-  | 'scheduled-task'
-  | 'serialized-browser-handler'
-  | 'webhook';
+  import('@kovojs/core/internal/security-operation-ir').SecurityRootKind;
 
 /** @internal */
 export interface CapabilityClosureSourceFile {

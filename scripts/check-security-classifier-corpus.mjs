@@ -5,12 +5,20 @@ import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import {
+  evaluateSecurityCarrierGrammar,
+  evaluateSecurityCoverageManifest,
+  extractSecurityCoverageVocabularyFromCoreSource,
+} from './security-coverage.mjs';
 
 export const repoRoot = findRepoRoot();
 
 const REQUEST_SAFE_RUNTIME_INVENTORY_FILE =
   'packages/core/src/internal/request-safe-runtime-inventory.ts';
 const REQUEST_PROCESS_CLASSIFIER_FILE = 'packages/drizzle/src/trust-escapes-static.ts';
+const SECURITY_OPERATION_IR_FILE = 'packages/core/src/internal/security-operation-ir.ts';
+const SECURITY_CARRIER_GRAMMAR_FILE = 'security/security-carrier-grammar.json';
+const SECURITY_COVERAGE_FILE = 'security/security-coverage.json';
 const REQUEST_SAFE_RUNTIME_RUNNER_FILES = {
   cliHandler: 'packages/cli/src/commands/build-export.ts',
   compiler: 'packages/compiler/src/security-bootstrap.ts',
@@ -2029,6 +2037,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "api: 'createWitnessWeakMap'",
           "api: 'systemDb'",
           'fails closed when a discovered mint is absent, stale, or lacks a reviewed reason',
+          'retains structural closed verdicts for raw exports, internal consumers, and SQL snapshots',
         ],
       },
       {
@@ -2114,6 +2123,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/browser/src/inline-loader-security.test.ts',
       'packages/browser/src/query-bindings.test.ts',
       'packages/browser/src/response-fragment-apply.browser.test.ts',
+      'packages/browser/src/security-operation-workflows.browser.test.ts',
       'packages/browser/src/security-output.test.ts',
       'packages/compiler/src/output-context-security.test.ts',
       'packages/compiler/src/route-pages.test.ts',
@@ -2122,7 +2132,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/compiler/src/executable-reference-attributes.test.ts',
       'packages/compiler/src/execution-triggers.test.ts',
       'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
+      'packages/compiler/src/security-provenance-relation.test.ts',
       'packages/core/src/sink-policy.test.ts',
+      'packages/core/src/internal/security-operation-ir.test.ts',
       'packages/cli/src/graph-explain-format.security.test.ts',
       'packages/cli/src/index.kovo-compile.test.ts',
       'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
@@ -2131,6 +2143,31 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'scripts/security-coverage.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'browser-operation-real-workflows',
+        file: 'packages/browser/src/security-operation-workflows.browser.test.ts',
+        snippets: [
+          'keeps finite-IR form, state, event, focus, and dialog workflows operational',
+          "kind: 'browser.dialog.open'",
+          "kind: 'browser.dialog.close'",
+          "kind: 'browser.dom.focus'",
+          "kind: 'browser.event.read'",
+          "kind: 'browser.form.submit'",
+          "kind: 'browser.form.reset'",
+          "kind: 'browser.state.read'",
+          "kind: 'browser.state.write'",
+        ],
+      },
+      {
+        id: 'exact-operation-door-and-closed-verdict-relation',
+        file: 'packages/compiler/src/security-provenance-relation.test.ts',
+        snippets: [
+          'keeps every finite operation paired with its authoritative C9 door owner',
+          'computes closure to enrolled doors or the exact closed verdict domain',
+          'reports a least-fixpoint counterexample path when a C9 owner disappears',
+          'securitySemanticClosedReasons',
+        ],
+      },
       {
         id: 'security-coverage-denominator-closure',
         file: 'scripts/security-coverage.test.mjs',
@@ -2557,6 +2594,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'propagates query no-write posture through summarized helpers',
           'closes arguments-object recovery and deterministic call-depth exhaustion',
           'budget-call-depth',
+          'budget-node-count',
+          'budget-operation-count',
+          'budget-summary-count',
+          'unsupported-authority-use',
           'fails closed for %s in normalized server semantics',
           'operation-function member laundering',
           'nested callable authority capture',
@@ -3213,6 +3254,22 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
   if (options.enforceRuntimeInventory ?? options.corpora === undefined) {
     findings.push(...evaluateRequestSafeRuntimeInventoryAlignment(readText));
   }
+  if (options.enforceCoverage ?? options.corpora === undefined) {
+    const coverageInputs = options.coverageInputs ?? readSecurityCoverageInputs(readText, findings);
+    if (coverageInputs !== undefined) {
+      findings.push(
+        ...evaluateSecurityCoverageManifest({
+          corpora,
+          document: coverageInputs.coverage,
+          vocabulary: coverageInputs.vocabulary,
+        }).findings,
+        ...evaluateSecurityCarrierGrammar({
+          corpora,
+          document: coverageInputs.grammar,
+        }).findings,
+      );
+    }
+  }
 
   for (const corpus of corpora) {
     const markerFiles = [];
@@ -3276,6 +3333,25 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
     ok: findings.length === 0,
     testFiles: uniqueTestFiles,
   };
+}
+
+function readSecurityCoverageInputs(readText, findings) {
+  try {
+    return {
+      coverage: JSON.parse(readText(SECURITY_COVERAGE_FILE)),
+      grammar: JSON.parse(readText(SECURITY_CARRIER_GRAMMAR_FILE)),
+      vocabulary: extractSecurityCoverageVocabularyFromCoreSource(
+        readText(SECURITY_OPERATION_IR_FILE),
+      ),
+    };
+  } catch (error) {
+    findings.push(
+      `security coverage inputs are missing or invalid: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return undefined;
+  }
 }
 
 function classifierCorpusTestBatches(testFiles, loadIsolatedTestConfigs) {

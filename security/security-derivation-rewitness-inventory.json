@@ -25,13 +25,13 @@
         "id": "D.capability-mint-census",
         "owner": "capability-surface census gate",
         "authoritativeSource": [
-          "packages/core/src/internal/framework-identity-catalog.ts",
-          "scripts/capability-surface-census-gate.mjs"
+          "scripts/capability-surface-census-gate.mjs",
+          "scripts/capability-surface-census.manifest.json"
         ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "proof": [],
-        "gap": "Witness and capability mint sites are not yet derived through one symbol-identity inventory.",
+        "status": "derived",
+        "proof": ["scripts/capability-surface-census-gate.test.mjs"],
+        "gap": null,
         "reviewedExemption": null
       },
       {
@@ -53,12 +53,16 @@
         "owner": "compiler security-operation inventories",
         "authoritativeSource": [
           "packages/core/src/internal/security-operation-ir.ts",
-          "scripts/check-security-classifier-corpus.mjs"
+          "security/security-coverage.json",
+          "security/security-carrier-grammar.json"
         ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "proof": [],
-        "gap": "C13 witnesses are not yet required for every generated root, operation, and closed-verdict cell.",
+        "status": "derived",
+        "proof": [
+          "scripts/security-coverage.test.mjs",
+          "packages/compiler/src/security-provenance-relation.test.ts"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {

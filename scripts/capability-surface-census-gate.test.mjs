@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   discoverCapabilityMintSites,
+  evaluateCapabilityBoundaryPosture,
   evaluateCapabilitySurfaceCensus,
 } from './capability-surface-census-gate.mjs';
 
@@ -35,7 +38,9 @@ it('discovers witness registries and systemDb mints by TypeScript symbol identit
   const sites = discoverCapabilityMintSites({
     canonicalSymbols: {
       systemDbDeclarations: [{ file: 'runtime.ts', owner: 'Runtime' }],
-      witnessFactories: [{ exportName: 'createWitnessWeakMap', file: 'security-witness-intrinsics.ts' }],
+      witnessFactories: [
+        { exportName: 'createWitnessWeakMap', file: 'security-witness-intrinsics.ts' },
+      ],
     },
     sources,
   });
@@ -60,7 +65,9 @@ it('fails closed when a discovered mint is absent, stale, or lacks a reviewed re
   const discovered = discoverCapabilityMintSites({
     canonicalSymbols: {
       systemDbDeclarations: [{ file: 'runtime.ts', owner: 'Runtime' }],
-      witnessFactories: [{ exportName: 'createWitnessWeakMap', file: 'security-witness-intrinsics.ts' }],
+      witnessFactories: [
+        { exportName: 'createWitnessWeakMap', file: 'security-witness-intrinsics.ts' },
+      ],
     },
     sources,
   });
@@ -104,9 +111,7 @@ describe('closed capability classifications', () => {
         },
       ],
       manifest: {
-        rows: [
-          { classification: 'unknown', id: 'consumer.ts#registry', reason: 'Not closed.' },
-        ],
+        rows: [{ classification: 'unknown', id: 'consumer.ts#registry', reason: 'Not closed.' }],
         schema: 'kovo-capability-surface-census/v2',
       },
     });
@@ -114,4 +119,44 @@ describe('closed capability classifications', () => {
       'consumer.ts#registry: classification must be mint or internal-registry',
     );
   });
+});
+
+it('retains structural closed verdicts for raw exports, internal consumers, and SQL snapshots', () => {
+  const readText = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+  expect(evaluateCapabilityBoundaryPosture({ readText })).toEqual([]);
+
+  const rawExport = evaluateCapabilityBoundaryPosture({
+    readText: (file) =>
+      file === 'packages/create-kovo/templates/src/_kovo/app-runtime-db.ts'
+        ? `${readText(file)}\nexport const leakedSystemDb = authSystemDb;\n`
+        : readText(file),
+  });
+  expect(rawExport).toContain('generated templates must not export raw systemDb capabilities');
+
+  const publicConsumer = evaluateCapabilityBoundaryPosture({
+    readText: (file) =>
+      file === 'packages/server/src/index.ts'
+        ? `${readText(file)}\nexport { usePostgresSystemDb } from './internal/postgres-capability.js';\n`
+        : readText(file),
+  });
+  expect(publicConsumer).toContain(
+    'the public @kovojs/server root must not export the raw Postgres capability consumer',
+  );
+
+  const mutableSql = evaluateCapabilityBoundaryPosture({
+    readText: (file) =>
+      file === 'packages/server/src/sql-safe-handle.ts'
+        ? readText(file).replaceAll(
+            'prependSqlSafetyArgument(snapshot, args)',
+            'prependSqlSafetyArgument(statement, args)',
+          )
+        : readText(file),
+  });
+  expect(mutableSql).toEqual(
+    expect.arrayContaining([
+      'managed SQL direct execution must pass the frozen snapshot to the driver',
+      'managed SQL prepare execution must pass the frozen snapshot to the driver',
+      'managed SQL execution must not pass the original mutable statement to the driver',
+    ]),
+  );
 });

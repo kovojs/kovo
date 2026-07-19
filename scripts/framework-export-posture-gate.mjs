@@ -13,6 +13,7 @@ import {
   publicEntrySubpaths,
   repoRoot,
 } from './public-packages.mjs';
+import { securityCoverageVocabulary } from './security-coverage.mjs';
 
 export const FRAMEWORK_EXPORT_POSTURE_SCHEMA = 'kovo-framework-public-runtime-export-posture/v1';
 export const FRAMEWORK_EXPORT_POSTURE_LEDGER = path.join(
@@ -48,19 +49,7 @@ const rawCapabilities = new Set([
   'worker',
 ]);
 const dispositions = new Set(['authority-free', 'framework-door', 'request-closed']);
-const rootKinds = new Set([
-  'agent-tool-callback',
-  'application',
-  'durable-task',
-  'endpoint',
-  'layout',
-  'mutation',
-  'none',
-  'query',
-  'route',
-  'serialized-browser-handler',
-  'webhook',
-]);
+const rootKinds = new Set([...securityCoverageVocabulary().rootKinds, 'none']);
 const securityRoles = new Set([
   'audit-introspection',
   'bootstrap-wiring',
