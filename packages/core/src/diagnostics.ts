@@ -139,7 +139,7 @@ export interface RegisteredDiagnostic<Code extends DiagnosticCode = DiagnosticCo
   code: Code;
   help?: string;
   message: string;
-  severity: DiagnosticSeverity;
+  severity: (typeof diagnosticDefinitions)[Code]['severity'];
 }
 
 /** @internal Message/help controls accepted by generated diagnostic constructors. */
