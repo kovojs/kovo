@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "b4d8fe0e211d26ec02b0901e87133e725c9965910a0445dd7102553ea36db46f",
+      "sourceTreeSha256": "3e1966844a9fa1f1dc526f19a9100234b43d2b8570e52968ee4f6fabc5bb8b32",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "d554f852e4d9ca36eab816ec7d7afdb6dd65cea0664b0b267522fcccc797425b",
+      "sourceTreeSha256": "94649b403391c3cd2ad93e35ce94e5f78588dc67580925e8aad9b15417f6f416",
       "manifestVariants": [
         {
           "fingerprint": "sha256:75d46765d2ff8f0ecaa779b6bc8ce9c44c3c34ab36d8cbb18e7893dfdb3e1368"
@@ -733,7 +733,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "7b0b7fb6907396853991e6f1e5a6d7018e1d4d4fdf7c6983f9d1048844d18b61"
+      "sourceTreeSha256": "753a6e3dfbde79c6430ff777ed51817bbd97c98067ba1c7e8ee1c6a6a63283ab"
     },
     {
       "manifestVariants": [
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "1fc82bccb84e5cc3903f37b0252247bb31f11040bfa1d2675610e1c67dac64cf"
+      "sourceTreeSha256": "b2ce8b1bec969b24567410d557a64d1a47b8090aa819de5a15abed479a62e464"
     },
     {
       "manifestVariants": [
@@ -1674,7 +1674,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "42f1956b72373bc329684dfd427f9e4f2cb7c26d120277758d2ffad8390598cd"
+      "sourceTreeSha256": "59f4626333ebc47bd29f44c65e84d337619dc4ca600ae930a7c56a1f846a48a7"
     },
     {
       "manifestVariants": [
