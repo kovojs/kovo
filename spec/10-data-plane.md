@@ -438,6 +438,48 @@ must be a member of only framework-owned roles plus an explicit benign don't-car
 role-attribute columns and non-allowlisted `pg_*` predefined-role memberships (C10/C11) both fail
 closed until classified.
 
+**External Postgres posture lease (normative).** The least-privilege result above is not a
+boot-only fact. Before an external-Postgres runtime becomes ready, Kovo MUST establish an immutable
+boot baseline from a versioned, deterministic SHA-256 digest of a bounded authoritative witness.
+The witness MUST cover the runtime identity, classified role attributes, role memberships and the
+complete assumable-role closure, protected policy/grant facts, the migration-ledger head, and the
+monotone posture epoch. Canonical facts are sorted by kind, key, and value. One witness accepts at
+most 2,048 facts, 4 KiB per fact field, and 256 KiB of canonical evidence; a field or total exceeding
+its bound fails closed. The digest MUST be stable across unchanged boots and MUST change when one covered grant,
+membership, policy, identity, ledger head, or epoch changes. The random pooler probe and physical
+backend PID prove the connection property below but are deliberately excluded from the stable
+digest.
+
+The lease TTL is 120 seconds with zero serve-degraded grace. Kovo renews from the authoritative
+catalog on a 30-second base interval with one process-stable plus-or-minus 10% jitter and a
+10-second witness timeout. PostgreSQL SQLSTATE `42501` requests the same renewal. Scheduled,
+permission-triggered, and request-admission renewals MUST share one in-flight promise; a caller
+cannot create one catalog scan per error or request. A failed witness, timeout, expired lease, or
+digest different from the immutable boot baseline trips KV433 app load-shed immediately. Kovo MUST
+reject new database-capability admissions, invoke the pool/session drain exactly once for that
+outage transition, and await that drain before it may mark the lease fresh again. This drain retires
+pooled sessions; it is not a claim that JavaScript can cancel SQL already issued to PostgreSQL.
+Failed recovery attempts use exponential backoff starting at 1 second and capped at 30 seconds.
+Only a successful authoritative witness whose digest exactly matches the boot baseline restores
+service. An intentional posture change therefore requires the operator to finish migration or
+provisioning and restart the process to authorize a new baseline; transient failures may recover in
+place when the old baseline is restored.
+
+Every witness MUST mechanize the pooler assumption inside one transaction. Statement one writes a
+random transaction-local frame with `set_config(..., true)` and reads that frame plus
+`pg_backend_pid()`, `current_database()`, `current_user`, and `session_user`; statement two reads the
+same fields again. A changed backend PID, lost frame, database, current user, or session user fails
+closed. This admits direct pools and transaction-preserving poolers, not statement-mode poolers.
+
+Freshness binds both the checksum-validated migration-ledger head and a monotone posture epoch that
+`kovo db migrate` reasserts with the expected ledger state. An epoch may advance but MUST NOT be
+silently decreased or reused. This detects a restore that regresses relative to an already-running
+lease or a deployment that re-runs migration; it does not let a brand-new process distinguish a
+self-consistent stale backup without an external expected head/epoch. `kovo explain --capabilities`
+MUST print this static external-Postgres contract, including its bounds and recovery rules. Because
+that command reads a build graph rather than a live process, it MUST label current status, digest,
+and expiry `not-observed` and MUST NOT imply that external Postgres is the deployed driver.
+
 **Split Postgres authority is bound to one live writable database (normative).** A runtime identity
 witness and a privileged posture audit are one proof only when they address the same logical
 database on the same current primary. Provisioning MUST mint one random framework-owned database

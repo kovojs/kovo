@@ -552,7 +552,7 @@ export const COMMANDS_MANIFEST = [
       {
         flag: '--capabilities',
         description:
-          'List held dangerous capabilities, including agent tools, audit-grade reveals, and signed URL mints.',
+          'List held dangerous capabilities and the static external-Postgres posture-lease contract.',
       },
       {
         flag: '--cookies',

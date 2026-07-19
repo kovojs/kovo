@@ -878,6 +878,19 @@ export function capabilityLine(capability: CoreGraph.CapabilityExplain): string 
   ].join(' ');
 }
 
+/**
+ * Stable static contract rows for the framework-owned external-Postgres posture lease (SPEC
+ * §10.3). `kovo explain` consumes a build graph rather than a live server, so these rows
+ * deliberately say that deployed-driver selection and current lease telemetry are not observed.
+ */
+export function postgresPostureLeaseContractLines(): readonly string[] {
+  return [
+    'POSTGRES-POSTURE-LEASE CONTRACT applies=external-postgres-if-configured source=static-framework-contract liveStatus=not-observed liveDigest=not-observed liveExpiry=not-observed ttlMs=120000 graceMs=0 renewBaseMs=30000 jitter=process-stable:+/-10% witnessTimeoutMs=10000 backoff=exponential:1000..30000 maxFacts=2048 maxFieldBytes=4096 maxCanonicalBytes=262144',
+    'POSTGRES-POSTURE-LEASE RENEW triggers=fixed-interval,sqlstate-42501 coalescing=single-flight drain=once-per-outage recovery=authoritative-exact-boot-baseline',
+    'POSTGRES-POSTURE-LEASE WITNESS pooler=same-transaction-two-statements+stable-backend-pid+stable-frame+stable-database+stable-current-user+stable-session-user freshness=migration-ledger-head+posture-epoch digestExcludes=backend-pid,probe-token',
+  ];
+}
+
 /** Stable root-to-authority proof rows for `kovo explain --capabilities` (SPEC §6.6). */
 export function compareCapabilityClosureFact(
   left: CoreGraph.CapabilityClosureExplainFact,

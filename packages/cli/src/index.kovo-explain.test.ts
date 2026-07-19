@@ -1442,6 +1442,9 @@ export const save = mutation('cart/save', {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       CAPABILITIES
+      POSTGRES-POSTURE-LEASE CONTRACT applies=external-postgres-if-configured source=static-framework-contract liveStatus=not-observed liveDigest=not-observed liveExpiry=not-observed ttlMs=120000 graceMs=0 renewBaseMs=30000 jitter=process-stable:+/-10% witnessTimeoutMs=10000 backoff=exponential:1000..30000 maxFacts=2048 maxFieldBytes=4096 maxCanonicalBytes=262144
+      POSTGRES-POSTURE-LEASE RENEW triggers=fixed-interval,sqlstate-42501 coalescing=single-flight drain=once-per-outage recovery=authoritative-exact-boot-baseline
+      POSTGRES-POSTURE-LEASE WITNESS pooler=same-transaction-two-statements+stable-backend-pid+stable-frame+stable-database+stable-current-user+stable-session-user freshness=migration-ledger-head+posture-epoch digestExcludes=backend-pid,probe-token
       CAPABILITY kind=authAdapterDb site=src/_kovo/app-runtime-db.ts:90 module=- target=src/auth.ts justification="Better Auth adapter owns session table writes before app session"
       CAPABILITY kind=crossOwnerRead site=app/admin.ts:12 module=- target=public.orders justification="admin support export across owners"
       CAPABILITY kind=egressAllowInternal site=app/server.ts:14 module=- target=10.0.0.5:9090 justification="internal metrics sidecar on the pod network"
@@ -1509,6 +1512,9 @@ export const save = mutation('cart/save', {
       output: [
         'kovo-explain/v1',
         'CAPABILITIES',
+        'POSTGRES-POSTURE-LEASE CONTRACT applies=external-postgres-if-configured source=static-framework-contract liveStatus=not-observed liveDigest=not-observed liveExpiry=not-observed ttlMs=120000 graceMs=0 renewBaseMs=30000 jitter=process-stable:+/-10% witnessTimeoutMs=10000 backoff=exponential:1000..30000 maxFacts=2048 maxFieldBytes=4096 maxCanonicalBytes=262144',
+        'POSTGRES-POSTURE-LEASE RENEW triggers=fixed-interval,sqlstate-42501 coalescing=single-flight drain=once-per-outage recovery=authoritative-exact-boot-baseline',
+        'POSTGRES-POSTURE-LEASE WITNESS pooler=same-transaction-two-statements+stable-backend-pid+stable-frame+stable-database+stable-current-user+stable-session-user freshness=migration-ledger-head+posture-epoch digestExcludes=backend-pid,probe-token',
         'CAPABILITY-CLOSURE',
         'CLOSED root=webhook:"billing" capability=network module=src/webhooks/billing.ts site=src/send.ts:3:1 path="webhook:billing -> src/send.ts -> package:raw-http" reason="package summary is absent"',
         'DOOR root=webhook:"billing" capability=database-driver module=src/webhooks/billing.ts site=src/db.ts:7:1 path="webhook:billing -> src/db.ts -> @kovojs/server/postgres" reason="framework-owned Postgres door"',
@@ -1523,12 +1529,16 @@ export const save = mutation('cart/save', {
 
   // SPEC §10.3: `kovo explain` reads a static graph, not a live server. It must expose the
   // framework-owned external-Postgres lease contract without inventing a current lease verdict.
-  it('surfaces the Postgres posture-lease contract without claiming live state', () => {
+  it('surfaces the Postgres posture-lease contract without claiming live state', async () => {
+    const runtimeContract = await import('../../server/src/postgres-posture-lease.js');
     const result = kovoExplain({}, { capabilities: true });
 
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain(
-      'POSTGRES-POSTURE-LEASE CONTRACT applies=external-postgres-if-configured source=static-framework-contract liveStatus=not-observed liveDigest=not-observed liveExpiry=not-observed ttlMs=120000 graceMs=0 renewBaseMs=30000 jitter=process-stable:+/-10% witnessTimeoutMs=10000 backoffMs=1000..30000 maxFacts=2048 maxCanonicalBytes=262144',
+      `ttlMs=${runtimeContract.POSTGRES_POSTURE_LEASE_TTL_MS} graceMs=0 renewBaseMs=${runtimeContract.POSTGRES_POSTURE_LEASE_RENEW_INTERVAL_MS}`,
+    );
+    expect(result.output).toContain(
+      `witnessTimeoutMs=${runtimeContract.POSTGRES_POSTURE_LEASE_WITNESS_TIMEOUT_MS} backoff=exponential:1000..30000 maxFacts=${runtimeContract.POSTGRES_POSTURE_LEASE_MAX_FACTS} maxFieldBytes=4096 maxCanonicalBytes=${runtimeContract.POSTGRES_POSTURE_LEASE_MAX_CANONICAL_BYTES}`,
     );
     expect(result.output).toContain(
       'POSTGRES-POSTURE-LEASE RENEW triggers=fixed-interval,sqlstate-42501 coalescing=single-flight drain=once-per-outage recovery=authoritative-exact-boot-baseline',

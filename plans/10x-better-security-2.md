@@ -591,6 +591,10 @@ a bounded-cost posture digest, lease state, and recovery protocol. **Blocks:** D
 - [ ] Restore-staleness (correction: the existing `database_instance_id` nonce is minted-once and
       survives a same-DB restore): digest a monotone freshness fact instead — the migration-ledger head
       / a posture epoch reasserted by `kovo db migrate`. Surface lease state in `kovo explain --capabilities`.
+  - Partial evidence (static explain surface only):
+    `pnpm exec vitest run packages/cli/src/index.kovo-explain.test.ts` proves the graph-only command
+    prints the bounded lease contract while labeling live status, digest, and expiry `not-observed`;
+    runtime freshness and restore evidence remain required before this item may close.
 
 ### 4.2 Mandatory request deadline + occupancy budget
 

@@ -64,6 +64,7 @@ import {
   optimisticProofLine,
   optimisticSummary,
   optimisticUnhandledFixLine,
+  postgresPostureLeaseContractLines,
   queryWriteReachabilityExplainLine,
   queryWriteReachabilityForQuery,
   queryWriteReachabilityLine,
@@ -339,6 +340,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     // escapes, each with its recorded justification. Surfacing informs review; it enforces nothing.
     const capabilities = collectCapabilityFacts(graph);
     lines.push('CAPABILITIES');
+    lines.push(...postgresPostureLeaseContractLines());
 
     for (const capability of capabilities) {
       lines.push(capabilityLine(capability));
