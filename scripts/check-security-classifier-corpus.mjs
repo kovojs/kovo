@@ -2111,6 +2111,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/compiler/src/execution-triggers.test.ts',
       'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
       'packages/core/src/sink-policy.test.ts',
+      'packages/cli/src/graph-explain-format.security.test.ts',
       'packages/cli/src/index.kovo-compile.test.ts',
       'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
       'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
@@ -2462,6 +2463,16 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "candidate.writeKey === 'account/exact'",
           "toEqual(['account/shared-one', 'account/shared-two'])",
           "path: 'targetId'",
+        ],
+      },
+      {
+        id: 'registered-diagnostic-verifier-snapshot-provenance',
+        file: 'packages/cli/src/graph-explain-format.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 registered-diagnostic-verifier-snapshot',
+          'preserves constructor-owned diagnostic provenance across the verifier snapshot',
+          "expect(result.output).toContain('ERROR KV414 src/queries/orders.ts:12')",
+          "expect(result.output).not.toContain('ERROR SECURITY')",
         ],
       },
       {
