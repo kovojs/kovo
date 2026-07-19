@@ -236,50 +236,50 @@ export const RuntimeFiltered = component({
   // @kovo-security-certifies C13 authored-executable-ref-provenance-closes
   it.each([
     ['direct handler', 'on:click="/c/other.client.js#privileged"'],
-    ['direct handler ASCII-case variant', 'ON:CLICK={\'/c/other.client.js#privileged\'}'],
-    [
-      'static-spread handler',
-      "{...{ 'on:click': '/c/other.client.js#privileged' }}",
-    ],
+    ['direct handler ASCII-case variant', "ON:CLICK={'/c/other.client.js#privileged'}"],
+    ['static-spread handler', "{...{ 'on:click': '/c/other.client.js#privileged' }}"],
     [
       'static-spread handler ASCII-case variant',
       "{...{ 'On:Click': '/c/other.client.js#privileged' }}",
     ],
     ['text derive module ref', 'data-bind="/c/other.client.js#privileged"'],
     ['attribute derive module ref', 'data-bind:hidden="/c/other.client.js#privileged"'],
-    [
-      'property derive module ref',
-      'data-bind-prop:checked="/c/other.client.js#privileged"',
-    ],
+    ['text binding path', 'data-bind="cart.count"'],
+    ['attribute binding path', 'data-bind:hidden="state.hidden"'],
+    ['static-spread text binding path', "{...{ 'data-bind': 'cart.count' }}"],
+    ['static-spread attribute binding path', "{...{ 'data-bind:hidden': 'state.hidden' }}"],
+    ['property derive module ref', 'data-bind-prop:checked="/c/other.client.js#privileged"'],
     ['property binding path', 'data-bind-prop:checked="state.checked"'],
     [
       'stream renderer module ref',
       'data-stream-text="assistant:a1" data-stream-renderer="/c/other.client.js#privileged"',
     ],
-    [
-      'module allowlist authority',
-      'data-kovo-module-allowlist="/c/other.client.js"',
-    ],
-  ])('closes app-authored static lowered executable references through %s', (_label, attributes) => {
-    const source = `
+    ['module allowlist authority', 'data-kovo-module-allowlist="/c/other.client.js"'],
+  ])(
+    'closes app-authored static lowered executable references through %s',
+    (_label, attributes) => {
+      const source = `
 import { component } from '@kovojs/core';
 export const Raw = component({
   render: () => <button ${attributes}>Run</button>,
 });
 `;
 
-    expect(kv235(source)).toEqual([
-      expect.objectContaining({
-        message: expect.stringContaining(
-          'App source hand-authors an executable lowered-IR reference',
-        ),
-      }),
-    ]);
-  });
+      expect(kv235(source)).toEqual([
+        expect.objectContaining({
+          message: expect.stringContaining(
+            'App source hand-authors an executable lowered-IR reference',
+          ),
+        }),
+      ]);
+    },
+  );
 
   it.each([
     ['handler ref', "'on:click': '/c/other.client.js#privileged'"],
     ['derive ref', "'data-bind:hidden': '/c/other.client.js#privileged'"],
+    ['text binding path', "'data-bind': 'cart.count'"],
+    ['attribute binding path', "'data-bind:hidden': 'state.hidden'"],
     ['derive property ref', "'data-bind-prop:checked': '/c/other.client.js#privileged'"],
     ['derive property path', "'data-bind-prop:checked': 'cart.checked'"],
     ['stream renderer ref', "'data-stream-renderer': '/c/other.client.js#privileged'"],
