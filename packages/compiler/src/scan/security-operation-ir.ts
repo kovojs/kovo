@@ -50,6 +50,13 @@ import type {
   SecurityOperationViolationModel,
   ServerSecurityOperationModel,
 } from './model.js';
+import {
+  securitySemanticBudgets,
+  serverMemberProvenanceFromRelation,
+  serverProvenanceAtOrBelowAuthorityTop,
+  type BrowserValueProvenance,
+  type ServerValueProvenance,
+} from './security-provenance-relation.js';
 
 interface SecurityOperationScanResult<Operation> {
   readonly operations: readonly Operation[];
@@ -69,40 +76,6 @@ export interface ResolvedSecurityIrCallable {
   readonly parameters: ts.NodeArray<ts.ParameterDeclaration>;
 }
 
-type BrowserValueProvenance =
-  | 'dom'
-  | 'event'
-  | 'form'
-  | 'local'
-  | 'raw-browser'
-  | 'state'
-  | 'unknown'
-  | 'unknown-authority'
-  | `operation:${BrowserSecurityOperationKind}`;
-type ServerValueProvenance =
-  | 'context'
-  | 'database'
-  | 'database-read-namespace'
-  | 'database-relational-query-namespace'
-  | 'database-relational-table-namespace'
-  | 'database-table-namespace'
-  | 'database-write-namespace'
-  | 'headers'
-  | 'global-object'
-  | 'foreign-executable'
-  | 'intrinsic-identity-call'
-  | 'intrinsic-object'
-  | 'local'
-  | 'respond'
-  | 'request'
-  | 'response-constructor'
-  | 'response-outcome'
-  | 'safe-call'
-  | 'scoped-key-call'
-  | 'scope-call'
-  | 'storage'
-  | 'unknown-authority'
-  | `operation:${ServerSecurityOperationKind}`;
 type ServerSecurityScanSurface = SecurityOperationSurface | 'route';
 
 const REDIRECT_IDENTITY = frameworkExport('@kovojs/server', 'redirect');
@@ -1517,10 +1490,10 @@ function classifyBrowserCall(
 }
 
 /** Scanner/source-text boundary for structured server effects. */
-const SECURITY_SEMANTIC_CALL_DEPTH_BUDGET = 16;
-const SECURITY_SEMANTIC_NODE_BUDGET = 50_000;
-const SECURITY_SEMANTIC_OPERATION_BUDGET = 4_096;
-const SECURITY_SEMANTIC_SUMMARY_BUDGET = 256;
+const SECURITY_SEMANTIC_CALL_DEPTH_BUDGET = securitySemanticBudgets.callDepth;
+const SECURITY_SEMANTIC_NODE_BUDGET = securitySemanticBudgets.nodes;
+const SECURITY_SEMANTIC_OPERATION_BUDGET = securitySemanticBudgets.operations;
+const SECURITY_SEMANTIC_SUMMARY_BUDGET = securitySemanticBudgets.summaries;
 
 interface SecuritySemanticState {
   readonly active: Set<string>;
@@ -4903,160 +4876,11 @@ function serverMemberProvenance(
   receiver: ServerValueProvenance,
   member: string,
 ): ServerValueProvenance {
-  if (receiver === 'unknown-authority') return receiver;
-  if (receiver === 'foreign-executable') return receiver;
-  // Every other finite operation is an exact callable sink, not a first-class capability object.
-  if (compilerStringStartsWith(receiver, 'operation:')) return 'unknown-authority';
-  if (receiver === 'context') {
-    if (member === 'db' || member === 'readonlyAppDb' || member === 'tx') return 'database';
-    if (member === 'headers') return 'headers';
-    if (member === 'respond') return 'respond';
-    if (member === 'storage') return 'storage';
-    if (member === 'request') return 'request';
-    if (member === 'tx') return 'database';
-    if (member === 'fetch') return serverOperationProvenance('server.egress.request');
-    if (
-      member === 'forwardSetCookie' ||
-      member === 'setCookie' ||
-      member === 'setSessionRevocationClearSiteData'
-    ) {
-      return serverOperationProvenance('server.response.cookie');
-    }
-    if (member === 'fail') return serverOperationProvenance('server.response.outcome');
-    if (member === 'signUrl') return serverOperationProvenance('server.storage.read');
-    if (member === 'stateKey' || member === 'systemStateKey') return 'scoped-key-call';
-    if (
-      member === 'invalidate' ||
-      member === 'recordChange' ||
-      member === 'runMutation' ||
-      member === 'runQuery' ||
-      member === 'schedule'
-    ) {
-      return serverOperationProvenance('server.task.compose');
-    }
-    if (member === 'actAs' || member === 'declareSystemRead' || member === 'declareSystemWrite') {
-      return 'scope-call';
-    }
-    if (member === 'header') return 'safe-call';
-    return 'unknown-authority';
-  }
-  if (receiver === 'request') {
-    if (member === 'db' || member === 'readonlyAppDb' || member === 'tx') return 'database';
-    if (member === 'cancel' || member === 'schedule') {
-      return serverOperationProvenance('server.task.compose');
-    }
-    return 'local';
-  }
-  if (receiver === 'database') {
-    if (member === 'read') return 'database-read-namespace';
-    if (member === 'write') return 'database-write-namespace';
-    if (member === 'query') return 'database-relational-query-namespace';
-    const kind = databaseOperationKind(member);
-    if (kind) return serverOperationProvenance(kind);
-    if (isRawDatabaseCapabilityMember(member)) {
-      return 'unknown-authority';
-    }
-    // Managed request handles support one exact static table namespace before a reviewed terminal
-    // (`request.db.products.get`). Further unknown namespace traversal closes below.
-    return 'database-table-namespace';
-  }
-  if (receiver === 'database-read-namespace') {
-    if (member === 'query') return 'database-relational-query-namespace';
-    return databaseOperationKind(member) === 'server.database.read'
-      ? serverOperationProvenance('server.database.read')
-      : 'unknown-authority';
-  }
-  if (receiver === 'database-write-namespace') {
-    return databaseOperationKind(member) === 'server.database.write'
-      ? serverOperationProvenance('server.database.write')
-      : 'unknown-authority';
-  }
-  if (receiver === 'database-table-namespace') {
-    // The generic one-member namespace exists for plain application table collections such as
-    // `request.db.products.get(...)`. It is not a second raw-driver door: SQL/execution and write
-    // terminals stay on the exact managed DB receiver/`read`/`write` namespaces, while an
-    // arbitrary `db.driver.execute(...)`-shaped chain remains absorbing unknown authority.
-    return member === 'all' || member === 'count' || member === 'get' || member === 'values'
-      ? serverOperationProvenance('server.database.read')
-      : 'unknown-authority';
-  }
-  if (receiver === 'database-relational-query-namespace') {
-    // Drizzle relational queries admit one exact static table member. Computed members never reach
-    // this transition because `staticMember` rejects them into absorbing unknown authority.
-    return 'database-relational-table-namespace';
-  }
-  if (receiver === 'database-relational-table-namespace') {
-    return member === 'findFirst' || member === 'findMany'
-      ? serverOperationProvenance('server.database.read')
-      : 'unknown-authority';
-  }
-  if (receiver === 'headers') {
-    if (member === 'append' || member === 'delete' || member === 'set') {
-      return serverOperationProvenance('server.response.header');
-    }
-    if (member === 'entries' || member === 'get' || member === 'has' || member === 'keys') {
-      return 'safe-call';
-    }
-    return 'unknown-authority';
-  }
-  if (receiver === 'storage') {
-    if (member === 'get' || member === 'stat' || member === 'stream') {
-      return serverOperationProvenance('server.storage.read');
-    }
-    if (member === 'delete' || member === 'put') {
-      return serverOperationProvenance('server.storage.write');
-    }
-    return 'unknown-authority';
-  }
-  if (receiver === 'respond') {
-    if (member === 'file' || member === 'storedFile' || member === 'stream') {
-      return serverOperationProvenance('server.response.outcome');
-    }
-    return 'unknown-authority';
-  }
-  if (receiver === 'global-object') {
-    return member === 'Response' ? 'response-constructor' : 'unknown-authority';
-  }
-  if (receiver === 'intrinsic-object') {
-    return member === 'freeze' || member === 'seal' || member === 'preventExtensions'
-      ? 'intrinsic-identity-call'
-      : 'local';
-  }
-  if (receiver === 'response-constructor') {
-    if (member === 'error' || member === 'json' || member === 'redirect') {
-      return serverOperationProvenance('server.response.raw');
-    }
-    return 'unknown-authority';
-  }
-  if (receiver === 'response-outcome') return 'unknown-authority';
-  return 'local';
-}
-
-function isRawDatabaseCapabilityMember(member: string): boolean {
-  return (
-    member === '$client' ||
-    member === 'client' ||
-    member === 'pglite' ||
-    member === 'session' ||
-    member === 'sqlite'
-  );
-}
-
-function serverOperationProvenance(
-  kind: ServerSecurityOperationKind,
-): `operation:${ServerSecurityOperationKind}` {
-  return `operation:${kind}`;
+  return serverMemberProvenanceFromRelation(receiver, member);
 }
 
 function serverProvenanceCarriesAuthority(provenance: ServerValueProvenance | undefined): boolean {
-  return (
-    provenance !== undefined &&
-    provenance !== 'foreign-executable' &&
-    provenance !== 'intrinsic-identity-call' &&
-    provenance !== 'intrinsic-object' &&
-    provenance !== 'local' &&
-    provenance !== 'safe-call'
-  );
+  return serverProvenanceAtOrBelowAuthorityTop(provenance);
 }
 
 function expressionContainsServerAuthority(
@@ -5132,36 +4956,6 @@ function serverArgumentsContainForeignExecutable(
 function isConstVariableDeclaration(declaration: ts.VariableDeclaration): boolean {
   const list = declaration.parent;
   return ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
-}
-
-function databaseOperationKind(method: string): ServerSecurityOperationKind | undefined {
-  if (
-    method === 'count' ||
-    method === 'findFirst' ||
-    method === 'findMany' ||
-    method === 'read' ||
-    method === 'select' ||
-    method === 'get' ||
-    method === 'all' ||
-    method === 'values' ||
-    method === 'rawRead'
-  ) {
-    return 'server.database.read';
-  }
-  if (
-    method === 'batch' ||
-    method === 'delete' ||
-    method === 'execute' ||
-    method === 'insert' ||
-    method === 'put' ||
-    method === 'run' ||
-    method === 'transaction' ||
-    method === 'update' ||
-    method === 'write'
-  ) {
-    return 'server.database.write';
-  }
-  return undefined;
 }
 
 function isStructuredServerReceiver(root: string): boolean {

@@ -53,6 +53,10 @@ const compilerSecuritySemanticGraphPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/security-operation-ir.ts',
 );
+const compilerSecurityProvenanceRelationPath = path.join(
+  repoRoot,
+  'packages/compiler/src/scan/security-provenance-relation.ts',
+);
 const compilerFiniteSecurityValidatorPath = path.join(
   repoRoot,
   'packages/compiler/src/validate/security-operation-ir.ts',
@@ -1120,9 +1124,9 @@ const weakenedSemanticSurfacePropagationBranch = [
   '            transfers: nextTransfers,',
 ].join('\n');
 const semanticOperationMemberClosureBranch =
-  "  if (compilerStringStartsWith(receiver, 'operation:')) return 'unknown-authority';";
+  "      ? ({ default: 'unknown-authority' } satisfies ServerMemberRule)";
 const weakenedSemanticOperationMemberClosureBranch =
-  "  if (compilerStringStartsWith(receiver, 'operation:')) return receiver;";
+  '      ? ({ default: state } satisfies ServerMemberRule)';
 const semanticMemberMutationClosureBranch =
   '      if (!ts.isIdentifier(left) && serverExpressionCarriesAuthority(left, aliases)) {';
 const removedSemanticMemberMutationClosureBranch =
@@ -1144,13 +1148,27 @@ const semanticRestArgumentClosureBranch =
 const removedSemanticRestArgumentClosureBranch =
   '      } else if (false && restParameterIndex !== undefined && index >= restParameterIndex) {';
 const semanticTableNamespaceClosureBranch = [
-  "    return member === 'all' || member === 'count' || member === 'get' || member === 'values'",
-  "      ? serverOperationProvenance('server.database.read')",
-  "      : 'unknown-authority';",
+  "  'database-table-namespace': {",
+  "    default: 'unknown-authority',",
+  '    overrides: {',
+  "      [literal('all')]: operation('server.database.read'),",
+  "      [literal('count')]: operation('server.database.read'),",
+  "      [literal('get')]: operation('server.database.read'),",
+  "      [literal('values')]: operation('server.database.read'),",
+  '    },',
+  '  },',
 ].join('\n');
 const weakenedSemanticTableNamespaceClosureBranch = [
-  '    const kind = databaseOperationKind(member);',
-  "    return kind ? serverOperationProvenance(kind) : 'unknown-authority';",
+  "  'database-table-namespace': {",
+  "    default: 'unknown-authority',",
+  '    overrides: {',
+  "      [literal('all')]: operation('server.database.read'),",
+  "      [literal('count')]: operation('server.database.read'),",
+  "      [literal('get')]: operation('server.database.read'),",
+  "      [literal('values')]: operation('server.database.read'),",
+  "      'database-write-operation': operation('server.database.write'),",
+  '    },',
+  '  },',
 ].join('\n');
 
 const semanticGraphBehavioralInstrumentation = [
@@ -1272,9 +1290,14 @@ const ambientErrorStabilityBranch = [
 ].join('\n');
 const weakenedAmbientErrorStabilityBranch =
   '            compilerSetHas(serverPureConstructors, callee.text)) &&';
-const ambientCryptoRandomUuidStabilityBranch =
-  '    securityIrMemberCallableIsStable(sourceFile, callee, call) &&';
-const weakenedAmbientCryptoRandomUuidStabilityBranch = '    true &&';
+const ambientCryptoRandomUuidStabilityBranch = [
+  '    !identifierIsShadowedWithinBoundary(globalRoot, sourceFile) &&',
+  '    securityIrMemberCallableIsStable(sourceFile, callee, call) &&',
+].join('\n');
+const weakenedAmbientCryptoRandomUuidStabilityBranch = [
+  '    !identifierIsShadowedWithinBoundary(globalRoot, sourceFile) &&',
+  '    true &&',
+].join('\n');
 const finiteManagedDatabaseContinuationBranch =
   '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&';
 const weakenedFiniteManagedDatabaseContinuationBranch = '      true &&';
@@ -1663,9 +1686,8 @@ const removedReviewedModuleStorageFactoryBranch = [
   '  // this module-constant fixed point.',
   "  return 'unknown-authority';",
 ].join('\n');
-const reviewedStorageStatBranch =
-  "    if (member === 'get' || member === 'stat' || member === 'stream') {";
-const removedReviewedStorageStatBranch = "    if (member === 'get' || member === 'stream') {";
+const reviewedStorageStatBranch = "      [literal('stat')]: operation('server.storage.read'),";
+const removedReviewedStorageStatBranch = '';
 const scopedKeySinkCompileClosureBranch =
   '  if (scopedKeySink?.key !== undefined && !scopedKeySink.proven) {';
 const removedScopedKeySinkCompileClosureBranch =
@@ -1762,7 +1784,7 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertScopedKeyRuntimeWitnessIsPinned,
   },
   {
-    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralEntryFile: compilerSecurityProvenanceRelationPath,
     behavioralTypeScript: true,
     description:
       'Deletes compiler provenance closure for app-authored static lowered executable references.',
@@ -2671,7 +2693,7 @@ export const SECURITY_GATE_MUTANTS = [
     name: 'compiler-finite-ir/drop-storage-stat-read',
     replacement: removedReviewedStorageStatBranch,
     search: reviewedStorageStatBranch,
-    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceFile: compilerSecurityProvenanceRelationPath,
     test: assertReviewedStorageStatBehavior,
   },
   {
@@ -2852,15 +2874,15 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertSemanticSurfacePropagationIsEnforced,
   },
   {
-    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralEntryFile: compilerSecurityProvenanceRelationPath,
     behavioralTypeScript: true,
     description: 'Treats members of an exact operation function as the same reviewed sink.',
     expectedKiller: 'operation-function call/apply/bind laundering must remain opaque',
     name: 'compiler-semantic-graph/allow-operation-member-laundering',
     replacement: weakenedSemanticOperationMemberClosureBranch,
     search: semanticOperationMemberClosureBranch,
-    sourceFile: compilerSecuritySemanticGraphPath,
-    test: assertSemanticOperationMemberClosureIsEnforced,
+    sourceFile: compilerSecurityProvenanceRelationPath,
+    test: assertProvenanceOperationMemberClosureIsEnforced,
   },
   {
     behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
@@ -2918,14 +2940,14 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertSemanticRestArgumentClosureIsEnforced,
   },
   {
-    behavioralInstrumentation: semanticGraphBehavioralInstrumentation,
+    behavioralEntryFile: compilerBehavioralEntryPath,
     behavioralTypeScript: true,
     description: 'Treats arbitrary raw-driver-shaped DB namespaces as managed operations.',
     expectedKiller: 'generic DB table namespaces must stay limited to finite read terminals',
     name: 'compiler-semantic-graph/allow-raw-database-namespace-chain',
     replacement: weakenedSemanticTableNamespaceClosureBranch,
     search: semanticTableNamespaceClosureBranch,
-    sourceFile: compilerSecuritySemanticGraphPath,
+    sourceFile: compilerSecurityProvenanceRelationPath,
     test: assertSemanticTableNamespaceClosureIsEnforced,
   },
   {
@@ -5543,19 +5565,10 @@ async function assertSemanticSurfacePropagationIsEnforced(moduleUnderTest) {
   }
 }
 
-async function assertSemanticOperationMemberClosureIsEnforced(moduleUnderTest) {
-  const result = assertSemanticMutationClosedDetail(
-    moduleUnderTest,
-    [
-      'async function root(_input, context) {',
-      '  const outbound = context.fetch.bind(null);',
-      "  await outbound('https://api.example.test');",
-      '}',
-    ].join('\n'),
-    'computed server capability call context.fetch.bind',
-  );
-  if (result.operations.some((operation) => operation.kind === 'server.egress.request')) {
-    throw new Error('operation-member laundering was emitted as a proved egress operation');
+async function assertProvenanceOperationMemberClosureIsEnforced(moduleUnderTest) {
+  const egress = 'operation:server.egress.request';
+  if (moduleUnderTest.serverMemberProvenanceFromRelation(egress, 'bind') !== 'unknown-authority') {
+    throw new Error('operation-member laundering remained inside the reviewed egress operation');
   }
 }
 
@@ -5636,18 +5649,18 @@ async function assertSemanticRestArgumentClosureIsEnforced(moduleUnderTest) {
 }
 
 async function assertSemanticTableNamespaceClosureIsEnforced(moduleUnderTest) {
-  const result = assertSemanticMutationClosedDetail(
+  assertFiniteIrCloses(
     moduleUnderTest,
     [
-      'async function root(_input, context) {',
-      "  await context.db.driver.execute('drop table accounts');",
-      '}',
+      "import { endpoint } from '@kovojs/server';",
+      "export const report = endpoint('/report', {",
+      '  async handler(_input, context) {',
+      "    await context.db.driver.execute('drop table accounts');",
+      '    return Response.json({ ok: true });',
+      '  },',
+      '});',
     ].join('\n'),
-    'computed server capability call context.db.driver.execute',
   );
-  if (result.operations.some((operation) => operation.kind === 'server.database.write')) {
-    throw new Error('raw-driver-shaped namespace was emitted as a managed database write');
-  }
 }
 
 async function assertExactContextFetchInvocationIsPinned(moduleUnderTest) {
