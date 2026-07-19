@@ -519,22 +519,41 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
 ): readonly OwnerPrivateScopeKey[] {
   const keys = new Map<string, OwnerPrivateScopeKey>();
 
+  // SPEC §6.6/§10.3 (OPP-28): a guard-derived owner operand is proof only when the
+  // exact same guard principal is part of the accepted, mutation-safe guard chain.
+  // Keep this intersection at the semantic-fact producer even though the operand
+  // classifier also applies it, so no uncoupled `guard:*` owner proof escapes.
+  const accept = (scoped: OwnerPrivateScopeKey): void => {
+    if (!ownerPrivateScopeKeyHasAcceptedGuard(scoped.privateKey, comparisons)) return;
+    keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+  };
+
   if (comparisons.ownerScopePredicates) {
     for (const predicate of comparisons.ownerScopePredicates) {
       for (const scoped of ownerPrivateScopedKeysFromComparisonPnf(predicate, tables)) {
-        keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+        accept(scoped);
       }
     }
   } else {
     for (const comparison of comparisons.instanceKey) {
       const scoped = ownerPrivateScopedKeyFromEqOperands(comparison.left, comparison.right, tables);
-      if (scoped) keys.set(`${scoped.domain}\0${scoped.privateKey}`, scoped);
+      if (scoped) accept(scoped);
     }
   }
 
   return [...keys.values()].sort(
     (left, right) =>
       left.domain.localeCompare(right.domain) || left.privateKey.localeCompare(right.privateKey),
+  );
+}
+
+function ownerPrivateScopeKeyHasAcceptedGuard(
+  privateKey: string,
+  comparisons: QueryInstanceKeyComparisons,
+): boolean {
+  return (
+    !privateKey.startsWith('guard:') ||
+    comparisons.acceptedGuardPrivateKeys?.includes(privateKey) === true
   );
 }
 
@@ -912,12 +931,46 @@ function eqOperandsAreTableColumnArgKeyed(
     argCandidates.push(...pnfAllEqOperandPairs(pnf).map(toComparison));
   }
 
+  const provenAcceptedGuardPrivateKeys = acceptedGuardPrivateKeysFromComparisons(
+    acceptedGuardPrivateKeys,
+    [...instanceKey, ...argCandidates],
+    ownerScopePredicates,
+  );
+
   return {
-    ...(acceptedGuardPrivateKeys.length > 0 ? { acceptedGuardPrivateKeys } : {}),
+    ...(provenAcceptedGuardPrivateKeys.length > 0
+      ? { acceptedGuardPrivateKeys: provenAcceptedGuardPrivateKeys }
+      : {}),
     argCandidates,
     instanceKey,
     ownerScopePredicates,
   };
+}
+
+function acceptedGuardPrivateKeysFromComparisons(
+  seed: readonly string[],
+  comparisons: readonly QueryInstanceKeyComparison[],
+  predicates: readonly QueryPredicateComparisonPnf[] = [],
+): readonly string[] {
+  const keys = new Set(seed);
+  const acceptComparison = (comparison: QueryInstanceKeyComparison): void => {
+    for (const operand of [comparison.left, comparison.right]) {
+      if (operand.acceptedGuardPrivateKey) keys.add(operand.acceptedGuardPrivateKey);
+    }
+  };
+  const acceptPredicate = (predicate: QueryPredicateComparisonPnf): void => {
+    if (predicate.kind === 'eq') {
+      acceptComparison(predicate.comparison);
+      return;
+    }
+    if (predicate.kind === 'and' || predicate.kind === 'or') {
+      for (const node of predicate.nodes) acceptPredicate(node);
+    }
+  };
+
+  for (const comparison of comparisons) acceptComparison(comparison);
+  for (const predicate of predicates) acceptPredicate(predicate);
+  return [...keys].sort();
 }
 
 function queryAcceptedGuardPrivateKeys(
@@ -952,69 +1005,36 @@ function acceptedGuardPrivateKeysFromGuardExpression(
 ): readonly string[] {
   if (depth > 4) return [];
   const node = unwrappedStaticExpressionNode(expression);
-  const keys = new Set<string>();
 
   const callable = summarizedStaticCallablePrivateScope(node, sessionContext);
-  if (callable?.kind === 'guard') keys.add(privateScopeKey(callable));
+  if (callable?.kind === 'guard') return [privateScopeKey(callable)];
 
-  if (Node.isArrayLiteralExpression(node)) {
-    if (node.getElements().some(Node.isSpreadElement)) return [];
-    for (const element of node.getElements()) {
-      for (const key of acceptedGuardPrivateKeysFromGuardExpression(
-        element,
-        sessionContext,
-        depth + 1,
-      )) {
-        keys.add(key);
-      }
-    }
-  } else if (Node.isCallExpression(node)) {
-    const callee = unwrappedStaticExpressionNode(node.getExpression());
-    const callArguments = node.getArguments();
-    const summarizedCall = summarizedStaticCallPrivateScope(node, sessionContext);
-    if (summarizedCall?.kind === 'guard') keys.add(privateScopeKey(summarizedCall));
+  if (!Node.isCallExpression(node)) return [];
+  const callee = unwrappedStaticExpressionNode(node.getExpression());
+  if (!isKovoGuardCompositionCall(callee)) return [];
 
-    if (isObjectFreezeCall(node)) {
-      const argument = singleObjectFreezeArgument(node);
-      if (!argument) return [...keys].sort();
-      for (const key of acceptedGuardPrivateKeysFromGuardExpression(
-        argument,
-        sessionContext,
-        depth + 1,
-      )) {
-        keys.add(key);
-      }
-    } else if (isKovoGuardCompositionCall(callee)) {
-      for (const argument of callArguments) {
-        for (const key of acceptedGuardPrivateKeysFromGuardExpression(
-          argument,
-          sessionContext,
-          depth + 1,
-        )) {
-          keys.add(key);
-        }
-      }
-    }
-  } else if (Node.isIdentifier(node)) {
-    const initializer = localConstInitializer(node);
-    if (initializer) {
-      for (const key of acceptedGuardPrivateKeysFromGuardExpression(
-        initializer,
-        sessionContext,
-        depth + 1,
-      )) {
-        keys.add(key);
-      }
-    }
-  }
+  const callArguments = node.getArguments();
+  if (callArguments.length === 0 || callArguments.some(Node.isSpreadElement)) return [];
 
-  return [...keys].sort();
+  // SPEC §6.6/§10.3 (OPP-28): guards.all executes every child left-to-right over
+  // one live request. An opaque sibling on either side can rewrite the principal:
+  // before the summary it can prime the exact-true guard result, and after it can
+  // poison the value observed by the loader. Admit only a closed composition whose
+  // every leaf independently resolves to the same exact body-verified private
+  // projection key. No general const-initializer expansion is permitted here.
+  const childKeys = callArguments.map((argument) =>
+    acceptedGuardPrivateKeysFromGuardExpression(argument, sessionContext, depth + 1),
+  );
+  const exactKey = childKeys[0]?.length === 1 ? childKeys[0][0] : undefined;
+  return exactKey && childKeys.every((keys) => keys.length === 1 && keys[0] === exactKey)
+    ? [exactKey]
+    : [];
 }
 
 function isKovoGuardCompositionCall(expression: Node): boolean {
   if (!Node.isPropertyAccessExpression(expression)) return false;
   const name = expression.getName();
-  if (name !== 'all' && name !== 'compose') return false;
+  if (name !== 'all') return false;
   const receiver = unwrappedStaticExpressionNode(expression.getExpression());
   return kovoServerGuardsReceiver(receiver);
 }
@@ -1489,24 +1509,34 @@ function relationalWithObjectTableExpressions(
 /** @internal */ export function queryPrivateScopeKeyOperand(
   expression: Node,
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
-): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
-  const provenance =
+): Pick<QueryInstanceKeyOperand, 'acceptedGuardPrivateKey' | 'privateKey' | 'sessionKey'> {
+  const candidate =
     privateScopeForOwnerPredicateExpression(expression, sessionContext) ??
     acceptedGuardPrivateScopeForExpression(expression, sessionContext) ??
     summarizedStaticCallPrivateScope(expression, sessionContext) ??
     awaitedExpressionPrivateScope(expression, sessionContext) ??
     conditionalExpressionPrivateScope(expression, sessionContext) ??
     binaryExpressionPrivateScope(expression, sessionContext);
+  const provenance = ownerPredicatePrivateScopeHasAcceptedGuard(
+    candidate,
+    sessionContext,
+    expression,
+  )
+    ? candidate
+    : undefined;
   if (!provenance) {
     const acceptedGuardAlias = localConstAcceptedGuardAliasPrivateScope(expression, sessionContext);
     if (acceptedGuardAlias) {
-      return { privateKey: privateScopeKey(acceptedGuardAlias) };
+      const privateKey = privateScopeKey(acceptedGuardAlias);
+      return { acceptedGuardPrivateKey: privateKey, privateKey };
     }
 
     const finiteAlias = localConstFinitePrivateScope(expression, sessionContext);
-    if (finiteAlias) {
+    if (ownerPredicatePrivateScopeHasAcceptedGuard(finiteAlias, sessionContext, expression)) {
+      const privateKey = privateScopeKey(finiteAlias);
       return {
-        privateKey: privateScopeKey(finiteAlias),
+        ...(finiteAlias.kind === 'guard' ? { acceptedGuardPrivateKey: privateKey } : {}),
+        privateKey,
         ...(finiteAlias.kind === 'session' ? { sessionKey: finiteAlias.path } : {}),
       };
     }
@@ -1528,10 +1558,26 @@ function relationalWithObjectTableExpressions(
     if (!local) return {};
     return { privateKey: `session:${local}`, sessionKey: local };
   }
+  const privateKey = privateScopeKey(provenance);
   return {
-    privateKey: privateScopeKey(provenance),
+    ...(provenance.kind === 'guard' ? { acceptedGuardPrivateKey: privateKey } : {}),
+    privateKey,
     ...(provenance.kind === 'session' ? { sessionKey: provenance.path } : {}),
   };
+}
+
+function ownerPredicatePrivateScopeHasAcceptedGuard(
+  provenance: PrivateScopeProvenance | undefined,
+  sessionContext: SessionProvenanceContext,
+  use?: Node,
+): provenance is PrivateScopeProvenance {
+  if (!provenance) return false;
+  if (provenance.kind !== 'guard') return true;
+  const key = privateScopeKey(provenance);
+  return (
+    sessionContext.acceptedGuardPrivateKeys?.has(key) === true ||
+    (use !== undefined && acceptedGuardPrivateKeysDominatingNode(use).includes(key))
+  );
 }
 
 /**
@@ -3064,8 +3110,14 @@ function isGeneratedAppRuntimeFrameworkFunction(
     ? insertValuesComparisons(calls, writeTableIdentifier, toOperand)
     : [];
   if (!predicate) {
+    const provenAcceptedGuardPrivateKeys = acceptedGuardPrivateKeysFromComparisons(
+      acceptedGuardPrivateKeys,
+      insertValueComparisons,
+    );
     return {
-      ...(acceptedGuardPrivateKeys.length > 0 ? { acceptedGuardPrivateKeys } : {}),
+      ...(provenAcceptedGuardPrivateKeys.length > 0
+        ? { acceptedGuardPrivateKeys: provenAcceptedGuardPrivateKeys }
+        : {}),
       argCandidates: insertValueComparisons,
       instanceKey: [],
       ...(insertValueComparisons.length > 0
@@ -3086,25 +3138,35 @@ function isGeneratedAppRuntimeFrameworkFunction(
     left: toOperand(left),
     right: toOperand(right),
   });
+  const argCandidates = [...pnfAllEqOperandPairs(pnf).map(toComparison), ...insertValueComparisons];
+  const instanceKey = (pnfExactConjuncts(pnf) ?? []).map(toComparison);
+  const ownerScopePredicates: QueryPredicateComparisonPnf[] = [
+    comparisonPnf(pnf, toComparison),
+    ...(insertValueComparisons.length > 0
+      ? [
+          {
+            kind: 'and' as const,
+            nodes: insertValueComparisons.map((comparison) => ({
+              comparison,
+              kind: 'eq' as const,
+            })),
+          },
+        ]
+      : []),
+  ];
+  const provenAcceptedGuardPrivateKeys = acceptedGuardPrivateKeysFromComparisons(
+    acceptedGuardPrivateKeys,
+    [...argCandidates, ...instanceKey],
+    ownerScopePredicates,
+  );
 
   return {
-    ...(acceptedGuardPrivateKeys.length > 0 ? { acceptedGuardPrivateKeys } : {}),
-    argCandidates: [...pnfAllEqOperandPairs(pnf).map(toComparison), ...insertValueComparisons],
-    instanceKey: (pnfExactConjuncts(pnf) ?? []).map(toComparison),
-    ownerScopePredicates: [
-      comparisonPnf(pnf, toComparison),
-      ...(insertValueComparisons.length > 0
-        ? [
-            {
-              kind: 'and' as const,
-              nodes: insertValueComparisons.map((comparison) => ({
-                comparison,
-                kind: 'eq' as const,
-              })),
-            },
-          ]
-        : []),
-    ],
+    ...(provenAcceptedGuardPrivateKeys.length > 0
+      ? { acceptedGuardPrivateKeys: provenAcceptedGuardPrivateKeys }
+      : {}),
+    argCandidates,
+    instanceKey,
+    ownerScopePredicates,
   };
 }
 

@@ -405,7 +405,11 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
         continue;
       }
 
-      if (isPrivateQueryReadScope(read.scope) && read.scope.ownerProof) {
+      if (
+        isPrivateQueryReadScope(read.scope) &&
+        read.scope.ownerProof &&
+        ownerPrivateScopeKeyIsAccepted(read.scope.key, fact.acceptedGuardPrivateKeys)
+      ) {
         audits.push({
           detail: ownerAuthorizationDataProofDetail(
             ownerScopes,
@@ -610,6 +614,13 @@ function ownerAuthorizationDataProofDetail(
   return `narrow Authorization-gates-DATA subset: ${ownerColumn}; owner column compared to ${privateKey}${guardCoupling}`;
 }
 
+function ownerPrivateScopeKeyIsAccepted(
+  privateKey: string,
+  acceptedGuardPrivateKeys: readonly string[] = [],
+): boolean {
+  return !privateKey.startsWith('guard:') || acceptedGuardPrivateKeys.includes(privateKey);
+}
+
 /**
  * A write touch on an owner-annotated domain, with the `args`/`session` domains its
  * `where()` predicate selects (SPEC §10.3, KV414 A1). The write half of the IDOR gate:
@@ -672,21 +683,21 @@ function ownerAuthorizationDataProofDetail(
       if (!owners.has(domain)) continue;
 
       const ownerSessionScoped = (fact.ownerScopedSessionWrites ?? []).includes(domain);
-      if (ownerSessionScoped) {
-        const privateKey = (fact.ownerScopedPrivateWriteKeys ?? []).find(
-          (scoped) => scoped.domain === domain,
-        )?.privateKey;
+      const privateKey = (fact.ownerScopedPrivateWriteKeys ?? []).find(
+        (scoped) => scoped.domain === domain,
+      )?.privateKey;
+      if (
+        ownerSessionScoped &&
+        privateKey !== undefined &&
+        ownerPrivateScopeKeyIsAccepted(privateKey, fact.acceptedGuardPrivateKeys)
+      ) {
         audits.push({
-          ...(privateKey
-            ? {
-                detail: ownerAuthorizationDataProofDetail(
-                  ownerScopes,
-                  domain,
-                  privateKey,
-                  fact.acceptedGuardPrivateKeys,
-                ),
-              }
-            : {}),
+          detail: ownerAuthorizationDataProofDetail(
+            ownerScopes,
+            domain,
+            privateKey,
+            fact.acceptedGuardPrivateKeys,
+          ),
           domain,
           kind: 'write',
           name: fact.name,
@@ -5643,6 +5654,8 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
 }
 
 /** @internal */ export interface QueryInstanceKeyOperand {
+  /** Exact accepted guard principal carried by this operand during static proof. */
+  acceptedGuardPrivateKey?: string;
   inputKey?: string;
   privateKey?: string;
   sessionKey?: string;

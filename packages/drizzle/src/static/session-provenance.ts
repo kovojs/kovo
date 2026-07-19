@@ -754,7 +754,7 @@ function privateScopeCarrierReferenceHasReviewedConsumer(
   return (
     exactPrivateScopeProjectionCall(call, parameterKey) ||
     exactDrizzlePrivateScopeProofCall(call) ||
-    exactFrameworkPrivateScopeValueCall(call) ||
+    exactFrameworkPrivateScopeValueCall(call, parameterKey) ||
     exactFinitePrivateScopeProofConsumer(call)
   );
 }
@@ -854,10 +854,31 @@ function exactDrizzlePrivateScopeProofCall(call: CallExpression): boolean {
   );
 }
 
-function exactFrameworkPrivateScopeValueCall(call: CallExpression): boolean {
-  return expressionResolvesToFrameworkExport(
-    call.getExpression(),
-    frameworkExport('@kovojs/server', 'serverValue'),
+function exactFrameworkPrivateScopeValueCall(call: CallExpression, parameterKey?: string): boolean {
+  if (
+    !expressionResolvesToFrameworkExport(
+      call.getExpression(),
+      frameworkExport('@kovojs/server', 'serverValue'),
+    )
+  ) {
+    return false;
+  }
+
+  const value = call.getArguments()[0];
+  if (!value || !definitelyImmutablePrivateScopeScalarType(value.getType())) return false;
+  // A scalar alias has already severed the mutable carrier reference, so its
+  // reviewed serverValue consumer needs no carrier key. Carrier references do:
+  // they must still be an exact private scalar projection below.
+  if (parameterKey === undefined) return true;
+  const expression = unwrappedStaticExpressionNode(value);
+
+  // SPEC §6.6/§10.3: serverValue returns its argument. It may consume an
+  // already-proved immutable scalar projection, but the request/context carrier
+  // or a mutable private object branch would create an untracked returned alias.
+  // Keep the positive grammar finite and structural.
+  return (
+    exactPrivateScopeScalarProjection(expression, parameterKey) ||
+    (Node.isCallExpression(expression) && exactPrivateScopeProjectionCall(expression, parameterKey))
   );
 }
 

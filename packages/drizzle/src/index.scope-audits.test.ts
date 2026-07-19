@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   extractOwnerAuditFromProject,
   scopeAuditsFromQueryFacts,
+  scopeAuditsFromWriteFacts,
   type QueryFact,
+  type WriteScopeFact,
 } from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
 
@@ -21,6 +23,51 @@ function auditScopes(audit: { scopeAudits: { domain: string; kind: string; scope
 }
 
 describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => {
+  it.each([
+    ['no accepted guard', undefined],
+    ['a mismatched accepted guard', ['guard:actorId']],
+  ])('fails closed at final read/write consumers with %s', (_label, acceptedGuardPrivateKeys) => {
+    const queryFacts: QueryFact[] = [
+      {
+        ...(acceptedGuardPrivateKeys ? { acceptedGuardPrivateKeys } : {}),
+        query: 'guardedOrder',
+        readProvenance: [
+          {
+            columns: [],
+            domain: 'order',
+            keys: null,
+            scope: { key: 'guard:userId', kind: 'guard', ownerProof: true },
+            site: 'q.ts:1',
+            source: 'select',
+            via: 'orders',
+          },
+        ],
+        reads: ['order'],
+        shape: {},
+        site: 'q.ts:1',
+      },
+    ];
+    const writeFacts: WriteScopeFact[] = [
+      {
+        ...(acceptedGuardPrivateKeys ? { acceptedGuardPrivateKeys } : {}),
+        argScopedWrites: [],
+        name: 'guardedOrderWrite',
+        ownerScopedPrivateWriteKeys: [{ domain: 'order', privateKey: 'guard:userId' }],
+        ownerScopedSessionWrites: ['order'],
+        reads: ['order'],
+        sessionAnchoredWrites: [],
+        site: 'm.ts:1',
+      },
+    ];
+
+    expect(
+      scopeAuditsFromQueryFacts(queryFacts, [{ domain: 'order', owner: 'userId' }])[0]?.scope,
+    ).toBe('unknown');
+    expect(
+      scopeAuditsFromWriteFacts(writeFacts, [{ domain: 'order', owner: 'userId' }])[0]?.scope,
+    ).toBe('unknown');
+  });
+
   // The classifier is the security-critical core: a canonical client-arg-keyed owner
   // read is the IDOR signal (`args`), a canonical session-anchored read is safe, and
   // missing canonical provenance fails closed instead of consulting legacy shadow fields.
@@ -579,6 +626,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'export const closeGuardReadonlyObjectTuple = mutation("closeGuardReadonlyObjectTuple", {',
               '  input: s.object({}),',
               '  async handler(_input: unknown, request: AppRequest) {',
+              '    if (!request.guard.userId) throw new Error("unauthorized");',
               '    const principal = { userIds: [currentGuardUser(request)] as const } as const;',
               '    await request.db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, principal.userIds));',
               '  },',
@@ -649,6 +697,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'export const closeGuardMine = mutation("closeGuardMine", {',
               '  input: s.object({}),',
               '  async handler(_input: unknown, request: AppRequest) {',
+              '    if (!request.guard.userId) throw new Error("unauthorized");',
               '    await request.db.update(orders).set({ status: "closed" }).where(inArray(orders.userId, [currentGuardUser(request)]));',
               '  },',
               '});',
@@ -833,6 +882,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'export const closeGuardByStatusDisjunction = mutation("closeGuardByStatusDisjunction", {',
               '  input: s.object({}),',
               '  async handler(_input: unknown, request: AppRequest) {',
+              '    if (!request.guard.userId) throw new Error("unauthorized");',
               '    await request.db.update(orders).set({ status: "closed" }).where(or(and(eq(orders.userId, currentGuardUser(request)), eq(orders.status, "open")), and(eq(orders.userId, currentGuardUser(request)), eq(orders.status, "draft"))));',
               '  },',
               '});',
@@ -1214,6 +1264,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'export const cancelMine = mutation({',
               '  input: s.object({}),',
               '  async handler(_input: unknown, request: AppRequest) {',
+              '    if (!request.guard.userId) throw new Error("unauthorized");',
               '    await request.db.update(orders).set({ status: "cancelled" }).where(eq(orders.userId, currentGuardUser(request)));',
               '  },',
               '});',
@@ -1233,7 +1284,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ).toEqual([
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'order',
         kind: 'write',
         scope: 'session',
@@ -2668,6 +2719,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
+              '  guard: currentGuardUser,',
               '  output: s.object({ id: s.string() }),',
               '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const guardUserId = currentGuardUser(ctx);',
@@ -2685,7 +2737,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ).toEqual([
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'order',
         scope: 'session',
       },
@@ -2868,6 +2920,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForAwaitedGuard = query("ordersForAwaitedGuard", {',
+              '  guard: currentGuardUser,',
               '  output: s.object({ id: s.string() }),',
               '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, await currentGuardUser(ctx)));',
@@ -2875,6 +2928,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '});',
               '',
               'export const ordersForAwaitedGuardAlias = query("ordersForAwaitedGuardAlias", {',
+              '  guard: currentGuardUser,',
               '  output: s.object({ id: s.string() }),',
               '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const guardUserId = await currentGuardUser(ctx);',
@@ -2904,14 +2958,14 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ).toEqual([
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'order',
         name: 'ordersForAwaitedGuard',
         scope: 'session',
       },
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'order',
         name: 'ordersForAwaitedGuardAlias',
         scope: 'session',
@@ -3036,6 +3090,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
+              '  guard: currentGuardUser,',
               '  output: s.object({ id: s.string() }),',
               '  async load(input: { preferPrimary: boolean }, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
               '    const guardUserId = input.preferPrimary ? currentGuardUser(ctx) : currentGuardUser(ctx);',
@@ -3053,7 +3108,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ).toEqual([
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'order',
         scope: 'session',
       },
@@ -4028,6 +4083,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               'kovoAnalyzerSummary(currentProfileUser, { returns: { kind: "guard", path: "profile.userId" } });',
               '',
               'export const ordersForProfile = query("ordersForProfile", {',
+              '  guard: currentProfileUser,',
               '  output: s.object({ id: s.string() }),',
               '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { profile: { userId: string } } } }) {',
               '    const profileUserId = currentProfileUser(ctx);',
@@ -4045,7 +4101,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ).toEqual([
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=profile.userId; owner column compared to guard:profile.userId',
+          'narrow Authorization-gates-DATA subset: owner=profile.userId; owner column compared to guard:profile.userId; accepted guard principal matched owner predicate',
         domain: 'order',
         scope: 'session',
       },
@@ -4108,14 +4164,19 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
             source: [
               'import { eq } from "drizzle-orm";',
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
               'import { query, s } from "@kovojs/server";',
               '',
               'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              'function currentGuardUser(context: { request: { guard: { userId: string } } }) { return context.request.guard.userId; }',
+              'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
               '',
               'export const ordersForGuard = query("ordersForGuard", {',
+              '  guard: currentGuardUser,',
               '  output: s.object({ id: s.string() }),',
-              '  async load(_input: unknown, context: { db: PgAsyncDatabase<any, any>; guard: { userId: string } }) {',
-              '    const { guard: { userId } } = context;',
+              '  async load(_input: unknown, context: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
+              '    if (!context.request.guard.userId) throw new Error("unauthorized");',
+              '    const { guard: { userId } } = context.request;',
               '    return context.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, userId));',
               '  },',
               '});',
@@ -4130,7 +4191,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ).toEqual([
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'order',
         scope: 'session',
       },
@@ -4211,7 +4272,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ).toEqual([
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'order',
         scope: 'session',
       },
@@ -4910,6 +4971,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
                 'kovoAnalyzerSummary(fallbackGuardUser, { returns: { kind: "guard", path: "userId" } });',
                 '',
                 'export const ordersForGuard = query("ordersForGuard", {',
+                '  guard: currentGuardUser,',
                 '  output: s.object({ id: s.string() }),',
                 '  async load(_input: unknown, ctx: { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string } } }) {',
                 `    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ${expression}));`,
@@ -4926,7 +4988,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       ).toEqual([
         {
           detail:
-            'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+            'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
           domain: 'order',
           scope: 'session',
         },
@@ -5736,6 +5798,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '  },',
               '});',
               'export const ordersForAlias = query("ordersForAlias", {',
+              '  guard: helperAlias,',
               '  output: s.object({ id: s.string() }),',
               '  async load(_input: unknown, ctx: LoadContext) {',
               '    return ctx.db.select({ id: orders.id }).from(orders).where(eq(orders.userId, helperAlias(ctx)));',
@@ -5802,7 +5865,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
-  it('OPP-28: closes callable containers while proving direct const aliases in mutations', () => {
+  it('OPP-28: closes callable containers and unaccepted direct aliases in mutations', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
         files: [
@@ -5893,7 +5956,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
         .sort((left, right) => left.name.localeCompare(right.name)),
     ).toEqual([
       { kind: 'write', name: 'order.mutations/close-by-actor', scope: 'unknown' },
-      { kind: 'write', name: 'order.mutations/close-by-alias', scope: 'session' },
+      { kind: 'write', name: 'order.mutations/close-by-alias', scope: 'unknown' },
       { kind: 'write', name: 'order.mutations/close-by-computed', scope: 'unknown' },
       { kind: 'write', name: 'order.mutations/close-by-mutable', scope: 'unknown' },
       { kind: 'write', name: 'order.mutations/close-by-object', scope: 'unknown' },

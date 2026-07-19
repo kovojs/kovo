@@ -1412,12 +1412,45 @@ const weakenedAnalyzerSummaryOppAliasChainClosureBranch = [
   '  }',
   '  return undefined;',
 ].join('\n');
+const analyzerSummaryOwnerAcceptedGuardIntersectionBranch =
+  '    if (!ownerPrivateScopeKeyHasAcceptedGuard(scoped.privateKey, comparisons)) return;';
+const weakenedAnalyzerSummaryOwnerAcceptedGuardIntersectionBranch =
+  '    if (false && !ownerPrivateScopeKeyHasAcceptedGuard(scoped.privateKey, comparisons)) return;';
+const analyzerSummaryAcceptedGuardClosedCompositionBranch = [
+  '  const childKeys = callArguments.map((argument) =>',
+  '    acceptedGuardPrivateKeysFromGuardExpression(argument, sessionContext, depth + 1),',
+  '  );',
+  '  const exactKey = childKeys[0]?.length === 1 ? childKeys[0][0] : undefined;',
+  '  return exactKey && childKeys.every((keys) => keys.length === 1 && keys[0] === exactKey)',
+  '    ? [exactKey]',
+  '    : [];',
+].join('\n');
+const weakenedAnalyzerSummaryAcceptedGuardClosedCompositionBranch = [
+  '  const terminalGuard = callArguments.at(-1);',
+  '  return terminalGuard',
+  '    ? acceptedGuardPrivateKeysFromGuardExpression(terminalGuard, sessionContext, depth + 1)',
+  '    : [];',
+].join('\n');
+const analyzerSummaryAcceptedGuardAliasClosureBranch =
+  '  if (!Node.isCallExpression(node)) return [];';
+const weakenedAnalyzerSummaryAcceptedGuardAliasClosureBranch = [
+  '  if (!Node.isCallExpression(node)) {',
+  '    if (!Node.isIdentifier(node)) return [];',
+  '    const initializer = stableLocalConstInitializer(node);',
+  '    return initializer',
+  '      ? acceptedGuardPrivateKeysFromGuardExpression(initializer, sessionContext, depth + 1)',
+  '      : [];',
+  '  }',
+].join('\n');
 const analyzerSummaryUnenrolledCarrierClosureBranch = '  if (frameworkRole !== true) return false;';
 const weakenedAnalyzerSummaryUnenrolledCarrierClosureBranch =
   '  if (frameworkRole === false) return false;';
 const analyzerSummaryCarrierIntegrityBranch =
   '  return privateScopeCarrierBindingIsStableAtUse(parameter, callable, auditedUse);';
 const weakenedAnalyzerSummaryCarrierIntegrityBranch = '  return true;';
+const analyzerSummaryServerValueScalarCarrierBranch =
+  '  if (!value || !definitelyImmutablePrivateScopeScalarType(value.getType())) return false;';
+const weakenedAnalyzerSummaryServerValueScalarCarrierBranch = '  if (value) return true;';
 const analyzerSummaryDirectCarrierIntegrityBranch =
   '  if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;';
 const weakenedAnalyzerSummaryDirectCarrierIntegrityBranch =
@@ -1597,9 +1630,13 @@ const weakenedAnalyzerSummaryConditionalEffectClosureBranch = [
   '  return true;',
   '  for (const node of [condition, ...condition.getDescendants()]) {',
 ].join('\n');
+const ownerScopeFinalAcceptedGuardConsumerBranch =
+  "  return !privateKey.startsWith('guard:') || acceptedGuardPrivateKeys.includes(privateKey);";
+const weakenedOwnerScopeFinalAcceptedGuardConsumerBranch = '  return true;';
 const analyzerSummarySummariesBehavioralInstrumentation = [
   '',
   'export { summarizedStaticCallablePrivateScope as __summarizedStaticCallablePrivateScope };',
+  'export { acceptedGuardPrivateKeysFromGuardExpression as __acceptedGuardPrivateKeysFromGuardExpression };',
   "export { sessionProvenanceContextForNodes } from './session-provenance.js';",
   'export function __analyzerSummaryContextForReference(expression, provenance) {',
   '  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();',
@@ -2367,6 +2404,59 @@ export const SECURITY_GATE_MUTANTS = [
     search: analyzerSummaryOppAliasChainClosureBranch,
     sourceFile: drizzleSummariesPath,
     test: assertAnalyzerSummaryOppAliasChainClosureIsEnforced,
+  },
+  {
+    behavioralInstrumentation: analyzerSummarySummariesBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Drops the exact accepted-guard intersection at the OPP fact producer.',
+    expectedKiller: 'guard owner facts must require the exact accepted guard principal',
+    name: 'drizzle-analyzer-summary/drop-owner-accepted-guard-intersection',
+    replacement: weakenedAnalyzerSummaryOwnerAcceptedGuardIntersectionBranch,
+    search: analyzerSummaryOwnerAcceptedGuardIntersectionBranch,
+    sourceFile: drizzleSummariesPath,
+    test: assertAnalyzerSummaryOwnerAcceptedGuardIntersectionIsEnforced,
+  },
+  {
+    behavioralInstrumentation: analyzerSummarySummariesBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Lets an opaque guard sibling prime or poison a summarized principal.',
+    expectedKiller: 'accepted guard compositions must prove every ordered sibling closed',
+    name: 'drizzle-analyzer-summary/allow-opaque-accepted-guard-sibling',
+    replacement: weakenedAnalyzerSummaryAcceptedGuardClosedCompositionBranch,
+    search: analyzerSummaryAcceptedGuardClosedCompositionBranch,
+    sourceFile: drizzleSummariesPath,
+    test: assertAnalyzerSummaryAcceptedGuardClosedCompositionIsEnforced,
+  },
+  {
+    behavioralInstrumentation: analyzerSummarySummariesBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Restores recursive const expansion in the accepted-guard consumer.',
+    expectedKiller: 'accepted guards must stop at the shared one-alias helper map',
+    name: 'drizzle-analyzer-summary/allow-accepted-guard-alias-chain',
+    replacement: weakenedAnalyzerSummaryAcceptedGuardAliasClosureBranch,
+    search: analyzerSummaryAcceptedGuardAliasClosureBranch,
+    sourceFile: drizzleSummariesPath,
+    test: assertAnalyzerSummaryAcceptedGuardAliasClosureIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets serverValue consume and return a whole framework request carrier.',
+    expectedKiller: 'serverValue reviewed consumption must remain scalar-projection-only',
+    name: 'drizzle-analyzer-summary/allow-server-value-whole-carrier',
+    replacement: weakenedAnalyzerSummaryServerValueScalarCarrierBranch,
+    search: analyzerSummaryServerValueScalarCarrierBranch,
+    sourceFile: drizzleSessionProvenancePath,
+    test: assertAnalyzerSummaryServerValueWholeCarrierIsRejected,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Drops exact accepted-guard coupling at final read and write consumers.',
+    expectedKiller: 'final owner-scope consumers must reject absent or mismatched guard keys',
+    name: 'drizzle-owner-scope/drop-final-accepted-guard-consumer',
+    replacement: weakenedOwnerScopeFinalAcceptedGuardConsumerBranch,
+    search: ownerScopeFinalAcceptedGuardConsumerBranch,
+    sourceFile: drizzleStaticPath,
+    test: assertOwnerScopeFinalAcceptedGuardConsumerIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -5881,7 +5971,7 @@ function analyzerSummaryCarrierVerdict(moduleUnderTest, statements, callArgument
   });
   const sourceFile = project.createSourceFile(
     'opp-carrier.ts',
-    `import { query } from '@kovojs/server';
+    `import { query, serverValue } from '@kovojs/server';
 function current(context) { return context.request.guard.userId; }
 function opaque(value) { return value; }
 export const list = query('list', {
@@ -5996,6 +6086,117 @@ async function assertAnalyzerSummaryOppAliasChainClosureIsEnforced(moduleUnderTe
   }
 }
 
+function analyzerSummaryAcceptedGuardKeys(moduleUnderTest, declarations, guardExpression) {
+  return withAnalyzerSummaryFixture(
+    'accepted-guard-consumer.ts',
+    analyzerSummaryQueryFixtureSource([
+      'function current(context: Context) { return context.request.guard.userId; }',
+      'function opaque(_context: Context) { return true; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      ...declarations,
+      'export const list = query("list", {',
+      `  guard: ${guardExpression},`,
+      '  async load(_input: Input, context: Context) { return current(context); },',
+      '});',
+    ]),
+    (sourceFile) => {
+      const guard = sourceFile
+        .getDescendantsOfKind(SyntaxKind.PropertyAssignment)
+        .find((property) => property.getName() === 'guard')
+        ?.getInitializer();
+      if (!guard) throw new Error('accepted-guard fixture lost its guard property');
+      const context = analyzerSummarySessionContext(moduleUnderTest, sourceFile);
+      return moduleUnderTest.__acceptedGuardPrivateKeysFromGuardExpression(guard, context);
+    },
+  );
+}
+
+async function assertAnalyzerSummaryOwnerAcceptedGuardIntersectionIsEnforced(moduleUnderTest) {
+  const keys = moduleUnderTest.queryOwnerPrivateScopedKeys(
+    {
+      acceptedGuardPrivateKeys: ['guard:actorId'],
+      argCandidates: [],
+      instanceKey: [
+        {
+          left: { tableKey: { key: 'userId', tableIdentifier: 'orders' } },
+          right: { privateKey: 'guard:userId' },
+        },
+      ],
+    },
+    new Map([
+      [
+        'orders',
+        [
+          {
+            annotation: { domain: 'order', key: 'id', name: 'orders', owner: 'userId' },
+            columns: {},
+            exported: true,
+          },
+        ],
+      ],
+    ]),
+  );
+  if (keys.length !== 0) {
+    throw new Error('mismatched accepted guard minted an owner-scoped producer fact');
+  }
+}
+
+async function assertAnalyzerSummaryAcceptedGuardClosedCompositionIsEnforced(moduleUnderTest) {
+  const exact = analyzerSummaryAcceptedGuardKeys(moduleUnderTest, [], 'guards.all(current)');
+  if (exact.length !== 1 || exact[0] !== 'guard:userId') {
+    throw new Error(`exact closed accepted guard was not admitted: ${JSON.stringify(exact)}`);
+  }
+  const equivalent = analyzerSummaryAcceptedGuardKeys(
+    moduleUnderTest,
+    [
+      'function equivalent(context: Context) { return context.request.guard.userId; }',
+      'kovoAnalyzerSummary(equivalent, { returns: { kind: "guard", path: "userId" } });',
+    ],
+    'guards.all(current, guards.all(equivalent, current))',
+  );
+  if (equivalent.length !== 1 || equivalent[0] !== 'guard:userId') {
+    throw new Error(
+      `equivalent body-verified accepted guards were not admitted: ${JSON.stringify(equivalent)}`,
+    );
+  }
+  const mismatched = analyzerSummaryAcceptedGuardKeys(
+    moduleUnderTest,
+    [
+      'function actor(context: Context) { return context.request.guard.actorId; }',
+      'kovoAnalyzerSummary(actor, { returns: { kind: "guard", path: "actorId" } });',
+    ],
+    'guards.all(current, actor)',
+  );
+  if (mismatched.length !== 0) {
+    throw new Error(`mismatched accepted-guard sibling minted ${JSON.stringify(mismatched)}`);
+  }
+  for (const expression of ['guards.all(opaque, current)', 'guards.all(current, opaque)']) {
+    const keys = analyzerSummaryAcceptedGuardKeys(moduleUnderTest, [], expression);
+    if (keys.length !== 0) {
+      throw new Error(`opaque accepted-guard sibling minted ${JSON.stringify(keys)}`);
+    }
+  }
+}
+
+async function assertAnalyzerSummaryAcceptedGuardAliasClosureIsEnforced(moduleUnderTest) {
+  const direct = analyzerSummaryAcceptedGuardKeys(
+    moduleUnderTest,
+    ['const first = current;'],
+    'first',
+  );
+  if (direct.length !== 1 || direct[0] !== 'guard:userId') {
+    throw new Error(`direct accepted-guard alias was not admitted: ${JSON.stringify(direct)}`);
+  }
+  const transitive = analyzerSummaryAcceptedGuardKeys(
+    moduleUnderTest,
+    ['const first = current;', 'const second = first;'],
+    'second',
+  );
+  if (transitive.length !== 0) {
+    throw new Error('accepted-guard consumer admitted a two-hop helper alias');
+  }
+}
+
 async function assertAnalyzerSummaryUnenrolledCarrierClosureIsEnforced(moduleUnderTest) {
   const admitted = withAnalyzerSummaryFixture(
     'summary-unenrolled-carrier.ts',
@@ -6022,6 +6223,63 @@ async function assertAnalyzerSummaryCarrierIntegrityIsEnforced(moduleUnderTest) 
   }
   if (analyzerSummaryCarrierVerdict(moduleUnderTest, 'opaque(context);', 'context')) {
     throw new Error('OPP admitted a carrier after opaque whole-callback escape');
+  }
+}
+
+async function assertAnalyzerSummaryServerValueWholeCarrierIsRejected(moduleUnderTest) {
+  if (
+    analyzerSummaryCarrierVerdict(
+      moduleUnderTest,
+      "const carrierAlias = serverValue(context, 'reviewed carrier'); opaque(carrierAlias);",
+      'context',
+    )
+  ) {
+    throw new Error('serverValue laundered a whole framework carrier through a returned alias');
+  }
+}
+
+async function assertOwnerScopeFinalAcceptedGuardConsumerIsEnforced(moduleUnderTest) {
+  const ownerDomains = [{ domain: 'order', owner: 'userId' }];
+  const queryAudits = moduleUnderTest.scopeAuditsFromQueryFacts(
+    [
+      {
+        acceptedGuardPrivateKeys: ['guard:actorId'],
+        query: 'guardedOrder',
+        readProvenance: [
+          {
+            columns: [],
+            domain: 'order',
+            keys: null,
+            scope: { key: 'guard:userId', kind: 'guard', ownerProof: true },
+            site: 'q.ts:1',
+            source: 'select',
+            via: 'orders',
+          },
+        ],
+        reads: ['order'],
+        shape: {},
+        site: 'q.ts:1',
+      },
+    ],
+    ownerDomains,
+  );
+  const writeAudits = moduleUnderTest.scopeAuditsFromWriteFacts(
+    [
+      {
+        acceptedGuardPrivateKeys: ['guard:actorId'],
+        argScopedWrites: [],
+        name: 'guardedOrderWrite',
+        ownerScopedPrivateWriteKeys: [{ domain: 'order', privateKey: 'guard:userId' }],
+        ownerScopedSessionWrites: ['order'],
+        reads: ['order'],
+        sessionAnchoredWrites: [],
+        site: 'm.ts:1',
+      },
+    ],
+    ownerDomains,
+  );
+  if (queryAudits[0]?.scope !== 'unknown' || writeAudits[0]?.scope !== 'unknown') {
+    throw new Error('final owner-scope consumer accepted a mismatched guard principal');
   }
 }
 

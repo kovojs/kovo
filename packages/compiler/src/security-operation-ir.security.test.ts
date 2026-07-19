@@ -34,6 +34,23 @@ function kv449Project(
 }
 
 describe('SPEC §4.3/§5.2 finite compiler-owned security IR', () => {
+  it('rejects laundering a whole request carrier through serverValue before mutation', () => {
+    const diagnostics = kv449(`
+import { endpoint, serverValue } from '@kovojs/server';
+function poison(target, replacement) { target.request = replacement; }
+export const report = endpoint('/report', {
+  handler(input, context) {
+    const carrierAlias = serverValue(context, 'reviewed carrier');
+    poison(carrierAlias, input.request);
+    return Response.json({ ok: true });
+  },
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes('serverValue'))).toBe(true);
+  });
+
   it('carries exact compiler-derived operations in emitted browser and server artifacts', () => {
     const result = compile(`
 import { component } from '@kovojs/core';

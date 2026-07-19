@@ -26,7 +26,7 @@ import {
   type GuardParamsRequest,
 } from './guards.js';
 import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
-import { query, runQuery } from './query.js';
+import { query, runQuery, type QueryLoadContext } from './query.js';
 import { snapshotPinnedLifecycleValue } from './request-carrier.js';
 import { route, runRoutePage } from './route.js';
 import { s, type Schema } from './schema.js';
@@ -1110,6 +1110,70 @@ describe('server guard and session primitives', () => {
       { kind: 'opaque', name: 'custom' },
       { kind: 'rateLimit', name: 'rateLimit', per: 'ip' },
     ]);
+  });
+
+  it('runs guards.all on one live request so a later sibling can poison an accepted principal', async () => {
+    type Request = { guard: { userId: string } };
+    const request: Request = { guard: { userId: 'attacker' } };
+    const guardedQuery = query('live-guard-principal', {
+      guard: guards.all<Request>(
+        (carrier) => {
+          carrier.guard.userId = 'primed';
+          return true;
+        },
+        (carrier) => carrier.guard.userId === 'primed',
+        (carrier) => {
+          carrier.guard.userId = 'attacker';
+          return true;
+        },
+      ),
+      load: (_input: unknown, context?: QueryLoadContext<Request>) => context!.request.guard.userId,
+      reads: [],
+    });
+
+    // This is the runtime counterexample behind OPP-28's closed guard-chain rule:
+    // the middle guard accepts `primed`, but the loader observes the later poison.
+    await expect(runQuery(guardedQuery, undefined, request)).resolves.toMatchObject({
+      ok: true,
+      value: 'attacker',
+    });
+  });
+
+  it('reaches the loader when an exact boolean principal is the terminal guard value', async () => {
+    type Request = { guard: { ownerFlag: true } };
+    const currentOwner = (carrier: Request): true => carrier.guard.ownerFlag;
+    const guardedQuery = query('boolean-owner-principal', {
+      guard: guards.all<Request>(currentOwner),
+      load: (_input: unknown, context?: QueryLoadContext<Request>) =>
+        currentOwner(context!.request),
+      reads: [],
+    });
+
+    await expect(
+      runQuery(guardedQuery, undefined, { guard: { ownerFlag: true } }),
+    ).resolves.toMatchObject({ ok: true, value: true });
+  });
+
+  it('lets prime then current accept an attacker-selected exact-true principal at runtime', async () => {
+    type Request = {
+      args?: { flag: boolean };
+      guard: { ownerFlag: boolean };
+    };
+    const currentOwner = (carrier: Request): boolean => carrier.guard.ownerFlag;
+    const guardedQuery = query('primed-boolean-owner-principal', {
+      args: s.object({ flag: s.boolean() }),
+      guard: guards.all<Request>((carrier) => {
+        carrier.guard.ownerFlag = carrier.args?.flag === true;
+        return true;
+      }, currentOwner),
+      load: (_input: { flag: boolean }, context?: QueryLoadContext<Request>) =>
+        currentOwner(context!.request),
+      reads: [],
+    });
+
+    await expect(
+      runQuery(guardedQuery, { flag: true }, { guard: { ownerFlag: false } }),
+    ).resolves.toMatchObject({ ok: true, value: true });
   });
 
   it('keys default-scoped rate limiting by the proven session principal', () => {

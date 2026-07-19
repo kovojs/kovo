@@ -7,8 +7,8 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
-  it('pins the exact forcing denominator after finite authorization-correspondence enrollment', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(251);
+  it('pins the exact forcing denominator after authorization correspondence and OPP-28 repair', () => {
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(256);
   });
 
   it('enrolls behavioral request-body shape, allocation, and FormData mutants', () => {
@@ -39,7 +39,7 @@ describe('security-gate-mutations', () => {
       mutant.name.startsWith('drizzle-analyzer-summary/'),
     );
 
-    expect(analyzerSummaryMutants).toHaveLength(28);
+    expect(analyzerSummaryMutants).toHaveLength(32);
     expect(analyzerSummaryMutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(
       true,
     );
@@ -487,8 +487,13 @@ describe('security-gate-mutations', () => {
   it('executes OPP and TASK B boundary mutants instead of source-text assertions', () => {
     const behavioralNames = [
       'drizzle-analyzer-summary/allow-extra-carrier-argument',
+      'drizzle-analyzer-summary/allow-accepted-guard-alias-chain',
+      'drizzle-analyzer-summary/allow-opaque-accepted-guard-sibling',
       'drizzle-analyzer-summary/allow-opp-alias-chain',
+      'drizzle-analyzer-summary/allow-server-value-whole-carrier',
       'drizzle-analyzer-summary/drop-carrier-integrity-proof',
+      'drizzle-analyzer-summary/drop-owner-accepted-guard-intersection',
+      'drizzle-owner-scope/drop-final-accepted-guard-consumer',
       'drizzle-task-b/drop-raw-registration-closure',
       'drizzle-task-b/restore-static-build-analysis-bypass',
     ];

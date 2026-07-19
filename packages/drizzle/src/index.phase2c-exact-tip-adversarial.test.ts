@@ -23,7 +23,7 @@ function ownerSource(body: readonly string[]): string {
     'import { eq } from "drizzle-orm";',
     'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
     'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
-    'import { query, s } from "@kovojs/server";',
+    'import { guards, query, s, serverValue } from "@kovojs/server";',
     'type Context = { request: { guard: { userId: string } }, db: PgAsyncDatabase<any, any> };',
     'type NullableContext = { request: { guard: { userId: string | undefined } }, db: PgAsyncDatabase<any, any> };',
     'export const docs = pgTable("docs", { userId: text("user_id").notNull(), id: text("id").notNull() }, kovo({ domain: "doc", key: "userId,id", owner: "userId" }));',
@@ -61,6 +61,7 @@ function carrierMutationSource(mutation: string): string {
     'function poison(target: Context, replacement: Context["request"]) { target.request = replacement; }',
     'export const list = query("list", {',
     '  args: s.object({ request: s.object({ guard: s.object({ userId: s.string() }) }) }),',
+    '  guard: guards.all(current),',
     '  async load(input: { request: Context["request"] }, context: Context) {',
     `    ${mutation}`,
     '    const userId = current(context);',
@@ -116,6 +117,122 @@ function massVerdict(
 }
 
 describe('Phase 2C exact-tip adversarial review', () => {
+  it.each([
+    ['no accepted guard', [], undefined],
+    [
+      'a mismatched accepted guard',
+      [
+        'function currentActor(_context: Context) { return "actor"; }',
+        'kovoAnalyzerSummary(currentActor, { returns: { kind: "guard", path: "actorId" } });',
+      ],
+      '  guard: guards.all(current, currentActor),',
+    ],
+    [
+      'an opaque sibling before the summarized guard',
+      ['function prime(_context: Context) { return true; }'],
+      '  guard: guards.all(prime, current),',
+    ],
+    [
+      'a summarized guard followed by a poisoning sibling',
+      [
+        'function prime(_context: Context) { return undefined; }',
+        'function poison(_context: Context) { return undefined; }',
+      ],
+      '  guard: guards.all(prime, current, poison),',
+    ],
+    [
+      'a two-hop accepted-guard alias',
+      ['const first = current;', 'const accepted = first;'],
+      '  guard: accepted,',
+    ],
+  ])('rejects summarized guard owner proof with %s', (_label, declarations, guardProperty) => {
+    const result = ownerVerdict(
+      ownerSource([
+        ...declarations,
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        ...(guardProperty ? [guardProperty] : []),
+        '  async load(_input: unknown, context: Context) {',
+        '    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, current(context))) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).toBe('unknown');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('rejects a summarized guard even when only a preceding sibling is opaque', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'function prime(_context: Context) { return undefined; }',
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  guard: guards.all(prime, current),',
+        '  async load(_input: unknown, context: Context) {',
+        '    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, current(context))) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).toBe('unknown');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('admits distinct body-verified helpers with the same exact boolean principal', () => {
+    const result = ownerVerdict(
+      [
+        'import { eq } from "drizzle-orm";',
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+        'import { guards, query, s } from "@kovojs/server";',
+        'type Context = { guard: { ownerFlag: true }, db: PgAsyncDatabase<any, any> };',
+        'export const docs = pgTable("docs", { ownerFlag: boolean("owner_flag").notNull(), id: text("id").notNull() }, kovo({ domain: "doc", key: "id", owner: "ownerFlag" }));',
+        'function currentOwner(context: Context): true { return context.guard.ownerFlag; }',
+        'function equivalentOwner(context: Context): true { return context.guard.ownerFlag; }',
+        'kovoAnalyzerSummary(currentOwner, { returns: { kind: "guard", path: "ownerFlag" } });',
+        'kovoAnalyzerSummary(equivalentOwner, { returns: { kind: "guard", path: "ownerFlag" } });',
+        'export const list = query("list", {',
+        '  args: s.object({}),',
+        '  guard: guards.all(currentOwner, guards.all(equivalentOwner, currentOwner)),',
+        '  async load(_input: unknown, context: Context) {',
+        '    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.ownerFlag, currentOwner(context))) };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result.scope).toBe('session');
+    expect(result.check.exitCode).toBe(0);
+  });
+
+  it('rejects prime then current even when the exact boolean principal reaches true', () => {
+    const result = ownerVerdict(
+      [
+        'import { eq } from "drizzle-orm";',
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+        'import { guards, query, s } from "@kovojs/server";',
+        'type Context = { args: { flag: boolean }, guard: { ownerFlag: boolean }, db: PgAsyncDatabase<any, any> };',
+        'export const docs = pgTable("docs", { ownerFlag: boolean("owner_flag").notNull(), id: text("id").notNull() }, kovo({ domain: "doc", key: "id", owner: "ownerFlag" }));',
+        'function currentOwner(context: Context): boolean { return context.guard.ownerFlag; }',
+        'function prime(context: Context): true { context.guard.ownerFlag = context.args.flag; return true; }',
+        'kovoAnalyzerSummary(currentOwner, { returns: { kind: "guard", path: "ownerFlag" } });',
+        'export const list = query("list", {',
+        '  args: s.object({ flag: s.boolean() }),',
+        '  guard: guards.all(prime, currentOwner),',
+        '  async load(_input: unknown, context: Context) {',
+        '    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.ownerFlag, currentOwner(context))) };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result.scope).toBe('unknown');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
   it('does not accept a validated-input parameter merely because it is named context', () => {
     const result = ownerVerdict(
       ownerSource([
@@ -176,6 +293,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
         ownerSource([
           'export const list = query("list", {',
           '  args: s.object({}),',
+          '  guard: guards.all(current),',
           '  async load(_input: unknown, actual: Context) {',
           `    ${read}`,
           '    return { items: await actual.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
@@ -375,6 +493,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
         'import { and, inArray } from "drizzle-orm";',
         'export const list = query("list", {',
         '  args: s.object({}),',
+        '  guard: guards.all(current),',
         '  async load(_input: unknown, actual: Context) {',
         `    return { items: await actual.db.select({ id: docs.id }).from(docs).where(and(inArray(docs.userId, ${values}), inArray(docs.userId, ${values}))) };`,
         '  },',
@@ -481,7 +600,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
       ?.getArguments()[0];
     if (!declaration || !use) throw new Error('expected exact shadow probe nodes');
 
-    const operand = queryPrivateScopeKeyOperand(use, undefined, {
+    const operand = queryPrivateScopeKeyOperand(use, {
       acceptedGuardPrivateKeys: new Set(['guard:userId']),
       aliases: new Map([
         [
@@ -526,6 +645,7 @@ describe('Phase 2C exact-tip adversarial review', () => {
       'import { poison } from "./poison";',
       'export const list = query("list", {',
       '  args: s.object({ request: s.object({ guard: s.object({ userId: s.string() }) }) }),',
+      '  guard: guards.all(current),',
       '  async load(input: { request: Context["request"] }, context: Context) {',
       '    poison(context, input.request);',
       '    const userId = current(context);',
@@ -541,6 +661,26 @@ describe('Phase 2C exact-tip adversarial review', () => {
       },
     ]);
     expect(result.scope).not.toBe('session');
+    expect(result.check.exitCode).toBe(1);
+    expect(result.check.output).toContain('KV414');
+  });
+
+  it('does not let serverValue launder a whole carrier before an opaque mutation', () => {
+    const result = ownerVerdict(
+      ownerSource([
+        'function poison(target: Context, replacement: Context["request"]) { target.request = replacement; }',
+        'export const list = query("list", {',
+        '  args: s.object({ request: s.object({ guard: s.object({ userId: s.string() }) }) }),',
+        '  guard: guards.all(current),',
+        '  async load(input: { request: Context["request"] }, context: Context) {',
+        '    const carrierAlias = serverValue(context, "reviewed carrier");',
+        '    poison(carrierAlias, input.request);',
+        '    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, current(context))) };',
+        '  },',
+        '});',
+      ]),
+    );
+    expect(result.scope).toBe('unknown');
     expect(result.check.exitCode).toBe(1);
     expect(result.check.output).toContain('KV414');
   });

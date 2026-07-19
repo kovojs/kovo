@@ -58,7 +58,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
         source: [
           'import { and, eq, sum } from "drizzle-orm";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-          'import { mutation, query } from "@kovojs/server";',
+          'import { guards, mutation, query } from "@kovojs/server";',
           '',
           'interface MutationRequest { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null }',
           'interface QueryContext { db: PgAsyncDatabase<any, any>; request?: { session?: { id?: string } | null } }',
@@ -681,6 +681,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
           'kovoAnalyzerSummary(requestGuardUser, { returns: { kind: "guard", path: "userId" } });',
           '',
           'export const activeCaseFiles = query("activeCaseFiles", {',
+          '  guard: guards.all(contextGuardUser),',
           '  async load(_input: {}, context: QueryContext) {',
           '    const userId = contextGuardUser(context);',
           '    return {',
@@ -691,6 +692,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
           '',
           'export const archiveCaseFile = mutation("archiveCaseFile", {',
           '  async handler({ targetId }: { targetId: string }, request: MutationRequest) {',
+          '    if (!request.guard.userId) throw new Error("unauthorized");',
           '    const userId = requestGuardUser(request);',
           '    await request.db.update(caseFiles).set({ status: "archived" }).where(and(eq(caseFiles.userId, userId), eq(caseFiles.id, targetId)));',
           '  },',
@@ -714,7 +716,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     ).toEqual([
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'case-file',
         kind: 'query',
         name: 'activeCaseFiles',
@@ -722,7 +724,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       },
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'case-file',
         kind: 'write',
         name: 'archiveCaseFile',
@@ -840,7 +842,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
           'import { and, eq } from "drizzle-orm";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
-          'import { mutation, query } from "@kovojs/server";',
+          'import { guards, mutation, query } from "@kovojs/server";',
           '',
           'interface MutationRequest { db: PgAsyncDatabase<any, any>; guard: { userId: string; actorId: string } }',
           'interface QueryContext { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string; actorId: string } } }',
@@ -865,6 +867,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
           'kovoAnalyzerSummary(requestGuardUser, { returns: { kind: "guard", path: "userId" } });',
           '',
           'export const openCases = query("openCases", {',
+          '  guard: guards.all(contextGuardUser),',
           '  async load(_input: {}, context: QueryContext) {',
           '    const ownerId = contextGuardUser(context);',
           '    return {',
@@ -875,6 +878,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
           '',
           'export const archiveCase = mutation("archiveCase", {',
           '  async handler({ targetId }: { targetId: string }, request: MutationRequest) {',
+          '    if (!request.guard.userId) throw new Error("unauthorized");',
           '    const ownerId = requestGuardUser(request);',
           '    await request.db.update(cases).set({ status: "archived" }).where(and(eq(cases.userId, ownerId), eq(cases.id, targetId)));',
           '  },',
@@ -882,6 +886,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
           '',
           'export const closeCase = mutation("closeCase", {',
           '  async handler({ targetId }: { targetId: string }, request: MutationRequest) {',
+          '    if (!request.guard.userId) throw new Error("unauthorized");',
           '    const ownerId = requestGuardUser(request);',
           '    await request.db.update(cases).set({ status: "closed" }).where(and(eq(cases.userId, ownerId), eq(cases.id, targetId)));',
           '  },',
@@ -910,7 +915,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     ).toEqual([
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'case',
         kind: 'write',
         name: 'archiveCase',
@@ -918,7 +923,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       },
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'case',
         kind: 'write',
         name: 'closeCase',
@@ -933,7 +938,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       },
       {
         detail:
-          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId',
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to guard:userId; accepted guard principal matched owner predicate',
         domain: 'case',
         kind: 'query',
         name: 'openCases',
