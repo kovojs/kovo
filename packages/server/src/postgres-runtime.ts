@@ -88,6 +88,7 @@ import {
   POSTGRES_POSTURE_LEASE_WITNESS_TIMEOUT_MS,
   type PostgresPostureFact,
   type PostgresPostureLease,
+  type PostgresPostureLeaseSnapshot,
   type PostgresPostureLeaseWitness,
   type PostgresPosturePoolerStatementWitness,
 } from './postgres-posture-lease.js';
@@ -167,6 +168,7 @@ const postgresAppRuntimeOptionSnapshots = createWitnessWeakMap<
   object,
   Readonly<KovoPostgresAppRuntimeOptions>
 >();
+const postgresRuntimePostureLeases = createWitnessWeakMap<object, PostgresPostureLease>();
 const POSTGRES_APP_RUNTIME_OPTION_KEYS = postgresStringSet([
   'adminDatabaseUrl',
   'adminRole',
@@ -1837,6 +1839,8 @@ export function createPostgresAppRuntimeDb(
       await client.close();
     },
   });
+  if (postureLease !== undefined)
+    witnessWeakMapSet(postgresRuntimePostureLeases, runtime, postureLease);
   registerPostgresAppRuntimeDb(runtime, dbForRequest);
   return runtime;
 }
@@ -2332,9 +2336,9 @@ async function derivePostgresPostureLeaseWitness(
           '/* kovo-posture-lease:pooler-first */ SELECT',
           'pg_catalog.pg_backend_pid()::text AS backend_pid,',
           'pg_catalog.current_database()::text AS current_database,',
-          'pg_catalog.current_user::text AS current_user,',
+          'CURRENT_USER::text AS current_user,',
           "pg_catalog.set_config('kovo.posture_lease_probe', $1, true)::text AS probe_value,",
-          'pg_catalog.session_user::text AS session_user',
+          'SESSION_USER::text AS session_user',
         ],
         ' ',
       ),
@@ -2346,9 +2350,9 @@ async function derivePostgresPostureLeaseWitness(
           '/* kovo-posture-lease:pooler-second */ SELECT',
           'pg_catalog.pg_backend_pid()::text AS backend_pid,',
           'pg_catalog.current_database()::text AS current_database,',
-          'pg_catalog.current_user::text AS current_user,',
+          'CURRENT_USER::text AS current_user,',
           "pg_catalog.current_setting('kovo.posture_lease_probe', true)::text AS probe_value,",
-          'pg_catalog.session_user::text AS session_user',
+          'SESSION_USER::text AS session_user',
         ],
         ' ',
       ),
@@ -2601,7 +2605,7 @@ const POSTGRES_POSTURE_LEASE_GRANT_FACTS_SQL = postgresJoin(
     'JOIN pg_catalog.pg_namespace namespace ON namespace.oid = routine.pronamespace',
     'CROSS JOIN LATERAL pg_catalog.aclexplode(routine.proacl) acl',
     'WHERE routine.proacl IS NOT NULL AND acl.grantee IN (SELECT oid FROM grantees)',
-    "UNION ALL SELECT 'default-grant'::text, owner.rolname || ':' || defaults.defaclobjtype || ':' ||",
+    "UNION ALL SELECT 'default-grant'::text, owner.rolname || ':' || defaults.defaclobjtype::text || ':' ||",
     "CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,",
     "acl.privilege_type::text || ';grantable=' || acl.is_grantable::text || ';grantor=' ||",
     'pg_catalog.pg_get_userbyid(acl.grantor) FROM pg_catalog.pg_default_acl defaults',
@@ -5809,6 +5813,16 @@ export const __testPostgresRuntimeInternals = {
     input: PostgresPostureLeaseDeriveInput,
   ): Promise<PostgresPostureLeaseWitness> {
     return derivePostgresPostureLeaseWitness(runtimeClient, postureClient, input);
+  },
+  notePostgresPostureLeaseSqlError(runtime: object, error: unknown): void {
+    const lease = witnessWeakMapGet(postgresRuntimePostureLeases, runtime);
+    if (lease === undefined) throw new TypeError('Runtime has no Postgres posture lease.');
+    lease.noteSqlError(error);
+  },
+  postgresPostureLeaseSnapshot(runtime: object): Readonly<PostgresPostureLeaseSnapshot> {
+    const lease = witnessWeakMapGet(postgresRuntimePostureLeases, runtime);
+    if (lease === undefined) throw new TypeError('Runtime has no Postgres posture lease.');
+    return lease.snapshot();
   },
   pinNodePostgresPoolClient(client: PoolClient): PoolClient {
     return pinNodePostgresPoolClient(client);
