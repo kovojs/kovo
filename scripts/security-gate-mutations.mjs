@@ -744,6 +744,42 @@ const compileSiblingRegistrationBranch = [
 ].join('\n');
 
 const removedCompileSiblingRegistrationBranch = ['  return;'].join('\n');
+const compilerIdentityRegistrationBehavioralInstrumentation = [
+  '',
+  'export function __compilerFrameworkIdentityProjectRegistrationVerdict(): boolean {',
+  "  const source = \"import { th } from './browser-root.js'; th('<b>safe</b>');\";",
+  "  const sourceFile = parseSourceFile('pages/probe.tsx', source);",
+  '  registerFrameworkIdentityProjectForOptions(sourceFile, {',
+  "    fileName: 'pages/probe.tsx',",
+  '    source,',
+  '    extraFiles: [',
+  '      {',
+  "        fileName: 'pages/browser-root.ts',",
+  '        source: "export { trustedHtml as th } from \'@kovojs/browser\';",',
+  '      },',
+  '    ],',
+  '  });',
+  '  let target: ts.Expression | undefined;',
+  '  const visit = (node: ts.Node): void => {',
+  '    if (target) return;',
+  "    if (ts.isCallExpression(node) && node.expression.getText(sourceFile) === 'th') {",
+  '      target = node.expression;',
+  '      return;',
+  '    }',
+  '    ts.forEachChild(node, visit);',
+  '  };',
+  '  ts.forEachChild(sourceFile, visit);',
+  '  return target',
+  '    ? expressionResolvesToFrameworkExport(',
+  '        ts,',
+  '        sourceFile,',
+  '        target,',
+  "        frameworkExport('@kovojs/browser', 'trustedHtml'),",
+  '      )',
+  '    : false;',
+  '}',
+  '',
+].join('\n');
 
 const viteJsToTsSiblingCandidatesBranch = [
   "      case '.js':",
@@ -1967,14 +2003,14 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertTrustedAssignNestedReviewIsPinned,
   },
   {
+    behavioralTypeScript: true,
     description: 'Deletes WebRTC peer construction from raw browser network authority.',
     expectedKiller: 'capability closure must retain RTCPeerConnection as raw network authority',
     name: 'compiler-capability-closure/drop-webrtc-network-global',
     replacement: weakenedBrowserRtcNetworkCapabilityBranch,
     search: browserRtcNetworkCapabilityBranch,
     sourceFile: compilerCapabilityClosureScannerPath,
-    sourceOnly: true,
-    test: assertBrowserRtcNetworkCapabilityIsPinned,
+    test: assertBrowserRtcNetworkCapabilityIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -2340,6 +2376,7 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertImmutableProjectSchemaBindingBehavior,
   },
   {
+    behavioralTypeScript: true,
     description:
       'Drops project identity files while reparsing emitted source for render equivalence.',
     expectedKiller: 'render equivalence must preserve exact project schema identity files',
@@ -2347,8 +2384,7 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: weakenedRenderEquivalenceProjectIdentityBranch,
     search: renderEquivalenceProjectIdentityBranch,
     sourceFile: compilerCompilePath,
-    sourceOnly: true,
-    test: assertRenderEquivalenceProjectIdentityIsPinned,
+    test: assertRenderEquivalenceProjectIdentityIsPreserved,
   },
   {
     description: 'Allows computed or optional framework-context fetch invocation shapes.',
@@ -2902,6 +2938,7 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertUnknownResolverExpressionKindIsCaught,
   },
   {
+    behavioralTypeScript: true,
     description: 'Deletes the core resolver expression-kind branch for literal element access.',
     expectedKiller:
       'B3 resolver must classify ElementAccessExpression as resolved rather than fail-closed',
@@ -2909,10 +2946,10 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedCoreElementAccessResolverBranch,
     search: coreElementAccessResolverBranch,
     sourceFile: coreFrameworkIdentityPath,
-    sourceOnly: true,
-    test: assertCoreResolverSourceKeepsElementAccess,
+    test: assertCoreElementAccessKindResolutionBehavior,
   },
   {
+    behavioralTypeScript: true,
     description: 'Deletes the core resolver canonicalization branch for literal element access.',
     expectedKiller:
       'B3 resolver must route literal element access through namespace member resolution',
@@ -2920,10 +2957,10 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedCoreElementAccessCanonicalBranch,
     search: coreElementAccessCanonicalBranch,
     sourceFile: coreFrameworkIdentityPath,
-    sourceOnly: true,
-    test: assertCoreResolverSourceKeepsElementAccess,
+    test: assertCoreElementAccessCanonicalizationBehavior,
   },
   {
+    behavioralTypeScript: true,
     description: 'Deletes the core resolver export-star traversal branch.',
     expectedKiller:
       'B3 resolver must traverse export * barrels when resolving framework identities',
@@ -2931,10 +2968,11 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedCoreExportStarResolverBranch,
     search: coreExportStarResolverBranch,
     sourceFile: coreFrameworkIdentityPath,
-    sourceOnly: true,
-    test: assertCoreResolverSourceKeepsExportStar,
+    test: assertCoreExportStarResolutionBehavior,
   },
   {
+    behavioralInstrumentation: compilerIdentityRegistrationBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description:
       'Deletes compileComponentModule registration of production sibling files with the resolver.',
     expectedKiller:
@@ -2943,10 +2981,10 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedCompileSiblingRegistrationBranch,
     search: compileSiblingRegistrationBranch,
     sourceFile: compilerCompilePath,
-    sourceOnly: true,
-    test: assertCompilerSourceKeepsSiblingRegistration,
+    test: assertCompilerFrameworkIdentityProjectRegistrationBehavior,
   },
   {
+    behavioralTypeScript: true,
     description:
       'Weakens Vite production sibling discovery so .js imports no longer prefer .ts/.tsx siblings.',
     expectedKiller:
@@ -2955,8 +2993,7 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: weakenedViteJsToTsSiblingCandidatesBranch,
     search: viteJsToTsSiblingCandidatesBranch,
     sourceFile: compilerVitePath,
-    sourceOnly: true,
-    test: assertViteSourceKeepsJsToTsSiblingCandidates,
+    test: assertViteJsToTsSiblingDiscoveryBehavior,
   },
   {
     description: 'Deletes the positive origin decision before framework-owned DNS resolution.',
@@ -3227,9 +3264,9 @@ export const Raw = component({
     )
   ) {
     throw new Error(
-      `app-authored executable reference did not close through KV235: ${diagnostics
-        .map((diagnostic) => diagnostic.message)
-        .join(' | ') || '<open>'}`,
+      `app-authored executable reference did not close through KV235: ${
+        diagnostics.map((diagnostic) => diagnostic.message).join(' | ') || '<open>'
+      }`,
     );
   }
 }
@@ -3501,9 +3538,26 @@ export const save = mutation('contacts/save', {
   );
 }
 
-async function assertBrowserRtcNetworkCapabilityIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(browserRtcNetworkCapabilityBranch)) {
-    throw new Error('capability closure no longer classifies RTCPeerConnection as raw network');
+async function assertBrowserRtcNetworkCapabilityIsEnforced(moduleUnderTest) {
+  const [scanned] = moduleUnderTest.scanCapabilityClosureModules([
+    {
+      fileName: 'webrtc.ts',
+      source: [
+        'export function connect() {',
+        "  const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:peer.example' }] });",
+        "  return peer.createDataChannel('direct');",
+        '}',
+      ].join('\n'),
+    },
+  ]);
+  const rtcFacts =
+    scanned?.globals.filter(
+      (fact) => fact.capability === 'network' && fact.evidence === 'global RTCPeerConnection',
+    ) ?? [];
+  if (rtcFacts.length !== 1) {
+    throw new Error(
+      `capability closure emitted ${rtcFacts.length} direct RTCPeerConnection network facts`,
+    );
   }
 }
 
@@ -3605,9 +3659,38 @@ contacts = new Proxy({}, {});
   );
 }
 
-async function assertRenderEquivalenceProjectIdentityIsPinned(_moduleUnderTest, { sourceText }) {
-  if (!sourceText.includes(renderEquivalenceProjectIdentityBranch)) {
-    throw new Error('render-equivalence reparsing no longer receives project identity files');
+async function assertRenderEquivalenceProjectIdentityIsPreserved(moduleUnderTest) {
+  const result = moduleUnderTest.compileComponentModule({
+    extraFiles: [
+      {
+        fileName: 'pages/component-root.ts',
+        source: "export { component as defineComponent } from '@kovojs/core';",
+      },
+      {
+        fileName: 'pages/component-barrel.ts',
+        source: "export * from './component-root';",
+      },
+    ],
+    fileName: 'pages/probe.tsx',
+    source: [
+      "import { defineComponent } from './component-barrel.js';",
+      'export const Probe = defineComponent({',
+      '  render: () => <main><h1>Identity-preserved render</h1></main>,',
+      '});',
+    ].join('\n'),
+  });
+  if (result.diagnostics.length > 0) {
+    throw new Error(
+      `render-equivalence identity fixture produced diagnostics: ${result.diagnostics
+        .map((diagnostic) => `${diagnostic.code}:${diagnostic.message}`)
+        .join(', ')}`,
+    );
+  }
+  const [check] = result.renderEquivalenceChecks;
+  if (!check?.ok) {
+    throw new Error(
+      `render-equivalence reparse lost project identity files: ${check?.detail ?? 'missing check'}`,
+    );
   }
 }
 
@@ -6078,15 +6161,63 @@ async function assertUnknownResolverExpressionKindIsCaught(moduleUnderTest) {
   );
 }
 
-async function assertCoreResolverSourceKeepsElementAccess(_moduleUnderTest, { sourceText } = {}) {
-  if (!sourceText?.includes(coreElementAccessResolverBranch)) {
-    throw new Error('core resolver no longer classifies ElementAccessExpression as resolved');
-  }
-  if (!sourceText.includes(coreElementAccessCanonicalBranch)) {
+function frameworkIdentitySourceFile(fileName, source) {
+  return ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+}
+
+function frameworkIdentityCallExpression(sourceFile, calleeText) {
+  let found;
+  const visit = (node) => {
+    if (found) return;
+    if (ts.isCallExpression(node) && node.expression.getText(sourceFile) === calleeText) {
+      found = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+  if (!found) throw new Error(`framework-identity fixture lost call ${calleeText}`);
+  return found;
+}
+
+function assertFrameworkIdentityEquals(actual, expected, label) {
+  if (actual?.module !== expected.module || actual.exportName !== expected.exportName) {
     throw new Error(
-      'core resolver no longer routes literal ElementAccessExpression through namespace member identity',
+      `${label} resolved to ${actual ? `${actual.module}:${actual.exportName}` : 'unknown'}`,
     );
   }
+}
+
+async function assertCoreElementAccessKindResolutionBehavior(moduleUnderTest) {
+  const row = moduleUnderTest
+    .frameworkIdentityExpressionKindRows(ts)
+    .find((candidate) => candidate.kind === ts.SyntaxKind.ElementAccessExpression);
+  if (row?.resolution !== 'resolve-element-access' || row.status !== 'resolved') {
+    throw new Error(
+      `ElementAccessExpression resolver row became ${row?.resolution ?? 'missing'}/${row?.status ?? 'missing'}`,
+    );
+  }
+}
+
+async function assertCoreElementAccessCanonicalizationBehavior(moduleUnderTest) {
+  const sourceFile = frameworkIdentitySourceFile(
+    '/app/usage.tsx',
+    [
+      "import * as browser from '@kovojs/browser';",
+      "browser['trustedHtml']('<strong>safe</strong>');",
+    ].join('\n'),
+  );
+  const call = frameworkIdentityCallExpression(sourceFile, "browser['trustedHtml']");
+  const identity = moduleUnderTest.canonicalFrameworkExportForExpression(
+    ts,
+    sourceFile,
+    call.expression,
+  );
+  assertFrameworkIdentityEquals(
+    identity,
+    { exportName: 'trustedHtml', module: '@kovojs/browser' },
+    'literal framework namespace element access',
+  );
 }
 
 async function assertFrameworkImplementationDigestComparisonIsClosed(moduleUnderTest) {
@@ -6103,21 +6234,71 @@ async function assertFrameworkImplementationDigestComparisonIsClosed(moduleUnder
   }
 }
 
-async function assertCoreResolverSourceKeepsExportStar(_moduleUnderTest, { sourceText } = {}) {
-  if (!sourceText?.includes(coreExportStarResolverBranch)) {
-    throw new Error('core resolver no longer traverses export * barrels');
+async function assertCoreExportStarResolutionBehavior(moduleUnderTest) {
+  const root = frameworkIdentitySourceFile(
+    '/app/browser-root.ts',
+    "export { trustedHtml as html } from '@kovojs/browser';",
+  );
+  const barrel = frameworkIdentitySourceFile(
+    '/app/browser-barrel.ts',
+    "export * from './browser-root';",
+  );
+  const usage = frameworkIdentitySourceFile(
+    '/app/usage.tsx',
+    ["import { html } from './browser-barrel.js';", "html('<strong>safe</strong>');"].join('\n'),
+  );
+  moduleUnderTest.registerFrameworkIdentityProject(usage, [root, barrel]);
+  const identity = moduleUnderTest.canonicalFrameworkExportForExpression(
+    ts,
+    usage,
+    frameworkIdentityCallExpression(usage, 'html').expression,
+  );
+  assertFrameworkIdentityEquals(
+    identity,
+    { exportName: 'trustedHtml', module: '@kovojs/browser' },
+    'export-star framework identity',
+  );
+}
+
+async function assertCompilerFrameworkIdentityProjectRegistrationBehavior(moduleUnderTest) {
+  if (!moduleUnderTest.__compilerFrameworkIdentityProjectRegistrationVerdict()) {
+    throw new Error(
+      'compiler project registration did not expose an extra-file framework identity',
+    );
   }
 }
 
-async function assertCompilerSourceKeepsSiblingRegistration(_moduleUnderTest, { sourceText } = {}) {
-  if (!sourceText?.includes(compileSiblingRegistrationBranch)) {
-    throw new Error('compileComponentModule no longer registers extraFiles with the resolver');
-  }
-}
+async function assertViteJsToTsSiblingDiscoveryBehavior(moduleUnderTest) {
+  const root = mkdtempSync(path.join(tmpdir(), 'kovo-vite-identity-mutant-'));
+  const src = path.join(root, 'src');
+  mkdirSync(src, { recursive: true });
+  const source = [
+    "import { trustedHtml } from './safe-html.js';",
+    'export const retained = trustedHtml;',
+  ].join('\n');
+  writeFileSync(
+    path.join(src, 'safe-html.ts'),
+    "export { trustedHtml } from '@kovojs/browser';\n",
+    'utf8',
+  );
 
-async function assertViteSourceKeepsJsToTsSiblingCandidates(_moduleUnderTest, { sourceText } = {}) {
-  if (!sourceText?.includes(viteJsToTsSiblingCandidatesBranch)) {
-    throw new Error('Vite sibling discovery no longer maps .js specifiers to .ts/.tsx candidates');
+  try {
+    const files = moduleUnderTest.viteFrameworkIdentityFiles(
+      root,
+      path.join(src, 'probe.tsx'),
+      source,
+    );
+    if (
+      !files.some(
+        (file) =>
+          file.fileName === 'src/safe-html.ts' &&
+          file.source.includes("export { trustedHtml } from '@kovojs/browser'"),
+      )
+    ) {
+      throw new Error('Vite did not resolve an explicit .js import to its TypeScript sibling');
+    }
+  } finally {
+    rmSync(root, { force: true, recursive: true });
   }
 }
 
