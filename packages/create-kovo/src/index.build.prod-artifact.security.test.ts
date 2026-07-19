@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { writeKovoProject } from './index.js';
 import {
@@ -44,6 +44,7 @@ import {
   firstFormHtml,
   formHtmlByAction,
   freshProductionArtifactIdempotencyToken,
+  migrateRuntimeSecretBoundaryProof,
   PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   signInDemoUser,
 } from './index.build.test-support.js';
@@ -235,16 +236,15 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
-  // @kovo-security-certifies KV435 runtime-secret-db-read-boundary
-  // @kovo-security-certifies KV435 runtime-secret-raw-sql-read-boundary
-  // @kovo-security-certifies KV435 runtime-secret-computed-read-boundary
-  // @kovo-security-certifies KV435 runtime-secret-audited-reveal-egress
-  // @kovo-security-certifies KV435 runtime-secret-reader-raw-sql-refusal
-  // @kovo-security-certifies KV435 runtime-secret-declared-read-capability
-  it('boxes schema-declared secret reads, raw SQL aliases, and computed values before query-wire egress in paranoid mode while allowing audited reveals', async () => {
+  // @kovo-security-certifies KV435 postgres-reader-role-secret-grant-floor
+  // @kovo-security-certifies KV435 postgres-reader-role-secret-view-floor
+  // @kovo-security-certifies KV435 runtime-secret-explicit-box-egress
+  // @kovo-security-certifies KV435 runtime-secret-audited-reveal-acceptance
+  it('distinguishes Postgres reader-role denials from runtime Secret wire refusal and audited reveal acceptance', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-runtime-secret-boundary-'));
+    const dataDir = join(root, '.kovo/runtime-secret-boundary-pglite');
     const port = await reservePort();
     const jar = new Map<string, string>();
     let server: ChildProcessWithoutNullStreams | undefined;
@@ -255,38 +255,49 @@ describe('create-kovo starter (build integration: production security artifacts)
       addRuntimeSecretBoundaryProof(root);
       const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
       const generatedRuntimeDb = readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8');
+      const runtimeSecretMigration = readFileSync(
+        join(root, 'migrations/001_runtime_secret_boundary.sql'),
+        'utf8',
+      );
       expect(proofQueries).toContain(
-        "import { declareSecretReadCapability, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+        "import { secret, trustedReveal } from '@kovojs/core';",
       );
       expect(proofQueries).not.toContain("from './_kovo/app-runtime-db.js'");
       expect(generatedRuntimeDb).not.toContain('declareSecretReadCapability');
-      expect(proofQueries).toContain('classified: runtimeSecretProof.classified');
+      expect(proofQueries).not.toContain('declareSecretReadCapability');
+      expect(proofQueries).not.toContain('as unknown as { execute');
+      expect(proofQueries).toContain('leaked: runtimeSecretProof.classified');
       expect(proofQueries).toContain('leaked: runtimeSecretFunctionProof.functionClassified');
       expect(proofQueries).toContain('runtimeSecretWholeProof.label');
+      expect(proofQueries).toContain('drizzleSql<string>`upper(${runtimeSecretProof.classified})`');
       expect(proofQueries).toContain('classified as leaked from "runtime_secret_proof"');
-      expect(proofQueries).toContain('opaque raw SQL parse-fail secret boundary proof');
-      expect(proofQueries).toContain('runtimeSecretDefaultRawRefusalQuery');
-      expect(proofQueries).toContain('default reader raw secret-column refusal proof');
-      expect(proofQueries).toContain('runtimeSecretDirectRawRefusalQuery');
-      expect(proofQueries).toContain('default reader direct raw secret-column refusal proof');
-      expect(proofQueries).toContain('runtimeSecretViewRawRefusalQuery');
-      expect(proofQueries).toContain('security-invoker view secret-column refusal proof');
-      expect(proofQueries).toContain('runtimeSecretReaderRoleProofQuery');
-      expect(proofQueries).toContain('PGlite non-superuser reader role assumption proof');
-      expect(proofQueries).toContain('runtimeSecretDefaultRawPublicQuery');
-      expect(proofQueries).toContain('default reader raw public-column proof');
-      expect(proofQueries).toContain('runtimeSecretDeclaredRawEgressQuery');
-      expect(proofQueries).toContain('declareSecretReadCapability(');
-      expect(proofQueries).toContain('runtimeSecretDeclaredRawRevealQuery');
-      expect(proofQueries).toContain('audited declared raw secret-read reveal acceptance proof');
-      expect(proofQueries).toContain('runtimeSecretComputedEgressQuery');
-      expect(proofQueries).toContain('leaked: row.classified');
       expect(proofQueries).toContain(
-        'trustedReveal(row as unknown as Secret<{ classified: string; id: string }>',
+        'select id, upper(classified) as leaked from "runtime_secret_proof"',
       );
+      expect(proofQueries).toContain('executable opaque raw expression engine-denial proof');
+      expect(runtimeSecretMigration).toContain(
+        'CREATE VIEW runtime_secret_proof_view WITH (security_invoker=true)',
+      );
+      expect(runtimeSecretMigration).toContain(
+        "INSERT INTO runtime_secret_proof (id, label, classified) VALUES ('s1', 'public label', 'runtime-secret-value')",
+      );
+      expect(proofQueries).toContain('runtimeSecretRawEngineDenialQuery');
+      expect(proofQueries).toContain('executable raw secret-column engine-denial proof');
+      expect(proofQueries).toContain('runtimeSecretViewEngineDenialQuery');
+      expect(proofQueries).toContain('existing runtime secret view engine-denial proof');
+      expect(proofQueries).toContain('runtimeSecretReaderRoleProofQuery');
+      expect(proofQueries).toContain('select id, current_user as label');
+      expect(proofQueries).toContain('PGlite current_user reader-role proof');
+      expect(proofQueries).toContain('runtimeSecretDefaultRawPublicQuery');
+      expect(proofQueries).toContain('select id, label from runtime_secret_proof order by id');
+      expect(proofQueries).toContain('default reader raw public-column negative control');
+      expect(proofQueries).toContain("const boxed = secret('runtime-secret-value')");
+      expect(proofQueries).toContain("trustedReveal(secret('runtime-secret-value'), {");
       expect(proofQueries).toContain('audited runtime query-wire reveal acceptance proof');
+      expect(proofQueries).not.toContain('if (false)');
 
       buildParanoidProductionArtifact(root);
+      migrateRuntimeSecretBoundaryProof(root, dataDir);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -295,6 +306,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           ...withRepoBinOnPath(),
           BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
+          KOVO_DATA_DIR: dataDir,
           KOVO_PARANOID: '1',
           NODE_ENV: 'test',
           PORT: String(port),
@@ -304,103 +316,121 @@ describe('create-kovo starter (build integration: production security artifacts)
       const origin = `http://127.0.0.1:${port}`;
 
       await signInDemoUser(root, origin, jar, output);
-      for (const key of [
-        'runtime-secret-column-egress',
-        'runtime-secret-function-egress',
-        'runtime-secret-raw-egress',
-        'runtime-secret-declared-raw-egress',
-        'runtime-secret-opaque-raw-egress',
-        'runtime-secret-computed-egress',
-        'runtime-secret-whole-table-egress',
-      ]) {
+
+      const engineDenialCases = [
+        [
+          'queries/runtime-secret-column-engine-denial-query',
+          /permission denied for table runtime_secret_proof/u,
+        ],
+        [
+          'queries/runtime-secret-function-engine-denial-query',
+          /permission denied for table runtime_secret_function_proof/u,
+        ],
+        [
+          'queries/runtime-secret-computed-engine-denial-query',
+          /permission denied for table runtime_secret_proof/u,
+        ],
+        [
+          'queries/runtime-secret-whole-table-engine-denial-query',
+          /permission denied for table runtime_secret_whole_proof/u,
+        ],
+        [
+          'queries/runtime-secret-raw-engine-denial-query',
+          /permission denied for table runtime_secret_proof/u,
+        ],
+        [
+          'queries/runtime-secret-opaque-raw-engine-denial-query',
+          /permission denied for table runtime_secret_proof/u,
+        ],
+        [
+          'queries/runtime-secret-view-engine-denial-query',
+          /permission denied for view runtime_secret_proof_view/u,
+        ],
+      ] as const;
+
+      for (const [key, exactEngineDenial] of engineDenialCases) {
+        const outputOffset = output().length;
         const response = await fetch(`${origin}/_q/${key}`, {
           headers: { cookie: cookieHeader(jar) },
         });
         const body = await response.text();
 
         expect(response.status, `${key}: ${body}`).toBe(500);
-        expect(body).toMatch(/^\{"code":"(?:KV410|SERVER_ERROR)","payload":\{\}\}$/u);
+        expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
         expect(body).not.toContain('runtime-secret-value');
         expect(body).not.toContain('runtime-function-secret-value');
         expect(body).not.toContain('runtime-whole-secret-value');
+        await vi.waitFor(() => {
+          const requestOutput = output().slice(outputOffset);
+          expect(requestOutput).toContain(`query-endpoint failed query=${key}`);
+          expect(requestOutput).toMatch(exactEngineDenial);
+          expect(requestOutput).not.toContain('KV433');
+          expect(requestOutput).not.toContain('KV435');
+          expect(requestOutput).not.toContain('runtime-secret-value');
+          expect(requestOutput).not.toContain('runtime-function-secret-value');
+          expect(requestOutput).not.toContain('runtime-whole-secret-value');
+        });
       }
-      expect(output()).toContain('KV435');
-      expect(output()).toContain('Secret runtime value cannot cross');
 
-      const refusalResponse = await fetch(`${origin}/_q/runtime-secret-default-raw-refusal`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const refusalBody = await refusalResponse.text();
-
-      expect(refusalResponse.status, refusalBody).toBe(200);
-      expect(refusalBody).toContain('default-reader-raw-secret-refusal');
-      expect(refusalBody).toContain('blocked');
-      expect(refusalBody).toContain('KV433');
-      expect(refusalBody).not.toContain('runtime-secret-value');
-
-      const directRefusalResponse = await fetch(`${origin}/_q/runtime-secret-direct-raw-refusal`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const directRefusalBody = await directRefusalResponse.text();
-
-      expect(directRefusalResponse.status, directRefusalBody).toBe(200);
-      expect(directRefusalBody).toContain('default-reader-direct-raw-secret-refusal');
-      expect(directRefusalBody).toContain('blocked');
-      expect(directRefusalBody).toContain('KV433');
-      expect(directRefusalBody).not.toContain('runtime-secret-value');
-
-      const viewRefusalResponse = await fetch(`${origin}/_q/runtime-secret-view-raw-refusal`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const viewRefusalBody = await viewRefusalResponse.text();
-
-      expect(viewRefusalResponse.status, viewRefusalBody).toBe(200);
-      expect(viewRefusalBody).toContain('default-reader-view-secret-refusal');
-      expect(viewRefusalBody).toContain('blocked');
-      expect(viewRefusalBody).toContain('KV433');
-      expect(viewRefusalBody).not.toContain('runtime-secret-value');
-
-      const readerRoleResponse = await fetch(`${origin}/_q/runtime-secret-reader-role-proof`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
+      const readerRoleResponse = await fetch(
+        `${origin}/_q/queries/runtime-secret-reader-role-proof-query`,
+        { headers: { cookie: cookieHeader(jar) } },
+      );
       const readerRoleBody = await readerRoleResponse.text();
 
       expect(readerRoleResponse.status, readerRoleBody).toBe(200);
-      expect(readerRoleBody).toContain('reader-role');
+      expect(readerRoleBody).toContain(
+        '<kovo-query name="queries/runtime-secret-reader-role-proof-query"',
+      );
+      expect(readerRoleBody).toContain('s1');
       expect(readerRoleBody).toContain('kovo_reader');
 
-      const publicRawResponse = await fetch(`${origin}/_q/runtime-secret-default-raw-public`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
+      const publicRawResponse = await fetch(
+        `${origin}/_q/queries/runtime-secret-default-raw-public-query`,
+        { headers: { cookie: cookieHeader(jar) } },
+      );
       const publicRawBody = await publicRawResponse.text();
 
       expect(publicRawResponse.status, publicRawBody).toBe(200);
-      expect(publicRawBody).toContain('<kovo-query name="runtime-secret-default-raw-public"');
+      expect(publicRawBody).toContain(
+        '<kovo-query name="queries/runtime-secret-default-raw-public-query"',
+      );
       expect(publicRawBody).toContain('public label');
       expect(publicRawBody).not.toContain('runtime-secret-value');
 
-      const revealResponse = await fetch(`${origin}/_q/runtime-secret-reveal-egress`, {
-        headers: { cookie: cookieHeader(jar) },
+      const boxOutputOffset = output().length;
+      const boxResponse = await fetch(
+        `${origin}/_q/queries/runtime-secret-explicit-box-egress-query`,
+        { headers: { cookie: cookieHeader(jar) } },
+      );
+      const boxBody = await boxResponse.text();
+
+      expect(boxResponse.status, boxBody).toBe(500);
+      expect(boxBody).toBe('{"code":"SERVER_ERROR","payload":{}}');
+      expect(boxBody).not.toContain('runtime-secret-value');
+      await vi.waitFor(() => {
+        const requestOutput = output().slice(boxOutputOffset);
+        expect(requestOutput).toContain(
+          'query-endpoint failed query=queries/runtime-secret-explicit-box-egress-query',
+        );
+        expect(requestOutput).toContain('KV435');
+        expect(requestOutput).toContain('Secret runtime value cannot cross');
+        expect(requestOutput).not.toContain('runtime-secret-value');
       });
+
+      const revealOutputOffset = output().length;
+      const revealResponse = await fetch(
+        `${origin}/_q/queries/runtime-secret-reveal-acceptance-query`,
+        { headers: { cookie: cookieHeader(jar) } },
+      );
       const revealBody = await revealResponse.text();
 
       expect(revealResponse.status, revealBody).toBe(200);
-      expect(revealBody).toContain('<kovo-query name="runtime-secret-reveal-egress"');
-      expect(revealBody).toContain('runtime-secret-value');
-      expect(revealBody).toContain('runtime-secret-value:computed');
-
-      const declaredRevealResponse = await fetch(
-        `${origin}/_q/runtime-secret-declared-raw-reveal`,
-        {
-          headers: { cookie: cookieHeader(jar) },
-        },
+      expect(revealBody).toContain(
+        '<kovo-query name="queries/runtime-secret-reveal-acceptance-query"',
       );
-      const declaredRevealBody = await declaredRevealResponse.text();
-
-      expect(declaredRevealResponse.status, declaredRevealBody).toBe(200);
-      expect(declaredRevealBody).toContain('<kovo-query name="runtime-secret-declared-raw-reveal"');
-      expect(declaredRevealBody).toContain('runtime-secret-value');
-      expect(declaredRevealBody).toContain('runtime-secret-value:declared');
+      expect(revealBody).toContain('runtime-secret-value');
+      expect(output().slice(revealOutputOffset)).not.toContain('KV435');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
