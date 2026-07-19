@@ -816,9 +816,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'kills Unicode filesystem case-fold aliases in runtime loaders',
           'kills a Unicode filesystem case-fold alias in a static import',
           'kills inode aliases through every literal POSIX CJS path interpretation',
-          "./poſtgres-authorization-correspondence.js",
-          "../../../pacKages/server/src/postgres-authorization-correspondence.js",
-          "./postgres-authorization-correspondence.jſ",
+          './poſtgres-authorization-correspondence.js',
+          '../../../pacKages/server/src/postgres-authorization-correspondence.js',
+          './postgres-authorization-correspondence.jſ',
           'opaque%ZZ.js',
           'opaque-query.js?x',
           'opaque-fragment.js#x',
@@ -872,7 +872,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'prints deterministic quoted non-correspondence records and one dead-role warning',
           'predicate="organization_id = 1\\\\nFORGED"',
-          "options: { authorization: true }",
+          'options: { authorization: true }',
         ],
       },
       {

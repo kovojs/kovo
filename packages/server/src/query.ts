@@ -641,24 +641,31 @@ export const renderQueryEndpointResponse = wireEmitter(
     let lifecycleRequest: Request = endpointRequest.request;
     try {
       searchEntries = snapshotQuerySearchInputEntries(endpointRequest.search ?? {});
-      const rawInput = tagUntrustedRequestValue(querySearchInputToRecord(searchEntries));
-      lifecycleRequest = await resolveKovoLifecycleRequest(endpointRequest.request, {
-        ...(endpointRequest.clientIp === undefined ? {} : { clientIp: endpointRequest.clientIp }),
-        ...(endpointRequest.db === undefined ? {} : { db: endpointRequest.db }),
-        ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),
-        ...(endpointRequest.sessionProvider === undefined
-          ? {}
-          : { sessionProvider: endpointRequest.sessionProvider }),
-        surface: 'query',
-      });
-      result = await runQuery(
-        definition,
-        rawInput,
-        lifecycleRequest,
-        endpointRequest.maxListItems === undefined
-          ? {}
-          : { maxListItems: endpointRequest.maxListItems },
-      );
+      if (definition.args === undefined && searchEntries.length > 0) {
+        // SPEC §9.4/§10.2: /_q/ input is rejected unless an args schema owns its grammar.
+        // Do this before lifecycle providers or guards so unvalidated query data cannot trigger
+        // authority-bearing work and an argsless endpoint never receives a tagged search record.
+        result = querySearchWithoutArgsSchemaFailure();
+      } else {
+        const rawInput = tagUntrustedRequestValue(querySearchInputToRecord(searchEntries));
+        lifecycleRequest = await resolveKovoLifecycleRequest(endpointRequest.request, {
+          ...(endpointRequest.clientIp === undefined ? {} : { clientIp: endpointRequest.clientIp }),
+          ...(endpointRequest.db === undefined ? {} : { db: endpointRequest.db }),
+          ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),
+          ...(endpointRequest.sessionProvider === undefined
+            ? {}
+            : { sessionProvider: endpointRequest.sessionProvider }),
+          surface: 'query',
+        });
+        result = await runQuery(
+          definition,
+          rawInput,
+          lifecycleRequest,
+          endpointRequest.maxListItems === undefined
+            ? {}
+            : { maxListItems: endpointRequest.maxListItems },
+        );
+      }
     } catch (error) {
       reportServerError(endpointRequest.onError, error, {
         operation: 'query-endpoint',
@@ -1033,6 +1040,19 @@ function appendQueryValue<Value>(values: Value[], value: Value): void {
 
 function validationFailurePayload(error: SchemaValidationErrorLike): ValidationFailurePayload {
   return { issues: error.issues };
+}
+
+function querySearchWithoutArgsSchemaFailure(): QueryEndpointFailure {
+  return {
+    error: {
+      code: 'VALIDATION',
+      payload: {
+        issues: [{ message: 'Search input requires a declared query args schema.', path: [] }],
+      },
+    },
+    ok: false,
+    status: 422,
+  };
 }
 
 type QuerySearchEntry = readonly [string, string];
