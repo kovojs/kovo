@@ -181,9 +181,12 @@ the prose assertion as enough to grant reader/writer access while installing no 
 `kovo build` already writes `graph.json` (`packages/cli/src/commands/build-export.ts:1145`). The
 identity object every later certificate, advisory, and attestation needs does not exist. (~0.3 pm)
 
-- [ ] Add a `provenance` block: resolved `@kovojs/*` versions, `pnpm-lock` content hash, graph schema
+- [x] Add a `provenance` block: resolved `@kovojs/*` versions, `pnpm-lock` content hash, graph schema
       version, and the `SECURITY.md` guarantee-register digest in force at build time. Verify byte
       stability across two no-op rebuilds and that it changes when any input changes.
+  - Evidence: SPEC §5.2.3 and `artifact-provenance.test.ts` pass 19/19 with the guarantee-gate suite;
+    the real `index.kovo-build.test.ts` no-op two-build proof passes and the unit corpus changes every
+    package-version, raw-lockfile, graph-schema, and canonical guarantee-register input.
 
 ### 0.5 Security process half (live credibility defect)
 
