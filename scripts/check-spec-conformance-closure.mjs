@@ -19,7 +19,13 @@ import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 
 export const repoRoot = findRepoRoot();
 export const diagnosticConformanceEvidencePath = 'security/diagnostic-conformance-evidence.json';
-export const diagnosticConformanceSchema = 'kovo.diagnostic-conformance-evidence/v1';
+export const diagnosticConformanceSchema = 'kovo.diagnostic-conformance-evidence/v2';
+
+const diagnosticActualLayers = Object.freeze([
+  'compile-error',
+  'fail-closed-runtime',
+  'audited-escape',
+]);
 
 const compilerMatrixKind = 'compiler-matrix';
 const fixturesKind = 'fixtures';
@@ -42,7 +48,7 @@ const cliStaticExportDiagnosticRehydrationDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '65f06e1fcd0ebf8fb28526decfadc927f34e866c33c935091e3975c3cbb2e891';
+  '479ce31481cf3063610e1dbc0b3cf854bf429ec292e0eb17068909cf129fc707';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -60,7 +66,9 @@ const expectedDiagnosticFactoryConstructorDigest =
 const expectedDiagnosticFactorySinkDigest =
   '74213deb854487b068017e285bc57791f0fcd5ec333c8971b3bcf22df832befd';
 const expectedDiagnosticEvidenceWitnessDigest =
-  '0f17c841bb8faf327a15805eb1ac84c4d1a000254175e00c3a5ed00c9d34b841';
+  '3853796300370563dd5283c9ecaa1770bbd8a49ff6252b806a88859203085715';
+const expectedDiagnosticActualLayerReviewDigest =
+  '68d65aff789f74256669b76e3ed246f94bd1cb6007bfa2615bd10b78751a8ada';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -77,12 +85,12 @@ const expectedCoreBuildDistCommand =
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/inline-loader.ts#2f9e41eda34b608793f2dbd54817ca1f0aa04da106d278e7fef51e4d03caaa91#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#3b2fbaed304404bb191701b08b79947a7869566df27f18520e91925ff3bc2d31',
-  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#f3f265afd66e69c25580b7ce0942eaf5bd8e36b1c3b9ec15d8a8cac80eba3836',
-  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#bc216e52c412c8b193eb048ec65ffe9acb38280f67773837203ae1f164ba01a2',
-  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#1c6d930e4e45cf09d26898686ca29ac9f739589a667ca73b6b77a70dfd7744ec',
-  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#666bd656e7c42491b16f3d6f97fb64bef5faaf31813e8ac4ecdd5f3df6eb104d',
-  'packages/cli/src/commands/build-export.ts#f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed#606f565bbb48636a234c79a4289dac3cf14d662050180563b00a61a266db42aa',
+  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#3b2fbaed304404bb191701b08b79947a7869566df27f18520e91925ff3bc2d31',
+  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#f3f265afd66e69c25580b7ce0942eaf5bd8e36b1c3b9ec15d8a8cac80eba3836',
+  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#bc216e52c412c8b193eb048ec65ffe9acb38280f67773837203ae1f164ba01a2',
+  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#1c6d930e4e45cf09d26898686ca29ac9f739589a667ca73b6b77a70dfd7744ec',
+  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#666bd656e7c42491b16f3d6f97fb64bef5faaf31813e8ac4ecdd5f3df6eb104d',
+  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#606f565bbb48636a234c79a4289dac3cf14d662050180563b00a61a266db42aa',
   'packages/cli/src/commands/db.ts#56af7873918dd0309505fa16539961821f5cd6d2c522d05c70671802e31b731a#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
@@ -107,7 +115,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'a3f0e056e282bb26179e8e4923ad17674b995ef6320326091a21e71d55db9f8e'],
   [
     'packages/cli/src/commands/build-export.ts',
-    'f5f9f07b6bad4549aea4dd53347eda56083a6d006fccaaa0146c84027348c5ed',
+    '19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a',
   ],
   [
     'packages/cli/src/commands/compile.ts',
@@ -135,7 +143,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    'bb7273924dcc8f31bcdb82058b85d3d3da801b0677fc1661ed8b1b3b10559c90',
+    'c3891dd6d1415a1ffe9cd1d51bca521a41639da002f40472f83acebde18fdc43',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
@@ -376,7 +384,7 @@ const namedFixtureTestCache = new Map();
 const diagnosticLiteralExemptions = new Map([
   [
     'packages/core/src/diagnostics.ts',
-    '0e19a85ba1f1a4848faf9c590b3884e3f3a2226d9085b9b035dd609f46b11ee0',
+    '5319ea04035ff51d9e3de651fefb8cd41cc0e2743e421b10a45f895dd358a730',
   ],
   [
     'packages/core/src/internal/diagnostic-registry.generated.ts',
@@ -557,6 +565,14 @@ export function evaluateSpecConformanceClosure(input) {
       fixtureFiles: input.fixtureFiles,
     }),
   );
+  findings.push(
+    ...validateDiagnosticActualLayerBindings({
+      emissionSites: scan.emissionSites,
+      evidence: input.evidence,
+      fixtureFiles: input.fixtureFiles,
+      rows,
+    }),
+  );
   const evidenceDigest = diagnosticEvidenceWitnessDigest(
     errorCodes,
     input.evidence,
@@ -707,7 +723,9 @@ function diagnosticEmissionSiteDigest(emissionSites) {
   const rows = [];
   for (const [code, sites] of emissionSites) {
     for (const site of sites) {
-      rows.push(`${code}\0${site.file}\0${site.line}\0${site.emitter}\0${site.ownerDigest}`);
+      rows.push(
+        `${code}\0${site.file}\0${site.line}\0${site.emitter}\0${site.ownerDigest}\0${site.siteDigest}`,
+      );
     }
   }
   return createHash('sha256').update(rows.sort().join('\n')).digest('hex');
@@ -846,6 +864,7 @@ export function scanDiagnosticProductionSources(
                 file: fileName,
                 line: position.line + 1,
                 ownerDigest: sourceNodeDigest(diagnosticEmissionOwner(node), sourceFile),
+                siteDigest: sourceNodeDigest(node, sourceFile),
               };
               const existing = emissionSites.get(code) ?? [];
               existing.push(site);
@@ -4675,6 +4694,265 @@ function variableIsExported(declaration) {
     ts.isVariableStatement(declaration.parent.parent)
     ? hasExportModifier(declaration.parent.parent)
     : false;
+}
+
+/**
+ * Derive exact source and executable-witness identities without consulting the registry's
+ * enforcementClass. The reviewed evidence ledger assigns these identities to layers separately;
+ * this split is what lets the gate reject a coherent SPEC/generated-registry relabel.
+ */
+export function deriveDiagnosticActualLayerBindingFacts({
+  emissionSites,
+  evidence,
+  fixtureFiles,
+  rows,
+}) {
+  const productionSites = [];
+  for (const [code, sites] of emissionSites) {
+    for (const site of sites) {
+      productionSites.push({ code, identity: diagnosticEmissionSiteIdentity(code, site) });
+    }
+  }
+
+  const evidenceWitnesses = [];
+  const entries = evidence?.diagnostics ?? {};
+  const matrix = evidence?.compilerMatrix;
+  const matrixSource = normalizePath(matrix?.source ?? '<missing>');
+  const matrixTestFile = normalizePath(matrix?.test ?? '<missing>');
+  const matrixTestName = matrix?.testName ?? '<missing>';
+  const matrixSourceDigest = sourceTextDigest(fixtureFiles?.[matrixSource] ?? '<missing>');
+  const matrixTestBody =
+    findNamedTest(fixtureFiles?.[matrixTestFile] ?? '', matrixTestName, matrixTestFile) ??
+    '<missing>';
+
+  for (const row of rows) {
+    if (row.severity !== 'error') continue;
+    const entry = entries[row.code];
+    if (entry?.kind === compilerMatrixKind) {
+      evidenceWitnesses.push({
+        code: row.code,
+        identity: [
+          row.code,
+          'compiler-matrix',
+          `${matrixSource}#${row.code}`,
+          `source=${matrixSourceDigest}`,
+          `${matrixTestFile}#${matrixTestName}`,
+          `body=${sourceTextDigest(matrixTestBody)}`,
+        ].join('|'),
+        role: 'compiler-matrix',
+      });
+      continue;
+    }
+
+    const references =
+      entry?.kind === fixturesKind
+        ? [
+            ['red', entry.red],
+            ['green', entry.green],
+            ['own-layer', entry.ownLayer],
+          ]
+        : entry?.kind === reviewedZeroEmissionKind
+          ? [['zero-emission mutation', entry.mutation]]
+          : [];
+    for (const [role, reference] of references) {
+      const file = normalizePath(reference?.file ?? '<missing>');
+      const testName = reference?.test ?? '<missing>';
+      const body = findNamedTest(fixtureFiles?.[file] ?? '', testName, file) ?? '<missing>';
+      evidenceWitnesses.push({
+        code: row.code,
+        identity: [row.code, role, `${file}#${testName}`, `body=${sourceTextDigest(body)}`].join(
+          '|',
+        ),
+        role,
+      });
+    }
+  }
+
+  productionSites.sort((left, right) => left.identity.localeCompare(right.identity));
+  evidenceWitnesses.sort((left, right) => left.identity.localeCompare(right.identity));
+  return { evidenceWitnesses, productionSites };
+}
+
+function diagnosticEmissionSiteIdentity(code, site) {
+  return [
+    code,
+    `${normalizePath(site.file)}:${site.line}`,
+    site.emitter,
+    `owner=${site.ownerDigest}`,
+    `body=${site.siteDigest}`,
+  ].join('|');
+}
+
+function sourceTextDigest(source) {
+  return createHash('sha256').update(source).digest('hex');
+}
+
+function validateDiagnosticActualLayerBindings({ emissionSites, evidence, fixtureFiles, rows }) {
+  const findings = [];
+  const review = evidence?.actualLayerBindings;
+  if (review === null || typeof review !== 'object' || Array.isArray(review)) {
+    return [
+      `${diagnosticConformanceEvidencePath}: independently reviewed actual-layer bindings are missing`,
+    ];
+  }
+
+  const reviewDigest = diagnosticActualLayerReviewDigest(review);
+  if (reviewDigest !== expectedDiagnosticActualLayerReviewDigest) {
+    findings.push(
+      `${diagnosticConformanceEvidencePath}: independently reviewed actual-layer binding manifest drifted (received ${reviewDigest})`,
+    );
+  }
+
+  const primary = reviewedLayerAssignments(review.primary, 'primary diagnostic', findings);
+  const production = reviewedLayerAssignments(review.productionSites, 'production site', findings);
+  const witnesses = reviewedLayerAssignments(
+    review.evidenceWitnesses,
+    'evidence witness',
+    findings,
+  );
+
+  const expectedCodes = new Set(rows.map((row) => row.code));
+  findings.push(
+    ...exactCodeSetFindings(
+      `${diagnosticConformanceEvidencePath} primary actual-layer bindings`,
+      new Set(primary.keys()),
+      expectedCodes,
+    ),
+  );
+
+  const facts = deriveDiagnosticActualLayerBindingFacts({
+    emissionSites,
+    evidence,
+    fixtureFiles,
+    rows,
+  });
+  const derivedProduction = exactIdentityMap(
+    facts.productionSites,
+    'derived production diagnostic site',
+    findings,
+  );
+  const derivedWitnesses = exactIdentityMap(
+    facts.evidenceWitnesses,
+    'derived diagnostic evidence witness',
+    findings,
+  );
+  findings.push(
+    ...exactIdentitySetFindings(
+      `${diagnosticConformanceEvidencePath} production actual-layer bindings`,
+      new Set(production.keys()),
+      new Set(derivedProduction.keys()),
+    ),
+    ...exactIdentitySetFindings(
+      `${diagnosticConformanceEvidencePath} witness actual-layer bindings`,
+      new Set(witnesses.keys()),
+      new Set(derivedWitnesses.keys()),
+    ),
+  );
+
+  for (const row of rows) {
+    const actual = primary.get(row.code);
+    if (actual !== undefined && actual !== row.enforcementClass) {
+      findings.push(
+        `${row.code}: independently bound primary actual layer ${actual} disagrees with SPEC enforcement ${row.enforcementClass}`,
+      );
+    }
+  }
+
+  for (const [identity, fact] of derivedProduction) {
+    const siteLayer = production.get(identity);
+    const primaryLayer = primary.get(fact.code);
+    if (siteLayer === undefined || primaryLayer === undefined) continue;
+    // SPEC §11.3 precedence is deliberately not equality here. A compile-error may retain a
+    // runtime floor, and a runtime-primary guarantee may reject statically provable subsets before
+    // execution. An audited site, however, cannot stand in for either blocking posture (or vice
+    // versa); each mixed blocking site remains exact and review-bound above.
+    if ((primaryLayer === 'audited-escape') !== (siteLayer === 'audited-escape')) {
+      findings.push(
+        `${fact.code}: production site ${identity} has actual layer ${siteLayer}, incompatible with primary ${primaryLayer}`,
+      );
+    }
+  }
+
+  for (const [identity, fact] of derivedWitnesses) {
+    const witnessLayer = witnesses.get(identity);
+    const primaryLayer = primary.get(fact.code);
+    if (witnessLayer !== undefined && primaryLayer !== undefined && witnessLayer !== primaryLayer) {
+      findings.push(
+        `${fact.code}: ${fact.role} witness has actual layer ${witnessLayer}, but primary evidence must prove ${primaryLayer}`,
+      );
+    }
+  }
+
+  return findings;
+}
+
+function reviewedLayerAssignments(groups, label, findings) {
+  const assignments = new Map();
+  if (groups === null || typeof groups !== 'object' || Array.isArray(groups)) {
+    findings.push(`${diagnosticConformanceEvidencePath}: ${label} layer groups are missing`);
+    return assignments;
+  }
+  for (const key of Object.keys(groups)) {
+    if (!diagnosticActualLayers.includes(key)) {
+      findings.push(`${diagnosticConformanceEvidencePath}: unknown ${label} layer ${key}`);
+    }
+  }
+  for (const layer of diagnosticActualLayers) {
+    const values = groups[layer];
+    if (!Array.isArray(values)) {
+      findings.push(
+        `${diagnosticConformanceEvidencePath}: ${label} layer ${layer} must be an array`,
+      );
+      continue;
+    }
+    for (const value of values) {
+      if (typeof value !== 'string' || value.length === 0) {
+        findings.push(
+          `${diagnosticConformanceEvidencePath}: ${label} layer ${layer} contains an invalid identity`,
+        );
+        continue;
+      }
+      if (assignments.has(value)) {
+        findings.push(`${diagnosticConformanceEvidencePath}: duplicate ${label} binding ${value}`);
+        continue;
+      }
+      assignments.set(value, layer);
+    }
+  }
+  return assignments;
+}
+
+function exactIdentityMap(facts, label, findings) {
+  const result = new Map();
+  for (const fact of facts) {
+    if (result.has(fact.identity)) findings.push(`${label} identity collided: ${fact.identity}`);
+    else result.set(fact.identity, fact);
+  }
+  return result;
+}
+
+function exactIdentitySetFindings(label, actual, expected) {
+  const missing = [...expected].filter((identity) => !actual.has(identity)).sort();
+  const extra = [...actual].filter((identity) => !expected.has(identity)).sort();
+  const findings = [];
+  if (missing.length > 0) findings.push(`${label}: missing ${missing.join(', ')}`);
+  if (extra.length > 0) findings.push(`${label}: unexpected ${extra.join(', ')}`);
+  return findings;
+}
+
+function diagnosticActualLayerReviewDigest(review) {
+  const rows = [
+    `reviewBasis\0${typeof review?.reviewBasis === 'string' ? review.reviewBasis : '<missing>'}`,
+  ];
+  for (const section of ['primary', 'productionSites', 'evidenceWitnesses']) {
+    for (const layer of diagnosticActualLayers) {
+      const values = Array.isArray(review?.[section]?.[layer])
+        ? review[section][layer].filter((value) => typeof value === 'string').sort()
+        : ['<missing>'];
+      for (const value of values) rows.push(`${section}\0${layer}\0${value}`);
+    }
+  }
+  return sourceTextDigest(rows.join('\n'));
 }
 
 function validateDiagnosticEvidence({ emissionSites, errorCodes, evidence, fixtureFiles }) {

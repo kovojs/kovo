@@ -160,6 +160,49 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
     }
   });
 
+  it('binds mixed compile/runtime backstops without overriding the reviewed primary layer', () => {
+    const bindings = baseline.evidence.actualLayerBindings;
+    expect(bindings.primary['compile-error']).toContain('KV236');
+    expect(bindings.productionSites['fail-closed-runtime']).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('KV236|packages/core/src/internal/sink-policy.ts:'),
+        expect.stringContaining('KV236|packages/server/src/html.ts:'),
+      ]),
+    );
+    expect(bindings.primary['fail-closed-runtime']).toContain('KV402');
+    expect(bindings.productionSites['compile-error']).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('KV402|packages/compiler/src/validate/component-contracts.ts:'),
+      ]),
+    );
+    expect(evaluate().findings).toEqual([]);
+  });
+
+  it('C13 mutation: actual-layer review and exact witness bodies cannot be relabeled', () => {
+    const bindings = structuredClone(baseline.evidence.actualLayerBindings);
+    const runtimeIndex = bindings.productionSites['fail-closed-runtime'].findIndex((identity) =>
+      identity.startsWith('KV236|packages/core/src/internal/sink-policy.ts:'),
+    );
+    const [runtimeFloor] = bindings.productionSites['fail-closed-runtime'].splice(runtimeIndex, 1);
+    bindings.productionSites['compile-error'].push(runtimeFloor);
+    const relabeledEvidence = { ...baseline.evidence, actualLayerBindings: bindings };
+    expect(evaluate({ evidence: relabeledEvidence }).findings.join('\n')).toContain(
+      'independently reviewed actual-layer binding manifest drifted',
+    );
+
+    const row = baseline.evidence.diagnostics.KV415;
+    const fixtureFiles = {
+      ...baseline.fixtureFiles,
+      [row.ownLayer.file]: baseline.fixtureFiles[row.ownLayer.file].replace(
+        "'X Kovo Header Proof': 'unsafe'",
+        "'X Kovo Header Proof': 'mutated'",
+      ),
+    };
+    expect(evaluate({ fixtureFiles }).findings.join('\n')).toContain(
+      'witness actual-layer bindings',
+    );
+  });
+
   it('C13 mutation: executes every runtime registry row and requires exact frozen semantics', () => {
     const findings = evaluate({
       runtimeDefinitionFactory(code) {
@@ -1791,7 +1834,8 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
       evaluate({ evidence, productionFiles }).findings.filter(
         (finding) =>
           !finding.includes('production diagnostic emission site manifest drifted') &&
-          !finding.includes('exact fixture witness manifest drifted'),
+          !finding.includes('exact fixture witness manifest drifted') &&
+          !finding.includes('actual-layer binding'),
       ),
     ).toEqual([]);
   });
