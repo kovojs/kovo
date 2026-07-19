@@ -1,11 +1,11 @@
 // SPEC.md §6.6 (trust surface, AUDIT-ONLY): static collectors that surface every
-// app-authored trust escape and dangerous imperative-DOM sink for `kovo explain --trust`
+// app-authored trust escape and unsupported request/process authority for `kovo explain --trust`
 // (KV426) and `kovo check` (KV424). These passes ENFORCE NOTHING by themselves — they
 // produce facts (TrustEscapeExplain / UnregisteredSinkFact) that the CLI renderer in
 // packages/cli/src/graph-output.ts surfaces. The trust pass is purely audit-only: it
 // emits one row per escape regardless of whether a justification is present, and the
-// consumer decides how to present a missing justification. The dangerous-sink pass is
-// deliberately conservative (see collectUnregisteredSinksFromProject) so the
+// consumer decides how to present a missing justification. The authority pass is deliberately
+// conservative (see collectUnregisteredSinksFromProject) so the
 // error-severity KV424 gate stays near-zero false-positive on real app code.
 //
 // These mirror the AST-pass style of ./static.ts (analyzeSqlSafetyFromProject):
@@ -370,17 +370,10 @@ function shortSource(node: Node): string {
 // =====================================================================================
 //
 // CONSERVATIVE BY DESIGN. KV424 fails `kovo check` on ANY entry, so this pass must stay
-// near-zero false-positive on real app code. Compiler-owned JSX handlers are enforced by the
-// finite browser IR and deliberately do not run through this name classifier. This survivor covers
-// only imperative `on*` assignments and `addEventListener` callbacks that are not serialized by
-// Kovo's JSX compiler. It deliberately does NOT walk arbitrary module/server code (where
-// `innerHTML` etc. may be legitimate non-app-boundary usage). The survivor lexicon:
-//   - `el.innerHTML = ...`      → safePath trustedHtml
-//   - `el.outerHTML = ...`      → safePath trustedHtml
-//   - `eval(...)`               → safePath (no Kovo equivalent; remove)
-//   - `setTimeout('...string...')` (string first arg) → safePath function-callback
-//   - `document.write(...)`     → safePath trustedHtml
-//   - `new Function(...)`       → safePath (no Kovo equivalent; remove)
+// near-zero false-positive on real app code. Request/process reachability owns unsupported raw
+// browser registrations as opaque protocol/call authority, while compiler-owned JSX handlers close
+// through the finite browser IR. The former callback-body name lexicon was redundant and is absent:
+// a raw registration closes before its callback effects need to be guessed from names (SPEC §6.6).
 
 interface DangerousSinkMatch {
   sink: string;
@@ -389,10 +382,10 @@ interface DangerousSinkMatch {
 }
 
 /**
- * Collect dangerous imperative-DOM sink writes/calls inside raw imperative handler bodies as
- * `UnregisteredSinkFact`s (SPEC §6.6, KV424). Compiler-owned JSX handlers instead close through
- * KV449's finite operation set. This narrow survivor covers only callbacks installed through raw
- * `on*` assignments or `addEventListener` and only the historical unambiguous lexicon.
+ * Collect unsupported request/process authority as `UnregisteredSinkFact`s (SPEC §6.6, KV424).
+ * Compiler-owned JSX handlers instead close through KV449's finite operation set. Raw imperative
+ * registrations reach the authoritative request graph as opaque protocol/call authority, so they
+ * close before callback effects and require no separate dangerous-name classifier.
  *
  * @internal
  */
@@ -401,19 +394,11 @@ export function collectUnregisteredSinksFromProject(
 ): UnregisteredSinkFact[] {
   const { sourceFiles, dispose } = createSyntacticProject(options.files);
   try {
-    const facts: UnregisteredSinkFact[] = [];
-    for (const [index, sourceFile] of sourceFiles.entries()) {
-      const file = options.files[index];
-      if (!file) continue;
-      facts.push(...unregisteredSinksForSourceFile(file, sourceFile));
-    }
-    facts.push(
-      ...requestProcessSinksForProject(
-        options.files,
-        sourceFiles,
-        options.buildConfigEntryFileName,
-        options.compilerSecuritySemanticSources,
-      ),
+    const facts = requestProcessSinksForProject(
+      options.files,
+      sourceFiles,
+      options.buildConfigEntryFileName,
+      options.compilerSecuritySemanticSources,
     );
     return facts.sort(
       (left, right) => left.site.localeCompare(right.site) || left.sink.localeCompare(right.sink),
@@ -446,7 +431,6 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
       const file = options.files[index];
       if (!file) continue;
       capabilities.push(...capabilityEscapesForSourceFile(file, sourceFile));
-      unregisteredSinks.push(...unregisteredSinksForSourceFile(file, sourceFile));
       for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
         const downgrade = cookieDowngradeForCall(file, call);
         if (downgrade) cookieDowngrades.push(downgrade);
@@ -38718,57 +38702,6 @@ function optionalOpaqueModule(opaqueModule: string | undefined): { opaqueModule?
   return opaqueModule === undefined ? {} : { opaqueModule };
 }
 
-function unregisteredSinksForSourceFile(
-  file: TrustEscapeSourceFileInput,
-  sourceFile: SourceFile,
-): UnregisteredSinkFact[] {
-  const facts: UnregisteredSinkFact[] = [];
-
-  for (const handler of nonCompilerRawHandlerBodies(sourceFile)) {
-    // Assignments: el.innerHTML = ..., el.outerHTML = ...
-    for (const binary of handler.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
-      if (binary.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
-      const left = binary.getLeft();
-      if (!Node.isPropertyAccessExpression(left)) continue;
-      const member = left.getName();
-      if (member !== 'innerHTML' && member !== 'outerHTML') continue;
-      facts.push({
-        sink: member,
-        safePath: 'trustedHtml',
-        site: siteFor(file, binary),
-        ...sourceField(binary.getRight()),
-      });
-    }
-
-    // Calls: eval(...), setTimeout('...'), document.write(...), new Function(...)
-    for (const call of handler.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      const match = dangerousCallSink(call);
-      if (match) {
-        facts.push({
-          sink: match.sink,
-          safePath: match.safePath,
-          site: siteFor(file, call),
-          ...(match.source ? { source: match.source } : {}),
-        });
-      }
-    }
-    for (const construct of handler.getDescendantsOfKind(SyntaxKind.NewExpression)) {
-      const callee = construct.getExpression();
-      if (unshadowedGlobalIdentifier(callee, 'Function')) {
-        const [arg] = construct.getArguments();
-        facts.push({
-          sink: 'Function',
-          safePath: 'remove dynamic code evaluation',
-          site: siteFor(file, construct),
-          ...(arg ? { source: shortSource(arg) } : {}),
-        });
-      }
-    }
-  }
-
-  return facts;
-}
-
 function dangerousCallSink(call: Node): DangerousSinkMatch | null {
   if (!Node.isCallExpression(call)) return null;
   const callee = call.getExpression();
@@ -38928,48 +38861,6 @@ function identifierTextEquals(identifier: Node & { getText(): string }, expected
 
 function sourceField(node: Node | undefined): { source?: string } {
   return node ? { source: shortSource(node) } : {};
-}
-
-/**
- * Raw imperative handler-shaped closures that are not serialized through Kovo's JSX compiler.
- * JSX `onClick`/`on:click` attributes are intentionally absent: their complete historical closed
- * corpus is owned by the compiler's finite browser IR and KV449. This survivor keeps older raw
- * `on*` property assignments and `addEventListener` callbacks fail-closed without pretending that
- * they are compiler-owned lowered handlers.
- */
-function nonCompilerRawHandlerBodies(sourceFile: SourceFile): Node[] {
-  const bodies: Node[] = [];
-  const seen = new Set<Node>();
-
-  const add = (node: Node | undefined): void => {
-    if (!node) return;
-    if (Node.isArrowFunction(node) || Node.isFunctionExpression(node)) {
-      const body = node.getBody();
-      if (body && !seen.has(body)) {
-        seen.add(body);
-        bodies.push(body);
-      }
-    }
-  };
-
-  // `element.onclick = () => {...}` style property assignments to on* handlers.
-  for (const binary of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
-    if (binary.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
-    const left = binary.getLeft();
-    if (!Node.isPropertyAccessExpression(left)) continue;
-    if (!/^on[a-z]/.test(left.getName())) continue;
-    add(binary.getRight());
-  }
-
-  // addEventListener('click', () => {...}) callbacks.
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const callee = call.getExpression();
-    if (Node.isPropertyAccessExpression(callee) && callee.getName() === 'addEventListener') {
-      add(call.getArguments()[1]);
-    }
-  }
-
-  return bodies;
 }
 
 // =====================================================================================

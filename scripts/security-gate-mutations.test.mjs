@@ -160,7 +160,7 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
-          name: 'drizzle-task-b/restore-jsx-name-scanner',
+          name: 'drizzle-task-b/drop-raw-registration-closure',
           status: 'killed',
         }),
         expect.objectContaining({
@@ -336,7 +336,7 @@ describe('security-gate-mutations', () => {
       'drizzle-analyzer-summary/allow-extra-carrier-argument',
       'drizzle-analyzer-summary/allow-opp-alias-chain',
       'drizzle-analyzer-summary/drop-carrier-integrity-proof',
-      'drizzle-task-b/restore-jsx-name-scanner',
+      'drizzle-task-b/drop-raw-registration-closure',
       'drizzle-task-b/restore-static-build-analysis-bypass',
     ];
 

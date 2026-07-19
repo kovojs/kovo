@@ -325,14 +325,18 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     {
       label: 'an imperative onclick assignment',
       registration: (body: string) => `element.onclick = () => { ${body} };`,
+      replacementSink: 'request-handler.opaque-protocol',
     },
     {
       label: 'an imperative addEventListener callback',
       registration: (body: string) => `element.addEventListener('click', () => { ${body} });`,
+      replacementSink: 'request-handler.opaque-call',
     },
-  ])('keeps the non-compiler $label survivor closed', ({ registration }) => {
-    const facts = sinksFor(
-      registration(`
+  ])(
+    'keeps the historical $label corpus closed at registration',
+    ({ registration, replacementSink }) => {
+      const facts = sinksFor(
+        registration(`
         element.innerHTML = input;
         element.outerHTML = input;
         eval(input);
@@ -342,25 +346,13 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         document.writeln(input);
         new Function(input);
       `),
-    );
+      );
 
-    const historicalSinks = new Set([
-      'Function',
-      'document.write',
-      'document.writeln',
-      'eval',
-      'innerHTML',
-      'outerHTML',
-      'setInterval',
-      'setTimeout',
-    ]);
-    expect(
-      facts
-        .map((fact) => fact.sink)
-        .filter((sink) => historicalSinks.has(sink))
-        .sort(),
-    ).toEqual([...historicalSinks].sort());
-  });
+      expect(facts).toEqual(
+        expect.arrayContaining([expect.objectContaining({ sink: replacementSink })]),
+      );
+    },
+  );
 
   it.each([
     {

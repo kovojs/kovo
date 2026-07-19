@@ -190,8 +190,7 @@ const compilerActiveEmbedClosureBranch = [
   '  ) {',
 ].join('\n');
 const removedCompilerActiveEmbedClosureBranch = '  if (false) {';
-const serverActiveEmbedClosureBranch =
-  '  if (isBlockedActiveEmbedElementName(intrinsicType)) {';
+const serverActiveEmbedClosureBranch = '  if (isBlockedActiveEmbedElementName(intrinsicType)) {';
 const removedServerActiveEmbedClosureBranch =
   '  if (false && isBlockedActiveEmbedElementName(intrinsicType)) {';
 const reactiveSubmitterTransportClosureBranch = [
@@ -1438,19 +1437,16 @@ const bypassedStaticBuildAuthoritativeProjectBranch = [
   '  }',
   '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
 ].join('\n');
-const taskBImperativeHandlerOnlyBranch =
-  '  // `element.onclick = () => {...}` style property assignments to on* handlers.';
-const restoredTaskBJsxNameScannerBranch = [
-  '  // JSX attributes whose name starts with `on` (onClick, on:click, onSubmit, ...).',
-  '  for (const attribute of sourceFile.getDescendantsOfKind(SyntaxKind.JsxAttribute)) {',
-  '    const name = attribute.getNameNode().getText();',
-  '    if (!/^on[:A-Z]/.test(name) && !/^on[a-z]/.test(name)) continue;',
-  '    const initializer = attribute.getInitializer();',
-  '    if (initializer && Node.isJsxExpression(initializer)) add(initializer.getExpression());',
-  '  }',
-  '',
-  taskBImperativeHandlerOnlyBranch,
+const rawRegistrationRequestProcessClosureBranch = [
+  '    const facts = requestProcessSinksForProject(',
+  '      options.files,',
+  '      sourceFiles,',
+  '      options.buildConfigEntryFileName,',
+  '      options.compilerSecuritySemanticSources,',
+  '    );',
 ].join('\n');
+const removedRawRegistrationRequestProcessClosureBranch =
+  '    const facts: UnregisteredSinkFact[] = [];';
 
 const reviewedCommandCapabilityDoorBranch =
   '  if (frameworkExportEquals(frameworkIdentity, RUN_COMMAND_IDENTITY)) {';
@@ -2186,13 +2182,14 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     behavioralTypeScript: true,
-    description: 'Restores the superseded per-name JSX handler sink traversal.',
-    expectedKiller: 'compiler-owned JSX handlers must stay exclusively on finite IR',
-    name: 'drizzle-task-b/restore-jsx-name-scanner',
-    replacement: restoredTaskBJsxNameScannerBranch,
-    search: taskBImperativeHandlerOnlyBranch,
+    description: 'Deletes authoritative request-graph closure for raw browser event registrations.',
+    expectedKiller:
+      'raw on* assignments and addEventListener calls must remain closed without a callback name scan',
+    name: 'drizzle-task-b/drop-raw-registration-closure',
+    replacement: removedRawRegistrationRequestProcessClosureBranch,
+    search: rawRegistrationRequestProcessClosureBranch,
     sourceFile: drizzleTrustEscapesPath,
-    test: assertTaskBJsxNameScannerRetirementIsEnforced,
+    test: assertTaskBRawRegistrationClosureIsEnforced,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -3298,9 +3295,13 @@ export const View = component({
   );
   const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242');
   const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
-  const leakedBinding = ['formaction', 'formenctype', 'formmethod', 'formnovalidate', 'formtarget'].find(
-    (name) => serverSource.includes(`data-bind:${name}`),
-  );
+  const leakedBinding = [
+    'formaction',
+    'formenctype',
+    'formmethod',
+    'formnovalidate',
+    'formtarget',
+  ].find((name) => serverSource.includes(`data-bind:${name}`));
   if (diagnostics.length === 0 || leakedBinding !== undefined) {
     throw new Error(
       `reactive typed-form transport did not close before lowering: diagnostics=${diagnostics.length} leaked=${leakedBinding ?? '<none>'}`,
@@ -5402,22 +5403,29 @@ async function assertStaticBuildAuthoritativeProjectIsExecuted(moduleUnderTest) 
       },
     ],
   });
-  if (!facts.unregisteredSinks.some((fact) => fact.sink === 'document.write')) {
+  if (!facts.unregisteredSinks.some((fact) => fact.sink === 'request-handler.opaque-protocol')) {
     throw new Error('static build trust facts bypassed authoritative TASK B analysis');
   }
 }
 
-async function assertTaskBJsxNameScannerRetirementIsEnforced(moduleUnderTest) {
+async function assertTaskBRawRegistrationClosureIsEnforced(moduleUnderTest) {
   const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
     files: [
       {
-        fileName: 'compiler-owned-handler.tsx',
-        source: `export const view = <button onClick={() => { element.innerHTML = userInput; }}>Save</button>;`,
+        fileName: 'raw-handler.ts',
+        source: `
+element.onclick = () => element.focus();
+element.addEventListener('click', () => element.focus());
+`,
       },
     ],
   });
-  if (sinks.some((fact) => fact.sink === 'innerHTML')) {
-    throw new Error('TASK B restored the superseded per-name JSX handler traversal');
+  const sinkKinds = new Set(sinks.map((fact) => fact.sink));
+  if (
+    !sinkKinds.has('request-handler.opaque-protocol') ||
+    !sinkKinds.has('request-handler.opaque-call')
+  ) {
+    throw new Error('raw browser registration escaped authoritative request-graph closure');
   }
 }
 

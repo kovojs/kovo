@@ -335,6 +335,14 @@ diagnostic. This is a conservative proof about accidental authority in Kovo's su
 authoring subset; consistent with the trusted application-code boundary above, it is not a
 same-realm JavaScript sandbox or a claim about deliberately hostile dependencies.
 
+Supported browser event handlers MUST be authored as TSX/JSX event attributes and lowered through
+the compiler-owned finite browser operation vocabulary. App-authored imperative registration — an
+`on*` property write, `addEventListener`, or an equivalent opaque protocol/call transfer — is outside
+the supported subset and MUST fail closed with KV424 before authored modules are evaluated. That
+verdict is rooted in the registration's reachable authority, not in a deny-list of names found in
+the callback body; adding or renaming a dangerous browser API therefore cannot reopen the raw
+registration path. Compiler-owned JSX handlers remain governed by KV449 and the finite operation IR.
+
 **Finite operation closure (normative, supported-subset static gate).** Capability closure answers
 which code and reviewed doors are reachable; the finite security-operation IR answers which
 security-relevant effects a supported handler can perform. Its browser vocabulary is closed in

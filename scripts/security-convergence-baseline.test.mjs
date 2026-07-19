@@ -103,7 +103,7 @@ describe('security convergence baseline', () => {
     ).not.toBe(measured.scopeSha256);
   });
 
-  it('derives the imperative DOM deny lexicon from its classifier branches', () => {
+  it('derives the residual dangerous-call lexicon without the deleted raw-handler classifier', () => {
     const measured = measureImperativeDomSinkLexicon(`
       function unregisteredSinksForSourceFile() {
         if (member !== 'innerHTML' && member !== 'outerHTML') return;
@@ -114,16 +114,7 @@ describe('security convergence baseline', () => {
         if (method === 'write' || method === 'writeln') return;
       }
     `);
-    expect(measured.sinkNames).toEqual([
-      'Function',
-      'eval',
-      'innerHTML',
-      'outerHTML',
-      'setInterval',
-      'setTimeout',
-      'write',
-      'writeln',
-    ]);
+    expect(measured.sinkNames).toEqual(['eval', 'setInterval', 'setTimeout', 'write', 'writeln']);
   });
 
   it('counts egress ranges, exact metadata identities, and every direct allow path', () => {

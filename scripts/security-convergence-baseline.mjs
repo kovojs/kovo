@@ -237,7 +237,9 @@ export function measureStaticPredicateObligations(source, fileName = 'security-p
 
 export function measureImperativeDomSinkLexicon(source) {
   const sourceFile = parseTypescript(source, TRUST_STATIC_FILE);
-  const functionNames = new Set(['unregisteredSinksForSourceFile', 'dangerousCallSink']);
+  // The former raw-handler callback classifier was deleted under C13. Only the residual global
+  // dangerous-call recognizer used by authoritative request/process reachability belongs here.
+  const functionNames = new Set(['dangerousCallSink']);
   const sinkNames = new Set();
 
   for (const statement of sourceFile.statements) {
