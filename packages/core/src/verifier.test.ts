@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   customVerifier,
@@ -36,7 +36,7 @@ const standardHeaders = {
 };
 
 describe('webhook verifier kit', () => {
-  it('verifies a generic HMAC signature with constant-time comparison inputs', async () => {
+  it('verifies a generic HMAC signature through native fixed-width verification', async () => {
     // B5 fix: public HMAC tolerance always prepends the timestamp to the signed bytes.
     const verifier = hmacSignature({
       encoding: 'hex',
@@ -205,9 +205,7 @@ describe('webhook verifier kit', () => {
     tolerance.seconds = 0;
     options.secret = new TextEncoder().encode('7172737475767778797a7b7c7d7e7f80');
     options.payload = new TextEncoder().encode('attacker-payload');
-    const exposedSecret = verifier.config.secret as Uint8Array;
     const exposedPayload = verifier.config.payload as Uint8Array;
-    exposedSecret.fill(0);
     exposedPayload.fill(0);
 
     await expect(
@@ -235,16 +233,22 @@ describe('webhook verifier kit', () => {
     expect(await import('./index.js')).not.toHaveProperty('isFrameworkHmacSignatureVerifier');
   });
 
-  it('keeps webhook signing material only in the verify authority, not public config', () => {
+  it('keeps webhook signing material only in the verify authority, not public config', async () => {
     const verifier = hmacSignature({
       encoding: 'hex',
       header: 'x-signature',
       payload: 'configured-payload',
       secret: snapshotSecret,
     });
-    expect(verifier).not.toHaveProperty('config');
+    expect(verifier.config).toEqual({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: 'configured-payload',
+    });
+    expect(verifier.config).not.toHaveProperty('secret');
     expect(verifier.resolved).not.toHaveProperty('secret');
     expect(JSON.stringify(verifier)).not.toContain(snapshotSecret);
+    expect(await import('./index.js')).not.toHaveProperty('createProviderWebhookHmacVerifyHandle');
   });
 
   it('uses captured validated SubtleCrypto methods after ambient prototype poisoning', async () => {
@@ -268,11 +272,11 @@ describe('webhook verifier kit', () => {
     }
     const validSignature = createHmac('sha256', postImportSecret).update('body').digest('hex');
     const subtlePrototype = Object.getPrototypeOf(globalThis.crypto.subtle) as Record<
-      'importKey' | 'sign',
+      'importKey' | 'verify',
       unknown
     >;
     const importKeyDescriptor = Object.getOwnPropertyDescriptor(subtlePrototype, 'importKey');
-    const signDescriptor = Object.getOwnPropertyDescriptor(subtlePrototype, 'sign');
+    const verifyDescriptor = Object.getOwnPropertyDescriptor(subtlePrototype, 'verify');
     let observedSecret = false;
     try {
       Object.defineProperty(subtlePrototype, 'importKey', {
@@ -285,9 +289,9 @@ describe('webhook verifier kit', () => {
           return {} as CryptoKey;
         },
       });
-      Object.defineProperty(subtlePrototype, 'sign', {
-        ...signDescriptor,
-        value: async () => new Uint8Array(32).buffer,
+      Object.defineProperty(subtlePrototype, 'verify', {
+        ...verifyDescriptor,
+        value: async () => true,
       });
 
       await expect(
@@ -300,10 +304,81 @@ describe('webhook verifier kit', () => {
       if (importKeyDescriptor) {
         Object.defineProperty(subtlePrototype, 'importKey', importKeyDescriptor);
       }
-      if (signDescriptor) Object.defineProperty(subtlePrototype, 'sign', signDescriptor);
+      if (verifyDescriptor) Object.defineProperty(subtlePrototype, 'verify', verifyDescriptor);
     }
     expect(observedSecretArray).toBe(false);
     expect(observedSecret).toBe(false);
+  });
+
+  it('fails closed when the verify-only crypto control is poisoned before authority capture', async () => {
+    const subtlePrototype = Object.getPrototypeOf(globalThis.crypto.subtle) as Record<
+      'importKey' | 'verify',
+      unknown
+    >;
+    const importKeyDescriptor = Object.getOwnPropertyDescriptor(subtlePrototype, 'importKey');
+    const verifyDescriptor = Object.getOwnPropertyDescriptor(subtlePrototype, 'verify');
+    const signature = createHmac('sha256', postImportSecret).update('body').digest('hex');
+    vi.resetModules();
+    try {
+      Object.defineProperty(subtlePrototype, 'importKey', {
+        ...importKeyDescriptor,
+        value: async () => ({}) as CryptoKey,
+      });
+      Object.defineProperty(subtlePrototype, 'verify', {
+        ...verifyDescriptor,
+        value: async () => true,
+      });
+      const isolated = await import('./verifier.js');
+      const verifier = isolated.hmacSignature({
+        encoding: 'hex',
+        header: 'x-signature',
+        payload: ({ payload }) => payload,
+        secret: postImportSecret,
+      });
+      await expect(
+        verifier.verify({ headers: { 'x-signature': signature }, payload: 'body' }),
+      ).rejects.toThrow(/crypto controls were modified before framework initialization/u);
+    } finally {
+      if (importKeyDescriptor) {
+        Object.defineProperty(subtlePrototype, 'importKey', importKeyDescriptor);
+      }
+      if (verifyDescriptor) Object.defineProperty(subtlePrototype, 'verify', verifyDescriptor);
+      vi.resetModules();
+    }
+  });
+
+  it('does not acquire signing authority even when SubtleCrypto.sign is poisoned before import', async () => {
+    const subtlePrototype = Object.getPrototypeOf(globalThis.crypto.subtle) as Record<
+      'sign',
+      unknown
+    >;
+    const signDescriptor = Object.getOwnPropertyDescriptor(subtlePrototype, 'sign');
+    const signature = createHmac('sha256', postImportSecret).update('body').digest('hex');
+    let signCalls = 0;
+    vi.resetModules();
+    try {
+      Object.defineProperty(subtlePrototype, 'sign', {
+        ...signDescriptor,
+        value: async () => {
+          signCalls += 1;
+          throw new Error('sign authority must not be acquired');
+        },
+      });
+      const isolated = await import('./verifier.js');
+      const verifier = isolated.hmacSignature({
+        encoding: 'hex',
+        header: 'x-signature',
+        payload: ({ payload }) => payload,
+        secret: postImportSecret,
+      });
+      await expect(
+        verifier.verify({ headers: { 'x-signature': signature }, payload: 'body' }),
+      ).resolves.toBe(true);
+      expect(signCalls).toBe(0);
+    } finally {
+      if (signDescriptor) Object.defineProperty(subtlePrototype, 'sign', signDescriptor);
+      vi.resetModules();
+    }
   });
 
   it('rejects forged signatures after late typed-array length poisoning', async () => {

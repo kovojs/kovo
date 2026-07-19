@@ -92,6 +92,7 @@ export type {
   HmacMultiSignature,
   HmacSecret,
   HmacSignatureEncoding,
+  HmacSignatureInspectionConfig,
   HmacSignatureOptions,
   HmacSignaturePayload,
   HmacSignaturePayloadContext,
