@@ -151,7 +151,11 @@ export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input
     `export const load = () => import('./postgres-authorization-correspondence.js?rogue');`,
     `export const load = () => import('./postgres-authorization-correspondence.js#rogue');`,
     `export const load = () => import('./postgres-authorization-correspondence%2Ejs');`,
+    `export const load = () => import('./POSTGRES-authorization-correspondence.js');`,
+    `export const load = () => import('./postgres-authorization-correspondence.JS');`,
+    `const { emitPostgresRlsPolicySql: rogue } = module.require('./POSTGRES-authorization-correspondence.js'); export const sql = rogue({ site: 'admin' });`,
     String.raw`const { emitPostgresRlsPolicySql: rogue } = module.require('.\\postgres-authorization-correspondence.js'); export const sql = rogue({ site: 'admin' });`,
+    String.raw`const { emitPostgresRlsPolicySql: rogue } = module.require('.\\POSTGRES-authorization-correspondence.JS'); export const sql = rogue({ site: 'admin' });`,
     `const moduleName = './postgres-' + 'authorization-correspondence.js'; export const load = () => import(moduleName);`,
     `const moduleName = new URL('./postgres-authorization-correspondence.js', import.meta.url); export const load = () => import(moduleName.href);`,
   ])('kills dynamic access to the correspondence module', (source) => {
@@ -165,6 +169,9 @@ export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input
     './postgres-authorization-correspondence.js?rogue',
     './postgres-authorization-correspondence.js#rogue',
     './postgres-authorization-correspondence%2Ejs',
+    './POSTGRES-authorization-correspondence.js',
+    './postgres-authorization-correspondence.JS',
+    './POSTGRES-authorization-correspondence%2EJS',
   ])('kills URL-spelled static imports of the correspondence module', (specifier) => {
     const files = cleanFixture();
     files.set(
