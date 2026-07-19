@@ -157,6 +157,14 @@ describe('framework identity resolver', () => {
       exportName: 'createS3CompatibleStorage',
       module: '@kovojs/core',
     });
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'publicScopedKey')).toEqual({
+      exportName: 'publicScopedKey',
+      module: '@kovojs/core',
+    });
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'scopedKey')).toEqual({
+      exportName: 'scopedKey',
+      module: '@kovojs/server',
+    });
   });
 
   it('catalogs only the reviewed public style authoring calls', () => {

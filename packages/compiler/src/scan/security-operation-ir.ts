@@ -98,10 +98,12 @@ type ServerValueProvenance =
   | 'response-constructor'
   | 'response-outcome'
   | 'safe-call'
+  | 'scoped-key-call'
   | 'scope-call'
   | 'storage'
   | 'unknown-authority'
   | `operation:${ServerSecurityOperationKind}`;
+type ServerSecurityScanSurface = SecurityOperationSurface | 'route';
 
 const REDIRECT_IDENTITY = frameworkExport('@kovojs/server', 'redirect');
 const TRUSTED_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'trustedSql');
@@ -118,6 +120,12 @@ const TRUSTED_HTML_IDENTITIES = [
   frameworkExport('@kovojs/server', 'trustedHtml'),
 ] as const;
 const RUN_COMMAND_IDENTITY = frameworkExport('@kovojs/server', 'runCommand');
+const PUBLIC_SCOPED_KEY_IDENTITIES = [
+  frameworkExport('@kovojs/core', 'publicScopedKey'),
+  frameworkExport('@kovojs/server', 'publicScopedKey'),
+] as const;
+const SCOPED_KEY_IDENTITY = frameworkExport('@kovojs/server', 'scopedKey');
+const RESPOND_IDENTITY = frameworkExport('@kovojs/server', 'respond');
 const SERVER_STORAGE_FACTORY_IDENTITIES = [
   frameworkExport('@kovojs/core', 'createFileSystemStorage'),
   frameworkExport('@kovojs/core', 'createS3CompatibleStorage'),
@@ -1609,6 +1617,28 @@ export function scanServerSecurityOperations(
   };
 }
 
+/**
+ * Route pages predate the full server semantic-root manifest, but their storage/download doors
+ * share the same ScopedKey obligation (SPEC §6.6). Reuse the exact scanner and expose only KV450
+ * closures until route pages are enrolled as first-class finite-IR roots.
+ */
+export function scanServerScopedKeySinkViolations(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  parameters: readonly ts.ParameterDeclaration[],
+): readonly SecurityOperationViolationModel[] {
+  const facts = scanServerSecurityOperationsDirect(sourceFile, body, 'route', parameters);
+  const violations: SecurityOperationViolationModel[] = [];
+  const snapshot = compilerSnapshotDenseArray(facts.violations, 'Route scoped-key sink violations');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const violation = snapshot[index]!;
+    if (violation.kind === 'unscoped-state-key') {
+      compilerArrayAppend(violations, violation, 'Route scoped-key sink violations');
+    }
+  }
+  return dedupeViolations(violations);
+}
+
 function analyzeServerSecurityCallable(options: {
   body: ts.ConciseBody;
   callable: ResolvedSecurityIrCallable | undefined;
@@ -2256,6 +2286,7 @@ function semanticReasonForViolation(
     case 'incomplete-mutation-form':
     case 'raw-capability-operation':
     case 'raw-dom-operation':
+    case 'unscoped-state-key':
       return 'unsupported-authority-use';
   }
 }
@@ -2416,7 +2447,7 @@ export function serverSecuritySemanticBudgets(): SecuritySemanticBudgets {
 function scanServerSecurityOperationsDirect(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
-  surface: SecurityOperationSurface,
+  surface: ServerSecurityScanSurface,
   parameters: readonly ts.ParameterDeclaration[] = [],
   parameterProvenances?: readonly ServerValueProvenance[],
   inheritedEnvironment?: ServerAliasEnvironment,
@@ -2928,10 +2959,397 @@ function nestedServerFunctionCapturesAuthority(
   return found;
 }
 
+interface ServerScopedKeySink {
+  readonly closedOptions?: ts.Node;
+  readonly exactRespond?: boolean;
+  readonly key?: ts.Node;
+  readonly proven: boolean;
+  readonly target: string;
+}
+
+type ServerExactObjectProperty =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'present'; readonly values: readonly ts.Expression[] }
+  | { readonly kind: 'unknown' };
+
+function serverScopedKeySink(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  surface: ServerSecurityScanSurface,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerScopedKeySink | undefined {
+  const callee = unwrapExpression(call.expression);
+  const member = staticMember(callee);
+  if (!member) return undefined;
+  const receiverProvenance = serverExpressionProvenance(member.receiver, aliases);
+  const target = `${expressionPath(member.receiver) ?? 'computed'}.${member.name}`;
+  const exactRespond = serverCallUsesExactRespondNamespace(sourceFile, call, member.receiver);
+
+  if (exactRespond && member.name !== 'storedFile') {
+    return member.name === 'file' || member.name === 'stream'
+      ? { exactRespond: true, proven: true, target }
+      : undefined;
+  }
+
+  if (
+    (receiverProvenance === 'storage' &&
+      (member.name === 'delete' ||
+        member.name === 'get' ||
+        member.name === 'put' ||
+        member.name === 'stat' ||
+        member.name === 'stream')) ||
+    ((receiverProvenance === 'respond' || exactRespond) && member.name === 'storedFile')
+  ) {
+    const keyIndex = member.name === 'storedFile' ? 1 : 0;
+    const key = call.arguments[keyIndex] ?? call;
+    return {
+      ...(exactRespond ? { exactRespond: true } : {}),
+      key,
+      proven:
+        call.arguments[keyIndex] !== undefined &&
+        serverExpressionIsExactScopedKey(
+          sourceFile,
+          call.arguments[keyIndex]!,
+          surface,
+          aliases,
+          compilerCreateSet<number>(),
+          0,
+        ),
+      target,
+    };
+  }
+
+  if (receiverProvenance === 'context' && member.name === 'signUrl') {
+    const options = call.arguments[0];
+    if (!options) return { closedOptions: call, proven: false, target };
+    const property = serverExactOwnObjectProperty(
+      sourceFile,
+      options,
+      'key',
+      compilerCreateSet<number>(),
+      0,
+    );
+    if (property.kind !== 'present') {
+      return { closedOptions: options, proven: false, target };
+    }
+    const proven = serverEveryExpressionIsExactScopedKey(
+      sourceFile,
+      property.values,
+      surface,
+      aliases,
+    );
+    return { key: property.values[0] ?? options, proven, target };
+  }
+
+  if (
+    (receiverProvenance === 'request' || receiverProvenance === 'context') &&
+    member.name === 'schedule' &&
+    call.arguments[2] !== undefined
+  ) {
+    const options = call.arguments[2]!;
+    const property = serverExactOwnObjectProperty(
+      sourceFile,
+      options,
+      'key',
+      compilerCreateSet<number>(),
+      0,
+    );
+    if (property.kind === 'absent') return undefined;
+    if (property.kind === 'unknown') {
+      return { closedOptions: options, proven: false, target };
+    }
+    const proven = serverEveryExpressionIsExactScopedKey(
+      sourceFile,
+      property.values,
+      surface,
+      aliases,
+    );
+    return { key: property.values[0] ?? options, proven, target };
+  }
+  return undefined;
+}
+
+function serverEveryExpressionIsExactScopedKey(
+  sourceFile: ts.SourceFile,
+  values: readonly ts.Expression[],
+  surface: ServerSecurityScanSurface,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const snapshot = compilerSnapshotDenseArray(values, 'Finite scoped-key object properties');
+  if (snapshot.length === 0) return false;
+  for (let index = 0; index < snapshot.length; index += 1) {
+    if (
+      !serverExpressionIsExactScopedKey(
+        sourceFile,
+        snapshot[index]!,
+        surface,
+        aliases,
+        compilerCreateSet<number>(),
+        0,
+      )
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function serverExpressionIsExactScopedKey(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  surface: ServerSecurityScanSurface,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+  active: Set<number>,
+  depth: number,
+): boolean {
+  if (depth > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) return false;
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+    if (!initializer) return false;
+    const key = initializer.getStart(sourceFile);
+    if (compilerSetHas(active, key)) return false;
+    compilerSetAdd(active, key);
+    try {
+      return serverExpressionIsExactScopedKey(
+        sourceFile,
+        initializer,
+        surface,
+        aliases,
+        active,
+        depth + 1,
+      );
+    } finally {
+      compilerSetDelete(active, key);
+    }
+  }
+  if (ts.isConditionalExpression(current)) {
+    return (
+      serverExpressionIsExactScopedKey(
+        sourceFile,
+        current.whenTrue,
+        surface,
+        aliases,
+        active,
+        depth + 1,
+      ) &&
+      serverExpressionIsExactScopedKey(
+        sourceFile,
+        current.whenFalse,
+        surface,
+        aliases,
+        active,
+        depth + 1,
+      )
+    );
+  }
+  return (
+    ts.isCallExpression(current) &&
+    serverCallIsExactScopedKeyConstructor(sourceFile, current, surface, aliases)
+  );
+}
+
+function serverCallIsExactScopedKeyConstructor(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  surface: ServerSecurityScanSurface,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  if (
+    frameworkIdentityIn(
+      canonicalFrameworkExportForExpression(ts as FrameworkIdentityTypeScript, sourceFile, callee),
+      PUBLIC_SCOPED_KEY_IDENTITIES,
+    )
+  ) {
+    return !!(
+      ts.isIdentifier(callee) &&
+      callee.text === 'publicScopedKey' &&
+      securityIrExpressionUsesDirectImportBinding(sourceFile, callee) &&
+      securityIrMemberCallableIsStable(sourceFile, callee, call) &&
+      call.arguments.length === 1 &&
+      !serverArgumentsContainAuthority(call.arguments, aliases) &&
+      !serverArgumentsContainForeignExecutable(call.arguments, aliases)
+    );
+  }
+  if (
+    serverCallUsesExactNamedFrameworkImport(
+      sourceFile,
+      call,
+      callee,
+      'scopedKey',
+      SCOPED_KEY_IDENTITY,
+    )
+  ) {
+    return !!(
+      call.arguments.length === 2 &&
+      serverExpressionProvenance(call.arguments[0]!, aliases) === 'request' &&
+      !serverExpressionCarriesAuthority(call.arguments[1]!, aliases) &&
+      serverExpressionProvenance(call.arguments[1]!, aliases) !== 'foreign-executable'
+    );
+  }
+  const member = staticMember(callee);
+  if (!member || surface !== 'task' || call.arguments.length !== 1) return false;
+  if (
+    serverExpressionCarriesAuthority(call.arguments[0]!, aliases) ||
+    serverExpressionProvenance(call.arguments[0]!, aliases) === 'foreign-executable' ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, call)
+  ) {
+    return false;
+  }
+  if (member.name === 'systemStateKey') {
+    return serverExpressionProvenance(member.receiver, aliases) === 'context';
+  }
+  return (
+    member.name === 'stateKey' &&
+    serverExpressionIsExactTaskScope(
+      sourceFile,
+      member.receiver,
+      aliases,
+      compilerCreateSet<number>(),
+      0,
+    )
+  );
+}
+
+function serverExpressionIsExactTaskScope(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+  active: Set<number>,
+  depth: number,
+): boolean {
+  if (depth > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) return false;
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+    if (!initializer) return false;
+    const key = initializer.getStart(sourceFile);
+    if (compilerSetHas(active, key)) return false;
+    compilerSetAdd(active, key);
+    try {
+      return serverExpressionIsExactTaskScope(sourceFile, initializer, aliases, active, depth + 1);
+    } finally {
+      compilerSetDelete(active, key);
+    }
+  }
+  if (!ts.isCallExpression(current)) return false;
+  const callee = unwrapExpression(current.expression);
+  const member = staticMember(callee);
+  return !!(
+    member &&
+    (member.name === 'actAs' ||
+      member.name === 'declareSystemRead' ||
+      member.name === 'declareSystemWrite') &&
+    serverExpressionProvenance(member.receiver, aliases) === 'context' &&
+    current.arguments.length === 1 &&
+    !serverArgumentsContainAuthority(current.arguments, aliases) &&
+    !serverArgumentsContainForeignExecutable(current.arguments, aliases) &&
+    securityIrMemberCallableIsStable(sourceFile, callee, current)
+  );
+}
+
+function serverExactOwnObjectProperty(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  propertyName: string,
+  active: Set<number>,
+  depth: number,
+): ServerExactObjectProperty {
+  if (depth > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) return { kind: 'unknown' };
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+    if (!initializer) return { kind: 'unknown' };
+    const key = initializer.getStart(sourceFile);
+    if (compilerSetHas(active, key)) return { kind: 'unknown' };
+    compilerSetAdd(active, key);
+    try {
+      return serverExactOwnObjectProperty(sourceFile, initializer, propertyName, active, depth + 1);
+    } finally {
+      compilerSetDelete(active, key);
+    }
+  }
+  if (ts.isConditionalExpression(current)) {
+    const whenTrue = serverExactOwnObjectProperty(
+      sourceFile,
+      current.whenTrue,
+      propertyName,
+      active,
+      depth + 1,
+    );
+    const whenFalse = serverExactOwnObjectProperty(
+      sourceFile,
+      current.whenFalse,
+      propertyName,
+      active,
+      depth + 1,
+    );
+    if (whenTrue.kind === 'absent' && whenFalse.kind === 'absent') return { kind: 'absent' };
+    if (whenTrue.kind !== 'present' || whenFalse.kind !== 'present') return { kind: 'unknown' };
+    const values: ts.Expression[] = [];
+    const trueValues = compilerSnapshotDenseArray(
+      whenTrue.values,
+      'Finite conditional object property values',
+    );
+    const falseValues = compilerSnapshotDenseArray(
+      whenFalse.values,
+      'Finite conditional object property values',
+    );
+    for (let index = 0; index < trueValues.length; index += 1) {
+      compilerArrayAppend(values, trueValues[index]!, 'Finite conditional object property values');
+    }
+    for (let index = 0; index < falseValues.length; index += 1) {
+      compilerArrayAppend(values, falseValues[index]!, 'Finite conditional object property values');
+    }
+    return { kind: 'present', values };
+  }
+  if (!ts.isObjectLiteralExpression(current)) return { kind: 'unknown' };
+  let value: ts.Expression | undefined;
+  const properties = compilerSnapshotDenseArray(
+    current.properties,
+    'Finite scoped-key sink options',
+  );
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (ts.isSpreadAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return { kind: 'unknown' };
+    }
+    if (staticPropertyName(property.name) !== propertyName) continue;
+    if (value !== undefined) return { kind: 'unknown' };
+    if (ts.isPropertyAssignment(property)) {
+      value = property.initializer;
+    } else if (ts.isShorthandPropertyAssignment(property)) {
+      value = property.name;
+    } else {
+      return { kind: 'unknown' };
+    }
+  }
+  return value === undefined ? { kind: 'absent' } : { kind: 'present', values: [value] };
+}
+
+function serverCallUsesExactRespondNamespace(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  receiver: ts.Expression,
+): boolean {
+  const current = unwrapExpression(receiver);
+  return !!(
+    ts.isIdentifier(current) &&
+    current.text === 'respond' &&
+    frameworkExportEquals(
+      canonicalFrameworkExportForExpression(ts as FrameworkIdentityTypeScript, sourceFile, current),
+      RESPOND_IDENTITY,
+    ) &&
+    securityIrExpressionUsesDirectImportBinding(sourceFile, current) &&
+    securityIrMemberCallableIsStable(sourceFile, unwrapExpression(call.expression), call)
+  );
+}
+
 function classifyServerCall(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
-  surface: SecurityOperationSurface,
+  surface: ServerSecurityScanSurface,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
   appendOperation: (
     kind: ServerSecurityOperationKind,
@@ -2952,6 +3370,32 @@ function classifyServerCall(
     callee,
     { legacyGlobals: SERVER_OPERATION_LEGACY_IDENTITIES },
   );
+  if (serverCallIsExactScopedKeyConstructor(sourceFile, call, surface, aliases)) {
+    // SPEC §6.6: these are the only app-authored constructors whose module identity and request or
+    // task authority let a key reach a non-database stateful sink. Runtime witness validation at
+    // every sink remains the security proof; this exact syntax gate rejects strings and casts
+    // before lowering.
+    return;
+  }
+  const scopedKeySink = serverScopedKeySink(sourceFile, call, surface, aliases);
+  if (scopedKeySink?.key !== undefined && !scopedKeySink.proven) {
+    appendViolation(
+      scopedKeySink.key,
+      'unscoped-state-key',
+      `${scopedKeySink.target} requires a key derived by an exact scopedKey, publicScopedKey, or task stateKey constructor`,
+    );
+  }
+  if (scopedKeySink?.closedOptions !== undefined) {
+    appendViolation(
+      scopedKeySink.closedOptions,
+      'unscoped-state-key',
+      `${scopedKeySink.target} options must be a finite object whose key posture is statically closed`,
+    );
+  }
+  if (scopedKeySink?.exactRespond === true) {
+    appendOperation('server.response.outcome', call, scopedKeySink.target);
+    return;
+  }
   if (frameworkExportEquals(frameworkIdentity, REDIRECT_IDENTITY)) {
     appendOperation('server.response.redirect', call, 'redirect');
     return;
@@ -3885,7 +4329,7 @@ function classifyServerProvenanceCall(
   provenance: ServerValueProvenance,
   call: ts.CallExpression,
   target: string,
-  surface: SecurityOperationSurface,
+  surface: ServerSecurityScanSurface,
   appendOperation: (
     kind: ServerSecurityOperationKind,
     node: ts.Node,
@@ -3974,7 +4418,7 @@ function serverAliasProvenance(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
   parameters: readonly ts.ParameterDeclaration[],
-  surface: SecurityOperationSurface,
+  surface: ServerSecurityScanSurface,
   parameterProvenances?: readonly ServerValueProvenance[],
   inheritedEnvironment?: ServerAliasEnvironment,
 ): ServerAliasEnvironment {
@@ -3991,7 +4435,8 @@ function serverAliasProvenance(
     );
   }
   if (parameterProvenances === undefined) {
-    const contextParameter = parameterSnapshot[surface === 'mutation' ? 2 : 1];
+    const contextParameter =
+      parameterSnapshot[surface === 'mutation' ? 2 : surface === 'route' ? 0 : 1];
     if (contextParameter) setServerAliasPattern(contextParameter.name, 'context', aliases);
     if (surface === 'mutation' && parameterSnapshot[1]) {
       setServerAliasPattern(parameterSnapshot[1]!.name, 'request', aliases);
@@ -4352,6 +4797,7 @@ function serverExpressionProvenance(
   if (ts.isCallExpression(current)) {
     const callee = serverExpressionProvenance(current.expression, aliases);
     if (callee === 'scope-call') return 'context';
+    if (callee === 'scoped-key-call') return 'local';
     if (callee === 'intrinsic-identity-call') {
       return current.arguments.length === 1
         ? serverExpressionProvenance(current.arguments[0]!, aliases)
@@ -4477,6 +4923,8 @@ function serverMemberProvenance(
       return serverOperationProvenance('server.response.cookie');
     }
     if (member === 'fail') return serverOperationProvenance('server.response.outcome');
+    if (member === 'signUrl') return serverOperationProvenance('server.storage.read');
+    if (member === 'stateKey' || member === 'systemStateKey') return 'scoped-key-call';
     if (
       member === 'invalidate' ||
       member === 'recordChange' ||
@@ -4552,7 +5000,7 @@ function serverMemberProvenance(
     return 'unknown-authority';
   }
   if (receiver === 'storage') {
-    if (member === 'get' || member === 'list' || member === 'signUrl' || member === 'stat') {
+    if (member === 'get' || member === 'stat' || member === 'stream') {
       return serverOperationProvenance('server.storage.read');
     }
     if (member === 'delete' || member === 'put') {
@@ -4561,7 +5009,7 @@ function serverMemberProvenance(
     return 'unknown-authority';
   }
   if (receiver === 'respond') {
-    if (member === 'file' || member === 'stream') {
+    if (member === 'file' || member === 'storedFile' || member === 'stream') {
       return serverOperationProvenance('server.response.outcome');
     }
     return 'unknown-authority';

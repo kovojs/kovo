@@ -608,6 +608,13 @@ internals may restore a persisted frame only through the same canonical parser a
 check. Storage object results may expose the normalized app-key string as descriptive metadata, but
 that string carries no authority back into a sink.
 
+The compiler MUST also fail **KV450** at every statically visible storage key, signed-URL `key`,
+stored-file-response key, and durable-schedule coalescing `key` unless every finite branch derives
+the value through the exact `scopedKey`, `publicScopedKey`, task `stateKey`, or task
+`systemStateKey` constructor. Casts, structural lookalikes, runtime-selected options, computed
+properties, and option spreads do not establish provenance. This compile gate is an author-facing
+early closure only; the module-private runtime witness remains the enforcing authority at the sink.
+
 Memory storage keys by the complete frame. Filesystem storage hashes the complete frame with SHA-256
 for its bounded physical slot and atomically records the exact frame in the sidecar, refusing a
 digest collision. S3-compatible storage uses a framework-owned `kovo-storage-v1/<sha256(frame)>`

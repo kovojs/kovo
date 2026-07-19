@@ -1,3 +1,4 @@
+// @kovo-security-classifier-corpus finite-security-operation-ir
 import { describe, expect, it } from 'vitest';
 
 import { compileRouteModule } from './scan/route-pages.js';
@@ -113,6 +114,47 @@ export const docsRoute = route('/docs/readme.txt', {
       { outcome: { kind: 'file' }, route: '/report.txt' },
       { outcome: { kind: 'stream' }, route: '/docs/readme.txt' },
     ]);
+  });
+
+  it('enforces ScopedKey provenance at route-page storage and capability doors', () => {
+    const safe = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { publicScopedKey, route } from '@kovojs/server';
+export const report = route('/report', {
+  async page(context) {
+    const key = publicScopedKey('reports/public');
+    const signed = await context.signUrl({ key });
+    return <a href={signed.url}>Report</a>;
+  },
+});
+`,
+    });
+    expect(safe.diagnostics.filter((diagnostic) => diagnostic.code === 'KV450')).toEqual([]);
+
+    const unsafe = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { createFileSystemStorage, respond, route, type ScopedKey } from '@kovojs/server';
+const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+export const report = route('/report', {
+  async page(context) {
+    await storage.stat(context.params.key);
+    await context.signUrl({ key: context.params.key as ScopedKey });
+    return respond.storedFile(storage, context.params.key as ScopedKey);
+  },
+});
+`,
+    });
+    const diagnostics = unsafe.diagnostics.filter((diagnostic) => diagnostic.code === 'KV450');
+    expect(diagnostics).toHaveLength(3);
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('storage.stat requires a key derived'),
+        expect.stringContaining('context.signUrl requires a key derived'),
+        expect.stringContaining('respond.storedFile requires a key derived'),
+      ]),
+    );
   });
 
   it('records compiler-derived layout chains for JSX-authored route pages', () => {

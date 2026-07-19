@@ -14,6 +14,10 @@ function kv449(source: string) {
   return compile(source).diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
 }
 
+function kv450(source: string) {
+  return compile(source).diagnostics.filter((diagnostic) => diagnostic.code === 'KV450');
+}
+
 function kv235(source: string) {
   return compile(source).diagnostics.filter((diagnostic) => diagnostic.code === 'KV235');
 }
@@ -557,6 +561,7 @@ import {
   commandAllowlist,
   createFileSystemStorage,
   mutation,
+  publicScopedKey,
   runCommand,
 } from '@kovojs/server';
 const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixed health probe' });
@@ -565,13 +570,107 @@ const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const verify = mutation({
   async handler() {
     await runCommand(command);
-    await storage.stat('fixed-key');
+    await storage.stat(publicScopedKey('fixed-key'));
     return { ok: true };
   },
 });
 `);
 
     expect(diagnostics).toEqual([]);
+  });
+
+  // @kovo-security-certifies KV450 finite-scoped-key-sink-provenance
+  it('proves exact scoped-key constructors at every non-database stateful key position', () => {
+    const result = compile(`
+import {
+  createFileSystemStorage,
+  mutation,
+  publicScopedKey,
+  respond,
+  scopedKey,
+  task,
+} from '@kovojs/server';
+const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+export const followup = task('followup', {
+  async run(args, ctx) {
+    const owner = ctx.actAs(args.ownerId);
+    const ownerKey = owner.stateKey(args.key);
+    await storage.put(ownerKey, 'done');
+    await ctx.schedule(followup, args, { key: ctx.systemStateKey('singleton') });
+  },
+});
+export const verify = mutation({
+  async handler(input, request, context) {
+    const ownerKey = scopedKey(request, input.key);
+    const sharedKey = publicScopedKey('public-receipt');
+    await storage.get(ownerKey);
+    await storage.stat(sharedKey);
+    await storage.stream(ownerKey);
+    await storage.delete(sharedKey);
+    await context.signUrl({ expiresIn: 1_000, key: ownerKey });
+    await request.schedule(followup, input, { key: sharedKey });
+    return respond.storedFile(storage, ownerKey);
+  },
+});
+`);
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV450')).toEqual([]);
+  });
+
+  it('rejects raw, cast, forged, and runtime-selected keys at every stateful sink family', () => {
+    const diagnostics = kv450(`
+import {
+  createFileSystemStorage,
+  mutation,
+  respond,
+  task,
+  type ScopedKey,
+} from '@kovojs/server';
+const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+const followup = task('followup', { async run() {} });
+export const verify = mutation({
+  async handler(input, request, context) {
+    const forged = { frame: input.key } as unknown as ScopedKey;
+    await storage.get(input.key);
+    await context.signUrl({ key: input.key as ScopedKey });
+    await request.schedule(followup, input, { key: forged });
+    return respond.storedFile(storage, forged);
+  },
+});
+`);
+
+    expect(diagnostics).toHaveLength(4);
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('storage.get requires a key derived'),
+        expect.stringContaining('context.signUrl requires a key derived'),
+        expect.stringContaining('request.schedule requires a key derived'),
+        expect.stringContaining('respond.storedFile requires a key derived'),
+      ]),
+    );
+  });
+
+  it('fails closed when signUrl or schedule options can hide or replace a key', () => {
+    const diagnostics = kv450(`
+import { mutation, task } from '@kovojs/server';
+const followup = task('followup', { async run() {} });
+export const verify = mutation({
+  async handler(input, request, context) {
+    const selected = input.signOptions;
+    await context.signUrl(selected);
+    await request.schedule(followup, input, { afterMs: 10, ...input.scheduleOptions });
+  },
+});
+`);
+
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics[0]?.message).toContain(
+      'options must be a finite object whose key posture is statically closed',
+    );
+    expect(diagnostics[1]?.message).toContain(
+      'options must be a finite object whose key posture is statically closed',
+    );
   });
 
   // @kovo-security-classifier-corpus C13 finite-ir-reviewed-data-doors

@@ -177,7 +177,7 @@ function coreStorage(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
     module: '@kovojs/core',
-    packageSourceFiles: ['index', 'storage'],
+    packageSourceFiles: ['index', 'scoped-key', 'storage'],
     scopes: ['authoring', 'data-plane'],
     specifiers: CORE_STORAGE_SPECIFIERS,
   };
@@ -258,6 +258,7 @@ appendCatalogFactories(
     'query',
     'Reader',
     's',
+    'scopedKey',
     'tag',
     'task',
     'write',
@@ -307,7 +308,7 @@ appendCatalogEntry(catalogEntries, serverData('stream'));
 appendCatalogFactories(catalogEntries, ['cmd', 'commandAllowlist', 'runCommand'], serverCommand);
 appendCatalogFactories(
   catalogEntries,
-  ['createFileSystemStorage', 'createS3CompatibleStorage'],
+  ['createFileSystemStorage', 'createS3CompatibleStorage', 'publicScopedKey'],
   coreStorage,
 );
 appendCatalogFactories(

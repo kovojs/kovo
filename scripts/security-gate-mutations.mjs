@@ -1639,9 +1639,12 @@ const removedReviewedModuleStorageFactoryBranch = [
   "  return 'unknown-authority';",
 ].join('\n');
 const reviewedStorageStatBranch =
-  "    if (member === 'get' || member === 'list' || member === 'signUrl' || member === 'stat') {";
-const removedReviewedStorageStatBranch =
-  "    if (member === 'get' || member === 'list' || member === 'signUrl') {";
+  "    if (member === 'get' || member === 'stat' || member === 'stream') {";
+const removedReviewedStorageStatBranch = "    if (member === 'get' || member === 'stream') {";
+const scopedKeySinkCompileClosureBranch =
+  '  if (scopedKeySink?.key !== undefined && !scopedKeySink.proven) {';
+const removedScopedKeySinkCompileClosureBranch =
+  '  if (false && scopedKeySink?.key !== undefined && !scopedKeySink.proven) {';
 const reviewedTrustedSqlRawDoorBranch = '  if (serverCallIsExactTrustedSqlRaw(sourceFile, call)) {';
 const removedReviewedTrustedSqlRawDoorBranch =
   '  if (false && serverCallIsExactTrustedSqlRaw(sourceFile, call)) {';
@@ -2633,6 +2636,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: reviewedStorageStatBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
     test: assertReviewedStorageStatBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description: 'Deletes compile-time owner-scope closure at non-database stateful key sinks.',
+    expectedKiller: 'raw stateful sink keys must close through KV450 before lowering',
+    name: 'compiler-finite-ir/drop-scoped-key-sink-closure',
+    replacement: removedScopedKeySinkCompileClosureBranch,
+    search: scopedKeySinkCompileClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    test: assertScopedKeySinkCompileClosureBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -6431,6 +6445,30 @@ function assertReviewedStorageStatBehavior(moduleUnderTest) {
   assertFiniteIrAllows(moduleUnderTest, reviewedStorageStatFixture);
 }
 
+function assertScopedKeySinkCompileClosureBehavior(moduleUnderTest) {
+  const result = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+import { createFileSystemStorage, mutation } from '@kovojs/server';
+const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+export const verify = mutation({
+  async handler(input) {
+    await storage.stat(input.key);
+    return { ok: true };
+  },
+});
+`,
+  );
+  const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV450');
+  if (
+    !diagnostics.some((diagnostic) =>
+      diagnostic.message.includes('storage.stat requires a key derived'),
+    )
+  ) {
+    throw new Error('raw stateful sink key did not close through KV450');
+  }
+}
+
 function assertReviewedTrustedSqlRawDoorBehavior(moduleUnderTest) {
   assertFiniteIrAllows(
     moduleUnderTest,
@@ -6541,11 +6579,11 @@ export const report = endpoint('/report', {
 }
 
 const reviewedStorageStatFixture = `
-import { createFileSystemStorage, mutation } from '@kovojs/server';
+import { createFileSystemStorage, mutation, publicScopedKey } from '@kovojs/server';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const verify = mutation({
   async handler() {
-    await storage.stat('fixed-key');
+    await storage.stat(publicScopedKey('fixed-key'));
     return { ok: true };
   },
 });

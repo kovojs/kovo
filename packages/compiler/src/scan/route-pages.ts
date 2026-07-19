@@ -26,6 +26,7 @@ import type {
 import { propertyAccessPath, propertyNameText, unwrapExpression } from './ast.js';
 import { accessGuardExclusivityDiagnostics } from './access-guard-exclusivity.js';
 import type { StaticLiteralValue } from './object.js';
+import { scanServerScopedKeySinkViolations } from './security-operation-ir.js';
 import {
   applySourceReplacements,
   replaceExtension,
@@ -225,6 +226,9 @@ function routePageFromCall(
     diagnostics,
   );
   if (!pageHandler && compilerArrayLength(regions, 'Compiler route regions') === 0) return null;
+  if (pageHandler) {
+    appendRouteScopedKeyDiagnostics(fileName, source, sourceFile, pageHandler, diagnostics);
+  }
 
   const pageComponents = pageHandler
     ? routePageComponentFacts(
@@ -303,6 +307,67 @@ function routePageFromCall(
       start: pageHandler?.replacementStart ?? definitionArg.properties.pos,
     },
   };
+}
+
+function appendRouteScopedKeyDiagnostics(
+  fileName: string,
+  source: string,
+  sourceFile: ts.SourceFile,
+  handler: RoutePageHandler,
+  diagnostics: CompilerDiagnostic[],
+): void {
+  if (ts.isMethodDeclaration(handler.node)) {
+    if (!handler.node.body) return;
+    appendRouteScopedKeyViolationDiagnostics(
+      fileName,
+      source,
+      sourceFile,
+      handler.node.body,
+      handler.node.parameters,
+      diagnostics,
+    );
+    return;
+  }
+  const callable = unwrapExpression(handler.node as ts.Expression);
+  if (!ts.isArrowFunction(callable) && !ts.isFunctionExpression(callable)) return;
+  appendRouteScopedKeyViolationDiagnostics(
+    fileName,
+    source,
+    sourceFile,
+    callable.body,
+    callable.parameters,
+    diagnostics,
+  );
+}
+
+function appendRouteScopedKeyViolationDiagnostics(
+  fileName: string,
+  source: string,
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  parameters: readonly ts.ParameterDeclaration[],
+  diagnostics: CompilerDiagnostic[],
+): void {
+  const violations = scanServerScopedKeySinkViolations(sourceFile, body, parameters);
+  const snapshot = compilerSnapshotJsonValue(violations, 'Compiler route scoped-key violations');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const violation = snapshot[index]!;
+    const measuredLength = violation.span.end - violation.span.start;
+    compilerArrayAppend(
+      diagnostics,
+      {
+        ...diagnosticFor(
+          fileName,
+          'KV450',
+          source,
+          violation.span.start,
+          measuredLength > 0 ? measuredLength : 1,
+        ),
+        message: `${diagnosticDefinitions.KV450.message} ${violation.detail}.`,
+      },
+      'Compiler route scoped-key diagnostics',
+    );
+  }
 }
 
 function uniqueRouteComponents(

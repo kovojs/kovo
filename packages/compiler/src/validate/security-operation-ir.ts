@@ -433,7 +433,11 @@ function appendViolations(
     if (!violation) {
       compilerFailClosed(`Security-IR violations[${index}] must be dense own data.`);
     }
-    appendFiniteIrDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
+    if (violation.kind === 'unscoped-state-key') {
+      appendScopedKeyDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
+    } else {
+      appendFiniteIrDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
+    }
   }
 }
 
@@ -482,6 +486,24 @@ function appendFiniteIrDiagnostic(
       detail,
     ),
     'Finite security-IR diagnostics',
+  );
+}
+
+function appendScopedKeyDiagnostic(
+  found: CompilerDiagnostic[],
+  diagnostics: DiagnosticFactory,
+  span: SourceSpan,
+  detail: string,
+): void {
+  const measuredLength = span.end - span.start;
+  compilerArrayAppend(
+    found,
+    diagnostics.at(
+      'KV450',
+      { length: measuredLength > 0 ? measuredLength : 1, start: span.start },
+      detail,
+    ),
+    'Scoped-key diagnostics',
   );
 }
 

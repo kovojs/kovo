@@ -2003,6 +2003,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/browser/src/response-fragment-apply.browser.test.ts',
       'packages/browser/src/security-output.test.ts',
       'packages/compiler/src/output-context-security.test.ts',
+      'packages/compiler/src/route-pages.test.ts',
       'packages/compiler/src/security-operation-ir.security.test.ts',
       'packages/compiler/src/executable-reference-attributes.test.ts',
       'packages/compiler/src/execution-triggers.test.ts',
@@ -2013,6 +2014,26 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'finite-scoped-key-sink-provenance',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies KV450 finite-scoped-key-sink-provenance',
+          'proves exact scoped-key constructors at every non-database stateful key position',
+          'rejects raw, cast, forged, and runtime-selected keys at every stateful sink family',
+          'fails closed when signUrl or schedule options can hide or replace a key',
+        ],
+      },
+      {
+        id: 'route-scoped-key-sink-provenance',
+        file: 'packages/compiler/src/route-pages.test.ts',
+        snippets: [
+          'enforces ScopedKey provenance at route-page storage and capability doors',
+          "diagnostic.code === 'KV450'",
+          'context.signUrl requires a key derived',
+          'respond.storedFile requires a key derived',
+        ],
+      },
       {
         id: 'exact-emitted-browser-and-server-operation-manifests',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',

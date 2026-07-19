@@ -134,9 +134,10 @@ export interface SecurityOperationViolationModel {
     | 'incomplete-mutation-form'
     | 'raw-capability-operation'
     | 'raw-dom-operation'
+    | 'unscoped-state-key'
     | 'unknown-security-operation';
   span: SourceSpan;
-  surface: SecurityOperationSurface | 'browser';
+  surface: SecurityOperationSurface | 'browser' | 'route';
 }
 
 export interface TaskRunHandlerModel extends MutationHandlerModel {
