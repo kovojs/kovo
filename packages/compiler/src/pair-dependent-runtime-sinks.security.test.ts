@@ -46,11 +46,13 @@ export const Base = component({
   });
 
   it('disables the document-wide base element even without a currently visible href', () => {
-    expect(kv236Diagnostics(`
+    expect(
+      kv236Diagnostics(`
 export const BaseTarget = component({
   render: () => <base target="_self" />,
 });
-`)).toEqual([
+`),
+    ).toEqual([
       expect.objectContaining({ message: expect.stringContaining('<base> is disabled') }),
     ]);
   });
@@ -132,5 +134,49 @@ export const ContextualSink = component({
         help: expect.stringContaining(expectedReason),
       }),
     ]);
+  });
+
+  it.each([
+    ['script source spread', '<script {...{ src: state.value }} />'],
+    ['link relationship spread', '<link {...{ href: "/theme.css", rel: state.value }} />'],
+    [
+      'iframe sandbox spread',
+      '<iframe {...{ sandbox: state.value, src: "/untrusted/profile" }} />',
+    ],
+    ['opaque script spread', '<script {...state.value} />'],
+    ['opaque link spread', '<link {...state.value} />'],
+    ['opaque iframe spread', '<iframe {...state.value} />'],
+  ])('closes a dynamic or opaque %s', (_label, markup) => {
+    expect(
+      kv236Diagnostics(`
+export const ContextualSpread = component({
+  state: () => ({ value: {} }),
+  render: (_queries, state) => (${markup}),
+});
+`),
+    ).toHaveLength(1);
+  });
+
+  it('keeps static contextual attributes and explicitly reviewed URL capabilities valid', () => {
+    expect(
+      kv236Diagnostics(`
+import { trustedUrl } from '@kovojs/browser';
+export const StaticContext = component({
+  state: () => ({ asset: '/reviewed/runtime.js', stylesheet: '/reviewed/theme.css' }),
+  render: (_queries, state) => (
+    <>
+      <script {...{ src: '/assets/runtime.js', type: 'module' }} />
+      <link {...{ href: '/assets/theme.css', rel: 'stylesheet' }} />
+      <iframe {...{ sandbox: 'allow-forms', src: '/untrusted/profile' }} />
+      <script src={trustedUrl(state.asset, 'reviewed executable module asset')} />
+      <link
+        rel="stylesheet"
+        href={trustedUrl(state.stylesheet, 'reviewed stylesheet asset')}
+      />
+    </>
+  ),
+});
+`),
+    ).toEqual([]);
   });
 });

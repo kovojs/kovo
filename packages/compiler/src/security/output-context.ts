@@ -18,6 +18,7 @@ import * as ts from 'typescript';
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   compilerArrayAppend,
+  compilerArrayJoin,
   compilerArrayLength,
   compilerJsonStringify,
   compilerOwnDataValue,
@@ -33,6 +34,7 @@ import {
 import {
   isUrlAttribute,
   expressionResolvesToTrustedHtmlBrand,
+  expressionResolvesToTrustedUrlPureBrand,
   trustedHtmlBrandLocalNames,
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
@@ -78,7 +80,7 @@ export function validateOutputContexts(
     const element = outputArrayValue(elements, index, 'Output-context JSX elements');
     appendOutputItems(
       found,
-      validateElementAttributes(diagnostics, element, compilerOwnedStyleSpans),
+      validateElementAttributes(diagnostics, model, element, compilerOwnedStyleSpans),
       'Output-context attribute diagnostics',
     );
     appendOutputItems(
@@ -257,6 +259,7 @@ export function collectTrustedHtmlOutputContextFacts(
 
 function validateElementAttributes(
   diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
   element: JsxElementModel,
   compilerOwnedStyleSpans: readonly SourceSpan[],
 ): CompilerDiagnostic[] {
@@ -292,6 +295,11 @@ function validateElementAttributes(
     found,
     validateDocumentNavigationElements(diagnostics, element),
     'Document navigation element diagnostics',
+  );
+  appendOutputItems(
+    found,
+    validateElementContextSecuritySinks(diagnostics, model, element),
+    'Element-context security diagnostics',
   );
   appendOutputItems(
     found,
@@ -566,6 +574,178 @@ function validateDocumentNavigationElements(
   return [];
 }
 
+/**
+ * SPEC §4.8 / §5.2 rule 10: a URL scheme is not the complete security context for elements that
+ * execute fetched bytes or carry an isolation boundary. `script[src]`, stylesheet links, and an
+ * iframe's `sandbox` attribute can all become unsafe while every individual string remains a
+ * syntactically safe relative/HTTPS value. Keep those decisions in the finite element-context
+ * surface and close opaque spreads instead of treating them as ordinary attributes.
+ */
+function validateElementContextSecuritySinks(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  const tag = element.intrinsicTagName;
+  if (tag !== 'script' && tag !== 'link' && tag !== 'iframe') return [];
+
+  const attributes = element.attributes;
+  const attributeLength = compilerArrayLength(attributes, 'Element-context attributes');
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Element-context attributes');
+    const reason = directElementContextSinkIssue(model, tag, attribute);
+    if (reason !== undefined) {
+      return [elementContextSecurityDiagnostic(diagnostics, element, reason)];
+    }
+  }
+
+  const spreads = element.spreadAttributes;
+  const spreadLength = compilerArrayLength(spreads, 'Element-context spreads');
+  for (let index = 0; index < spreadLength; index += 1) {
+    const spread = outputArrayValue(spreads, index, 'Element-context spreads');
+    if (spread.staticWireAttributeEntries !== undefined) {
+      const entries = spread.staticWireAttributeEntries;
+      const entryLength = compilerArrayLength(entries, 'Static element-context spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(
+          entries,
+          entryIndex,
+          'Static element-context spread entries',
+        );
+        const reason = renderedElementContextSinkIssue(
+          tag,
+          compilerStringToLowerCase(entry.key),
+          staticWireSpreadAttributeValue(entry),
+        );
+        if (reason !== undefined) {
+          return [elementContextSecurityDiagnostic(diagnostics, element, reason)];
+        }
+      }
+      continue;
+    }
+    if (spread.objectEntries !== undefined) {
+      const entries = spread.objectEntries;
+      const entryLength = compilerArrayLength(entries, 'Element-context spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(entries, entryIndex, 'Element-context spread entries');
+        const reason = renderedElementContextSinkIssue(
+          tag,
+          compilerStringToLowerCase(entry.key),
+          staticSpreadAttributeValue(entry),
+        );
+        if (reason !== undefined) {
+          return [elementContextSecurityDiagnostic(diagnostics, element, reason)];
+        }
+      }
+      continue;
+    }
+    return [
+      elementContextSecurityDiagnostic(
+        diagnostics,
+        element,
+        `an opaque <${tag}> spread could replace an execution or isolation control`,
+      ),
+    ];
+  }
+  return [];
+}
+
+function directElementContextSinkIssue(
+  model: ComponentModuleModel,
+  tag: 'iframe' | 'link' | 'script',
+  attribute: JsxAttributeModel,
+): string | undefined {
+  const dynamicTarget = dynamicAttributeName(attribute);
+  const target = compilerStringToLowerCase(dynamicTarget ?? attribute.name);
+  const value =
+    dynamicTarget === null ? staticDirectAttributeValue(attribute) : ({ kind: 'unknown' } as const);
+  if (
+    value.kind === 'unknown' &&
+    (target === 'src' || target === 'href') &&
+    attributeExpressionIsTrustedUrlBrand(model, attribute)
+  ) {
+    return undefined;
+  }
+  return renderedElementContextSinkIssue(tag, target, value);
+}
+
+function renderedElementContextSinkIssue(
+  tag: 'iframe' | 'link' | 'script',
+  target: string,
+  value: StaticRenderedAttributeValue,
+): string | undefined {
+  if (value.kind !== 'unknown') return undefined;
+  if (tag === 'script' && target === 'src') {
+    return 'a dynamic script source can execute same-origin attacker-controlled JavaScript';
+  }
+  if (tag === 'script' && target === 'type') {
+    return 'a dynamic script type can turn an inert data block into executable JavaScript';
+  }
+  if (tag === 'link' && target === 'href') {
+    return 'a dynamic stylesheet URL can apply attacker-controlled CSS';
+  }
+  if (tag === 'link' && target === 'rel') {
+    return 'a dynamic link relationship can turn an inert resource into an active stylesheet';
+  }
+  if (tag === 'iframe' && target === 'sandbox') {
+    return 'a dynamic iframe sandbox value can remove the embedded-document isolation boundary';
+  }
+  return undefined;
+}
+
+function attributeExpressionIsTrustedUrlBrand(
+  model: ComponentModuleModel,
+  attribute: JsxAttributeModel,
+): boolean {
+  if (attribute.expressionStart === undefined || attribute.expressionEnd === undefined)
+    return false;
+  const expressions = jsxExpressions(model);
+  const expressionLength = compilerArrayLength(expressions, 'Trusted URL attribute expressions');
+  for (let index = 0; index < expressionLength; index += 1) {
+    const expression = outputArrayValue(expressions, index, 'Trusted URL attribute expressions');
+    if (
+      expression.start !== attribute.expressionStart ||
+      expression.end !== attribute.expressionEnd
+    ) {
+      continue;
+    }
+    const astExpression = expressionAtSpan(
+      ts as FrameworkIdentityTypeScript,
+      model.sourceFile,
+      expression,
+    );
+    return (
+      astExpression !== undefined &&
+      ts.isCallExpression(astExpression) &&
+      expressionResolvesToTrustedUrlPureBrand(model.sourceFile, astExpression.expression)
+    );
+  }
+  return false;
+}
+
+function elementContextSecurityDiagnostic(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+  reason: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnostics.at('KV236', {
+      start: element.start,
+      length: element.openingEnd - element.start,
+    }),
+    help: compilerArrayJoin(
+      [
+        `Blocked reason: ${reason}.`,
+        'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script or link URL.',
+        'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
+        'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed.',
+      ],
+      '\n',
+    ),
+    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+  };
+}
+
 const metaRefreshFixes = [
   'Fixes: perform navigation through Kovo response/router outcomes, or use ordinary non-refresh metadata with a statically proved http-equiv value.',
   'Escape: there is no app-authored meta-refresh suppression.',
@@ -581,9 +761,7 @@ function metaRefreshAttributeIssue(attribute: JsxAttributeModel): string | undef
   }
   if (foldedName === 'data-derive-attr') {
     const target =
-      typeof attribute.value === 'string'
-        ? compilerStringToLowerCase(attribute.value)
-        : undefined;
+      typeof attribute.value === 'string' ? compilerStringToLowerCase(attribute.value) : undefined;
     return target === 'http-equiv' || target === 'httpequiv'
       ? 'a dynamic meta http-equiv derive could create refresh navigation'
       : undefined;
@@ -621,18 +799,22 @@ function documentNavigationDiagnostic(
   diagnostics: DiagnosticFactory,
   element: JsxElementModel,
   reason: string,
-  fixes: readonly string[],
+  fixes: readonly [string, string],
 ): CompilerDiagnostic {
   return {
     ...diagnostics.at('KV236', {
       start: element.start,
       length: element.openingEnd - element.start,
     }),
-    help: [
-      `Blocked reason: ${reason}.`,
-      ...fixes,
-      'SPEC §4.8 and §5.2 rule 10 require security-sensitive browser output contexts to fail closed.',
-    ].join('\n'),
+    help: compilerArrayJoin(
+      [
+        `Blocked reason: ${reason}.`,
+        fixes[0],
+        fixes[1],
+        'SPEC §4.8 and §5.2 rule 10 require security-sensitive browser output contexts to fail closed.',
+      ],
+      '\n',
+    ),
     message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
   };
 }
