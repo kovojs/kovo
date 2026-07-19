@@ -30,9 +30,7 @@ describe('kovo explain --model-boundaries (Plan 3 §6 C13 anchor)', () => {
     expect(result.output).toContain('MODELED replay.reserve\n');
     expect(result.output).toContain('NOT-MODELED-ACTION jobs.claimDue\n');
     expect(result.output).toContain('NOT-MODELED-ACTION replay.auditPrivileges\n');
-    expect(result.output).toContain(
-      'NOT-MODELED-PHENOMENON postgres-lock-implementation ',
-    );
+    expect(result.output).toContain('NOT-MODELED-PHENOMENON postgres-lock-implementation ');
     expect(result.output).toContain(
       'SUMMARY modeledActions=7 notModeledActions=22 notModeledPhenomena=6\n',
     );

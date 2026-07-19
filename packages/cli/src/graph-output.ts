@@ -128,6 +128,7 @@ export {
 } from './graph-args.js';
 export { inputErrorMessage, readGraphInput, runGraphCommand } from './graph-input.js';
 import type { KovoCheckResult } from './shared.js';
+import { modelBoundariesExplainResult } from './model-boundaries.js';
 import { sourcesSinksCheckResult, sourcesSinksExplainResult } from './sources-sinks.js';
 import {
   graphVerifierSecurityFailure,
@@ -178,6 +179,10 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
 
   const graph = input as CoreGraph.KovoExplainInput;
   const lines = [explainOutputVersion];
+
+  if ('modelBoundaries' in options) {
+    return modelBoundariesExplainResult(explainOutputVersion);
+  }
 
   if ('authorization' in options) {
     const facts = [...(graph.authorizationCorrespondence ?? [])].sort(

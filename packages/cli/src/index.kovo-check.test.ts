@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { EXPLAIN_USAGE_LINE } from './commands-manifest.js';
 import { kovoCheck, kovoExplain, main } from './index.js';
 
 type KovoCheckInput = Parameters<typeof kovoCheck>[0];
@@ -499,9 +500,7 @@ describe('kovo check', () => {
       files: [
         {
           fileName: 'widget.tsx',
-          source: [
-            "element.addEventListener('click', () => { element.focus(); });",
-          ].join('\n'),
+          source: ["element.addEventListener('click', () => { element.focus(); });"].join('\n'),
         },
       ],
     });
@@ -2610,7 +2609,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: unknown explain option "--json".\nkovo: usage: kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]\n',
+      `kovo: unknown explain option "--json".\nkovo: usage: ${EXPLAIN_USAGE_LINE}\n`,
     );
   });
 

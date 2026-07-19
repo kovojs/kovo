@@ -28,6 +28,7 @@ export type KovoExplainOptions =
   | { cookies: true }
   | KovoDocumentExplainOptions
   | KovoEndpointExplainOptions
+  | { modelBoundaries: true }
   | KovoRevealedExplainOptions
   | KovoSourcesSinksExplainOptions
   | KovoTasksExplainOptions
@@ -224,6 +225,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--capabilities',
     '--cookies',
     '--endpoints',
+    '--model-boundaries',
     '--revealed',
     '--sources-sinks',
     '--tasks',
@@ -243,6 +245,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       return explainUsage();
     }
     return { inputPath: positional[0], ok: true, options: { authorization: true } };
+  }
+
+  if (flags.has('--model-boundaries')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 0
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: undefined, ok: true, options: { modelBoundaries: true } };
   }
 
   if (flags.has('--access')) {

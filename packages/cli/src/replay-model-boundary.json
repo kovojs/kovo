@@ -1,0 +1,78 @@
+{
+  "schema": "kovo.replay-model-boundary/v1",
+  "id": "replay-reservation/v1",
+  "status": "registered-not-model-checked",
+  "atomicityAxiom": {
+    "classification": "human-assumption",
+    "detail": "Each registered transition CTE is modeled as one atomic action.",
+    "id": "postgres-cte-atomicity",
+    "justification": "The replay watermark row is selected FOR UPDATE before each modeled transition; this is reviewed Postgres reasoning, not machine verification of the database implementation.",
+    "verified": false
+  },
+  "bounds": {
+    "backwardClockSteps": 1,
+    "crashPoints": 1,
+    "identities": 2,
+    "replicas": 2,
+    "slots": 2
+  },
+  "modeledActions": [
+    "replay.abort",
+    "replay.commit",
+    "replay.read",
+    "replay.reclaimCommitted",
+    "replay.releasePending",
+    "replay.reserve",
+    "replay.settle"
+  ],
+  "notModeledActions": [
+    "jobs.cancelReady",
+    "jobs.claimDue",
+    "jobs.enqueueDebounce",
+    "jobs.enqueueThrottle",
+    "jobs.enqueueUnkeyed",
+    "jobs.grantWriter",
+    "jobs.heartbeat",
+    "jobs.markFailed",
+    "jobs.markSucceeded",
+    "jobs.observe",
+    "jobs.probe",
+    "jobs.provision",
+    "jobs.reapExpiredLeases",
+    "replay.auditPrivileges",
+    "replay.auditRelation",
+    "replay.auditShape",
+    "replay.auditTimeless",
+    "replay.auditWatermark",
+    "replay.auditWatermarkShape",
+    "replay.consumeCapability",
+    "replay.preflightLegacy",
+    "replay.provision"
+  ],
+  "notModeledPhenomena": [
+    {
+      "detail": "Driver retries, network partitions, and outcomes hidden after a connection failure are outside the state model.",
+      "id": "driver-network-failures"
+    },
+    {
+      "detail": "Durable-task queue transitions and scheduling semantics are inventoried but outside ReplayReservation.",
+      "id": "durable-task-semantics"
+    },
+    {
+      "detail": "Postgres implements the transaction, CTE, and row-lock semantics assumed by each atomic model action.",
+      "id": "postgres-lock-implementation"
+    },
+    {
+      "detail": "Response body/header serialization, byte limits, and application response correctness are outside the interleaving model.",
+      "id": "response-serialization"
+    },
+    {
+      "detail": "Schema provisioning, migration, ACL posture, and catalog audit queries are inventoried but not transition states.",
+      "id": "schema-and-posture"
+    },
+    {
+      "detail": "Replicas, slots, identities, backward clock steps, and crash points beyond the printed finite bounds are not explored.",
+      "id": "unbounded-cardinality"
+    }
+  ]
+}

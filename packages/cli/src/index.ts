@@ -147,6 +147,9 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
   explain(args, security) {
     const parsed = parseExplainArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
+    if ('modelBoundaries' in parsed.options) {
+      return writeCommandResult(kovoExplain({}, parsed.options));
+    }
     return writeCommandResult(
       runGraphCommand(
         parsed.inputPath,

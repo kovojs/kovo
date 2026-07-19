@@ -540,6 +540,31 @@ Pending truth never expires or loses its slot automatically, because the applica
 
 One committed snapshot is additionally limited to 1,048,576 UTF-16LE body bytes and 65,536 UTF-8 header bytes. Oversized settlement stores no oversized bytes and leaves the already-claimed key pending/fail-closed, so a retry cannot repeat a write whose application transaction may have committed; operator reconciliation must first establish the application outcome. The schema posture audit proves the exact non-deferrable `(surface, scope, idem)` primary key, nullable pending-slot column, 1..1,000 slot constraint, unique per-surface pending-slot index, canonical mint/occurrence/expiry columns and constraints, persisted per-surface reclamation watermark, response-byte constraint, and exact replay-table ACL before production serves. Ordinary app/runtime roles MUST have neither table-level nor column-level replay privileges; only the isolated system role receives the exact `SELECT, INSERT, UPDATE, DELETE` set. Provisioning repairs missing canonical identity constraints, revokes stray table/column grants, and fails closed if duplicate or temporally ambiguous legacy truth prevents repair.
 
+<!-- kovo-model-boundary:replay-reservation/v1 -->
+
+**Bounded replay-model honesty boundary (normative disclosure).** The optional
+`ReplayReservation` state model explores exactly 2 replicas, 2 admission slots, 2 replay identities,
+one backward clock step, and one crash point. Its **Postgres-CTE atomicity axiom** treats each
+registered transition CTE as one atomic model action. The watermark row's `FOR UPDATE` lock is the
+reviewed justification for that abstraction. It remains a **human assumption** about Postgres
+transaction and row-lock behavior, not machine-verified evidence about the database implementation.
+`kovo explain --model-boundaries` MUST print that axiom, these bounds, every registered modeled
+action, and the exact action complement plus excluded phenomena below.
+
+The model explicitly does not cover:
+
+- <!-- kovo-not-modeled:durable-task-semantics --> durable-task queue transitions or scheduling;
+- <!-- kovo-not-modeled:driver-network-failures --> driver retries, network partitions, or outcomes
+  hidden by connection failure;
+- <!-- kovo-not-modeled:postgres-lock-implementation --> the implementation correctness of Postgres
+  transactions, CTEs, or row locks;
+- <!-- kovo-not-modeled:response-serialization --> response serialization, byte limits, or
+  application response correctness;
+- <!-- kovo-not-modeled:schema-and-posture --> schema provisioning, migration, ACL posture, or
+  catalog-audit queries; and
+- <!-- kovo-not-modeled:unbounded-cardinality --> replicas, slots, identities, clock steps, or crash
+  points beyond the printed finite bounds.
+
 **Idem-token minting, horizon, and entropy (normative).** `Kovo-Idem` is a per-submit token, not a per-form constant. Its only accepted production grammar is `v1_<issued-at-ms>_<nonce>`, where `issued-at-ms` is exactly 13 decimal Unix-epoch-millisecond digits and `nonce` is exactly 32 lowercase hexadecimal digits produced from 16 cryptographically random bytes. UUID v4 version/variant bits do not count toward this ≥128-bit nonce floor, so browser minting requires `crypto.getRandomValues(new Uint8Array(16))`; there is no timeless UUID/base64url fallback. A server-rendered/no-JavaScript form stamps server time. Enhanced modular and inline submits preserve that stamped issued-at value while replacing only the nonce, so JavaScript enhancement cannot silently extend the document's retry/deploy horizon. A direct seedless browser API has no server stamp to preserve and uses its boot-captured client clock.
 
 The nominal mutation retry horizon is 24 hours, aligned with the required deploy-skew retention floor (§14): admission requires `nowMs < issuedAtMs + 24 hours` and `issuedAtMs <= nowMs + 5 minutes`. Thus the exact expiry millisecond is stale, the exact future-skew boundary is accepted, and one millisecond beyond either boundary is rejected. Malformed, legacy timeless, stale, and farther-future tokens are answered as a 422 idempotency conflict before any replay-store call or handler execution on enhanced, streaming, and no-JavaScript paths. Parsing produces an immutable `{ token, issuedAtMs, expiresAtMs }` fact so durable storage/cleanup consumes the already-snapshotted token rather than re-reading a request carrier. The timestamp is not a MAC or authorization claim: a client may always mint a new logical token, and changing the timestamp also changes the exact replay key. The security invariant is instead that an already-used exact token cannot become admissible again after its row is safely reclaimed.
