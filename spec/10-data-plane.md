@@ -440,6 +440,14 @@ CSRF validation → replay reservation by (principal, CSRF rotation binding, der
 
 This ordering closes the read-your-writes hazard: responses can never render pre-commit data (which would visibly revert the user's optimistic update). A replay hit does not bypass authorization: the runtime MUST re-evaluate the session-bound guard chain against the **current** principal before re-serving a stored response, so a replay never re-serves a private response after the principal's authorization changed (role revoked, ownership lost). The replay store is keyed on (principal ∧ CSRF session/rotation binding ∧ source-derived mutation identity ∧ idem-token), using canonical length framing for each identity component, so a replay can only ever return to the same principal that produced it even when an app supplies a shared rotation id. Session/rotation ids, independently resolved principals, anonymous-CSRF secrets, and mutation identities are each capped at 1,024 JavaScript code units before composition. A framework lifecycle binding embeds its pinned principal exactly once and replay rejects a later mismatch rather than appending duplicate identity. At those maxima, the canonical framework CSRF binding is 2,124 code units, the enhanced raw replay scope is 3,158, and the `nojs:` scope is 3,163 — all below the durable store's 4,096-code-unit raw-scope ceiling.
 
+The volatile replay store's physical map identity MUST additionally be the complete canonical
+§6.6 system `ScopedKey` frame under the finite `mutation-replay` posture. Its app-key is the exact
+injective length frame `(scope, idem)`, including NUL and delimiter placement; it is not a bespoke
+concatenation or app-authored principal. This registered composite posture preserves the maximum
+3,158-code-unit enhanced scope plus the canonical 49-code-unit idem token while keeping the outer
+frame within 4,096 code units. Public/principal keys and every other system posture retain the
+ordinary 1,024-code-unit app-key bound.
+
 The handler `request.db` type is a defense-in-depth authoring guardrail, not the security proof:
 it preserves the configured DB provider's read/write surface while hiding public transaction
 openers such as `.transaction()`, so nested transaction/open-handle misuse is a TypeScript error

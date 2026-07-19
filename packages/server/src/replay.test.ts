@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 import { untrusted } from '@kovojs/core';
+import { restoreScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import { registerFrameworkSessionPrincipalSnapshot } from './auth-principal.js';
 import { csrfToken, mintCsrfField, resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
@@ -20,6 +21,7 @@ import {
   canonicalRequestFingerprint,
   createMemoryMutationReplayStore,
   mutationReplayContext,
+  mutationReplayScopedKeyFrame,
   readMutationReplay,
   type MutationReplayResponse,
   type MutationReplayStore,
@@ -378,6 +380,37 @@ describe('server mutation replay store', () => {
 
     expect(replayStore.get('scope\0idem', 'tail')).toEqual(first);
     expect(replayStore.get('scope', 'idem\0tail')).toEqual(second);
+  });
+
+  it('nests the replay pair injectively under the exact finite ScopedKey frame', () => {
+    const frame = mutationReplayScopedKeyFrame('scope\0idem', 'tail');
+    const shifted = mutationReplayScopedKeyFrame('scope', 'idem\0tail');
+
+    expect(frame).toBe('18:kovo-scoped-key-v16:system15:mutation-replay19:10:scope\0idem4:tail');
+    expect(frame).not.toBe(shifted);
+    expect(scopedKeyFactsFor(restoreScopedKey(frame))).toMatchObject({
+      key: '10:scope\0idem4:tail',
+      posture: 'system',
+      systemPosture: 'mutation-replay',
+    });
+  });
+
+  it('preserves the maximum supported mutation replay scope inside the 4,096-unit frame', () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const scope = 's'.repeat(3_158);
+    const idem = replayIdem('maximum-scoped-replay-identity');
+    const response = { body: 'maximum', headers: {}, status: 200 } as const;
+    const frame = mutationReplayScopedKeyFrame(scope, idem);
+
+    expect(idem).toHaveLength(49);
+    expect(frame.length).toBeLessThanOrEqual(4_096);
+    expect(scopedKeyFactsFor(restoreScopedKey(frame))).toMatchObject({
+      key: `3158:${scope}49:${idem}`,
+      posture: 'system',
+      systemPosture: 'mutation-replay',
+    });
+    replayStore.set(scope, idem, response);
+    expect(replayStore.get(scope, idem)).toEqual(response);
   });
 
   it('length-frames mutation identity and CSRF session scope without delimiter collisions', async () => {

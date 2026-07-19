@@ -3,6 +3,8 @@ import {
   invokeBetterAuthMountAdapter,
   type BetterAuthMountAdapter,
 } from '@kovojs/better-auth/internal/server-mount-adapter';
+import type { ScopedKey } from '@kovojs/core';
+import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import { getTableColumns, getTableName, is, sql } from 'drizzle-orm';
 import {
   bigint,
@@ -34,10 +36,9 @@ import type { Schema } from '../schema.js';
 import { usePostgresSystemDb, type KovoPostgresSystemDb } from './postgres-capability.js';
 import { useSqliteSystemDb, type KovoSqliteSystemDb } from './sqlite-capability.js';
 
-const BETTER_AUTH_RATE_LIMIT_BUCKET_PREFIX = 'kovo-ba-rl-v1:';
 const BETTER_AUTH_RATE_LIMIT_MAX = 3;
 const BETTER_AUTH_RATE_LIMIT_WINDOW_MS = 10_000;
-const BETTER_AUTH_RATE_LIMIT_BUCKET_PATTERN = /^kovo-ba-rl-v1:[0-9a-f]{4}$/u;
+const BETTER_AUTH_RATE_LIMIT_BUCKET_PATTERN = /^[0-9a-f]{4}$/u;
 
 // These functions are never called. Their return types give the reviewed dynamic-schema boundary
 // an exact Drizzle shape after the runtime table/column census below has succeeded.
@@ -64,8 +65,8 @@ type SqliteRateLimitTable = ReturnType<typeof sqliteRateLimitTableContract>;
 
 /** @internal Fixed input accepted by Kovo's Better Auth bucket consumers. */
 export interface BetterAuthRateLimitBucketInput {
-  /** Fixed-width, HMAC-derived Kovo bucket key; never a raw IP address or URL path. */
-  bucketKey: string;
+  /** Runtime-witnessed, fixed-width HMAC bucket; never a raw IP address or URL path. */
+  bucketKey: ScopedKey;
   /** Exact credential-attempt ceiling. */
   max: number;
   /** Exact credential window in milliseconds. */
@@ -161,7 +162,7 @@ export function createBetterAuthPostgresRateLimitBucketConsumer(
 ): BetterAuthRateLimitBucketConsumer {
   const rateLimit = requirePostgresRateLimitTable(table);
   return usePostgresSystemDb(capability, (db) => async (input) => {
-    assertBetterAuthRateLimitBucketInput(input);
+    const bucketFrame = assertBetterAuthRateLimitBucketInput(input);
     const databaseNow = sql<number>`CAST(EXTRACT(EPOCH FROM statement_timestamp()) * 1000 AS BIGINT)`;
     const rows = await db
       .insert(rateLimit)
@@ -170,7 +171,7 @@ export function createBetterAuthPostgresRateLimitBucketConsumer(
         // Keep the primary key independent so `key` is the only deterministic conflict. Real
         // PostgreSQL may report a simultaneous PK collision before the targeted key arbiter.
         id: sql<string>`gen_random_uuid()::text`,
-        key: input.bucketKey,
+        key: bucketFrame,
         lastRequest: databaseNow,
       })
       .onConflictDoUpdate({
@@ -200,14 +201,14 @@ export function createBetterAuthSqliteRateLimitBucketConsumer(
 ): BetterAuthRateLimitBucketConsumer {
   const rateLimit = requireSqliteRateLimitTable(table);
   return useSqliteSystemDb(capability, (db) => async (input) => {
-    assertBetterAuthRateLimitBucketInput(input);
+    const bucketFrame = assertBetterAuthRateLimitBucketInput(input);
     const databaseNow = sql<number>`CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)`;
     const rows = await db
       .insert(rateLimit)
       .values({
         count: 1,
         id: sql<string>`lower(hex(randomblob(16)))`,
-        key: input.bucketKey,
+        key: bucketFrame,
         lastRequest: databaseNow,
       })
       .onConflictDoUpdate({
@@ -223,14 +224,10 @@ export function createBetterAuthSqliteRateLimitBucketConsumer(
   });
 }
 
-function assertBetterAuthRateLimitBucketInput(input: BetterAuthRateLimitBucketInput): void {
+function assertBetterAuthRateLimitBucketInput(input: BetterAuthRateLimitBucketInput): string {
   if (
     typeof input !== 'object' ||
     input === null ||
-    typeof input.bucketKey !== 'string' ||
-    !BETTER_AUTH_RATE_LIMIT_BUCKET_PATTERN.test(input.bucketKey) ||
-    input.bucketKey.slice(0, BETTER_AUTH_RATE_LIMIT_BUCKET_PREFIX.length) !==
-      BETTER_AUTH_RATE_LIMIT_BUCKET_PREFIX ||
     input.max !== BETTER_AUTH_RATE_LIMIT_MAX ||
     input.windowMs !== BETTER_AUTH_RATE_LIMIT_WINDOW_MS
   ) {
@@ -238,6 +235,17 @@ function assertBetterAuthRateLimitBucketInput(input: BetterAuthRateLimitBucketIn
       'KV414: invalid Better Auth rate-limit bucket input; use the first-party bounded storage adapter (SPEC §6.6).',
     );
   }
+  const facts = scopedKeyFactsFor(input.bucketKey);
+  if (
+    facts.posture !== 'system' ||
+    facts.systemPosture !== 'better-auth-rate-limit' ||
+    !BETTER_AUTH_RATE_LIMIT_BUCKET_PATTERN.test(facts.key)
+  ) {
+    throw new TypeError(
+      'KV450: Better Auth rate-limit buckets require the registered better-auth-rate-limit ScopedKey posture (SPEC §6.6).',
+    );
+  }
+  return facts.frame;
 }
 
 function requirePostgresRateLimitTable(table: unknown): PostgresRateLimitTable {

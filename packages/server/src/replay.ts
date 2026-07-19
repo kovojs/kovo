@@ -3,6 +3,7 @@ import {
   hasFrameworkDurableReplayStoreReceipt,
   propagateFrameworkDurableReplayStoreReceipt,
 } from '@kovojs/core/internal/security-markers';
+import { frameworkScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import {
   blessRedirectResponse,
@@ -338,7 +339,7 @@ export function createMemoryMutationReplayStore<
   const store: MutationReplayStore<Response> = {
     get(scope, idem, fingerprint) {
       sweepExpiredCommittedMutationReplays(responses, observeNow());
-      const key = mutationReplayKey(scope, idem);
+      const key = mutationReplayScopedKeyFrame(scope, idem);
       const record = witnessMapGet(responses, key);
       if (!record) return undefined;
 
@@ -355,7 +356,7 @@ export function createMemoryMutationReplayStore<
     reserve(scope, idem, fingerprint) {
       const nowMs = observeNow();
       sweepExpiredCommittedMutationReplays(responses, nowMs);
-      const key = mutationReplayKey(scope, idem);
+      const key = mutationReplayScopedKeyFrame(scope, idem);
       const existing = witnessMapGet(responses, key);
       if (existing) {
         if (!fingerprintsMatch(existing.fingerprint, fingerprint)) {
@@ -443,7 +444,7 @@ export function createMemoryMutationReplayStore<
     set(scope, idem, response, fingerprint) {
       const nowMs = observeNow();
       sweepExpiredCommittedMutationReplays(responses, nowMs);
-      const key = mutationReplayKey(scope, idem);
+      const key = mutationReplayScopedKeyFrame(scope, idem);
       const existing = witnessMapGet(responses, key);
       if (existing && !fingerprintsMatch(existing.fingerprint, fingerprint)) {
         throw new MutationReplayConflictError();
@@ -837,8 +838,10 @@ function stableMutationReplayRequestValue(
   return before.value;
 }
 
-function mutationReplayKey(scope: string, idem: string): string {
-  return requestStateExactCompositeKey(scope, idem);
+/** @internal Canonical physical identity for the volatile mutation replay store (SPEC §6.6/§10.3). */
+export function mutationReplayScopedKeyFrame(scope: string, idem: string): string {
+  const identity = requestStateExactCompositeKey(scope, idem);
+  return scopedKeyFactsFor(frameworkScopedKey('mutation-replay', identity)).frame;
 }
 
 /**

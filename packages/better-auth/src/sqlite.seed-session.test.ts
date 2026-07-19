@@ -434,7 +434,9 @@ describe('Better Auth development seed session posture', () => {
       expect.objectContaining({
         count: 3,
         id: expect.stringMatching(/^[0-9a-f]{32}$/u),
-        key: expect.stringMatching(/^kovo-ba-rl-v1:[0-9a-f]{4}$/u),
+        key: expect.stringMatching(
+          /^18:kovo-scoped-key-v16:system22:better-auth-rate-limit4:[0-9a-f]{4}$/u,
+        ),
       }),
     ]);
     expect(rows[0]?.key).not.toContain('127.0.0.20');

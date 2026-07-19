@@ -1,12 +1,11 @@
 import type { BetterAuthRateLimitBucketConsumer } from '@kovojs/server/internal/better-auth';
+import { frameworkScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import type { BetterAuthRateLimitOptions } from 'better-auth';
 
 const credentialRateLimitWindowSeconds = 10;
 const credentialRateLimitMax = 3;
 const defaultBucketCount = 65_536;
 const maximumRateLimitKeyLength = 1_024;
-const bucketPrefix = 'kovo-ba-rl-v1:';
-const hmacDomain = 'kovo-better-auth-rate-limit-v1\u0000';
 
 interface BoundedRateLimitStorageOptions {
   /** Smaller powers are test-only and make deterministic collision tests inexpensive. */
@@ -53,11 +52,14 @@ export function createBetterAuthBoundedRateLimitStorage(
 
   async function bucketFor(rawKey: string): Promise<string> {
     assertCredentialRateLimitKey(rawKey);
+    const sourceFrame = scopedKeyFactsFor(
+      frameworkScopedKey('better-auth-rate-limit', rawKey),
+    ).frame;
     const digest = new Uint8Array(
-      await crypto.subtle.sign('HMAC', await signingKey, encoder.encode(`${hmacDomain}${rawKey}`)),
+      await crypto.subtle.sign('HMAC', await signingKey, encoder.encode(sourceFrame)),
     );
     const bucket = (((digest[0] ?? 0) << 8) | (digest[1] ?? 0)) % bucketCount;
-    return `${bucketPrefix}${bucket.toString(16).padStart(4, '0')}`;
+    return bucket.toString(16).padStart(4, '0');
   }
 
   const disabledFallback = async (): Promise<never> => {
@@ -92,7 +94,7 @@ export function createBetterAuthBoundedRateLimitStorage(
           );
         }
         const allowed = await consumeBucket({
-          bucketKey: await bucketFor(rawKey),
+          bucketKey: frameworkScopedKey('better-auth-rate-limit', await bucketFor(rawKey)),
           max: credentialRateLimitMax,
           windowMs: credentialRateLimitWindowSeconds * 1_000,
         });

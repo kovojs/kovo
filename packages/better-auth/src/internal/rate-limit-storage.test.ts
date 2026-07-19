@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ScopedKey } from '@kovojs/core';
+import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
+
 import { createBetterAuthBoundedRateLimitStorage } from './rate-limit-storage.js';
 
 const secret = 'Kovo-Bounded-Rate-Limit-Test-Secret-0a1B2c3D4e5F6g7H8i9J';
@@ -33,7 +36,7 @@ describe('bounded Better Auth credential rate-limit storage', () => {
     const options = createBetterAuthBoundedRateLimitStorage(
       secret,
       async ({ bucketKey }) => {
-        buckets.add(bucketKey);
+        buckets.add(scopedKeyFactsFor(bucketKey).key);
         return true;
       },
       { bucketCount: 4 },
@@ -49,15 +52,18 @@ describe('bounded Better Auth credential rate-limit storage', () => {
 
     expect(buckets.size).toBeLessThanOrEqual(4);
     expect(buckets.size).toBeGreaterThan(1);
-    expect([...buckets].every((key) => /^kovo-ba-rl-v1:000[0-3]$/u.test(key))).toBe(true);
+    expect([...buckets].every((key) => /^000[0-3]$/u.test(key))).toBe(true);
   });
 
   it('aggregates HMAC collisions so the shared ceiling fails closed', async () => {
     const counts = new Map<string, number>();
-    const consumeBucket = vi.fn(async ({ bucketKey }: { bucketKey: string }) => {
-      const count = counts.get(bucketKey) ?? 0;
+    const frames = new Set<string>();
+    const consumeBucket = vi.fn(async ({ bucketKey }: { bucketKey: ScopedKey }) => {
+      const facts = scopedKeyFactsFor(bucketKey);
+      frames.add(facts.frame);
+      const count = counts.get(facts.key) ?? 0;
       if (count >= 3) return false;
-      counts.set(bucketKey, count + 1);
+      counts.set(facts.key, count + 1);
       return true;
     });
     const options = createBetterAuthBoundedRateLimitStorage(secret, consumeBucket, {
@@ -72,7 +78,10 @@ describe('bounded Better Auth credential rate-limit storage', () => {
 
     expect(results.filter(({ allowed }) => allowed)).toHaveLength(3);
     expect(results.filter(({ allowed }) => !allowed)).toEqual([{ allowed: false, retryAfter: 10 }]);
-    expect(counts).toEqual(new Map([['kovo-ba-rl-v1:0000', 3]]));
+    expect(counts).toEqual(new Map([['0000', 3]]));
+    expect(frames).toEqual(
+      new Set(['18:kovo-scoped-key-v16:system22:better-auth-rate-limit4:0000']),
+    );
   });
 
   it('fails loud on fallback, unknown paths, oversized keys, and widened rules', async () => {

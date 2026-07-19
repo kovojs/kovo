@@ -571,6 +571,15 @@ reconstruction. The package source-use census MUST resolve aliases, destructurin
 access, `.call`/`.apply`, and local imports/re-exports by symbol/value flow; printed callee spelling
 or a fixed method-name regex is not coverage evidence.
 
+The fixed credential rate limiter MUST domain-separate each admitted raw Better Auth identity by
+HMACing the canonical `ScopedKey` frame under the finite `better-auth-rate-limit` system posture,
+not a bespoke delimiter prefix. Its bounded 16-bit bucket is itself a runtime-witnessed key under
+that same posture, and the SQLite/Postgres consumer MUST authenticate the witness, exact posture,
+and four-lowercase-hex app-key before persisting the complete canonical frame. Raw IP/path input,
+bare strings, structural forgeries, public/principal keys, and other system postures fail before the
+database statement. HMAC collisions deliberately share the same bucket and aggregate attempts, so
+the fixed 65,536-bucket bound fails closed rather than granting additional credential guesses.
+
 **Better Auth redirect mount response boundary (normative).** The opaque Better Auth mount is a
 redirect-protocol adapter, not a public proxy for the dependency router. After the exact request
 origin check, Kovo MUST admit only status `301`, `302`, `303`, `307`, or `308` with exactly one
@@ -597,7 +606,11 @@ only from the framework-installed request session snapshot (`scopedKey(request, 
 task `actAs(id).stateKey(key)` scope; public authority comes only from the named
 `publicScopedKey(key)` capability; system authority comes only from a finite framework-owned posture
 registered in the C9 census. App-authored principal ids and free-form system reason strings are not
-key authority. Each component is a non-empty string of at most 1,024 code units.
+key authority. Authority components and every public/principal app-key are non-empty strings of at
+most 1,024 code units. The finite `mutation-replay` system posture alone may carry the already-
+bounded canonical `(scope, idem)` subframe as its app-key beyond 1,024 code units; its complete outer
+`ScopedKey` frame MUST remain at most 4,096 code units. No app-facing constructor or other system
+posture inherits that composite-key exception.
 
 The public TypeScript type is ergonomics, not the proof. A module-private runtime witness owns the
 frame and exact posture facts; storage, signed-URL, stored-file-response, and durable-task queue doors

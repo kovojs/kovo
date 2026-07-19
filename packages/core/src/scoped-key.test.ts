@@ -41,6 +41,24 @@ describe('ScopedKey owner provenance (SPEC §6.6 C9)', () => {
     expect(() => frameworkScopedKey('app-reason' as never, 'k')).toThrow(/KV450/u);
   });
 
+  it('bounds the registered replay composite by the complete canonical frame', () => {
+    const maximum = frameworkScopedKey('mutation-replay', 'r'.repeat(4_044));
+    const frame = scopedKeyFactsFor(maximum).frame;
+
+    expect(frame).toHaveLength(4_096);
+    expect(frame).toBe(`18:kovo-scoped-key-v16:system15:mutation-replay4044:${'r'.repeat(4_044)}`);
+    expect(scopedKeysEqual(maximum, restoreScopedKey(frame))).toBe(true);
+    expect(() => frameworkScopedKey('mutation-replay', 'r'.repeat(4_045))).toThrow(
+      /frame must be at most 4096 code units/u,
+    );
+    expect(() => publicScopedKey('r'.repeat(1_025))).toThrow(
+      /app key must be a 1\.\.1024 code-unit string/u,
+    );
+    expect(() => frameworkScopedKey('better-auth-rate-limit', 'r'.repeat(1_025))).toThrow(
+      /app key must be a 1\.\.1024 code-unit string/u,
+    );
+  });
+
   it('rejects bare strings, structural lookalikes, proxies, and TypeScript casts at the sink', async () => {
     const storage = createMemoryStorage();
     const forged = Object.freeze(Object.create(null)) as ScopedKey;

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { frameworkScopedKey } from '@kovojs/core/internal/storage';
 import { compareAndSet, kovo, sql } from '@kovojs/drizzle';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -343,7 +344,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       const first = createBetterAuthPostgresRateLimitBucketConsumer(systemDb, externalRateLimit);
       const second = createBetterAuthPostgresRateLimitBucketConsumer(systemDb, externalRateLimit);
       const input = {
-        bucketKey: 'kovo-ba-rl-v1:0042',
+        bucketKey: frameworkScopedKey('better-auth-rate-limit', '0042'),
         max: 3,
         windowMs: 10_000,
       } as const;
@@ -363,7 +364,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
         expect.objectContaining({
           count: 3,
           id: expect.stringMatching(/^[0-9a-f-]{36}$/u),
-          key: input.bucketKey,
+          key: '18:kovo-scoped-key-v16:system22:better-auth-rate-limit4:0042',
         }),
       ]);
     } finally {

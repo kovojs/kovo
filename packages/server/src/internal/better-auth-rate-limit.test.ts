@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { publicScopedKey } from '@kovojs/core';
+import { frameworkScopedKey } from '@kovojs/core/internal/storage';
 import { kovo } from '@kovojs/drizzle';
 import { eq, sql } from 'drizzle-orm';
 import { bigint, integer, pgTable, text } from 'drizzle-orm/pg-core';
@@ -32,7 +34,12 @@ const rateLimit = pgTable(
   }),
 );
 
-const input = { bucketKey: 'kovo-ba-rl-v1:0042', max: 3, windowMs: 10_000 } as const;
+const input = {
+  bucketKey: frameworkScopedKey('better-auth-rate-limit', '0042'),
+  max: 3,
+  windowMs: 10_000,
+} as const;
+const bucketFrame = '18:kovo-scoped-key-v16:system22:better-auth-rate-limit4:0042';
 const roots: string[] = [];
 const runtimes: KovoPostgresAppRuntimeDb[] = [];
 
@@ -58,7 +65,7 @@ describe('Better Auth Postgres bounded rate-limit consumer', () => {
       expect.objectContaining({
         count: 3,
         id: expect.stringMatching(/^[0-9a-f-]{36}$/u),
-        key: input.bucketKey,
+        key: bucketFrame,
       }),
     ]);
   });
@@ -67,7 +74,7 @@ describe('Better Auth Postgres bounded rate-limit consumer', () => {
     const { first, second, systemDb } = await consumers();
     await Promise.all([first(input), first(input), first(input)]);
     await usePostgresSystemDb(systemDb, (db) =>
-      db.update(rateLimit).set({ lastRequest: 0 }).where(eq(rateLimit.key, input.bucketKey)),
+      db.update(rateLimit).set({ lastRequest: 0 }).where(eq(rateLimit.key, bucketFrame)),
     );
     vi.spyOn(Date, 'now').mockReturnValue(Number.MAX_SAFE_INTEGER);
 
@@ -75,6 +82,19 @@ describe('Better Auth Postgres bounded rate-limit consumer', () => {
     await expect(
       usePostgresSystemDb(systemDb, (db) => db.select({ count: rateLimit.count }).from(rateLimit)),
     ).resolves.toEqual([{ count: 1 }]);
+  });
+
+  it('rejects bare, forged, and wrong-posture buckets before database use', async () => {
+    const { first, systemDb } = await consumers();
+
+    await expect(first({ ...input, bucketKey: '0042' as never })).rejects.toThrow(/KV450/u);
+    await expect(first({ ...input, bucketKey: Object.freeze({}) as never })).rejects.toThrow(
+      /KV450/u,
+    );
+    await expect(first({ ...input, bucketKey: publicScopedKey('0042') })).rejects.toThrow(/KV450/u);
+    await expect(
+      usePostgresSystemDb(systemDb, (db) => db.select().from(rateLimit)),
+    ).resolves.toEqual([]);
   });
 });
 

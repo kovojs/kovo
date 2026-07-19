@@ -28,9 +28,11 @@ export interface ScopedKey {
 
 /** @internal Closed framework system namespaces. App-authored reason strings are absent. */
 export type FrameworkScopedKeyPosture =
+  | 'better-auth-rate-limit'
   | 'durable-task-cron'
   | 'durable-task-system'
   | 'framework-upload'
+  | 'mutation-replay'
   | 'security-test';
 
 /** @internal Exact witnessed facts consumed by storage and queue doors. */
@@ -45,11 +47,19 @@ export interface ScopedKeyFacts {
 const scopedKeyFacts = securityWeakMap<object, ScopedKeyFacts>();
 const FRAME_VERSION = 'kovo-scoped-key-v1';
 const MAX_SCOPED_KEY_COMPONENT_LENGTH = 1_024;
+const MAX_SCOPED_KEY_FRAME_LENGTH = 4_096;
 const systemPostures = securitySet<FrameworkScopedKeyPosture>();
+const compositeSystemPostures = securitySet<FrameworkScopedKeyPosture>();
+securitySetAdd(systemPostures, 'better-auth-rate-limit');
 securitySetAdd(systemPostures, 'durable-task-cron');
 securitySetAdd(systemPostures, 'durable-task-system');
 securitySetAdd(systemPostures, 'framework-upload');
+securitySetAdd(systemPostures, 'mutation-replay');
 securitySetAdd(systemPostures, 'security-test');
+// Replay's already-bounded principal + CSRF + mutation + idem identity is itself a canonical
+// subframe. It is the only registered posture allowed to exceed an ordinary app-key component;
+// the complete outer ScopedKey frame remains bounded to 4,096 code units (SPEC §6.6/§10.3).
+securitySetAdd(compositeSystemPostures, 'mutation-replay');
 
 /**
  * Deliberately place an object in the application-wide public namespace.
@@ -133,8 +143,17 @@ function mintScopedKey(
   systemPosture?: FrameworkScopedKeyPosture,
 ): ScopedKey {
   const boundedAuthority = boundedComponent(authority, 'ScopedKey authority');
-  const boundedKey = boundedComponent(key, 'ScopedKey app key');
+  const keyLimit =
+    systemPosture !== undefined && securitySetHas(compositeSystemPostures, systemPosture)
+      ? MAX_SCOPED_KEY_FRAME_LENGTH
+      : MAX_SCOPED_KEY_COMPONENT_LENGTH;
+  const boundedKey = boundedComponent(key, 'ScopedKey app key', keyLimit);
   const frame = frameComponents([FRAME_VERSION, posture, boundedAuthority, boundedKey]);
+  if (frame.length > MAX_SCOPED_KEY_FRAME_LENGTH) {
+    throw new TypeError(
+      `ScopedKey frame must be at most ${MAX_SCOPED_KEY_FRAME_LENGTH} code units.`,
+    );
+  }
   const value = freezeSecurityValue(securityNullRecord()) as unknown as ScopedKey;
   const facts = freezeSecurityValue({
     authority: boundedAuthority,
@@ -147,15 +166,13 @@ function mintScopedKey(
   return value;
 }
 
-function boundedComponent(value: unknown, label: string): string {
-  if (
-    typeof value !== 'string' ||
-    value.length === 0 ||
-    value.length > MAX_SCOPED_KEY_COMPONENT_LENGTH
-  ) {
-    throw new TypeError(
-      `${label} must be a 1..${MAX_SCOPED_KEY_COMPONENT_LENGTH} code-unit string.`,
-    );
+function boundedComponent(
+  value: unknown,
+  label: string,
+  maximumLength = MAX_SCOPED_KEY_COMPONENT_LENGTH,
+): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maximumLength) {
+    throw new TypeError(`${label} must be a 1..${maximumLength} code-unit string.`);
   }
   return value;
 }
@@ -167,7 +184,11 @@ function frameComponents(components: readonly string[]): string {
 }
 
 function parseFrame(frame: unknown): string[] {
-  if (typeof frame !== 'string' || frame.length === 0 || frame.length > 20_000) {
+  if (
+    typeof frame !== 'string' ||
+    frame.length === 0 ||
+    frame.length > MAX_SCOPED_KEY_FRAME_LENGTH
+  ) {
     throw new TypeError('KV450: persisted ScopedKey frame is not a bounded string.');
   }
   const components: string[] = [];
@@ -193,7 +214,7 @@ function parseFrame(frame: unknown): string[] {
     for (let index = 0; index < lengthText.length; index += 1) {
       length = length * 10 + securityStringCharCodeAt(lengthText, index) - 0x30;
     }
-    if (length < 1 || length > MAX_SCOPED_KEY_COMPONENT_LENGTH) {
+    if (length < 1 || length > MAX_SCOPED_KEY_FRAME_LENGTH) {
       throw new TypeError('KV450: persisted ScopedKey frame component is out of bounds.');
     }
     cursor += 1;
