@@ -1406,7 +1406,6 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedAuthoredExecutableReferenceClosureBranch,
     search: authoredExecutableReferenceClosureBranch,
     sourceFile: compilerAuthoringSurfaceValidatorPath,
-    sourceOnly: true,
     test: assertAuthoredExecutableReferenceClosureBehavior,
   },
   {
@@ -1469,6 +1468,8 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertGeneratedControlManifestEntryBehavior,
   },
   {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description:
       'Deletes compiler closure for request/query-selected executable module/export references.',
     expectedKiller:
@@ -3194,51 +3195,26 @@ async function assertInlineDynamicControlPlaneClosureBehavior(_moduleUnderTest, 
   }
 }
 
-async function assertAuthoredExecutableReferenceClosureBehavior(_moduleUnderTest, { sourceText }) {
-  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-authored-executable-ref-behavior-'));
-  try {
-    const compilerRoot = path.join(tempRoot, 'packages', 'compiler');
-    mkdirSync(compilerRoot, { recursive: true });
-    cpSync(path.join(repoRoot, 'packages/compiler/src'), path.join(compilerRoot, 'src'), {
-      recursive: true,
-    });
-    cpSync(
-      path.join(repoRoot, 'packages/compiler/package.json'),
-      path.join(compilerRoot, 'package.json'),
+function assertAuthoredExecutableReferenceClosureBehavior(moduleUnderTest) {
+  const result = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+export const Raw = component({
+  render: () => <button on:click="/c/other.client.js#privileged">Run</button>,
+});
+`,
+  );
+  const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235');
+  if (
+    !diagnostics.some((diagnostic) =>
+      diagnostic.message.includes('App source hand-authors an executable lowered-IR reference'),
+    )
+  ) {
+    throw new Error(
+      `app-authored executable reference did not close through KV235: ${diagnostics
+        .map((diagnostic) => diagnostic.message)
+        .join(' | ') || '<open>'}`,
     );
-    symlinkSync(
-      path.join(repoRoot, 'packages/compiler/node_modules'),
-      path.join(compilerRoot, 'node_modules'),
-      'dir',
-    );
-    writeFileSync(path.join(compilerRoot, 'src/validate/authoring-surface.ts'), sourceText, 'utf8');
-    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
-
-    const result = spawnSync(
-      process.execPath,
-      [
-        path.join(repoRoot, 'node_modules/vitest/vitest.mjs'),
-        '--run',
-        'packages/compiler/src/security-operation-ir.security.test.ts',
-        '--testNamePattern',
-        'app-authored static lowered|duplicate and nested|compiler-emitted executable references',
-        '--reporter=dot',
-      ],
-      {
-        cwd: tempRoot,
-        encoding: 'utf8',
-        env: { ...process.env, FORCE_COLOR: '0' },
-        timeout: 60_000,
-      },
-    );
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-      throw new Error(
-        `authored executable-reference behavioral regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
-      );
-    }
-  } finally {
-    rmSync(tempRoot, { force: true, recursive: true });
   }
 }
 

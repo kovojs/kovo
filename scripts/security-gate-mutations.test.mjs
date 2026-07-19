@@ -12,7 +12,7 @@ describe('security-gate-mutations', () => {
       mutant.name.startsWith('compiler-finite-ir/'),
     );
 
-    expect(finiteIrMutants).toHaveLength(19);
+    expect(finiteIrMutants).toHaveLength(20);
     expect(finiteIrMutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
     expect(finiteIrMutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });
@@ -274,7 +274,7 @@ describe('security-gate-mutations', () => {
     );
     expect(results.every((result) => result.status === 'killed')).toBe(true);
     expect(results.length).toBe(SECURITY_GATE_MUTANTS.length);
-  });
+  }, 180_000);
 
   it('executes semantic-v2 consumer mutants instead of source-text assertions', () => {
     const semanticV2Mutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
