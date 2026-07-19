@@ -2001,7 +2001,12 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'stream renderer module ref',
           'module allowlist authority',
           'closes app-authored static lowered %s merged through primitive attrs',
+          'closes duplicate and nested static-spread executable selectors by authored provenance',
+          'closes duplicate and nested primitive attrs without trusting the carrier tag',
+          'preserves data-only query and state binding paths while closing module refs',
           'keeps typed event and execution-trigger inputs on compiler-owned lowering',
+          'pins typed events to the exact runtime-installed delegation vocabulary',
+          'on:dblclick',
         ],
       },
       {

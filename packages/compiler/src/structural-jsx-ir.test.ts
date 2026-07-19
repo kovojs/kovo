@@ -28,7 +28,6 @@ export const ProductPage = component({
         asChild
         attrs={{
           class: 'primitive',
-          'on:click': '/c/primitive#click',
           'data-state': 'closed',
         }}
       >
@@ -64,7 +63,7 @@ export const ProductPage = component({
     expect(serverSource).toContain('class="primitive nav-link"');
     expect(serverSource).toContain('href="/products/p1"');
     expect(serverSource).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/product-page\.client\.js#ProductPage\$selectProduct \/c\/primitive#click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/product-page\.client\.js#ProductPage\$selectProduct"/,
     );
     expect(serverSource).toContain('data-state="closed"');
     expect(serverSource).toContain('commandfor="details" command="show-modal"');
