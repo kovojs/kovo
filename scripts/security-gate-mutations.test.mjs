@@ -7,6 +7,22 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
+  it('executes every finite security-IR mutant against a behavioral compiler oracle', () => {
+    const finiteIrMutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
+      mutant.name.startsWith('compiler-finite-ir/'),
+    );
+
+    expect(finiteIrMutants).toHaveLength(19);
+    expect(finiteIrMutants).toEqual(
+      finiteIrMutants.map((mutant) =>
+        expect.objectContaining({
+          behavioralTypeScript: true,
+          sourceOnly: undefined,
+        }),
+      ),
+    );
+  });
+
   it('kills every enrolled security gate branch deletion mutant', async () => {
     const results = await runSecurityGateMutationHarness();
 
