@@ -303,10 +303,11 @@ the guard checks a role SQL never sees.
       renderers. Reject statically visible `CREATE`/`ALTER`/`DROP POLICY` mutations elsewhere across
       production package and starter-template source, and bind the reviewed emitter by TS symbol
       identity so aliases, re-exports, dynamic loads, and extra calls fail closed.
-  - Evidence: `pnpm run check:rls-emission-door` passes 27/27 with exactly 3 CREATE renderers, 4 DROP
-    renderers, and 5 constructor calls. Focused `postgres-runtime.test.ts` boot regressions reject an
-    extra policy with `KV433_POLICY_SET` and an `ALTER POLICY ... USING (true)` weakening with
-    `KV433_OWNER_POLICY`.
+  - Evidence: `pnpm run check:rls-emission-door` passes 28/28 with exactly 3 CREATE renderers, 4 DROP
+    renderers, and 5 constructor calls. The 144/144 four-file PostgreSQL suite rejects an extra
+    policy with `KV433_POLICY_SET`, an `ALTER POLICY ... USING (true)` weakening with
+    `KV433_OWNER_POLICY`, and a sixth policy that survives a provisioning reset; external Postgres
+    defaults the post-provision boot audit on.
   - Honesty boundary: the source gate recognizes a deliberately finite static grammar over trusted
     framework source; it does not claim to decide arbitrary JavaScript or dynamically assembled SQL.
     The supported-deployment security boundary is the live boot posture check over the engine's exact
@@ -321,7 +322,7 @@ the guard checks a role SQL never sees.
 - [x] Retarget `resolveProtectedPostgresTables` (`:7710-7778`) to build a 2-constructor algebra term
       and render SQL **from** the term; first proof obligation is byte-identity against today's
       predicate strings (already pinned by `postgres-runtime.test.ts` / `postgres-authz.test.ts`).
-  - Evidence: the combined four-file PostgreSQL suite passes 142/142 and pins owner/ownerVia SQL
+  - Evidence: the combined four-file PostgreSQL suite passes 144/144 and pins owner/ownerVia SQL
     byte identity while the live runtime resolves both through the shared term.
 - [x] Implement the three-valued Kleene denotation and an **exhaustive** enumerator over
       `{true,false,null}` per equality and `{present,absent,null}` per FK edge, up to the shipped
@@ -337,7 +338,7 @@ the guard checks a role SQL never sees.
 - [x] Close the SQL-side extraction gap against a real engine: a PGlite test materializes every
       enumerated model as rows under FORCE RLS with the actually-generated policy and asserts observed
       visibility equals the denotation for all models. Finite and enumerated, not sampled.
-  - Evidence: `postgres-authorization-correspondence.pglite.test.ts` passes inside the 142/142 root
+  - Evidence: `postgres-authorization-correspondence.pglite.test.ts` passes inside the 144/144 root
     run and compares all 243 model rows under FORCE RLS.
 
 > Sequencing: the framework-generated `ownsRow` default is a **breaking change to a shipped public

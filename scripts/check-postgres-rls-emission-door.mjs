@@ -572,15 +572,13 @@ function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings) {
   }
 
   walk(sourceFile, (node) => {
-    if (!ts.isCallExpression(node) || node.arguments.length !== 1) return;
-    const argument = node.arguments[0];
-    const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
-    const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
-    if (!isDynamicImport && !isRequire) return;
+    if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
+    const argument = node.arguments?.[0];
+    if (argument === undefined) return;
     const specifier = evaluateStaticString(argument, checker);
     if (specifier === undefined || !moduleCanResolveToEmitter(fileName, specifier)) return;
     findings.push(
-      `${fileName}:${lineOf(sourceFile, node)}: the RLS correspondence module may not be loaded dynamically`,
+      `${fileName}:${lineOf(sourceFile, node)}: the RLS correspondence module may not be supplied to runtime loading code`,
     );
   });
 
@@ -594,7 +592,12 @@ function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings) {
       return;
     }
     if (ts.isExternalModuleReference(parent) && parent.expression === node) return;
-    if (ts.isCallExpression(parent) && parent.arguments[0] === node) return;
+    if (
+      (ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
+      parent.arguments?.[0] === node
+    ) {
+      return;
+    }
     findings.push(
       `${fileName}:${lineOf(sourceFile, node)}: the RLS correspondence module specifier may not escape into computed loading data`,
     );

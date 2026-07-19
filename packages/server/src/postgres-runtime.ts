@@ -5208,7 +5208,7 @@ function resolvePostgresRuntimeConfigSnapshot(
   const publicRelations = normalizePublicRelationDeclarations(options.publicRelations);
   const postureCheck = resolvePostgresPostureCheck(
     options,
-    driver === 'node-postgres' && options.provisionOnBoot !== true,
+    driver === 'node-postgres',
   );
   const config: ResolvedPostgresRuntimeConfig = {
     adminRole,
