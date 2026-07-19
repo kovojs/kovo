@@ -97,6 +97,7 @@ async function runSandboxOriginProbe(
   clickPrevented: boolean;
   effectiveOrigin: string;
   fetchCalls: number;
+  formErrorCode?: string;
   importCalls: number;
   locationOrigin: string;
   moduleAllowed?: boolean;
@@ -117,6 +118,7 @@ async function runSandboxOriginProbe(
     clickPrevented: boolean;
     effectiveOrigin: string;
     fetchCalls: number;
+    formErrorCode?: string;
     importCalls: number;
     locationOrigin: string;
     moduleAllowed?: boolean;
@@ -425,7 +427,7 @@ it('keeps generated mutation on the response transport captured at boot', async 
 });
 
 it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
-  'leaves %s mutation actions native in an opaque generated-loader document',
+  'blocks %s mutation actions in an opaque generated-loader document without fetching',
   async (action) => {
     const harness = await createOpaqueFrame(
       `<form enhance data-mutation="chat" action="${action}" method="post"><button>send</button></form>`,
@@ -447,7 +449,8 @@ it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
     });
     form.dispatchEvent(event);
 
-    expect(event.defaultPrevented).toBe(false);
+    expect(event.defaultPrevented).toBe(true);
+    expect(form.getAttribute('data-error-code')).toBe('INVALID_MUTATION_TRANSPORT');
     expect(fetch).not.toHaveBeenCalled();
   },
 );
@@ -457,7 +460,8 @@ it('rejects enhanced authority in an opaque-origin sandboxed network document', 
 
   expect(result.locationOrigin).toBe(location.origin);
   expect(result.effectiveOrigin).toBe('null');
-  expect(result.submitPrevented).toBe(false);
+  expect(result.submitPrevented).toBe(true);
+  expect(result.formErrorCode).toBe('INVALID_MUTATION_TRANSPORT');
   expect(result.clickPrevented).toBe(false);
   expect(result.fetchCalls).toBe(0);
   expect(result.importCalls).toBe(0);
@@ -485,7 +489,7 @@ it.each([
   ['empty formmethod', 'formmethod=""'],
   ['empty formaction and formmethod', 'formaction="" formmethod=""'],
 ] as const)(
-  'leaves a submitter with %s native in the generated mutation loader',
+  'blocks a submitter with %s in the generated mutation loader',
   async (_name, submitterAttributes) => {
     const harness = await createFrame(
       [
@@ -509,7 +513,8 @@ it.each([
     });
     form.dispatchEvent(event);
 
-    expect(event.defaultPrevented).toBe(false);
+    expect(event.defaultPrevented).toBe(true);
+    expect(form.getAttribute('data-error-code')).toBe('INVALID_MUTATION_TRANSPORT');
     expect(fetch).not.toHaveBeenCalled();
   },
 );
@@ -544,7 +549,8 @@ it('matches the live document base for mutation and navigation targets', async (
   const clickEvent = new harness.window.MouseEvent('click', { bubbles: true, cancelable: true });
   anchor.dispatchEvent(clickEvent);
 
-  expect(submitEvent.defaultPrevented).toBe(false);
+  expect(submitEvent.defaultPrevented).toBe(true);
+  expect(form.getAttribute('data-error-code')).toBe('INVALID_MUTATION_TRANSPORT');
   expect(clickEvent.defaultPrevented).toBe(true);
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch.mock.calls[0]?.[0]).toBe(`${harness.window.location.origin}/safe/account`);
