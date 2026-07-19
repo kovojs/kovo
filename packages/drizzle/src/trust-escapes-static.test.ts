@@ -667,6 +667,59 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     );
   });
 
+  it.each([
+    ['direct eval', 'eval(input.code);'],
+    ['direct Function call', 'Function(input.code);'],
+    ['direct Function construction', 'new Function(input.code);'],
+    ['string setTimeout', "setTimeout('owned()', 1);"],
+    ['string setInterval', "setInterval('owned()', 1);"],
+    ['document.write', 'document.write(input.code);'],
+    ['document.writeln', 'document.writeln(input.code);'],
+    ['dynamic import', 'await import(input.module);'],
+    ['dynamic require', 'require(input.module);'],
+    ['process module resolution', "process.getBuiltinModule('node:fs');"],
+    ['function-constructor indirection', '(() => {}).constructor(input.code);'],
+  ])('keeps the legacy %s terminal closed independent of its diagnostic label', (_label, body) => {
+    const facts = sinksFor(`
+      import { mutation } from '@kovojs/server';
+      export const unsafe = mutation({ async handler(input) {
+        ${body}
+        return null;
+      } });
+    `);
+
+    // C13 replacement corpus: the closed verdict is the invariant. A more general structural
+    // authority boundary may replace a terminal-specific diagnostic without reopening this root.
+    expect(facts.length, body).toBeGreaterThan(0);
+  });
+
+  it('keeps locally resolved same-name callables and document methods green', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      const document = {
+        write(value) { return value; },
+        writeln(value) { return value; },
+      };
+      function eval(value) { return value; }
+      function Function(value) { return value; }
+      function setTimeout(value) { return value; }
+      function setInterval(value) { return value; }
+
+      export const safe = query({ load() {
+        eval('value');
+        Function('value');
+        new Function('value');
+        setTimeout('value');
+        setInterval('value');
+        document.write('value');
+        document.writeln('value');
+        return { ok: true };
+      } });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
   it('keeps direct and aliased timers open for statically resolved function callbacks', () => {
     const facts = sinksFor(`
       import { mutation } from '@kovojs/server';
