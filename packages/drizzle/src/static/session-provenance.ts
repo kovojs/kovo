@@ -663,6 +663,11 @@ function privateScopeCarrierBindingIsStableAtUse(
     // callback carrier itself, its private object branches, and containers remain non-transferable:
     // `const alias = request` and `const guard = request.guard` still close every proof.
     if (exactPrivateScopeScalarProjection(initializer, parameterKey)) continue;
+    if (
+      privateScopeCarrierReferencesHaveReviewedConsumers(initializer, parameterKey, body, auditedUse)
+    ) {
+      continue;
+    }
     return false;
   }
 
@@ -690,28 +695,92 @@ function privateScopeCarrierBindingIsStableAtUse(
       symbolForIdentifierReference(reference) ?? reference.getSymbol(),
     );
     if (referenceKey !== parameterKey || nodeContains(auditedUse, reference)) continue;
-    const call = nearestCallExpressionAncestor(reference, body);
-    if (!call) continue;
-    if (nodeContains(call.getExpression(), reference)) {
-      const access = staticAccessSegments(call.getExpression());
-      if (!access || resolvedSymbolKey(access.root.getSymbol()) !== parameterKey) return false;
-      const receiver = access.path[0];
-      if (!receiver || !PRIVATE_SCOPE_SAFE_CAPABILITY_RECEIVERS.has(receiver)) return false;
-      continue;
-    }
-    // Classify the nearest consumer, not every enclosing builder call. For
-    // `where(eq(owner, request.guard.id))`, the framework carrier reaches only the exact Drizzle
-    // `eq` proof call; the enclosing `where` receives SQL IR, not the request object. A bare carrier
-    // passed to Object.assign, an opaque helper, or a cross-file mutator still reaches that opaque
-    // call as its nearest consumer and closes the proof.
-    if (exactPrivateScopeProjectionCall(call, parameterKey)) continue;
-    if (exactDrizzlePrivateScopeProofCall(call)) continue;
-    if (exactFrameworkPrivateScopeValueCall(call)) continue;
-    if (exactFinitePrivateScopeProofConsumer(call)) continue;
-    return false;
+    if (!privateScopeCarrierReferenceHasReviewedConsumer(reference, parameterKey, body)) return false;
   }
 
   return true;
+}
+
+function privateScopeCarrierReferencesHaveReviewedConsumers(
+  node: Node,
+  parameterKey: string,
+  body: Node,
+  auditedUse: Node,
+): boolean {
+  const references = [node, ...node.getDescendantsOfKind(SyntaxKind.Identifier)].filter(
+    Node.isIdentifier,
+  );
+  let found = false;
+  for (const reference of references) {
+    const referenceKey = resolvedSymbolKey(
+      symbolForIdentifierReference(reference) ?? reference.getSymbol(),
+    );
+    if (referenceKey !== parameterKey) continue;
+    found = true;
+    if (nodeContains(auditedUse, reference)) continue;
+    if (!privateScopeCarrierReferenceHasReviewedConsumer(reference, parameterKey, body)) {
+      return false;
+    }
+  }
+  return found;
+}
+
+function privateScopeCarrierReferenceHasReviewedConsumer(
+  reference: import('ts-morph').Identifier,
+  parameterKey: string,
+  body: Node,
+): boolean {
+  const call = nearestCallExpressionAncestor(reference, body);
+  if (!call) {
+    return exactPrivateScopeScalarProjectionIsReviewedRead(reference, parameterKey);
+  }
+  if (nodeContains(call.getExpression(), reference)) {
+    const access = staticAccessSegments(call.getExpression());
+    if (!access || resolvedSymbolKey(access.root.getSymbol()) !== parameterKey) return false;
+    const receiver = access.path[0];
+    return !!receiver && PRIVATE_SCOPE_SAFE_CAPABILITY_RECEIVERS.has(receiver);
+  }
+  // Classify the nearest consumer, not every enclosing builder call. For
+  // `where(eq(owner, request.guard.id))`, the framework carrier reaches only the exact Drizzle
+  // `eq` proof call; the enclosing `where` receives SQL IR, not the request object. A bare carrier
+  // passed to Object.assign, an opaque helper, or a cross-file mutator still reaches that opaque
+  // call as its nearest consumer and closes the proof.
+  return (
+    exactPrivateScopeProjectionCall(call, parameterKey) ||
+    exactDrizzlePrivateScopeProofCall(call) ||
+    exactFrameworkPrivateScopeValueCall(call) ||
+    exactFinitePrivateScopeProofConsumer(call)
+  );
+}
+
+function exactPrivateScopeScalarProjectionIsReviewedRead(
+  reference: import('ts-morph').Identifier,
+  parameterKey: string,
+): boolean {
+  let current: Node | undefined = reference;
+  let projection: Node | undefined;
+  while (current) {
+    if (exactPrivateScopeScalarProjection(current, parameterKey)) projection = current;
+    const parent = current.getParent();
+    if (!parent || Node.isStatement(parent) || Node.isCallExpression(parent)) break;
+    current = parent;
+  }
+  if (!projection) return false;
+
+  const declaration = projection.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const initializer = declaration?.getInitializer();
+  if (
+    initializer &&
+    sameSourceNode(
+      unwrappedStaticExpressionNode(initializer),
+      unwrappedStaticExpressionNode(projection),
+    )
+  ) {
+    return true;
+  }
+
+  const branch = projection.getFirstAncestorByKind(SyntaxKind.IfStatement);
+  return !!branch && nodeContains(branch.getExpression(), projection);
 }
 
 function exactPrivateScopeScalarProjection(node: Node, parameterKey: string): boolean {
@@ -1038,6 +1107,7 @@ function privateScopeBindingIsStableAtUse(declaration: Node, name: string, use: 
     ? resolvedSymbolKey(symbolForIdentifierReference(nameNode) ?? nameNode.getSymbol())
     : undefined;
   if (!bindingKey) return false;
+  const bindingIsImmutableScalar = definitelyImmutablePrivateScopeScalarType(nameNode.getType());
 
   // Scan through the whole sink statement, not merely preceding statements. Query builders may
   // evaluate another argument before `.where(...)`, and they may retain an object parameter until
@@ -1056,8 +1126,25 @@ function privateScopeBindingIsStableAtUse(declaration: Node, name: string, use: 
       const candidateKey = resolvedSymbolKey(
         symbolForIdentifierReference(candidate) ?? candidate.getSymbol(),
       );
-      return candidateKey === bindingKey;
+      if (candidateKey !== bindingKey) return false;
+      return !(
+        bindingIsImmutableScalar &&
+        privateScopeScalarReferenceHasReviewedConsumer(candidate, used.statement)
+      );
     });
+}
+
+function privateScopeScalarReferenceHasReviewedConsumer(
+  reference: import('ts-morph').Identifier,
+  boundary: Node,
+): boolean {
+  const call = nearestCallExpressionAncestor(reference, boundary);
+  return (
+    !!call &&
+    (exactDrizzlePrivateScopeProofCall(call) ||
+      exactFrameworkPrivateScopeValueCall(call) ||
+      exactFinitePrivateScopeProofConsumer(call))
+  );
 }
 
 /** @internal Exact-symbol lookup shared by every private-alias consumer. */
