@@ -456,20 +456,28 @@ roots:[{module,rootKind}], doors:[{module,site,escapeId}], opaque:[{module,reaso
 
 Do not fund a second certificate format or a second checker.
 
-- [ ] Re-derive the import-specifier set from the emitted `*.client.js` **text** and require it ⊆ the
+- [x] Re-derive the import-specifier set from the emitted `*.client.js` **text** and require it ⊆ the
       KV437 reviewed set (`packages/compiler/src/validate/client-capture.ts`). This closes the exact
       channel that gate's doc comment names ("lowering re-emits `import { STRIPE_SECRET_KEY }`
       verbatim"); the adversarial fixture already exists at `client-secret-capture.test.ts:38-50`. (~0.5 pm)
-- [ ] Require the exact secret field names refused by `validateSecretQueryWire`
+  - Evidence: `packages/verify/src/translation.test.ts` reparses imports and rejects an emitted binding
+    absent from the KV437 decision record; `client-secret-capture.test.ts` remains green.
+- [x] Require the exact secret field names refused by `validateSecretQueryWire`
       (`compiler/src/validate/confidentiality.ts:16`) to be absent from emitted client and registry
       sources. (~0.5 pm)
-- [ ] Emitted-artifact coverage guard: every file kind produced at `compiler/src/compile.ts:959-980`
+  - Evidence: `query-bindings.test.ts` proves KV435-refused fields are withheld, while
+    `translation.test.ts` rejects exact secret tokens without substring false positives.
+- [x] Emitted-artifact coverage guard: every file kind produced at `compiler/src/compile.ts:959-980`
       (server, client, css, registry) is covered by a relation or a reviewed exclusion list; a synthetic
       new kind fails the build until classified. (~0.25 pm)
-- [ ] Serialization-integrity only (**not** body re-derivation): assert the operation-kind multiset in
+  - Evidence: `translation.test.ts` covers server, client, registry, and CSS and rejects a synthetic
+    `source-map` kind.
+- [x] Serialization-integrity only (**not** body re-derivation): assert the operation-kind multiset in
       `__kovoSecurityOperationManifest_v1` (`emit/server-render.ts:107-127`) and each
       `securityHandler([...])` call (`emit/client.ts:957`) parses out of the emitted text as own-data
       JSON, is drawn only from the frozen vocabularies, and equals the decision record. (~0.5 pm)
+  - Evidence: `translation.test.ts` rejects non-JSON, unknown-vocabulary, and multiset-drift mutants;
+    `pnpm run check:certificate` passes 26 tests against the regenerated packed certificate.
 
 ### 2.3 Structural code emission
 
