@@ -347,6 +347,28 @@ describe('security-gate-mutations', () => {
     }
   });
 
+  it('executes runtime-boundary mutants instead of source-text assertions', () => {
+    const behavioralNames = [
+      'better-auth-credential-gate/drop-result-consumer-identity',
+      'better-auth-credential-gate/drop-source-identity',
+      'drizzle-egress/allow-inexact-context-fetch-call',
+      'request-ingress/recompute-vercel-prepared-verdict',
+      'server-egress/drop-dispatcher-pin',
+      'server-egress/drop-origin-before-dns',
+      'server-egress/drop-task-context-fetch-seal',
+      'server-egress/drop-webhook-context-fetch-seal',
+      'server-wire-html/drop-query-wire-body-escaping',
+      'sql-safe-handle/drop-managed-raw-driver-escape-denial',
+      'trusted-html-provenance/weaken-call-result-taint-fail-closed',
+    ];
+
+    for (const name of behavioralNames) {
+      const mutant = SECURITY_GATE_MUTANTS.find((candidate) => candidate.name === name);
+      expect(mutant).toEqual(expect.objectContaining({ behavioralTypeScript: true, name }));
+      expect(mutant?.sourceOnly).not.toBe(true);
+    }
+  });
+
   it('reports a surviving mutant when the branch mutation is a no-op', async () => {
     const noopMutant = {
       ...SECURITY_GATE_MUTANTS[0],
