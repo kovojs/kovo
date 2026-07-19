@@ -17,10 +17,10 @@ export const ScrollPanel = component({
       };
     });
     return (
-      <section kovo-key="scroll-panel">
-        <div kovo-key="scroll-region" data-scroll-region>
+      <section key="scroll-panel">
+        <div key="scroll-region" data-scroll-region>
           {rows.map((row) => (
-            <p kovo-key={`row-${row.rowNumber}`} data-row={row.rowNumber}>
+            <p key={`row-${row.rowNumber}`} data-row={row.rowNumber}>
               {row.label}
             </p>
           ))}
