@@ -4018,6 +4018,7 @@ export default async function handler(request) {
                   message:
                     "KV229 static export cannot export guarded route '/dynamic'. Exported sites have no server-side guard/session pass; serve this route dynamically or remove the guard from the exported surface.",
                   routePath: '/dynamic',
+                  severity: 'error',
                 },
               ],
               policy: 'dynamic',
