@@ -135,6 +135,10 @@ const serverResponsePosturePath = path.join(repoRoot, 'packages/server/src/respo
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 const serverSchemaPath = path.join(repoRoot, 'packages/server/src/schema.ts');
+const serverPostgresAuthorizationCorrespondencePath = path.join(
+  repoRoot,
+  'packages/server/src/postgres-authorization-correspondence.ts',
+);
 
 const serverEgressBehavioralInstrumentation = [
   '',
@@ -1732,6 +1736,8 @@ const postgresStringAuthzPolicyClosureBranch =
   "    if (tableFactory === 'pgTable' && canonical.kind === 'guard-assertion') {";
 const removedPostgresStringAuthzPolicyClosureBranch =
   "    if (false && tableFactory === 'pgTable' && canonical.kind === 'guard-assertion') {";
+const postgresOwnerNullEdgeClosureBranch = "  if (edge !== 'present') return 'false';";
+const weakenedPostgresOwnerNullEdgeClosureBranch = "  if (edge === 'absent') return 'false';";
 
 const threatMatrixMissingSinkDenominatorBranch = [
   '  const missing = [...expectedSinks.keys()].filter((sink) => !seen.has(sink));',
@@ -2979,6 +2985,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: postgresStringAuthzPolicyClosureBranch,
     sourceFile: drizzleStaticPath,
     test: assertPostgresStringAuthzPolicyClosureBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Treats a NULL ownerVia edge as present in the finite RLS denotation.',
+    expectedKiller:
+      'the generated SQL denotation and framework ownsRow must both deny NULL ownerVia edges',
+    name: 'postgres-authorization-correspondence/allow-null-owner-via-edge',
+    replacement: weakenedPostgresOwnerNullEdgeClosureBranch,
+    search: postgresOwnerNullEdgeClosureBranch,
+    sourceFile: serverPostgresAuthorizationCorrespondencePath,
+    test: assertPostgresAuthorizationNullEdgeClosureBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -4704,6 +4721,31 @@ function assertPostgresStringAuthzPolicyClosureBehavior(moduleUnderTest) {
   if (!/KV414: Postgres authzPolicy.*literal SQL predicate/u.test(String(failure))) {
     throw new Error(
       `Postgres string authzPolicy did not fail closed through KV414: ${String(failure)}`,
+    );
+  }
+}
+
+async function assertPostgresAuthorizationNullEdgeClosureBehavior(moduleUnderTest) {
+  const owner = moduleUnderTest.postgresOwnerColumnPolicyTerm({
+    columnName: 'owner_id',
+    tableName: 'accounts',
+  });
+  const child = moduleUnderTest.postgresOwnerViaPolicyTerm({
+    fkColumnName: 'account_id',
+    parent: owner,
+    parentKeyColumnName: 'id',
+    tableName: 'entries',
+  });
+  const model = { edges: ['null'], equality: 'true' };
+  const sqlAllows = moduleUnderTest.postgresOwnerPolicyModelAllows(child, model);
+  const ownsRow = moduleUnderTest.deriveFrameworkPostgresOwnsRow(child, () => ({
+    id: 'unreachable',
+    owner_id: 'principal',
+  }));
+  const guardAllows = await ownsRow({ account_id: null }, 'principal');
+  if (sqlAllows || guardAllows || sqlAllows !== guardAllows) {
+    throw new Error(
+      `NULL ownerVia edge correspondence widened: sql=${String(sqlAllows)} guard=${String(guardAllows)}`,
     );
   }
 }

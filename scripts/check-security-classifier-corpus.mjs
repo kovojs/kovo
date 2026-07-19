@@ -699,6 +699,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus postgres-identity-posture',
     testFiles: [
       'packages/server/src/managed-db.test.ts',
+      'packages/server/src/postgres-authorization-correspondence.pglite.test.ts',
+      'packages/server/src/postgres-authorization-correspondence.test.ts',
       'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
       'packages/server/src/postgres-external-probe.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
@@ -797,6 +799,46 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'classifies every pg_settings source and fails closed on future source categories',
           'future provider control plane',
           'unclassified pg_settings source future provider control plane',
+        ],
+      },
+      {
+        id: 'finite-rls-emission-door-and-c13-byte-corpus',
+        file: 'packages/server/src/postgres-authorization-correspondence.test.ts',
+        snippets: [
+          'freezes the five and only five production RLS SQL emission sites',
+          "expect(runtimeSource).not.toContain('CREATE POLICY')",
+          'preserves the C13 byte corpus while rendering SQL from the two-constructor term',
+          'kovo_parent_order_items_2',
+        ],
+      },
+      {
+        id: 'finite-kleene-null-unset-negative-control',
+        file: 'packages/server/src/postgres-authorization-correspondence.test.ts',
+        snippets: [
+          'enumerates exactly 3^k * 3^e models through the shipped depth bound',
+          'uses Kleene truth and kills the NULL/unset over-permission mirror',
+          "status: 'divergent'",
+          "model: { edges: [], equality: 'null' }",
+        ],
+      },
+      {
+        id: 'authorization-non-correspondence-explain-record',
+        file: 'packages/server/src/postgres-authorization-correspondence.test.ts',
+        snippets: [
+          'pairs RLS and guard facts while leaving every non-finite or arbitrary path honest',
+          "semantics: 'arbitrary-app-callback'",
+          'no generated RLS predicate reads it',
+          "status: 'unproven'",
+        ],
+      },
+      {
+        id: 'exhaustive-force-rls-pglite-correspondence',
+        file: 'packages/server/src/postgres-authorization-correspondence.pglite.test.ts',
+        snippets: [
+          'materializes every bounded model under FORCE RLS and matches observed visibility',
+          'relforcerowsecurity: true',
+          'postgresOwnerPolicyModelAllows(term, models[index]!)',
+          'expect(unsetResult.rows).toEqual([])',
         ],
       },
     ],

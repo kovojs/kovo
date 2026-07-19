@@ -57,6 +57,16 @@ import {
   type FrameworkManagedDbProvider,
 } from './guards.js';
 import {
+  emitPostgresRlsPolicySql,
+  postgresOwnerColumnPolicyTerm,
+  postgresOwnerViaPolicyTerm,
+  renderPostgresOwnerPolicyPredicate,
+  type PostgresAuthorizationPolicyExplainInput,
+  type PostgresOwnerColumnPolicyTerm,
+  type PostgresOwnerPolicyTerm,
+  type PostgresOwnerViaPolicyTerm,
+} from './postgres-authorization-correspondence.js';
+import {
   createPostgresCapabilityReplayStoreFromExecutor,
   createPostgresMutationReplayStoreFromExecutor,
   createPostgresWebhookReplayStoreFromExecutor,
@@ -1096,12 +1106,26 @@ interface AuthzPolicyPredicate {
   tableName: string;
 }
 
-interface ProtectedPostgresTable {
-  kind: 'authzPolicy' | 'owner' | 'ownerVia';
-  predicate: string;
+interface ProtectedPostgresTableBase {
   schemaName: string;
   tableName: string;
 }
+
+type ProtectedPostgresTable =
+  | (ProtectedPostgresTableBase & {
+      kind: 'authzPolicy';
+      predicate: string;
+    })
+  | (ProtectedPostgresTableBase & {
+      kind: 'owner';
+      predicate: string;
+      term: PostgresOwnerColumnPolicyTerm;
+    })
+  | (ProtectedPostgresTableBase & {
+      kind: 'ownerVia';
+      predicate: string;
+      term: PostgresOwnerViaPolicyTerm;
+    });
 
 interface PostgresPolicyRow {
   cmd: string;
@@ -5073,6 +5097,16 @@ export const __testPostgresRuntimeInternals = {
   releasePinnedNodePostgresPoolClient(client: PoolClient, error?: Error | boolean): void {
     releasePinnedNodePostgresPoolClient(client, error);
   },
+  resolveAuthorizationPolicyExplainInputs(
+    tables: readonly PgTable[],
+    metadata: KovoRuntimeDbMetadata,
+  ): readonly PostgresAuthorizationPolicyExplainInput[] {
+    return postgresMapDense(
+      postgresMapValues(resolveProtectedPostgresTables(tables, metadata)),
+      (table) => protectedPostgresAuthorizationPolicyExplainInput(table),
+      'Postgres authorization explain policies',
+    );
+  },
   resolvePostgresRuntimeConfig(options: PostgresRuntimeConfigInput): ResolvedPostgresRuntimeConfig {
     return resolvePostgresRuntimeConfig(options);
   },
@@ -7731,11 +7765,16 @@ function resolveProtectedPostgresTables(
     (owner, tableName) => {
       const tableConfig = witnessMapGet(tableConfigs, tableName);
       if (tableConfig === undefined) return;
+      const term = postgresOwnerColumnPolicyTerm({
+        columnName: owner.columnName,
+        tableName,
+      });
       witnessMapSet(protectedTables, tableName, {
         kind: 'owner',
-        predicate: `${quoteIdent(owner.columnName)} = current_setting('kovo.principal', true)`,
+        predicate: renderPostgresOwnerPolicyPredicate(term),
         schemaName: tableSchemaName(tableConfig),
         tableName,
+        term,
       });
     },
   );
@@ -7745,21 +7784,28 @@ function resolveProtectedPostgresTables(
     (ownerVia, tableName) => {
       const tableConfig = witnessMapGet(tableConfigs, tableName);
       if (tableConfig === undefined) return;
-      const predicate = ownerPredicateForTable(metadata, ownerVia.parentTable, {
-        parentKeyColumnName: ownerVia.parentKeyColumnName,
-        parentMatchExpression: `${quoteIdent(tableName)}.${quoteIdent(ownerVia.fkColumnName)}`,
-        visited: postgresStringSet([tableName]),
-      });
-      if (predicate === undefined) {
+      const parent = ownerPolicyTermForTable(
+        metadata,
+        ownerVia.parentTable,
+        postgresStringSet([tableName]),
+      );
+      if (parent === undefined) {
         throw new Error(
           `KV414: ownerVia table ${tableName} cannot resolve parent chain through ${ownerVia.parentTable} to an owner column (SPEC §10.3).`,
         );
       }
+      const term = postgresOwnerViaPolicyTerm({
+        fkColumnName: ownerVia.fkColumnName,
+        parent,
+        parentKeyColumnName: ownerVia.parentKeyColumnName,
+        tableName,
+      });
       witnessMapSet(protectedTables, tableName, {
         kind: 'ownerVia',
-        predicate,
+        predicate: renderPostgresOwnerPolicyPredicate(term),
         schemaName: tableSchemaName(tableConfig),
         tableName,
+        term,
       });
     },
   );
@@ -7778,35 +7824,37 @@ function resolveProtectedPostgresTables(
   return protectedTables;
 }
 
-function ownerPredicateForTable(
+function protectedPostgresAuthorizationPolicyExplainInput(
+  table: ProtectedPostgresTable,
+): PostgresAuthorizationPolicyExplainInput {
+  return table.kind === 'authzPolicy'
+    ? {
+        emissionSite: 'authzPolicy',
+        predicate: table.predicate,
+        tableName: table.tableName,
+      }
+    : {
+        emissionSite: table.kind,
+        predicate: table.predicate,
+        tableName: table.tableName,
+        term: table.term,
+      };
+}
+
+function ownerPolicyTermForTable(
   metadata: KovoRuntimeDbMetadata,
   tableName: string,
-  input: {
-    parentKeyColumnName: string;
-    parentMatchExpression: string;
-    visited: Set<string>;
-  },
-): string | undefined {
-  if (witnessSetHas(input.visited, tableName)) return undefined;
-  witnessSetAdd(input.visited, tableName);
-  const parentAlias = quoteIdent(`kovo_parent_${tableName}_${witnessSetSize(input.visited)}`);
+  visited: Set<string>,
+): PostgresOwnerPolicyTerm | undefined {
+  if (witnessSetHas(visited, tableName)) return undefined;
+  witnessSetAdd(visited, tableName);
   const owner = postgresReadonlyMapValue(
     metadata.ownerSourcesByTable,
     tableName,
     'Postgres owner sources by table',
   );
   if (owner !== undefined) {
-    return postgresJoin(
-      [
-        'EXISTS (SELECT 1 FROM',
-        `${quoteIdent(tableName)} ${parentAlias}`,
-        'WHERE',
-        `${parentAlias}.${quoteIdent(input.parentKeyColumnName)} = ${input.parentMatchExpression}`,
-        'AND',
-        `${parentAlias}.${quoteIdent(owner.columnName)} = current_setting('kovo.principal', true))`,
-      ],
-      ' ',
-    );
+    return postgresOwnerColumnPolicyTerm({ columnName: owner.columnName, tableName });
   }
   const ownerVia = postgresReadonlyMapValue(
     metadata.ownerViaSourcesByTable,
@@ -7814,24 +7862,14 @@ function ownerPredicateForTable(
     'Postgres owner-via sources by table',
   );
   if (ownerVia === undefined) return undefined;
-  const nested = ownerPredicateForTable(metadata, ownerVia.parentTable, {
+  const parent = ownerPolicyTermForTable(metadata, ownerVia.parentTable, visited);
+  if (parent === undefined) return undefined;
+  return postgresOwnerViaPolicyTerm({
+    fkColumnName: ownerVia.fkColumnName,
+    parent,
     parentKeyColumnName: ownerVia.parentKeyColumnName,
-    parentMatchExpression: `${parentAlias}.${quoteIdent(ownerVia.fkColumnName)}`,
-    visited: input.visited,
+    tableName,
   });
-  if (nested === undefined) return undefined;
-  return postgresJoin(
-    [
-      'EXISTS (SELECT 1 FROM',
-      `${quoteIdent(tableName)} ${parentAlias}`,
-      'WHERE',
-      `${parentAlias}.${quoteIdent(input.parentKeyColumnName)} = ${input.parentMatchExpression}`,
-      'AND',
-      nested,
-      ')',
-    ],
-    ' ',
-  );
 }
 
 async function applyPostgresRlsPolicies(
@@ -7859,27 +7897,41 @@ async function applyPostgresRlsPolicies(
     await client.exec(`DROP POLICY IF EXISTS kovo_owner_scope ON ${table}`);
     await client.exec(`DROP POLICY IF EXISTS kovo_authz_policy ON ${table}`);
     await client.exec(`DROP POLICY IF EXISTS kovo_system_scope ON ${table}`);
+    const primaryPolicySql =
+      protectedTable.kind === 'owner'
+        ? emitPostgresRlsPolicySql({
+            readerRole: config.readerRole,
+            schemaName,
+            site: 'owner',
+            tableName,
+            term: protectedTable.term,
+            writerRole: config.writerRole,
+          })
+        : protectedTable.kind === 'ownerVia'
+          ? emitPostgresRlsPolicySql({
+              readerRole: config.readerRole,
+              schemaName,
+              site: 'ownerVia',
+              tableName,
+              term: protectedTable.term,
+              writerRole: config.writerRole,
+            })
+          : emitPostgresRlsPolicySql({
+              predicate,
+              readerRole: config.readerRole,
+              schemaName,
+              site: 'authzPolicy',
+              tableName,
+              writerRole: config.writerRole,
+            });
+    await client.exec(primaryPolicySql);
     await client.exec(
-      postgresJoin(
-        [
-          `CREATE POLICY ${
-            protectedTable.kind === 'authzPolicy' ? 'kovo_authz_policy' : 'kovo_owner_scope'
-          } ON ${table}`,
-          `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
-          `USING (${predicate}) WITH CHECK (${predicate})`,
-        ],
-        ' ',
-      ),
-    );
-    await client.exec(
-      postgresJoin(
-        [
-          `CREATE POLICY kovo_system_scope ON ${table}`,
-          `FOR ALL TO ${quoteIdent(config.systemRole)}`,
-          'USING (true) WITH CHECK (true)',
-        ],
-        ' ',
-      ),
+      emitPostgresRlsPolicySql({
+        schemaName,
+        site: 'system',
+        systemRole: config.systemRole,
+        tableName,
+      }),
     );
   }
   const crossOwnerReadableTables = postgresCrossOwnerReadableTableNames(tables, metadata);
@@ -7898,14 +7950,12 @@ async function applyPostgresRlsPolicies(
     await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
     await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
     await client.exec(
-      postgresJoin(
-        [
-          `CREATE POLICY kovo_admin_scope ON ${table}`,
-          `FOR SELECT TO ${quoteIdent(config.adminRole)}`,
-          'USING (true)',
-        ],
-        ' ',
-      ),
+      emitPostgresRlsPolicySql({
+        adminRole: config.adminRole,
+        schemaName: tableSchemaName(tableConfig),
+        site: 'admin',
+        tableName: tableConfig.name,
+      }),
     );
   }
 }

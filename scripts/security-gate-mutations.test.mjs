@@ -7,8 +7,8 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
-  it('pins the exact forcing denominator after finite browser-control enrollment', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(250);
+  it('pins the exact forcing denominator after finite authorization-correspondence enrollment', () => {
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(251);
   });
 
   it('enrolls behavioral request-body shape, allocation, and FormData mutants', () => {
@@ -506,6 +506,7 @@ describe('security-gate-mutations', () => {
       'generated-client/drop-security-operation-own-data-boundary',
       'better-auth-credential-gate/drop-source-identity',
       'drizzle-egress/allow-inexact-context-fetch-call',
+      'postgres-authorization-correspondence/allow-null-owner-via-edge',
       'request-ingress/recompute-vercel-prepared-verdict',
       'server-response-posture/drop-endpoint-verification-choke',
       'server-egress/drop-dispatcher-pin',

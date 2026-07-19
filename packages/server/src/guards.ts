@@ -22,6 +22,12 @@ import {
 import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import {
+  explainPostgresAuthorizationCorrespondence,
+  type PostgresAuthorizationCorrespondenceExplainRecord,
+  type PostgresOwnerPolicyModel,
+  type PostgresAuthorizationPolicyExplainInput,
+} from './postgres-authorization-correspondence.js';
+import {
   inheritFrameworkPrincipalSnapshot,
   type NonRequestPrincipalPosture,
   principalPostureFromRequest,
@@ -873,6 +879,25 @@ export function explainGuard<Request>(
   guard: Guard<Request> | undefined,
 ): readonly GuardAuditFact[] {
   return guard === undefined ? [] : (witnessWeakMapGet(guardAuditFacts, guard) ?? []);
+}
+
+/**
+ * @internal Pair one generated Postgres RLS predicate with the executable guard's audit facts.
+ * SPEC §10.3: arbitrary public `guards.owns` callbacks remain explicitly unproven. A finite
+ * abstract match is evidence, not executable binding; the later migration owns that claim.
+ */
+export function explainPostgresGuardCorrespondence<Request>(input: {
+  guard: Guard<Request> | undefined;
+  guardModelVerdict?: (model: PostgresOwnerPolicyModel) => boolean;
+  policy: PostgresAuthorizationPolicyExplainInput;
+}): PostgresAuthorizationCorrespondenceExplainRecord {
+  return explainPostgresAuthorizationCorrespondence({
+    ...(input.guardModelVerdict === undefined
+      ? {}
+      : { guardModelVerdict: input.guardModelVerdict }),
+    guardFacts: explainGuard(input.guard),
+    policy: input.policy,
+  });
 }
 
 /** @internal Project the stable audit name attached to an executable guard. */

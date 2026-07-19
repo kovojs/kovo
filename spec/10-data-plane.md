@@ -205,6 +205,28 @@ then derive every RLS/grant/posture sink from the immutable compiler snapshot. I
 the callback slot after comparison; callback replacement between validation and asynchronous
 policy installation cannot weaken the emitted engine policy (C9/C15, §6.6).
 
+**Finite generated owner-policy correspondence (normative).** Framework-generated Postgres owner
+policies are exactly a two-constructor algebra: `ownerColumn(table, column)` and
+`ownerVia(table, fk, parentKey, parentTerm)`. A term contains exactly one owner/principal equality
+and at most four `ownerVia` edges; a deeper chain is KV414 before policy installation. Kovo MUST
+render the owner/owner-via RLS predicate and derive its framework-owned `ownsRow` evaluator from the
+same immutable term. Its decision gate enumerates the complete three-valued domain —
+`{true,false,null}` for the owner equality and `{present,absent,null}` for every relation edge — so
+the exact model count is `3^1 · 3^e` (at most 243), not a sample or an SMT approximation. SQL
+`EXISTS` admits only a TRUE inner predicate; missing/null edges and NULL/unset owner comparisons
+therefore deny. Real PGlite evidence MUST materialize every enumerated model under the actually
+generated policy on a `FORCE ROW LEVEL SECURITY` table and compare observed visibility with that
+denotation.
+
+This is deliberately not a broad guard≡RLS claim. The current public `guards.owns(keyOf, ownsRow)`
+callback is app-authored and every explain record marks it `unproven` until a separately reviewed
+migration binds the framework-derived evaluator. Hand-authored `authzPolicy`, arbitrary ownership
+callbacks, the system/admin `USING (true)` policies, and `guards.role()` all lie outside the decided
+fragment. Authorization explain records MUST place the generated RLS predicate and `explainGuard`
+facts side by side and name that status. They MUST also warn that the managed transaction frame
+writes `kovo.role` while no generated RLS predicate reads it; session-role guard success is not SQL
+authorization. The engine's FORCE-RLS/effective-privilege closure remains the enforcement boundary.
+
 **Engine-door completeness (normative).** Kovo may claim the storage engine is the sole authorization/confidentiality door only when the runtime itself holds no superuser/`BYPASSRLS` authority and cannot assume a privileged provision/admin role, and when a closure audit over the engine's actual grant graph proves that **every** object reachable by the app roles is one of: (i) a base table under `FORCE ROW LEVEL SECURITY` with a live `kovo` policy; (ii) a proven `security_invoker` view/function whose reachable base relations are themselves in that safe set; or (iii) a relation declared through the reviewed public escape, `declarePublicRelation(...)`, and surfaced as a `publicRelation` row in `kovo explain --capabilities`. The audit MUST ask the engine's finest-granularity effective-privilege oracle instead of lossy grant views or direct-grant rows: table and column reachability both count for relations, `PUBLIC` and role membership count for every privilege decision, sequence reachability is audited separately from relation reachability, and `SECURITY DEFINER` routines are scanned across all non-system schemas. Reachable objects that cannot enforce RLS, including materialized views, foreign tables, unsupported relation kinds, non-allowlisted sequences, and reachable `SECURITY DEFINER` routines, MUST fail closed. App roles MUST also hold no unexpected privilege on other ACL-bearing catalog objects or default privileges that would create future reachable objects outside the audited relation/routine/sequence set; such grants are refused rather than ignored. Build-time lints and source enumerations remain defense-in-depth only — never the thing the authorization/confidentiality guarantee rests on.
 
 **Production database driver floor (normative).** In-process PGlite is a dev/test-only,
