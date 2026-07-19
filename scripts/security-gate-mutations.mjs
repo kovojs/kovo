@@ -233,7 +233,7 @@ function finiteBrowserControlTupleDeletionMutants() {
   const tupleSources = [
     ...manifestSource.matchAll(/^  freezeSecurityValue\(\[\n(?:    .*\n){5}  \] as const\),$/gm),
   ].map((match) => match[0]);
-  if (tupleSources.length !== 60) {
+  if (tupleSources.length !== 66) {
     throw new Error(
       `finite browser-control tuple source denominator drifted: ${tupleSources.length}`,
     );
@@ -248,7 +248,7 @@ function finiteBrowserControlTupleDeletionMutants() {
     const mutationIdentity = `${tag}-${attribute}`.replaceAll(/[^a-z0-9]+/g, '-');
     return {
       behavioralTypeScript: true,
-      description: `Deletes ${tag}[${attribute}] from the canonical 60-tuple browser-control denominator.`,
+      description: `Deletes ${tag}[${attribute}] from the canonical 66-tuple browser-control denominator.`,
       expectedKiller: 'the finite browser-control denominator must retain every exact tuple',
       name: `runtime-sink/drop-finite-browser-${mutationIdentity}-tuple`,
       replacement: `  // ${tag}[${attribute}] finite browser-control tuple removed by mutant`,
@@ -258,6 +258,10 @@ function finiteBrowserControlTupleDeletionMutants() {
     };
   });
 }
+
+const disabledBrowserControlClosureBranch = "  if (control.staticPolicy === 'disabled') {";
+const invertedDisabledBrowserControlClosureBranch =
+  "  if (control.staticPolicy !== 'disabled') {";
 
 const blockedActiveEmbedEntry = "  'embed',";
 const removedBlockedActiveEmbedEntry = '  // embed denominator entry removed by mutant';
@@ -1758,6 +1762,18 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertGeneratedControlManifestEntryBehavior,
   },
   ...finiteBrowserControlTupleDeletionMutants(),
+  {
+    behavioralTypeScript: true,
+    description:
+      'Inverts the named-capability-door posture so disabled controls survive while reviewed static-only controls are removed.',
+    expectedKiller:
+      'disabled geolocation controls must remove while feImage/style dynamic writes preserve reviewed values',
+    name: 'runtime-sink/invert-disabled-browser-control-closure',
+    replacement: invertedDisabledBrowserControlClosureBranch,
+    search: disabledBrowserControlClosureBranch,
+    sourceFile: coreSinkPolicyPath,
+    test: assertResidualBrowserControlPolicyBehavior,
+  },
   {
     behavioralTypeScript: true,
     description: 'Deletes allow-forms from the exact finite iframe sandbox vocabulary.',
@@ -3632,6 +3648,8 @@ const exactFiniteBrowserControlKeys = [
   'script[nonce]',
   'script[language]',
   'script[attributionsrc]',
+  'style[type]',
+  'style[media]',
   'style[nonce]',
   'link[href]',
   'link[rel]',
@@ -3655,6 +3673,9 @@ const exactFiniteBrowserControlKeys = [
   'iframe[referrerpolicy]',
   'iframe[name]',
   'annotation-xml[encoding]',
+  'geolocation[autolocate]',
+  'geolocation[watch]',
+  'geolocation[accuracymode]',
   'a[target]',
   'a[rel]',
   'a[referrerpolicy]',
@@ -3679,6 +3700,7 @@ const exactFiniteBrowserControlKeys = [
   'audio[crossorigin]',
   'video[crossorigin]',
   'image[crossorigin]',
+  'feimage[crossorigin]',
   'meta[name]',
 ];
 const exactIframeSandboxTokens = [
@@ -3707,6 +3729,43 @@ function assertFiniteBrowserControlDenominatorBehavior(moduleUnderTest) {
       control?.staticPolicy !== staticPolicy
     ) {
       throw new Error(`finite browser-control classifier omitted ${tag}[${attribute}]`);
+    }
+  }
+}
+
+function assertResidualBrowserControlPolicyBehavior(moduleUnderTest) {
+  for (const [tag, attribute] of [
+    ['feimage', 'crossorigin'],
+    ['style', 'type'],
+    ['style', 'media'],
+  ]) {
+    const control = moduleUnderTest.elementContextSecurityControl(tag, attribute);
+    if (control?.staticPolicy !== 'allow') {
+      throw new Error(`reviewed static-only browser control drifted: ${tag}[${attribute}]`);
+    }
+    const decision = moduleUnderTest.decideRuntimeAttributeWrite(attribute, 'attacker-selected', {
+      elementName: tag,
+      posture: 'dynamic-binding',
+    });
+    if (decision.action !== 'preserve') {
+      throw new Error(`dynamic browser control did not preserve reviewed value: ${tag}[${attribute}]`);
+    }
+  }
+
+  for (const attribute of ['autolocate', 'watch', 'accuracymode']) {
+    const control = moduleUnderTest.elementContextSecurityControl('geolocation', attribute);
+    if (control?.staticPolicy !== 'disabled') {
+      throw new Error(`geolocation capability door opened: geolocation[${attribute}]`);
+    }
+    if (!moduleUnderTest.elementContextSecurityStaticValueIssue('geolocation', attribute, '')) {
+      throw new Error(`static geolocation control survived: geolocation[${attribute}]`);
+    }
+    const decision = moduleUnderTest.decideRuntimeAttributeWrite(attribute, 'attacker-selected', {
+      elementName: 'geolocation',
+      posture: 'dynamic-binding',
+    });
+    if (decision.action !== 'remove') {
+      throw new Error(`dynamic geolocation control survived: geolocation[${attribute}]`);
     }
   }
 }

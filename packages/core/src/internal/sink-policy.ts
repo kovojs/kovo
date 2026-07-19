@@ -251,6 +251,20 @@ export const ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES = freezeSecurityValue([
   ] as const),
   freezeSecurityValue([
     'style',
+    'type',
+    false,
+    'allow',
+    'a dynamic style MIME type can activate an otherwise inert authored CSS block',
+  ] as const),
+  freezeSecurityValue([
+    'style',
+    'media',
+    false,
+    'allow',
+    'a dynamic style media query can activate an otherwise inactive authored CSS block',
+  ] as const),
+  freezeSecurityValue([
+    'style',
     'nonce',
     false,
     'disabled',
@@ -409,6 +423,27 @@ export const ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES = freezeSecurityValue([
     false,
     'allow',
     'a dynamic MathML annotation encoding can activate inert descendants as HTML',
+  ] as const),
+  freezeSecurityValue([
+    'geolocation',
+    'autolocate',
+    false,
+    'disabled',
+    'automatic geolocation acquisition is disabled until Kovo exposes a named permission-policy capability door',
+  ] as const),
+  freezeSecurityValue([
+    'geolocation',
+    'watch',
+    false,
+    'disabled',
+    'continuous geolocation acquisition is disabled until Kovo exposes a named permission-policy capability door',
+  ] as const),
+  freezeSecurityValue([
+    'geolocation',
+    'accuracymode',
+    false,
+    'disabled',
+    'geolocation accuracy selection is disabled until Kovo exposes a named permission-policy capability door',
   ] as const),
   freezeSecurityValue([
     'a',
@@ -577,6 +612,13 @@ export const ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES = freezeSecurityValue([
     false,
     'allow',
     'SVG image credential mode must be fixed before the request starts',
+  ] as const),
+  freezeSecurityValue([
+    'feimage',
+    'crossorigin',
+    false,
+    'allow',
+    'SVG feImage credential mode must be fixed before the filter resource request starts',
   ] as const),
   freezeSecurityValue([
     'meta',

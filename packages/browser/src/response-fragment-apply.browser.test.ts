@@ -68,13 +68,17 @@ describe('browser response fragment apply', () => {
       ' data-bind:crossorigin="state.credentialMode"></feImage></svg>',
       '<style data-case="style" type="text/plain" media="not all"',
       ' data-bind:type="state.styleType" data-bind:media="state.styleMedia">',
-      'body { color: red }',
+      '#kovo-reviewed-style-probe { display: none !important }',
       '</style>',
+      '<div id="kovo-reviewed-style-probe">reviewed style activation probe</div>',
       '<geolocation data-case="location"',
       ' data-bind:autolocate="state.autolocate" data-bind:watch="state.watch"',
       ' data-bind:accuracymode="state.accuracyMode"></geolocation>',
     ].join('');
     document.body.append(root);
+
+    const styleProbe = root.querySelector('#kovo-reviewed-style-probe');
+    expect(getComputedStyle(styleProbe as Element).display).not.toBe('none');
 
     await applyStateBindings(root, {
       accuracyMode: 'precise',
@@ -90,6 +94,7 @@ describe('browser response fragment apply', () => {
     const style = root.querySelector('[data-case="style"]');
     expect(style?.getAttribute('type')).toBe('text/plain');
     expect(style?.getAttribute('media')).toBe('not all');
+    expect(getComputedStyle(styleProbe as Element).display).not.toBe('none');
     const geolocation = root.querySelector('[data-case="location"]');
     expect(geolocation?.hasAttribute('autolocate')).toBe(false);
     expect(geolocation?.hasAttribute('watch')).toBe(false);

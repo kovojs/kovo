@@ -1233,7 +1233,18 @@ describe('server jsx runtime', () => {
     ).toBe(
       '<script charset="utf-8" crossorigin="anonymous" integrity="sha384-reviewed" referrerpolicy="strict-origin" src="/runtime.js" type="module"></script>',
     );
-    expect(html(jsx('style', { nonce: 'reused-nonce' }))).toBe('<style></style>');
+    expect(
+      html(
+        jsx('style', {
+          media: 'not all',
+          nonce: 'reused-nonce',
+          rawHtml: trustedHtml('#kovo-reviewed-style-probe { display: none !important }'),
+          type: 'text/plain',
+        }),
+      ),
+    ).toBe(
+      '<style media="not all" type="text/plain">#kovo-reviewed-style-probe { display: none !important }</style>',
+    );
     expect(
       html(
         jsx('a', {
@@ -1277,6 +1288,16 @@ describe('server jsx runtime', () => {
     ).toBe('<iframe allowfullscreen title="safe"></iframe>');
     expect(
       html(
+        jsx('geolocation', {
+          accuracymode: 'precise',
+          autolocate: true,
+          title: 'safe',
+          watch: true,
+        }),
+      ),
+    ).toBe('<geolocation title="safe"></geolocation>');
+    expect(
+      html(
         jsx('form', {
           children: [
             jsx('button', { children: 'Pay', formtarget: '_self' }),
@@ -1304,13 +1325,19 @@ describe('server jsx runtime', () => {
             jsx('audio', { crossorigin: 'anonymous' }),
             jsx('video', { crossorigin: 'use-credentials' }),
             jsx('svg', {
-              children: jsx('image', { crossorigin: 'anonymous', href: '/reviewed.svg' }),
+              children: [
+                jsx('image', { crossorigin: 'anonymous', href: '/reviewed.svg' }),
+                jsx('feImage', {
+                  crossorigin: 'anonymous',
+                  href: '/reviewed-filter.svg',
+                }),
+              ],
             }),
           ],
         }),
       ),
     ).toBe(
-      '<div><img crossorigin="anonymous"><audio crossorigin="anonymous"></audio><video crossorigin="use-credentials"></video><svg><image crossorigin="anonymous" href="/reviewed.svg"></image></svg></div>',
+      '<div><img crossorigin="anonymous"><audio crossorigin="anonymous"></audio><video crossorigin="use-credentials"></video><svg><image crossorigin="anonymous" href="/reviewed.svg"></image><feImage crossorigin="anonymous" href="/reviewed-filter.svg"></feImage></svg></div>',
     );
   });
 

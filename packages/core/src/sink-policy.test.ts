@@ -320,15 +320,17 @@ describe('shared runtime sink policy', () => {
   });
 
   // @kovo-security-certifies C13 finite-browser-control-tuple-denominator
-  it('owns one exact non-vacuous 60-tuple browser-control denominator', () => {
-    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(60);
+  it('owns one exact non-vacuous 66-tuple browser-control denominator', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(66);
     const keys = new Set(
       ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.map(([tag, attribute]) => `${tag}[${attribute}]`),
     );
-    expect(keys.size).toBe(60);
+    expect(keys.size).toBe(66);
     for (const witness of [
       'script[integrity]',
       'script[nonce]',
+      'style[type]',
+      'style[media]',
       'style[nonce]',
       'link[as]',
       'iframe[allowfullscreen]',
@@ -336,6 +338,9 @@ describe('shared runtime sink policy', () => {
       'iframe[browsingtopics]',
       'iframe[allowpaymentrequest]',
       'iframe[sharedstoragewritable]',
+      'geolocation[autolocate]',
+      'geolocation[watch]',
+      'geolocation[accuracymode]',
       'a[target]',
       'a[attributionsrc]',
       'a[attributiondestination]',
@@ -355,6 +360,7 @@ describe('shared runtime sink policy', () => {
       'audio[crossorigin]',
       'video[crossorigin]',
       'image[crossorigin]',
+      'feimage[crossorigin]',
       'meta[name]',
     ]) {
       expect(keys.has(witness), witness).toBe(true);
@@ -417,6 +423,9 @@ describe('shared runtime sink policy', () => {
       ['iframe', 'sharedstoragewritable'],
       ['img', 'sharedstoragewritable'],
       ['style', 'nonce'],
+      ['geolocation', 'autolocate'],
+      ['geolocation', 'watch'],
+      ['geolocation', 'accuracymode'],
     ] as const) {
       expect(elementContextSecurityControl(tag, attribute), `${tag}[${attribute}]`).toMatchObject({
         acceptsTrustedUrl: false,
@@ -432,6 +441,7 @@ describe('shared runtime sink policy', () => {
       ['audio', 'crossorigin'],
       ['video', 'crossorigin'],
       ['image', 'crossorigin'],
+      ['feimage', 'crossorigin'],
     ] as const) {
       expect(elementContextSecurityControl(tag, attribute), `${tag}[${attribute}]`).toMatchObject({
         acceptsTrustedUrl: false,

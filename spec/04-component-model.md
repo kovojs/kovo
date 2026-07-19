@@ -345,18 +345,26 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 - `srcdoc`;
 - `<script>` element text and `<script type="application/json">` island bodies (§9.1 governs the byte-level encoding for the latter).
 - element-context execution, request, and isolation controls form one finite denominator of exactly
-  39 element/attribute tuples: `script` × (`src`, `href`, `xlink:href`, `type`, `nomodule`,
-  `integrity`, `crossorigin`, `referrerpolicy`, `charset`, `nonce`, `language`); `link` × (`href`,
-  `rel`, `type`, `media`, `disabled`, `integrity`, `crossorigin`, `referrerpolicy`, `as`, `nonce`);
-  `iframe` × (`src`, `sandbox`, `allow`, `credentialless`, `csp`, `referrerpolicy`, `name`);
-  `annotation-xml[encoding]`; `a` and `area` × (`target`, `rel`, `referrerpolicy`, `ping`);
-  `img[referrerpolicy]`; and `meta[name]`. Every listed control is static-only: a direct dynamic
-  value, dynamic removal, or opaque spread is KV236. The parser-request controls are included as
-  tuples, not treated as independent strings: changing a script/link `integrity`, credential mode,
-  destination/type, or referrer policy after the parser starts a request cannot retroactively secure
-  that request. Script scheduling hints (`async`, `defer`, `fetchpriority`) are deliberately outside
-  this denominator because they schedule an already-reviewed resource rather than select its
-  authority or isolation posture.
+  66 element/attribute tuples: `script` × (`src`, `href`, `xlink:href`, `type`, `nomodule`,
+  `integrity`, `crossorigin`, `referrerpolicy`, `charset`, `nonce`, `language`, `attributionsrc`);
+  `style` × (`type`, `media`, `nonce`); `link` × (`href`, `rel`, `type`, `media`, `disabled`,
+  `integrity`, `crossorigin`, `referrerpolicy`, `as`, `nonce`); `iframe` × (`src`, `sandbox`,
+  `allow`, `allowfullscreen`, `allowpaymentrequest`, `browsingtopics`, `credentialless`,
+  `sharedstoragewritable`, `csp`, `referrerpolicy`, `name`); `annotation-xml[encoding]`;
+  `geolocation` × (`autolocate`, `watch`, `accuracymode`); `a` × (`target`, `rel`,
+  `referrerpolicy`, `ping`, `attributionsrc`, `attributiondestination`, `attributionsourceid`,
+  `attributionsourcenonce`); `area` × (`target`, `rel`, `referrerpolicy`, `ping`,
+  `attributionsrc`); `form` × (`target`, `rel`); `button[formtarget]`; `input[formtarget]`; `img` ×
+  (`referrerpolicy`, `crossorigin`, `attributionsrc`, `sharedstoragewritable`);
+  `audio[crossorigin]`; `video[crossorigin]`; SVG `image[crossorigin]` and
+  `feImage[crossorigin]`; and `meta[name]`. Every listed control is static-only or disabled by the
+  stronger value rules below: a direct dynamic value, dynamic removal, or opaque spread is KV236.
+  The parser-request controls are included as tuples, not treated as independent strings: changing
+  a script/link/style `type` or `media`, subresource `integrity` or credential mode, destination,
+  or referrer policy after parsing/request selection cannot retroactively secure that action.
+  Script scheduling hints (`async`, `defer`, `fetchpriority`) are deliberately outside this
+  denominator because they schedule an already-reviewed resource rather than select its authority
+  or isolation posture.
   The URL halves (`script[src|href|xlink:href]`, `link[href]`, and `iframe[src]`) may instead hold an
   exact `trustedUrl(value, auditedReason)`; `trustedUrl` suppresses no other tuple. Live bindings and
   keyed fragment morphs preserve the reviewed current value (including absence) rather than apply
@@ -371,7 +379,13 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
   disabled outright because its reporting headers can disclose the source URL. `meta[name=referrer]`
   is disabled because it can override the response-header posture. Script/link `nonce` is
   framework-owned and disabled in authored output under Kovo's hash-locked CSP, and obsolete
-  `script[language]` is disabled. These bans have no trusted-value suppression.
+  `script[language]` is disabled. Attribution registration, browsing-topics disclosure,
+  shared-storage writes, and legacy payment-request delegation controls are disabled pending named
+  reviewed capability doors. `geolocation[autolocate|watch|accuracymode]` is likewise disabled:
+  supported Kovo responses send `Permissions-Policy: geolocation=()`, and a future opt-in requires
+  a named permission-policy capability rather than an incidental element attribute. HTML and SVG
+  `crossorigin` credential modes and `style[type|media]` activation remain available only as
+  statically reviewed values. These bans have no trusted-value suppression.
   An `iframe[src]` additionally requires a present, statically reviewed `sandbox` attribute; a
   trusted URL never suppresses that relational boundary. `sandbox` is an ASCII-whitespace token
   set with the exact admitted tokens `allow-forms`, `allow-modals`, `allow-orientation-lock`,

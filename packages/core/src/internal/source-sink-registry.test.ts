@@ -56,6 +56,8 @@ const exactFiniteBrowserControlKeys = [
   'script[nonce]',
   'script[language]',
   'script[attributionsrc]',
+  'style[type]',
+  'style[media]',
   'style[nonce]',
   'link[href]',
   'link[rel]',
@@ -79,6 +81,9 @@ const exactFiniteBrowserControlKeys = [
   'iframe[referrerpolicy]',
   'iframe[name]',
   'annotation-xml[encoding]',
+  'geolocation[autolocate]',
+  'geolocation[watch]',
+  'geolocation[accuracymode]',
   'a[target]',
   'a[rel]',
   'a[referrerpolicy]',
@@ -103,6 +108,7 @@ const exactFiniteBrowserControlKeys = [
   'audio[crossorigin]',
   'video[crossorigin]',
   'image[crossorigin]',
+  'feimage[crossorigin]',
   'meta[name]',
 ] as const;
 const exactIframeSandboxTokens = [
@@ -532,7 +538,7 @@ describe('boundary crossing sink inventory', () => {
 
     expect(proof?.controlTuples).toBe(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES);
     expect(proof?.iframeSandboxTokens).toBe(SAFE_IFRAME_SANDBOX_TOKENS);
-    expect(proof?.controlTuples).toHaveLength(60);
+    expect(proof?.controlTuples).toHaveLength(66);
     expect(proof?.controlTuples.map(([tag, attribute]) => `${tag}[${attribute}]`)).toEqual(
       exactFiniteBrowserControlKeys,
     );

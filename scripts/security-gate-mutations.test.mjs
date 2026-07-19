@@ -8,7 +8,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after finite browser-control enrollment', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(237);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(244);
   });
 
   it('enrolls behavioral request-body shape, allocation, and FormData mutants', () => {
@@ -116,6 +116,8 @@ describe('security-gate-mutations', () => {
       'script[nonce]',
       'script[language]',
       'script[attributionsrc]',
+      'style[type]',
+      'style[media]',
       'style[nonce]',
       'link[href]',
       'link[rel]',
@@ -139,6 +141,9 @@ describe('security-gate-mutations', () => {
       'iframe[referrerpolicy]',
       'iframe[name]',
       'annotation-xml[encoding]',
+      'geolocation[autolocate]',
+      'geolocation[watch]',
+      'geolocation[accuracymode]',
       'a[target]',
       'a[rel]',
       'a[referrerpolicy]',
@@ -163,6 +168,7 @@ describe('security-gate-mutations', () => {
       'audio[crossorigin]',
       'video[crossorigin]',
       'image[crossorigin]',
+      'feimage[crossorigin]',
       'meta[name]',
     ];
     const tupleNames = tupleKeys.map(
@@ -174,6 +180,7 @@ describe('security-gate-mutations', () => {
     const behavioralNames = [
       'compiler-output-context/drop-iframe-source-sandbox-boundary',
       ...tupleNames,
+      'runtime-sink/invert-disabled-browser-control-closure',
       'runtime-sink/drop-iframe-sandbox-allow-forms-token',
       'runtime-sink/drop-iframe-sandbox-combination-closure',
       'runtime-sink/drop-iframe-source-sandbox-boundary',
@@ -182,7 +189,7 @@ describe('security-gate-mutations', () => {
     const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => behavioralNames.includes(mutant.name));
 
     expect(mutants.map((mutant) => mutant.name).sort()).toEqual(behavioralNames.sort());
-    expect(tupleNames).toHaveLength(60);
+    expect(tupleNames).toHaveLength(66);
     expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
     expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
     const inline = SECURITY_GATE_MUTANTS.find(

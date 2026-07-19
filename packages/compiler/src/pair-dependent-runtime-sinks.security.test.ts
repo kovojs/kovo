@@ -111,7 +111,7 @@ describe('element-context execution and isolation sinks', () => {
     [
       'style media activation',
       '<style media={state.value}>{`body { color: red }`}</style>',
-      'style media activation',
+      'style media',
     ],
     [
       'geolocation automatic acquisition',
@@ -152,23 +152,32 @@ export const DisabledGeolocationControl = component({ render: () => (${markup}) 
   });
 
   it('preserves reviewed static feImage credentials and inert style activation posture', () => {
-    expect(
-      kv236Diagnostics(`
+    const result = compileComponentModule({
+      fileName: 'reviewed-browser-controls.tsx',
+      source: `
 export const ReviewedNewBrowserControls = component({
   render: () => (
     <>
       <svg><feImage href="/reviewed.svg" crossorigin="anonymous" /></svg>
-      <style type="text/plain" media="not all">{'body { color: red }'}</style>
+      <style type="text/plain" media="not all">{'#kovo-reviewed-style-probe { display: none !important }'}</style>
     </>
   ),
 });
-`),
-    ).toEqual([]);
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    expect(serverSource).toContain('crossorigin="anonymous"');
+    expect(serverSource).toContain('/reviewed.svg');
+    expect(serverSource).toContain('type="text/plain"');
+    expect(serverSource).toContain('media="not all"');
+    expect(serverSource).toContain('#kovo-reviewed-style-probe { display: none !important }');
   });
 
   // @kovo-security-certifies C13 compiler-finite-browser-control-tuples
-  it('rejects a direct dynamic write for every one of the 60 finite browser controls', () => {
-    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(60);
+  it('rejects a direct dynamic write for every one of the 66 finite browser controls', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(66);
     for (const [tag, attribute] of ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES) {
       const markup = `<${tag} ${attribute}={state.value} />`;
       expect(
@@ -204,7 +213,7 @@ export const BrowserControlSpread = component({
         (tag) => tag !== 'button' && tag !== 'input',
       ),
     );
-    expect(controlledTags.size).toBe(13);
+    expect(controlledTags.size).toBe(15);
     for (const tag of controlledTags) {
       expect(
         kv236Diagnostics(`
@@ -810,6 +819,7 @@ export const StaticControls = component({
   render: (_queries, state) => (
     <>
       <script type="module" nomodule={false} integrity="sha384-reviewed" crossorigin="anonymous" referrerpolicy="strict-origin" charset="utf-8" async={state.schedule} defer={state.schedule} fetchpriority={state.schedule} />
+      <style type="text/plain" media="not all">{'body { color: red }'}</style>
       <link href="/app.css" rel="stylesheet" type="text/css" media="screen" disabled={false} integrity="sha384-reviewed" crossorigin="anonymous" referrerpolicy="no-referrer" as="style" />
       <iframe src="/profile" sandbox="allow-forms" allow="fullscreen" allowfullscreen credentialless csp="default-src 'none'" referrerpolicy="same-origin" name="profile-frame" />
       <a target="_blank" rel="noopener noreferrer" referrerpolicy="strict-origin-when-cross-origin" />
@@ -819,6 +829,7 @@ export const StaticControls = component({
       <audio crossorigin="anonymous" />
       <video crossorigin="use-credentials" />
       <svg><image href="/reviewed.svg" crossorigin="anonymous" /></svg>
+      <svg><feImage href="/reviewed-filter.svg" crossorigin="anonymous" /></svg>
       <meta name="description" content="Account" />
     </>
   ),
