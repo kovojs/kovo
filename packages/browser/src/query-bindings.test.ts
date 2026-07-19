@@ -164,6 +164,70 @@ describe('query binding helpers', () => {
     expect(description.getAttribute('content')).toBe('Account overview');
   });
 
+  it('preserves reviewed execution and isolation controls across hostile binding writes', () => {
+    const root = new FakeMorphRoot();
+    const scriptSource = new FakeQueryPlanElement(
+      { 'data-bind:src': 'page.script', src: '/reviewed/runtime.js' },
+      { tagName: 'SCRIPT' },
+    );
+    const scriptType = new FakeQueryPlanElement(
+      {
+        'data-bind:type': 'page.scriptType',
+        src: '/reviewed/data.json',
+        type: 'application/json',
+      },
+      { tagName: 'SCRIPT' },
+    );
+    const stylesheet = new FakeQueryPlanElement(
+      { 'data-bind:href': 'page.stylesheet', href: '/reviewed/theme.css', rel: 'stylesheet' },
+      { tagName: 'LINK' },
+    );
+    const linkRelationship = new FakeQueryPlanElement(
+      { 'data-bind:rel': 'page.relationship', href: '/reviewed/icon.svg', rel: 'icon' },
+      { tagName: 'LINK' },
+    );
+    const iframeSandbox = new FakeQueryPlanElement(
+      {
+        'data-bind:sandbox': 'page.sandbox',
+        sandbox: 'allow-forms',
+        src: '/untrusted/profile',
+      },
+      { tagName: 'IFRAME' },
+    );
+    const iframeNullSandbox = new FakeQueryPlanElement(
+      {
+        'data-bind:sandbox': 'page.nullSandbox',
+        sandbox: 'allow-forms',
+        src: '/untrusted/comments',
+      },
+      { tagName: 'IFRAME' },
+    );
+    root.planElements.push(
+      scriptSource,
+      scriptType,
+      stylesheet,
+      linkRelationship,
+      iframeSandbox,
+      iframeNullSandbox,
+    );
+
+    applyQueryBindings(root, 'page', {
+      nullSandbox: null,
+      relationship: 'stylesheet',
+      sandbox: 'allow-scripts allow-same-origin',
+      script: '/uploads/attacker.js',
+      scriptType: 'module',
+      stylesheet: '/uploads/attacker.css',
+    });
+
+    expect(scriptSource.getAttribute('src')).toBe('/reviewed/runtime.js');
+    expect(scriptType.getAttribute('type')).toBe('application/json');
+    expect(stylesheet.getAttribute('href')).toBe('/reviewed/theme.css');
+    expect(linkRelationship.getAttribute('rel')).toBe('icon');
+    expect(iframeSandbox.getAttribute('sandbox')).toBe('allow-forms');
+    expect(iframeNullSandbox.getAttribute('sandbox')).toBe('allow-forms');
+  });
+
   it('applies optional binding path segments and removes empty attribute bindings', () => {
     const root = new FakeMorphRoot();
     const name = new FakeQueryBindingElement('deal.contact?.name', { textContent: 'Ada' });
