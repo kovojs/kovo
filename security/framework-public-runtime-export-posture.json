@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "d6f0860bcadecceeb70f33fb0395300ed032386c07207290f0629b2b9d26ac1f",
+      "sourceTreeSha256": "d94346ece97603c16d40772f4f77bf243eb7a40e1a42c759b5b894d014860841",
       "manifestVariants": [
         {
           "exports": {
@@ -733,7 +733,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "6c79f2dc29a67ef2ca0f6b330dc345ad7e079d8260a14935aff0657f760a1b33"
+      "sourceTreeSha256": "aeec2c86e31199bcf58fa3526fa95bba931e1e73ed458c5c69ad9a86533f29d3"
     },
     {
       "manifestVariants": [
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "6c2a26c4ab30a79c3b31a30e2ee0726836fbd40d4d6d63c50a95e821d9b8f519"
+      "sourceTreeSha256": "d378cdd2d0a148d2932054cbbd4ff079c6a3ea3d0eef420d77b097d4d0dbf276"
     },
     {
       "manifestVariants": [
