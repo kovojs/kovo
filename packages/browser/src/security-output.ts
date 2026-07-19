@@ -303,7 +303,7 @@ export function kovoSetSafeAttribute(
   const rendered = kovoBoundAttributeValue(name, value, {
     effectiveHttpEquiv:
       element.getAttribute?.('http-equiv') ?? element.getAttribute?.('httpequiv') ?? null,
-    elementName: element.tagName,
+    ...(element.tagName === undefined ? {} : { elementName: element.tagName }),
   });
   if (rendered === undefined) return;
   if (rendered === null) {
