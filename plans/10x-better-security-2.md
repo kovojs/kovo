@@ -232,21 +232,31 @@ fitting for a framework whose product is proof.
 analysis-time dependency closure and deterministic package subjects. **Blocks:** artifact identity
 used by §4.3; it does not establish runtime host integrity.
 
-- [ ] Enroll the analyzer toolchain (`typescript`, `vp`, `vitest`, `esbuild`, `ts-morph`) in
+- [x] Enroll the analyzer toolchain (`typescript`, `vp`, `vitest`, `esbuild`, `ts-morph`) in
       `security/TCB.md` with exact pins; the `typescript ^6.0.3` caret in
       `packages/compiler/package.json` should FAIL `check:tcb-boundary` first, proving the gate sees it.
-- [ ] Replace `lockfileHasResolvedVersion`'s regex presence test
+  - Evidence: `pnpm run check:tcb-boundary` passes with exact toolchain declarations inside the
+    1,992-line TCB budget after the caret mutation was rejected.
+- [x] Replace `lockfileHasResolvedVersion`'s regex presence test
       (`scripts/check-tcb-boundary.mjs:498`) with structural `pnpm-lock.yaml` parsing that pins each
       surface's `resolution.integrity` sha512 — closes the same-version lockfile-integrity swap that
       currently passes on human review alone.
-- [ ] `check:analysis-time-closure`: walk the import graph of every gate entrypoint + the compile
+  - Evidence: the structural lock parser's focused suite passes and the closure validates exact
+    version-plus-sha512 subjects rather than text presence.
+- [x] `check:analysis-time-closure`: walk the import graph of every gate entrypoint + the compile
       path, derive the loaded third-party set, fail on any package absent from the TCB manifest.
-- [ ] Monotone shrink ratchet on `totalTcbMaxLines`/entry count/closure size (explicit reviewed-raise
+  - Evidence: `pnpm run check:analysis-time-closure` passes 25/25 with 74 roots closing over 359
+    optional-inclusive integrity-pinned package subjects.
+- [x] Monotone shrink ratchet on `totalTcbMaxLines`/entry count/closure size (explicit reviewed-raise
       marker; mutation-killed).
-- [ ] Define deterministic package inputs first (normalized mtimes, ownership, ordering, modes,
+  - Evidence: the same 25/25 gate suite kills unreviewed raises of the TCB, entry, and closure
+    denominators.
+- [x] Define deterministic package inputs first (normalized mtimes, ownership, ordering, modes,
       locale/timezone, and `SOURCE_DATE_EPOCH`), then run a reproducible-pack job in a second clean
       checkout and compare each public tarball's sha512 subject. The attestation records both build
       environments and honestly excludes runtime-host integrity.
+  - Evidence: two clean frozen-install checkouts produced matching sha512 subjects for all 13 public
+    tarballs through `scripts/reproducible-pack.mjs`.
 
 ---
 
