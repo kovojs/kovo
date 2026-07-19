@@ -46,6 +46,33 @@ describe('security-gate-mutations', () => {
     expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });
 
+  it('enrolls the finite active-content and effective-element-context closure mutants', () => {
+    const behavioralNames = [
+      'browser-fragment/drop-declarative-shadow-dom-classifier',
+      'compiler-output-context/drop-declarative-shadow-dom-closure',
+      'compiler-output-context/drop-effective-element-context-closure',
+      'runtime-sink/drop-active-embed-denominator-entry',
+      'runtime-sink/drop-active-frame-denominator-entry',
+      'runtime-sink/drop-active-frameset-denominator-entry',
+      'runtime-sink/drop-active-object-denominator-entry',
+      'runtime-sink/drop-shadowrootclonable-denominator-entry',
+      'runtime-sink/drop-shadowrootdelegatesfocus-denominator-entry',
+      'runtime-sink/drop-shadowrootmode-denominator-entry',
+      'runtime-sink/drop-shadowrootserializable-denominator-entry',
+      'server-jsx/drop-declarative-shadow-dom-runtime-floor',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => behavioralNames.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(behavioralNames.sort());
+    expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
+    expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
+    expect(
+      SECURITY_GATE_MUTANTS.find(
+        (mutant) => mutant.name === 'inline-runtime/drop-declarative-shadow-dom-classifier',
+      ),
+    ).toEqual(expect.objectContaining({ sourceOnly: true }));
+  });
+
   it('kills every enrolled security gate branch deletion mutant', async () => {
     const results = await runSecurityGateMutationHarness();
 

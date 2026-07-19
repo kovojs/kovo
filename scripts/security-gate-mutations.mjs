@@ -73,6 +73,10 @@ const semanticAttributeManifestPath = path.join(
   'packages/core/src/internal/semantic-attribute-manifest.ts',
 );
 const inlineLoaderBuildPath = path.join(repoRoot, 'packages/browser/src/inline-loader-build.ts');
+const browserResponseFragmentApplyPath = path.join(
+  repoRoot,
+  'packages/browser/src/response-fragment-apply.ts',
+);
 const browserMutationSubmitPath = path.join(repoRoot, 'packages/browser/src/mutation-submit.ts');
 const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
@@ -181,8 +185,24 @@ const removedGeneratedDeferredStyleControlManifestEntry =
 
 const blockedActiveEmbedEntry = "  'embed',";
 const removedBlockedActiveEmbedEntry = '  // embed denominator entry removed by mutant';
+const blockedActiveFrameEntry = "  'frame',";
+const removedBlockedActiveFrameEntry = '  // frame denominator entry removed by mutant';
+const blockedActiveFramesetEntry = "  'frameset',";
+const removedBlockedActiveFramesetEntry = '  // frameset denominator entry removed by mutant';
 const blockedActiveObjectEntry = "  'object',";
 const removedBlockedActiveObjectEntry = '  // object denominator entry removed by mutant';
+const blockedDeclarativeShadowModeEntry = "  'shadowrootmode',";
+const removedBlockedDeclarativeShadowModeEntry =
+  '  // shadowrootmode denominator entry removed by mutant';
+const blockedDeclarativeShadowDelegatesFocusEntry = "  'shadowrootdelegatesfocus',";
+const removedBlockedDeclarativeShadowDelegatesFocusEntry =
+  '  // shadowrootdelegatesfocus denominator entry removed by mutant';
+const blockedDeclarativeShadowClonableEntry = "  'shadowrootclonable',";
+const removedBlockedDeclarativeShadowClonableEntry =
+  '  // shadowrootclonable denominator entry removed by mutant';
+const blockedDeclarativeShadowSerializableEntry = "  'shadowrootserializable',";
+const removedBlockedDeclarativeShadowSerializableEntry =
+  '  // shadowrootserializable denominator entry removed by mutant';
 const compilerActiveEmbedClosureBranch = [
   '  if (',
   '    element.intrinsicTagName !== undefined &&',
@@ -193,6 +213,37 @@ const removedCompilerActiveEmbedClosureBranch = '  if (false) {';
 const serverActiveEmbedClosureBranch = '  if (isBlockedActiveEmbedElementName(intrinsicType)) {';
 const removedServerActiveEmbedClosureBranch =
   '  if (false && isBlockedActiveEmbedElementName(intrinsicType)) {';
+const compilerDeclarativeShadowDomClosureBranch =
+  '    validateDeclarativeShadowDomElement(diagnostics, element),';
+const removedCompilerDeclarativeShadowDomClosureBranch = '    [],';
+const serverDeclarativeShadowDomClosureBranch =
+  '  if (isDeclarativeShadowDomRuntimeControl(type, name, value)) {';
+const removedServerDeclarativeShadowDomClosureBranch =
+  '  if (false && isDeclarativeShadowDomRuntimeControl(type, name, value)) {';
+const browserDeclarativeShadowDomClassifierBranch = [
+  "    n === 'shadowrootmode' ||",
+  "    n === 'shadowrootdelegatesfocus' ||",
+  "    n === 'shadowrootclonable' ||",
+  "    n === 'shadowrootserializable'",
+].join('\n');
+const removedBrowserDeclarativeShadowDomClassifierBranch = [
+  "    false && n === 'shadowrootmode' ||",
+  "    false && n === 'shadowrootdelegatesfocus' ||",
+  "    false && n === 'shadowrootclonable' ||",
+  "    false && n === 'shadowrootserializable'",
+].join('\n');
+const inlineDeclarativeShadowDomClassifierBranch = [
+  "    name === 'shadowrootmode' || name === 'shadowrootdelegatesfocus' ||",
+  "    name === 'shadowrootclonable' || name === 'shadowrootserializable';",
+].join('\n');
+const removedInlineDeclarativeShadowDomClassifierBranch = [
+  "    name === 'mutant-shadowrootmode' || name === 'mutant-shadowrootdelegatesfocus' ||",
+  "    name === 'mutant-shadowrootclonable' || name === 'mutant-shadowrootserializable';",
+].join('\n');
+const effectiveElementContextClosureBranch =
+  '  const effectiveElementContexts = validateEffectiveElementContextSecurity(options, tree.roots);';
+const removedEffectiveElementContextClosureBranch =
+  '  const effectiveElementContexts = { diagnostics: [], facts: [] } as const;';
 const reactiveSubmitterTransportClosureBranch = [
   '      appendCompilerFacts(',
   '        forbidden,',
@@ -1605,7 +1656,8 @@ export const SECURITY_GATE_MUTANTS = [
   {
     behavioralTypeScript: true,
     description: 'Deletes embed from the finite unsandboxable active-element denominator.',
-    expectedKiller: 'the active-embed denominator must remain exactly embed and object',
+    expectedKiller:
+      'the active-embed denominator must remain exactly embed, frame, frameset, and object',
     name: 'runtime-sink/drop-active-embed-denominator-entry',
     replacement: removedBlockedActiveEmbedEntry,
     search: blockedActiveEmbedEntry,
@@ -1614,8 +1666,31 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     behavioralTypeScript: true,
+    description: 'Deletes frame from the finite unsandboxable active-element denominator.',
+    expectedKiller:
+      'the active-embed denominator must retain obsolete frame and frameset primitives',
+    name: 'runtime-sink/drop-active-frame-denominator-entry',
+    replacement: removedBlockedActiveFrameEntry,
+    search: blockedActiveFrameEntry,
+    sourceFile: coreSinkPolicyPath,
+    test: assertActiveEmbedDenominatorBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes frameset from the finite unsandboxable active-element denominator.',
+    expectedKiller:
+      'the active-embed denominator must retain obsolete frame and frameset primitives',
+    name: 'runtime-sink/drop-active-frameset-denominator-entry',
+    replacement: removedBlockedActiveFramesetEntry,
+    search: blockedActiveFramesetEntry,
+    sourceFile: coreSinkPolicyPath,
+    test: assertActiveEmbedDenominatorBehavior,
+  },
+  {
+    behavioralTypeScript: true,
     description: 'Deletes object from the finite unsandboxable active-element denominator.',
-    expectedKiller: 'the active-embed denominator must remain exactly embed and object',
+    expectedKiller:
+      'the active-embed denominator must remain exactly embed, frame, frameset, and object',
     name: 'runtime-sink/drop-active-object-denominator-entry',
     replacement: removedBlockedActiveObjectEntry,
     search: blockedActiveObjectEntry,
@@ -1642,6 +1717,101 @@ export const SECURITY_GATE_MUTANTS = [
     search: serverActiveEmbedClosureBranch,
     sourceFile: serverJsxRuntimePath,
     test: assertServerActiveEmbedClosureBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes shadowrootmode from the declarative Shadow DOM denominator.',
+    expectedKiller: 'the declarative Shadow DOM denominator must remain exact and complete',
+    name: 'runtime-sink/drop-shadowrootmode-denominator-entry',
+    replacement: removedBlockedDeclarativeShadowModeEntry,
+    search: blockedDeclarativeShadowModeEntry,
+    sourceFile: coreSinkPolicyPath,
+    test: assertDeclarativeShadowDomDenominatorBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes shadowrootdelegatesfocus from the declarative Shadow DOM denominator.',
+    expectedKiller: 'the declarative Shadow DOM denominator must remain exact and complete',
+    name: 'runtime-sink/drop-shadowrootdelegatesfocus-denominator-entry',
+    replacement: removedBlockedDeclarativeShadowDelegatesFocusEntry,
+    search: blockedDeclarativeShadowDelegatesFocusEntry,
+    sourceFile: coreSinkPolicyPath,
+    test: assertDeclarativeShadowDomDenominatorBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes shadowrootclonable from the declarative Shadow DOM denominator.',
+    expectedKiller: 'the declarative Shadow DOM denominator must remain exact and complete',
+    name: 'runtime-sink/drop-shadowrootclonable-denominator-entry',
+    replacement: removedBlockedDeclarativeShadowClonableEntry,
+    search: blockedDeclarativeShadowClonableEntry,
+    sourceFile: coreSinkPolicyPath,
+    test: assertDeclarativeShadowDomDenominatorBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes shadowrootserializable from the declarative Shadow DOM denominator.',
+    expectedKiller: 'the declarative Shadow DOM denominator must remain exact and complete',
+    name: 'runtime-sink/drop-shadowrootserializable-denominator-entry',
+    replacement: removedBlockedDeclarativeShadowSerializableEntry,
+    search: blockedDeclarativeShadowSerializableEntry,
+    sourceFile: coreSinkPolicyPath,
+    test: assertDeclarativeShadowDomDenominatorBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description: 'Deletes compiler refusal of declarative Shadow DOM construction controls.',
+    expectedKiller:
+      'direct, bound, derived, static-spread, and opaque template controls must diagnose KV236',
+    name: 'compiler-output-context/drop-declarative-shadow-dom-closure',
+    replacement: removedCompilerDeclarativeShadowDomClosureBranch,
+    search: compilerDeclarativeShadowDomClosureBranch,
+    sourceFile: compilerOutputContextValidatorPath,
+    test: assertCompilerDeclarativeShadowDomClosureBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes the direct JSX runtime floor for declarative Shadow DOM controls.',
+    expectedKiller: 'direct JSX runtime calls must omit every declarative Shadow DOM control',
+    name: 'server-jsx/drop-declarative-shadow-dom-runtime-floor',
+    replacement: removedServerDeclarativeShadowDomClosureBranch,
+    search: serverDeclarativeShadowDomClosureBranch,
+    sourceFile: serverJsxRuntimePath,
+    test: assertServerDeclarativeShadowDomClosureBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes the response-fragment declarative Shadow DOM classifier.',
+    expectedKiller: 'response-fragment adoption must classify every declarative Shadow DOM control',
+    name: 'browser-fragment/drop-declarative-shadow-dom-classifier',
+    replacement: removedBrowserDeclarativeShadowDomClassifierBranch,
+    search: browserDeclarativeShadowDomClassifierBranch,
+    sourceFile: browserResponseFragmentApplyPath,
+    test: assertBrowserDeclarativeShadowDomClosureBehavior,
+  },
+  {
+    description: 'Deletes the always-loaded inline declarative Shadow DOM classifier.',
+    expectedKiller: 'the readable inline loader must retain every declarative Shadow DOM control',
+    name: 'inline-runtime/drop-declarative-shadow-dom-classifier',
+    replacement: removedInlineDeclarativeShadowDomClassifierBranch,
+    search: inlineDeclarativeShadowDomClassifierBranch,
+    sourceFile: inlineLoaderBuildPath,
+    sourceOnly: true,
+    test: assertInlineDeclarativeShadowDomClosureBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description:
+      'Deletes post-spread and post-composition validation of effective intrinsic element controls.',
+    expectedKiller:
+      'primitive attrs that create executable element controls must diagnose KV236 after composition',
+    name: 'compiler-output-context/drop-effective-element-context-closure',
+    replacement: removedEffectiveElementContextClosureBranch,
+    search: effectiveElementContextClosureBranch,
+    sourceFile: compilerStructuralJsxPath,
+    test: assertEffectiveElementContextClosureBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -3228,13 +3398,35 @@ export const DynamicRef = component({
 function assertActiveEmbedDenominatorBehavior(moduleUnderTest) {
   const denominator = [...moduleUnderTest.BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES];
   if (
-    denominator.length !== 2 ||
+    denominator.length !== 4 ||
     denominator[0] !== 'embed' ||
-    denominator[1] !== 'object' ||
+    denominator[1] !== 'frame' ||
+    denominator[2] !== 'frameset' ||
+    denominator[3] !== 'object' ||
     !moduleUnderTest.isBlockedActiveEmbedElementName('EMBED') ||
+    !moduleUnderTest.isBlockedActiveEmbedElementName('Frame') ||
+    !moduleUnderTest.isBlockedActiveEmbedElementName('FRAMESET') ||
     !moduleUnderTest.isBlockedActiveEmbedElementName('Object')
   ) {
     throw new Error(`active-embed denominator drifted: ${JSON.stringify(denominator)}`);
+  }
+}
+
+function assertDeclarativeShadowDomDenominatorBehavior(moduleUnderTest) {
+  const expected = [
+    'shadowrootmode',
+    'shadowrootdelegatesfocus',
+    'shadowrootclonable',
+    'shadowrootserializable',
+  ];
+  const denominator = [...moduleUnderTest.BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES];
+  if (JSON.stringify(denominator) !== JSON.stringify(expected)) {
+    throw new Error(`declarative Shadow DOM denominator drifted: ${JSON.stringify(denominator)}`);
+  }
+  for (const name of expected) {
+    if (!moduleUnderTest.isBlockedDeclarativeShadowDomAttributeName(name.toUpperCase())) {
+      throw new Error(`declarative Shadow DOM classifier omitted ${name}`);
+    }
   }
 }
 
@@ -3261,7 +3453,7 @@ export const ActiveEmbeds = component({
 }
 
 function assertServerActiveEmbedClosureBehavior(moduleUnderTest) {
-  for (const tag of ['object', 'OBJECT', 'embed', 'EmBeD']) {
+  for (const tag of ['object', 'OBJECT', 'embed', 'EmBeD', 'frame', 'FRAMESET']) {
     const rendered = moduleUnderTest.jsx(tag, {
       children: moduleUnderTest.jsx('script', { children: 'globalThis.compromised = true' }),
       data: '/safe/account',
@@ -3271,6 +3463,117 @@ function assertServerActiveEmbedClosureBehavior(moduleUnderTest) {
     if (String(rendered) !== '') {
       throw new Error(`direct JSX runtime emitted disabled <${tag}> content: ${String(rendered)}`);
     }
+  }
+}
+
+function assertCompilerDeclarativeShadowDomClosureBehavior(moduleUnderTest) {
+  const fixtures = [
+    '<template shadowrootmode="open" />',
+    '<template data-bind:shadowrootmode="state.mode" />',
+    '<template data-derive-attr="shadowrootserializable" />',
+    '<template {...{ shadowRootClonable: true }} />',
+    '<template {...state.attrs} />',
+  ];
+  for (const markup of fixtures) {
+    const result = compileFiniteIrFixture(
+      moduleUnderTest,
+      `
+export const ShadowControl = component({
+  state: () => ({ attrs: {}, mode: 'open' }),
+  render: (_queries, state) => (${markup}),
+});
+`,
+    );
+    const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236');
+    if (diagnostics.length === 0) {
+      throw new Error(
+        `declarative Shadow DOM construction did not close through KV236 for ${markup}`,
+      );
+    }
+  }
+}
+
+function assertServerDeclarativeShadowDomClosureBehavior(moduleUnderTest) {
+  const controls = [
+    'shadowrootmode',
+    'shadowrootdelegatesfocus',
+    'shadowrootclonable',
+    'shadowrootserializable',
+  ];
+  for (const name of controls) {
+    const rendered = String(
+      moduleUnderTest.jsx('template', { children: 'safe', [name]: 'open' }),
+    ).toLowerCase();
+    if (rendered.includes(name)) {
+      throw new Error(`direct JSX runtime emitted declarative Shadow DOM control ${name}`);
+    }
+  }
+  for (const [name, value] of [
+    ['data-bind:shadowrootmode', 'state.mode'],
+    ['data-derive-attr', 'shadowrootserializable'],
+  ]) {
+    const rendered = String(
+      moduleUnderTest.jsx('template', { children: 'safe', [name]: value }),
+    ).toLowerCase();
+    if (rendered.includes(name) || rendered.includes(value)) {
+      throw new Error(`direct JSX runtime emitted derived declarative Shadow DOM control ${name}`);
+    }
+  }
+}
+
+function assertBrowserDeclarativeShadowDomClosureBehavior(moduleUnderTest) {
+  const classifier =
+    moduleUnderTest.__responseFragmentApplySanitizerParityForTests
+      ?.isBlockedDeclarativeShadowDomAttributeName;
+  if (typeof classifier !== 'function') {
+    throw new Error('response-fragment declarative Shadow DOM classifier is unavailable');
+  }
+  for (const name of [
+    'shadowrootmode',
+    'shadowrootdelegatesfocus',
+    'shadowrootclonable',
+    'shadowrootserializable',
+  ]) {
+    if (!classifier(name.toUpperCase())) {
+      throw new Error(`response-fragment classifier omitted ${name}`);
+    }
+  }
+}
+
+function assertInlineDeclarativeShadowDomClosureBehavior(_moduleUnderTest, { sourceText }) {
+  for (const name of [
+    'shadowrootmode',
+    'shadowrootdelegatesfocus',
+    'shadowrootclonable',
+    'shadowrootserializable',
+  ]) {
+    if (!sourceText.includes(`name === '${name}'`)) {
+      throw new Error(`readable inline loader classifier omitted ${name}`);
+    }
+  }
+}
+
+function assertEffectiveElementContextClosureBehavior(moduleUnderTest) {
+  const result = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+export const ComposedExecutableContext = component({
+  state: () => ({ source: '/attacker.js' }),
+  render: (_queries, state) => (
+    <Tooltip.Trigger asChild attrs={{ src: state.source }}>
+      <script type="module" />
+    </Tooltip.Trigger>
+  ),
+});
+`,
+  );
+  const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236');
+  if (
+    !diagnostics.some((diagnostic) =>
+      diagnostic.message.includes('a dynamic script source can execute'),
+    )
+  ) {
+    throw new Error('post-composition executable element context did not close through KV236');
   }
 }
 
