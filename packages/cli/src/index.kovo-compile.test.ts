@@ -390,9 +390,9 @@ import { tabsKeyDown } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   queries: { cart: {} },
-  render: () => (
+  render: ({ cart }) => (
     <button onClick={() => tabsKeyDown(state, item.id)}>
-      <span data-bind="cart.count">2</span>
+      <span>{cart.count}</span>
     </button>
   ),
 });
@@ -454,7 +454,8 @@ export const CartBadge = component({
 import { component } from '@kovojs/core';
 
 export const ProductCard = component({
-  render: () => <span data-bind="product.details.name">Coffee</span>,
+  queries: { product: {} },
+  render: ({ product }) => <span>{product.details.name}</span>,
 });
 `,
         'utf8',
