@@ -13557,7 +13557,8 @@ function requestRawReadCallArgumentsAreExact(call: import('ts-morph').CallExpres
   }
   const [statement, options, ...extra] = call.getArguments();
   if (!statement || !options || extra.length !== 0) return false;
-  if (!requestRawReadStatementArgumentIsExact(statement, call)) return false;
+  const trusted = unwrapStaticExpression(statement);
+  if (!Node.isCallExpression(trusted) || !requestCallIsExactKovoTrustedSql(trusted)) return false;
   const record = unwrapStaticExpression(options);
   if (!Node.isObjectLiteralExpression(record)) return false;
   const [reads, ...optionExtra] = record.getProperties();
@@ -13585,59 +13586,6 @@ function requestRawReadCallArgumentsAreExact(call: import('ts-morph').CallExpres
         name !== undefined && runtimeRegExpTest(/^[A-Za-z_][A-Za-z0-9_]*$/u, name),
     ) &&
     new Set(names).size === names.length
-  );
-}
-
-/**
- * SPEC §6.6 normalized request closure: `rawRead` accepts either the exact inline `trustedSql`
- * form or one immutable, same-block, single-use binding of that exact form. The latter is the
- * generated/runtime fixture shape and is still a finite provenance edge: aliases, reassignment,
- * exports, cross-block capture, multiple consumers, and computed SQL all stay closed.
- */
-function requestRawReadStatementArgumentIsExact(
-  expression: Node,
-  executionCall: import('ts-morph').CallExpression,
-): boolean {
-  const statement = unwrapStaticExpression(expression);
-  if (Node.isCallExpression(statement)) return requestCallIsExactKovoTrustedSql(statement);
-  if (!Node.isIdentifier(statement)) return false;
-
-  const symbol = requestIdentifierValueSymbol(statement) ?? statement.getSymbol();
-  const declarations = symbol?.getDeclarations().filter(Node.isVariableDeclaration) ?? [];
-  const [declaration] = declarations;
-  const variableStatement = declaration?.getVariableStatement();
-  const name = declaration?.getNameNode();
-  const initializer = declaration?.getInitializer();
-  const trusted = initializer ? unwrapStaticExpression(initializer) : undefined;
-  const declarationBlock = variableStatement?.getParentIfKind(SyntaxKind.Block);
-  const executionBlock = executionCall.getFirstAncestorByKind(SyntaxKind.Block);
-  if (
-    !symbol ||
-    declarations.length !== 1 ||
-    !declaration ||
-    !variableStatement ||
-    variableStatement.getDeclarationKind() !== VariableDeclarationKind.Const ||
-    variableStatement.getDeclarations().length !== 1 ||
-    variableStatement.isExported() ||
-    !Node.isIdentifier(name) ||
-    name.getSymbol() !== symbol ||
-    !trusted ||
-    !Node.isCallExpression(trusted) ||
-    !requestCallIsExactKovoTrustedSql(trusted) ||
-    !declarationBlock ||
-    declarationBlock !== executionBlock ||
-    declaration.getStart() >= executionCall.getStart() ||
-    requestAssignedBindingProjections(symbol).length !== 0
-  ) {
-    return false;
-  }
-
-  const references = requestExactBindingReferences(declaration);
-  return !!(
-    references &&
-    references.length === 1 &&
-    requestNodesAreSame(references[0], statement) &&
-    requestNodesAreSame(unwrapStaticExpression(executionCall.getArguments()[0]!), statement)
   );
 }
 
