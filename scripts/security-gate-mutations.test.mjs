@@ -8,7 +8,19 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after finite browser-control enrollment', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(232);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(234);
+  });
+
+  it('enrolls behavioral request-body shape and lazy-provenance allocation mutants', () => {
+    const names = [
+      'request-body-provenance/restore-eager-scalar-boxing',
+      'request-body/drop-json-pretag-shape-budget',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(names.sort());
+    expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
+    expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });
 
   it('executes every finite security-IR mutant against a behavioral compiler oracle', () => {
