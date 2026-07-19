@@ -2038,6 +2038,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'rejects a dynamic generated-control target smuggled through %s',
           'nested primitive attrs',
           'dynamically targets compiler-generated control-plane attribute',
+          'does not treat an attrs object inside a plain-element spread as a primitive merge',
         ],
       },
       {

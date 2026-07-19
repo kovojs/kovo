@@ -1,6 +1,11 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { parseKovoModuleRef } from '@kovojs/core/internal/module-ref';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import {
+  kovoExecutableReferenceAttributeKind,
+  type KovoExecutableReferenceAttributeKind,
+} from '../executable-reference-attributes.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -9,9 +14,17 @@ import {
   compilerOwnDataValue,
   compilerRegExpTest,
   compilerStringStartsWith,
+  compilerStringToLowerCase,
 } from '../compiler-security-intrinsics.js';
 import { compilerIrHeader, cssIrHeader } from '../ir.js';
-import type { ComponentModuleModel } from '../scan/parse.js';
+import {
+  jsxElements,
+  type ComponentModuleModel,
+  type JsxAttributeModel,
+  type JsxSpreadAttributeModel,
+  type ObjectLiteralEntry,
+  type StaticJsxWireAttributeEntry,
+} from '../scan/parse.js';
 import { isCompilerEmittedSourceProvenance } from '../source-provenance.js';
 import type { InternalCompileComponentOptions } from '../types.js';
 
@@ -42,6 +55,12 @@ export function validateAuthoringSurface(
   const diagnostics: CompilerDiagnostic[] = [];
 
   if (model !== null) {
+    appendAuthoredExecutableReferenceDiagnostics(
+      diagnostics,
+      options.fileName,
+      options.source,
+      model,
+    );
     appendComponentIdentityAssignmentDiagnostics(
       diagnostics,
       options.fileName,
@@ -116,6 +135,235 @@ export function validateAuthoringSurface(
 
   appendRenderDiagnostics(diagnostics, options.fileName, options.source, renders);
   return diagnostics;
+}
+
+/**
+ * SPEC §4.3/§5.2 rules 7 and 12: executable wire references are compiler output, not an
+ * app-authoring surface. This gate deliberately runs over the original parser model: typed event
+ * closures and reviewed primitive lowering have not emitted their on:* / data-bind* references
+ * yet, while copied lowered strings remain directly attributable to authored source.
+ */
+function appendAuthoredExecutableReferenceDiagnostics(
+  diagnostics: CompilerDiagnostic[],
+  fileName: string,
+  source: string,
+  model: ComponentModuleModel,
+): void {
+  const elements = jsxElements(model);
+  const elementLength = compilerArrayLength(elements, 'Authored executable-ref JSX elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Authored executable-ref JSX elements',
+    ) as (typeof elements)[number] | undefined;
+    if (!element) {
+      throw new TypeError(`Authored executable-ref JSX elements[${elementIndex}] must be dense.`);
+    }
+
+    const attributeLength = compilerArrayLength(
+      element.attributes,
+      'Authored executable-ref JSX attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        'Authored executable-ref JSX attributes',
+      ) as JsxAttributeModel | undefined;
+      if (!attribute) {
+        throw new TypeError(
+          `Authored executable-ref JSX attributes[${attributeIndex}] must be dense.`,
+        );
+      }
+      appendAuthoredExecutableReferenceDiagnosticForName(
+        diagnostics,
+        fileName,
+        source,
+        attribute.name,
+        staticAuthoredAttributeString(attribute),
+        attribute.start,
+        attribute.end,
+      );
+      if (
+        compilerStringToLowerCase(attribute.name) === 'attrs' &&
+        attribute.expressionObjectEntries !== undefined
+      ) {
+        appendAuthoredExecutableObjectEntryDiagnostics(
+          diagnostics,
+          fileName,
+          source,
+          attribute.expressionObjectEntries,
+          attribute.start,
+          attribute.end,
+          'primitive attrs',
+        );
+      }
+    }
+
+    const spreadLength = compilerArrayLength(
+      element.spreadAttributes,
+      'Authored executable-ref JSX spreads',
+    );
+    for (let spreadIndex = 0; spreadIndex < spreadLength; spreadIndex += 1) {
+      const spread = compilerOwnDataValue(
+        element.spreadAttributes,
+        spreadIndex,
+        'Authored executable-ref JSX spreads',
+      ) as JsxSpreadAttributeModel | undefined;
+      if (!spread) {
+        throw new TypeError(`Authored executable-ref JSX spreads[${spreadIndex}] must be dense.`);
+      }
+      appendAuthoredExecutableSpreadDiagnostics(diagnostics, fileName, source, spread);
+    }
+  }
+}
+
+function appendAuthoredExecutableSpreadDiagnostics(
+  diagnostics: CompilerDiagnostic[],
+  fileName: string,
+  source: string,
+  spread: JsxSpreadAttributeModel,
+): void {
+  if (spread.objectEntries !== undefined) {
+    appendAuthoredExecutableObjectEntryDiagnostics(
+      diagnostics,
+      fileName,
+      source,
+      spread.objectEntries,
+      spread.start,
+      spread.end,
+      'static JSX spread',
+    );
+    return;
+  }
+  if (spread.staticWireAttributeEntries === undefined) return;
+  const length = compilerArrayLength(
+    spread.staticWireAttributeEntries,
+    'Authored executable-ref static wire entries',
+  );
+  for (let index = 0; index < length; index += 1) {
+    const entry = compilerOwnDataValue(
+      spread.staticWireAttributeEntries,
+      index,
+      'Authored executable-ref static wire entries',
+    ) as StaticJsxWireAttributeEntry | undefined;
+    if (!entry) {
+      throw new TypeError(`Authored executable-ref static wire entries[${index}] must be dense.`);
+    }
+    appendAuthoredExecutableReferenceDiagnosticForName(
+      diagnostics,
+      fileName,
+      source,
+      entry.key,
+      entry.value.kind === 'known' && typeof entry.value.value === 'string'
+        ? entry.value.value
+        : undefined,
+      spread.start,
+      spread.end,
+    );
+  }
+}
+
+function appendAuthoredExecutableObjectEntryDiagnostics(
+  diagnostics: CompilerDiagnostic[],
+  fileName: string,
+  source: string,
+  entries: readonly ObjectLiteralEntry[],
+  start: number,
+  end: number,
+  carrier: string,
+): void {
+  const length = compilerArrayLength(entries, `Authored executable-ref ${carrier} entries`);
+  for (let index = 0; index < length; index += 1) {
+    const entry = compilerOwnDataValue(
+      entries,
+      index,
+      `Authored executable-ref ${carrier} entries`,
+    ) as ObjectLiteralEntry | undefined;
+    if (!entry) {
+      throw new TypeError(`Authored executable-ref ${carrier} entries[${index}] must be dense.`);
+    }
+    appendAuthoredExecutableReferenceDiagnosticForName(
+      diagnostics,
+      fileName,
+      source,
+      entry.key,
+      entry.staticStringValue,
+      start,
+      end,
+    );
+    if (compilerStringToLowerCase(entry.key) === 'attrs' && entry.objectEntries !== undefined) {
+      appendAuthoredExecutableObjectEntryDiagnostics(
+        diagnostics,
+        fileName,
+        source,
+        entry.objectEntries,
+        start,
+        end,
+        'nested primitive attrs',
+      );
+    }
+  }
+}
+
+function appendAuthoredExecutableReferenceDiagnosticForName(
+  diagnostics: CompilerDiagnostic[],
+  fileName: string,
+  source: string,
+  name: string,
+  staticValue: string | undefined,
+  start: number,
+  end: number,
+): void {
+  const kind = kovoExecutableReferenceAttributeKind(name);
+  if (kind === undefined) return;
+  // This slice closes executable-reference authority without declaring legacy authored residual
+  // data-bind paths a supported surface. SPEC §4.8/§5.2 still reserves those stamps for compiler
+  // output; migrating the remaining historical fixtures is a separate provenance closure. Until
+  // then, only url#export derives cross this gate, while data-bind-prop remains closed outright.
+  const lowerName = compilerStringToLowerCase(name);
+  if (
+    kind === 'derive' &&
+    (lowerName === 'data-bind' || compilerStringStartsWith(lowerName, 'data-bind:')) &&
+    (staticValue === undefined || parseKovoModuleRef(staticValue, 'derive') === undefined)
+  ) {
+    return;
+  }
+  compilerArrayAppend(
+    diagnostics,
+    {
+      ...diagnosticFor(fileName, 'KV235', source, start, end - start),
+      help: compilerArrayJoin(
+        [
+          authoredExecutableReferenceFix(kind),
+          `Blocked lowered selector: ${name}.`,
+          'SPEC.md §4.3/§5.2 rules 7 and 12: app source supplies typed closures, symbols, and values; only compiler-owned lowering may mint executable url#export wire references.',
+        ],
+        '\n',
+      ),
+      message: `App source hand-authors an executable lowered-IR reference; use typed TSX and let the compiler emit it. ${name}`,
+    },
+    'Authoring-surface diagnostics',
+  );
+}
+
+function staticAuthoredAttributeString(attribute: JsxAttributeModel): string | undefined {
+  if (typeof attribute.expressionStaticValue === 'string') return attribute.expressionStaticValue;
+  return typeof attribute.value === 'string' ? attribute.value : undefined;
+}
+
+function authoredExecutableReferenceFix(kind: KovoExecutableReferenceAttributeKind): string {
+  if (kind === 'handler') {
+    return 'Fix: author a typed JSX closure or reviewed callable, such as `onClick={() => ...}`, `onIdle={() => ...}`, or `onVisible={() => ...}`.';
+  }
+  if (kind === 'derive') {
+    return 'Fix: author the typed state/query expression in JSX and let Kovo emit the data-bind/data-bind-prop derive reference.';
+  }
+  if (kind === 'stream-renderer') {
+    return 'Fix: remove the raw stream-renderer reference; v1 has no app-authored typed stream-renderer syntax, so streamed text remains plain text until the compiler owns such lowering.';
+  }
+  return 'Fix: remove the module allowlist attribute; the compiler derives the exact client-module allowlist from emitted handlers and derives.';
 }
 
 function appendComponentIdentityAssignmentDiagnostics(

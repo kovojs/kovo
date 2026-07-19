@@ -51,6 +51,16 @@ const compilerFiniteSecurityValidatorPath = path.join(
   repoRoot,
   'packages/compiler/src/validate/security-operation-ir.ts',
 );
+const compilerAuthoringSurfaceValidatorPath = path.join(
+  repoRoot,
+  'packages/compiler/src/validate/authoring-surface.ts',
+);
+const compilerOutputContextValidatorPath = path.join(
+  repoRoot,
+  'packages/compiler/src/security/output-context.ts',
+);
+const coreSinkPolicyPath = path.join(repoRoot, 'packages/core/src/internal/sink-policy.ts');
+const inlineLoaderBuildPath = path.join(repoRoot, 'packages/browser/src/inline-loader-build.ts');
 const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/capability-closure.ts',
@@ -90,6 +100,39 @@ const runtimeSelectedExecutableReferenceClosureBranch =
   '      appendRuntimeSelectedExecutableReferenceDiagnostics(found, diagnostics, element);';
 const removedRuntimeSelectedExecutableReferenceClosureBranch =
   '      // runtime-selected executable-reference closure removed by mutant';
+const authoredExecutableReferenceClosureBranch = [
+  '    appendAuthoredExecutableReferenceDiagnostics(',
+  '      diagnostics,',
+  '      options.fileName,',
+  '      options.source,',
+  '      model,',
+  '    );',
+].join('\n');
+const removedAuthoredExecutableReferenceClosureBranch =
+  '    // authored executable-reference provenance closure removed by mutant';
+const dynamicBindingControlPlaneClosureBranch = [
+  "  if (options.posture === 'dynamic-binding' && isGeneratedOnlySemanticAttribute(name)) {",
+  '    return blockedDecision(',
+  '      name,',
+  "      'framework-control',",
+  '      value,',
+  "      'dynamic binding cannot mint or replace compiler-generated control-plane markup',",
+  '    );',
+  '  }',
+].join('\n');
+const removedDynamicBindingControlPlaneClosureBranch =
+  '  // dynamic-binding control-plane closure removed by mutant';
+const dynamicGeneratedControlTargetClosureBranch =
+  '  return name !== null && isGeneratedOnlySemanticAttribute(name) ? name : null;';
+const removedDynamicGeneratedControlTargetClosureBranch = '  return null;';
+const inlineDynamicControlPlaneClosureBranch = [
+  '    if (isGeneratedOnlyAttribute(n)) {',
+  '      bns.removeElementAttribute(el, name);',
+  '      return;',
+  '    }',
+].join('\n');
+const removedInlineDynamicControlPlaneClosureBranch =
+  '    // inline dynamic-binding control-plane closure removed by mutant';
 
 const browserRtcNetworkCapabilityBranch = [
   'const globalCapabilities = new Map<string, RawCapabilityKind>([',
@@ -1289,6 +1332,54 @@ const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
 ].join('\n');
 
 export const SECURITY_GATE_MUTANTS = [
+  {
+    description:
+      'Deletes compiler provenance closure for app-authored static lowered executable references.',
+    expectedKiller:
+      'app source must not mint executable wire authority without compiler-owned lowering',
+    name: 'compiler-finite-ir/drop-authored-executable-reference-provenance',
+    replacement: removedAuthoredExecutableReferenceClosureBranch,
+    search: authoredExecutableReferenceClosureBranch,
+    sourceFile: compilerAuthoringSurfaceValidatorPath,
+    sourceOnly: true,
+    test: assertAuthoredExecutableReferenceClosureBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
+      'Lets state/query values replace compiler-generated handler, renderer, and allowlist markup.',
+    expectedKiller:
+      'dynamic bindings must remove generated control-plane attributes without stripping compiler wire',
+    name: 'runtime-sink/drop-dynamic-binding-control-plane-closure',
+    replacement: removedDynamicBindingControlPlaneClosureBranch,
+    search: dynamicBindingControlPlaneClosureBranch,
+    sourceFile: coreSinkPolicyPath,
+    test: assertDynamicBindingControlPlaneClosureBehavior,
+  },
+  {
+    description:
+      'Deletes compiler output-context closure for bindings that target generated control markup.',
+    expectedKiller:
+      'direct, static-spread, and primitive-attrs dynamic control targets must diagnose KV236',
+    name: 'compiler-output-context/drop-dynamic-generated-control-target-closure',
+    replacement: removedDynamicGeneratedControlTargetClosureBranch,
+    search: dynamicGeneratedControlTargetClosureBranch,
+    sourceFile: compilerOutputContextValidatorPath,
+    sourceOnly: true,
+    test: assertDynamicGeneratedControlTargetCompilerBehavior,
+  },
+  {
+    description:
+      'Deletes the always-loaded inline runtime floor for state-selected compiler control markup.',
+    expectedKiller:
+      'readable and freshly minified inline state writes must remove generated control attributes',
+    name: 'inline-runtime/drop-dynamic-binding-control-plane-closure',
+    replacement: removedInlineDynamicControlPlaneClosureBranch,
+    search: inlineDynamicControlPlaneClosureBranch,
+    sourceFile: inlineLoaderBuildPath,
+    sourceOnly: true,
+    test: assertInlineDynamicControlPlaneClosureBehavior,
+  },
   {
     description:
       'Deletes compiler closure for request/query-selected executable module/export references.',
@@ -2751,6 +2842,192 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertWebhookEgressContextKeepsCapabilitySeal,
   },
 ];
+
+async function assertDynamicBindingControlPlaneClosureBehavior(moduleUnderTest) {
+  const reservedNames = [
+    'data-bind:aria-label',
+    'data-kovo-module-allowlist',
+    'data-stream-renderer',
+    'ON:CLICK',
+  ];
+  for (const name of reservedNames) {
+    const dynamicDecision = moduleUnderTest.decideRuntimeAttributeWrite(
+      name,
+      '/c/attacker.client.js#run',
+      { posture: 'dynamic-binding' },
+    );
+    if (dynamicDecision.action !== 'remove' || dynamicDecision.family !== 'framework-control') {
+      throw new Error(`dynamic binding retained compiler control-plane attribute ${name}`);
+    }
+    const compilerWireDecision = moduleUnderTest.decideRuntimeAttributeWrite(
+      name,
+      '/c/compiler.client.js#run',
+    );
+    if (compilerWireDecision.action !== 'allow') {
+      throw new Error(`compiler wire lost control-plane attribute ${name}`);
+    }
+  }
+  const visibleDecision = moduleUnderTest.decideRuntimeAttributeWrite('aria-label', 'Ready', {
+    posture: 'dynamic-binding',
+  });
+  if (visibleDecision.action !== 'allow') {
+    throw new Error('dynamic binding lost an ordinary visible attribute');
+  }
+}
+
+async function assertDynamicGeneratedControlTargetCompilerBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-dynamic-control-target-behavior-'));
+  try {
+    const compilerRoot = path.join(tempRoot, 'packages', 'compiler');
+    mkdirSync(compilerRoot, { recursive: true });
+    cpSync(path.join(repoRoot, 'packages/compiler/src'), path.join(compilerRoot, 'src'), {
+      recursive: true,
+    });
+    cpSync(
+      path.join(repoRoot, 'packages/compiler/package.json'),
+      path.join(compilerRoot, 'package.json'),
+    );
+    symlinkSync(
+      path.join(repoRoot, 'packages/compiler/node_modules'),
+      path.join(compilerRoot, 'node_modules'),
+      'dir',
+    );
+    writeFileSync(path.join(compilerRoot, 'src/security/output-context.ts'), sourceText, 'utf8');
+    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'node_modules/vitest/vitest.mjs'),
+        '--run',
+        'packages/compiler/src/output-context-security.test.ts',
+        '--testNamePattern',
+        'dynamic binding targeting the generated|dynamic generated-control target smuggled',
+        '--reporter=dot',
+      ],
+      {
+        cwd: tempRoot,
+        encoding: 'utf8',
+        env: { ...process.env, FORCE_COLOR: '0' },
+        timeout: 60_000,
+      },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(
+        `dynamic generated-control compiler regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      );
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+}
+
+async function assertInlineDynamicControlPlaneClosureBehavior(_moduleUnderTest, { sourceText }) {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-inline-control-plane-behavior-'));
+  try {
+    const browserRoot = path.join(tempRoot, 'packages', 'browser');
+    const coreInternalRoot = path.join(tempRoot, 'packages', 'core', 'src', 'internal');
+    mkdirSync(browserRoot, { recursive: true });
+    mkdirSync(coreInternalRoot, { recursive: true });
+    cpSync(path.join(repoRoot, 'packages/browser/src'), path.join(browserRoot, 'src'), {
+      recursive: true,
+    });
+    cpSync(
+      path.join(repoRoot, 'packages/browser/package.json'),
+      path.join(browserRoot, 'package.json'),
+    );
+    cpSync(
+      path.join(repoRoot, 'packages/core/src/internal/semantic-attribute-manifest.ts'),
+      path.join(coreInternalRoot, 'semantic-attribute-manifest.ts'),
+    );
+    symlinkSync(
+      path.join(repoRoot, 'packages/browser/node_modules'),
+      path.join(browserRoot, 'node_modules'),
+      'dir',
+    );
+    symlinkSync(path.join(repoRoot, 'node_modules'), path.join(tempRoot, 'node_modules'), 'dir');
+    writeFileSync(path.join(browserRoot, 'src/inline-loader-build.ts'), sourceText, 'utf8');
+    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'node_modules/vitest/vitest.mjs'),
+        '--run',
+        'packages/browser/src/inline-loader-security.test.ts',
+        '--testNamePattern',
+        'removes state-selected compiler control-plane attributes',
+        '--reporter=dot',
+      ],
+      {
+        cwd: tempRoot,
+        encoding: 'utf8',
+        env: { ...process.env, FORCE_COLOR: '0' },
+        timeout: 60_000,
+      },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(
+        `inline dynamic control-plane regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      );
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+}
+
+async function assertAuthoredExecutableReferenceClosureBehavior(_moduleUnderTest, { sourceText }) {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-authored-executable-ref-behavior-'));
+  try {
+    const compilerRoot = path.join(tempRoot, 'packages', 'compiler');
+    mkdirSync(compilerRoot, { recursive: true });
+    cpSync(path.join(repoRoot, 'packages/compiler/src'), path.join(compilerRoot, 'src'), {
+      recursive: true,
+    });
+    cpSync(
+      path.join(repoRoot, 'packages/compiler/package.json'),
+      path.join(compilerRoot, 'package.json'),
+    );
+    symlinkSync(
+      path.join(repoRoot, 'packages/compiler/node_modules'),
+      path.join(compilerRoot, 'node_modules'),
+      'dir',
+    );
+    writeFileSync(path.join(compilerRoot, 'src/validate/authoring-surface.ts'), sourceText, 'utf8');
+    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'node_modules/vitest/vitest.mjs'),
+        '--run',
+        'packages/compiler/src/security-operation-ir.security.test.ts',
+        '--testNamePattern',
+        'app-authored static lowered|duplicate and nested|compiler-emitted executable references',
+        '--reporter=dot',
+      ],
+      {
+        cwd: tempRoot,
+        encoding: 'utf8',
+        env: { ...process.env, FORCE_COLOR: '0' },
+        timeout: 60_000,
+      },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(
+        `authored executable-reference behavioral regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      );
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+}
 
 async function assertRuntimeSelectedExecutableReferenceClosureBehavior(
   _moduleUnderTest,

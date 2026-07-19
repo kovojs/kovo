@@ -10,6 +10,10 @@ import { gzipSync } from 'node:zlib';
 import ts from 'typescript';
 
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
+import {
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES,
+} from '../../core/src/internal/semantic-attribute-manifest.ts';
 
 import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
@@ -209,6 +213,20 @@ function installInlineKovoLoader(im) {
   const ns = (value) => bns.call(intrinsicNumber, undefined, [value]);
   const ss = (value) => bns.call(intrinsicString, undefined, [value]);
   const ec = (value) => bns.call(intrinsicEncodeURIComponent, undefined, [value]);
+  // SPEC §4.8/§5.2: state/query values may update visible attributes, but may not mint or replace
+  // compiler-owned lowered IR. These arrays are generated from core's single semantic manifest so
+  // the always-loaded bootstrap, modular runtime, and compiler output gate share one denominator.
+  const generatedOnlyAttributes = ${JSON.stringify([...GENERATED_ONLY_SEMANTIC_ATTRIBUTES])};
+  const generatedOnlyAttributePrefixes = ${JSON.stringify([...GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES])};
+  const isGeneratedOnlyAttribute = (name) => {
+    for (let index = 0; index < generatedOnlyAttributes.length; index += 1) {
+      if (name === generatedOnlyAttributes[index]) return true;
+    }
+    for (let index = 0; index < generatedOnlyAttributePrefixes.length; index += 1) {
+      if (bns.indexOf(name, generatedOnlyAttributePrefixes[index]) === 0) return true;
+    }
+    return false;
+  };
   const tk = (source, separator) => {
     const values = [];
     let start = 0;
@@ -496,6 +514,10 @@ function installInlineKovoLoader(im) {
   const wa = (el, name, val) => {
     const n = bns.lower(name);
     if (inertBlockedSmil(el)) return;
+    if (isGeneratedOnlyAttribute(n)) {
+      bns.removeElementAttribute(el, name);
+      return;
+    }
     // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
     // lives in the top layer. Toggling its open attribute alone never exits the
     // top layer (it stays :modal with an inert backdrop intercepting every

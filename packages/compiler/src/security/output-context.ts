@@ -10,6 +10,7 @@ import {
   htmlElementWireValueIssue,
   htmlTextWireValuePosture,
   htmlWireValueIssue,
+  isGeneratedOnlySemanticAttribute,
   type HtmlWireValuePosture,
 } from '@kovojs/core/internal/semantic-attributes';
 import * as ts from 'typescript';
@@ -322,6 +323,20 @@ function validateElementAttributes(
         found,
         validateStyleAttribute(diagnostics, attribute),
         'Style attribute diagnostics',
+      );
+      continue;
+    }
+
+    const generatedControlTarget = dynamicGeneratedControlPlaneTarget(attribute);
+    if (generatedControlTarget !== null) {
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(
+          diagnostics,
+          `${attribute.name} dynamically targets compiler-generated control-plane attribute "${generatedControlTarget}"`,
+          { start: attribute.start, length: attribute.end - attribute.start },
+        ),
+        'Element attribute diagnostics',
       );
       continue;
     }
@@ -730,6 +745,8 @@ function validatePrimitiveAttrsEntries(
         attribute.expressionObjectEntries,
         { end: attribute.end, start: attribute.start },
         hasExternalEscape,
+        undefined,
+        true,
       ),
       'Primitive attrs entry diagnostics',
     );
@@ -752,11 +769,31 @@ function validateStaticObjectEntrySinks(
   span: SourceSpan,
   hasExternalEscape: boolean,
   intrinsicTagName?: string,
+  descendIntoPrimitiveAttrs = false,
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
   const length = compilerArrayLength(entries, 'Static object sink entries');
   for (let index = 0; index < length; index += 1) {
     const entry = outputArrayValue(entries, index, 'Static object sink entries');
+    if (
+      descendIntoPrimitiveAttrs &&
+      compilerStringToLowerCase(entry.key) === 'attrs' &&
+      entry.objectEntries !== undefined
+    ) {
+      appendOutputItems(
+        found,
+        validateStaticObjectEntrySinks(
+          diagnostics,
+          entry.objectEntries,
+          span,
+          hasExternalEscape,
+          intrinsicTagName,
+          true,
+        ),
+        'Nested static object sink diagnostics',
+      );
+      continue;
+    }
     if (entry.value === undefined) continue;
     const literal = entry.staticStringValue ?? literalStringValue(entry.value);
     if (literal === null) continue;
@@ -773,6 +810,20 @@ function validateStaticObjectEntrySinks(
       validateWireStableAttribute(diagnostics, intrinsicTagName, synthetic, span),
       'Static wire-stable spread diagnostics',
     );
+
+    const generatedControlTarget = dynamicGeneratedControlPlaneTarget(synthetic);
+    if (generatedControlTarget !== null) {
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(
+          diagnostics,
+          `${synthetic.name} dynamically targets compiler-generated control-plane attribute "${generatedControlTarget}"`,
+          { start: span.start, length: span.end - span.start },
+        ),
+        'Static generated-control diagnostics',
+      );
+      continue;
+    }
 
     if (isUrlAttribute(synthetic.name)) {
       appendOutputItems(
@@ -1003,13 +1054,20 @@ function literalAttributeStringValue(attribute: JsxAttributeModel): string | nul
  * For `data-derive-attr` with value "foo" the dynamic name is "foo".
  */
 function dynamicAttributeName(attribute: JsxAttributeModel): string | null {
-  if (compilerStringStartsWith(attribute.name, 'data-bind:')) {
-    return compilerStringSlice(attribute.name, 'data-bind:'.length);
+  const normalizedAttributeName = compilerStringToLowerCase(attribute.name);
+  if (compilerStringStartsWith(normalizedAttributeName, 'data-bind:')) {
+    return compilerStringSlice(normalizedAttributeName, 'data-bind:'.length);
   }
-  if (attribute.name === 'data-derive-attr' && typeof attribute.value === 'string') {
-    return attribute.value;
+  if (normalizedAttributeName === 'data-derive-attr' && typeof attribute.value === 'string') {
+    return compilerStringToLowerCase(attribute.value);
   }
   return null;
+}
+
+/** Returns the normalized generated-only target of one dynamic binding, when present. */
+function dynamicGeneratedControlPlaneTarget(attribute: JsxAttributeModel): string | null {
+  const name = dynamicAttributeName(attribute);
+  return name !== null && isGeneratedOnlySemanticAttribute(name) ? name : null;
 }
 
 /** Returns true when the attribute dynamically targets an on* event-handler sink. */

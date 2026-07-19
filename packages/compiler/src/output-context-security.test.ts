@@ -1021,4 +1021,11 @@ describe('KV236 direct ≡ spread ≡ attrs-merge channel symmetry (P2-1 / S4)',
     );
     expect(messages).toEqual([]);
   });
+
+  it('does not treat an attrs object inside a plain-element spread as a primitive merge', () => {
+    const messages = kv236Messages(
+      `export const PlainSpread = component({ render: () => <div {...{ attrs: { 'data-bind:data-kovo-module-allowlist': 'state.module' } }}>x</div> });`,
+    );
+    expect(messages).toEqual([]);
+  });
 });

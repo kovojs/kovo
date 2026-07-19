@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
-  authoredKovoExecutableReferenceAttributeKind,
   kovoExecutableReferenceAttributeInventory,
   kovoExecutableReferenceAttributeKind,
 } from './executable-reference-attributes.js';
@@ -19,23 +18,16 @@ describe('SPEC §4.3/§5.2 executable-reference attribute inventory', () => {
   // @kovo-security-certifies C13 executable-reference-selector-denominator
   it('keeps one finite ASCII-case-normalized classifier for both compiler gates', () => {
     expect(kovoExecutableReferenceAttributeInventory).toEqual([
-      { authoredPolicy: 'always', kind: 'handler', match: 'prefix', selector: 'on:' },
-      { authoredPolicy: 'module-ref', kind: 'derive', match: 'exact', selector: 'data-bind' },
-      { authoredPolicy: 'module-ref', kind: 'derive', match: 'prefix', selector: 'data-bind:' },
+      { kind: 'handler', match: 'prefix', selector: 'on:' },
+      { kind: 'derive', match: 'exact', selector: 'data-bind' },
+      { kind: 'derive', match: 'prefix', selector: 'data-bind:' },
+      { kind: 'derive', match: 'prefix', selector: 'data-bind-prop:' },
       {
-        authoredPolicy: 'always',
-        kind: 'derive',
-        match: 'prefix',
-        selector: 'data-bind-prop:',
-      },
-      {
-        authoredPolicy: 'always',
         kind: 'stream-renderer',
         match: 'exact',
         selector: 'data-stream-renderer',
       },
       {
-        authoredPolicy: 'always',
         kind: 'module-allowlist',
         match: 'exact',
         selector: 'data-kovo-module-allowlist',
@@ -45,23 +37,10 @@ describe('SPEC §4.3/§5.2 executable-reference attribute inventory', () => {
     expect(kovoExecutableReferenceAttributeKind('ON:CLICK')).toBe('handler');
     expect(kovoExecutableReferenceAttributeKind('DATA-BIND:HIDDEN')).toBe('derive');
     expect(kovoExecutableReferenceAttributeKind('DATA-BIND-PROP:CHECKED')).toBe('derive');
-    expect(kovoExecutableReferenceAttributeKind('DATA-STREAM-RENDERER')).toBe(
-      'stream-renderer',
-    );
+    expect(kovoExecutableReferenceAttributeKind('DATA-STREAM-RENDERER')).toBe('stream-renderer');
     expect(kovoExecutableReferenceAttributeKind('DATA-KOVO-MODULE-ALLOWLIST')).toBe(
       'module-allowlist',
     );
-
-    expect(authoredKovoExecutableReferenceAttributeKind('data-bind', 'cart.count')).toBeUndefined();
-    expect(
-      authoredKovoExecutableReferenceAttributeKind(
-        'data-bind',
-        '/c/cart.client.js#Cart$count',
-      ),
-    ).toBe('derive');
-    expect(
-      authoredKovoExecutableReferenceAttributeKind('data-bind-prop:checked', 'cart.checked'),
-    ).toBe('derive');
   });
 
   it('censuses every runtime executable-selector consumer against the shared inventory', () => {
