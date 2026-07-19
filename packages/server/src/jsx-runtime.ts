@@ -19,6 +19,7 @@ import {
 } from '@kovojs/core/internal/semantic-attributes';
 import {
   drainRuntimeSinkSecurityEvent,
+  isBlockedActiveEmbedElementName,
   isBlockedSvgSmilElementName,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
@@ -205,6 +206,20 @@ export function jsx(
         'raw-html',
         intrinsicType,
         'SVG SMIL animation elements are disabled because they can transfer values into executable attributes',
+      ),
+    );
+    return renderedHtml('');
+  }
+  // SPEC.md §4.8 / §5.2 rule 10: object/embed can execute same-origin HTML with
+  // parent-document authority but provide no iframe sandbox boundary. The compiler rejects
+  // authored uses; this floor also closes direct/uncompiled JSX and opaque spread construction.
+  if (isBlockedActiveEmbedElementName(intrinsicType)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        `<${intrinsicType}>`,
+        'raw-html',
+        intrinsicType,
+        'active object/embed elements are disabled because their documents cannot be sandboxed',
       ),
     );
     return renderedHtml('');

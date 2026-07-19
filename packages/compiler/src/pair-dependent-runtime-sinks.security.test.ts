@@ -96,6 +96,21 @@ export const Metadata = component({
 
 describe('element-context execution and isolation sinks', () => {
   it.each([
+    ['object', '<object data="/safe/account" type="text/html">fallback</object>'],
+    ['embed', '<embed src="/safe/account" type="text/html" />'],
+  ])('disables the unsandboxable active <%s> element', (_tag, markup) => {
+    expect(
+      kv236Diagnostics(`
+export const ActiveEmbed = component({
+  render: () => (${markup}),
+});
+`),
+    ).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('sandbox boundary') }),
+    ]);
+  });
+
+  it.each([
     [
       'script source',
       '<script src={state.value} />',
@@ -105,6 +120,16 @@ describe('element-context execution and isolation sinks', () => {
       'script type',
       '<script src="/uploads/reviewed.js" type={state.value} />',
       'a dynamic script type can turn an inert data block into executable JavaScript',
+    ],
+    [
+      'SVG script href',
+      '<svg><script href={state.value} /></svg>',
+      'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+    ],
+    [
+      'SVG script xlink href',
+      '<svg><script xlink:href={state.value} /></svg>',
+      'a dynamic script source can execute same-origin attacker-controlled JavaScript',
     ],
     [
       'stylesheet href',
@@ -125,6 +150,11 @@ describe('element-context execution and isolation sinks', () => {
       'iframe source',
       '<iframe src={state.value} sandbox="allow-forms" />',
       'a dynamic iframe source can load same-origin attacker-controlled active content',
+    ],
+    [
+      'MathML annotation encoding',
+      '<math><annotation-xml encoding={state.value}><script src="/reviewed.js" /></annotation-xml></math>',
+      'a dynamic MathML annotation encoding can activate inert descendants as HTML',
     ],
   ])('rejects a dynamic %s', (_label, markup, expectedReason) => {
     const diagnostics = kv236Diagnostics(`

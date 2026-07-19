@@ -178,6 +178,14 @@ describe('query binding helpers', () => {
       },
       { tagName: 'SCRIPT' },
     );
+    const svgScriptHref = new FakeQueryPlanElement(
+      { 'data-bind:href': 'page.svgScript', href: '/reviewed/svg-runtime.js' },
+      { tagName: 'SCRIPT' },
+    );
+    const mathEncoding = new FakeQueryPlanElement(
+      { 'data-bind:encoding': 'page.encoding', encoding: 'text/plain' },
+      { tagName: 'ANNOTATION-XML' },
+    );
     const stylesheet = new FakeQueryPlanElement(
       { 'data-bind:href': 'page.stylesheet', href: '/reviewed/theme.css', rel: 'stylesheet' },
       { tagName: 'LINK' },
@@ -213,6 +221,8 @@ describe('query binding helpers', () => {
     root.planElements.push(
       scriptSource,
       scriptType,
+      svgScriptHref,
+      mathEncoding,
       stylesheet,
       linkRelationship,
       iframeSandbox,
@@ -227,16 +237,50 @@ describe('query binding helpers', () => {
       sandbox: 'allow-scripts allow-same-origin',
       script: '/uploads/attacker.js',
       scriptType: 'module',
+      svgScript: '/uploads/attacker-svg.js',
+      encoding: 'text/html',
       stylesheet: '/uploads/attacker.css',
     });
 
     expect(scriptSource.getAttribute('src')).toBe('/reviewed/runtime.js');
     expect(scriptType.getAttribute('type')).toBe('application/json');
+    expect(svgScriptHref.getAttribute('href')).toBe('/reviewed/svg-runtime.js');
+    expect(mathEncoding.getAttribute('encoding')).toBe('text/plain');
     expect(stylesheet.getAttribute('href')).toBe('/reviewed/theme.css');
     expect(linkRelationship.getAttribute('rel')).toBe('icon');
     expect(iframeSandbox.getAttribute('sandbox')).toBe('allow-forms');
     expect(iframeNullSandbox.getAttribute('sandbox')).toBe('allow-forms');
     expect(iframeSource.getAttribute('src')).toBe('/reviewed/profile');
+  });
+
+  it('inerts object and embed before a live binding can activate same-origin HTML', () => {
+    const root = new FakeMorphRoot();
+    const object = new FakeQueryPlanElement(
+      {
+        'data-bind:data': 'page.objectUrl',
+        data: '/reviewed/file.pdf',
+        type: 'application/pdf',
+      },
+      { tagName: 'OBJECT', textContent: 'fallback' },
+    );
+    const embed = new FakeQueryPlanElement(
+      {
+        'data-bind:src': 'page.embedUrl',
+        src: '/reviewed/file.pdf',
+        type: 'application/pdf',
+      },
+      { tagName: 'EMBED' },
+    );
+    root.planElements.push(object, embed);
+
+    applyQueryBindings(root, 'page', {
+      embedUrl: '/safe/account',
+      objectUrl: '/safe/account',
+    });
+
+    expect(object.attributes).toEqual([]);
+    expect(object.textContent).toBe('');
+    expect(embed.attributes).toEqual([]);
   });
 
   it('applies optional binding path segments and removes empty attribute bindings', () => {

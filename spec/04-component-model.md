@@ -333,11 +333,13 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 - the `style` attribute and `<style>` element text;
 - `srcdoc`;
 - `<script>` element text and `<script type="application/json">` island bodies (§9.1 governs the byte-level encoding for the latter).
-- element-context execution and isolation controls: a dynamic `<script src>` can execute
-  same-origin attacker-controlled JavaScript, a dynamic script `type` can turn inert data into
+- element-context execution and isolation controls: a dynamic HTML `<script src>` or SVG
+  `<script href>`/`xlink:href` can execute same-origin attacker-controlled JavaScript, a dynamic
+  script `type` can turn inert data into
   code, a dynamic stylesheet `<link href>`/`rel` pair can apply attacker-controlled CSS, and a
   dynamic `<iframe src>`/`sandbox` pair can load active same-origin content or lift its isolation.
-  These attributes must be static compiler-reviewed values. The URL halves (`script[src]`,
+  A dynamic MathML `annotation-xml[encoding]` can likewise turn inert descendants into live HTML.
+  These attributes must be static compiler-reviewed values. The URL halves (`script[src|href|xlink:href]`,
   `link[href]`, and `iframe[src]`) may instead hold an exact `trustedUrl(value, auditedReason)`;
   `trustedUrl` never suppresses `type`, `rel`, or `sandbox`. Live bindings and keyed fragment
   morphs preserve the reviewed value rather than applying or removing a blocked control.
@@ -352,6 +354,7 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
   valid. There is no trusted-value suppression for document-wide navigation; use Kovo router or
   response navigation outcomes and framework deployment-base configuration instead.
 - generic SVG SMIL execution primitives — `<animate>`, `<animateColor>`, `<animateMotion>`, `<animateTransform>`, `<discard>`, and `<set>` — are disabled outright in framework-generated or framework-managed DOM. SMIL's `attributeName` target and its `values`/`from`/`to`/`by` transfers are one temporal sink: the target may be an ancestor or an `href="#id"` sibling, and live bindings may commit target and transfer values in either order. The compiler reports **KV236** for these intrinsic elements even when the apparent target is benign; server JSX omits them, and fragment/live-update runtimes inert them before adoption or update. There is no plain-JSX trusted-value suppression for this ban; reviewed raw `trustedHtml(...)` remains the explicit whole-markup authority described below.
+- unsandboxable active embeds — `<object>` and `<embed>` — are disabled outright in framework-generated or framework-managed DOM. Either element can load same-origin HTML with the embedding document's authority, but neither provides the isolation contract of `iframe[sandbox]`; CSP `object-src 'none'` remains defense in depth rather than the proof. The compiler reports **KV236**, server JSX omits the element, and fragment/live-update runtimes remove its attributes and fallback descendants before adoption or update. Use a sandboxed iframe or an ordinary download/navigation link instead; there is no plain-JSX trusted-value suppression for this ban.
 
 Every `data-bind:<attr>` write into a URL-scheme attribute MUST scheme-allowlist its resolved value at both render and loader update time; a value resolving to a denied scheme is dropped to the attribute's empty semantics (the attribute is removed, per the `?.` rule above), never written verbatim. A binding into an unsafe context with no escape hatch is **KV236** with the usual teaching menu: change the projection, extract a derive that returns a safe value, or — for genuinely author-trusted markup/URLs — opt in via the trusted-HTML escape hatch.
 

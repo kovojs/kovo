@@ -67,9 +67,25 @@ export const BLOCKED_SVG_SMIL_ELEMENT_NAMES = freezeSecurityValue([
   'set',
 ] as const);
 
+/**
+ * @internal Active embedded-document elements Kovo refuses to render or adopt.
+ *
+ * SPEC.md §4.8 / §5.2 rule 10: unlike an iframe, `object` and `embed` have no
+ * sandbox boundary. A same-origin HTML resource therefore executes with the
+ * embedding document's origin and can directly reach its parent. Kovo's
+ * technical-preview surface disables the primitives instead of relying on CSP.
+ */
+export const BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES = freezeSecurityValue([
+  'embed',
+  'object',
+] as const);
+
 const urlAttributeNames = securitySetOf<string>(URL_ATTRIBUTE_NAMES);
 const safeUrlSchemes = securitySetOf<string>(SAFE_URL_SCHEMES);
 const blockedSvgSmilElementNames = securitySetOf<string>(BLOCKED_SVG_SMIL_ELEMENT_NAMES);
+const blockedActiveEmbedElementNames = securitySetOf<string>(
+  BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
+);
 const urlSchemePattern = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 const htmlColonReferencePattern = /&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/;
 
@@ -81,6 +97,80 @@ export function isUrlAttributeName(name: string): boolean {
 /** @internal True when an intrinsic element is a disabled SVG SMIL execution primitive. */
 export function isBlockedSvgSmilElementName(name: string): boolean {
   return securitySetHas(blockedSvgSmilElementNames, securityStringToLowerCase(name));
+}
+
+/** @internal True when an intrinsic element is an unsandboxable active embed primitive. */
+export function isBlockedActiveEmbedElementName(name: string): boolean {
+  return securitySetHas(blockedActiveEmbedElementNames, securityStringToLowerCase(name));
+}
+
+/** @internal One finite element/attribute security-control classification. */
+export interface ElementContextSecurityControl {
+  readonly acceptsTrustedUrl: boolean;
+  readonly reason: string;
+}
+
+/**
+ * @internal Finite registry for attributes whose safety depends on their owning element.
+ *
+ * Compiler and runtime paths consume this same classifier so a URL-scheme-safe value cannot
+ * bypass execution, isolation, or foreign-content activation review (SPEC §4.8, §5.2 rule 10).
+ */
+export function elementContextSecurityControl(
+  elementName: string,
+  attributeName: string,
+): ElementContextSecurityControl | undefined {
+  const tag = securityStringToLowerCase(elementName);
+  const attribute = securityStringToLowerCase(attributeName);
+  if (tag === 'script') {
+    if (attribute === 'src' || attribute === 'href' || attribute === 'xlink:href') {
+      return {
+        acceptsTrustedUrl: true,
+        reason: 'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+      };
+    }
+    if (attribute === 'type') {
+      return {
+        acceptsTrustedUrl: false,
+        reason: 'a dynamic script type can turn an inert data block into executable JavaScript',
+      };
+    }
+  }
+  if (tag === 'link') {
+    if (attribute === 'href') {
+      return {
+        acceptsTrustedUrl: true,
+        reason: 'a dynamic stylesheet URL can apply attacker-controlled CSS',
+      };
+    }
+    if (attribute === 'rel') {
+      return {
+        acceptsTrustedUrl: false,
+        reason: 'a dynamic link relationship can turn an inert resource into an active stylesheet',
+      };
+    }
+  }
+  if (tag === 'iframe') {
+    if (attribute === 'src') {
+      return {
+        acceptsTrustedUrl: true,
+        reason: 'a dynamic iframe source can load same-origin attacker-controlled active content',
+      };
+    }
+    if (attribute === 'sandbox') {
+      return {
+        acceptsTrustedUrl: false,
+        reason: 'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
+      };
+    }
+  }
+  if (tag === 'annotation-xml' && attribute === 'encoding') {
+    return {
+      acceptsTrustedUrl: false,
+      reason: 'a dynamic MathML annotation encoding can activate inert descendants as HTML',
+    };
+  }
+  return undefined;
 }
 
 /**
@@ -470,40 +560,10 @@ function decideRuntimeElementContextWrite(
   }
 
   if (options.posture !== 'dynamic-binding') return undefined;
-  const preserveReason = dynamicElementContextPreserveReason(
-    tag,
-    attribute,
-    options.trustedUrl === true,
-  );
-  return preserveReason === undefined
-    ? undefined
-    : preservedDecision(name, family, value, preserveReason);
-}
-
-function dynamicElementContextPreserveReason(
-  tag: string,
-  attribute: string,
-  trustedUrl: boolean,
-): string | undefined {
-  if (tag === 'script') {
-    if (attribute === 'src' && !trustedUrl)
-      return 'dynamic script sources require an exact reviewed TrustedUrl';
-    if (attribute === 'type')
-      return 'dynamic script type could turn an inert data block into executable JavaScript';
-  }
-  if (tag === 'link') {
-    if (attribute === 'href' && !trustedUrl)
-      return 'dynamic link URLs require an exact reviewed TrustedUrl';
-    if (attribute === 'rel')
-      return 'dynamic link relationship could turn an inert resource into an active stylesheet';
-  }
-  if (tag === 'iframe') {
-    if (attribute === 'src' && !trustedUrl)
-      return 'dynamic iframe sources require an exact reviewed TrustedUrl';
-    if (attribute === 'sandbox')
-      return 'dynamic iframe sandbox changes can remove the embedded-document isolation boundary';
-  }
-  return undefined;
+  const control = elementContextSecurityControl(tag, attribute);
+  if (control === undefined) return undefined;
+  if (control.acceptsTrustedUrl && options.trustedUrl === true) return undefined;
+  return preservedDecision(name, family, value, control.reason);
 }
 
 /** @internal Sanitize a srcset candidate list by dropping unsafe URL candidates. */

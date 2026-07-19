@@ -1,4 +1,5 @@
 import {
+  BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
   BLOCKED_SVG_SMIL_ELEMENT_NAMES,
   createRenderedFragmentHtml,
   decideRuntimeAttributeWrite,
@@ -84,6 +85,9 @@ describe('browser response fragment apply', () => {
 
         await new Promise((resolve) => setTimeout(resolve, 500));
         expect(executed).toBe(false);
+        const adopted = root.querySelector(kind);
+        expect(adopted?.attributes).toHaveLength(0);
+        expect(adopted?.childNodes).toHaveLength(0);
       } finally {
         removeEventListener('message', onMessage);
       }
@@ -579,6 +583,19 @@ describe('browser response fragment apply', () => {
     expect(__responseFragmentApplySanitizerParityForTests.isBlockedSvgSmilElementName('svg')).toBe(
       false,
     );
+    for (const name of BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES) {
+      expect(
+        __responseFragmentApplySanitizerParityForTests.isBlockedActiveEmbedElementName(name),
+      ).toBe(true);
+      expect(
+        __responseFragmentApplySanitizerParityForTests.isBlockedActiveEmbedElementName(
+          name.toUpperCase(),
+        ),
+      ).toBe(true);
+    }
+    expect(
+      __responseFragmentApplySanitizerParityForTests.isBlockedActiveEmbedElementName('iframe'),
+    ).toBe(false);
   });
 });
 

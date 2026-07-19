@@ -324,7 +324,7 @@ function sa(
   security: HtmlResponseFragmentSecurityControls,
   preserveReviewedContext = false,
 ): void {
-  if (inertBlockedSvgSmilElement(e, security)) return;
+  if (inertBlockedActiveEmbedElement(e, security) || inertBlockedSvgSmilElement(e, security)) return;
   const n = security.lower(name);
   if (blocksDocumentNavigationAttribute(e, n, v, security)) {
     security.removeElementAttribute(e, name);
@@ -365,9 +365,14 @@ export function preservesReviewedHtmlElementContextAttribute(
   const tag = security.lower(security.readElementTagName(element) ?? '');
   const attribute = security.lower(name);
   return (
-    (tag === 'script' && (attribute === 'src' || attribute === 'type')) ||
+    (tag === 'script' &&
+      (attribute === 'src' ||
+        attribute === 'href' ||
+        attribute === 'xlink:href' ||
+        attribute === 'type')) ||
     (tag === 'link' && (attribute === 'href' || attribute === 'rel')) ||
-    (tag === 'iframe' && (attribute === 'src' || attribute === 'sandbox'))
+    (tag === 'iframe' && (attribute === 'src' || attribute === 'sandbox')) ||
+    (tag === 'annotation-xml' && attribute === 'encoding')
   );
 }
 
@@ -411,6 +416,33 @@ function isBlockedSvgSmilTagName(
     n === 'discard' ||
     n === 'set'
   );
+}
+
+function isBlockedActiveEmbedTagName(
+  name: string | undefined,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const n = security.lower(name ?? '');
+  return n === 'embed' || n === 'object';
+}
+
+/**
+ * SPEC.md §4.8 / §5.2 rule 10: object/embed can activate a same-origin HTML document without
+ * an iframe sandbox. Strip the whole primitive while it is still in detached parsed content,
+ * before a response-fragment adoption can start the fetch or execute its fallback descendants.
+ */
+function inertBlockedActiveEmbedElement(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  if (!isBlockedActiveEmbedTagName(security.readElementTagName(element), security)) return false;
+  const attributes = security.snapshotElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute) security.removeElementAttribute(element, attribute.name);
+  }
+  security.replaceElementChildren(element, []);
+  return true;
 }
 
 /**
@@ -507,6 +539,7 @@ function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element 
   for (let elementIndex = -1; elementIndex < descendants.length; elementIndex += 1) {
     const x = elementIndex < 0 ? e : descendants[elementIndex];
     if (!x) continue;
+    if (inertBlockedActiveEmbedElement(x, security)) continue;
     if (inertBlockedSvgSmilElement(x, security)) continue;
     if (inertDocumentNavigationElement(x, security)) continue;
     const attributes = security.snapshotElementAttributes(x);
@@ -635,6 +668,10 @@ export const __responseFragmentApplySanitizerParityForTests = {
   isBlockedSvgSmilElementName(value: string): boolean {
     const security = createBrowserNavigationSecurityControls();
     return isBlockedSvgSmilTagName(value, security);
+  },
+  isBlockedActiveEmbedElementName(value: string): boolean {
+    const security = createBrowserNavigationSecurityControls();
+    return isBlockedActiveEmbedTagName(value, security);
   },
   sanitizeAttribute(e: Element, name: string, value: string): void {
     sa(e, name, value, createBrowserNavigationSecurityControls());

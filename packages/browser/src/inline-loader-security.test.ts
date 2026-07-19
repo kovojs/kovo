@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { BLOCKED_SVG_SMIL_ELEMENT_NAMES } from '@kovojs/core/internal/sink-policy';
+import {
+  BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
+  BLOCKED_SVG_SMIL_ELEMENT_NAMES,
+} from '@kovojs/core/internal/sink-policy';
 
 import {
   dispatchInlineDelegatedClick,
@@ -275,6 +278,13 @@ describe('inline loader output security', () => {
         {
           attribute: 'href',
           binding: 'href',
+          current: '/reviewed/svg-runtime.js',
+          tagName: 'SCRIPT',
+          value: '/uploads/attacker-svg.js',
+        },
+        {
+          attribute: 'href',
+          binding: 'href',
           current: '/reviewed/theme.css',
           tagName: 'LINK',
           value: '/uploads/attacker.css',
@@ -307,6 +317,13 @@ describe('inline loader output security', () => {
           tagName: 'IFRAME',
           value: '/uploads/attacker.html',
         },
+        {
+          attribute: 'encoding',
+          binding: 'encoding',
+          current: 'text/plain',
+          tagName: 'ANNOTATION-XML',
+          value: 'text/html',
+        },
       ] as const;
 
       for (const testCase of cases) {
@@ -326,6 +343,31 @@ describe('inline loader output security', () => {
           ['/c/client.js'],
         );
         expect(element.getAttribute(testCase.attribute), testCase.tagName).toBe(testCase.current);
+      }
+    });
+
+    it(`${label}: inerts unsandboxable active embeds before a live write`, async () => {
+      for (const tagName of BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES) {
+        const activationAttribute = tagName === 'object' ? 'data' : 'src';
+        const element = new BoundTriggerElement(
+          {
+            [activationAttribute]: '/reviewed/file.pdf',
+            [`data-bind:${activationAttribute}`]: 'state.url',
+            'kovo-state': JSON.stringify({ url: '/safe/account' }),
+            'on:click': '/c/client.js#commitEmbed',
+            type: 'application/pdf',
+          },
+          tagName.toUpperCase(),
+        );
+
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({ commitEmbed() {} }),
+          installSource,
+          ['/c/client.js'],
+        );
+
+        expect(element.attributes, tagName).toEqual([]);
       }
     });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
   BLOCKED_SVG_SMIL_ELEMENT_NAMES,
   blessSink,
   createFragmentHtml,
@@ -11,6 +12,7 @@ import {
   hasUnsafeCssText,
   hasUnsafeCssUrl,
   isBlessedSink,
+  isBlockedActiveEmbedElementName,
   isBlockedSvgSmilElementName,
   isFragmentHtml,
   isRenderedFragmentHtml,
@@ -85,6 +87,7 @@ describe('shared Blessed<Sink> witness substrate (SPEC §6.6)', () => {
 describe('shared runtime sink policy', () => {
   it('freezes every exported sink-classification policy', () => {
     const policies = [
+      BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
       BLOCKED_SVG_SMIL_ELEMENT_NAMES,
       FRAMEWORK_BLESSED_SINK_KINDS,
       RAW_HTML_SINK_NAMES,
@@ -98,6 +101,7 @@ describe('shared runtime sink policy', () => {
     }
 
     expect(FRAMEWORK_BLESSED_SINK_KINDS[0]).toBe('browser:response-fragment-html');
+    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual(['embed', 'object']);
     expect(BLOCKED_SVG_SMIL_ELEMENT_NAMES).toEqual([
       'animate',
       'animatecolor',
@@ -118,6 +122,16 @@ describe('shared runtime sink policy', () => {
 
     expect(isBlockedSvgSmilElementName('svg')).toBe(false);
     expect(isBlockedSvgSmilElementName('a')).toBe(false);
+  });
+
+  it('fails closed on unsandboxable active embeds independent of authored casing', () => {
+    for (const name of BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES) {
+      expect(isBlockedActiveEmbedElementName(name)).toBe(true);
+      expect(isBlockedActiveEmbedElementName(name.toUpperCase())).toBe(true);
+    }
+
+    expect(isBlockedActiveEmbedElementName('iframe')).toBe(false);
+    expect(isBlockedActiveEmbedElementName('video')).toBe(false);
   });
 
   it('classifies unsafe runtime sink families', () => {

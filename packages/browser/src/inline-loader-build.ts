@@ -500,8 +500,12 @@ function installInlineKovoLoader(im) {
     return tag === 'animate' || tag === 'animatecolor' || tag === 'animatemotion' ||
       tag === 'animatetransform' || tag === 'discard' || tag === 'set';
   };
-  const inertBlockedSmil = (el) => {
-    if (!isBlockedSmil(el)) return false;
+  const isBlockedActiveEmbed = (el) => {
+    const tag = bns.lower(bns.readElementTagName(el) || '');
+    return tag === 'embed' || tag === 'object';
+  };
+  const inertBlockedActiveElement = (el) => {
+    if (!isBlockedSmil(el) && !isBlockedActiveEmbed(el)) return false;
     // SPEC.md §4.8 / §5.2 rule 10: target and transfer bindings may commit in either
     // order. Clear the complete SMIL primitive, including its binding stamps, on the first write.
     const attributes = bns.snapshotElementAttributes(el);
@@ -538,9 +542,11 @@ function installInlineKovoLoader(im) {
       }
     }
     if (
-      (tag === 'script' && (name === 'src' || name === 'type')) ||
+      (tag === 'script' &&
+        (name === 'src' || name === 'href' || name === 'xlink:href' || name === 'type')) ||
       (tag === 'link' && (name === 'href' || name === 'rel')) ||
-      (tag === 'iframe' && (name === 'src' || name === 'sandbox'))
+      (tag === 'iframe' && (name === 'src' || name === 'sandbox')) ||
+      (tag === 'annotation-xml' && name === 'encoding')
     ) {
       // Preserve the compiler-reviewed live value. Removing iframe[sandbox] is privilege
       // elevation, so blocked context writes must never share the ordinary remove action.
@@ -550,7 +556,7 @@ function installInlineKovoLoader(im) {
   };
   const wa = (el, name, val) => {
     const n = bns.lower(name);
-    if (inertBlockedSmil(el)) return;
+    if (inertBlockedActiveElement(el)) return;
     if (isGeneratedOnlyAttribute(n)) {
       bns.removeElementAttribute(el, name);
       return;

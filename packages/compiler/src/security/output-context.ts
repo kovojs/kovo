@@ -4,7 +4,11 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
-import { isBlockedSvgSmilElementName } from '@kovojs/core/internal/sink-policy';
+import {
+  elementContextSecurityControl,
+  isBlockedActiveEmbedElementName,
+  isBlockedSvgSmilElementName,
+} from '@kovojs/core/internal/sink-policy';
 import {
   htmlAttributeWireValuePosture,
   htmlElementWireValueIssue,
@@ -266,6 +270,31 @@ function validateElementAttributes(
   const found: CompilerDiagnostic[] = [];
   let hasExternalEscape = false;
   const attributeLength = compilerArrayLength(element.attributes, 'Element attributes');
+  if (
+    element.intrinsicTagName !== undefined &&
+    isBlockedActiveEmbedElementName(element.intrinsicTagName)
+  ) {
+    compilerArrayAppend(
+      found,
+      {
+        ...diagnostics.at(
+          'KV236',
+          {
+            start: element.start,
+            length: element.openingEnd - element.start,
+          },
+          `<${element.intrinsicTagName}> is disabled because it can execute an embedded document without a sandbox boundary`,
+        ),
+        help: [
+          'Blocked reason: object/embed can load same-origin HTML with the embedding document origin and no iframe sandbox boundary.',
+          'Fixes: use a sandboxed <iframe> for active content, or an ordinary download/navigation link for a file.',
+          'SPEC §4.8 and §5.2 rule 10 require contextual output safety independent of CSP.',
+          'Escape: there is no plain JSX suppression for disabled active embed elements.',
+        ].join('\n'),
+      },
+      'Active embed element diagnostics',
+    );
+  }
   if (
     element.intrinsicTagName !== undefined &&
     isBlockedSvgSmilElementName(element.intrinsicTagName)
@@ -587,7 +616,7 @@ function validateElementContextSecuritySinks(
   element: JsxElementModel,
 ): CompilerDiagnostic[] {
   const tag = element.intrinsicTagName;
-  if (tag !== 'script' && tag !== 'link' && tag !== 'iframe') return [];
+  if (tag === undefined || !elementHasContextSecurityControls(tag)) return [];
 
   const attributes = element.attributes;
   const attributeLength = compilerArrayLength(attributes, 'Element-context attributes');
@@ -652,7 +681,7 @@ function validateElementContextSecuritySinks(
 
 function directElementContextSinkIssue(
   model: ComponentModuleModel,
-  tag: 'iframe' | 'link' | 'script',
+  tag: string,
   attribute: JsxAttributeModel,
 ): string | undefined {
   const dynamicTarget = dynamicAttributeName(attribute);
@@ -661,7 +690,7 @@ function directElementContextSinkIssue(
     dynamicTarget === null ? staticDirectAttributeValue(attribute) : ({ kind: 'unknown' } as const);
   if (
     value.kind === 'unknown' &&
-    (target === 'src' || target === 'href') &&
+    elementContextSecurityControl(tag, target)?.acceptsTrustedUrl === true &&
     attributeExpressionIsTrustedUrlBrand(model, attribute)
   ) {
     return undefined;
@@ -670,30 +699,16 @@ function directElementContextSinkIssue(
 }
 
 function renderedElementContextSinkIssue(
-  tag: 'iframe' | 'link' | 'script',
+  tag: string,
   target: string,
   value: StaticRenderedAttributeValue,
 ): string | undefined {
   if (value.kind !== 'unknown') return undefined;
-  if (tag === 'script' && target === 'src') {
-    return 'a dynamic script source can execute same-origin attacker-controlled JavaScript';
-  }
-  if (tag === 'script' && target === 'type') {
-    return 'a dynamic script type can turn an inert data block into executable JavaScript';
-  }
-  if (tag === 'link' && target === 'href') {
-    return 'a dynamic stylesheet URL can apply attacker-controlled CSS';
-  }
-  if (tag === 'link' && target === 'rel') {
-    return 'a dynamic link relationship can turn an inert resource into an active stylesheet';
-  }
-  if (tag === 'iframe' && target === 'sandbox') {
-    return 'a dynamic iframe sandbox value can remove the embedded-document isolation boundary';
-  }
-  if (tag === 'iframe' && target === 'src') {
-    return 'a dynamic iframe source can load same-origin attacker-controlled active content';
-  }
-  return undefined;
+  return elementContextSecurityControl(tag, target)?.reason;
+}
+
+function elementHasContextSecurityControls(tag: string): boolean {
+  return tag === 'script' || tag === 'link' || tag === 'iframe' || tag === 'annotation-xml';
 }
 
 function attributeExpressionIsTrustedUrlBrand(

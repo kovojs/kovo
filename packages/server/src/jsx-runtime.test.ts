@@ -1120,6 +1120,21 @@ describe('server jsx runtime', () => {
     ).toBe('<svg><a id="sibling-target">target</a></svg>');
   });
 
+  it('omits unsandboxable object and embed documents at the direct JSX runtime floor', () => {
+    for (const tag of ['object', 'OBJECT', 'embed', 'EmBeD'] as const) {
+      expect(
+        html(
+          jsx(tag, {
+            children: jsx('script', { children: 'globalThis.compromised = true' }),
+            data: '/safe/account',
+            src: '/safe/account',
+            type: 'text/html',
+          }),
+        ),
+      ).toBe('');
+    }
+  });
+
   it('refuses spread-delivered executable attributes from the final runtime attribute set', () => {
     const spread = {
       content: '0; url=javascript:alert(1)',

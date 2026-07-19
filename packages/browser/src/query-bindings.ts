@@ -1,5 +1,8 @@
 import { parseKovoModuleRef, type KovoModuleRef } from '@kovojs/core/internal/module-ref';
-import { isBlockedSvgSmilElementName } from '@kovojs/core/internal/sink-policy';
+import {
+  isBlockedActiveEmbedElementName,
+  isBlockedSvgSmilElementName,
+} from '@kovojs/core/internal/sink-policy';
 
 import { applyBindProp, BIND_PROP_PREFIX } from './bind-prop.js';
 import { domAttributes } from './dom-like.js';
@@ -853,7 +856,7 @@ function removeBoundAttribute(
   name: string,
   securityDecisionApplied = false,
 ): void {
-  if (inertBlockedSvgSmilBindingElement(element)) return;
+  if (inertBlockedActiveBindingElement(element)) return;
   if (
     !securityDecisionApplied &&
     kovoBoundAttributeValue(name, null, boundAttributeWriteContext(element)) === undefined
@@ -940,7 +943,7 @@ function reconcileDialogOpen(element: QueryBindingElement, value: unknown): bool
 }
 
 function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {
-  if (inertBlockedSvgSmilBindingElement(element)) return;
+  if (inertBlockedActiveBindingElement(element)) return;
   // J3 (SPEC §4.6/§4.8): HTML boolean-presence attributes must remove on false/null/undefined,
   // and set to '' (present) on any other value including true, '', and non-null strings.
   // This covers both query-source raw booleans and state-derive '' / null patterns.
@@ -1192,17 +1195,23 @@ function bindingElementAttributes(
 }
 
 /**
- * SPEC.md §4.8 / §5.2 rule 10: a live binding can change a SMIL target before or after its
- * transfer value. Removing the whole attribute set makes both transition orders inert and also
- * retires the binding stamps so a later commit cannot rebuild the primitive.
+ * SPEC.md §4.8 / §5.2 rule 10: live writes cannot rebuild disabled active elements. SMIL can
+ * change a transfer target in either order; object/embed can execute a same-origin document
+ * without a sandbox. Clearing attributes, children, and binding stamps makes both classes inert.
  */
-function inertBlockedSvgSmilBindingElement(element: QueryBindingElement): boolean {
+function inertBlockedActiveBindingElement(element: QueryBindingElement): boolean {
   const tagName = readBindingTagName(element);
-  if (tagName === undefined || !isBlockedSvgSmilElementName(tagName)) return false;
+  if (
+    tagName === undefined ||
+    (!isBlockedSvgSmilElementName(tagName) && !isBlockedActiveEmbedElementName(tagName))
+  ) {
+    return false;
+  }
   const attributes = bindingElementAttributes(element);
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index];
     if (attribute) removeBindingAttribute(element, attribute.name);
   }
+  writeQueryPlanElement(element, '');
   return true;
 }
