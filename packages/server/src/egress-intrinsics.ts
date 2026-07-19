@@ -67,6 +67,7 @@ const urlProtocolGetter = nativeObjectGetOwnPropertyDescriptor(urlPrototype, 'pr
 const urlSearchGetter = nativeObjectGetOwnPropertyDescriptor(urlPrototype, 'search')?.get;
 const urlToString = urlPrototype.toString;
 const urlUsernameGetter = nativeObjectGetOwnPropertyDescriptor(urlPrototype, 'username')?.get;
+const requestSignalGetter = nativeObjectGetOwnPropertyDescriptor(requestPrototype, 'signal')?.get;
 const requestUrlGetter = nativeObjectGetOwnPropertyDescriptor(requestPrototype, 'url')?.get;
 
 function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
@@ -147,6 +148,7 @@ function capturedControlsAreSound(): boolean {
       typeof urlProtocolGetter !== 'function' ||
       typeof urlSearchGetter !== 'function' ||
       typeof urlUsernameGetter !== 'function' ||
+      typeof requestSignalGetter !== 'function' ||
       typeof requestUrlGetter !== 'function'
     ) {
       return false;
@@ -447,6 +449,16 @@ export function egressRequestWithDispatcher(value: Request, dispatcher: unknown)
   // An explicit second clone replaces that authority while preserving native replayable-body,
   // redirect, credential-stripping, abort, and header semantics (SPEC §6.6).
   return new NativeRequest(value, { dispatcher } as RequestInit);
+}
+
+export function egressRequestWithSignal(value: Request, signal: AbortSignal): Request {
+  assertEgressIntrinsics();
+  return new NativeRequest(value, { signal });
+}
+
+export function egressRequestSignal(value: Request): AbortSignal {
+  assertEgressIntrinsics();
+  return apply(requestSignalGetter!, value, []);
 }
 
 export function egressRequestUrl(value: Request): string {

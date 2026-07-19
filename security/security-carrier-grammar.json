@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 245,
+    "historicalWitnesses": 246,
     "productions": 12
   },
   "productions": [
@@ -956,6 +956,12 @@
       "corpus": "capability-closure",
       "production": "structural-closure",
       "reason": "This witness closes framework input reads over exact reader symbols and a finite carrier grammar."
+    },
+    {
+      "anchor": "request-deadline-effect-door-census",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness requires exact imports from the framework deadline module at every reviewed request effect door; a same-named local function cannot certify the boundary."
     },
     {
       "anchor": "complete-root-census",

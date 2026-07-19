@@ -3,6 +3,8 @@ import { isDocumentConfig } from './document-structured.js';
 import { isFrameworkManagedDbProvider } from './guards.js';
 import { isFrameworkCsrfSigningSecret } from './keyring.js';
 import {
+  MAX_APP_REQUEST_DEADLINE_MS,
+  MAX_APP_REQUEST_IN_FLIGHT,
   MAX_APP_REQUEST_BODY_BYTES,
   MAX_APP_REQUEST_QUERY_LIST_ITEMS,
   MAX_APP_REQUEST_RATE,
@@ -88,10 +90,18 @@ function isAppRequestLimits(value: unknown): value is KovoApp['requestLimits'] {
     isRecord(value) &&
     isResolvedRateLimit(value.global) &&
     isResolvedRateLimit(value.perIp) &&
+    typeof value.deadlineMs === 'number' &&
+    Number.isSafeInteger(value.deadlineMs) &&
+    value.deadlineMs > 0 &&
+    value.deadlineMs <= MAX_APP_REQUEST_DEADLINE_MS &&
     typeof value.maxBodyBytes === 'number' &&
     Number.isSafeInteger(value.maxBodyBytes) &&
     value.maxBodyBytes >= 0 &&
     value.maxBodyBytes <= MAX_APP_REQUEST_BODY_BYTES &&
+    typeof value.maxInFlight === 'number' &&
+    Number.isSafeInteger(value.maxInFlight) &&
+    value.maxInFlight > 0 &&
+    value.maxInFlight <= MAX_APP_REQUEST_IN_FLIGHT &&
     typeof value.maxQueryListItems === 'number' &&
     Number.isSafeInteger(value.maxQueryListItems) &&
     value.maxQueryListItems > 0 &&

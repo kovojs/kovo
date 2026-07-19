@@ -79,6 +79,11 @@ import {
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import {
+  assertCurrentRequestDeadlineActive,
+  awaitWithCurrentRequestDeadline,
+  currentRequestDeadlineSignal,
+} from './request-deadline.js';
+import {
   securityStringSlice,
   securityStringStartsWith,
   securityStringTrim,
@@ -510,7 +515,11 @@ export async function admitFrameworkManagedDbProvider(provider: unknown): Promis
   if (typeof provider !== 'object' || provider === null) return;
   const registration = witnessWeakMapGet(frameworkManagedDbProviders, provider);
   if (registration?.admit !== undefined) {
-    await witnessReflectApply<Promise<void> | void>(registration.admit, undefined, []);
+    assertCurrentRequestDeadlineActive('database admission');
+    await awaitWithCurrentRequestDeadline(
+      Promise.resolve(witnessReflectApply<Promise<void> | void>(registration.admit, undefined, [])),
+      'database admission',
+    );
   }
 }
 
@@ -519,19 +528,22 @@ export function resolveDbProvider<RawRequest, DbValue, SessionValue = unknown>(
   provider: DbProvider<RawRequest, DbValue, SessionValue>,
   request: LifecycleRequest<RawRequest, SessionValue, never>,
 ): Promise<DbValue> | DbValue {
+  let resolved: Promise<DbValue> | DbValue;
   if (typeof provider === 'function') {
-    return witnessReflectApply<Promise<DbValue> | DbValue>(provider, undefined, [request]);
-  }
-  if (typeof provider !== 'object' || provider === null) {
+    resolved = witnessReflectApply<Promise<DbValue> | DbValue>(provider, undefined, [request]);
+  } else if (typeof provider !== 'object' || provider === null) {
     throw new TypeError('Framework-managed DB provider capability is invalid (SPEC §6.6/§10.3).');
+  } else {
+    const registration = witnessWeakMapGet(frameworkManagedDbProviders, provider);
+    if (registration === undefined) {
+      throw new TypeError('Framework-managed DB provider capability is forged (SPEC §6.6/§10.3).');
+    }
+    resolved = witnessReflectApply<Promise<DbValue> | DbValue>(registration.resolver, undefined, [
+      request,
+    ]);
   }
-  const registration = witnessWeakMapGet(frameworkManagedDbProviders, provider);
-  if (registration === undefined) {
-    throw new TypeError('Framework-managed DB provider capability is forged (SPEC §6.6/§10.3).');
-  }
-  return witnessReflectApply<Promise<DbValue> | DbValue>(registration.resolver, undefined, [
-    request,
-  ]);
+  if (currentRequestDeadlineSignal() === undefined) return resolved;
+  return awaitWithCurrentRequestDeadline(Promise.resolve(resolved), 'database provider');
 }
 
 /** Request shape after the framework has installed configured lifecycle channels. */

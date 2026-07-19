@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   discoverCapabilityMintSites,
   evaluateCapabilityBoundaryPosture,
+  evaluateRequestDeadlineEffectDoors,
   evaluateCapabilitySurfaceCensus,
 } from './capability-surface-census-gate.mjs';
 
@@ -59,6 +60,74 @@ it('discovers witness registries and systemDb mints by TypeScript symbol identit
       symbol: 'runtime.ts#Runtime.systemDb',
     },
   ]);
+});
+
+// @kovo-security-certifies C13 request-deadline-effect-door-census
+it('requires every owned request effect door to consume the canonical deadline capability', () => {
+  const effectSources = new Map([
+    [
+      'request-deadline.ts',
+      `export function composeCurrentRequestDeadlineSignal() { return undefined; }`,
+    ],
+    [
+      'egress.ts',
+      `import { composeCurrentRequestDeadlineSignal as consumeDeadline } from './request-deadline.js';
+       function localLookalike() { return undefined; }
+       export const frameworkEgressFetch = () => consumeDeadline();`,
+    ],
+  ]);
+  const rows = [
+    {
+      consumes: ['composeCurrentRequestDeadlineSignal'],
+      evidence: 'Focused egress test observes deadline cancellation at the native transport.',
+      id: 'test.egress',
+      owner: 'frameworkEgressFetch',
+      path: 'egress.ts',
+      purpose: 'The framework network door composes its caller signal with the request deadline.',
+    },
+  ];
+
+  expect(
+    evaluateRequestDeadlineEffectDoors({
+      requiredIds: ['test.egress'],
+      rows,
+      sources: effectSources,
+    }),
+  ).toMatchObject({ ok: true, summary: { effectDoors: 1 } });
+
+  effectSources.set(
+    'egress.ts',
+    `import { composeCurrentRequestDeadlineSignal as consumeDeadline } from './request-deadline.js';
+     function localLookalike() { return undefined; }
+     export const frameworkEgressFetch = () => localLookalike();`,
+  );
+  expect(
+    evaluateRequestDeadlineEffectDoors({
+      requiredIds: ['test.egress'],
+      rows,
+      sources: effectSources,
+    }).findings,
+  ).toContain(
+    'test.egress: frameworkEgressFetch does not consume composeCurrentRequestDeadlineSignal from request-deadline',
+  );
+
+  effectSources.set(
+    'egress.ts',
+    `import { composeCurrentRequestDeadlineSignal as consumeDeadline } from './request-deadline.js';
+     export const frameworkEgressFetch = () => {
+       function deadLookalike() { return consumeDeadline(); }
+       return undefined;
+     };`,
+  );
+  expect(
+    evaluateRequestDeadlineEffectDoors({
+      requiredIds: ['test.egress'],
+      rows,
+      sources: effectSources,
+    }).findings,
+  ).toContain(
+    'test.egress: frameworkEgressFetch does not consume composeCurrentRequestDeadlineSignal from request-deadline',
+  );
 });
 
 it('fails closed when a discovered mint is absent, stale, or lacks a reviewed reason', () => {

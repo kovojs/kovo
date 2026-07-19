@@ -2054,6 +2054,16 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'request-deadline-effect-door-census',
+        file: 'scripts/capability-surface-census-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 request-deadline-effect-door-census',
+          'requires every owned request effect door to consume the canonical deadline capability',
+          'composeCurrentRequestDeadlineSignal as consumeDeadline',
+          'frameworkEgressFetch does not consume composeCurrentRequestDeadlineSignal from request-deadline',
+        ],
+      },
+      {
         id: 'complete-root-census',
         file: 'packages/compiler/src/capability-closure.security.test.ts',
         snippets: [

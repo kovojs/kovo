@@ -34,7 +34,9 @@ import {
   egressReflectGet,
   egressRegExpTest,
   egressRequest,
+  egressRequestSignal,
   egressRequestWithDispatcher,
+  egressRequestWithSignal,
   egressRequestUrl,
   egressSetAdd,
   egressSetDelete,
@@ -60,6 +62,11 @@ import {
   egressUrlToString,
   egressUrlUsername,
 } from './egress-intrinsics.js';
+import {
+  assertCurrentRequestDeadlineActive,
+  awaitWithCurrentRequestDeadline,
+  composeCurrentRequestDeadlineSignal,
+} from './request-deadline.js';
 import {
   createWitnessWeakMap,
   witnessFreeze,
@@ -1768,6 +1775,11 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
     // Calling fetch with only this Request also prevents a nonstandard per-call dispatcher from
     // bypassing the framework-owned dispatcher on later hops.
     request = egressRequest(input, init);
+    assertCurrentRequestDeadlineActive('egress');
+    request = egressRequestWithSignal(
+      request,
+      composeCurrentRequestDeadlineSignal(egressRequestSignal(request)),
+    );
   } catch {
     throw new EgressBlockedError({
       destination: requestDestination(input),
@@ -1831,7 +1843,10 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
       reason: 'destination-allowlist',
     });
   } else {
-    const resolved = await lookupAllAddresses(host);
+    const resolved = await awaitWithCurrentRequestDeadline(
+      lookupAllAddresses(host),
+      'egress DNS lookup',
+    );
     if (resolved.length === 0) {
       throw new EgressBlockedError({
         destination: `${host}:${port}`,

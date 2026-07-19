@@ -84,6 +84,40 @@ describe('kovo graph input validation', () => {
     ).toEqual([]);
   });
 
+  it('requires paired long-lived deadline facts on an endpoint surface', () => {
+    expect(() =>
+      deriveAccessExplainFacts({
+        endpoints: [{ deadlineMs: 120_000, path: '/events', surface: 'endpoint' }],
+      }),
+    ).toThrow(/pair deadlineMs with deadlineJustification/u);
+    expect(() =>
+      deriveAccessExplainFacts({
+        endpoints: [
+          {
+            deadlineJustification: 'bounded event stream',
+            deadlineMs: 120_000,
+            path: '/events',
+            surface: 'route-stream',
+          },
+        ],
+      }),
+    ).toThrow(/only on an endpoint surface/u);
+    expect(
+      deriveAccessExplainFacts({
+        endpoints: [
+          {
+            deadlineJustification: 'bounded event stream',
+            deadlineMs: 120_000,
+            path: '/events',
+            surface: 'endpoint',
+          },
+        ],
+      }),
+    ).toEqual([
+      expect.objectContaining({ decision: 'missing', kind: 'endpoint', name: '/events' }),
+    ]);
+  });
+
   it('derives guarded access only from executable guard names', () => {
     expect(
       deriveAccessExplainFacts({

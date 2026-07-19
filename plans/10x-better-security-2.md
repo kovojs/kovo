@@ -629,19 +629,28 @@ door migrations, don't race them.
 vs hard-deadline decision. **Produces:** bounded admission and cooperative cancellation for owned
 effects. **Blocks:** availability W coverage; it cannot bound arbitrary synchronous app JavaScript.
 
-- [ ] `normalizeAppRequestLimits` gains `deadlineMs` + `maxInFlight` with finite defaults, hard
+- [x] `normalizeAppRequestLimits` gains `deadlineMs` + `maxInFlight` with finite defaults, hard
       ceilings, and the same cannot-be-`false` TypeError posture as `maxBodyBytes`.
-- [ ] `preDispatchLoadShedResponse` mints a framework-owned per-request deadline `AbortSignal` and
+  - Evidence: `request-deadline.test.ts` proves finite defaults/ceilings and rejects disabled or
+    unbounded limits (SPEC §9.5).
+- [x] `preDispatchLoadShedResponse` mints a framework-owned per-request deadline `AbortSignal` and
       acquires an occupancy slot; over-occupancy sheds 503+Retry-After before any handler work. Specify
       exact slot release on response completion, disconnect, exception, deadline, and streaming escape.
-- [ ] The deadline becomes a required capability parameter of the effect-door contract (egress fetch,
+  - Evidence: `request-deadline.test.ts` and `node.test.ts` prove pre-handler shedding and slot release
+    across completion, disconnect, exception, deadline, and stream cancellation.
+- [x] The deadline becomes a required capability parameter of the effect-door contract (egress fetch,
       DB/transaction, deferred-region, streaming flush); the capability census fails an owned door that
       does not consume it. Explicitly exclude arbitrary Promises and synchronous loops from the hard
       guarantee unless Kovo later isolates app execution in a terminable worker/process.
-- [ ] Post-deadline discard at the response mint door + bounded response write-out; abort propagates
+  - Evidence: `check:capability-surface-census` enumerates deadline-consuming owned effect doors;
+    SPEC §9.5 explicitly excludes arbitrary promises and synchronous loops.
+- [x] Post-deadline discard at the response mint door + bounded response write-out; abort propagates
       into the transaction door (`mutation-wire.ts` `abort` hook) with explicit pre-commit vs
       post-commit semantics—never claim cancellation can roll back an already committed transaction.
       Named audited escape for legitimate streaming/long-poll surfaces, visible in `kovo explain`.
+  - Evidence: `request-deadline.test.ts`, `node.test.ts`, and `index.kovo-explain.test.ts` prove
+    transport destruction, post-deadline discard, commit-boundary semantics, bounded escapes, and
+    explain visibility.
 
 ### 4.3 Security-event door + signed runtime posture attestation
 

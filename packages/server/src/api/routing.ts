@@ -29,6 +29,7 @@ export type {
   EndpointDeclaration,
   EndpointDefinition,
   EndpointHandler,
+  EndpointLongLivedResponsePosture,
   EndpointMountDefinition,
   EndpointMethod,
   EndpointMount,

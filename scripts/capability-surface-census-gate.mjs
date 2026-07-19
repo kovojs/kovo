@@ -50,6 +50,23 @@ const requiredPublicSurfaceFields = [
   'evidence',
 ];
 
+const requiredRequestDeadlineEffectDoorIds = [
+  'server.egress-fetch',
+  'server.db-provider',
+  'server.mutation-transaction',
+  'server.deferred-region',
+  'server.response-stream-flush',
+  'server.node-response-transport',
+];
+const requestDeadlineConsumers = new Set([
+  'assertCurrentRequestDeadlineActive',
+  'awaitWithCurrentRequestDeadline',
+  'bindRequestDeadlineResponseTransport',
+  'composeCurrentRequestDeadlineSignal',
+  'onCurrentRequestDeadline',
+  'RequestDeadlineAdmission.signal',
+]);
+
 /**
  * Resolve the exact framework mint APIs through the TypeScript checker and return every call site.
  * Same-named local functions and object methods do not share the canonical declaration symbol and
@@ -188,7 +205,97 @@ export function generatedCapabilitySurfaceCensus({ discovered, existing }) {
     // These reviewed public surfaces remain the threat-matrix denominator; `mintSites` is the
     // independently derived symbol census replacing the former regex pins.
     rows: Array.isArray(existing?.rows) ? existing.rows : [],
+    requestDeadlineEffectDoors: Array.isArray(existing?.requestDeadlineEffectDoors)
+      ? existing.requestDeadlineEffectDoors
+      : [],
     mintSites,
+  };
+}
+
+/** Validate the finite Kovo-owned effect-door denominator against exact deadline imports. */
+export function evaluateRequestDeadlineEffectDoors({
+  requiredIds = requiredRequestDeadlineEffectDoorIds,
+  rows,
+  sources,
+}) {
+  const findings = [];
+  if (!Array.isArray(rows)) {
+    return {
+      findings: ['requestDeadlineEffectDoors must be an array'],
+      ok: false,
+      summary: { effectDoors: 0 },
+    };
+  }
+  if (!(sources instanceof Map)) {
+    return {
+      findings: ['requestDeadlineEffectDoors require an exact source map'],
+      ok: false,
+      summary: { effectDoors: rows.length },
+    };
+  }
+
+  const required = new Set(requiredIds);
+  const seen = new Set();
+  for (const row of rows) {
+    if (
+      !isRecord(row) ||
+      typeof row.id !== 'string' ||
+      typeof row.path !== 'string' ||
+      typeof row.owner !== 'string' ||
+      !Array.isArray(row.consumes)
+    ) {
+      findings.push('request deadline effect-door row is malformed');
+      continue;
+    }
+    if (seen.has(row.id)) findings.push(`${row.id}: duplicate request deadline effect door`);
+    seen.add(row.id);
+    if (!required.has(row.id)) findings.push(`${row.id}: stale request deadline effect door`);
+    if (!substantive(row.purpose) || !substantive(row.evidence)) {
+      findings.push(`${row.id}: request deadline effect door needs purpose and evidence`);
+    }
+    if (
+      row.consumes.length === 0 ||
+      row.consumes.some((name) => !requestDeadlineConsumers.has(name))
+    ) {
+      findings.push(`${row.id}: request deadline consumers are missing or unsupported`);
+      continue;
+    }
+    const sourceText = sources.get(row.path);
+    if (typeof sourceText !== 'string') {
+      findings.push(`${row.id}: missing effect-door source ${row.path}`);
+      continue;
+    }
+    const sourceFile = ts.createSourceFile(
+      row.path,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+      row.path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+    const owner = requestDeadlineOwner(sourceFile, row.owner);
+    if (owner === undefined) {
+      findings.push(`${row.id}: missing effect-door owner ${row.owner}`);
+      continue;
+    }
+    const imports = requestDeadlineImportBindings(sourceFile, row.path);
+    const called = importedDeadlineCalls(owner, imports);
+    for (const consumer of row.consumes) {
+      const consumed =
+        consumer === 'RequestDeadlineAdmission.signal'
+          ? ownerConsumesDeadlineAdmissionSignal(owner, sourceFile)
+          : called.has(consumer);
+      if (!consumed) {
+        findings.push(`${row.id}: ${row.owner} does not consume ${consumer} from request-deadline`);
+      }
+    }
+  }
+  for (const id of required) {
+    if (!seen.has(id)) findings.push(`${id}: missing required request deadline effect door`);
+  }
+  return {
+    findings,
+    ok: findings.length === 0,
+    summary: { effectDoors: rows.length },
   };
 }
 
@@ -475,7 +582,20 @@ export function main({ rootDir = repoRoot, write = process.argv.includes('--writ
   );
   const discovered = discoverCapabilityMintSites({ rootDir });
   const result = evaluateCapabilitySurfaceCensus({ discovered, manifest });
+  const deadlineRows = Array.isArray(manifest.requestDeadlineEffectDoors)
+    ? manifest.requestDeadlineEffectDoors
+    : [];
+  const deadlineSources = new Map();
+  for (const row of deadlineRows) {
+    if (!isRecord(row) || typeof row.path !== 'string' || deadlineSources.has(row.path)) continue;
+    deadlineSources.set(row.path, readFileSync(path.join(rootDir, row.path), 'utf8'));
+  }
+  const deadlineResult = evaluateRequestDeadlineEffectDoors({
+    rows: deadlineRows,
+    sources: deadlineSources,
+  });
   result.findings.push(
+    ...deadlineResult.findings,
     ...evaluatePublicCapabilitySurfaces(manifest),
     ...evaluateCapabilityBoundaryPosture({
       readText: (file) => readFileSync(path.join(rootDir, file), 'utf8'),
@@ -483,10 +603,103 @@ export function main({ rootDir = repoRoot, write = process.argv.includes('--writ
   );
   result.ok = result.findings.length === 0;
   process.stdout.write(
-    `capability-surface-census/v2 ${result.ok ? 'OK' : 'FAIL'} sites=${result.summary.sites} mints=${result.summary.mints} registries=${result.summary.internalRegistries}\n`,
+    `capability-surface-census/v2 ${result.ok ? 'OK' : 'FAIL'} sites=${result.summary.sites} mints=${result.summary.mints} registries=${result.summary.internalRegistries} deadlineDoors=${deadlineResult.summary.effectDoors}\n`,
   );
   for (const finding of result.findings) process.stderr.write(`${finding}\n`);
   return result.ok;
+}
+
+function requestDeadlineOwner(sourceFile, ownerName) {
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === ownerName) return statement;
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== ownerName) continue;
+      const initializer = unwrapExpression(declaration.initializer);
+      if (
+        initializer !== undefined &&
+        (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+      ) {
+        return initializer;
+      }
+    }
+  }
+  return undefined;
+}
+
+function requestDeadlineImportBindings(sourceFile, sourcePath) {
+  const bindings = new Map();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.importClause?.namedBindings === undefined ||
+      !ts.isNamedImports(statement.importClause.namedBindings)
+    ) {
+      continue;
+    }
+    const importedPath = path.posix
+      .normalize(path.posix.join(path.posix.dirname(sourcePath), statement.moduleSpecifier.text))
+      .replace(/\.(?:m?js)$/u, '.ts');
+    const expectedPath = path.posix.join(path.posix.dirname(sourcePath), 'request-deadline.ts');
+    if (importedPath !== expectedPath) continue;
+    for (const element of statement.importClause.namedBindings.elements) {
+      const imported = element.propertyName?.text ?? element.name.text;
+      if (requestDeadlineConsumers.has(imported)) bindings.set(element.name.text, imported);
+    }
+  }
+  return bindings;
+}
+
+function importedDeadlineCalls(owner, imports) {
+  const calls = new Set();
+  const visitOwner = (node) => {
+    if (
+      node !== owner &&
+      (ts.isArrowFunction(node) ||
+        ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isMethodDeclaration(node)) &&
+      (ts.isFunctionDeclaration(node) ||
+        ts.isMethodDeclaration(node) ||
+        ts.isVariableDeclaration(node.parent))
+    ) {
+      return;
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const imported = imports.get(node.expression.text);
+      if (imported !== undefined) calls.add(imported);
+    }
+    ts.forEachChild(node, visitOwner);
+  };
+  visitOwner(owner);
+  return calls;
+}
+
+function ownerConsumesDeadlineAdmissionSignal(owner, sourceFile) {
+  const parameterNames = new Set();
+  for (const parameter of owner.parameters ?? []) {
+    if (
+      ts.isIdentifier(parameter.name) &&
+      parameter.type?.getText(sourceFile).includes('RequestDeadlineAdmission')
+    ) {
+      parameterNames.add(parameter.name.text);
+    }
+  }
+  let consumed = false;
+  const visitOwner = (node) => {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      node.name.text === 'signal' &&
+      ts.isIdentifier(node.expression) &&
+      parameterNames.has(node.expression.text)
+    ) {
+      consumed = true;
+    }
+    ts.forEachChild(node, visitOwner);
+  };
+  visitOwner(owner);
+  return consumed;
 }
 
 function exportedValueNames(sourceFile) {

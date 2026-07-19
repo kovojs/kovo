@@ -154,6 +154,14 @@ browser-state proof as an authored cookie on every safe-method or CSRF-exempt en
 
 Raw HTTP integrations use declared `endpoint()` entries, not ad-hoc server escape hatches. An endpoint is registry-visible, receives `Request -> Response`, requires an explicit HTTP `method` (there is no implicit any-method endpoint), requires an endpoint-level `reason`/`purpose`, and is enrolled in the endpoint and unguarded audits with the same auth metadata as routes, queries, and mutations. Prefix mounts require a `mountJustification` because they enlarge the routed surface beyond one path. Endpoint declarations also carry raw response posture metadata for the audit row: body class (`html`, `json`, `text`, `bytes`, `stream`, or `redirect`), cache posture, and whether app code owns body encoding plus response-header safety. That app-owned posture never transfers message-framing or hop-by-hop authority: the framework still reconstructs raw response headers and applies the adapter-owned-field KV415 floor above. The closed safe-method set is `GET`, `HEAD`, and `OPTIONS`; every other method, including an extension method unknown to Kovo, is unsafe and receives the default synchronizer-token check unless the endpoint explicitly opts out of CSRF with a named justification. A safe-method endpoint receives only a managed DB Reader from `ctx.actAs()` and MUST NOT emit `Set-Cookie` or `Clear-Site-Data`; an executable non-ambient verifier that actually succeeds for the exact request (or an equivalent private framework-owned self-verifying receipt) may authorize those browser-state effects. The runtime enforces both known capability boundaries even if application types are bypassed. App-owned side effects outside Kovo's capability and response sinks remain the application's responsibility, so authors MUST use an unsafe method for a state-changing operation. Endpoint handlers receive the raw `Request` before body parsing so signature verification can use wire bytes; exact and prefix mounts are declared; cookies are not interpreted and no ambient `req.session` is passed. A CSRF exemption is sound only because endpoint/webhook auth does not ride ambient browser authority. OAuth/SAML callbacks and adapter-owned mounts belong here; browser credential forms should still prefer typed `mutation()` flows so they keep schema validation, no-JS behavior, and the normal response vocabulary.
 
+An endpoint that legitimately streams or long-polls beyond the app deadline MAY declare
+`response.longLived: { deadlineMs, justification }`. This is the only request-deadline escape: it
+selects one endpoint-scoped finite deadline from 1 through 300,000 ms, requires a non-empty audited
+justification, and is printed as `deadline=long-lived:<milliseconds>:<justification>` by
+`kovo explain --endpoints`. It does not disable or enlarge the app's occupancy budget, does not
+apply to another endpoint or route, and does not exempt the response from adapter write-out
+cancellation. Omitting the declaration uses the app deadline.
+
 An endpoint `auth` declaration MAY carry an executable verifier from the webhook verifier kit. When present, the dispatcher MUST verify cloned raw wire bytes `{ headers, payload }` before CSRF validation and before the handler runs; verifier `false`, malformed input, or thrown verifier errors fail closed with `401 Unauthorized`, and the original request body remains readable by the handler after a successful check. Name-only endpoint auth declarations remain audit metadata. `webhook()` continues to emit name-only endpoint auth because it self-enforces raw-byte verification in its own lifecycle before parsing.
 
 `webhook()` is the shaped machine-endpoint primitive for third-party POSTs that write Kovo-owned data. Shape: `webhook('/provider/path', { verify, input, idempotency, handler })`, lowering to a registry-visible endpoint with a source-derived webhook identity (§4.1) and `auth=verifier:<resolved scheme>` unless an explicitly justified custom/none verifier is used. The first string is the public HTTP receiver path, not the webhook registry name. The lifecycle is fixed: capture one request clock and the raw bytes → verify → parse/coerce a loose input schema (unknown provider fields pass through) → construct and validate an authenticated provider-event replay identity → atomically reserve/replay under the source-derived webhook identity → optional framework transaction wrapper → handler receives a machine-ingress context with no ambient session and dispatches Kovo-owned writes through `context.runMutation(mutation, input)` → the called mutation owns the audited DB write, touch set, and static diagnostics → commit/store the response and emit the unified change record `{domain, keys, input}` derived from the called mutation's committed changes.
@@ -322,6 +330,38 @@ serialized URL authority delivered by its named platform bridge and reconstructs
 `Host` from that verdict; this is not evidence about a raw authority the platform already erased.
 
 **Pre-dispatch load shed (normative).** Because there is no user middleware chain, the request shell/adapter itself owns a coarse limiter that runs **ahead of** replay lookup, schema parse/coercion, and the guard chain (§10.3) — guard combinators such as `rateLimit({ per: 'session' })` shed load only after CSRF, replay, and parse have already paid out, and `per: 'session'` cannot distinguish a flood of null-session attackers, so they are insufficient as the only chokepoint. Before any `/_m/`, `/_q/`, `endpoint()`, or route dispatch the shell MUST enforce: (1) a maximum request/body size — a request exceeding it is rejected with **413** before the body is parsed; streamed bodies additionally have a hard 4,096-chunk budget and exceeding it is the same 413-class body-limit failure even when the byte count remains below the configured maximum, so adversarial transfer fragmentation cannot turn the byte limit into unbounded per-chunk work; (2) a serialized request-target ceiling of 65,536 JavaScript string code units and a 10,000-entry URL-query ceiling — Node/Vite/generated adapters MUST scan the raw target before constructing a Web `Request`, `URL`, or `URLSearchParams`, and a direct Web handler MUST scan `Request.url` before constructing `URL`/`URLSearchParams`; either target violation is rejected with **414**, including for static and not-found paths; (3) URL-encoded body segments and multipart parts share the same default KV430 breadth ceiling of 10,000 entries, counted before record reconstruction, split, or part adoption, so a compact separator-heavy carrier cannot amplify into an unbounded parser graph; and (4) a coarse per-IP and global request-rate budget — a request over budget is rejected with **429** carrying `Retry-After`, before replay+parse. `createApp({ requestLimits })`, its body-size gate, and every base or per-surface rate budget are mandatory finite postures and MUST NOT accept `false`; author-supplied maxima are bounded to 67,108,864 body bytes, 100,000 query/list result items, 1,000,000 requests per rate window, 100,000 retained rate keys, and an 86,400,000 ms rate window. These limits are normative defaults configured on `createApp()` (per-IP and global `/_m/` and `/_q/` request rates, max body size, and a bound on fragment-targets reconstructed per response, §9.1); the coarse limiter is identity-blind on purpose so it survives the anonymous flood the session-scoped limiter cannot. This pre-dispatch posture is enrolled in and printed by the `--endpoints` audit. The fine-grained `rateLimit` guard combinator still runs in the guard chain for per-principal policy. It admits a `per: 'ip'` (and global) dimension in addition to `per: 'session'`, so an anonymous or per-IP budget can also be expressed at the guard layer; the coarse shell limiter and the guard combinator compose rather than replace each other.
+
+The same pre-dispatch door MUST acquire one app-local occupancy slot and mint one framework-owned
+request deadline before any DB provider, request-body read, guard, transaction, or handler work.
+`requestLimits.deadlineMs` defaults to 30,000 ms and is a finite integer from 1 through 300,000;
+`requestLimits.maxInFlight` defaults to 256 and is a finite integer from 1 through 10,000. Neither
+posture accepts `false`. A request at the occupancy ceiling is rejected with **503 Service
+Unavailable** and `Retry-After: 1` before that work starts.
+
+The admitted request's framework-owned `AbortSignal` MUST be the signal visible to authored request
+code and consumed by every Kovo-owned request effect door: outbound fetch (including bounded DNS
+wait), DB admission/provider wait and transaction checkpoints, deferred-region selection, response
+stream flush, and an adapter-owned final transport where Kovo controls one. The response-mint door
+MUST discard a handler result that loses the deadline/disconnect race. An unfinished response body
+MUST error and cancel its source at expiry. The Node adapter MUST additionally destroy an unfinished
+response transport at expiry and retain the occupancy slot through actual `finish` or `close`; its
+backpressure-aware pipeline therefore cannot turn a slow reader into an unbounded write. A
+Fetch-native adapter can bound only the Web response stream Kovo owns; the platform's post-handoff
+client transport is outside Kovo's proof.
+
+Occupancy release is one-shot. It occurs immediately on deadline or ingress disconnect, on an
+exception before response mint, on direct-Web response-body completion/cancel/error, and for a
+bodyless direct-Web response at mint because no later transport receipt exists. When an adapter
+claims the final transport, body completion alone does not release the slot: actual transport
+`finish`/`close` does. Deadline/disconnect release does not assert that arbitrary authored work has
+stopped; it prevents that abandoned work from retaining admission forever and revokes the
+framework-owned capabilities it could otherwise continue to use.
+
+This is cooperative cancellation, not JavaScript preemption. Kovo does not claim to terminate an
+arbitrary Promise, a synchronous loop, native extension work, an uncooperative third-party API, SQL
+already issued to a driver without cancellation support, or a transaction already committed. Such
+work may continue after its result becomes ineligible for the response. A hard guarantee over those
+cases would require app execution in a terminable worker or process.
 
 **Trusted-proxy per-IP identity (normative).** When `trustedProxy` enables Kovo's built-in
 `X-Forwarded-For`, `X-Real-IP`, or RFC 7239 `Forwarded` source, the selected proxy-nearest hop MUST

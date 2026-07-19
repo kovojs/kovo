@@ -26,6 +26,7 @@ import {
   securityPromiseResolve,
   securityPromiseThen,
 } from './response-security-intrinsics.js';
+import { onCurrentRequestDeadline } from './request-deadline.js';
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
@@ -270,10 +271,12 @@ function withDeferredRegionTimeout<Value>(
 ): Promise<DeferredStreamChunk> {
   return createSecurityPromise((resolve, reject) => {
     let winnerSelected = false;
+    let releaseDeadline = (): void => undefined;
     const select = (produce: () => MaybePromise<DeferredStreamChunk>): void => {
       if (winnerSelected) return;
       winnerSelected = true;
       clearTimeout(timer);
+      releaseDeadline();
       let selected: MaybePromise<DeferredStreamChunk>;
       try {
         selected = produce();
@@ -283,7 +286,9 @@ function withDeferredRegionTimeout<Value>(
       }
       void securityPromiseThen(securityPromiseResolve(selected), resolve, reject);
     };
+    const deadlineExpired = (): void => select(onTimeout);
     const timer = setTimeout(() => select(onTimeout), timeoutMs);
+    releaseDeadline = onCurrentRequestDeadline(deadlineExpired);
     void securityPromiseThen(
       pending,
       (value) => select(() => onValue(value)),

@@ -1005,6 +1005,32 @@ export const save = mutation('cart/save', {
     `);
   });
 
+  it('prints the bounded audited long-lived endpoint deadline posture', () => {
+    const result = kovoExplain(
+      {
+        endpoints: [
+          {
+            auth: 'none',
+            body: 'text',
+            cache: 'no-store',
+            csrf: 'safe:read-only',
+            deadlineJustification: 'bounded event-stream connection for build notifications',
+            deadlineMs: 120_000,
+            method: 'GET',
+            name: 'build-events',
+            path: '/events/builds',
+          },
+        ],
+      },
+      { endpoints: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain(
+      'deadline=long-lived:120000:"bounded event-stream connection for build notifications"',
+    );
+  });
+
   it('prints webhook mutation dispatch and derives webhook writes from the called mutation', () => {
     const result = kovoExplain(
       {
