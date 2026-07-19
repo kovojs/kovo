@@ -121,6 +121,11 @@ The split is editorial, not semantic. It reduces the root to the material reader
 | §12               | [spec/12-testing.md](spec/12-testing.md)                 | Framework testing API and proof-surface test model.                                                                                                                                   |
 | §14               | [spec/14-deploy-skew.md](spec/14-deploy-skew.md)         | Deploy skew recovery, render-plan token mismatch handling, and prior-version retention floor.                                                                                         |
 
+SPEC §6.6's finite-transfer claim is accompanied by the
+[reviewed analyzable-fragment hand argument](spec/06-analyzable-fragment-hand-argument.md),
+which states its compositionality, adequacy, and non-claims without presenting prose as a
+mechanized proof.
+
 ### 3.4 Compatibility map for section citations
 
 Existing comments, diagnostics, tests, and docs may still cite `SPEC §N.M`. Those citations remain understandable by preserving the old top-level numbers in this root and by keeping the detailed numbered headings inside the linked modules. For example, `SPEC §4.8` means the update-plan contract in `spec/04-component-model.md`; `SPEC §10.3` means the mutations-and-writes contract in `spec/10-data-plane.md`; `SPEC §11.3` means the diagnostic registry in `spec/11-diagnostics.md`. New citations may use either the old number (`SPEC §10.3`) or the file-qualified form (`spec/10-data-plane.md §10.3`) when the file qualification prevents ambiguity.

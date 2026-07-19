@@ -636,17 +636,23 @@ Replaces a `ts.SyntaxKind` totality sweep, which would be theatre.
 
 ### 4.6 Undecidability ledger (~0.75–1 pm)
 
-- [ ] `security/analyzable-fragment.json`: one row per prohibition in SPEC §6.6's transfer-semantics
+- [x] `security/analyzable-fragment.json`: one row per prohibition in SPEC §6.6's transfer-semantics
       paragraph (returning/throwing authority, opaque container, mutating an authority alias,
       mutable/ambiguous join, unsummarized nested callable, `arguments`/rest/spread recovery,
       `call`/`apply`/`bind`, imported/computed/aliased/reassigned/unresolved callable), each classified
       `FUNDAMENTAL | DELIBERATE | BUDGETED`, mapped to one of the exactly-8 closed reasons, each with a
       witness fixture that actually emits KV449 with that reason. **Generate the SPEC §6.6 prohibition
       table from this file.**
-- [ ] Record budget-bindingness: do the 16 / 50 000 / 4 096 / 256 budgets (`:1511-1514`) ever bind on a
+  - Evidence: `node scripts/analyzable-fragment.mjs` and the focused compiler/gate suite validate nine
+    generated rows, all eight live reasons, the generated SPEC table, and each emitted KV449 trace.
+- [x] Record budget-bindingness: do the 16 / 50 000 / 4 096 / 256 budgets (`:1511-1514`) ever bind on a
       real root?
-- [ ] A reviewed prose compositionality/adequacy argument checked into `spec/`, explicitly labelled a
+  - Evidence: the focused compiler suite compiles 11 checked-in starter/example files (29 semantic
+    roots); none binds any of the four budgets, and the checked binding sets are empty.
+- [x] A reviewed prose compositionality/adequacy argument checked into `spec/`, explicitly labelled a
       **hand argument** — the deliberate substitute for a mechanized adequacy proof.
+  - Evidence: `spec/06-analyzable-fragment-hand-argument.md` states the induction, adequacy boundary,
+    and non-claims; the generated-ledger gate requires all nine prohibition references and limits.
 
 This ledger is the single sentence Kovo cannot say today: _"here is precisely what we will never prove,
 and why each item is on that list."_ It is a prerequisite for honest publication of every Phase-1 result.

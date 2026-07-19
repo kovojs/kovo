@@ -171,7 +171,7 @@
   "sources": {
     "budgets": "packages/compiler/src/scan/security-provenance-relation.ts",
     "closedReasons": "packages/core/src/internal/security-operation-ir.ts",
-    "specification": "spec/06-type-system.md#66-compiler-owned-security-operation-ir-normative"
+    "specification": "spec/06-type-system.md#66-soundness-boundary-normative"
   },
   "summary": {
     "budgets": 4,

@@ -189,7 +189,7 @@ export function generatedAnalyzableFragmentDocument() {
     sources: {
       budgets: compilerProvenanceRelationPath,
       closedReasons: coreSecurityOperationIrPath,
-      specification: `${analyzableFragmentSpecPath}#66-compiler-owned-security-operation-ir-normative`,
+      specification: `${analyzableFragmentSpecPath}#66-soundness-boundary-normative`,
     },
     summary: {
       budgets: 4,
