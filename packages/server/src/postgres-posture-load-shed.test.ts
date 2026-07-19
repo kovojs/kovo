@@ -14,12 +14,14 @@ const rawTextResponse = {
 describe('Postgres posture app load shedding', () => {
   it('maps only a framework-minted posture admission failure to a stable 503 shell', async () => {
     const onError = vi.fn();
-    const provider = createFrameworkManagedDbProvider(async () => {
-      throw mintFrameworkLoadShedError({
-        code: 'KV433',
-        reason: 'Postgres posture lease digest diverged',
-        retryAfterMs: 2_500,
-      });
+    const provider = createFrameworkManagedDbProvider(async () => ({}), {
+      admit: async () => {
+        throw mintFrameworkLoadShedError({
+          code: 'KV433',
+          reason: 'Postgres posture lease digest diverged',
+          retryAfterMs: 2_500,
+        });
+      },
     });
     const health = endpoint('/health', {
       db: true,
@@ -49,8 +51,10 @@ describe('Postgres posture app load shedding', () => {
       reason: 'Postgres posture lease digest diverged',
       retryAfterMs: 2_500,
     });
-    const provider = createFrameworkManagedDbProvider(async () => {
-      throw forged;
+    const provider = createFrameworkManagedDbProvider(async () => ({}), {
+      admit: async () => {
+        throw forged;
+      },
     });
     const health = endpoint('/health', {
       db: true,

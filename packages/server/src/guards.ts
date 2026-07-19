@@ -466,17 +466,29 @@ export type DbProvider<RawRequest, DbValue, SessionValue = unknown> =
   | FrameworkManagedDbProvider<DbValue>
   | ((request: LifecycleRequest<RawRequest, SessionValue, never>) => Promise<DbValue> | DbValue);
 
-type FrameworkManagedDbResolver = (request: unknown) => Promise<unknown> | unknown;
-const frameworkManagedDbProviders = createWitnessWeakMap<object, FrameworkManagedDbResolver>();
+type FrameworkManagedDbResolver = (request: unknown) => unknown;
+interface FrameworkManagedDbRegistration {
+  readonly admit?: () => Promise<void> | void;
+  readonly resolver: FrameworkManagedDbResolver;
+}
+const frameworkManagedDbProviders = createWitnessWeakMap<object, FrameworkManagedDbRegistration>();
 
 /** @internal Register a package-owned resolver behind an opaque, frozen provider token. */
 export function createFrameworkManagedDbProvider<RawRequest, DbValue, SessionValue = unknown>(
   resolver: (
     request: LifecycleRequest<RawRequest, SessionValue, never>,
   ) => Promise<DbValue> | DbValue,
+  options: { readonly admit?: () => Promise<void> | void } = {},
 ): FrameworkManagedDbProvider<DbValue> {
   const token = witnessFreeze(witnessCreateNullRecord());
-  witnessWeakMapSet(frameworkManagedDbProviders, token, resolver as FrameworkManagedDbResolver);
+  witnessWeakMapSet(
+    frameworkManagedDbProviders,
+    token,
+    witnessFreeze({
+      ...(options.admit === undefined ? {} : { admit: options.admit }),
+      resolver: resolver as FrameworkManagedDbResolver,
+    }),
+  );
   // The private WeakMap is the runtime proof; this assertion only carries the already-minted
   // provider's DB type through createApp authoring without placing a forgeable brand on the token.
   return token as unknown as FrameworkManagedDbProvider<DbValue>;
@@ -493,6 +505,15 @@ export function isFrameworkManagedDbProvider(
   );
 }
 
+/** @internal Run a framework-owned provider's admission gate before session/auth/handler work. */
+export async function admitFrameworkManagedDbProvider(provider: unknown): Promise<void> {
+  if (typeof provider !== 'object' || provider === null) return;
+  const registration = witnessWeakMapGet(frameworkManagedDbProviders, provider);
+  if (registration?.admit !== undefined) {
+    await witnessReflectApply<Promise<void> | void>(registration.admit, undefined, []);
+  }
+}
+
 /** @internal Resolve either a conventional callback provider or a framework-owned opaque token. */
 export function resolveDbProvider<RawRequest, DbValue, SessionValue = unknown>(
   provider: DbProvider<RawRequest, DbValue, SessionValue>,
@@ -504,11 +525,13 @@ export function resolveDbProvider<RawRequest, DbValue, SessionValue = unknown>(
   if (typeof provider !== 'object' || provider === null) {
     throw new TypeError('Framework-managed DB provider capability is invalid (SPEC §6.6/§10.3).');
   }
-  const resolver = witnessWeakMapGet(frameworkManagedDbProviders, provider);
-  if (resolver === undefined) {
+  const registration = witnessWeakMapGet(frameworkManagedDbProviders, provider);
+  if (registration === undefined) {
     throw new TypeError('Framework-managed DB provider capability is forged (SPEC §6.6/§10.3).');
   }
-  return witnessReflectApply<Promise<DbValue> | DbValue>(resolver, undefined, [request]);
+  return witnessReflectApply<Promise<DbValue> | DbValue>(registration.resolver, undefined, [
+    request,
+  ]);
 }
 
 /** Request shape after the framework has installed configured lifecycle channels. */

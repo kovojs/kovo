@@ -32,6 +32,7 @@ import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import { schemaMaxUploadBytes, type Schema } from './schema.js';
 import { mutationResponseWithoutBrowserState } from './mutation.js';
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
+import { admitFrameworkManagedDbProvider } from './guards.js';
 import {
   requestCreateUrl,
   requestDecodeURIComponent,
@@ -105,6 +106,8 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       maxBodyBytes,
     );
     if (loadShed) return loadShed;
+
+    if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);
 
     if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {
       return kovoSecurityReportResponse(app, request);
