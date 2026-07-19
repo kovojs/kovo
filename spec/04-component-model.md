@@ -333,6 +333,16 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 - the `style` attribute and `<style>` element text;
 - `srcdoc`;
 - `<script>` element text and `<script type="application/json">` island bodies (§9.1 governs the byte-level encoding for the latter).
+- document-wide navigation elements are outside the app-authored output surface: `<base>` is
+  disabled because even a safe-scheme value retargets every later relative URL, and
+  `<meta http-equiv="refresh">` is disabled because `http-equiv` plus `content` is one executable
+  navigation sink whose attributes may be committed in either order. The compiler reports KV236
+  for `<base>` and for a statically or directly dynamically refresh-capable `<meta>`; opaque spread
+  values are reconstructed and classified by the element-aware runtime pair sink. Server rendering
+  and live binding updates remove attempts that reach that floor. Ordinary metadata such as
+  `<meta name="description" content={...}>` and statically non-refresh `http-equiv` values remain
+  valid. There is no trusted-value suppression for document-wide navigation; use Kovo router or
+  response navigation outcomes and framework deployment-base configuration instead.
 - generic SVG SMIL execution primitives — `<animate>`, `<animateColor>`, `<animateMotion>`, `<animateTransform>`, `<discard>`, and `<set>` — are disabled outright in framework-generated or framework-managed DOM. SMIL's `attributeName` target and its `values`/`from`/`to`/`by` transfers are one temporal sink: the target may be an ancestor or an `href="#id"` sibling, and live bindings may commit target and transfer values in either order. The compiler reports **KV236** for these intrinsic elements even when the apparent target is benign; server JSX omits them, and fragment/live-update runtimes inert them before adoption or update. There is no plain-JSX trusted-value suppression for this ban; reviewed raw `trustedHtml(...)` remains the explicit whole-markup authority described below.
 
 Every `data-bind:<attr>` write into a URL-scheme attribute MUST scheme-allowlist its resolved value at both render and loader update time; a value resolving to a denied scheme is dropped to the attribute's empty semantics (the attribute is removed, per the `?.` rule above), never written verbatim. A binding into an unsafe context with no escape hatch is **KV236** with the usual teaching menu: change the projection, extract a derive that returns a safe value, or — for genuinely author-trusted markup/URLs — opt in via the trusted-HTML escape hatch.

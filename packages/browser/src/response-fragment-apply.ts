@@ -321,6 +321,10 @@ function sa(
 ): void {
   if (inertBlockedSvgSmilElement(e, security)) return;
   const n = security.lower(name);
+  if (blocksDocumentNavigationAttribute(e, n, v, security)) {
+    security.removeElementAttribute(e, name);
+    return;
+  }
   if (r(n)) {
     security.removeElementAttribute(e, name);
     return;
@@ -405,12 +409,83 @@ function inertBlockedSvgSmilElement(
   return true;
 }
 
+/**
+ * SPEC §4.8 / §5.2 rule 10: document-wide navigation is one element/pair sink, not a
+ * collection of ordinary independent attributes. A `<base>` is always inert. A meta refresh keeps
+ * its descriptive attributes but loses `content`, which is the byte-carrying navigation half.
+ */
+function inertDocumentNavigationElement(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const tag = security.lower(security.readElementTagName(element) ?? '');
+  if (tag === 'base') {
+    const attributes = security.snapshotElementAttributes(element);
+    for (let index = 0; index < attributes.length; index += 1) {
+      const attribute = attributes[index];
+      if (attribute) security.removeElementAttribute(element, attribute.name);
+    }
+    security.replaceElementChildren(element, []);
+    return true;
+  }
+  if (tag === 'meta' && metaElementHasRefreshPosture(element, security)) {
+    removeAsciiCaseAttribute(element, 'content', security);
+  }
+  return false;
+}
+
+function blocksDocumentNavigationAttribute(
+  element: Element,
+  normalizedName: string,
+  value: string,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const tag = security.lower(security.readElementTagName(element) ?? '');
+  if (tag === 'base') {
+    inertDocumentNavigationElement(element, security);
+    return true;
+  }
+  if (tag !== 'meta') return false;
+  if (normalizedName === 'content') return metaElementHasRefreshPosture(element, security);
+  if (
+    (normalizedName === 'http-equiv' || normalizedName === 'httpequiv') &&
+    security.lower(security.trim(value)) === 'refresh'
+  ) {
+    removeAsciiCaseAttribute(element, 'content', security);
+  }
+  return false;
+}
+
+function metaElementHasRefreshPosture(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const effective =
+    security.readAttribute(element, 'http-equiv') ?? security.readAttribute(element, 'httpequiv');
+  return effective !== null && security.lower(security.trim(effective)) === 'refresh';
+}
+
+function removeAsciiCaseAttribute(
+  element: Element,
+  expectedName: string,
+  security: HtmlResponseFragmentSecurityControls,
+): void {
+  const attributes = security.snapshotElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute && security.lower(attribute.name) === expectedName) {
+      security.removeElementAttribute(element, attribute.name);
+    }
+  }
+}
+
 function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element {
   const descendants = security.queryAllElements(e, '*');
   for (let elementIndex = -1; elementIndex < descendants.length; elementIndex += 1) {
     const x = elementIndex < 0 ? e : descendants[elementIndex];
     if (!x) continue;
     if (inertBlockedSvgSmilElement(x, security)) continue;
+    if (inertDocumentNavigationElement(x, security)) continue;
     const attributes = security.snapshotElementAttributes(x);
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex];
