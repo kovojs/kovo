@@ -921,10 +921,8 @@ async function expectEventuallyPostgresEventCount(
   const deadline = Date.now() + 10_000;
   let lastBody = '';
   while (Date.now() < deadline) {
-    const response = await fetch(`${origin}/api/phase5-pg-status`);
-    lastBody = await response.text();
-    expect(response.status, lastBody).toBe(200);
-    const status = JSON.parse(lastBody) as { events: { id: string; label: string }[] };
+    const status = await postgresParanoidStatus(origin);
+    lastBody = JSON.stringify(status);
     if (
       status.events.length === expectedCount &&
       status.events.every((event) => event.label === 'owner-visible')
