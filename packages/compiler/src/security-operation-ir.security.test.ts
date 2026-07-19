@@ -83,7 +83,6 @@ export const api = endpoint('/api', {
     ['direct ASCII-case variant', 'ON:CLICK={profile.handler}'],
     ['static spread lowercase', "{...{ 'on:click': profile.handler }}"],
     ['static spread ASCII-case variant', "{...{ 'On:Click': profile.handler }}"],
-    ['nested static spread', "{...{ ...{ 'on:click': profile.handler } }}"],
   ])('closes a runtime-selected handler reference through %s', (_label, attributes) => {
     const source = `
 export const DynamicRef = component({
@@ -100,7 +99,72 @@ export const DynamicRef = component({
     ]);
   });
 
-  it('keeps exact static primitive handler references compiler-authorized', () => {
+  it('closes a runtime-selected handler reference merged through primitive attrs', () => {
+    const source = `
+export const DynamicPrimitiveRef = component({
+  render: ({ profile }) => (
+    <Tooltip.Trigger asChild attrs={{ 'on:click': profile.handler }}>
+      <button>Run</button>
+    </Tooltip.Trigger>
+  ),
+});
+`;
+
+    expect(kv449(source)).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'runtime-selected on:* handler reference is not compiler-authorized',
+        ),
+      }),
+    ]);
+  });
+
+  it.each([
+    ['derive text ref (direct)', 'data-bind={profile.executableRef}'],
+    ['derive attribute ref (direct ASCII-case)', 'DATA-BIND:HIDDEN={profile.executableRef}'],
+    ['derive property ref (direct)', 'data-bind-prop:checked={profile.executableRef}'],
+    [
+      'stream renderer ref (direct ASCII-case)',
+      'data-stream-text="assistant:a1" DATA-STREAM-RENDERER={profile.executableRef}',
+    ],
+    [
+      'module allowlist authority (direct ASCII-case)',
+      'DATA-KOVO-MODULE-ALLOWLIST={profile.executableRef}',
+    ],
+    ['derive text ref (static-key spread)', "{...{ 'data-bind': profile.executableRef }}"],
+    [
+      'derive attribute ref (static-key spread)',
+      "{...{ 'data-bind:hidden': profile.executableRef }}",
+    ],
+    [
+      'derive property ref (static-key spread)',
+      "{...{ 'data-bind-prop:checked': profile.executableRef }}",
+    ],
+    [
+      'stream renderer ref (static-key spread)',
+      "data-stream-text=\"assistant:a1\" {...{ 'data-stream-renderer': profile.executableRef }}",
+    ],
+    [
+      'module allowlist authority (static-key spread)',
+      "{...{ 'data-kovo-module-allowlist': profile.executableRef }}",
+    ],
+  ])('closes a runtime-selected executable selector through %s', (_label, attributes) => {
+    const source = `
+export const DynamicExecutableRef = component({
+  render: ({ profile }) => <output ${attributes}>Result</output>,
+});
+`;
+
+    expect(kv449(source)).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'runtime-selected executable reference is not compiler-authorized',
+        ),
+      }),
+    ]);
+  });
+
+  it('keeps exact static reviewed executable references compiler-authorized', () => {
     const result = compile(`
 export const StaticRefs = component({
   render: () => (
@@ -108,12 +172,41 @@ export const StaticRefs = component({
       <button on:click="/c/primitives.client.js#staticClick">Direct</button>
       <button {...{ 'on:click': '/c/primitives.client.js#spreadClick' }}>Spread</button>
       <button on:click={'/c/primitives.client.js#expressionClick'}>Expression</button>
+      <output data-bind="/c/primitives.client.js#textDerive">Text derive</output>
+      <output data-bind:hidden={'/c/primitives.client.js#hiddenDerive'}>Attr derive</output>
+      <input data-bind-prop:checked="/c/primitives.client.js#checkedDerive" />
+      <p
+        data-stream-text="assistant:a1"
+        {...{ 'data-stream-renderer': '/c/primitives.client.js#streamRenderer' }}
+      >Stream</p>
+      <meta data-kovo-module-allowlist="/c/primitives.client.js" />
     </section>
   ),
 });
 `);
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+
+    const runtimeFilteredNestedSpread = compile(`
+export const RuntimeFiltered = component({
+  render: ({ profile }) => (
+    <button {...{ ...{
+      'on:click': profile.handler,
+      'data-bind': profile.derive,
+      'data-bind:hidden': profile.derive,
+      'data-bind-prop:checked': profile.derive,
+      'data-stream-renderer': profile.renderer,
+      'data-kovo-module-allowlist': profile.module,
+    } }}>Nested spread</button>
+  ),
+});
+`);
+    expect(
+      runtimeFilteredNestedSpread.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449'),
+    ).toEqual([]);
+    expect(
+      runtimeFilteredNestedSpread.files.find((file) => file.kind === 'server')?.source,
+    ).toContain('kovoSafeJsxSpread');
   });
 
   it('accepts realistic state, delegated-event, reviewed primitive, focus, form, and timer effects', () => {

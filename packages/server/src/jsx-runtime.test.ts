@@ -825,10 +825,12 @@ describe('server jsx runtime', () => {
     );
   });
 
-  it('M3: compiler-owned spread reconstruction omits the runtime control-attribute census', () => {
+  it('M3: compiler-owned spread reconstruction omits every executable selector family', () => {
     const record = {
       'ON:LOAD': '/c/account.client.js#deleteAccount',
       'DaTa-BiNd': '/c/account.client.js#derive',
+      'DATA-BIND:HIDDEN': '/c/account.client.js#deriveHidden',
+      'data-bind-prop:checked': '/c/account.client.js#deriveChecked',
       'DATA-DERIVE': '/c/account.client.js#derive',
       'aria-label': 'Profile',
       class: 'card',
