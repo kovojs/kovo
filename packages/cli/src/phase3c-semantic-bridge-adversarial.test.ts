@@ -98,7 +98,7 @@ function assertExactCarrierDischargesOnlyTheKnownLegacyNoise(
 }
 
 describe('Phase 3C semantic carrier integrity', () => {
-  it('preserves an exact context-owned rawRead over one immutable trustedSql binding when compiler semantics are present', () => {
+  it('keeps a const-bound trustedSql rawRead closed without a compiler-owned semantic edge', () => {
     const files = [
       {
         fileName: 'schema.ts',
@@ -145,8 +145,8 @@ describe('Phase 3C semantic carrier integrity', () => {
     ];
     const semanticSources = compilerSemanticSources(files);
 
-    expect(hasRequestProcessClosure(files)).toBe(false);
-    expect(hasRequestProcessClosure(files, semanticSources)).toBe(false);
+    expect(hasRequestProcessClosure(files)).toBe(true);
+    expect(hasRequestProcessClosure(files, semanticSources)).toBe(true);
 
     for (const hostileSource of [
       files[1]!.source.replace('db.rawRead', "db['rawRead']"),

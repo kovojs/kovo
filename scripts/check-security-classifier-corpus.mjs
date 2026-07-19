@@ -1000,13 +1000,13 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'compiler-semantic-context-raw-read-consistency',
         file: 'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
         snippets: [
-          'preserves an exact context-owned rawRead over one immutable trustedSql binding when compiler semantics are present',
+          'keeps a const-bound trustedSql rawRead closed without a compiler-owned semantic edge',
           "const db = context?.db;",
           'const statement = trustedSql(',
           "{ reads: ['contacts'] }",
           "db['rawRead']",
           'const rawRead = db.rawRead;',
-          'expect(hasRequestProcessClosure(files, semanticSources)).toBe(false)',
+          'expect(hasRequestProcessClosure(files, semanticSources)).toBe(true)',
         ],
       },
       {
