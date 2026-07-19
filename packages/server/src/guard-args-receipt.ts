@@ -6,43 +6,17 @@ import {
   isGuardArgsFileReceipt,
 } from './guard-args-file-receipt.js';
 import { snapshotPinnedDataTreeValue } from './request-carrier.js';
-import {
-  securityCreateDate,
-  securityDateGetTime,
-  securityIsDate,
-  securityNumberIsNaN,
-} from './response-security-intrinsics.js';
+import { securityIsDate } from './response-security-intrinsics.js';
 import {
   createWitnessWeakSet,
-  witnessDefineProperty,
-  witnessFreeze,
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 const GuardArgsTypeError = TypeError;
 const guardArgsReceipts = createWitnessWeakSet<object>();
-const dateMutationRefusal = witnessFreeze((): never => {
-  throw new GuardArgsTypeError('Validated guard args Date receipts are immutable.');
-});
-const dateMutators = witnessFreeze([
-  'setDate',
-  'setFullYear',
-  'setHours',
-  'setMilliseconds',
-  'setMinutes',
-  'setMonth',
-  'setSeconds',
-  'setTime',
-  'setUTCDate',
-  'setUTCFullYear',
-  'setUTCHours',
-  'setUTCMilliseconds',
-  'setUTCMinutes',
-  'setUTCMonth',
-  'setUTCSeconds',
-  'setYear',
-] as const);
+const rejectedDateMessage =
+  'Validated guard args cannot contain Date values because JavaScript Date internal slots are mutable through borrowed native mutators; use an ISO timestamp string or epoch number instead.';
 
 /**
  * @internal Commit parsed query/mutation args to the exact bounded value observed by both the
@@ -79,21 +53,14 @@ function snapshotGuardArgsLeaf(
   const fileReceipt = guardArgsFileReceiptForSource(value);
   if (fileReceipt !== undefined) return { handled: true, value: fileReceipt };
 
-  if (!securityIsDate(value)) return undefined;
-  const timestamp = securityDateGetTime(value);
-  if (securityNumberIsNaN(timestamp)) {
-    throw new GuardArgsTypeError('Validated guard args cannot contain an invalid Date.');
+  if (securityIsDate(value)) {
+    // SPEC §6.6 / §10.3 C15: Object.freeze() and own throwing methods cannot freeze Date's
+    // [[DateValue]] internal slot. Date.prototype.setTime.call(receipt, value) bypasses both and
+    // can change an accepted ownership key before the final read/write consumer. A Proxy membrane
+    // would lose native Date brand/borrowed-read/structured-clone semantics and would make the
+    // proxy, rather than a reconstruct/box/own door, the security mechanism. Reject the value and
+    // require an actually immutable timestamp representation.
+    throw new GuardArgsTypeError(rejectedDateMessage);
   }
-  const receipt = securityCreateDate(timestamp);
-  for (let index = 0; index < dateMutators.length; index += 1) {
-    witnessDefineProperty(receipt, dateMutators[index]!, {
-      configurable: false,
-      enumerable: false,
-      value: dateMutationRefusal,
-      writable: false,
-    });
-  }
-  const pinned = witnessFreeze(receipt);
-  witnessWeakSetAdd(guardArgsReceipts, pinned);
-  return { handled: true, value: pinned };
+  return undefined;
 }

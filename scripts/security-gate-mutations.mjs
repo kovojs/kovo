@@ -133,6 +133,10 @@ const serverRequestBodyProvenancePath = path.join(
 );
 const serverResponsePosturePath = path.join(repoRoot, 'packages/server/src/response-posture.ts');
 const serverGuardsPath = path.join(repoRoot, 'packages/server/src/guards.ts');
+const serverGuardArgsReceiptPath = path.join(
+  repoRoot,
+  'packages/server/src/guard-args-receipt.ts',
+);
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 const serverSchemaPath = path.join(repoRoot, 'packages/server/src/schema.ts');
@@ -184,6 +188,11 @@ const removedLifecyclePrivateScopeCarrierPinBranch =
   '  return lifecycleRequest as LifecycleRequest<';
 const guardArgsReceiptBranch = 'snapshotGuardArgsReceipt(args)';
 const removedGuardArgsReceiptBranch = 'args';
+const guardArgsDateRejectionBranch = '  if (securityIsDate(value)) {';
+const weakenedGuardArgsDateRejectionBranch = [
+  '  if (securityIsDate(value)) return { handled: true, value };',
+  '  if (false) {',
+].join('\n');
 const dynamicBindingControlPlaneClosureBranch = [
   "  if (options.posture === 'dynamic-binding' && isGeneratedOnlySemanticAttribute(name)) {",
   '    return blockedDecision(',
@@ -2487,6 +2496,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: guardArgsReceiptBranch,
     sourceFile: serverGuardsPath,
     test: assertGuardArgsReceiptIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Treats a mutable native Date as an already-safe validated-args receipt.',
+    expectedKiller:
+      'Date internal slots must be rejected before guards or final read/write consumers run',
+    name: 'server-lifecycle/allow-mutable-date-guard-args-receipt',
+    replacement: weakenedGuardArgsDateRejectionBranch,
+    search: guardArgsDateRejectionBranch,
+    sourceFile: serverGuardArgsReceiptPath,
+    test: assertGuardArgsDateRejectionIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -6013,6 +6033,18 @@ async function assertGuardArgsReceiptIsEnforced(moduleUnderTest) {
     throw new Error(
       `guard args receipt drifted: authorized=${String(authorized)} consumed=${String(consumed)} sourceReads=${String(reads)}`,
     );
+  }
+}
+
+async function assertGuardArgsDateRejectionIsEnforced(moduleUnderTest) {
+  let failure;
+  try {
+    moduleUnderTest.snapshotGuardArgsReceipt({ when: new Date('2025-07-20T00:00:00.000Z') });
+  } catch (error) {
+    failure = error;
+  }
+  if (!/Date internal slots are mutable through borrowed native mutators/u.test(String(failure))) {
+    throw new Error(`mutable Date guard-args receipt was not rejected precisely: ${String(failure)}`);
   }
 }
 

@@ -85,15 +85,18 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
   async function expectBorrowedDateMutationClosed(
     operation: Promise<unknown>,
     consumer: ReturnType<typeof vi.fn>,
+    sessionProvider: ReturnType<typeof vi.fn>,
   ): Promise<void> {
+    let failure: unknown;
     try {
-      await expect(operation).resolves.toMatchObject({ ok: true, value: authorizedDate });
-      expect(consumer).toHaveBeenCalledOnce();
+      await operation;
     } catch (error) {
-      expect(error).toBeInstanceOf(TypeError);
-      expect(error).toHaveProperty('message', rejectedDateMessage);
-      expect(consumer).not.toHaveBeenCalled();
+      failure = error;
     }
+    expect(failure).toBeInstanceOf(TypeError);
+    expect(failure).toHaveProperty('message', rejectedDateMessage);
+    expect(consumer).not.toHaveBeenCalled();
+    expect(sessionProvider).not.toHaveBeenCalled();
   }
 
   function accessorArgsSchema(reads: { value: number }): Schema<{ id: string }> {
@@ -149,6 +152,7 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
 
   it('prevents a borrowed Date mutator from changing the accepted query final consumer', async () => {
     const load = vi.fn((input: DateArgs) => input.authorized.toISOString());
+    const sessionProvider = vi.fn(async () => ({ user: { id: 'owner' } }));
     const definition = query('security/guard-args-query-date-receipt', {
       args: s.object({ authorized: s.datetime(), selected: s.datetime() }),
       guard: dateOwnershipThenRemoteSelection(),
@@ -160,14 +164,17 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
       runQuery(
         definition,
         { authorized: authorizedDate, selected: selectedDate },
-        { session: { user: { id: 'owner' } } },
+        {},
+        { sessionProvider },
       ),
       load,
+      sessionProvider,
     );
   });
 
   it('prevents a borrowed Date mutator from changing the accepted mutation final consumer', async () => {
     const handler = vi.fn((input: DateArgs) => input.authorized.toISOString());
+    const sessionProvider = vi.fn(async () => ({ user: { id: 'owner' } }));
     const definition = mutation('security/guard-args-mutation-date-receipt', {
       guard: dateOwnershipThenRemoteSelection(),
       handler,
@@ -178,9 +185,11 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
       runMutation(
         definition,
         { authorized: authorizedDate, selected: selectedDate },
-        { session: { user: { id: 'owner' } } },
+        {},
+        { sessionProvider },
       ),
       handler,
+      sessionProvider,
     );
   });
 
@@ -309,7 +318,7 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
     ).resolves.toMatchObject({ ok: true, value: 'owned' });
   });
 
-  it('layers mutation args after async providers and preserves nested, Date, and file semantics', async () => {
+  it('layers mutation args after async providers and preserves nested and file semantics', async () => {
     const providerSession = { user: { id: 'owner' } };
     const fileBytes = new TextEncoder().encode('safe').buffer;
     const raw = {
@@ -321,7 +330,6 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
       },
       id: 'owned',
       nested: [{ label: 'kept' }],
-      when: '2026-07-19T00:00:00.000Z',
     };
     const definition = mutation('security/guard-args-mutation-provider-order', {
       guard: ownershipGuard(),
@@ -336,7 +344,6 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
         expect(request.session?.user?.id).toBe('owner');
         expect(requestArgs.id).toBe('owned');
         expect(requestArgs.nested[0]?.label).toBe('kept');
-        expect(() => input.when.setTime(0)).toThrow(/immutable/u);
         const receivedBytes = await input.attachment.arrayBuffer();
         return {
           bytes: receivedBytes.byteLength,
@@ -344,14 +351,12 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
           id: input.id,
           label: input.nested[0]?.label,
           name: input.attachment.name,
-          when: input.when.toISOString(),
         };
       },
       input: s.object({
         attachment: s.file(),
         id: s.string(),
         nested: s.array(s.object({ label: s.string() })),
-        when: s.datetime(),
       }),
     });
 
@@ -365,7 +370,6 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
         id: 'owned',
         label: 'kept',
         name: 'proof.txt',
-        when: '2026-07-19T00:00:00.000Z',
       },
     });
   });

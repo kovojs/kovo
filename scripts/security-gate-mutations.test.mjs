@@ -8,11 +8,12 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after lifecycle private-scope closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(258);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(259);
   });
 
   it('executes the lifecycle private-scope pin mutant against a behavioral runtime oracle', () => {
     const names = [
+      'server-lifecycle/allow-mutable-date-guard-args-receipt',
       'server-lifecycle/drop-guard-args-receipt',
       'server-lifecycle/drop-private-scope-carrier-pin',
     ];

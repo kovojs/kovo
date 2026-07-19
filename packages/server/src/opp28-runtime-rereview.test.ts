@@ -6,9 +6,9 @@ import { query, runQuery } from './query.js';
 import { s, type Schema } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
-// Review-only live-defect reproducer for SPEC §6.6 / §10.3 C15. These expectations describe the
-// current unsound result and must be replaced with fail-closed assertions when the receipt lands.
-describe('OPP-28 exact-tip runtime receipt re-review', () => {
+// Retained regression for SPEC §6.6 / §10.3 C15: both final consumers must use the detached value
+// accepted by guards.owns, never a later read from the schema-produced Proxy.
+describe('OPP-28 runtime receipt regression', () => {
   type AppRequest = { session?: { user?: { id: string } | null } | null };
   type ArgsRequest = GuardArgsRequest<AppRequest, { id: string }>;
 
@@ -39,7 +39,7 @@ describe('OPP-28 exact-tip runtime receipt re-review', () => {
     );
   }
 
-  it('reproduces accepted query-key Proxy drift through the unpinned args carrier', async () => {
+  it('pins an accepted query key before the final consumer', async () => {
     const definition = query('opp28/args-query-drift', {
       args: driftingArgsSchema(),
       guard: ownershipGuard(),
@@ -49,10 +49,10 @@ describe('OPP-28 exact-tip runtime receipt re-review', () => {
 
     await expect(
       runQuery(definition, { id: 'owned' }, { session: { user: { id: 'owner' } } }),
-    ).resolves.toMatchObject({ ok: true, value: 'victim' });
+    ).resolves.toMatchObject({ ok: true, value: 'owned' });
   });
 
-  it('reproduces accepted mutation-key Proxy drift through async handler dispatch', async () => {
+  it('pins an accepted mutation key through async handler dispatch', async () => {
     const definition = mutation('opp28/args-mutation-drift', {
       guard: ownershipGuard(),
       handler: async (input) => {
@@ -64,6 +64,6 @@ describe('OPP-28 exact-tip runtime receipt re-review', () => {
 
     await expect(
       runMutation(definition, { id: 'owned' }, { session: { user: { id: 'owner' } } }),
-    ).resolves.toMatchObject({ ok: true, value: 'victim' });
+    ).resolves.toMatchObject({ ok: true, value: 'owned' });
   });
 });

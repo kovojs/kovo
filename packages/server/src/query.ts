@@ -506,6 +506,8 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
 ): Promise<QueryEndpointResult<Value, Input>> {
   const argsResult = parseQueryInput(definition, rawInput, options.trustedInput === true);
   if (!argsResult.ok) return argsResult.failure;
+  const input =
+    definition.args === undefined ? argsResult.value : snapshotGuardArgsReceipt(argsResult.value);
 
   // SPEC §9.4/§10.3 (MARQUEE): the framework owns the handle threaded into the loader. A
   // `query()` loader always runs in read mode (KV433 read-only proxy); writes belong in
@@ -526,8 +528,6 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   // `keyOf(request)` reads `undefined` and a key-ignoring predicate authorizes everyone (IDOR).
   // Only on the validated path (a declared `args` schema, parsed above); a query without args never
   // fabricates an unvalidated `req.args`. The loader/guard then see the same coerced values.
-  const input =
-    definition.args === undefined ? argsResult.value : snapshotGuardArgsReceipt(argsResult.value);
   const lifecycleRequest =
     definition.args === undefined
       ? resolvedRequest

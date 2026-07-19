@@ -151,9 +151,10 @@ export function snapshotPinnedLifecycleValue<Value>(value: Value): Value {
  * @internal Reconstruct a bounded own-data graph while allowing exact framework-witnessed leaves.
  *
  * Unlike provider/session snapshots, request-input receipts must retain a few closed runtime value
- * classes such as `Date`, `SecretValue`, `ScopedKey`, and verified file receipts. The leaf callback
- * is module-private framework policy; every other object still has to be a stable plain own-data
- * record or dense array (SPEC §6.6 / §10.3 C15).
+ * classes such as `SecretValue`, `ScopedKey`, and verified file receipts. Mutable internal-slot
+ * values such as `Date` are rejected by the caller's leaf policy. The leaf callback is
+ * module-private framework policy; every other object still has to be a stable plain own-data record
+ * or dense array (SPEC §6.6 / §10.3 C15).
  */
 export function snapshotPinnedDataTreeValue<Value>(
   value: Value,
