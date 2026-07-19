@@ -17,6 +17,18 @@ describe('security-gate-mutations', () => {
     expect(finiteIrMutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });
 
+  it('executes every Drizzle analyzer-summary mutant against a behavioral verdict oracle', () => {
+    const analyzerSummaryMutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
+      mutant.name.startsWith('drizzle-analyzer-summary/'),
+    );
+
+    expect(analyzerSummaryMutants).toHaveLength(28);
+    expect(
+      analyzerSummaryMutants.every((mutant) => mutant.behavioralTypeScript === true),
+    ).toBe(true);
+    expect(analyzerSummaryMutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
+  });
+
   it('kills every enrolled security gate branch deletion mutant', async () => {
     const results = await runSecurityGateMutationHarness();
 
