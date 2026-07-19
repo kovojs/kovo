@@ -437,6 +437,41 @@ describe('browser response fragment apply', () => {
     expect(document.body.dataset.kovoSmilXss).toBeUndefined();
   });
 
+  it('inerts base and meta-refresh navigation before modular or inline fragment adoption', () => {
+    const assertInert = (target: string) => {
+      const base = document.querySelector(`[kovo-fragment-target="${target}"] base`);
+      const meta = document.querySelector(`[kovo-fragment-target="${target}"] meta`);
+      expect(base?.getAttribute('href')).toBeNull();
+      expect(base?.getAttribute('target')).toBeNull();
+      expect(meta?.getAttribute('content')).toBeNull();
+    };
+    const incoming = (target: string) =>
+      [
+        `<section kovo-fragment-target="${target}">`,
+        '<base href="https://attacker.example/" target="_self">',
+        '<meta http-equiv="ReFrEsH" content="3600; url=https://attacker.example/collect">',
+        '</section>',
+      ].join('');
+
+    const modular = document.createElement('section');
+    modular.setAttribute('kovo-fragment-target', 'modular-navigation');
+    document.body.append(modular);
+    applyHtmlResponseFragments(
+      [{ html: fragmentHtml(incoming('modular-navigation')), target: 'modular-navigation' }],
+      (name) => document.querySelector(`[kovo-fragment-target="${name}"]`),
+    );
+    assertInert('modular-navigation');
+
+    const inline = document.createElement('section');
+    inline.setAttribute('kovo-fragment-target', 'inline-navigation');
+    document.body.append(inline);
+    installInlineKovoLoader(async () => ({}));
+    (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+      `<kovo-fragment target="inline-navigation">${incoming('inline-navigation')}</kovo-fragment>`,
+    );
+    assertInert('inline-navigation');
+  });
+
   it('keeps focused sanitizer helper outputs in parity with shared URL/srcset/CSS decisions', () => {
     for (const testCase of sinkParityCases) {
       const decision = decideRuntimeAttributeWrite(testCase.name, testCase.value);

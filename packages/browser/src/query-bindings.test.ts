@@ -116,6 +116,54 @@ describe('query binding helpers', () => {
     expect(JSON.stringify(events)).not.toContain('alert');
   });
 
+  it('fails closed for pair-dependent base and meta-refresh binding transitions', () => {
+    const root = new FakeMorphRoot();
+    const base = new FakeQueryPlanElement(
+      {
+        'data-bind:href': 'page.base',
+        href: '/safe/',
+      },
+      { tagName: 'BASE' },
+    );
+    const metaContent = new FakeQueryPlanElement(
+      {
+        content: 'safe',
+        'data-bind:content': 'page.refresh',
+        'http-equiv': 'ReFrEsH',
+      },
+      { tagName: 'META' },
+    );
+    const metaEquiv = new FakeQueryPlanElement(
+      {
+        content: '0; url=https://attacker.example/collect',
+        'data-bind:http-equiv': 'page.equiv',
+      },
+      { tagName: 'META' },
+    );
+    const description = new FakeQueryPlanElement(
+      {
+        content: 'old',
+        'data-bind:content': 'page.description',
+        name: 'description',
+      },
+      { tagName: 'META' },
+    );
+    root.planElements.push(base, metaContent, metaEquiv, description);
+
+    applyQueryBindings(root, 'page', {
+      base: 'https://attacker.example/',
+      description: 'Account overview',
+      equiv: ' refresh ',
+      refresh: '0; url=https://attacker.example/collect',
+    });
+
+    expect(base.getAttribute('href')).toBeNull();
+    expect(metaContent.getAttribute('content')).toBeNull();
+    expect(metaEquiv.getAttribute('http-equiv')).toBeNull();
+    expect(metaEquiv.getAttribute('content')).toBe('0; url=https://attacker.example/collect');
+    expect(description.getAttribute('content')).toBe('Account overview');
+  });
+
   it('applies optional binding path segments and removes empty attribute bindings', () => {
     const root = new FakeMorphRoot();
     const name = new FakeQueryBindingElement('deal.contact?.name', { textContent: 'Ada' });

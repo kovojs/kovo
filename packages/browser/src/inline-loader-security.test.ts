@@ -206,6 +206,56 @@ describe('inline loader output security', () => {
       expect(element.getAttribute('aria-label')).toBe('Ready');
     });
 
+    it(`${label}: removes pair-dependent base and meta-refresh binding transitions`, async () => {
+      const cases = [
+        {
+          attributes: {
+            'data-bind:href': 'state.value',
+            href: '/safe/',
+            'kovo-state': '{"value":"https://attacker.example/"}',
+            'on:click': '/c/client.js#commit',
+          },
+          blocked: 'href',
+          tagName: 'BASE',
+        },
+        {
+          attributes: {
+            content: 'safe',
+            'data-bind:content': 'state.value',
+            'http-equiv': 'ReFrEsH',
+            'kovo-state': '{"value":"0; url=https://attacker.example/collect"}',
+            'on:click': '/c/client.js#commit',
+          },
+          blocked: 'content',
+          tagName: 'META',
+        },
+        {
+          attributes: {
+            content: '0; url=https://attacker.example/collect',
+            'data-bind:http-equiv': 'state.value',
+            'kovo-state': '{"value":" refresh "}',
+            'on:click': '/c/client.js#commit',
+          },
+          blocked: 'http-equiv',
+          tagName: 'META',
+        },
+      ] as const;
+
+      for (const testCase of cases) {
+        const element = new BoundTriggerElement(
+          { ...testCase.attributes },
+          testCase.tagName,
+        );
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({ commit() {} }),
+          installSource,
+          ['/c/client.js'],
+        );
+        expect(element.getAttribute(testCase.blocked), testCase.tagName).toBeNull();
+      }
+    });
+
     it(`${label}: H12 inerts SMIL target/value bindings in either transition order`, async () => {
       const payload = "javascript:(document.body.dataset.kovoSmilXss='inline',void 0)";
       for (const [index, transfer] of ['values', 'from', 'to', 'by'].entries()) {

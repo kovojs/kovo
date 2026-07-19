@@ -1170,6 +1170,22 @@ describe('server jsx runtime', () => {
     ).toBe('<meta httpEquiv="ReFrEsH">');
   });
 
+  it('drops the document-wide base element at the runtime JSX floor', () => {
+    const events: RuntimeSinkSecurityEvent[] = [];
+    const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
+    try {
+      expect(html(jsx('BASE', { href: 'https://attacker.example/', target: '_self' }))).toBe('');
+      expect(html(jsx('base', { ...kovoSafeJsxSpread({ href: '/same-origin/' }) }))).toBe('');
+    } finally {
+      restore();
+    }
+
+    expect(events.map(({ action, family, sink }) => ({ action, family, sink }))).toEqual([
+      { action: 'remove', family: 'url', sink: 'base' },
+      { action: 'remove', family: 'url', sink: 'base' },
+    ]);
+  });
+
   it('classifies meta refresh from the browser-effective first ASCII-case-folded attribute', () => {
     const target = '0; url=https://attacker.example/phish';
 
