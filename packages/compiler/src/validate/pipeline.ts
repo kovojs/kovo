@@ -1,3 +1,5 @@
+import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+
 import {
   createDiagnosticFactory,
   type CompilerDiagnostic,
@@ -277,6 +279,10 @@ export function collectCompilerDiagnostics(context: ValidatorContext): CompilerD
           `Compiler validator ${index} diagnostics[${diagnosticIndex}] must be dense.`,
         );
       }
+      assertRegisteredDiagnostic(
+        diagnostic,
+        `Compiler validator ${index} diagnostics[${diagnosticIndex}]`,
+      );
       compilerArrayAppend(
         diagnostics,
         diagnostic as CompilerDiagnostic,

@@ -31,7 +31,11 @@ import {
 import { promisify as builtinPromisify } from 'node:util';
 
 import type { DiagnosticCode } from '@kovojs/core';
-import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+  isDiagnosticCode,
+} from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
@@ -1276,16 +1280,21 @@ async function buildCheckGraph(
 function buildPreflightComponentDiagnostics(
   components: NonNullable<KovoBuildCheckArtifacts['components']>,
 ): CompileResult['diagnostics'] {
-  return buildFlatMapDense(
+  const diagnostics = buildFlatMapDense(
     components,
     'Build preflight components',
     (component) => component.diagnostics,
   );
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `Build component diagnostics[${index}]`);
+  }
+  return diagnostics;
 }
 
 function staticDiagnosticFact(
   diagnostic: CompileResult['diagnostics'][number],
 ): CoreGraph.StaticDiagnosticFact {
+  assertRegisteredDiagnostic(diagnostic, 'Build compiler diagnostic projection');
   return {
     code: diagnostic.code,
     message: diagnostic.message,
@@ -2705,6 +2714,7 @@ function assertKovoBuildAuthoredCompilerAuthority(fileName: string, source: stri
   const blocked: Array<CompileResult['diagnostics'][number]> = [];
   for (let index = 0; index < diagnostics.length; index += 1) {
     const diagnostic = diagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Build authored compiler diagnostics[${index}]`);
     if (diagnostic.code === 'KV235') {
       buildSecurityArrayAppend(
         blocked,
@@ -5118,22 +5128,74 @@ function staticExportDiagnosticsFromModule(module: unknown): StaticExportCompile
   const diagnostics = (module as { diagnostics?: unknown }).diagnostics;
   if (!buildArrayIsArray(diagnostics)) return [];
 
-  return buildFilterDense(
-    diagnostics,
-    'Static-export compile diagnostics',
-    isStaticExportCompileDiagnostic,
+  const transferred: StaticExportCompileDiagnostic[] = [];
+  const source = buildSnapshotDenseArray(diagnostics, 'Static-export compile diagnostics');
+  for (let index = 0; index < source.length; index += 1) {
+    const diagnostic = registeredStaticExportCompileDiagnostic(source[index], index);
+    if (diagnostic !== undefined) {
+      buildSecurityArrayAppend(
+        transferred,
+        diagnostic,
+        'CLI packages/cli/src/commands/build-export.ts collection',
+      );
+    }
+  }
+  return transferred;
+}
+
+function registeredStaticExportCompileDiagnostic(
+  value: unknown,
+  index: number,
+): StaticExportCompileDiagnostic | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const label = `Static-export compile diagnostics[${index}]`;
+  const code = buildOwnDataProperty(value, 'code', `${label}.code`);
+  const fileName = buildOwnDataProperty(value, 'fileName', `${label}.fileName`);
+  const help = buildOwnDataProperty(value, 'help', `${label}.help`);
+  const message = buildOwnDataProperty(value, 'message', `${label}.message`);
+  const rawStart = buildOwnDataProperty(value, 'start', `${label}.start`);
+  if (
+    !code.present ||
+    !isDiagnosticCode(code.value) ||
+    !fileName.present ||
+    typeof fileName.value !== 'string' ||
+    !message.present ||
+    typeof message.value !== 'string' ||
+    (help.present && typeof help.value !== 'string')
+  ) {
+    return undefined;
+  }
+  let start: StaticExportCompileDiagnostic['start'];
+  if (rawStart.present) {
+    if (typeof rawStart.value !== 'object' || rawStart.value === null) return undefined;
+    const column = buildOwnDataProperty(rawStart.value, 'column', `${label}.start.column`);
+    const line = buildOwnDataProperty(rawStart.value, 'line', `${label}.start.line`);
+    if (
+      !column.present ||
+      typeof column.value !== 'number' ||
+      !line.present ||
+      typeof line.value !== 'number'
+    ) {
+      return undefined;
+    }
+    start = { column: column.value, line: line.value };
+  }
+  return rehydrateStaticExportCompileDiagnostic(
+    code.value,
+    { fileName: fileName.value, ...(start === undefined ? {} : { start }) },
+    {
+      ...(help.present ? { help: help.value as string } : {}),
+      message: message.value,
+    },
   );
 }
 
-function isStaticExportCompileDiagnostic(value: unknown): value is StaticExportCompileDiagnostic {
-  if (typeof value !== 'object' || value === null) return false;
-  const diagnostic = value as Partial<StaticExportCompileDiagnostic>;
-
-  return (
-    isDiagnosticCode(diagnostic.code) &&
-    typeof diagnostic.fileName === 'string' &&
-    typeof diagnostic.message === 'string'
-  );
+function rehydrateStaticExportCompileDiagnostic(
+  code: DiagnosticCode,
+  fields: { fileName: string; start?: { column: number; line: number } },
+  options: { help?: string; message: string },
+): StaticExportCompileDiagnostic {
+  return createRegisteredDiagnostic(code, fields, options);
 }
 
 function kovoExportResult(
@@ -5141,6 +5203,7 @@ function kovoExportResult(
   options: KovoExportOptions,
 ): KovoExportCommandResult {
   const lines = ['kovo-export/v1'];
+  const diagnostics = registeredStaticExportResultDiagnostics(result.diagnostics);
 
   for (const artifact of result.artifacts) {
     lines.push(
@@ -5160,29 +5223,42 @@ function kovoExportResult(
     );
   }
 
-  for (const diagnostic of result.diagnostics) {
+  for (const diagnostic of diagnostics) {
     lines.push(
       `WARN ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
     );
   }
 
   lines.push(
-    `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} assets=${result.assets.length} diagnostics=${result.diagnostics.length} outDir=${stringifyBuildValue(options.outDir)}`,
+    `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} assets=${result.assets.length} diagnostics=${diagnostics.length} outDir=${stringifyBuildValue(options.outDir)}`,
   );
 
   return {
-    exitCode: exportResultExitCode(result, options),
+    exitCode: exportResultExitCode(diagnostics, options),
     output: `${lines.join('\n')}\n`,
     staticExport: result,
   };
 }
 
-function exportResultExitCode(result: StaticExportResult, options: KovoExportOptions): 0 | 1 {
-  if (result.diagnostics.length === 0) return 0;
+function registeredStaticExportResultDiagnostics(
+  diagnostics: StaticExportResult['diagnostics'],
+): StaticExportResult['diagnostics'][number][] {
+  const snapshot = buildSnapshotDenseArray(diagnostics, 'Static-export result diagnostics');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    assertRegisteredDiagnostic(snapshot[index], `Static-export result diagnostics[${index}]`);
+  }
+  return snapshot;
+}
+
+function exportResultExitCode(
+  diagnostics: StaticExportResult['diagnostics'],
+  options: KovoExportOptions,
+): 0 | 1 {
+  if (diagnostics.length === 0) return 0;
   if (
     options.onNonExportable === 'skip' &&
     buildEveryDense(
-      result.diagnostics,
+      diagnostics,
       'Static-export non-exportable diagnostics',
       (diagnostic) => diagnostic.code === 'KV229',
     )

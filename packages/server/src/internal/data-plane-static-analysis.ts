@@ -7,13 +7,18 @@ import {
   resolve as builtinResolve,
 } from 'node:path';
 
-import type { DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
 import {
   compilerSourceModuleSpecifiers,
   createCompilerSourceFileSystem,
   type CompilerSourceFileSystem,
 } from '@kovojs/compiler/internal/source-filesystem';
-import { createRegisteredDiagnostic, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
+  isDiagnosticCode,
+} from '@kovojs/core/internal/diagnostics';
 import {
   outputSchemaQueryShapeFactsFromProject,
   type QueryShape,
@@ -61,11 +66,9 @@ export interface DataPlaneSourceFile {
 }
 
 /** @internal Normalized error-severity finding from the data-plane analyzers. */
-export interface DataPlaneDiagnostic {
-  code: DiagnosticCode;
+export interface DataPlaneDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   fileName: string;
   line: number;
-  message: string;
   site: string;
 }
 
@@ -468,17 +471,16 @@ function dataPlaneErrorDiagnosticsFromStaticFacts(
   const diagnostics: DataPlaneDiagnostic[] = [];
   for (let index = 0; index < raw.length; index += 1) {
     const diagnostic = raw[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Vite data-plane diagnostics[${index}]`);
     if (!isDiagnosticCode(diagnostic.code) || (diagnostic.severity ?? 'error') !== 'error') {
       continue;
     }
     const { fileName, line } = parseDiagnosticSite(diagnostic.site);
-    const projected: DataPlaneDiagnostic = {
-      code: diagnostic.code,
-      fileName,
-      line,
-      message: diagnostic.message,
-      site: diagnostic.site,
-    };
+    const projected = deriveRegisteredDiagnostic(
+      diagnostic,
+      { fileName, line, site: diagnostic.site },
+      { message: diagnostic.message },
+    ) as DataPlaneDiagnostic;
     let insertAt = diagnostics.length;
     while (insertAt > 0 && projected.site < diagnostics[insertAt - 1]!.site) {
       staticAnalysisArraySet(
@@ -1349,9 +1351,7 @@ function isIgnoredDataPlaneDirectory(entry: string): boolean {
 }
 
 function sqlSafetyDiagnosticFact(value: unknown): CoreGraph.SqlSafetyDiagnosticFact[] {
-  if (!isRecord(value)) {
-    throw new TypeError('Static SQL-safety diagnostic must be an own-data record.');
-  }
+  assertRegisteredDiagnostic(value, 'Static SQL-safety diagnostic');
   const code = staticAnalysisOwnDataValue(value, 'code', 'SQL-safety diagnostic');
   const message = staticAnalysisOwnDataValue(value, 'message', 'SQL-safety diagnostic');
   const severity = staticAnalysisOwnDataValue(value, 'severity', 'SQL-safety diagnostic');

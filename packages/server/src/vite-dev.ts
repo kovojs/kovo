@@ -4,6 +4,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import {
+  assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
   diagnosticDefinitions,
 } from '@kovojs/core/internal/diagnostics';
@@ -348,7 +349,7 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
       clearModuleRecord(fileName, allModuleRecords, allHrefToFileName);
       clearModuleRecord(fileName, moduleRecords, hrefToFileName);
 
-      const diagnostics = viteDevDenseArrayValues<DiagnosticDocumentDiagnostic>(
+      const diagnostics = registeredDiagnosticValues(
         record.diagnostics,
         'Vite dev module diagnostics',
       );
@@ -1530,7 +1531,7 @@ function recordRequestDiagnostic(
   record: KovoAppShellDevRequestDiagnostics,
 ): void {
   const store = witnessWeakMapGet(requestDiagnosticStores, diagnostics);
-  const diagnosticValues = viteDevDenseArrayValues<DiagnosticDocumentDiagnostic>(
+  const diagnosticValues = registeredDiagnosticValues(
     record.diagnostics,
     'Vite dev request diagnostics',
   );
@@ -1549,14 +1550,22 @@ function recordRequestDiagnostic(
 }
 
 function hasErrorDiagnostic(diagnostics: readonly DiagnosticDocumentDiagnostic[]): boolean {
-  const values = viteDevDenseArrayValues<DiagnosticDocumentDiagnostic>(
-    diagnostics,
-    'Vite dev diagnostics',
-  );
+  const values = registeredDiagnosticValues(diagnostics, 'Vite dev diagnostics');
   for (let index = 0; index < values.length; index += 1) {
     if (isErrorDiagnostic(values[index]!)) return true;
   }
   return false;
+}
+
+function registeredDiagnosticValues(
+  diagnostics: readonly DiagnosticDocumentDiagnostic[],
+  label: string,
+): DiagnosticDocumentDiagnostic[] {
+  const values = viteDevDenseArrayValues<DiagnosticDocumentDiagnostic>(diagnostics, label);
+  for (let index = 0; index < values.length; index += 1) {
+    assertRegisteredDiagnostic(values[index], `${label}[${index}]`);
+  }
+  return values;
 }
 
 function appendUniqueViteDevStrings(

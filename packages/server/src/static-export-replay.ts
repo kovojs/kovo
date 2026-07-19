@@ -1,4 +1,5 @@
 import type { KovoApp } from './app-types.js';
+import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { commitBuildArrayValue, snapshotBuildArray } from './build-security-intrinsics.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
@@ -105,6 +106,7 @@ function copyStaticExportDiagnostics(
   const pinned = snapshotBuildArray(source, 'static-export diagnostics');
   const diagnostics: StaticExportDiagnostic[] = [];
   for (let index = 0; index < pinned.length; index += 1) {
+    assertRegisteredDiagnostic(pinned[index], `Static-export replay diagnostics[${index}]`);
     witnessArrayAppend(
       diagnostics,
       pinned[index]!,
@@ -119,6 +121,10 @@ function staticExportDiagnosticsSuppressTarget(
   routeTarget: StaticExportRouteTarget,
 ): boolean {
   for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(
+      diagnostics[index],
+      `Static-export suppression diagnostics[${index}]`,
+    );
     if (staticExportDiagnosticSuppresses(diagnostics[index]!, routeTarget)) return true;
   }
   return false;

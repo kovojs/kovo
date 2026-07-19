@@ -1,4 +1,4 @@
-import type { CompilerDiagnostic } from '../diagnostics.js';
+import { contextualizeCompilerDiagnostic, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   generatedJsxIrAttribute,
   markJsxIrChanged,
@@ -292,10 +292,9 @@ function withMergeWriterNames(diagnostics: readonly CompilerDiagnostic[]): Compi
     ) as CompilerDiagnostic;
     appendCompositionFact(
       result,
-      {
-        ...diagnostic,
+      contextualizeCompilerDiagnostic(diagnostic, {
         message: `${diagnostic.message} (writers: primitive attrs, author JSX)`,
-      },
+      }),
       'Primitive merge diagnostics',
     );
   }

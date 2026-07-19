@@ -18,7 +18,7 @@ import {
   securityWeakSetHas,
 } from './internal/security-witness-intrinsics.js';
 
-export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
+export type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from './diagnostics.js';
 export type { JsonValue } from './json.js';
 export {
   declareOffWire,

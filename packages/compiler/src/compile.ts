@@ -5,7 +5,10 @@ import {
   encodeRenderPlanFrame,
   type RenderPlanFingerprintInput,
 } from '@kovojs/core/internal/render-plan-token';
-import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
 import {
   callExpressionAtSpan,
   expressionResolvesToFrameworkExport,
@@ -899,6 +902,7 @@ function appendCompilerDiagnostics(
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, label) as CompilerDiagnostic | undefined;
     if (!value) compilerFailClosed(`${label}[${index}] must be dense own data.`);
+    assertRegisteredDiagnostic(value, `${label}[${index}]`);
     appendCompileValue(output, value, label);
   }
 }
@@ -1844,10 +1848,15 @@ export class CompilerDiagnosticError extends Error {
   readonly diagnostic: ReturnType<typeof kv416Diagnostic>;
 
   constructor(diagnostic: ReturnType<typeof kv416Diagnostic>) {
-    super(`${diagnostic.code}: ${diagnostic.message}`);
+    super(compilerDiagnosticErrorMessage(diagnostic));
     this.name = 'CompilerDiagnosticError';
     this.diagnostic = diagnostic;
   }
+}
+
+function compilerDiagnosticErrorMessage(diagnostic: ReturnType<typeof kv416Diagnostic>): string {
+  assertRegisteredDiagnostic(diagnostic, 'Compiler diagnostic error');
+  return `${diagnostic.code}: ${diagnostic.message}`;
 }
 
 function sortedRecord(record: Record<string, string>): [string, string][] {

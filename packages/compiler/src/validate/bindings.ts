@@ -11,7 +11,12 @@ import {
   compilerSnapshotDenseArray,
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
-import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticAt,
+  type CompilerDiagnostic,
+  type DiagnosticFactory,
+} from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
 import {
   callExpressions,
@@ -492,15 +497,15 @@ function kv227Diagnostic(
   binding: DataBindAttribute,
   traversal: { segment: string },
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticAt(
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(
       diagnostics,
       'KV227',
       { start: binding.index, length: binding.length },
       `${binding.path} (segment: ${traversal.segment})`,
     ),
-    help: diagnosticDefinitions.KV227.help,
-  };
+    { help: diagnosticDefinitions.KV227.help },
+  );
 }
 
 function jsxAttributes(model: ComponentModuleModel) {

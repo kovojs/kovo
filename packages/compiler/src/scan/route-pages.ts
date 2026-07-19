@@ -10,7 +10,11 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 import type { AccessDecisionFact } from '@kovojs/core/internal/graph';
 
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticFor,
+  type CompilerDiagnostic,
+} from '../diagnostics.js';
 import type {
   CompileRouteModuleOptions,
   CompileRouteModuleResult,
@@ -355,16 +359,16 @@ function appendRouteScopedKeyViolationDiagnostics(
     const measuredLength = violation.span.end - violation.span.start;
     compilerArrayAppend(
       diagnostics,
-      {
-        ...diagnosticFor(
+      contextualizeCompilerDiagnostic(
+        diagnosticFor(
           fileName,
           'KV450',
           source,
           violation.span.start,
           measuredLength > 0 ? measuredLength : 1,
         ),
-        message: `${diagnosticDefinitions.KV450.message} ${violation.detail}.`,
-      },
+        { message: `${diagnosticDefinitions.KV450.message} ${violation.detail}.` },
+      ),
       'Compiler route scoped-key diagnostics',
     );
   }
@@ -1015,8 +1019,7 @@ function layoutChainDiagnostic(
   length: number,
   detail: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, 'KV303', source, start, length),
+  return contextualizeCompilerDiagnostic(diagnosticFor(fileName, 'KV303', source, start, length), {
     help: compilerArrayJoin(
       [
         diagnosticDefinitions.KV303.help,
@@ -1025,7 +1028,7 @@ function layoutChainDiagnostic(
       '\n',
     ),
     message: `${diagnosticDefinitions.KV303.message} ${detail}`,
-  };
+  });
 }
 
 function layoutQueryNames(layoutDefinition: ts.ObjectLiteralExpression): string[] {
@@ -1243,24 +1246,26 @@ function routePageComponentSpreadDiagnostics(
     if (!ts.isJsxSpreadAttribute(attribute)) continue;
     compilerArrayAppend(
       diagnostics,
-      {
-        ...diagnosticFor(
+      contextualizeCompilerDiagnostic(
+        diagnosticFor(
           fileName,
           'KV303',
           source,
           attribute.getStart(sourceFile),
           attribute.getWidth(sourceFile),
         ),
-        help: compilerArrayJoin(
-          [
-            diagnosticDefinitions.KV303.help,
-            'Route component props must be statically reconstructible so route query, live target, and navigation segment metadata can be derived.',
-            'Fix: pass named props directly, for example `<QuestionDetail questionId={params.id} />`, instead of spreading an object.',
-          ],
-          '\n',
-        ),
-        message: `${diagnosticDefinitions.KV303.message} Route component '${localName}' uses spread props that cannot be represented in generated route metadata.`,
-      },
+        {
+          help: compilerArrayJoin(
+            [
+              diagnosticDefinitions.KV303.help,
+              'Route component props must be statically reconstructible so route query, live target, and navigation segment metadata can be derived.',
+              'Fix: pass named props directly, for example `<QuestionDetail questionId={params.id} />`, instead of spreading an object.',
+            ],
+            '\n',
+          ),
+          message: `${diagnosticDefinitions.KV303.message} Route component '${localName}' uses spread props that cannot be represented in generated route metadata.`,
+        },
+      ),
       'Compiler route spread diagnostics',
     );
   }
@@ -1506,23 +1511,25 @@ function routeAuthoringSurfaceDiagnostics(
     ) {
       compilerArrayAppend(
         diagnostics,
-        {
-          ...diagnosticFor(
+        contextualizeCompilerDiagnostic(
+          diagnosticFor(
             fileName,
             'KV235',
             source,
             node.moduleSpecifier.getStart(sourceFile),
             node.moduleSpecifier.getWidth(sourceFile),
           ),
-          help: compilerArrayJoin(
-            [
-              diagnosticDefinitions.KV235.help,
-              'Route/layout source should import the authored component, for example `../components/question-list.js`; the route compiler rewrites the generated route artifact to the lowered component module.',
-            ],
-            '\n',
-          ),
-          message: `${diagnosticDefinitions.KV235.message} app-local generated component import ${node.moduleSpecifier.getText(sourceFile)} in route/layout source.`,
-        },
+          {
+            help: compilerArrayJoin(
+              [
+                diagnosticDefinitions.KV235.help,
+                'Route/layout source should import the authored component, for example `../components/question-list.js`; the route compiler rewrites the generated route artifact to the lowered component module.',
+              ],
+              '\n',
+            ),
+            message: `${diagnosticDefinitions.KV235.message} app-local generated component import ${node.moduleSpecifier.getText(sourceFile)} in route/layout source.`,
+          },
+        ),
         'Compiler route diagnostics',
       );
     }
@@ -1533,25 +1540,27 @@ function routeAuthoringSurfaceDiagnostics(
     ) {
       compilerArrayAppend(
         diagnostics,
-        {
-          ...diagnosticFor(
+        contextualizeCompilerDiagnostic(
+          diagnosticFor(
             fileName,
             'KV235',
             source,
             node.name.getStart(sourceFile),
             node.name.getWidth(sourceFile),
           ),
-          help: compilerArrayJoin(
-            [
-              diagnosticDefinitions.KV235.help,
-              'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
-              'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
-              'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
-            ],
-            '\n',
-          ),
-          message: `${diagnosticDefinitions.KV235.message} hand-authored navigation segment stamp ${node.name.text}.`,
-        },
+          {
+            help: compilerArrayJoin(
+              [
+                diagnosticDefinitions.KV235.help,
+                'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
+                'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
+                'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
+              ],
+              '\n',
+            ),
+            message: `${diagnosticDefinitions.KV235.message} hand-authored navigation segment stamp ${node.name.text}.`,
+          },
+        ),
         'Compiler route diagnostics',
       );
     }

@@ -6,7 +6,11 @@ import {
   clientModuleContentVersion,
   clientModuleHrefForSourceFile,
 } from '@kovojs/core/internal/client-module-url';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+  isRegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { KovoViteMiddleware } from './internal.js';
@@ -36,6 +40,30 @@ const kv236 = diagnosticDefinitions.KV236;
 const kv330 = diagnosticDefinitions.KV330;
 const kv435 = diagnosticDefinitions.KV435;
 const kv437 = diagnosticDefinitions.KV437;
+
+function compilerDiagnostic(
+  code: keyof typeof diagnosticDefinitions,
+  options: {
+    fileName: string;
+    help?: string;
+    length?: number;
+    message?: string;
+    start?: { column: number; line: number };
+  },
+) {
+  return createRegisteredDiagnostic(
+    code,
+    {
+      fileName: options.fileName,
+      ...(options.length === undefined ? {} : { length: options.length }),
+      ...(options.start === undefined ? {} : { start: options.start }),
+    },
+    {
+      ...(options.help === undefined ? {} : { help: options.help }),
+      message: options.message ?? diagnosticDefinitions[code].message,
+    },
+  );
+}
 
 function createMiddlewareResponse(): {
   body: string;
@@ -586,15 +614,13 @@ export const orderPaid = routing.webhook('/webhooks/order-paid', { handler() {} 
     const plugin = createKovoVitePlugin(
       () => ({
         diagnostics: [
-          {
-            code: 'KV201',
+          compilerDiagnostic('KV201', {
             fileName: 'src/bad.tsx',
             help: kv201.help,
             length: 9,
             message: kv201.message,
-            severity: kv201.severity,
             start: { line: 3, column: 12 },
-          },
+          }),
         ],
         files: [
           { kind: 'server', source: 'export function renderSource() {}' },
@@ -636,6 +662,25 @@ export const orderPaid = routing.webhook('/webhooks/order-paid', { handler() {} 
       fileName: 'src/bad.tsx',
       source: 'component(',
     });
+    expect(isRegisteredDiagnostic(onModuleDiagnostics.mock.calls[0]![0].diagnostics[0])).toBe(true);
+  });
+
+  it('rejects a structurally forged compile-result diagnostic before Vite classification', async () => {
+    const plugin = createKovoVitePlugin(() => ({
+      diagnostics: [
+        {
+          code: 'KV201',
+          fileName: 'src/forged.tsx',
+          message: kv201.message,
+          severity: 'notice',
+        } as never,
+      ],
+      files: [{ kind: 'server', source: 'export const forged = true;' }],
+    }));
+
+    await expect(plugin.transform('component(', 'src/forged.tsx')).rejects.toThrow(
+      /must be created by createRegisteredDiagnostic/u,
+    );
   });
 
   it.each([
@@ -646,15 +691,13 @@ export const orderPaid = routing.webhook('/webhooks/order-paid', { handler() {} 
   ] as const)('blocks Vite transform output for %s error diagnostics', async (code, definition) => {
     const plugin = createKovoVitePlugin(() => ({
       diagnostics: [
-        {
-          code,
+        compilerDiagnostic(code, {
           fileName: `src/${code.toLowerCase()}.tsx`,
           help: definition.help,
           length: 11,
           message: definition.message,
-          severity: definition.severity,
           start: { line: 7, column: 15 },
-        },
+        }),
       ],
       files: [
         { kind: 'server', source: `export const leakedServer = "${code}";` },
@@ -752,12 +795,10 @@ export const RealKv437 = component({
     // this realm and previously could make reportViteDiagnostics() drop this exact array through a
     // selective late Array.prototype.filter replacement, returning deployable server code.
     const diagnostics = [
-      {
-        code: 'KV435' as const,
+      compilerDiagnostic('KV435', {
         fileName: 'src/account.tsx',
         message: kv435.message,
-        severity: 'error' as const,
-      },
+      }),
     ];
     const plugin = createKovoVitePlugin(() => ({
       diagnostics,
@@ -784,18 +825,14 @@ export const RealKv437 = component({
 
   it('classifies KV435 before diagnostic observers can mutate compiler output', async () => {
     const diagnostics = [
-      {
-        code: 'KV311' as const,
+      compilerDiagnostic('KV311', {
         fileName: 'src/account.tsx',
         message: 'non-blocking diagnostic before the error',
-        severity: 'warn' as const,
-      },
-      {
-        code: 'KV435' as const,
+      }),
+      compilerDiagnostic('KV435', {
         fileName: 'src/account.tsx',
         message: kv435.message,
-        severity: 'error' as const,
-      },
+      }),
     ];
     const plugin = createKovoVitePlugin(
       () => ({
@@ -804,11 +841,11 @@ export const RealKv437 = component({
       }),
       {
         onDiagnostic() {
-          diagnostics[1]!.severity = 'warn';
+          Reflect.set(diagnostics[1]!, 'severity', 'warn');
         },
         onModuleDiagnostics(event) {
-          diagnostics[1]!.severity = 'warn';
-          event.diagnostics[1]!.severity = 'warn';
+          Reflect.set(diagnostics[1]!, 'severity', 'warn');
+          Reflect.set(event.diagnostics[1]!, 'severity', 'warn');
         },
       },
     );
@@ -852,12 +889,10 @@ export const RealKv437 = component({
   it('settles asynchronous compile diagnostics through the boot-captured Promise control', async () => {
     const real = {
       diagnostics: [
-        {
-          code: 'KV236' as const,
+        compilerDiagnostic('KV236', {
           fileName: 'src/unsafe-link.tsx',
           message: kv236.message,
-          severity: 'error' as const,
-        },
+        }),
       ],
       files: [{ kind: 'server', source: 'export const unsafe = true;' }],
     };
@@ -985,27 +1020,21 @@ export const RealKv437 = component({
     const plugin = createKovoVitePlugin(
       () => ({
         diagnostics: [
-          {
-            code: 'KV311',
+          compilerDiagnostic('KV311', {
             fileName: 'src/diagnostics.tsx',
             message: 'Query/state-dependent DOM position has no update status.',
-            severity: 'warn',
             start: { line: 4, column: 9 },
-          },
-          {
-            code: 'KV210',
+          }),
+          compilerDiagnostic('KV210', {
             fileName: 'src/diagnostics.tsx',
             message: kv210.message,
-            severity: 'lint',
             start: { line: 5, column: 11 },
-          },
-          {
-            code: 'KV409',
+          }),
+          compilerDiagnostic('KV409', {
             fileName: 'src/diagnostics.tsx',
             message: 'Non-eq predicate degraded to table-level invalidation.',
-            severity: 'notice',
             start: { line: 6, column: 13 },
-          },
+          }),
         ],
         files: [
           { kind: 'server', source: 'export function renderSource() {}' },
@@ -1030,13 +1059,11 @@ export const RealKv437 = component({
   it('does not retain emitted client modules from transforms with error diagnostics', async () => {
     const plugin = createKovoVitePlugin(() => ({
       diagnostics: [
-        {
-          code: 'KV236' as const,
+        compilerDiagnostic('KV236', {
           fileName: 'src/unsafe-link.tsx',
           message: kv236.message,
-          severity: kv236.severity,
           start: { line: 4, column: 18 },
-        },
+        }),
       ],
       files: [
         { kind: 'server', source: 'export const unsafeServer = true;' },
@@ -1249,14 +1276,12 @@ export const RealKv437 = component({
     const sourceFile = join(root, 'src/secret-button.tsx');
     const plugin = createKovoVitePlugin(() => ({
       diagnostics: [
-        {
-          code: 'KV437' as const,
+        compilerDiagnostic('KV437', {
           fileName: 'src/secret-button.tsx',
           help: kv437.help,
           message: kv437.message,
-          severity: kv437.severity,
           start: { line: 6, column: 28 },
-        },
+        }),
       ],
       files: [
         { kind: 'server', source: 'export const blockedServer = true;' },
@@ -2143,12 +2168,10 @@ export const RegionB = component({
 
   it('sends Kovo diagnostics HMR events for compiler errors without throwing', async () => {
     const ws = { send: vi.fn() };
-    const diagnostic = {
-      code: 'KV201' as const,
+    const diagnostic = compilerDiagnostic('KV201', {
       fileName: 'src/counter.tsx',
       message: kv201.message,
-      severity: kv201.severity,
-    };
+    });
     const previous = hmrMetadata({ factHash: 'previous' });
     const next = hmrMetadata({
       diagnostics: [{ code: 'KV201', message: kv201.message, severity: kv201.severity }],

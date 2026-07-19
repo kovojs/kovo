@@ -22,6 +22,10 @@ import {
 
 import type { DiagnosticDocumentDiagnostic } from './document-diagnostics.js';
 import type { StylesheetAsset } from './hints.js';
+import {
+  assertRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 /*
  * This value import is intentionally eager: authored Vite config can install node:module resolver
@@ -740,6 +744,7 @@ function dataPlaneGateError(diagnostics: readonly DataPlaneDiagnostic[]): Error 
   const findingLines: string[] = [];
   for (let index = 0; index < diagnostics.length; index += 1) {
     const diagnostic = diagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Data-plane gate diagnostics[${index}]`);
     commitBuildArrayValue(
       findingLines,
       `  ERROR ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
@@ -770,6 +775,7 @@ function paranoidDataPlaneDiagnosticsAreAdvisory(
   if (diagnostics.length === 0) return false;
   for (let index = 0; index < diagnostics.length; index += 1) {
     const diagnostic = diagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Paranoid data-plane diagnostics[${index}]`);
     const code = buildOwnDataProperty(diagnostic, 'code', 'data-plane diagnostic code');
     if (
       !code.present ||
@@ -787,13 +793,20 @@ function dataPlaneLedgerReport(
   absFileName: string,
   diagnostics: readonly DataPlaneDiagnostic[],
 ): KovoAppShellViteCompilerModuleDiagnosticReport {
-  const documentDiagnostics: DiagnosticDocumentDiagnostic[] = diagnostics.map((diagnostic) => ({
-    code: diagnostic.code,
-    fileName: absFileName,
-    message: diagnostic.message,
-    severity: 'error',
-    start: { column: 1, line: diagnostic.line },
-  }));
+  const documentDiagnostics: DiagnosticDocumentDiagnostic[] = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Data-plane ledger diagnostics[${index}]`);
+    commitBuildArrayValue(
+      documentDiagnostics,
+      deriveRegisteredDiagnostic(
+        diagnostic,
+        { fileName: absFileName, start: { column: 1, line: diagnostic.line } },
+        { message: diagnostic.message },
+      ),
+      'data-plane document diagnostic',
+    );
+  }
   return {
     diagnostics: documentDiagnostics,
     fileName: absFileName,

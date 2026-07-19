@@ -1,5 +1,10 @@
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
-import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
+import type { DiagnosticConstructionOptions } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
 
 import { generatedOffsetToOriginal, type SourceOffsetMap } from './shared.js';
 
@@ -8,10 +13,7 @@ import { generatedOffsetToOriginal, type SourceOffsetMap } from './shared.js';
  * message, source site, optional fix help). Carried inside {@link CompileResult}; in-repo
  * consumers read it but it is not part of the app-author surface (SPEC.md §5.2 rule 5).
  */
-export interface CompilerDiagnostic {
-  code: DiagnosticCode;
-  severity: DiagnosticSeverity;
-  message: string;
+export interface CompilerDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   fileName: string;
   help?: string;
   length?: number;
@@ -139,6 +141,34 @@ export function diagnosticAt(
         : {}),
     },
     { ...(detail === undefined ? {} : { detail }), includeHelp: true },
+  );
+}
+
+/**
+ * @internal Re-mint a compiler diagnostic when a producer needs contextual message/help text.
+ * Object spread destroys the constructor-owned identity recorded by the core diagnostic registry;
+ * this helper first proves the source identity, then routes the derived value back through the
+ * validating constructor (SPEC §2/§11). Code and severity remain registry-owned.
+ */
+export function contextualizeCompilerDiagnostic(
+  diagnostic: CompilerDiagnostic,
+  options: Pick<DiagnosticConstructionOptions, 'help' | 'message'>,
+): CompilerDiagnostic {
+  assertRegisteredDiagnostic(diagnostic, 'Compiler diagnostic context source');
+  const help = options.help ?? diagnostic.help;
+  return deriveRegisteredDiagnostic(
+    diagnostic,
+    {
+      fileName: diagnostic.fileName,
+      ...(diagnostic.length === undefined ? {} : { length: diagnostic.length }),
+      ...(diagnostic.start === undefined
+        ? {}
+        : { start: { column: diagnostic.start.column, line: diagnostic.start.line } }),
+    },
+    {
+      ...(help === undefined ? {} : { help }),
+      message: options.message ?? diagnostic.message,
+    },
   );
 }
 

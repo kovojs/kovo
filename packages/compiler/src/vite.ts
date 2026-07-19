@@ -13,7 +13,11 @@ import {
   parseVersionedClientModuleTarget,
   versionedClientModuleRequestKey,
 } from '@kovojs/core/internal/client-module-url';
-import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
+  isDiagnosticCode,
+} from '@kovojs/core/internal/diagnostics';
 
 import { snapshotCompileComponentOptions } from './compile-options.js';
 import { canonicalJson } from './canonical-json.js';
@@ -51,7 +55,7 @@ import {
   compilerWeakMapGet,
   compilerWeakMapSet,
 } from './compiler-security-intrinsics.js';
-import type { CompilerDiagnostic } from './diagnostics.js';
+import { contextualizeCompilerDiagnostic, type CompilerDiagnostic } from './diagnostics.js';
 import { compileComponentModuleForFramework } from './framework-compile.js';
 import {
   collectCssAssetManifest,
@@ -1076,11 +1080,31 @@ function snapshotViteCompileResultForSettlement(value: unknown): ViteCompileResu
     'files',
     compilerSnapshotJsonValue(files, 'Vite compile result.files'),
   );
+  const diagnostics = compilerOwnDataValue(value, 'diagnostics', 'Vite compile result');
+  if (diagnostics !== undefined) {
+    if (!compilerArrayIsArray(diagnostics)) {
+      throw new TypeError('Vite compile result.diagnostics must be an array.');
+    }
+    const diagnosticLength = compilerArrayLength(diagnostics, 'Vite compile result diagnostics');
+    const diagnosticSnapshot: CompilerDiagnostic[] = [];
+    for (let index = 0; index < diagnosticLength; index += 1) {
+      const diagnostic = compilerOwnDataValue(
+        diagnostics,
+        index,
+        'Vite compile result diagnostics',
+      );
+      compilerArrayAppend(
+        diagnosticSnapshot,
+        snapshotViteCompilerDiagnostic(diagnostic, index),
+        'Vite compile result diagnostics',
+      );
+    }
+    compilerDefineOwnDataProperty(snapshot, 'diagnostics', compilerFreeze(diagnosticSnapshot));
+  }
   const optionalProperties = [
     'clientExports',
     'cssAssets',
     'dependencyFootprint',
-    'diagnostics',
     'handlerExports',
     'hmrImpact',
     'renderPlanFingerprint',
@@ -1703,10 +1727,8 @@ function reportViteDiagnostics(
 }
 
 function snapshotViteCompilerDiagnostic(value: unknown, index: number): CompilerDiagnostic {
-  if (!value || typeof value !== 'object') {
-    throw new TypeError(`Kovo Vite compile diagnostics[${index}] must be an object.`);
-  }
   const label = `Vite compile diagnostics[${index}]`;
+  assertRegisteredDiagnostic(value, label);
   const code = compilerOwnDataValue(value, 'code', label);
   const fileName = compilerOwnDataValue(value, 'fileName', label);
   const help = compilerOwnDataValue(value, 'help', label);
@@ -1742,15 +1764,15 @@ function snapshotViteCompilerDiagnostic(value: unknown, index: number): Compiler
     }
     start = { column, line };
   }
-  return {
-    code,
-    fileName,
-    ...(help === undefined ? {} : { help }),
-    ...(length === undefined ? {} : { length }),
-    message,
-    severity,
-    ...(start === undefined ? {} : { start }),
-  };
+  return deriveRegisteredDiagnostic(
+    value,
+    {
+      fileName,
+      ...(length === undefined ? {} : { length }),
+      ...(start === undefined ? {} : { start }),
+    },
+    { ...(help === undefined ? {} : { help }), message },
+  );
 }
 
 function cloneViteCompilerDiagnostics(
@@ -1768,10 +1790,7 @@ function cloneViteCompilerDiagnostics(
 }
 
 function cloneViteCompilerDiagnostic(diagnostic: CompilerDiagnostic): CompilerDiagnostic {
-  return {
-    ...diagnostic,
-    ...(diagnostic.start === undefined ? {} : { start: { ...diagnostic.start } }),
-  };
+  return contextualizeCompilerDiagnostic(diagnostic, {});
 }
 
 function snapshotViteEmittedFiles(result: ViteCompileResult): { kind: string; source: string }[] {

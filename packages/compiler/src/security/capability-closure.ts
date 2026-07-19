@@ -1,5 +1,8 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
 
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import { scanCapabilityClosureModules } from '../scan/capability-closure.js';
@@ -1427,6 +1430,9 @@ function stableFacts(
 }
 
 function stableDiagnostics(diagnostics: readonly CompilerDiagnostic[]): CompilerDiagnostic[] {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `Capability diagnostics[${index}]`);
+  }
   return [...diagnostics].sort(
     (left, right) =>
       left.fileName.localeCompare(right.fileName) ||

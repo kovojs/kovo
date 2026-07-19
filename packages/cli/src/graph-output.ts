@@ -1,5 +1,6 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
+  assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
   diagnosticDefinitionText,
 } from '@kovojs/core/internal/diagnostics';
@@ -766,7 +767,9 @@ export function kovoCheck(
   if (includeAll) {
     const diagnostics = diagnosticsForTouchGraph(graph.touchGraph ?? {});
 
-    for (const diagnostic of diagnostics) {
+    for (let index = 0; index < diagnostics.length; index += 1) {
+      const diagnostic = diagnostics[index]!;
+      assertRegisteredDiagnostic(diagnostic, `CLI touch-graph diagnostics[${index}]`);
       pushFinding(
         `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
         diagnostic.severity === 'error',

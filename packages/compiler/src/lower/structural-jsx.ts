@@ -16,7 +16,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { isHtmlWireValueStable } from '@kovojs/core/internal/semantic-attributes';
-import { diagnosticFor } from '../diagnostics.js';
+import { contextualizeCompilerDiagnostic, diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
 import {
@@ -2766,10 +2766,12 @@ function mutationFormProvenanceDiagnostic(
   span: { end: number; start: number },
   detail: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(options.fileName, 'KV242', options.source, span.start, span.end - span.start),
-    message: `${diagnosticDefinitions.KV242.message} ${detail}`,
-  };
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(options.fileName, 'KV242', options.source, span.start, span.end - span.start),
+    {
+      message: `${diagnosticDefinitions.KV242.message} ${detail}`,
+    },
+  );
 }
 
 function hasCompilerEscapeImport(model: ComponentModuleModel, importedName: string): boolean {
@@ -4845,16 +4847,18 @@ function structuralWriterConflictDiagnostic(
   secondWriter: string,
 ): CompilerDiagnostic {
   const anchor = attribute.anchor;
-  return {
-    ...diagnosticFor(
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(
       options.fileName,
       'KV231',
       options.source,
       anchor?.start,
       anchor ? anchor.end - anchor.start : undefined,
     ),
-    message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
-  };
+    {
+      message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
+    },
+  );
 }
 
 function attributeByName(element: JsxIrElement, name: string): JsxIrAttribute | undefined {

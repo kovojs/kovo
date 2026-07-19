@@ -1,6 +1,11 @@
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 
-import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticAt,
+  type CompilerDiagnostic,
+  type DiagnosticFactory,
+} from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -120,8 +125,7 @@ function componentEventPropDiagnostic(
     start: attribute.start,
     length: attribute.end - attribute.start,
   });
-  return {
-    ...diagnostic,
+  return contextualizeCompilerDiagnostic(diagnostic, {
     help: compilerArrayJoin(
       [
         `Would lower to: serializable props on <${element.tag}> and a DOM event handler on the native element that owns the behavior.`,
@@ -133,5 +137,5 @@ function componentEventPropDiagnostic(
       '\n',
     ),
     message: `Component event callback prop cannot cross the render boundary. <${element.tag}> ${attribute.name}`,
-  };
+  });
 }

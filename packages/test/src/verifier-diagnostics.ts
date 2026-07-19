@@ -1,4 +1,4 @@
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
@@ -28,12 +28,9 @@ export type { DiagnosticCode } from '@kovojs/core';
  * (`KovoTestContext.verificationDiagnostics`): an uncovered/declared-but-unobserved
  * write or branch, with its domain, message, and severity (SPEC.md §11).
  */
-export interface DbVerificationDiagnostic {
+export interface DbVerificationDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   branch?: string;
-  code: DiagnosticCode;
   domain: string;
-  message: string;
-  severity: DiagnosticSeverity;
   site?: string;
 }
 

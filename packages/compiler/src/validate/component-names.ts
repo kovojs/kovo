@@ -16,7 +16,12 @@ import {
   compilerStringSplit,
 } from '../compiler-security-intrinsics.js';
 import { deriveComponentNames } from '../component-names.js';
-import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticAt,
+  type CompilerDiagnostic,
+  type DiagnosticFactory,
+} from '../diagnostics.js';
 import {
   jsxElements,
   type ComponentModel,
@@ -279,23 +284,25 @@ function duplicateComponentNameDiagnostic(
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV237;
   const duplicateSpan = duplicate.span;
-  return {
-    ...diagnosticAt(diagnostics, 'KV237', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV237', {
       start: duplicateSpan?.start,
       length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
     }),
-    help: compilerArrayJoin(
-      [
-        definition.help,
-        `Effective name: ${duplicate.effectiveName}`,
-        `First definition: ${componentLabel(first.component)}`,
-        `Duplicate definition: ${componentLabel(duplicate.component)}`,
-        'SPEC §6.1.1 package prefixes remain the cross-package namespace mechanism; app-authored/vendored components in one module must not share an effective wire name.',
-      ],
-      '\n',
-    ),
-    message: `${definition.message} ${duplicate.effectiveName} is used by ${componentLabel(first.component)} and ${componentLabel(duplicate.component)}.`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          definition.help,
+          `Effective name: ${duplicate.effectiveName}`,
+          `First definition: ${componentLabel(first.component)}`,
+          `Duplicate definition: ${componentLabel(duplicate.component)}`,
+          'SPEC §6.1.1 package prefixes remain the cross-package namespace mechanism; app-authored/vendored components in one module must not share an effective wire name.',
+        ],
+        '\n',
+      ),
+      message: `${definition.message} ${duplicate.effectiveName} is used by ${componentLabel(first.component)} and ${componentLabel(duplicate.component)}.`,
+    },
+  );
 }
 
 function registryComponentNameDiagnostic(
@@ -304,23 +311,25 @@ function registryComponentNameDiagnostic(
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV237;
   const duplicateSpan = duplicate.span;
-  return {
-    ...diagnosticAt(diagnostics, 'KV237', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV237', {
       start: duplicateSpan?.start,
       length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
     }),
-    help: compilerArrayJoin(
-      [
-        definition.help,
-        `Effective name: ${duplicate.effectiveName}`,
-        `Registry definition: ${duplicate.effectiveName}`,
-        `Duplicate definition: ${componentLabel(duplicate.component)}`,
-        'SPEC §6.1.1 keeps effective names app-wide unique; registryFacts.components carries names already known to the app graph.',
-      ],
-      '\n',
-    ),
-    message: `${definition.message} ${duplicate.effectiveName} is already present in registry facts and is reused by ${componentLabel(duplicate.component)}.`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          definition.help,
+          `Effective name: ${duplicate.effectiveName}`,
+          `Registry definition: ${duplicate.effectiveName}`,
+          `Duplicate definition: ${componentLabel(duplicate.component)}`,
+          'SPEC §6.1.1 keeps effective names app-wide unique; registryFacts.components carries names already known to the app graph.',
+        ],
+        '\n',
+      ),
+      message: `${definition.message} ${duplicate.effectiveName} is already present in registry facts and is reused by ${componentLabel(duplicate.component)}.`,
+    },
+  );
 }
 
 function changedComponentNameDiagnostic(
@@ -330,23 +339,25 @@ function changedComponentNameDiagnostic(
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV241;
   const span = current.span;
-  return {
-    ...diagnosticAt(diagnostics, 'KV241', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV241', {
       start: span?.start,
       length: span ? span.end - span.start : undefined,
     }),
-    help: compilerArrayJoin(
-      [
-        definition.help,
-        `Previous registry key: ${previousName}`,
-        `Current registry key: ${current.effectiveName}`,
-        `DOM leaf: ${current.domName}`,
-        'Registry writer: previousRegistryFacts.components',
-      ],
-      '\n',
-    ),
-    message: `${definition.message} ${previousName} -> ${current.effectiveName}.`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          definition.help,
+          `Previous registry key: ${previousName}`,
+          `Current registry key: ${current.effectiveName}`,
+          `DOM leaf: ${current.domName}`,
+          'Registry writer: previousRegistryFacts.components',
+        ],
+        '\n',
+      ),
+      message: `${definition.message} ${previousName} -> ${current.effectiveName}.`,
+    },
+  );
 }
 
 function duplicateFragmentTargetNameDiagnostic(
@@ -356,23 +367,25 @@ function duplicateFragmentTargetNameDiagnostic(
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV238;
   const duplicateSpan = duplicate.span;
-  return {
-    ...diagnosticAt(diagnostics, 'KV238', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV238', {
       start: duplicateSpan?.start,
       length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
     }),
-    help: compilerArrayJoin(
-      [
-        definition.help,
-        `Fragment target: ${duplicate.targetName}`,
-        `First writer: ${componentLabel(first.component)}`,
-        `Duplicate writer: ${componentLabel(duplicate.component)}`,
-        registryFragmentTargetSnapshot(duplicate.targetName),
-      ],
-      '\n',
-    ),
-    message: `${definition.message} ${duplicate.targetName} is used by ${componentLabel(first.component)} and ${componentLabel(duplicate.component)}.`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          definition.help,
+          `Fragment target: ${duplicate.targetName}`,
+          `First writer: ${componentLabel(first.component)}`,
+          `Duplicate writer: ${componentLabel(duplicate.component)}`,
+          registryFragmentTargetSnapshot(duplicate.targetName),
+        ],
+        '\n',
+      ),
+      message: `${definition.message} ${duplicate.targetName} is used by ${componentLabel(first.component)} and ${componentLabel(duplicate.component)}.`,
+    },
+  );
 }
 
 function registryFragmentTargetNameDiagnostic(
@@ -381,23 +394,25 @@ function registryFragmentTargetNameDiagnostic(
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV238;
   const duplicateSpan = duplicate.span;
-  return {
-    ...diagnosticAt(diagnostics, 'KV238', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV238', {
       start: duplicateSpan?.start,
       length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
     }),
-    help: compilerArrayJoin(
-      [
-        definition.help,
-        `Fragment target: ${duplicate.targetName}`,
-        `Registry writer: registryFacts.fragmentTargets`,
-        `Duplicate writer: ${componentLabel(duplicate.component)}`,
-        registryFragmentTargetSnapshot(duplicate.targetName),
-      ],
-      '\n',
-    ),
-    message: `${definition.message} ${duplicate.targetName} is already present in registry facts and is reused by ${componentLabel(duplicate.component)}.`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          definition.help,
+          `Fragment target: ${duplicate.targetName}`,
+          `Registry writer: registryFacts.fragmentTargets`,
+          `Duplicate writer: ${componentLabel(duplicate.component)}`,
+          registryFragmentTargetSnapshot(duplicate.targetName),
+        ],
+        '\n',
+      ),
+      message: `${definition.message} ${duplicate.targetName} is already present in registry facts and is reused by ${componentLabel(duplicate.component)}.`,
+    },
+  );
 }
 
 function duplicateViewTransitionNameDiagnostic(
@@ -406,24 +421,26 @@ function duplicateViewTransitionNameDiagnostic(
   duplicate: ViewTransitionRegistration,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV239;
-  return {
-    ...diagnosticAt(diagnostics, 'KV239', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV239', {
       start: duplicate.attribute.start,
       length: duplicate.attribute.end - duplicate.attribute.start,
     }),
-    help: compilerArrayJoin(
-      [
-        definition.help,
-        `View-transition name: ${duplicate.name}`,
-        `First writer: ${viewTransitionLabel(first)}`,
-        `Duplicate writer: ${viewTransitionLabel(duplicate)}`,
-        registryViewTransitionSnapshot(duplicate.name),
-        'Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.',
-      ],
-      '\n',
-    ),
-    message: `${definition.message} ${duplicate.name} is used by ${viewTransitionLabel(first)} and ${viewTransitionLabel(duplicate)}.`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          definition.help,
+          `View-transition name: ${duplicate.name}`,
+          `First writer: ${viewTransitionLabel(first)}`,
+          `Duplicate writer: ${viewTransitionLabel(duplicate)}`,
+          registryViewTransitionSnapshot(duplicate.name),
+          'Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.',
+        ],
+        '\n',
+      ),
+      message: `${definition.message} ${duplicate.name} is used by ${viewTransitionLabel(first)} and ${viewTransitionLabel(duplicate)}.`,
+    },
+  );
 }
 
 function registryViewTransitionNameDiagnostic(
@@ -431,24 +448,26 @@ function registryViewTransitionNameDiagnostic(
   duplicate: ViewTransitionRegistration,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV239;
-  return {
-    ...diagnosticAt(diagnostics, 'KV239', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV239', {
       start: duplicate.attribute.start,
       length: duplicate.attribute.end - duplicate.attribute.start,
     }),
-    help: compilerArrayJoin(
-      [
-        definition.help,
-        `View-transition name: ${duplicate.name}`,
-        `Registry writer: registryFacts.viewTransitions`,
-        `Duplicate writer: ${viewTransitionLabel(duplicate)}`,
-        registryViewTransitionSnapshot(duplicate.name),
-        'Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.',
-      ],
-      '\n',
-    ),
-    message: `${definition.message} ${duplicate.name} is already present in registry facts and is reused by ${viewTransitionLabel(duplicate)}.`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          definition.help,
+          `View-transition name: ${duplicate.name}`,
+          `Registry writer: registryFacts.viewTransitions`,
+          `Duplicate writer: ${viewTransitionLabel(duplicate)}`,
+          registryViewTransitionSnapshot(duplicate.name),
+          'Scope: module-local static rendered source plus registryFacts.viewTransitions when supplied; dynamic names require page-composition proof outside this validator.',
+        ],
+        '\n',
+      ),
+      message: `${definition.message} ${duplicate.name} is already present in registry facts and is reused by ${viewTransitionLabel(duplicate)}.`,
+    },
+  );
 }
 
 function componentLabel(component: ComponentModel): string {

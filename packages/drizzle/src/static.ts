@@ -6,7 +6,10 @@ import {
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { JsonValue } from '@kovojs/core';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import type {
   AlgebraicField,
   AlgebraicQueryShape,
@@ -133,7 +136,7 @@ import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
 } from './static/framework-identity.js';
-import { drizzleDiagnostic } from './static/diagnostics.js';
+import { drizzleDiagnostic, relocateDrizzleDiagnostic } from './static/diagnostics.js';
 
 /** @internal */ export const IGNORED_LOCAL_CALL_NAMES = drizzleStaticReadonlySet([
   'eq',
@@ -5136,7 +5139,9 @@ function extractQueryFactsFromPreparedFiles(
         .concat(secretProjectionBackstopDiagnostics(query.query, readProvenance, query.shape))
         .concat(tableRowProjectionDiagnostics(query.query, query.shape, site))
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
-        .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
+        .concat(
+          query.diagnostics?.map((diagnostic) => relocateDrizzleDiagnostic(diagnostic, site)) ?? [],
+        )
         .concat(unmodeledRelationReadDiagnostics(query.tableExpressions, fileTables, site))
         .concat(exemptReadDiagnostics)
         // SPEC §10.2/§11.1: an opaque/raw read that takes the declared-opaque-read escape but whose
@@ -5513,6 +5518,9 @@ function projectedColumnKey(column: QueryProjectedColumn): string {
 }
 
 function dedupeDiagnostics(diagnostics: readonly TouchGraphDiagnostic[]): TouchGraphDiagnostic[] {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `Drizzle diagnostics[${index}]`);
+  }
   return [
     ...new Map(diagnostics.map((diagnostic) => [diagnosticKey(diagnostic), diagnostic])).values(),
   ];

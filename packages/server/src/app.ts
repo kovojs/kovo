@@ -2,6 +2,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   snapshotVersionedClientModuleRegistry,
 } from './client-modules.js';
+import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { snapshotAuditJustification } from './audit-justification.js';
 import {
   appRequestUrlLimitResponse,
@@ -804,7 +805,10 @@ function appendAppDiagnosticGroup(
 ): void {
   denseOwnArrayForEach(
     group,
-    (diagnostic) => witnessArrayAppend(diagnostics, diagnostic, 'createApp diagnostics'),
+    (diagnostic) => {
+      assertRegisteredDiagnostic(diagnostic, 'createApp diagnostic group entry');
+      witnessArrayAppend(diagnostics, diagnostic, 'createApp diagnostics');
+    },
     'createApp diagnostic group',
   );
 }

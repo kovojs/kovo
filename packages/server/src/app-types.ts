@@ -1,4 +1,4 @@
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { EgressOptions } from './egress.js';
 import type { CsrfOptions } from './csrf.js';
@@ -316,13 +316,10 @@ export interface CreateAppOptions<
  * returned by `createApp`). Carries the diagnostic code, message, source file, and
  * optional severity/position so app tooling can report it (SPEC §9.5).
  */
-export interface AppDiagnostic {
-  code: DiagnosticCode;
+export interface AppDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   fileName: string;
   help?: string;
   length?: number;
-  message: string;
-  severity?: DiagnosticSeverity;
   start?: { column: number; line: number };
 }
 

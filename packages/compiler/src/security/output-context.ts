@@ -24,6 +24,7 @@ import {
 import * as ts from 'typescript';
 
 import {
+  contextualizeCompilerDiagnostic,
   diagnosticAt,
   diagnosticFor,
   type CompilerDiagnostic,
@@ -338,25 +339,27 @@ function effectiveElementContextDiagnostic(
   fact: EffectiveElementContextFact,
   reason: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(
       options.fileName,
       'KV236',
       options.source,
       fact.span?.start,
       fact.span === undefined ? undefined : fact.span.end - fact.span.start,
     ),
-    help: compilerArrayJoin(
-      [
-        `Blocked reason: ${reason}.`,
-        'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
-        'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
-        'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed after structural lowering.',
-      ],
-      '\n',
-    ),
-    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          `Blocked reason: ${reason}.`,
+          'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
+          'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
+          'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed after structural lowering.',
+        ],
+        '\n',
+      ),
+      message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+    },
+  );
 }
 
 /**
@@ -527,8 +530,8 @@ function validateElementAttributes(
   ) {
     compilerArrayAppend(
       found,
-      {
-        ...diagnosticAt(
+      contextualizeCompilerDiagnostic(
+        diagnosticAt(
           diagnostics,
           'KV236',
           {
@@ -537,13 +540,15 @@ function validateElementAttributes(
           },
           `<${element.intrinsicTagName}> is disabled because it can create an embedded browsing context without a reviewable sandbox boundary`,
         ),
-        help: [
-          'Blocked reason: object/embed and obsolete frame/frameset output can load or contain same-origin HTML without a reviewable modern iframe sandbox boundary.',
-          'Fixes: use a sandboxed <iframe> for active content, or an ordinary download/navigation link for a file.',
-          'SPEC §4.8 and §5.2 rule 10 require contextual output safety independent of CSP.',
-          'Escape: there is no plain JSX suppression for disabled active embed elements.',
-        ].join('\n'),
-      },
+        {
+          help: [
+            'Blocked reason: object/embed and obsolete frame/frameset output can load or contain same-origin HTML without a reviewable modern iframe sandbox boundary.',
+            'Fixes: use a sandboxed <iframe> for active content, or an ordinary download/navigation link for a file.',
+            'SPEC §4.8 and §5.2 rule 10 require contextual output safety independent of CSP.',
+            'Escape: there is no plain JSX suppression for disabled active embed elements.',
+          ].join('\n'),
+        },
+      ),
       'Active embed element diagnostics',
     );
   }
@@ -553,8 +558,8 @@ function validateElementAttributes(
   ) {
     compilerArrayAppend(
       found,
-      {
-        ...diagnosticAt(
+      contextualizeCompilerDiagnostic(
+        diagnosticAt(
           diagnostics,
           'KV236',
           {
@@ -563,13 +568,15 @@ function validateElementAttributes(
           },
           `SVG <${element.intrinsicTagName}> is disabled because SMIL can transfer values into URL, event-handler, or style sinks`,
         ),
-        help: [
-          'Blocked reason: SVG SMIL values/from/to/by and attributeName are one temporal sink; per-attribute escaping cannot prove their browser execution order or href-targeted destination.',
-          'Fixes: use Kovo state plus property-level CSS/DOM updates, or render a non-animated SVG representation.',
-          'SPEC §4.8 and §5.2 rule 10 require contextual output safety and fail-closed dynamic sinks.',
-          'Escape: there is no plain JSX suppression for disabled SVG SMIL elements.',
-        ].join('\n'),
-      },
+        {
+          help: [
+            'Blocked reason: SVG SMIL values/from/to/by and attributeName are one temporal sink; per-attribute escaping cannot prove their browser execution order or href-targeted destination.',
+            'Fixes: use Kovo state plus property-level CSS/DOM updates, or render a non-animated SVG representation.',
+            'SPEC §4.8 and §5.2 rule 10 require contextual output safety and fail-closed dynamic sinks.',
+            'Escape: there is no plain JSX suppression for disabled SVG SMIL elements.',
+          ].join('\n'),
+        },
+      ),
       'SVG SMIL element diagnostics',
     );
   }
@@ -888,20 +895,22 @@ function declarativeShadowDomDiagnostic(
   element: JsxElementModel,
   reason: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticAt(diagnostics, 'KV236', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV236', {
       start: element.start,
       length: element.openingEnd - element.start,
     }),
-    help: [
-      `Blocked reason: ${reason}.`,
-      'Kovo component output is light DOM; parser-created shadow roots would hide descendants from framework traversal and document-wide IDREF/form behavior.',
-      'Fixes: keep the template inert and render its content into ordinary light DOM.',
-      'SPEC §4.2 and §5.2 rule 10 make declarative Shadow DOM unavailable in authored output.',
-      'Escape: there is no app-authored declarative Shadow DOM suppression.',
-    ].join('\n'),
-    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}; declarative Shadow DOM is disabled.`,
-  };
+    {
+      help: [
+        `Blocked reason: ${reason}.`,
+        'Kovo component output is light DOM; parser-created shadow roots would hide descendants from framework traversal and document-wide IDREF/form behavior.',
+        'Fixes: keep the template inert and render its content into ordinary light DOM.',
+        'SPEC §4.2 and §5.2 rule 10 make declarative Shadow DOM unavailable in authored output.',
+        'Escape: there is no app-authored declarative Shadow DOM suppression.',
+      ].join('\n'),
+      message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}; declarative Shadow DOM is disabled.`,
+    },
+  );
 }
 
 /**
@@ -1228,22 +1237,24 @@ function elementContextSecurityDiagnostic(
   element: JsxElementModel,
   reason: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticAt(diagnostics, 'KV236', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV236', {
       start: element.start,
       length: element.openingEnd - element.start,
     }),
-    help: compilerArrayJoin(
-      [
-        `Blocked reason: ${reason}.`,
-        'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
-        'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
-        'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed.',
-      ],
-      '\n',
-    ),
-    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          `Blocked reason: ${reason}.`,
+          'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
+          'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
+          'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed.',
+        ],
+        '\n',
+      ),
+      message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+    },
+  );
 }
 
 const metaRefreshFixes = [
@@ -1301,22 +1312,24 @@ function documentNavigationDiagnostic(
   reason: string,
   fixes: readonly [string, string],
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticAt(diagnostics, 'KV236', {
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV236', {
       start: element.start,
       length: element.openingEnd - element.start,
     }),
-    help: compilerArrayJoin(
-      [
-        `Blocked reason: ${reason}.`,
-        fixes[0],
-        fixes[1],
-        'SPEC §4.8 and §5.2 rule 10 require security-sensitive browser output contexts to fail closed.',
-      ],
-      '\n',
-    ),
-    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          `Blocked reason: ${reason}.`,
+          fixes[0],
+          fixes[1],
+          'SPEC §4.8 and §5.2 rule 10 require security-sensitive browser output contexts to fail closed.',
+        ],
+        '\n',
+      ),
+      message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+    },
+  );
 }
 
 type StaticRenderedAttributeValue =
@@ -1346,19 +1359,21 @@ function validateCrossAttributeWireSemantics(
   const issue = htmlElementWireValueIssue('input', values.type, values.name);
   if (issue === undefined) return [];
   return [
-    {
-      ...diagnosticAt(diagnostics, 'KV236', {
+    contextualizeCompilerDiagnostic(
+      diagnosticAt(diagnostics, 'KV236', {
         start: element.start,
         length: element.openingEnd - element.start,
       }),
-      help: [
-        'Blocked reason: HTML reserves an ASCII-case-insensitive `_charset_` name on hidden inputs and replaces its submitted value with the selected encoding label.',
-        'Fixes: rename the field, or use a non-hidden ordinary `_charset_` control only when its authored value is intentional business input.',
-        'SPEC §13.2 requires hidden submitted identity to remain the same string; SPEC §6.6 requires the browser sink to fail closed.',
-        'Escape: there is no suppression for a browser-reserved submitted control.',
-      ].join('\n'),
-      message: `Unsafe server HTML wire value in <input> attributes (${issue}); native form construction would replace the authored hidden value.`,
-    },
+      {
+        help: [
+          'Blocked reason: HTML reserves an ASCII-case-insensitive `_charset_` name on hidden inputs and replaces its submitted value with the selected encoding label.',
+          'Fixes: rename the field, or use a non-hidden ordinary `_charset_` control only when its authored value is intentional business input.',
+          'SPEC §13.2 requires hidden submitted identity to remain the same string; SPEC §6.6 requires the browser sink to fail closed.',
+          'Escape: there is no suppression for a browser-reserved submitted control.',
+        ].join('\n'),
+        message: `Unsafe server HTML wire value in <input> attributes (${issue}); native form construction would replace the authored hidden value.`,
+      },
+    ),
   ];
 }
 
@@ -1559,16 +1574,18 @@ function wireIdentityDiagnostic(
   issue: string,
   span: SourceSpan,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticAt(diagnostics, 'KV236', { start: span.start, length: span.end - span.start }),
-    help: [
-      'Blocked reason: UTF-8, HTML parsing, or native form serialization would substitute or canonicalize this server-authored wire value; identity-bearing values can then alias a distinct record or DOM target.',
-      'Fixes: remove NUL and lone UTF-16 surrogates; use line-ending-free control names and identity-bearing single-line/hidden values. Multiline textarea business content may retain CR/LF. Give options an explicit stable value when their label needs formatting whitespace.',
-      'SPEC §13.2 requires rendered, submitted, morph, and optimistic identity to remain the same string.',
-      'Escape: there is no suppression; encode display copy separately from identity-bearing fields.',
-    ].join('\n'),
-    message: `Unsafe server HTML wire value in <${tag}> ${sink} (${posture}: ${issue}); the browser would observe a different string.`,
-  };
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV236', { start: span.start, length: span.end - span.start }),
+    {
+      help: [
+        'Blocked reason: UTF-8, HTML parsing, or native form serialization would substitute or canonicalize this server-authored wire value; identity-bearing values can then alias a distinct record or DOM target.',
+        'Fixes: remove NUL and lone UTF-16 surrogates; use line-ending-free control names and identity-bearing single-line/hidden values. Multiline textarea business content may retain CR/LF. Give options an explicit stable value when their label needs formatting whitespace.',
+        'SPEC §13.2 requires rendered, submitted, morph, and optimistic identity to remain the same string.',
+        'Escape: there is no suppression; encode display copy separately from identity-bearing fields.',
+      ].join('\n'),
+      message: `Unsafe server HTML wire value in <${tag}> ${sink} (${posture}: ${issue}); the browser would observe a different string.`,
+    },
+  );
 }
 
 /**
@@ -2013,10 +2030,9 @@ function outputContextDiagnostic(
   detail: string,
   span?: { start?: number | undefined; length?: number | undefined },
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticAt(diagnostics, 'KV236', span, detail),
+  return contextualizeCompilerDiagnostic(diagnosticAt(diagnostics, 'KV236', span, detail), {
     help: diagnosticDefinitions.KV236.help,
-  };
+  });
 }
 
 function outputJsonString(value: string): string {

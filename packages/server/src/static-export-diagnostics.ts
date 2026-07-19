@@ -1,11 +1,14 @@
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
 import {
+  assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
   diagnosticDefinitions,
   isDiagnosticCode,
+  isRegisteredDiagnostic,
 } from '@kovojs/core/internal/diagnostics';
 import { snapshotBuildArray } from './build-security-intrinsics.js';
-import { witnessArrayAppend } from './security-witness-intrinsics.js';
+import { witnessArrayAppend, witnessFreeze } from './security-witness-intrinsics.js';
 
 /**
  * Route-level diagnostic emitted when a request-shell route cannot be represented
@@ -18,12 +21,9 @@ import { witnessArrayAppend } from './security-witness-intrinsics.js';
  * pattern (`routePath`). Route-level diagnostics with no single concrete target leave
  * `concretePath` undefined.
  */
-export interface StaticExportDiagnostic {
-  code: DiagnosticCode | 'KV229';
+export interface StaticExportDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   concretePath?: string;
-  message: string;
   routePath: string;
-  severity: DiagnosticSeverity;
 }
 
 /** Severity label used when formatting static-export diagnostics. */
@@ -35,11 +35,9 @@ export type StaticExportDiagnosticSeverity = 'ERROR' | 'WARN';
  * Input to the public {@link assertStaticExportCompileDiagnostics} and
  * {@link blockingStaticExportDiagnostics}, which fail static export on error-severity codes.
  */
-export interface StaticExportCompileDiagnostic {
-  code: DiagnosticCode;
+export interface StaticExportCompileDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   fileName: string;
   help?: string;
-  message: string;
   start?: { column: number; line: number };
 }
 
@@ -49,14 +47,15 @@ export class StaticExportError extends Error {
   readonly diagnostics: readonly StaticExportDiagnostic[];
 
   constructor(diagnostics: readonly StaticExportDiagnostic[]) {
+    const registered = registeredStaticExportDiagnostics(diagnostics, 'static-export error');
     super(
-      diagnostics.length === 1
-        ? diagnostics[0]?.message
-        : `KV229 static export found ${diagnostics.length} non-exportable routes.`,
+      registered.length === 1
+        ? registered[0]!.message
+        : `KV229 static export found ${registered.length} non-exportable routes.`,
     );
     this.name = 'StaticExportError';
-    this.code = diagnostics[0]?.code ?? 'KV229';
-    this.diagnostics = diagnostics;
+    this.code = registered[0]?.code ?? 'KV229';
+    this.diagnostics = witnessFreeze(registered);
   }
 }
 
@@ -74,6 +73,7 @@ export function staticExportDiagnostic(
  * @internal Static-export diagnostic shape guard for framework export tooling (SPEC.md §9.5).
  */
 export function isStaticExportDiagnostic(value: unknown): value is StaticExportDiagnostic {
+  if (!isRegisteredDiagnostic(value)) return false;
   const concretePath = (value as StaticExportDiagnostic | null)?.concretePath;
   const code = (value as StaticExportDiagnostic | null)?.code;
   return (
@@ -108,6 +108,7 @@ export function formatStaticExportDiagnostic(
   diagnostic: StaticExportDiagnostic,
   severity: StaticExportDiagnosticSeverity,
 ): string {
+  assertRegisteredDiagnostic(diagnostic, 'Static-export diagnostic formatter input');
   return `${severity} ${diagnostic.code} route=${diagnostic.routePath} ${stableDiagnosticText(
     diagnostic.message,
   )}`;
@@ -149,6 +150,7 @@ export function blockingStaticExportDiagnostics(
   const blocking: StaticExportDiagnostic[] = [];
   for (let index = 0; index < source.length; index += 1) {
     const diagnostic = source[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Static-export compile diagnostics[${index}]`);
     if (diagnosticDefinitions[diagnostic.code].severity !== 'error') continue;
     witnessArrayAppend(
       blocking,
@@ -159,11 +161,29 @@ export function blockingStaticExportDiagnostics(
   return blocking;
 }
 
+function registeredStaticExportDiagnostics(
+  diagnostics: readonly StaticExportDiagnostic[],
+  label: string,
+): StaticExportDiagnostic[] {
+  const source = snapshotBuildArray(diagnostics, `${label} diagnostics`);
+  const registered: StaticExportDiagnostic[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const diagnostic = source[index];
+    assertRegisteredDiagnostic(diagnostic, `${label} diagnostics[${index}]`);
+    witnessArrayAppend(
+      registered,
+      diagnostic,
+      'Server packages/server/src/static-export-diagnostics.ts collection',
+    );
+  }
+  return registered;
+}
+
 function blockingStaticExportDiagnostic(
   diagnostic: StaticExportCompileDiagnostic,
 ): StaticExportDiagnostic {
-  return createRegisteredDiagnostic(
-    diagnostic.code,
+  return deriveRegisteredDiagnostic(
+    diagnostic,
     { routePath: diagnostic.fileName },
     { message: staticExportCompileDiagnosticMessage(diagnostic) },
   );

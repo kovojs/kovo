@@ -24,7 +24,12 @@ import {
   compilerStringStartsWith,
   compilerStringToLowerCase,
 } from '../compiler-security-intrinsics.js';
-import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticAt,
+  type CompilerDiagnostic,
+  type DiagnosticFactory,
+} from '../diagnostics.js';
 import {
   componentOptionObjectKeys,
   jsxElements,
@@ -149,23 +154,25 @@ export function validateHandAuthoredNavigationSegmentStamps(
       if (!compilerSetHas(navigationSegmentStampAttributes, attribute.name)) continue;
       compilerArrayAppend(
         found,
-        {
-          ...diagnosticAt(
+        contextualizeCompilerDiagnostic(
+          diagnosticAt(
             diagnostics,
             'KV235',
             { start: attribute.start, length: attribute.end - attribute.start },
             `hand-authored navigation segment stamp ${attribute.name}.`,
           ),
-          help: compilerArrayJoin(
-            [
-              diagnosticDefinitions.KV235.help,
-              'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
-              'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
-              'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
-            ],
-            '\n',
-          ),
-        },
+          {
+            help: compilerArrayJoin(
+              [
+                diagnosticDefinitions.KV235.help,
+                'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
+                'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
+                'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
+              ],
+              '\n',
+            ),
+          },
+        ),
         'Markup idref values',
       );
     }

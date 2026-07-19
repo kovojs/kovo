@@ -19,7 +19,11 @@ import {
   compilerSetAdd,
   compilerSetHas,
 } from '../compiler-security-intrinsics.js';
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticFor,
+  type CompilerDiagnostic,
+} from '../diagnostics.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 import { propertyNameText, unwrapExpression } from './ast.js';
 
@@ -95,8 +99,7 @@ export function accessGuardExclusivityDiagnostics(
             );
             compilerArrayAppend(
               diagnostics,
-              {
-                ...diagnostic,
+              contextualizeCompilerDiagnostic(diagnostic, {
                 help:
                   surface.legacyGuard === 'unsupported'
                     ? unsupportedGuardHelp(surface.name)
@@ -105,7 +108,7 @@ export function accessGuardExclusivityDiagnostics(
                   surface.legacyGuard === 'unsupported'
                     ? `Unsupported access decision: ${surface.name}() cannot declare legacy guard.`
                     : `Conflicting access decisions: ${surface.name}() cannot declare both access and legacy guard.`,
-              },
+              }),
               'Compiler access/guard exclusivity diagnostics',
             );
           }

@@ -23,7 +23,7 @@ import type {
   RouteComponentImportRewrite,
 } from '@kovojs/compiler';
 import type { DiagnosticCode } from '@kovojs/core';
-import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import { assertRegisteredDiagnostic, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import {
@@ -907,6 +907,7 @@ async function runCompileComponentCommand(
     >;
   }
   const result = await compileFrameworkComponentModule(compileOptions);
+  assertCompileResultDiagnostics(result.diagnostics, 'CLI component compiler diagnostics');
   const allowedDiagnosticCodes = new Set(options.allowedDiagnosticCodes);
   const warnings = result.diagnostics.filter((diagnostic) =>
     allowedDiagnosticCodes.has(diagnostic.code),
@@ -1292,6 +1293,10 @@ async function compileStaticHandlerSecurityVerdict(
       readonly extraFiles?: readonly { fileName: string; source: string }[];
     };
     const result: CompileResult = await compileFrameworkComponentModule(options);
+    assertCompileResultDiagnostics(
+      result.diagnostics,
+      `CLI static handler diagnostics for ${file.fileName}`,
+    );
     for (const diagnostic of result.diagnostics) {
       if (diagnostic.code !== 'KV449') continue;
       diagnostics.push({
@@ -1712,6 +1717,7 @@ async function runCompilePackageCssCommand(
   if (!result.css) throw new Error(`no CSS extracted for ${options.packageName}`);
 
   const lines = await compileArtifactLines(options, result.css, 'package-css');
+  assertCompileResultDiagnostics(result.diagnostics, 'CLI package CSS diagnostics');
   for (const diagnostic of result.diagnostics) {
     lines.splice(
       -1,
@@ -1795,18 +1801,16 @@ async function compileArtifactActionLines(
   ];
 }
 
-function warningLines(
-  diagnostics: readonly { code: DiagnosticCode; fileName: string; message: string }[],
-): string[] {
+function warningLines(diagnostics: CompileResult['diagnostics']): string[] {
+  assertCompileResultDiagnostics(diagnostics, 'CLI warning diagnostics');
   return diagnostics.map(
     (diagnostic) =>
       `WARN ${diagnostic.code} file=${JSON.stringify(diagnostic.fileName)} ${stableText(diagnostic.message)}`,
   );
 }
 
-function compileDiagnosticResult(
-  diagnostics: readonly { code: DiagnosticCode; fileName: string; message: string }[],
-): CliCommandResult {
+function compileDiagnosticResult(diagnostics: CompileResult['diagnostics']): CliCommandResult {
+  assertCompileResultDiagnostics(diagnostics, 'CLI blocking compiler diagnostics');
   return {
     error: [
       compileCommandOutputVersion,
@@ -1818,6 +1822,15 @@ function compileDiagnosticResult(
     ].join('\n'),
     exitCode: 1,
   };
+}
+
+function assertCompileResultDiagnostics(
+  diagnostics: CompileResult['diagnostics'],
+  label: string,
+): void {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `${label}[${index}]`);
+  }
 }
 
 function readJsonFile(path: string): unknown {

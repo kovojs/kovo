@@ -36,12 +36,23 @@ const serverSecurityWitnessIntrinsicsPath = 'packages/server/src/security-witnes
 const verifierDiagnosticsPath = 'packages/test/src/verifier-diagnostics.ts';
 const verifierSecurityIntrinsicsPath = 'packages/test/src/verifier-security-intrinsics.ts';
 const rootDiagnosticDoor = `${coreDiagnosticsPath}#createRegisteredDiagnostic`;
+const derivedDiagnosticDoor = `${coreDiagnosticsPath}#deriveRegisteredDiagnostic`;
+const cliStaticExportDiagnosticRehydrationDoor =
+  'packages/cli/src/commands/build-export.ts#rehydrateStaticExportCompileDiagnostic';
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '1f605f161d5d1d5513044e1403ff7ce34772583cbbee778aecba9abc60d04ef2';
+  '53c740c76181942e870d2a1c6e6cb96803f93fcd3429bcfbaf33003b5b103bf8';
 const expectedRootDiagnosticDoorDigest =
-  '6ace905f997e5c733f0e3b070dde67b2c6a399bf1b1f8f92851b0bd4985440e8';
+  '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
+const expectedRegisteredDiagnosticGuardDigest =
+  '5e62f57e439e251c874e93ca959395c34f039a98f2e201d4b0a12d148a2defce';
+const expectedRegisteredDiagnosticAssertionDigest =
+  '2d4f399c61a679f28a081902b5464a2009a92dd3b24c198ca1aee6b3a0313c26';
+const expectedDerivedDiagnosticDoorDigest =
+  '45d97a10f0537ad7fcdbcfc806e9ce227ba5a157e73eaab13e108717f4d7e63a';
+const expectedCliStaticExportDiagnosticRehydrationDoorDigest =
+  '38e9f176edf8a6520ec7884e2e05d0d86c6a44938fd11c2a370a789f84ce704c';
 const expectedRegisteredDiagnosticDefinitionFactoryDigest =
   'e8dd153b51da2c8f22bc81bfe190d872c63bca35acf4a10ddef4db6f511f6a97';
 const expectedDiagnosticFactoryConstructorDigest =
@@ -51,9 +62,9 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '0f17c841bb8faf327a15805eb1ac84c4d1a000254175e00c3a5ed00c9d34b841';
 const expectedBlockingStaticExportCollectionDigest =
-  '37a12e352557d6831047c8ded36f5eb4d7d616b6124b6e31f868834a5ad0ba73';
+  '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
-  '1832d3bcd778d43a514906a554570f556daa91939b6fb5922b2aec4d3d24a187';
+  '5c4ea6e80d4882483133a89d4d69ece75e7488ee30547d83c7d1150970f2ab45';
 const expectedCompileComponentModuleDigest =
   'a22e75b77161b32169cd2d41c0248a61baf55e2296197e6e82adbd5341e4d904';
 const expectedValidateComponentPhaseDigest =
@@ -66,12 +77,12 @@ const expectedCoreBuildDistCommand =
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/inline-loader.ts#2f9e41eda34b608793f2dbd54817ca1f0aa04da106d278e7fef51e4d03caaa91#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/cli/src/commands/build-export.ts#b0d61e0aa85fb61fda9eb18b2f23addae9057d2e32aa30d2b3eff3821a295dcb#3b2fbaed304404bb191701b08b79947a7869566df27f18520e91925ff3bc2d31',
-  'packages/cli/src/commands/build-export.ts#b0d61e0aa85fb61fda9eb18b2f23addae9057d2e32aa30d2b3eff3821a295dcb#f3f265afd66e69c25580b7ce0942eaf5bd8e36b1c3b9ec15d8a8cac80eba3836',
-  'packages/cli/src/commands/build-export.ts#b0d61e0aa85fb61fda9eb18b2f23addae9057d2e32aa30d2b3eff3821a295dcb#bc216e52c412c8b193eb048ec65ffe9acb38280f67773837203ae1f164ba01a2',
-  'packages/cli/src/commands/build-export.ts#b0d61e0aa85fb61fda9eb18b2f23addae9057d2e32aa30d2b3eff3821a295dcb#1c6d930e4e45cf09d26898686ca29ac9f739589a667ca73b6b77a70dfd7744ec',
-  'packages/cli/src/commands/build-export.ts#b0d61e0aa85fb61fda9eb18b2f23addae9057d2e32aa30d2b3eff3821a295dcb#666bd656e7c42491b16f3d6f97fb64bef5faaf31813e8ac4ecdd5f3df6eb104d',
-  'packages/cli/src/commands/build-export.ts#b0d61e0aa85fb61fda9eb18b2f23addae9057d2e32aa30d2b3eff3821a295dcb#606f565bbb48636a234c79a4289dac3cf14d662050180563b00a61a266db42aa',
+  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#3b2fbaed304404bb191701b08b79947a7869566df27f18520e91925ff3bc2d31',
+  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#f3f265afd66e69c25580b7ce0942eaf5bd8e36b1c3b9ec15d8a8cac80eba3836',
+  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#bc216e52c412c8b193eb048ec65ffe9acb38280f67773837203ae1f164ba01a2',
+  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#1c6d930e4e45cf09d26898686ca29ac9f739589a667ca73b6b77a70dfd7744ec',
+  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#666bd656e7c42491b16f3d6f97fb64bef5faaf31813e8ac4ecdd5f3df6eb104d',
+  'packages/cli/src/commands/build-export.ts#d438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5#606f565bbb48636a234c79a4289dac3cf14d662050180563b00a61a266db42aa',
   'packages/cli/src/commands/db.ts#ee124a743f4e948da7fa66338746629c412a5f4c44113cad02e5e30cf064069b#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
@@ -96,11 +107,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'a3f0e056e282bb26179e8e4923ad17674b995ef6320326091a21e71d55db9f8e'],
   [
     'packages/cli/src/commands/build-export.ts',
-    'b0d61e0aa85fb61fda9eb18b2f23addae9057d2e32aa30d2b3eff3821a295dcb',
+    'd438a2395d2ea9df57e0df310e5fc11e1057331697e9161c6040397f1e9c03d5',
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    '8924eed8109ff3123699c5a1fe55b69ede27db96a48a81587da2b933245a0d96',
+    '61ad06c6c437ab42a81c6408b4dd33ff237dfb24244c120a16a4f6d25a5e1d0e',
   ],
   [
     'packages/cli/src/commands/dev.ts',
@@ -163,15 +174,15 @@ const reviewedExcludedSourceReachability = new Set([
 // outer-owner digests; any new shape or owner edit must be reviewed explicitly.
 const reviewedDynamicDiagnosticShapeSummaries = new Map([
   [
-    'packages/cli/src/commands/build-export.ts#literal#a209f13a3241aa94fc75527ddecacbd22892f71c957ec29711008fa69148dc72#866753292155eaa3ce46b5aedd1ba30c9f5a55f60ad3bc41a1db59fe07cf49c4',
+    'packages/cli/src/commands/build-export.ts#literal#a209f13a3241aa94fc75527ddecacbd22892f71c957ec29711008fa69148dc72#cd7da4c29ffb6674b361e1a9a4efb4ab5e213b65e3289bad20eba374622ed2f6',
     'Registry-derived compiler diagnostic projection for the build-export result protocol.',
   ],
   [
-    'packages/cli/src/commands/compile.ts#literal#46266841b02836a4b1a875f9222807db4ebb2e7bee8d197868ac210207efe2ac#f6581d65c230f2660ada314d445b048f17a174369588ccab51ba334a81d62a3b',
+    'packages/cli/src/commands/compile.ts#literal#46266841b02836a4b1a875f9222807db4ebb2e7bee8d197868ac210207efe2ac#35282b851c8c02ec18cc841f9ab19d7f9d4b848483e472c59be682870a4d09f8',
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
   ],
   [
-    'packages/cli/src/commands/mcp.ts#literal#6affac251930fd2eed1ebe17b0bf9a2cedbf622fb6edbe4baab81d3366695b9f#74f1f6c9819e17da9c8199275f742db019410dbdbb2b60d1fd0dec644f6fc537',
+    'packages/cli/src/commands/mcp.ts#literal#6affac251930fd2eed1ebe17b0bf9a2cedbf622fb6edbe4baab81d3366695b9f#0344b46b3f7ef48b3eab5b172714f4ff3d92a0435e78195222d4b1bd1df78003',
     'Non-Kovo JSON-RPC response envelope with protocol-defined code and message fields.',
   ],
   [
@@ -195,12 +206,8 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Gallery oracle mismatch record; code is a non-diagnostic comparison label.',
   ],
   [
-    'packages/compiler/src/hmr-impact.ts#literal#dd6ddbf49d08780a059b50b062fe4a5dd195bc0e3e4fd5938e3acc64c6165335#dcca5e77c314a9c1374d1af3c7797f0fd933a71f5fa58a76c897d8995e740431',
+    'packages/compiler/src/hmr-impact.ts#literal#d36859e8a89c106c98eb8f0d2ce79cf1cbbdde9ebbb0c5b4a707207683282580#f58b25d212d057aba99b6dc36dcc1a824145fb31dd3a4493d1e5b9f247ed4912',
     'Registry-derived compiler diagnostic projection for the HMR impact protocol.',
-  ],
-  [
-    'packages/compiler/src/vite.ts#literal#293c37145f7111633ce41b23d828733c359937a5d21d4e97c9f3fa13d1ee2496#553626fc124adb68dc0097d3ed90d5da7b31c9d7c90cf31ce522ec85a8fabeb3',
-    'Registry-derived compiler diagnostic projection for the Vite integration protocol.',
   ],
   [
     'packages/drizzle/src/graph.ts#literal#037a71b0f00e382d761fb4137b567a34140f2e1d5daa99e58cfcce9f396328f0#beed01b5fa90fee5ddd948ea765c0648b95dd154a2326d104ed6f3e69b39008b',
@@ -263,16 +270,8 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Environment validation issue protocol with a non-Kovo code namespace.',
   ],
   [
-    'packages/server/src/internal/data-plane-static-analysis.ts#literal#048eb4a04eb19e28bc29729be7d4c8afabee33f58e6ce6164c23009c60b4c667#4b46d3c234b34599ea420f45f0e216ffdaaee651b6624dacce71bfa74c060f71',
+    'packages/server/src/internal/data-plane-static-analysis.ts#literal#d8b01e4ce93ec83c534e009638f2469aa0608d221b451f71cf8ea1f10ed10c10#698a3c77a3848eb3b80cddf5442f4cc1133ee05d5b8e6ac930385024def78b81',
     'Registry-derived compiler diagnostic projection for data-plane analysis.',
-  ],
-  [
-    'packages/server/src/internal/data-plane-static-analysis.ts#literal#d8b01e4ce93ec83c534e009638f2469aa0608d221b451f71cf8ea1f10ed10c10#57371d8c08eb6a24f7ebc60389bc9f66e024f9fdc268aea5ec31e817b4059c81',
-    'Registry-derived compiler diagnostic projection for data-plane analysis.',
-  ],
-  [
-    'packages/server/src/vite.ts#literal#1f2af3a1963df166654add61950d15bb3ff427f8c696b92f9d3d3cbe6a3f49cb#656322d0c6607285ad077b6f22b222c720d2bdb3b0b797ba652a378cc2b8d1a6',
-    'Registry-derived compiler diagnostic projection for the server Vite integration.',
   ],
   [
     'packages/test/src/integration/fixture-compiler-plugin.ts#literal#6d68b0cf359673b8aaa9738ba0e6082092fc51a98d943d841017256b72d1078a#6f24790b339c702d1fc57fd7f6bb3fd02ae753a67cf002b09dd0c92cb4b32595',
@@ -285,6 +284,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
 ]);
 const protectedCoreBridgeExports = new Map([
   ['createRegisteredDiagnostic', coreDiagnosticsPath],
+  ['deriveRegisteredDiagnostic', coreDiagnosticsPath],
   ['diagnosticConstructors', generatedDiagnosticRegistryModulePath],
 ]);
 
@@ -292,6 +292,11 @@ const protectedCoreBridgeExports = new Map([
 // when its lexical binding resolves to this exact file + symbol and the wrapper graph below proves
 // that definition still reaches the root createRegisteredDiagnostic door.
 const reviewedDiagnosticWrappers = new Map([
+  [derivedDiagnosticDoor, { exported: true, name: 'deriveRegisteredDiagnostic' }],
+  [
+    cliStaticExportDiagnosticRehydrationDoor,
+    { exported: false, name: 'rehydrateStaticExportCompileDiagnostic' },
+  ],
   [`${compilerDiagnosticsPath}#diagnosticFor`, { exported: true, name: 'diagnosticFor' }],
   [
     'packages/compiler/src/lower/attribute-merge.ts#attributeMergeDiagnostic',
@@ -326,12 +331,14 @@ const reviewedDiagnosticWrappers = new Map([
 const reviewedDiagnosticEmitterNames = new Set([
   'attributeMergeDiagnostic',
   'createRegisteredDiagnostic',
+  'deriveRegisteredDiagnostic',
   'diagnosticAt',
   'diagnosticFor',
   'diagnosticMessage',
   'drizzleDiagnostic',
   'drizzleDiagnosticWithoutSite',
   'eventTriggerDiagnostic',
+  'rehydrateStaticExportCompileDiagnostic',
   'staticExportDiagnostic',
   'blockingStaticExportDiagnostic',
 ]);
@@ -369,7 +376,7 @@ const namedFixtureTestCache = new Map();
 const diagnosticLiteralExemptions = new Map([
   [
     'packages/core/src/diagnostics.ts',
-    '84dc401bbeceb1f53f4fa66cb6a8d253af9fa71434d19a60ae8e60b1984690a2',
+    '0e19a85ba1f1a4848faf9c590b3884e3f3a2226d9085b9b035dd609f46b11ee0',
   ],
   [
     'packages/core/src/internal/diagnostic-registry.generated.ts',
@@ -2249,6 +2256,14 @@ function reviewedImportTarget(fileName, binding, context) {
       ? rootDiagnosticDoor
       : undefined;
   }
+  if (
+    modulePath === coreInternalDiagnosticsPath &&
+    binding.importedName === 'deriveRegisteredDiagnostic'
+  ) {
+    return bridgeResolvesExactExport('deriveRegisteredDiagnostic', context)
+      ? derivedDiagnosticDoor
+      : undefined;
+  }
   if (modulePath === coreDiagnosticsPath && binding.importedName === 'createRegisteredDiagnostic') {
     return rootDiagnosticDoor;
   }
@@ -2456,10 +2471,25 @@ function callIsReviewedDynamicForwarding(call, target, context) {
     return false;
   }
   const references = symbolIdentifierOccurrences(owner, diagnosticSymbol, context);
+  const provenanceAssertion = references.some((reference) => {
+    const call = reference.parent;
+    const binding =
+      ts.isCallExpression(call) && ts.isIdentifier(call.expression)
+        ? importedBinding(call.expression, context)
+        : undefined;
+    return (
+      ts.isCallExpression(call) &&
+      call.arguments[0] === reference &&
+      binding?.moduleSpecifier === '@kovojs/core/internal/diagnostics' &&
+      binding.importedName === 'assertRegisteredDiagnostic' &&
+      binding.localName === 'assertRegisteredDiagnostic'
+    );
+  });
   return (
-    references.length === 3 &&
+    references.length === 4 &&
     references.includes(diagnosticDeclaration.name) &&
     references.includes(argument) &&
+    provenanceAssertion &&
     references.some(
       (reference) =>
         ts.isPropertyAccessExpression(reference.parent) &&
@@ -3215,6 +3245,7 @@ function validateEmissionDoorBindings(files) {
     findings.push(`${rootDiagnosticDoor}: root validating diagnostic door is missing`);
   }
   findings.push(...validateRootDiagnosticDoorDefinition(rootSource));
+  findings.push(...validateRegisteredDiagnosticProvenance(rootSource, analysis));
   findings.push(...validateDiagnosticRegistryFreezeInitialization(rootSource));
 
   const constructorFunction =
@@ -3768,11 +3799,17 @@ function reviewedWrapperCodeFlowFindings(declaration, key, analysis) {
         const actualText =
           resolution.target === generatedDiagnosticConstructorDoor
             ? resolution.constructorCode
-            : actual?.getText(sourceFile);
-        if (
-          actualText === undefined ||
-          !diagnosticCodeExpressionMatchesWrapperSource(actual, expected, context)
-        ) {
+            : resolution.target === derivedDiagnosticDoor && actual !== undefined
+              ? `${actual.getText(sourceFile)}.code`
+              : actual?.getText(sourceFile);
+        const matchesReviewedSource =
+          resolution.target === derivedDiagnosticDoor
+            ? expected.property === 'code' &&
+              actual !== undefined &&
+              ts.isIdentifier(actual) &&
+              context.checker.getSymbolAtLocation(actual) === expected.symbol
+            : diagnosticCodeExpressionMatchesWrapperSource(actual, expected, context);
+        if (actualText === undefined || !matchesReviewedSource) {
           const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
           findings.push(
             `${key}:${line}: dynamic diagnostic code ${actualText ?? '<unproven>'} does not derive from reviewed source ${expected.text}`,
@@ -3819,6 +3856,9 @@ function diagnosticCodeExpressionMatchesWrapperSource(expression, expected, cont
 
 function diagnosticCodeExpressionAtCall(call, target, sourceFile) {
   if (target === generatedDiagnosticConstructorDoor) return undefined;
+  if (target === derivedDiagnosticDoor) {
+    return call.arguments[0];
+  }
   const position = diagnosticEmitterCodePositions.get(target);
   if (position === undefined) return undefined;
   const argument = call.arguments[position.argument];
@@ -3872,9 +3912,10 @@ function validateCoreDiagnosticsBridge(sourceFile, context) {
       statement.exportClause === undefined &&
       statement.moduleSpecifier !== undefined,
   );
-  if (starExports.length !== protectedCoreBridgeExports.size) {
+  const reviewedStarExportSources = new Set(protectedCoreBridgeExports.values());
+  if (starExports.length !== reviewedStarExportSources.size) {
     findings.push(
-      `${coreInternalDiagnosticsPath}: bridge must contain only the two reviewed star re-exports`,
+      `${coreInternalDiagnosticsPath}: bridge must contain only the reviewed star re-exports`,
     );
   }
   return findings;
@@ -3962,13 +4003,157 @@ function validateRootDiagnosticDoorDefinition(sourceFile) {
       `${rootDiagnosticDoor}: validating implementation drifted from its reviewed exact body (received ${implementationDigest})`,
     );
   }
+  const registered = findVariableInNode(implementation.body, 'registered');
+  const registeredStatement = registered?.parent?.parent;
+  const registeredValue =
+    registered?.initializer === undefined
+      ? undefined
+      : unwrapTransparentExpression(registered.initializer);
+  const addStatements = implementation.body.statements.filter((statement) => {
+    if (!ts.isExpressionStatement(statement)) return false;
+    const call = unwrapTransparentExpression(statement.expression);
+    return (
+      ts.isCallExpression(call) &&
+      ts.isIdentifier(call.expression) &&
+      call.expression.text === 'securityWeakSetAdd' &&
+      call.arguments.length === 2 &&
+      ts.isIdentifier(call.arguments[0]) &&
+      call.arguments[0].text === 'registeredDiagnosticRegistry' &&
+      ts.isIdentifier(call.arguments[1]) &&
+      call.arguments[1].text === 'registered'
+    );
+  });
   const returns = directReturnExpressions(implementation.body);
-  if (returns.length !== 1 || returns[0] === undefined) {
-    findings.push(`${rootDiagnosticDoor}: root must return one frozen registered diagnostic`);
-    return findings;
+  const returned = returns.length === 1 ? unwrapTransparentExpression(returns[0]) : undefined;
+  const registeredIndex = implementation.body.statements.indexOf(registeredStatement);
+  const addIndex =
+    addStatements.length === 1 ? implementation.body.statements.indexOf(addStatements[0]) : -1;
+  const returnStatement = implementation.body.statements.find(
+    (statement) =>
+      ts.isReturnStatement(statement) &&
+      statement.expression !== undefined &&
+      unwrapTransparentExpression(statement.expression) === returned,
+  );
+  const returnIndex = implementation.body.statements.indexOf(returnStatement);
+  if (
+    registered === undefined ||
+    !ts.isVariableDeclarationList(registered.parent) ||
+    (registered.parent.flags & ts.NodeFlags.Const) === 0 ||
+    registeredValue === undefined ||
+    !ts.isCallExpression(registeredValue) ||
+    !ts.isIdentifier(registeredValue.expression) ||
+    registeredValue.expression.text !== 'freezeSecurityValue' ||
+    registeredValue.arguments.length !== 1 ||
+    !ts.isIdentifier(registeredValue.arguments[0]) ||
+    registeredValue.arguments[0].text !== 'diagnostic' ||
+    addStatements.length !== 1 ||
+    returned === undefined ||
+    !ts.isIdentifier(returned) ||
+    returned.text !== 'registered' ||
+    registeredIndex < 0 ||
+    addIndex !== registeredIndex + 1 ||
+    returnIndex !== addIndex + 1 ||
+    !hasExactNamedImport(sourceFile, 'freezeSecurityValue') ||
+    !hasExactNamedImport(sourceFile, 'securityWeakSetAdd')
+  ) {
+    findings.push(
+      `${rootDiagnosticDoor}: root must freeze, privately enroll, and return the same exact diagnostic identity`,
+    );
   }
-  const value = unwrapTransparentExpression(returns[0]);
-  const exactFreezeImport = sourceFile.statements.some(
+  return findings;
+}
+
+function validateRegisteredDiagnosticProvenance(sourceFile, analysis) {
+  if (sourceFile === undefined) {
+    return [`${coreDiagnosticsPath}#registeredDiagnosticRegistry: provenance source is missing`];
+  }
+  const findings = [];
+  const registry = findTopLevelVariable(sourceFile, 'registeredDiagnosticRegistry');
+  const registryStatement = registry?.parent?.parent;
+  const registryInitializer =
+    registry?.initializer === undefined
+      ? undefined
+      : unwrapTransparentExpression(registry.initializer);
+  if (
+    registry === undefined ||
+    !ts.isVariableDeclarationList(registry.parent) ||
+    (registry.parent.flags & ts.NodeFlags.Const) === 0 ||
+    !ts.isVariableStatement(registryStatement) ||
+    hasExportModifier(registryStatement) ||
+    sourceFile.statements.some((statement) =>
+      explicitlyExportsName(statement, 'registeredDiagnosticRegistry'),
+    ) ||
+    registryInitializer === undefined ||
+    !ts.isCallExpression(registryInitializer) ||
+    !ts.isIdentifier(registryInitializer.expression) ||
+    registryInitializer.expression.text !== 'securityWeakSet' ||
+    registryInitializer.arguments.length !== 0 ||
+    !hasExactNamedImport(sourceFile, 'securityWeakSet')
+  ) {
+    findings.push(
+      `${coreDiagnosticsPath}#registeredDiagnosticRegistry: provenance registry must be a module-private captured WeakSet`,
+    );
+  }
+
+  const implementation = sourceFile.statements.find(
+    (statement) =>
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === 'createRegisteredDiagnostic' &&
+      statement.body !== undefined,
+  );
+  const guard = findTopLevelFunction(sourceFile, 'isRegisteredDiagnostic');
+  const assertion = findTopLevelFunction(sourceFile, 'assertRegisteredDiagnostic');
+  const derivation = findTopLevelFunction(sourceFile, 'deriveRegisteredDiagnostic');
+  const addCalls = namedCallExpressions(sourceFile, 'securityWeakSetAdd');
+  const hasCalls = namedCallExpressions(sourceFile, 'securityWeakSetHas');
+  if (
+    implementation === undefined ||
+    addCalls.length !== 1 ||
+    !nodeContains(implementation, addCalls[0])
+  ) {
+    findings.push(
+      `${rootDiagnosticDoor}: only the validating constructor may enroll diagnostic identity`,
+    );
+  }
+  if (
+    guard === undefined ||
+    hasCalls.length !== 1 ||
+    !nodeContains(guard, hasCalls[0]) ||
+    !hasExactNamedImport(sourceFile, 'securityWeakSetHas')
+  ) {
+    findings.push(
+      `${coreDiagnosticsPath}#isRegisteredDiagnostic: provenance checks must use the private captured WeakSet`,
+    );
+  }
+  for (const [name, declaration, expectedDigest] of [
+    ['isRegisteredDiagnostic', guard, expectedRegisteredDiagnosticGuardDigest],
+    ['assertRegisteredDiagnostic', assertion, expectedRegisteredDiagnosticAssertionDigest],
+    ['deriveRegisteredDiagnostic', derivation, expectedDerivedDiagnosticDoorDigest],
+  ]) {
+    const digest = sourceNodeDigest(declaration, sourceFile);
+    if (digest !== expectedDigest) {
+      findings.push(
+        `${coreDiagnosticsPath}#${name}: runtime provenance implementation drifted from its reviewed exact body (received ${digest})`,
+      );
+    }
+  }
+
+  const cliSource = analysis.sourceFiles.get('packages/cli/src/commands/build-export.ts');
+  const cliRehydration =
+    cliSource === undefined
+      ? undefined
+      : findTopLevelFunction(cliSource, 'rehydrateStaticExportCompileDiagnostic');
+  const cliDigest = sourceNodeDigest(cliRehydration, cliSource);
+  if (cliDigest !== expectedCliStaticExportDiagnosticRehydrationDoorDigest) {
+    findings.push(
+      `${cliStaticExportDiagnosticRehydrationDoor}: serialized diagnostic rehydration door drifted from its reviewed exact body (received ${cliDigest})`,
+    );
+  }
+  return findings;
+}
+
+function hasExactNamedImport(sourceFile, importedName) {
+  return sourceFile.statements.some(
     (statement) =>
       ts.isImportDeclaration(statement) &&
       ts.isStringLiteralLike(statement.moduleSpecifier) &&
@@ -3976,26 +4161,29 @@ function validateRootDiagnosticDoorDefinition(sourceFile) {
       statement.importClause?.namedBindings !== undefined &&
       ts.isNamedImports(statement.importClause.namedBindings) &&
       statement.importClause.namedBindings.elements.some(
-        (element) =>
-          element.name.text === 'freezeSecurityValue' && element.propertyName === undefined,
+        (element) => element.name.text === importedName && element.propertyName === undefined,
       ),
   );
-  if (
-    !(
-      exactFreezeImport &&
-      ts.isCallExpression(value) &&
-      ts.isIdentifier(value.expression) &&
-      value.expression.text === 'freezeSecurityValue' &&
-      value.arguments.length === 1 &&
-      ts.isIdentifier(value.arguments[0]) &&
-      value.arguments[0].text === 'diagnostic'
-    )
-  ) {
-    findings.push(
-      `${rootDiagnosticDoor}: returned diagnostics must be frozen by the exact runtime witness`,
-    );
-  }
-  return findings;
+}
+
+function namedCallExpressions(root, name) {
+  const calls = [];
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === name
+    ) {
+      calls.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return calls;
+}
+
+function nodeContains(owner, node) {
+  return node.getStart() >= owner.getStart() && node.getEnd() <= owner.getEnd();
 }
 
 function validateDiagnosticRegistryFreezeInitialization(sourceFile) {

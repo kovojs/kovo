@@ -26,7 +26,11 @@ import {
   compilerStringSplit,
   compilerStringToUpperCase,
 } from './compiler-security-intrinsics.js';
-import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticFor,
+  type CompilerDiagnostic,
+} from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import { attributeKebabCase, normalizeComponentFileName, replaceExtension } from './shared.js';
@@ -1211,11 +1215,10 @@ export function queryShapeFactDiagnostics(
     const base = diagnosticFor(fileName, 'KV240');
     compilerArrayAppend(
       diagnostics,
-      {
-        ...base,
+      contextualizeCompilerDiagnostic(base, {
         help: diagnosticDefinitions.KV240.help,
         message: `${base.message} query="${query}" sources=${sources}`,
-      },
+      }),
       'Compiler packages/compiler/src/types.ts collection',
     );
   });

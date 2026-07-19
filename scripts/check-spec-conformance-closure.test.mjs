@@ -39,6 +39,7 @@ function diagnosticDoorFiles(replacements = {}) {
     'packages/core/src/internal/diagnostics.ts',
     'packages/core/src/internal/diagnostic-registry.generated.ts',
     'packages/compiler/src/diagnostics.ts',
+    'packages/cli/src/commands/build-export.ts',
     ...Object.keys(replacements),
   ]);
   return [...paths].map((fileName) => ({
@@ -84,7 +85,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
       errorCodes: 70,
       findings: [],
       ok: true,
-      sites: 198,
+      sites: 197,
     });
   }, 180_000);
 
@@ -220,7 +221,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(198);
+    expect(result.sites).toBe(197);
     expect(result.findings.join('\n')).toContain(
       'production diagnostic emission site manifest drifted',
     );
@@ -239,7 +240,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
         text.replace(exact, replacement),
       );
       const result = evaluate({ productionFiles });
-      expect(result.sites).toBe(198);
+      expect(result.sites).toBe(197);
       expect(result.findings.join('\n')).toContain(
         'production diagnostic emission site manifest drifted',
       );
@@ -266,7 +267,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(198);
+    expect(result.sites).toBe(197);
     expect(result.findings.join('\n')).toContain(
       'reviewed validator registry and dispatch summary drifted',
     );
@@ -1766,11 +1767,10 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
   });
 
   it('C13 mutation: a wrapper-local root lookalike cannot satisfy the reviewed call graph', () => {
-    const productionFiles = replaceProductionFile('packages/compiler/src/diagnostics.ts', (text) =>
-      text.replace(
-        "import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';",
-        'function createRegisteredDiagnostic() { return undefined; }',
-      ),
+    const productionFiles = replaceProductionFile(
+      'packages/compiler/src/diagnostics.ts',
+      (text) =>
+        `${text.replace('  createRegisteredDiagnostic,\n', '')}\nfunction createRegisteredDiagnostic() { return undefined; }\n`,
     );
     const findings = evaluate({ productionFiles }).findings.join('\n');
     expect(findings).toContain('reviewed wrapper uses untrusted emitter');
@@ -1925,8 +1925,8 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
   it('C13 canary: reviewed dynamic wrappers cannot select a fixed generated constructor', () => {
     const fileName = 'packages/compiler/src/diagnostics.ts';
     let mutated = productionText(fileName).replace(
-      "import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';",
-      "import { createRegisteredDiagnostic, diagnosticConstructors } from '@kovojs/core/internal/diagnostics';",
+      '  createRegisteredDiagnostic,\n',
+      '  createRegisteredDiagnostic,\n  diagnosticConstructors,\n',
     );
     mutated = replaceFunctionDeclaration(
       mutated,
@@ -2081,7 +2081,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
       [
         'extra star source',
         (text) => `${text}\nexport * from '../fake.ts';\n`,
-        'bridge must contain only the two reviewed star re-exports',
+        'bridge must contain only the reviewed star re-exports',
       ],
     ];
     for (const [name, mutate, finding] of canaries) {
@@ -2256,14 +2256,63 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
   it('C13 canary: the root diagnostic door cannot return mutable identity fields', () => {
     const fileName = 'packages/core/src/diagnostics.ts';
     const mutated = productionText(fileName).replace(
-      'return freezeSecurityValue(diagnostic) as RegisteredDiagnostic<Code> & Fields;',
-      'return diagnostic as RegisteredDiagnostic<Code> & Fields;',
+      '  const registered = freezeSecurityValue(diagnostic);',
+      '  const registered = diagnostic;',
     );
     expect(
       validateDiagnosticEmissionDoorBindings(diagnosticDoorFiles({ [fileName]: mutated })).join(
         '\n',
       ),
-    ).toContain('returned diagnostics must be frozen');
+    ).toContain(
+      'root must freeze, privately enroll, and return the same exact diagnostic identity',
+    );
+  });
+
+  it('C13 canaries: diagnostic provenance remains private, identity-based, and constructor-owned', () => {
+    const fileName = 'packages/core/src/diagnostics.ts';
+    const canaries = [
+      [
+        'exported registry',
+        (text) =>
+          text.replace(
+            'const registeredDiagnosticRegistry = securityWeakSet<object>();',
+            'export const registeredDiagnosticRegistry = securityWeakSet<object>();',
+          ),
+        'provenance registry must be a module-private captured WeakSet',
+      ],
+      [
+        'removed enrollment',
+        (text) =>
+          text.replace('  securityWeakSetAdd(registeredDiagnosticRegistry, registered);\n', ''),
+        'only the validating constructor may enroll diagnostic identity',
+      ],
+      [
+        'structural guard',
+        (text) =>
+          text.replace(
+            '    securityWeakSetHas(registeredDiagnosticRegistry, value)',
+            "    'code' in value",
+          ),
+        'provenance checks must use the private captured WeakSet',
+      ],
+      [
+        'unvalidated derivation',
+        (text) =>
+          text.replace(
+            "  assertRegisteredDiagnostic(source, 'Registered diagnostic derivation source');\n",
+            '',
+          ),
+        'runtime provenance implementation drifted from its reviewed exact body',
+      ],
+    ];
+    for (const [name, mutate, finding] of canaries) {
+      expect(
+        validateDiagnosticEmissionDoorBindings(
+          diagnosticDoorFiles({ [fileName]: mutate(productionText(fileName)) }),
+        ).join('\n'),
+        name,
+      ).toContain(finding);
+    }
   });
 
   it('C13 canaries: the root diagnostic door stays bound to registry code and severity', () => {

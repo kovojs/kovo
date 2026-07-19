@@ -1,7 +1,11 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticFor,
+  type CompilerDiagnostic,
+} from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerCreateMap,
@@ -614,16 +618,18 @@ function streamTextTargetDiagnostic(
   attribute: JsxAttributeModel,
   target: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(
       options.fileName,
       'KV243',
       options.source,
       attribute.start,
       attribute.end - attribute.start,
     ),
-    message: `${diagnosticDefinitions.KV243.message} "${target}" is not a stream source id; expected "source:id", not a selector or unscoped id.`,
-  };
+    {
+      message: `${diagnosticDefinitions.KV243.message} "${target}" is not a stream source id; expected "source:id", not a selector or unscoped id.`,
+    },
+  );
 }
 
 type MutationInputFact = LocalMutationInputFact;
@@ -647,16 +653,18 @@ function repeatableMutationFormDiagnostic(
     return null;
   }
 
-  return {
-    ...diagnosticFor(
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(
       options.fileName,
       'KV238',
       options.source,
       binding.start,
       binding.end - binding.start,
     ),
-    message: `${diagnosticDefinitions.KV238.message} repeatable enhanced mutation form needs authored key identity`,
-  };
+    {
+      message: `${diagnosticDefinitions.KV238.message} repeatable enhanced mutation form needs authored key identity`,
+    },
+  );
 }
 
 function mutationFormFieldDiagnostics(
@@ -772,10 +780,12 @@ function formFieldDiagnostic(
   length: number,
   detail: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(options.fileName, 'KV242', options.source, start, length),
-    message: `${diagnosticDefinitions.KV242.message} ${detail}`,
-  };
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(options.fileName, 'KV242', options.source, start, length),
+    {
+      message: `${diagnosticDefinitions.KV242.message} ${detail}`,
+    },
+  );
 }
 
 function successfulFormControls(

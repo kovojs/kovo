@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { createRegisteredDiagnostic, diagnosticDefinitions } from './diagnostics.js';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+  isRegisteredDiagnostic,
+} from './diagnostics.js';
 import {
   diagnosticConstructors,
   diagnosticRegistry,
@@ -71,6 +76,34 @@ describe('generated diagnostic registry and constructors (SPEC §2/§11)', () =>
     expect(() => diagnosticConstructors.KV415({}, { detail: 'one', message: 'two' })).toThrow(
       /detail or message/u,
     );
+  });
+
+  it('records exact constructor identity and rejects structural or symbol-copied forgeries', () => {
+    const diagnostic = createRegisteredDiagnostic(
+      'KV415',
+      { fileName: '/app.ts' },
+      { includeHelp: true },
+    );
+    expect(isRegisteredDiagnostic(diagnostic)).toBe(true);
+    expect(() => assertRegisteredDiagnostic(diagnostic)).not.toThrow();
+
+    const structuralForgery = {
+      code: diagnostic.code,
+      fileName: diagnostic.fileName,
+      help: diagnostic.help,
+      message: diagnostic.message,
+      severity: diagnostic.severity,
+    };
+    expect(isRegisteredDiagnostic(structuralForgery)).toBe(false);
+    expect(() => assertRegisteredDiagnostic(structuralForgery, 'Compiler diagnostic')).toThrow(
+      'Compiler diagnostic must be created by createRegisteredDiagnostic.',
+    );
+
+    const copiedSymbols = Object.create(Object.getPrototypeOf(diagnostic));
+    Object.defineProperties(copiedSymbols, Object.getOwnPropertyDescriptors(diagnostic));
+    expect(Reflect.ownKeys(copiedSymbols)).toEqual(Reflect.ownKeys(diagnostic));
+    expect(isRegisteredDiagnostic(copiedSymbols)).toBe(false);
+    expect(() => assertRegisteredDiagnostic(copiedSymbols)).toThrow(/createRegisteredDiagnostic/u);
   });
 
   it('freezes generated registry and constructor authority', () => {

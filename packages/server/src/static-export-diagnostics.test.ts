@@ -4,6 +4,8 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { compileComponentModule } from '@kovojs/compiler';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createApp } from './app.js';
 import { route } from './route.js';
@@ -14,18 +16,19 @@ describe('server static export diagnostic boundary', () => {
   it('coerces only blocking compiler diagnostics into KV229-compatible export diagnostics', () => {
     expect(
       blockingStaticExportDiagnostics([
-        {
-          code: 'KV201',
-          fileName: 'src/cart.tsx',
-          help: 'Fixes: move the value into component/query state via ctx.',
-          message: 'Closure captures unserializable value.',
-          start: { column: 12, line: 4 },
-        },
-        {
-          code: 'KV210',
-          fileName: 'src/cart.tsx',
-          message: 'Anonymous handler; name it for stable identity.',
-        },
+        createRegisteredDiagnostic(
+          'KV201',
+          { fileName: 'src/cart.tsx', start: { column: 12, line: 4 } },
+          {
+            help: 'Fixes: move the value into component/query state via ctx.',
+            message: 'Closure captures unserializable value.',
+          },
+        ),
+        createRegisteredDiagnostic(
+          'KV210',
+          { fileName: 'src/cart.tsx' },
+          { message: 'Anonymous handler; name it for stable identity.' },
+        ),
       ]),
     ).toEqual([
       {
@@ -56,12 +59,11 @@ describe('server static export diagnostic boundary', () => {
       await expect(
         exportStaticApp(app, {
           diagnostics: [
-            {
-              code: 'KV201',
-              fileName: 'src/cart.tsx',
-              message: 'Closure captures unserializable value.',
-              start: { column: 12, line: 4 },
-            },
+            createRegisteredDiagnostic(
+              'KV201',
+              { fileName: 'src/cart.tsx', start: { column: 12, line: 4 } },
+              { message: 'Closure captures unserializable value.' },
+            ),
           ],
           outDir,
         }),
@@ -98,11 +100,11 @@ describe('server static export diagnostic boundary', () => {
         ],
       });
       const diagnostics = [
-        {
-          code: 'KV426' as const,
-          fileName: 'src/home.tsx',
-          message: 'trustedHtml() raw HTML requires a literal justification.',
-        },
+        createRegisteredDiagnostic(
+          'KV426',
+          { fileName: 'src/home.tsx' },
+          { message: 'trustedHtml() raw HTML requires a literal justification.' },
+        ),
       ];
 
       Array.prototype.filter = function (callback, thisArg) {
@@ -173,16 +175,44 @@ describe('server static export diagnostic boundary', () => {
     await expect(
       exportStaticApp(app, {
         diagnostics: [
-          {
-            code: 'KV210',
-            fileName: 'src/cart.tsx',
-            message: 'Anonymous handler; name it for stable identity.',
-          },
+          createRegisteredDiagnostic(
+            'KV210',
+            { fileName: 'src/cart.tsx' },
+            { message: 'Anonymous handler; name it for stable identity.' },
+          ),
         ],
       }),
     ).resolves.toMatchObject({
       artifacts: [{ path: '/index.html' }],
       diagnostics: [],
     });
+  });
+
+  it('rejects structurally forged compiler diagnostics before classification', () => {
+    expect(() =>
+      blockingStaticExportDiagnostics([
+        {
+          code: 'KV210',
+          fileName: 'src/forged.tsx',
+          message: 'forged',
+          severity: 'error',
+        } as never,
+      ]),
+    ).toThrow(/must be created by createRegisteredDiagnostic/u);
+  });
+
+  it('accepts constructor provenance transferred from compiler to the server gate', () => {
+    const result = compileComponentModule({
+      fileName: 'src/forged-ir.server.ts',
+      source: `
+export function renderSource() {
+  return '<main>hand-authored lowered output</main>';
+}
+`,
+    });
+
+    expect(blockingStaticExportDiagnostics(result.diagnostics)).toEqual([
+      expect.objectContaining({ code: 'KV235', routePath: 'src/forged-ir.server.ts' }),
+    ]);
   });
 });

@@ -1,6 +1,8 @@
 import type { DiagnosticCode } from '@kovojs/core';
 import {
+  assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
   diagnosticDefinitionText,
 } from '@kovojs/core/internal/diagnostics';
 import type { Node } from 'ts-morph';
@@ -78,6 +80,19 @@ export function drizzleDiagnosticWithoutSite(input: {
         ? undefined
         : { detail: input.detail }
       : { message: input.detail ? `${message} ${input.detail}` : message },
+  );
+}
+
+/** @internal Re-mint a constructor-owned diagnostic at its final derived source site. */
+export function relocateDrizzleDiagnostic(
+  diagnostic: TouchGraphDiagnostic,
+  site: string,
+): TouchGraphDiagnostic {
+  assertRegisteredDiagnostic(diagnostic, 'Drizzle diagnostic relocation source');
+  return deriveRegisteredDiagnostic(
+    diagnostic,
+    { site: nonEmptyDiagnosticSite(site) },
+    { message: diagnostic.message },
   );
 }
 

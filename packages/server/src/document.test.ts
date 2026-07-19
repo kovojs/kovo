@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { inlineKovoLoaderInstallerSource } from '@kovojs/browser/internal/inline-loader';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { cspSha256, renderContentSecurityPolicy, renderDefaultDocumentCsp } from './csp.js';
 import {
@@ -1018,14 +1019,14 @@ describe('server app shell document assembly', () => {
   it('renders dev diagnostic documents with code, severity, help, and source frame', () => {
     const response = renderDiagnosticDocument(
       [
-        {
-          code: 'KV201',
-          fileName: 'src/cart.tsx',
-          help: 'Fixes: move the value into ctx.\nUse data-p-* for serializable params.',
-          length: 6,
-          message: 'Closure captures <window>.',
-          start: { column: 17, line: 2 },
-        },
+        createRegisteredDiagnostic(
+          'KV201',
+          { fileName: 'src/cart.tsx', length: 6, start: { column: 17, line: 2 } },
+          {
+            help: 'Fixes: move the value into ctx.\nUse data-p-* for serializable params.',
+            message: 'Closure captures <window>.',
+          },
+        ),
       ],
       [
         'export function Cart() {',
@@ -1058,19 +1059,16 @@ describe('server app shell document assembly', () => {
   it('renders multiple diagnostics without source when no matching source is available', () => {
     const response = renderDiagnosticDocument({
       diagnostics: [
-        {
-          code: 'KV210',
-          fileName: 'src/cart.tsx',
-          message: 'Anonymous handler; name it for stable identity.',
-          severity: 'lint',
-        },
-        {
-          code: 'KV225',
-          fileName: 'src/detail.tsx',
-          message: 'JSX nesting violates the HTML content model.',
-          severity: 'error',
-          start: { column: 3, line: 1 },
-        },
+        createRegisteredDiagnostic(
+          'KV210',
+          { fileName: 'src/cart.tsx' },
+          { message: 'Anonymous handler; name it for stable identity.' },
+        ),
+        createRegisteredDiagnostic(
+          'KV225',
+          { fileName: 'src/detail.tsx', start: { column: 3, line: 1 } },
+          { message: 'JSX nesting violates the HTML content model.' },
+        ),
       ],
       source: {
         fileName: 'src/cart.tsx',
@@ -1104,10 +1102,7 @@ describe('server app shell document assembly', () => {
       } as typeof Array.prototype.map;
 
       body = renderDiagnosticDocument([
-        {
-          code: 'KV201',
-          message: 'Closure captures browser authority.',
-        },
+        createRegisteredDiagnostic('KV201', {}, { message: 'Closure captures browser authority.' }),
       ]).body;
     } finally {
       Array.prototype.map = originalMap;
@@ -1115,6 +1110,18 @@ describe('server app shell document assembly', () => {
 
     expect(body).not.toContain(payload);
     expect(body).toContain('<h2>Closure captures browser authority.</h2>');
+  });
+
+  it('rejects structurally forged diagnostics before rendering any authority fields', () => {
+    expect(() =>
+      renderDiagnosticDocument([
+        {
+          code: 'KV201',
+          message: 'forged compiler error',
+          severity: 'error',
+        } as never,
+      ]),
+    ).toThrow(/must be created by createRegisteredDiagnostic/u);
   });
 
   it('renders one error document title while preserving other static meta hints', () => {

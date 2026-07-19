@@ -6,6 +6,10 @@ import {
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { assertHtmlElementWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 import {
+  assertRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
+import {
   accessDecisionFor,
   assertUnambiguousAccessDeclaration,
   pinAccessDecision,
@@ -589,6 +593,7 @@ export function snapshotAppTask(source: AppTaskDeclaration, index = 0): AppTaskD
 /** Reconstruct one runtime-blocking diagnostic so app code cannot rewrite dispatch policy. */
 function snapshotAppDiagnostic(source: AppDiagnostic, index: number): AppDiagnostic {
   const label = `app.diagnostics[${index}]`;
+  assertRegisteredDiagnostic(source, label);
   const record = snapshotOwnDataRecord(source, label);
   if (
     typeof record.code !== 'string' ||
@@ -597,8 +602,7 @@ function snapshotAppDiagnostic(source: AppDiagnostic, index: number): AppDiagnos
     (record.help !== undefined && typeof record.help !== 'string') ||
     (record.length !== undefined &&
       (!nativeNumberIsSafeInteger(record.length) || record.length < 0)) ||
-    (record.severity !== undefined &&
-      record.severity !== 'error' &&
+    (record.severity !== 'error' &&
       record.severity !== 'warn' &&
       record.severity !== 'lint' &&
       record.severity !== 'notice')
@@ -617,7 +621,18 @@ function snapshotAppDiagnostic(source: AppDiagnostic, index: number): AppDiagnos
     }
     record.start = witnessFreeze(start);
   }
-  return witnessFreeze(record) as AppDiagnostic;
+  return deriveRegisteredDiagnostic(
+    source,
+    {
+      fileName: record.fileName,
+      ...(record.length === undefined ? {} : { length: record.length }),
+      ...(record.start === undefined ? {} : { start: record.start }),
+    },
+    {
+      ...(record.help === undefined ? {} : { help: record.help }),
+      message: record.message,
+    },
+  );
 }
 
 /**

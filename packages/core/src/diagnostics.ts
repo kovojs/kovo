@@ -5,6 +5,9 @@ import {
   securityHasOwn,
   securityObjectKeys,
   securityOwnArrayEntry,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
 } from '#security-witness-intrinsics';
 
 /** Severity tier of a diagnostic, from blocking `error` down to advisory `notice`. */
@@ -120,12 +123,23 @@ export interface RegisteredDiagnosticDefinition extends DiagnosticDefinition {
   enforcementClass: DiagnosticEnforcementClass;
 }
 
-/** @internal Reserved fields whose authority always comes from the diagnostic registry. */
+const registeredDiagnosticBrand: unique symbol = Symbol('kovo.registered-diagnostic');
+const registeredDiagnosticRegistry = securityWeakSet<object>();
+
+/**
+ * Constructor-authenticated Kovo diagnostic identity.
+ *
+ * The nominal property is an author-time guardrail. Runtime consumers still verify exact object
+ * identity through the framework-owned diagnostic registry before trusting or rendering a record
+ * (SPEC §2/§11).
+ */
 export interface RegisteredDiagnostic<Code extends DiagnosticCode = DiagnosticCode> {
+  /** Module-private nominal witness; runtime authority lives in registeredDiagnosticRegistry. */
+  readonly [registeredDiagnosticBrand]: true;
   code: Code;
   help?: string;
   message: string;
-  severity: (typeof diagnosticDefinitions)[Code]['severity'];
+  severity: DiagnosticSeverity;
 }
 
 /** @internal Message/help controls accepted by generated diagnostic constructors. */
@@ -265,6 +279,30 @@ function ownDiagnosticTextOption(
  */
 export function isDiagnosticCode(value: unknown): value is DiagnosticCode {
   return typeof value === 'string' && securityHasOwn(diagnosticDefinitions, value);
+}
+
+/**
+ * @internal Runtime provenance guard for structured diagnostics crossing collection/rendering
+ * boundaries. Structural equality, a cast, a clone, and a copied private-symbol property cannot
+ * enroll a value: only createRegisteredDiagnostic records exact object identity in the private
+ * registry (SPEC §2/§11).
+ */
+export function isRegisteredDiagnostic(value: unknown): value is RegisteredDiagnostic {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    securityWeakSetHas(registeredDiagnosticRegistry, value)
+  );
+}
+
+/** @internal Fail closed unless a value carries constructor-owned diagnostic provenance. */
+export function assertRegisteredDiagnostic(
+  value: unknown,
+  label = 'Kovo structured diagnostic',
+): asserts value is RegisteredDiagnostic {
+  if (!isRegisteredDiagnostic(value)) {
+    throw new TypeError(`${label} must be created by createRegisteredDiagnostic.`);
+  }
 }
 
 /** Compiler-owned diagnostics whose help must satisfy SPEC §5.2 teaching-error shape. */
@@ -1342,11 +1380,17 @@ export function createRegisteredDiagnostic<Code extends DiagnosticCode, Fields e
     throw new TypeError('Diagnostic message must be non-empty.');
   }
 
-  const diagnostic: RegisteredDiagnostic<Code> & Record<string, unknown> = {
+  const diagnostic = {
     code,
     message,
     severity: definition.severity,
-  };
+  } as Record<PropertyKey, unknown>;
+  securityDefineProperty(diagnostic, registeredDiagnosticBrand, {
+    configurable: false,
+    enumerable: false,
+    value: true,
+    writable: false,
+  });
   if (contextualHelp !== undefined && contextualHelp.length === 0) {
     throw new TypeError('Diagnostic help must be non-empty.');
   }
@@ -1389,9 +1433,27 @@ export function createRegisteredDiagnostic<Code extends DiagnosticCode, Fields e
     }
   }
 
+  const registered = freezeSecurityValue(diagnostic);
+  securityWeakSetAdd(registeredDiagnosticRegistry, registered);
+
   // The overload is backed by the reserved-field runtime checks above; the cast
-  // only retains the caller's already-validated own-data field types.
-  return freezeSecurityValue(diagnostic) as RegisteredDiagnostic<Code> & Fields;
+  // only retains the caller's already-validated own-data field types. Runtime
+  // provenance is the private WeakSet membership above, not the TypeScript brand.
+  return registered as RegisteredDiagnostic<Code> & Fields;
+}
+
+/**
+ * @internal Derive a new registered diagnostic from an already enrolled source diagnostic.
+ * This is the only supported transfer/remint door: exact source identity is checked against the
+ * module-private registry before code authority is forwarded to the validating constructor.
+ */
+export function deriveRegisteredDiagnostic<Code extends DiagnosticCode, Fields extends object>(
+  source: RegisteredDiagnostic<Code>,
+  fields: Fields & ReservedDiagnosticFields,
+  options: DiagnosticConstructionOptions = {},
+): RegisteredDiagnostic<Code> & Fields {
+  assertRegisteredDiagnostic(source, 'Registered diagnostic derivation source');
+  return createRegisteredDiagnostic(source.code, fields, options);
 }
 
 /** @internal Create one generated, code-specific diagnostic constructor. */
