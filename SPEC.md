@@ -143,6 +143,7 @@ Detailed moved-subsection map:
 | §5.2 Hard rules                                  | [spec/05-compiler.md](spec/05-compiler.md)               |
 | §5.2.1 Render-plan version token                 | [spec/05-compiler.md](spec/05-compiler.md)               |
 | §5.2.2 Prod render-equivalence gate              | [spec/05-compiler.md](spec/05-compiler.md)               |
+| §5.2.3 Build artifact provenance                 | [spec/05-compiler.md](spec/05-compiler.md)               |
 | §5.3 `kovo explain`                              | [spec/05-compiler.md](spec/05-compiler.md)               |
 | §6.1 The registries                              | [spec/06-type-system.md](spec/06-type-system.md)         |
 | §6.1.1 Package component prefixes                | [spec/06-type-system.md](spec/06-type-system.md)         |

@@ -62,6 +62,37 @@ The **render-plan version token** is a single opaque build-stable string that id
 
 The prod build is sound only if delta encoding reconstructs the dev full render. The gate, over the differential corpus (§5.2 rule 3): for every query and every change record, `apply_delta(base, render_prod(Δ)) ≡ render_dev(full)`, where `apply_delta` is the §9.1.1 deep-merge plus update plan and `base` is the prior full value. The gate MUST also assert token monotonicity: any corpus edit that changes a projected query shape or the update-plan grammar changes the §5.2.1 token. A prod build whose delta path fails this equivalence, or whose token fails to move on a shape change, fails the build (**KV416**).
 
+#### 5.2.3 Build artifact provenance (normative)
+
+Every successful `kovo build` MUST add a top-level `provenance` object to the emitted
+`dist/.kovo/graph.json`. The object has schema `kovo.artifact.provenance/v1` and contains exactly the
+path-independent inputs later certificates and advisories use to identify the framework posture:
+
+- `graphSchemaVersion` is the compiler-owned graph grammar identifier (`kovo.graph/v1` initially).
+  Any incompatible meaning or shape change in the graph moves this value.
+- `frameworkPackages` is the unique, ascending sequence of `{name, version}` pairs for resolved
+  `@kovojs/*` packages. Resolution starts from the executing `@kovojs/cli` package and the nearest app
+  `package.json` inside the lockfile root, follows declared Kovo dependencies recursively under Node's
+  actual resolution contexts, and retains simultaneous versions of one package as separate pairs.
+  App `dependencies`, `devDependencies`, optional dependencies, and peers seed the walk; resolved Kovo
+  packages contribute their production dependencies, optional dependencies, and peers. Missing
+  optional packages are absent; a missing required declared package fails the build.
+- `pnpmLock.contentHash` is `sha256:<lowercase-hex>` over the exact bytes of the nearest ancestor
+  `pnpm-lock.yaml`, with no newline, path, or text normalization. A production build with no such
+  lockfile fails before app or config evaluation.
+- `securityGuarantees` records schema `kovo.security.guarantees/v1` plus `canonicalHash`. The hash is
+  SHA-256 over UTF-8 canonical JSON of the fenced guarantee register in `SECURITY.md`: arrays retain
+  order; object keys sort by JavaScript/Unicode UTF-16 code-unit order at every depth; strings,
+  numbers, booleans, and null use ordinary JSON encoding; and the serialization contains no
+  whitespace. The executing CLI's package manifest embeds this identity, and the security-guarantee
+  gate MUST reject a digest that does not match the normative register before that CLI ships.
+
+The stamp contains no absolute paths, filesystem identities, wall-clock time, random values, or
+output-directory names. Capturing it before authored config/app evaluation and sorting every set-like
+field makes two no-op builds byte-identical; changing any listed input MUST change the emitted graph
+bytes. The stamp identifies the build inputs. It is not a signature and does not by itself prove that
+the artifact is safe or that the package contents match their version labels.
+
 ### 5.3 `kovo explain`
 
 The compiler's decision tree, on demand. Sub-commands (all output stable, diffable text — agents consume the same artifact humans read):

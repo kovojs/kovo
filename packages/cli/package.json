@@ -48,5 +48,11 @@
   },
   "devDependencies": {
     "vitest": "4.1.8"
+  },
+  "kovoBuildProvenance": {
+    "securityGuarantees": {
+      "schema": "kovo.security.guarantees/v1",
+      "canonicalHash": "sha256:5520ba2631adaa1b36f077f5f3ce7fc52b16b49f748856f586c0a5e445f9b7db"
+    }
   }
 }

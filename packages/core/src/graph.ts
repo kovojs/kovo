@@ -74,6 +74,29 @@ export interface TouchGraphEntry {
 /** @internal */
 export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 
+/** @internal One exact installed Kovo package version participating in a production build. */
+export interface KovoArtifactFrameworkPackage {
+  name: string;
+  version: string;
+}
+
+/**
+ * @internal Deterministic identity inputs stamped into a built `.kovo/graph.json` artifact
+ * (SPEC.md §5.2.3). This is build-owned evidence, never an app-authored trust assertion.
+ */
+export interface KovoArtifactProvenance {
+  frameworkPackages: readonly KovoArtifactFrameworkPackage[];
+  graphSchemaVersion: string;
+  pnpmLock: {
+    contentHash: string;
+  };
+  schema: 'kovo.artifact.provenance/v1';
+  securityGuarantees: {
+    canonicalHash: string;
+    schema: 'kovo.security.guarantees/v1';
+  };
+}
+
 /** @internal */
 export interface KovoCheckInput {
   access?: readonly AccessExplainFact[];
@@ -97,6 +120,7 @@ export interface KovoCheckInput {
   ownerDomains?: readonly OwnerDomainFact[];
   ownershipPosture?: readonly OwnershipPostureFact[];
   pages?: readonly PageExplain[];
+  provenance?: KovoArtifactProvenance;
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
   queryWriteReachability?: readonly QueryWriteReachabilityFact[];

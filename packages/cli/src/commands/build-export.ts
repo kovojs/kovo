@@ -119,6 +119,7 @@ import {
   stableText,
   stableValue,
 } from '../shared.js';
+import { resolveKovoArtifactProvenance } from '../artifact-provenance.js';
 import { findNearestFile, readJsonRecord } from '../tooling.js';
 import {
   kovoCommandBootSecurityDisposition,
@@ -566,6 +567,12 @@ export async function runBuildCommand(
     options = snapshotKovoBuildOptions(options);
     const invocationRoot = security.invocationCwd;
     const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
+    // SPEC §5.2.3: capture path-free artifact identity inputs before config or app evaluation.
+    // The resulting stamp identifies the exact lock bytes, shipped guarantee register, graph
+    // schema, and resolved Kovo package versions that were in force for this build.
+    const artifactProvenance = resolveKovoArtifactProvenance({
+      appModulePath: resolvedAppModulePath,
+    });
     // SPEC §6.6 rule 6: classify app-authored authority before config, plugins, or app evaluation
     // can mutate shared-realm prototypes. Runtime handler identity is joined after evaluation.
     const reachableSessionAuthorityFacts =
@@ -715,7 +722,7 @@ export async function runBuildCommand(
       serverHandlerSource: serverHandlerBuild.source,
       stylesheetSourceRoot: dirname(resolvedAppModulePath),
     });
-    writeKovoBuildGraphArtifact(neutralBuild, checkGraph);
+    writeKovoBuildGraphArtifact(neutralBuild, checkGraph, artifactProvenance);
     const presetToken =
       selectedPreset.name === 'cloudflare'
         ? cloudflare()
@@ -1159,11 +1166,16 @@ type SourceRoutePageFacts = Pick<CompileRouteModuleResult, 'routePageFacts'>;
 function writeKovoBuildGraphArtifact(
   neutralBuild: KovoNeutralBuild,
   graph: CoreGraph.KovoCheckInput,
+  provenance: CoreGraph.KovoArtifactProvenance,
 ): void {
-  // SPEC §5.3: the build-derived graph is a review/debug artifact, not just an
+  // SPEC §5.2.3/§5.3: the build-derived graph is a review/debug artifact, not just an
   // in-memory preflight input. Persist it in the neutral build metadata directory
-  // so `kovo explain ...` can discover it after an ordinary scaffold build.
-  writeFileSync(join(neutralBuild.outDir, 'graph.json'), `${stringifyBuildValue(graph, 2)}\n`);
+  // so `kovo explain ...` can discover it after an ordinary scaffold build. Provenance is
+  // build-owned and overwrites any untrusted graph field with the boot-time identity snapshot.
+  writeFileSync(
+    join(neutralBuild.outDir, 'graph.json'),
+    `${stringifyBuildValue({ ...graph, provenance }, 2)}\n`,
+  );
 }
 
 function buildCheckFailureOutput(output: string): string {

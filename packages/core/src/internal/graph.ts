@@ -22,6 +22,8 @@ export type {
   HandlerWriteSinkSurface,
   HandlerWriteSinkTargetProvenance,
   HandlerExplain,
+  KovoArtifactFrameworkPackage,
+  KovoArtifactProvenance,
   KovoCheckInput,
   KovoExplainInput,
   MassAssignmentFact,

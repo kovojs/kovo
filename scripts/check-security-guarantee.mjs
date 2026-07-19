@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -9,6 +10,7 @@ import { SECURITY_BUILD_PROOFS } from './security-test-build-gate.mjs';
 
 export const repoRoot = findRepoRoot();
 export const defaultGuaranteePath = 'SECURITY.md';
+export const defaultCliPackageManifestPath = 'packages/cli/package.json';
 export const defaultTcbManifestPath = 'security/TCB.md';
 export const guaranteeSchema = 'kovo.security.guarantees/v1';
 export const privateVulnerabilityReportUrl =
@@ -21,6 +23,7 @@ const advisoryStatuses = new Set(['open', 'resolved']);
 export function checkSecurityGuarantee(options = {}) {
   const root = options.repoRoot ?? repoRoot;
   const guaranteePath = options.guaranteePath ?? defaultGuaranteePath;
+  const cliPackageManifestPath = options.cliPackageManifestPath ?? defaultCliPackageManifestPath;
   const tcbManifestPath = options.tcbManifestPath ?? defaultTcbManifestPath;
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
@@ -38,6 +41,14 @@ export function checkSecurityGuarantee(options = {}) {
   findings.push(...validateSecurityReportingSection(guaranteeDocument, guaranteePath));
   findings.push(...validateRegisterShape(register, guaranteePath));
   if (findings.length > 0) return result(findings);
+  findings.push(
+    ...validateGuaranteeProvenanceIdentity({
+      cliPackageManifestPath,
+      exists,
+      readText,
+      register,
+    }),
+  );
 
   const manifest = loadTcbManifest({ manifestPath: tcbManifestPath, readText });
   const tcbEntries = new Map(manifest.entries.map((entry) => [entry.id, entry]));
@@ -147,6 +158,57 @@ export function checkSecurityGuarantee(options = {}) {
     (guarantee) => guarantee.state === 'current',
   ).length;
   return result(findings, currentGuaranteeCount);
+}
+
+/** SHA-256 over canonical UTF-8 JSON: sorted object keys, retained array order, no whitespace. */
+export function securityGuaranteeRegisterCanonicalHash(register) {
+  return `sha256:${createHash('sha256').update(canonicalJson(register), 'utf8').digest('hex')}`;
+}
+
+function validateGuaranteeProvenanceIdentity({
+  cliPackageManifestPath,
+  exists,
+  readText,
+  register,
+}) {
+  if (!exists(cliPackageManifestPath)) {
+    return [`${cliPackageManifestPath}: CLI provenance manifest is missing`];
+  }
+
+  let cliManifest;
+  try {
+    cliManifest = JSON.parse(readText(cliPackageManifestPath));
+  } catch {
+    return [`${cliPackageManifestPath}: CLI provenance manifest is not valid JSON`];
+  }
+  const identity = cliManifest?.kovoBuildProvenance?.securityGuarantees;
+  if (identity?.schema !== guaranteeSchema) {
+    return [
+      `${cliPackageManifestPath}: kovoBuildProvenance.securityGuarantees.schema must be ${guaranteeSchema}`,
+    ];
+  }
+  const expectedHash = securityGuaranteeRegisterCanonicalHash(register);
+  if (identity.canonicalHash !== expectedHash) {
+    return [
+      `${cliPackageManifestPath}: kovoBuildProvenance.securityGuarantees.canonicalHash must be ${expectedHash}`,
+    ];
+  }
+  return [];
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort(compareStrings)
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function compareStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 export function loadGuaranteeRegister({

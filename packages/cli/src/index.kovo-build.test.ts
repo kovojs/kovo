@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import {
   createServer as createHttpServer,
   type IncomingMessage,
@@ -158,6 +158,81 @@ describe('kovo build', () => {
     // four-way CI shard also runs the security-heavy build corpus, so retain per-test headroom for
     // the real artifact path instead of letting the generic 30 second timeout interrupt cleanup.
   }, 90_000);
+
+  it('emits byte-stable artifact provenance across two no-op production rebuilds', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-provenance-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const lockBytes = 'lockfileVersion: 9.0\n# artifact provenance fixture\n';
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        join(root, 'package.json'),
+        `${JSON.stringify({
+          dependencies: {
+            '@kovojs/browser': '0.2.0',
+            '@kovojs/server': '0.2.0',
+          },
+          name: 'kovo-artifact-provenance-fixture',
+          private: true,
+          type: 'module',
+        })}\n`,
+      );
+      writeFileSync(join(root, 'pnpm-lock.yaml'), lockBytes);
+      writeFileSync(appPath, appModuleSource(), 'utf8');
+      writeClientEntry(root);
+      writeRetentionProofConfig(root);
+
+      const build = async () => {
+        stdout.mockClear();
+        stderr.mockClear();
+        const exitCode = await withCwd(root, () =>
+          withEnv({ VERCEL: '1' }, () => mainAsync(['build', './app.mjs', '--out', './dist'])),
+        );
+        const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+        expect(exitCode, errorOutput).toBe(0);
+        return readFileSync(join(outDir, '.kovo/graph.json'), 'utf8');
+      };
+
+      const first = await build();
+      const graph = JSON.parse(first) as {
+        provenance?: {
+          frameworkPackages: readonly { name: string; version: string }[];
+          graphSchemaVersion: string;
+          pnpmLock: { contentHash: string };
+          schema: string;
+          securityGuarantees: { canonicalHash: string; schema: string };
+        };
+      };
+      expect(graph.provenance).toMatchObject({
+        frameworkPackages: expect.arrayContaining([
+          { name: '@kovojs/browser', version: '0.2.0' },
+          { name: '@kovojs/cli', version: '0.2.0' },
+          { name: '@kovojs/server', version: '0.2.0' },
+        ]),
+        graphSchemaVersion: 'kovo.graph/v1',
+        pnpmLock: {
+          contentHash: `sha256:${createHash('sha256').update(lockBytes).digest('hex')}`,
+        },
+        schema: 'kovo.artifact.provenance/v1',
+        securityGuarantees: {
+          canonicalHash: 'sha256:5520ba2631adaa1b36f077f5f3ce7fc52b16b49f748856f586c0a5e445f9b7db',
+          schema: 'kovo.security.guarantees/v1',
+        },
+      });
+      expect(JSON.stringify(graph.provenance)).not.toContain(root);
+      expect(await build()).toBe(first);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 180_000);
 
   it('serves referenced public assets and local stylesheet declarations from node static output', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-static-assets-'));

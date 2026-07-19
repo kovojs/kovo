@@ -236,6 +236,13 @@ export function linkStarterBuildDependencies(root: string): void {
   mkdirSync(join(nodeModules, '@types'), { recursive: true });
   mkdirSync(nodeModulesBin, { recursive: true });
 
+  // SPEC §5.2.3: symlink-mode fixtures bypass a package-manager install, so copy the workspace
+  // lock snapshot they actually resolve through. Packed/link-local modes produce their own lockfile.
+  const lockfilePath = join(root, 'pnpm-lock.yaml');
+  if (!existsSync(lockfilePath)) {
+    writeFileSync(lockfilePath, readFileSync(join(process.cwd(), 'pnpm-lock.yaml')));
+  }
+
   symlinkSync(join(resolveDependencyRoot('kovo'), 'src/bin.ts'), join(nodeModulesBin, 'kovo'));
   symlinkSync(join(resolveDependencyRoot('vite-plus'), 'bin/vp'), join(nodeModulesBin, 'vp'));
   symlinkSync(resolveDependencyRoot('@types/node'), join(nodeModules, '@types/node'));

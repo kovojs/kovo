@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   checkSecurityGuarantee,
+  defaultCliPackageManifestPath,
   isParanoidRuntimeProof,
+  loadGuaranteeRegister,
   privateVulnerabilityReportContactLine,
+  securityGuaranteeRegisterCanonicalHash,
 } from './check-security-guarantee.mjs';
 
 const manifestPath = 'security/TCB.md';
@@ -59,8 +62,23 @@ ${privateVulnerabilityReportContactLine}
 }
 
 function run(files, options = {}) {
+  const fixtureFiles = { ...files };
+  if (
+    Object.hasOwn(fixtureFiles, guaranteePath) &&
+    !Object.hasOwn(fixtureFiles, defaultCliPackageManifestPath)
+  ) {
+    const register = loadGuaranteeRegister({ text: fixtureFiles[guaranteePath] });
+    fixtureFiles[defaultCliPackageManifestPath] = JSON.stringify({
+      kovoBuildProvenance: {
+        securityGuarantees: {
+          canonicalHash: securityGuaranteeRegisterCanonicalHash(register),
+          schema: 'kovo.security.guarantees/v1',
+        },
+      },
+    });
+  }
   return checkSecurityGuarantee({
-    exists: (relativePath) => Object.hasOwn(files, relativePath),
+    exists: (relativePath) => Object.hasOwn(fixtureFiles, relativePath),
     proofEntries: [
       {
         claimId: 'runtime-secret-explicit-box-egress',
@@ -75,7 +93,7 @@ function run(files, options = {}) {
           'rolls back default mutation transactions and executes webhook mutation composition in the production build artifact',
       },
     ],
-    readText: (relativePath) => files[relativePath] ?? '',
+    readText: (relativePath) => fixtureFiles[relativePath] ?? '',
     repoRoot: '/fixture',
     ...options,
   });
@@ -98,6 +116,57 @@ describe('security guarantee gate', () => {
 
     expect(result.findings).toEqual([]);
     expect(result.summary).toContain('OK 1 security guarantee');
+  });
+
+  it('canonicalizes guarantee objects by key while retaining array order', () => {
+    const first = securityGuaranteeRegisterCanonicalHash({
+      array: ['first', 'second'],
+      nested: { a: 1, z: 2 },
+    });
+    expect(first).toBe(
+      'sha256:16fd239f376248d0b8774c1ab3e617ae566b31a154d8f96b0371b914dc78d913',
+    );
+    expect(
+      securityGuaranteeRegisterCanonicalHash({
+        nested: { z: 2, a: 1 },
+        array: ['first', 'second'],
+      }),
+    ).toBe(first);
+    expect(
+      securityGuaranteeRegisterCanonicalHash({
+        array: ['second', 'first'],
+        nested: { a: 1, z: 2 },
+      }),
+    ).not.toBe(first);
+  });
+
+  it('rejects a shipped CLI guarantee digest that does not match SECURITY.md', () => {
+    const result = run({
+      [defaultCliPackageManifestPath]: JSON.stringify({
+        kovoBuildProvenance: {
+          securityGuarantees: {
+            canonicalHash: `sha256:${'0'.repeat(64)}`,
+            schema: 'kovo.security.guarantees/v1',
+          },
+        },
+      }),
+      [guaranteePath]: securityRegister(),
+      [manifestPath]: tcbManifest([
+        {
+          classification: 'tcb',
+          file: 'packages/server/src/response-posture.ts',
+          id: 'server.response-posture.emit-to-wire',
+          kind: 'wire-emitter',
+          name: 'emitToWire',
+        },
+      ]),
+    });
+
+    expect(result.findings).toContainEqual(
+      expect.stringContaining(
+        `${defaultCliPackageManifestPath}: kovoBuildProvenance.securityGuarantees.canonicalHash must be sha256:`,
+      ),
+    );
   });
 
   it('requires the published threat model and non-goals', () => {
