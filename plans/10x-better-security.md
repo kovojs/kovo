@@ -68,6 +68,29 @@ path; abstract interpretation is the last static resort; runtime floors own unav
 facts. A “covers 90%” result is not a proof. Every prior closed verdict must remain closed under
 C13, and every residual must have a named door or explicit out-of-scope disposition.
 
+### Decision record and routing rule
+
+The three static options are complementary, not interchangeable. Kovo therefore adopts the
+layered design above rather than asking one mechanism to carry the entire proof:
+
+| Mechanism | What it proves best | Cost accepted | Boundary it must not cross |
+| --- | --- | --- | --- |
+| Capability-closed module graph | A reachable module cannot acquire an undeclared authority | Versioned package summaries, conditional-export closure, and graph maintenance | Possessing a reviewed capability does not prove that every use of it is safe |
+| Finite compiler-owned IR | The ordinary security-critical effect is one exact reviewed operation | A deliberately smaller authoring language and explicit exceptional doors | It does not model arbitrary JavaScript or admit hand-authored lowered IR |
+| Narrow abstract interpretation | Residual cross-helper data/provenance facts over normalized semantics | Budgets, conservative closed verdicts, and some false positives | It must not become a general JavaScript verifier or a new raw-AST pattern treadmill |
+
+Routing is mechanical: first remove unavailable authority with the module graph; then require each
+ordinary security-critical effect to lower to finite IR; then interpret only the residual normalized
+facts needed to connect reviewed roots and operations. Unsupported syntax, opaque calls, missing or
+stale summaries, contradictory facts, recursion, and budget exhaustion close. Facts that inherently
+depend on runtime resolution or carrier behavior go to the real sink floor rather than being guessed
+statically.
+
+Any new abstract-interpreter rule must name its normalized fact, transfer, resource budget, exact
+closed reason, C13 reject/green anchors, behavioral mutant, and the production predicate it replaces.
+A rule that merely accepts one more source spelling is not architectural progress and does not earn a
+Phase 2C/3C checkbox. Technical-preview compatibility is not a reason to retain a weaker door.
+
 ## Convergence measurements
 
 Measurements are versioned and reproducible:
@@ -319,6 +342,28 @@ Measurements are versioned and reproducible:
       emits KV406 for the nested owner read, and both families are enrolled in C13.
 - [ ] Delete each superseded syntax/name predicate only after its C13 and mutation evidence passes.
       Record the remaining P obligations and explain every survivor.
+- [ ] Maintain a Phase 3C survivor register until every residual has an owner, reachable-root set,
+      terminal family, C13 anchor, behavioral mutant, and explicit replacement/deletion condition.
+      Moving a predicate into another module does not remove it from P.
+  - Current survivor: raw imperative handlers outside compiler-owned JSX, owned by
+    `nonCompilerRawHandlerBodies` / `unregisteredSinksForSourceFile` / `dangerousCallSink`; roots are
+    direct `on*` property assignments and `addEventListener` callbacks; terminals are `Function`,
+    `eval`, `innerHTML`, `outerHTML`, string `setInterval`/`setTimeout`, `document.write`, and
+    `document.writeln`. Its `kv424-request-process` C13 anchor stays closed until those registration
+    forms lower through finite IR or this narrow floor receives an executable deletion mutant and
+    an explicit long-term disposition.
+  - Current survivor: request/process KV424 authority and reachability analysis, owned by
+    `requestProcessSinksForProject` and its root/callable scans. It retains raw filesystem, process,
+    network, worker, VM, dynamic-loader, database-driver, build-initializer, request-authority, and
+    opaque-call terminals not discharged by the exact compiler semantic carrier. Delete a family
+    only when capability closure or finite IR owns the same roots and its behavioral mutant proves
+    the replacement; otherwise retain it as P rather than calling all TASK B logic retired.
+  - Current survivor: specialized Drizzle KV406/OPP correspondence in
+    `static/session-provenance.ts`, `static/summaries.ts`, and the write analyzer. Exact carrier,
+    principal projection, predicate, operation, and target mapping stay specialized until the
+    normalized graph proves the same correspondence and behavioral mutants kill declaration,
+    carrier, alias, and predicate laundering. Actual Drizzle writes remain an engine/audit
+    responsibility whenever JavaScript predicate correctness is not structurally provable.
 - [ ] Run full classifier, compiler, integration, browser, build, package, performance, and memory
       gates before declaring the treadmill retired.
 
