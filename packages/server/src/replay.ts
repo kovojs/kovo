@@ -1,4 +1,4 @@
-import { isUntrusted, revealUntrusted } from '@kovojs/core';
+import { isUntrusted, revealUntrusted, type ScopedKey } from '@kovojs/core';
 import {
   hasFrameworkDurableReplayStoreReceipt,
   propagateFrameworkDurableReplayStoreReceipt,
@@ -88,8 +88,10 @@ export type MutationReplayResponse = ServerResponseBase<
 
 /**
  * Idempotent mutation/webhook replay store contract (SPEC §9.1): look up a prior
- * response by `(scope, idem)`, reserve a pending slot for an in-flight handler, and
- * record the committed response. Apps may inject a custom store for local development and tests;
+ * response by the runtime-witnessed `key`, reserve a pending slot for an in-flight handler, and
+ * record the committed response. `scope` and `idem` remain descriptive/token metadata only; the
+ * complete canonical ScopedKey frame is the namespace authority. Apps may inject a custom store
+ * for local development and tests;
  * deployed mutation declarations require the framework-authenticated durable store returned by
  * `createPostgresAppRuntimeDb().mutationReplayStore`. The framework provides
  * {@link createMemoryMutationReplayStore} as the default in-memory development implementation.
@@ -98,11 +100,13 @@ export interface MutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
 > {
   get(
+    key: ScopedKey,
     scope: string,
     idem: string,
     fingerprint?: string,
   ): Promise<Response | undefined> | Response | undefined;
   reserve(
+    key: ScopedKey,
     scope: string,
     idem: string,
     fingerprint?: string,
@@ -110,7 +114,13 @@ export interface MutationReplayStore<
     | MutationReplayReservation<Response>
     | Promise<MutationReplayReservation<Response> | undefined>
     | undefined;
-  set(scope: string, idem: string, response: Response, fingerprint?: string): Promise<void> | void;
+  set(
+    key: ScopedKey,
+    scope: string,
+    idem: string,
+    response: Response,
+    fingerprint?: string,
+  ): Promise<void> | void;
 }
 
 /** Pin a custom mutation replay store's method/receiver authority at app assembly. */
@@ -124,11 +134,14 @@ export function snapshotMutationReplayStore<Response extends MutationReplayRespo
   const reserve = stableMutationReplayMethod(source, 'reserve', true)!;
   const set = stableMutationReplayMethod(source, 'set', true)!;
   const snapshot: MutationReplayStore<Response> = witnessFreeze({
-    get(scope: string, idem: string, fingerprint?: string) {
-      return witnessReflectApply(get, source, [scope, idem, fingerprint]);
+    get(key: ScopedKey, scope: string, idem: string, fingerprint?: string) {
+      assertMutationReplayScopedKey(key, scope, idem);
+      return witnessReflectApply(get, source, [key, scope, idem, fingerprint]);
     },
-    async reserve(scope: string, idem: string, fingerprint?: string) {
+    async reserve(key: ScopedKey, scope: string, idem: string, fingerprint?: string) {
+      assertMutationReplayScopedKey(key, scope, idem);
       const reservation = await witnessReflectApply<unknown>(reserve, source, [
+        key,
         scope,
         idem,
         fingerprint,
@@ -137,8 +150,10 @@ export function snapshotMutationReplayStore<Response extends MutationReplayRespo
         ? undefined
         : snapshotMutationReplayReservation<Response>(reservation);
     },
-    set(scope: string, idem: string, response: Response, fingerprint?: string) {
+    set(key: ScopedKey, scope: string, idem: string, response: Response, fingerprint?: string) {
+      assertMutationReplayScopedKey(key, scope, idem);
       return witnessReflectApply<Promise<void> | void>(set, source, [
+        key,
         scope,
         idem,
         response,
@@ -337,10 +352,10 @@ export function createMemoryMutationReplayStore<
   };
 
   const store: MutationReplayStore<Response> = {
-    get(scope, idem, fingerprint) {
+    get(key, scope, idem, fingerprint) {
       sweepExpiredCommittedMutationReplays(responses, observeNow());
-      const key = mutationReplayScopedKeyFrame(scope, idem);
-      const record = witnessMapGet(responses, key);
+      const keyFrame = assertMutationReplayScopedKey(key, scope, idem).frame;
+      const record = witnessMapGet(responses, keyFrame);
       if (!record) return undefined;
 
       if (!fingerprintsMatch(record.fingerprint, fingerprint)) {
@@ -353,11 +368,11 @@ export function createMemoryMutationReplayStore<
 
       return cloneMutationReplayResponse(record.response);
     },
-    reserve(scope, idem, fingerprint) {
+    reserve(key, scope, idem, fingerprint) {
       const nowMs = observeNow();
       sweepExpiredCommittedMutationReplays(responses, nowMs);
-      const key = mutationReplayScopedKeyFrame(scope, idem);
-      const existing = witnessMapGet(responses, key);
+      const keyFrame = assertMutationReplayScopedKey(key, scope, idem).frame;
+      const existing = witnessMapGet(responses, keyFrame);
       if (existing) {
         if (!fingerprintsMatch(existing.fingerprint, fingerprint)) {
           throw new MutationReplayConflictError();
@@ -392,14 +407,14 @@ export function createMemoryMutationReplayStore<
         reject: rejectPending,
         resolve: resolvePending,
       };
-      witnessMapSet(responses, key, record);
+      witnessMapSet(responses, keyFrame, record);
       pendingCount += 1;
 
       return {
         abort() {
           // Release only this reservation generation. A stale abort must not remove or reject
           // a newer committed/pending generation installed under the same key.
-          const current = witnessMapGet(responses, key);
+          const current = witnessMapGet(responses, keyFrame);
           if (
             current !== record ||
             current.kind !== 'pending' ||
@@ -407,7 +422,7 @@ export function createMemoryMutationReplayStore<
           ) {
             return;
           }
-          witnessMapDelete(responses, key);
+          witnessMapDelete(responses, keyFrame);
           pendingCount -= 1;
           rejectPending(new MutationReplayAbortedError());
         },
@@ -415,7 +430,7 @@ export function createMemoryMutationReplayStore<
           // Generation fence (M7): an aborted/superseded reservation has lost ownership of this
           // key and may never overwrite newer truth. `set()` resolves its waiters when it
           // supersedes a pending record, so a stale commit can safely become a no-op.
-          const current = witnessMapGet(responses, key);
+          const current = witnessMapGet(responses, keyFrame);
           if (
             current !== record ||
             current.kind !== 'pending' ||
@@ -431,7 +446,7 @@ export function createMemoryMutationReplayStore<
           }
           const cloned = cloneMutationReplayResponse(response);
           pendingCount -= 1;
-          witnessMapSet(responses, key, {
+          witnessMapSet(responses, keyFrame, {
             expiresAtMs,
             fingerprint,
             kind: 'committed',
@@ -441,11 +456,11 @@ export function createMemoryMutationReplayStore<
         },
       };
     },
-    set(scope, idem, response, fingerprint) {
+    set(key, scope, idem, response, fingerprint) {
       const nowMs = observeNow();
       sweepExpiredCommittedMutationReplays(responses, nowMs);
-      const key = mutationReplayScopedKeyFrame(scope, idem);
-      const existing = witnessMapGet(responses, key);
+      const keyFrame = assertMutationReplayScopedKey(key, scope, idem).frame;
+      const existing = witnessMapGet(responses, keyFrame);
       if (existing && !fingerprintsMatch(existing.fingerprint, fingerprint)) {
         throw new MutationReplayConflictError();
       }
@@ -460,7 +475,7 @@ export function createMemoryMutationReplayStore<
       if (existing?.kind === 'pending') {
         pendingCount -= 1;
       }
-      witnessMapSet(responses, key, {
+      witnessMapSet(responses, keyFrame, {
         expiresAtMs,
         fingerprint,
         kind: 'committed',
@@ -637,7 +652,12 @@ export async function readMutationReplay<Response extends MutationReplayResponse
 ): Promise<Response | undefined> {
   if (!replay.idem || !replay.scope) return undefined;
   try {
-    const response = await replay.replayStore?.get(replay.scope, replay.idem, replay.fingerprint);
+    const response = await replay.replayStore?.get(
+      mutationReplayScopedKey(replay.scope, replay.idem),
+      replay.scope,
+      replay.idem,
+      replay.fingerprint,
+    );
     return response === undefined ? undefined : cloneMutationReplayResponse(response);
   } catch (error) {
     // A pending record this read joined was aborted (e.g. the in-flight request
@@ -666,11 +686,26 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
   | { kind: 'reserved'; reservation: MutationReplayReservation<Response> }
   | { kind: 'unavailable' }
 > {
+  const scope = replay.scope;
+  const idem = replay.idem;
+  const replayKey =
+    scope === null || idem === undefined ? undefined : mutationReplayScopedKey(scope, idem);
+  const replayStore =
+    replay.replayStore === undefined || replayKey === undefined
+      ? undefined
+      : {
+          get(_scope: string, _idem: string, fingerprint?: string) {
+            return replay.replayStore!.get(replayKey, scope!, idem!, fingerprint);
+          },
+          reserve(_scope: string, _idem: string, fingerprint?: string) {
+            return replay.replayStore!.reserve(replayKey, scope!, idem!, fingerprint);
+          },
+        };
   const result = await reserveReplayBeforeRun({
     fingerprint: replay.fingerprint,
-    idem: replay.idem,
-    scope: replay.scope,
-    store: replay.replayStore,
+    idem,
+    scope,
+    store: replayStore,
   });
   return result.kind === 'replayed'
     ? { kind: 'replayed', response: cloneMutationReplayResponse(result.response) }
@@ -838,10 +873,30 @@ function stableMutationReplayRequestValue(
   return before.value;
 }
 
-/** @internal Canonical physical identity for the volatile mutation replay store (SPEC §6.6/§10.3). */
-export function mutationReplayScopedKeyFrame(scope: string, idem: string): string {
+/** @internal Runtime-witnessed mutation replay identity (SPEC §6.6/§10.3). */
+export function mutationReplayScopedKey(scope: string, idem: string): ScopedKey {
   const identity = requestStateExactCompositeKey(scope, idem);
-  return scopedKeyFactsFor(frameworkScopedKey('mutation-replay', identity)).frame;
+  return frameworkScopedKey('mutation-replay', identity);
+}
+
+/** @internal Canonical physical identity for mutation replay stores (SPEC §6.6/§10.3). */
+export function mutationReplayScopedKeyFrame(scope: string, idem: string): string {
+  return scopedKeyFactsFor(mutationReplayScopedKey(scope, idem)).frame;
+}
+
+/** @internal Authenticate a replay key and bind its descriptive tuple to the witnessed frame. */
+export function assertMutationReplayScopedKey(key: unknown, scope: string, idem: string) {
+  const facts = scopedKeyFactsFor(key);
+  if (
+    facts.posture !== 'system' ||
+    facts.systemPosture !== 'mutation-replay' ||
+    facts.key !== requestStateExactCompositeKey(scope, idem)
+  ) {
+    throw new TypeError(
+      'KV450: mutation replay stores require the matching registered mutation-replay ScopedKey posture (SPEC §6.6/§10.3).',
+    );
+  }
+  return facts;
 }
 
 /**

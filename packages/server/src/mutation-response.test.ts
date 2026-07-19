@@ -1208,7 +1208,7 @@ describe('server mutation primitives', () => {
           },
         };
       },
-      set(_scope, _idem, response) {
+      set(_key, _scope, _idem, response) {
         replayed = response;
       },
     };

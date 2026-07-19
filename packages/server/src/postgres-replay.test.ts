@@ -18,11 +18,17 @@ import {
 } from './postgres-runtime.js';
 import {
   createPostgresCapabilityReplayStoreFromExecutor,
-  createPostgresMutationReplayStoreFromExecutor,
+  createPostgresMutationReplayStoreFromExecutor as createPostgresMutationReplayStoreBase,
   createPostgresWebhookReplayStoreFromExecutor,
   releasePostgresPendingReplayFromExecutor,
 } from './postgres-replay.js';
-import { MutationReplayConflictError } from './replay.js';
+import {
+  MutationReplayConflictError,
+  mutationReplayScopedKey,
+  mutationReplayScopedKeyFrame,
+  type MutationReplayResponse,
+  type MutationReplayStore,
+} from './replay.js';
 import { replayMutationWireBody } from './response.js';
 import type { DurableTaskStatusSqlExecutor } from './task-observability.js';
 import { createDurableTaskSqlExecutor } from './task-queue.js';
@@ -39,6 +45,26 @@ const WEBHOOK_TEST_OCCURRED_AT_MS = Date.now();
 function mutationIdem(label: string, issuedAtMs = MUTATION_TEST_ISSUED_AT_MS): string {
   const nonce = createHash('sha256').update(label).digest('hex').slice(0, 32);
   return `v1_${issuedAtMs}_${nonce}`;
+}
+
+function mutationReplayClient(store: MutationReplayStore) {
+  return {
+    get(scope: string, idem: string, fingerprint?: string) {
+      return store.get(mutationReplayScopedKey(scope, idem), scope, idem, fingerprint);
+    },
+    reserve(scope: string, idem: string, fingerprint?: string) {
+      return store.reserve(mutationReplayScopedKey(scope, idem), scope, idem, fingerprint);
+    },
+    set(scope: string, idem: string, response: MutationReplayResponse, fingerprint?: string) {
+      return store.set(mutationReplayScopedKey(scope, idem), scope, idem, response, fingerprint);
+    },
+  };
+}
+
+function createPostgresMutationReplayStoreFromExecutor(
+  ...args: Parameters<typeof createPostgresMutationReplayStoreBase>
+) {
+  return mutationReplayClient(createPostgresMutationReplayStoreBase(...args));
 }
 
 function webhookIdentity(label: string, occurredAtMs = WEBHOOK_TEST_OCCURRED_AT_MS) {
@@ -320,7 +346,7 @@ describe('Postgres durable replay stores', () => {
 
   it('releases mutation admission slots after commit instead of saturating for process lifetime', async () => {
     const { executor, runtime } = await runtimeAt(dataDir());
-    const store = runtime.mutationReplayStore;
+    const store = mutationReplayClient(runtime.mutationReplayStore);
 
     for (let index = 0; index < 1_001; index += 1) {
       const reservation = await store.reserve(
@@ -362,10 +388,11 @@ describe('Postgres durable replay stores', () => {
 
   it('caps 1000 pending mutation claims while keeping the webhook slot pool isolated', async () => {
     const { executor, runtime } = await runtimeAt(dataDir());
-    const attempts: Array<ReturnType<typeof runtime.mutationReplayStore.reserve>> = [];
+    const mutationStore = mutationReplayClient(runtime.mutationReplayStore);
+    const attempts: Array<ReturnType<typeof mutationStore.reserve>> = [];
     for (let index = 0; index < 1_000; index += 1) {
       attempts.push(
-        runtime.mutationReplayStore.reserve(
+        mutationStore.reserve(
           'public:pending-cap',
           mutationIdem(`pending-${index}`),
           `fingerprint-${index}`,
@@ -375,7 +402,7 @@ describe('Postgres durable replay stores', () => {
     const pending = await Promise.all(attempts);
     expect(pending.every((reservation) => reservation !== undefined)).toBe(true);
     await expect(
-      runtime.mutationReplayStore.reserve(
+      mutationStore.reserve(
         'public:pending-cap',
         mutationIdem('pending-over-capacity'),
         'fingerprint-over-capacity',
@@ -915,6 +942,13 @@ describe('Postgres durable replay stores', () => {
       values: [],
     });
     expect(rows.rows).toHaveLength(2);
+    const persistedFrame = (scope: string) =>
+      `sha256:${createHash('sha256')
+        .update(encodeURIComponent(mutationReplayScopedKeyFrame(scope, idem)))
+        .digest('base64')}`;
+    expect(new Set(rows.rows.map((row) => row.scope))).toEqual(
+      new Set([persistedFrame(nulScope), persistedFrame(literalScope)]),
+    );
     expect(
       rows.rows.every(
         (row) =>

@@ -6,7 +6,9 @@ import { snapshotAuditJustification } from './audit-justification.js';
 import type { CapabilityReplayStore } from './capability-url.js';
 import { parseMutationIdemToken } from './mutation-idem.js';
 import {
+  assertMutationReplayScopedKey,
   MutationReplayConflictError,
+  mutationReplayScopedKeyFrame,
   snapshotMutationReplayResponse,
   type MutationReplayReservation,
   type MutationReplayResponse,
@@ -122,10 +124,10 @@ const DEFAULT_MAX_RESPONSE_HEADER_BYTES = POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BY
 /**
  * Create a durable mutation replay store over a framework-system Postgres SQL executor.
  *
- * Reservation ownership is a unique `(surface, scope, idem)` row. Pending rows survive process
- * crashes, while committed rows remain through their exact token horizon and can be reclaimed only
- * behind the durable per-surface watermark. This prevents another replica from executing the
- * mutation across the settlement window or after database-clock rollback (SPEC §10.3).
+ * Reservation ownership is a unique `(surface, digest(scoped-key-frame), idem)` row. Pending rows
+ * survive process crashes, while committed rows remain through their exact token horizon and can be
+ * reclaimed only behind the durable per-surface watermark. This prevents another replica from
+ * executing the mutation across the settlement window or after database-clock rollback (SPEC §10.3).
  */
 /** @internal Construct only from a framework-owned system DB capability wrapper. */
 export function createPostgresMutationReplayStoreFromExecutor(
@@ -134,23 +136,32 @@ export function createPostgresMutationReplayStoreFromExecutor(
 ): MutationReplayStore {
   const runtime = createPostgresReplayRuntime(executor, options);
   const store: MutationReplayStore = {
-    async get(scope: string, idem: string, fingerprint?: string) {
+    async get(key, scope: string, idem: string, fingerprint?: string) {
+      const keyFrame = assertMutationReplayScopedKey(key, scope, idem).frame;
       const identity = mutationReplayIdentity(idem);
-      const row = await runtime.readSettled('mutation', scope, identity, fingerprint);
+      const row = await runtime.readSettled('mutation', keyFrame, identity, fingerprint);
       return row === undefined ? undefined : mutationResponseFromRow(row);
     },
-    async reserve(scope: string, idem: string, fingerprint?: string) {
+    async reserve(key, scope: string, idem: string, fingerprint?: string) {
+      const keyFrame = assertMutationReplayScopedKey(key, scope, idem).frame;
       const identity = mutationReplayIdentity(idem);
-      const generation = await runtime.reserve('mutation', scope, identity, fingerprint);
+      const generation = await runtime.reserve('mutation', keyFrame, identity, fingerprint);
       return generation === undefined
         ? undefined
-        : mutationReservation(runtime, scope, identity, fingerprint, generation);
+        : mutationReservation(runtime, keyFrame, identity, fingerprint, generation);
     },
-    async set(scope: string, idem: string, response: MutationReplayResponse, fingerprint?: string) {
+    async set(
+      key,
+      scope: string,
+      idem: string,
+      response: MutationReplayResponse,
+      fingerprint?: string,
+    ) {
+      const keyFrame = assertMutationReplayScopedKey(key, scope, idem).frame;
       const identity = mutationReplayIdentity(idem);
       await runtime.settleWithoutReservation(
         'mutation',
-        scope,
+        keyFrame,
         identity,
         fingerprint,
         mutationResponseForStorage(response),
@@ -340,7 +351,10 @@ export async function releasePostgresPendingReplayFromExecutor(
   }
   const scope = stableRequiredString(target, 'scope', 'Postgres replay release target');
   const idem = stableRequiredString(target, 'idem', 'Postgres replay release target');
-  const persisted = persistedReplayKey(scope, idem);
+  const persisted = persistedReplayKey(
+    surface === 'mutation' ? mutationReplayScopedKeyFrame(scope, idem) : scope,
+    idem,
+  );
   const generation = stableRequiredString(target, 'generation', 'Postgres replay release target');
   snapshotAuditJustification(
     stableRequiredString(options, 'justification', 'Postgres replay release options'),

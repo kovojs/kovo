@@ -255,17 +255,17 @@ async function assertSubmitTransition(
 
 function tracingReplayStore(source: MutationReplayStore, events: string[]): MutationReplayStore {
   return {
-    get(scope, idem, fingerprint) {
+    get(key, scope, idem, fingerprint) {
       events.push('get');
-      return source.get(scope, idem, fingerprint);
+      return source.get(key, scope, idem, fingerprint);
     },
-    reserve(scope, idem, fingerprint) {
+    reserve(key, scope, idem, fingerprint) {
       events.push('reserve');
-      return source.reserve(scope, idem, fingerprint);
+      return source.reserve(key, scope, idem, fingerprint);
     },
-    set(scope, idem, response: MutationReplayResponse, fingerprint) {
+    set(key, scope, idem, response: MutationReplayResponse, fingerprint) {
       events.push('set');
-      return source.set(scope, idem, response, fingerprint);
+      return source.set(key, scope, idem, response, fingerprint);
     },
   };
 }

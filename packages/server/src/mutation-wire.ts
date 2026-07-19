@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
-import type { JsonValue, Redirect } from '@kovojs/core';
+import type { JsonValue, Redirect, ScopedKey } from '@kovojs/core';
 import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
   frameworkSessionPrincipalPostureFromRequest,
@@ -395,6 +395,7 @@ export type MutationEndpointReplayResponse = BufferedMutationWireResponse | NoJs
  */
 export interface NoJsMutationReplayStore {
   get(
+    key: ScopedKey,
     scope: string,
     idem: string,
     fingerprint?: string,
@@ -403,6 +404,7 @@ export interface NoJsMutationReplayStore {
     | MutationEndpointReplayResponse
     | undefined;
   reserve(
+    key: ScopedKey,
     scope: string,
     idem: string,
     fingerprint?: string,

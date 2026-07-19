@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component, form } from '@kovojs/core';
+import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import { renderComponentMutationFailure } from './component-render.js';
 import {
@@ -282,11 +283,11 @@ describe('no-JS mutation responses', () => {
     // Build a simple in-memory NoJsMutationReplayStore using a Map.
     const store = new Map<string, import('./mutation-wire.js').NoJsMutationResponse>();
     const noJsReplayStore: import('./mutation-wire.js').NoJsMutationReplayStore = {
-      get(scope, idem) {
-        return store.get(`${scope}\0${idem}`);
+      get(key) {
+        return store.get(scopedKeyFactsFor(key).frame);
       },
-      reserve(scope, idem) {
-        const key = `${scope}\0${idem}`;
+      reserve(scopedKey) {
+        const key = scopedKeyFactsFor(scopedKey).frame;
         if (store.has(key)) return undefined;
         // Use a sentinel value to mark as reserved (pending).
         const reservation: import('./mutation-wire.js').NoJsMutationReplayReservation = {
@@ -429,11 +430,11 @@ describe('no-JS mutation responses', () => {
 
     const store = new Map<string, import('./mutation-wire.js').NoJsMutationResponse>();
     const noJsReplayStore: import('./mutation-wire.js').NoJsMutationReplayStore = {
-      get(scope, idem) {
-        return store.get(`${scope}\0${idem}`);
+      get(key) {
+        return store.get(scopedKeyFactsFor(key).frame);
       },
-      reserve(scope, idem) {
-        const key = `${scope}\0${idem}`;
+      reserve(scopedKey) {
+        const key = scopedKeyFactsFor(scopedKey).frame;
         if (store.has(key)) return undefined;
         const reservation: import('./mutation-wire.js').NoJsMutationReplayReservation = {
           abort() {

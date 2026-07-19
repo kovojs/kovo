@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { kovo } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterAll, describe, expect, it } from 'vitest';
+import type { ScopedKey } from '@kovojs/core';
 
 import type { MutationReplayResponse } from './replay.js';
 import type { WebhookReplayIdentity, WebhookWireResponse } from './webhook.js';
@@ -56,18 +57,18 @@ function declaredMutation() {
 function structuralMutationReplayStore() {
   const responses = new Map<string, MutationReplayResponse>();
   return {
-    get(scope: string, identity: WebhookReplayIdentity) {
-      return responses.get(`${scope}\u0000${identity.key}`);
+    get(_key: ScopedKey, scope: string, idem: string) {
+      return responses.get(`${scope}\u0000${idem}`);
     },
-    reserve(scope: string, identity: WebhookReplayIdentity) {
-      const key = `${scope}\u0000${identity.key}`;
+    reserve(_key: ScopedKey, scope: string, idem: string) {
+      const key = `${scope}\u0000${idem}`;
       return {
         commit(response: MutationReplayResponse) {
           responses.set(key, response);
         },
       };
     },
-    set(scope: string, idem: string, response: MutationReplayResponse) {
+    set(_key: ScopedKey, scope: string, idem: string, response: MutationReplayResponse) {
       responses.set(`${scope}\u0000${idem}`, response);
     },
     [Symbol.for('kovo.durable-replay-store')]: true,

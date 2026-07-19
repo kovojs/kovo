@@ -14,7 +14,11 @@ import { MUTATION_IDEM_MAX_AGE_MS } from './mutation-idem.js';
 import { renderMutationEndpointResponse, renderMutationResponse } from './mutation.js';
 import { noJsMutationReplayPolicy } from './mutation/replay-policy.js';
 import type { MutationWireRequest, NoJsMutationRequest } from './mutation-wire.js';
-import { createMemoryMutationReplayStore, MutationReplayAbortedError } from './replay.js';
+import {
+  createMemoryMutationReplayStore,
+  MutationReplayAbortedError,
+  mutationReplayScopedKey,
+} from './replay.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
@@ -50,31 +54,34 @@ describe('memory mutation replay clock rollback', () => {
     const store = createMemoryMutationReplayStore({ maxEntries: 1 });
     const expiresAtMs = clock.nowMs + 100;
     const idem = expiringIdem(expiresAtMs, '12');
+    const key = mutationReplayScopedKey('scope', idem);
 
-    store.set('scope', idem, settledResponse, 'fingerprint');
-    expect(store.get('scope', idem, 'fingerprint')).toEqual(settledResponse);
+    store.set(key, 'scope', idem, settledResponse, 'fingerprint');
+    expect(store.get(key, 'scope', idem, 'fingerprint')).toEqual(settledResponse);
 
     clock.nowMs = expiresAtMs;
-    expect(store.get('scope', idem, 'fingerprint')).toBeUndefined();
+    expect(store.get(key, 'scope', idem, 'fingerprint')).toBeUndefined();
 
     clock.nowMs = expiresAtMs - 50;
-    expect(store.reserve('scope', idem, 'fingerprint')).toBeUndefined();
-    expect(() => store.set('scope', idem, settledResponse, 'fingerprint')).toThrow(
+    expect(store.reserve(key, 'scope', idem, 'fingerprint')).toBeUndefined();
+    expect(() => store.set(key, 'scope', idem, settledResponse, 'fingerprint')).toThrow(
       /expired before replay settlement/u,
     );
 
     const pendingExpiresAtMs = expiresAtMs + 200;
     const pendingIdem = expiringIdem(pendingExpiresAtMs, '34');
-    const reservation = store.reserve('scope', pendingIdem, 'fingerprint');
+    const pendingKey = mutationReplayScopedKey('scope', pendingIdem);
+    const reservation = store.reserve(pendingKey, 'scope', pendingIdem, 'fingerprint');
     expect(reservation).toBeDefined();
 
     clock.nowMs = pendingExpiresAtMs;
     expect(() => reservation?.commit(settledResponse)).toThrow(/expired before replay settlement/u);
-    expect(store.get('scope', pendingIdem, 'fingerprint')).toBeInstanceOf(Promise);
+    expect(store.get(pendingKey, 'scope', pendingIdem, 'fingerprint')).toBeInstanceOf(Promise);
 
     const distinctIdem = expiringIdem(pendingExpiresAtMs + 100, '56');
-    expect(store.get('scope', distinctIdem, 'fingerprint')).toBeUndefined();
-    expect(store.reserve('scope', distinctIdem, 'fingerprint')).toBeUndefined();
+    const distinctKey = mutationReplayScopedKey('scope', distinctIdem);
+    expect(store.get(distinctKey, 'scope', distinctIdem, 'fingerprint')).toBeUndefined();
+    expect(store.reserve(distinctKey, 'scope', distinctIdem, 'fingerprint')).toBeUndefined();
   });
 });
 

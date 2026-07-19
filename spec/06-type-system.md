@@ -613,8 +613,9 @@ bounded canonical `(scope, idem)` subframe as its app-key beyond 1,024 code unit
 posture inherits that composite-key exception.
 
 The public TypeScript type is ergonomics, not the proof. A module-private runtime witness owns the
-frame and exact posture facts; storage, signed-URL, stored-file-response, and durable-task queue doors
-MUST authenticate that witness before reading any fields or deriving a namespace. Bare strings,
+frame and exact posture facts; storage, signed-URL, stored-file-response, durable-task queue,
+mutation-replay, and bounded rate-limit doors MUST authenticate that witness before reading any
+fields or deriving a namespace. Bare strings,
 casts, object literals, copied properties, proxies, malformed/non-canonical persisted frames, and
 unregistered system postures fail **KV450**. A validated key remains opaque to app code; framework
 internals may restore a persisted frame only through the same canonical parser and finite-posture

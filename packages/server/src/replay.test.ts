@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { untrusted } from '@kovojs/core';
+import { publicScopedKey, untrusted } from '@kovojs/core';
 import { restoreScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import { registerFrameworkSessionPrincipalSnapshot } from './auth-principal.js';
@@ -20,9 +20,11 @@ import {
 import {
   canonicalRequestFingerprint,
   createMemoryMutationReplayStore,
+  mutationReplayScopedKey,
   mutationReplayContext,
   mutationReplayScopedKeyFrame,
   readMutationReplay,
+  snapshotMutationReplayStore,
   type MutationReplayResponse,
   type MutationReplayStore,
 } from './replay.js';
@@ -39,6 +41,34 @@ const replayTestIssuedAt = Date.now();
 function replayIdem(label: string): string {
   const nonce = createHash('sha256').update(label).digest('hex').slice(0, 32);
   return `v1_${replayTestIssuedAt}_${nonce}`;
+}
+
+function replayGet<Response extends MutationReplayResponse>(
+  store: MutationReplayStore<Response>,
+  scope: string,
+  idem: string,
+  fingerprint?: string,
+) {
+  return store.get(mutationReplayScopedKey(scope, idem), scope, idem, fingerprint);
+}
+
+function replayReserve<Response extends MutationReplayResponse>(
+  store: MutationReplayStore<Response>,
+  scope: string,
+  idem: string,
+  fingerprint?: string,
+) {
+  return store.reserve(mutationReplayScopedKey(scope, idem), scope, idem, fingerprint);
+}
+
+function replaySet<Response extends MutationReplayResponse>(
+  store: MutationReplayStore<Response>,
+  scope: string,
+  idem: string,
+  response: Response,
+  fingerprint?: string,
+) {
+  return store.set(mutationReplayScopedKey(scope, idem), scope, idem, response, fingerprint);
 }
 
 function withReplayTestBuildToken<T extends { buildToken?: string }>(
@@ -76,13 +106,13 @@ function createDurableMutationReplayStore(): MutationReplayStore {
     string,
     { committed?: MutationReplayResponse; fingerprint: string | undefined }
   >();
-  const keyFor = (scope: string, idem: string) => `${scope.length}:${scope}${idem.length}:${idem}`;
+  const keyFor = (key: Parameters<MutationReplayStore['get']>[0]) => scopedKeyFactsFor(key).frame;
   return {
-    get(scope, idem) {
-      return rows.get(keyFor(scope, idem))?.committed;
+    get(key) {
+      return rows.get(keyFor(key))?.committed;
     },
-    reserve(scope, idem, fingerprint) {
-      const key = keyFor(scope, idem);
+    reserve(scopedKey, _scope, _idem, fingerprint) {
+      const key = keyFor(scopedKey);
       if (rows.has(key)) return undefined;
       const row: { committed?: MutationReplayResponse; fingerprint: string | undefined } = {
         fingerprint,
@@ -97,8 +127,8 @@ function createDurableMutationReplayStore(): MutationReplayStore {
         },
       };
     },
-    set(scope, idem, response, fingerprint) {
-      rows.set(keyFor(scope, idem), { committed: response, fingerprint });
+    set(key, _scope, _idem, response, fingerprint) {
+      rows.set(keyFor(key), { committed: response, fingerprint });
     },
   };
 }
@@ -148,8 +178,8 @@ describe('server mutation replay store', () => {
       status: 303 as const,
     });
 
-    replayStore.set('session-a', 'idem_redirect', source);
-    const replayed = replayStore.get('session-a', 'idem_redirect');
+    replaySet(replayStore, 'session-a', 'idem_redirect', source);
+    const replayed = replayGet(replayStore, 'session-a', 'idem_redirect');
 
     if (replayed === undefined) throw new Error('memory replay did not retain redirect response');
     expect(replayed).not.toBe(source);
@@ -175,8 +205,8 @@ describe('server mutation replay store', () => {
     });
     source.headers.Location = 'https://evil.example/phish';
 
-    replayStore.set('session-a', 'idem_mutated_redirect', source);
-    const replayed = replayStore.get('session-a', 'idem_mutated_redirect');
+    replaySet(replayStore, 'session-a', 'idem_mutated_redirect', source);
+    const replayed = replayGet(replayStore, 'session-a', 'idem_mutated_redirect');
     if (replayed === undefined) throw new Error('memory replay did not retain redirect response');
     expect(isBlessedRedirectResponse(replayed)).toBe(true);
     expect(replayed.headers.Location).toBe('/');
@@ -189,8 +219,8 @@ describe('server mutation replay store', () => {
       headers: { Location: '/looks-safe-but-has-no-private-witness' },
       status: 303,
     };
-    replayStore.set('session-a', 'idem_durable_lookalike', durableLookalike);
-    const clonedLookalike = replayStore.get('session-a', 'idem_durable_lookalike');
+    replaySet(replayStore, 'session-a', 'idem_durable_lookalike', durableLookalike);
+    const clonedLookalike = replayGet(replayStore, 'session-a', 'idem_durable_lookalike');
     if (clonedLookalike === undefined) {
       throw new Error('memory replay did not retain durable-store lookalike');
     }
@@ -236,9 +266,11 @@ describe('server mutation replay store', () => {
       headers: {},
       status: 200,
     }) as MutationReplayResponse;
-    expect(() => replayStore.set('scope', 'inherited', inherited)).toThrow(/body must be an own/u);
+    expect(() => replaySet(replayStore, 'scope', 'inherited', inherited)).toThrow(
+      /body must be an own/u,
+    );
     expect(() =>
-      replayStore.set('scope', 'invalid-status', {
+      replaySet(replayStore, 'scope', 'invalid-status', {
         body: frameworkWireBody('invalid'),
         headers: {},
         status: 201 as MutationReplayResponse['status'],
@@ -259,15 +291,17 @@ describe('server mutation replay store', () => {
       status: 200,
     } as const;
 
-    replayStore.set('session-a', 'idem_01', first);
-    expect(() => replayStore.set('session-a', 'idem_02', second)).toThrow(/capacity|saturated/u);
-    expect(replayStore.reserve('session-a', 'idem_02')).toBeUndefined();
-    expect(replayStore.get('session-a', 'idem_01')).toEqual(first);
-    expect(replayStore.get('session-a', 'idem_02')).toBeUndefined();
+    replaySet(replayStore, 'session-a', 'idem_01', first);
+    expect(() => replaySet(replayStore, 'session-a', 'idem_02', second)).toThrow(
+      /capacity|saturated/u,
+    );
+    expect(replayReserve(replayStore, 'session-a', 'idem_02')).toBeUndefined();
+    expect(replayGet(replayStore, 'session-a', 'idem_01')).toEqual(first);
+    expect(replayGet(replayStore, 'session-a', 'idem_02')).toBeUndefined();
 
     await new Promise((resolve) => setTimeout(resolve, 15));
-    expect(replayStore.get('session-a', 'idem_01')).toEqual(first);
-    expect(replayStore.reserve('session-a', 'idem_02')).toBeUndefined();
+    expect(replayGet(replayStore, 'session-a', 'idem_01')).toEqual(first);
+    expect(replayReserve(replayStore, 'session-a', 'idem_02')).toBeUndefined();
   });
 
   it('M7: pending and committed replay truth outlive the legacy ttl hint', async () => {
@@ -276,59 +310,59 @@ describe('server mutation replay store', () => {
       maxPending: 1,
       ttlMs: 10,
     });
-    const reservation = replayStore.reserve('scope', 'idem', 'fingerprint');
+    const reservation = replayReserve(replayStore, 'scope', 'idem', 'fingerprint');
     expect(reservation).toBeDefined();
-    const joined = replayStore.get('scope', 'idem', 'fingerprint');
+    const joined = replayGet(replayStore, 'scope', 'idem', 'fingerprint');
     expect(joined).toBeInstanceOf(Promise);
 
     await new Promise((resolve) => setTimeout(resolve, 15));
     // The in-flight generation neither expires nor frees maxPending capacity.
-    expect(replayStore.reserve('scope', 'idem', 'fingerprint')).toBeUndefined();
-    expect(replayStore.reserve('scope', 'other', 'fingerprint')).toBeUndefined();
+    expect(replayReserve(replayStore, 'scope', 'idem', 'fingerprint')).toBeUndefined();
+    expect(replayReserve(replayStore, 'scope', 'other', 'fingerprint')).toBeUndefined();
 
     const response = { body: 'settled', headers: {}, status: 200 } as const;
     reservation!.commit(response);
     await expect(joined).resolves.toEqual(response);
-    expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(response);
+    expect(replayGet(replayStore, 'scope', 'idem', 'fingerprint')).toEqual(response);
 
     await new Promise((resolve) => setTimeout(resolve, 15));
-    expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(response);
-    expect(replayStore.reserve('scope', 'other', 'fingerprint')).toBeUndefined();
+    expect(replayGet(replayStore, 'scope', 'idem', 'fingerprint')).toEqual(response);
+    expect(replayReserve(replayStore, 'scope', 'other', 'fingerprint')).toBeUndefined();
   });
 
   it('M7: a superseded reservation commit is generation-fenced from newer truth', async () => {
     const replayStore = createMemoryMutationReplayStore({ ttlMs: 10 });
-    const stale = replayStore.reserve('scope', 'idem', 'fingerprint');
+    const stale = replayReserve(replayStore, 'scope', 'idem', 'fingerprint');
     expect(stale).toBeDefined();
-    const joined = replayStore.get('scope', 'idem', 'fingerprint');
+    const joined = replayGet(replayStore, 'scope', 'idem', 'fingerprint');
 
     const newer = { body: 'newer', headers: {}, status: 200 } as const;
-    replayStore.set('scope', 'idem', newer, 'fingerprint');
+    replaySet(replayStore, 'scope', 'idem', newer, 'fingerprint');
     await expect(joined).resolves.toEqual(newer);
 
     stale!.commit({ body: 'stale', headers: {}, status: 200 });
-    expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(newer);
+    expect(replayGet(replayStore, 'scope', 'idem', 'fingerprint')).toEqual(newer);
   });
 
   it('M7: an aborted old generation cannot overwrite a replacement reservation', () => {
     const replayStore = createMemoryMutationReplayStore();
-    const old = replayStore.reserve('scope', 'idem', 'fingerprint');
+    const old = replayReserve(replayStore, 'scope', 'idem', 'fingerprint');
     expect(old).toBeDefined();
     old!.abort?.();
 
-    const replacement = replayStore.reserve('scope', 'idem', 'fingerprint');
+    const replacement = replayReserve(replayStore, 'scope', 'idem', 'fingerprint');
     expect(replacement).toBeDefined();
     old!.commit({ body: 'old', headers: {}, status: 200 });
     const newer = { body: 'replacement', headers: {}, status: 200 } as const;
     replacement!.commit(newer);
 
-    expect(replayStore.get('scope', 'idem', 'fingerprint')).toEqual(newer);
+    expect(replayGet(replayStore, 'scope', 'idem', 'fingerprint')).toEqual(newer);
   });
 
   it('keeps committed replay truth under selective Map.get poisoning', () => {
     const replayStore = createMemoryMutationReplayStore({ ttlMs: 60_000 });
     const response = { body: 'committed', headers: {}, status: 200 } as const;
-    replayStore.set('scope', 'idem', response, 'fingerprint');
+    replaySet(replayStore, 'scope', 'idem', response, 'fingerprint');
 
     const originalMapGet = Map.prototype.get;
     let duplicateReservation: ReturnType<typeof replayStore.reserve> = undefined;
@@ -340,8 +374,8 @@ describe('server mutation replay store', () => {
         }
         return originalMapGet.call(this, key);
       };
-      duplicateReservation = replayStore.reserve('scope', 'idem', 'fingerprint');
-      replayed = replayStore.get('scope', 'idem', 'fingerprint');
+      duplicateReservation = replayReserve(replayStore, 'scope', 'idem', 'fingerprint');
+      replayed = replayGet(replayStore, 'scope', 'idem', 'fingerprint');
     } finally {
       Map.prototype.get = originalMapGet;
     }
@@ -353,15 +387,15 @@ describe('server mutation replay store', () => {
   it('does not let a late Date.now advance expire committed replay truth', () => {
     const replayStore = createMemoryMutationReplayStore({ ttlMs: 60_000 });
     const response = { body: 'committed', headers: {}, status: 200 } as const;
-    replayStore.set('scope', 'idem', response, 'fingerprint');
+    replaySet(replayStore, 'scope', 'idem', response, 'fingerprint');
 
     const originalDateNow = Date.now;
     let replayed: ReturnType<typeof replayStore.get> = undefined;
     let duplicateReservation: ReturnType<typeof replayStore.reserve> = undefined;
     try {
       Date.now = () => originalDateNow() + 365 * 24 * 60 * 60_000;
-      replayed = replayStore.get('scope', 'idem', 'fingerprint');
-      duplicateReservation = replayStore.reserve('scope', 'idem', 'fingerprint');
+      replayed = replayGet(replayStore, 'scope', 'idem', 'fingerprint');
+      duplicateReservation = replayReserve(replayStore, 'scope', 'idem', 'fingerprint');
     } finally {
       Date.now = originalDateNow;
     }
@@ -375,11 +409,11 @@ describe('server mutation replay store', () => {
     const first = { body: 'first', headers: {}, status: 200 } as const;
     const second = { body: 'second', headers: {}, status: 200 } as const;
 
-    replayStore.set('scope\0idem', 'tail', first);
-    replayStore.set('scope', 'idem\0tail', second);
+    replaySet(replayStore, 'scope\0idem', 'tail', first);
+    replaySet(replayStore, 'scope', 'idem\0tail', second);
 
-    expect(replayStore.get('scope\0idem', 'tail')).toEqual(first);
-    expect(replayStore.get('scope', 'idem\0tail')).toEqual(second);
+    expect(replayGet(replayStore, 'scope\0idem', 'tail')).toEqual(first);
+    expect(replayGet(replayStore, 'scope', 'idem\0tail')).toEqual(second);
   });
 
   it('nests the replay pair injectively under the exact finite ScopedKey frame', () => {
@@ -393,6 +427,24 @@ describe('server mutation replay store', () => {
       posture: 'system',
       systemPosture: 'mutation-replay',
     });
+  });
+
+  it('authenticates the matching replay ScopedKey before invoking a custom store', () => {
+    const get = vi.fn(() => undefined);
+    const reserve = vi.fn(() => undefined);
+    const set = vi.fn(() => undefined);
+    const store = snapshotMutationReplayStore({ get, reserve, set });
+    const key = mutationReplayScopedKey('scope', 'idem');
+
+    expect(store.get(key, 'scope', 'idem')).toBeUndefined();
+    expect(get).toHaveBeenCalledWith(key, 'scope', 'idem', undefined);
+
+    expect(() => store.get('scope' as never, 'scope', 'idem')).toThrow(/KV450/u);
+    expect(() => store.get(publicScopedKey('idem'), 'scope', 'idem')).toThrow(/KV450/u);
+    expect(() => store.get(mutationReplayScopedKey('other', 'idem'), 'scope', 'idem')).toThrow(
+      /matching registered mutation-replay ScopedKey/u,
+    );
+    expect(get).toHaveBeenCalledOnce();
   });
 
   it('preserves the maximum supported mutation replay scope inside the 4,096-unit frame', () => {
@@ -409,8 +461,8 @@ describe('server mutation replay store', () => {
       posture: 'system',
       systemPosture: 'mutation-replay',
     });
-    replayStore.set(scope, idem, response);
-    expect(replayStore.get(scope, idem)).toEqual(response);
+    replaySet(replayStore, scope, idem, response);
+    expect(replayGet(replayStore, scope, idem)).toEqual(response);
   });
 
   it('length-frames mutation identity and CSRF session scope without delimiter collisions', async () => {
@@ -550,7 +602,7 @@ describe('server mutation replay store', () => {
   it('ignores inherited replay-store limits and refuses accessors without invoking them', () => {
     const inherited = Object.create({ maxEntries: 0, maxPending: 0, ttlMs: 0 });
     const inheritedStore = createMemoryMutationReplayStore(inherited);
-    expect(inheritedStore.reserve('scope', 'idem')).toBeDefined();
+    expect(replayReserve(inheritedStore, 'scope', 'idem')).toBeDefined();
 
     let getterCalls = 0;
     const accessor = {} as { maxPending?: number };
@@ -568,16 +620,16 @@ describe('server mutation replay store', () => {
   it('does not treat a missing stored fingerprint as a wildcard for byte-sensitive requests', () => {
     const replayStore = createMemoryMutationReplayStore();
     const response = { body: 'legacy', headers: {}, status: 200 } as const;
-    replayStore.set('scope', 'settled', response);
-    const pending = replayStore.reserve('scope', 'pending');
+    replaySet(replayStore, 'scope', 'settled', response);
+    const pending = replayReserve(replayStore, 'scope', 'pending');
 
-    expect(() => replayStore.get('scope', 'settled', 'sha256:request')).toThrow(
+    expect(() => replayGet(replayStore, 'scope', 'settled', 'sha256:request')).toThrow(
       /different request fingerprint/u,
     );
-    expect(() => replayStore.get('scope', 'pending', 'sha256:request')).toThrow(
+    expect(() => replayGet(replayStore, 'scope', 'pending', 'sha256:request')).toThrow(
       /different request fingerprint/u,
     );
-    expect(() => replayStore.reserve('scope', 'settled', 'sha256:request')).toThrow(
+    expect(() => replayReserve(replayStore, 'scope', 'settled', 'sha256:request')).toThrow(
       /different request fingerprint/u,
     );
     pending?.abort?.();
@@ -1390,29 +1442,29 @@ describe('server mutation response replay', () => {
     const records = new Map<string, MutationReplayResponse>();
     const pendingResolvers = new Map<string, (response: MutationReplayResponse) => void>();
     const replayStore: MutationReplayStore = {
-      get(scope, idem) {
-        const key = `${scope} ${idem}`;
-        return records.get(key);
+      get(key) {
+        const keyFrame = scopedKeyFactsFor(key).frame;
+        return records.get(keyFrame);
       },
-      reserve(scope, idem) {
-        const key = `${scope} ${idem}`;
-        if (reserved.has(key)) return undefined;
-        reserved.add(key);
+      reserve(key) {
+        const keyFrame = scopedKeyFactsFor(key).frame;
+        if (reserved.has(keyFrame)) return undefined;
+        reserved.add(keyFrame);
         let resolvePending: (response: MutationReplayResponse) => void = () => undefined;
         const pending = new Promise<MutationReplayResponse>((resolve) => {
           resolvePending = resolve;
         });
-        records.set(key, pending as unknown as MutationReplayResponse);
-        pendingResolvers.set(key, resolvePending);
+        records.set(keyFrame, pending as unknown as MutationReplayResponse);
+        pendingResolvers.set(keyFrame, resolvePending);
         return {
           commit(response) {
-            records.set(key, response);
-            pendingResolvers.get(key)?.(response);
+            records.set(keyFrame, response);
+            pendingResolvers.get(keyFrame)?.(response);
           },
         };
       },
-      set(scope, idem, response) {
-        records.set(`${scope} ${idem}`, response);
+      set(key, _scope, _idem, response) {
+        records.set(scopedKeyFactsFor(key).frame, response);
       },
     };
     const handlerStarted = deferred();
@@ -2123,20 +2175,20 @@ describe('server mutation response replay', () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 2 });
 
     // Reserve A (pending).
-    const reservationA = replayStore.reserve('scope-a', 'idem_a');
+    const reservationA = replayReserve(replayStore, 'scope-a', 'idem_a');
     expect(reservationA).toBeDefined();
 
-    const reservationB = replayStore.reserve('scope-b', 'idem_b');
-    const reservationC = replayStore.reserve('scope-c', 'idem_c');
+    const reservationB = replayReserve(replayStore, 'scope-b', 'idem_b');
+    const reservationC = replayReserve(replayStore, 'scope-c', 'idem_c');
     expect(reservationB).toBeDefined();
     expect(reservationC).toBeUndefined();
 
     // A must still be present (not evicted) — get() returns a Promise (the pending record).
-    const getA = replayStore.get('scope-a', 'idem_a');
+    const getA = replayGet(replayStore, 'scope-a', 'idem_a');
     expect(getA).toBeDefined();
 
     // A second reserve for A must return undefined (slot still occupied by the pending reservation).
-    const secondReserveA = replayStore.reserve('scope-a', 'idem_a');
+    const secondReserveA = replayReserve(replayStore, 'scope-a', 'idem_a');
     expect(secondReserveA).toBeUndefined();
   });
 
@@ -2151,30 +2203,30 @@ describe('server mutation response replay', () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 100, maxPending: 2 });
 
     // First two distinct keys reserve pending slots up to the cap.
-    const reservationA = replayStore.reserve('scope', 'idem_a');
-    const reservationB = replayStore.reserve('scope', 'idem_b');
+    const reservationA = replayReserve(replayStore, 'scope', 'idem_a');
+    const reservationB = replayReserve(replayStore, 'scope', 'idem_b');
     expect(reservationA).toBeDefined();
     expect(reservationB).toBeDefined();
 
     // A third distinct key exceeds maxPending → refused (undefined), NOT allocated.
-    const reservationC = replayStore.reserve('scope', 'idem_c');
+    const reservationC = replayReserve(replayStore, 'scope', 'idem_c');
     expect(reservationC).toBeUndefined();
 
     // A6 preserved: the existing pending slots were NOT evicted — they still hold and a
     // re-reserve of an occupied key returns undefined (slot still taken), not a fresh slot.
-    expect(replayStore.get('scope', 'idem_a')).toBeDefined();
-    expect(replayStore.get('scope', 'idem_b')).toBeDefined();
-    expect(replayStore.reserve('scope', 'idem_a')).toBeUndefined();
+    expect(replayGet(replayStore, 'scope', 'idem_a')).toBeDefined();
+    expect(replayGet(replayStore, 'scope', 'idem_b')).toBeDefined();
+    expect(replayReserve(replayStore, 'scope', 'idem_a')).toBeUndefined();
 
     // Committing a pending slot frees capacity so a new reservation can be made again.
     reservationA!.commit({ body: 'committed', headers: {}, status: 200 });
-    const reservationD = replayStore.reserve('scope', 'idem_d');
+    const reservationD = replayReserve(replayStore, 'scope', 'idem_d');
     expect(reservationD).toBeDefined();
   });
 
   it('fails closed instead of running enhanced mutations when maxPending refuses reservation', async () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 100, maxPending: 1 });
-    const held = replayStore.reserve('other-scope', 'held-idem');
+    const held = replayReserve(replayStore, 'other-scope', 'held-idem');
     expect(held).toBeDefined();
     let writes = 0;
     const addToCart = mutation('cart/add', {
@@ -2202,7 +2254,7 @@ describe('server mutation response replay', () => {
   it('fails closed before execution when retained replay truth fills maxEntries', async () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 1 });
     const retained = { body: 'retained', headers: {}, status: 200 } as const;
-    replayStore.set('retained-scope', 'retained-idem', retained);
+    replaySet(replayStore, 'retained-scope', 'retained-idem', retained);
     let writes = 0;
     const addToCart = mutation('cart/capacity', {
       input: s.object({ productId: s.string() }),
@@ -2224,16 +2276,16 @@ describe('server mutation response replay', () => {
     expect(response.status).toBe(429);
     expect(response.headers['Retry-After']).toBe('1');
     expect(response.body).toContain('data-error-code="RATE_LIMITED"');
-    expect(replayStore.get('retained-scope', 'retained-idem')).toEqual(retained);
+    expect(replayGet(replayStore, 'retained-scope', 'retained-idem')).toEqual(retained);
   });
 
   // E4: the pending bound is additional defense-in-depth; it must never let pending records
   // bypass the total maxEntries admission cap.
   it('E4: default maxPending cannot bypass the total maxEntries admission cap', () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 2 });
-    expect(replayStore.reserve('scope-a', 'idem_a')).toBeDefined();
-    expect(replayStore.reserve('scope-b', 'idem_b')).toBeDefined();
-    expect(replayStore.reserve('scope-c', 'idem_c')).toBeUndefined();
+    expect(replayReserve(replayStore, 'scope-a', 'idem_a')).toBeDefined();
+    expect(replayReserve(replayStore, 'scope-b', 'idem_b')).toBeDefined();
+    expect(replayReserve(replayStore, 'scope-c', 'idem_c')).toBeUndefined();
   });
 
   // M7/K3 (SPEC §10.3): direct set() at capacity must fail before it can evict an in-flight
@@ -2241,20 +2293,20 @@ describe('server mutation response replay', () => {
   it('M7: set() fails closed at capacity without evicting or stranding pending truth', async () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 1 });
 
-    const reservationA = replayStore.reserve('scope', 'idem_a');
+    const reservationA = replayReserve(replayStore, 'scope', 'idem_a');
     expect(reservationA).toBeDefined();
-    const joined = replayStore.get('scope', 'idem_a');
+    const joined = replayGet(replayStore, 'scope', 'idem_a');
     expect(joined).toBeInstanceOf(Promise);
 
     expect(() =>
-      replayStore.set('scope', 'idem_b', { body: 'b', headers: {}, status: 200 }),
+      replaySet(replayStore, 'scope', 'idem_b', { body: 'b', headers: {}, status: 200 }),
     ).toThrow(/capacity|saturated/u);
-    expect(replayStore.reserve('scope', 'idem_a')).toBeUndefined();
+    expect(replayReserve(replayStore, 'scope', 'idem_a')).toBeUndefined();
 
     const settledA = { body: 'a', headers: {}, status: 200 } as const;
     reservationA!.commit(settledA);
     await expect(joined).resolves.toEqual(settledA);
-    expect(replayStore.get('scope', 'idem_a')).toEqual(settledA);
-    expect(replayStore.get('scope', 'idem_b')).toBeUndefined();
+    expect(replayGet(replayStore, 'scope', 'idem_a')).toEqual(settledA);
+    expect(replayGet(replayStore, 'scope', 'idem_b')).toBeUndefined();
   });
 });

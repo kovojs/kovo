@@ -1660,14 +1660,14 @@ export function createPostgresAppRuntimeDb(
   });
   mintFrameworkDurableReplayStoreReceipt(capabilityStore, 'capability');
   const mutationStore: MutationReplayStore = witnessFreeze({
-    get(scope, idem, fingerprint) {
-      return durableMutationReplayStore().get(scope, idem, fingerprint);
+    get(key, scope, idem, fingerprint) {
+      return durableMutationReplayStore().get(key, scope, idem, fingerprint);
     },
-    reserve(scope, idem, fingerprint) {
-      return durableMutationReplayStore().reserve(scope, idem, fingerprint);
+    reserve(key, scope, idem, fingerprint) {
+      return durableMutationReplayStore().reserve(key, scope, idem, fingerprint);
     },
-    set(scope, idem, response, fingerprint) {
-      return durableMutationReplayStore().set(scope, idem, response, fingerprint);
+    set(key, scope, idem, response, fingerprint) {
+      return durableMutationReplayStore().set(key, scope, idem, response, fingerprint);
     },
   });
   mintFrameworkDurableReplayStoreReceipt(mutationStore, 'mutation');

@@ -1,10 +1,11 @@
-import { isUntrusted, revealUntrusted } from '@kovojs/core';
+import { isUntrusted, revealUntrusted, type ScopedKey } from '@kovojs/core';
 
 import { KOVO_IDEM_FIELD_NAME, type CsrfOptions } from '../csrf.js';
 import {
   MutationReplayConflictError,
   MutationReplaySettlementExpiredError,
   mutationReplayContext,
+  mutationReplayScopedKey,
   readMutationReplay,
   reserveReplayBeforeRun,
   reserveMutationReplayBeforeRun,
@@ -103,15 +104,15 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   const replayStore = mode.request.replayStore;
   if (!replayStore) return freshnessOnlyMutationIdemReplayPolicy(idemFacts.token);
   const freshnessCheckedStore = {
-    async get(scope: string, token: string, fingerprint?: string) {
+    async get(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
       assertFreshMutationIdem(idemFacts.token);
-      const response = await replayStore.get(scope, token, fingerprint);
+      const response = await replayStore.get(key, scope, token, fingerprint);
       assertFreshMutationIdem(idemFacts.token);
       return response;
     },
-    async reserve(scope: string, token: string, fingerprint?: string) {
+    async reserve(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
       assertFreshMutationIdem(idemFacts.token);
-      const reservation = await replayStore.reserve(scope, token, fingerprint);
+      const reservation = await replayStore.reserve(key, scope, token, fingerprint);
       if (validateMutationIdemToken(idemFacts.token) === undefined) {
         await reservation?.abort?.();
         throw new MutationReplayConflictError();
@@ -119,12 +120,13 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
       return reservation;
     },
     set(
+      key: ScopedKey,
       scope: string,
       token: string,
       response: BufferedMutationWireResponse,
       fingerprint?: string,
     ) {
-      return replayStore.set(scope, token, response, fingerprint);
+      return replayStore.set(key, scope, token, response, fingerprint);
     },
   };
   let context: ReturnType<typeof mutationReplayContext> | undefined;
@@ -195,15 +197,15 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   if (!replayStore) return freshnessOnlyMutationIdemReplayPolicy(idemFacts.token);
 
   const freshnessCheckedStore = {
-    async get(scope: string, token: string, fingerprint?: string) {
+    async get(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
       assertFreshMutationIdem(idemFacts.token);
-      const response = await replayStore.get(scope, token, fingerprint);
+      const response = await replayStore.get(key, scope, token, fingerprint);
       assertFreshMutationIdem(idemFacts.token);
       return response;
     },
-    async reserve(scope: string, token: string, fingerprint?: string) {
+    async reserve(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
       assertFreshMutationIdem(idemFacts.token);
-      const reservation = await replayStore.reserve(scope, token, fingerprint);
+      const reservation = await replayStore.reserve(key, scope, token, fingerprint);
       if (validateMutationIdemToken(idemFacts.token) === undefined) {
         await reservation?.abort?.();
         throw new MutationReplayConflictError();
@@ -230,7 +232,12 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
     async read() {
       const context = await replayContext();
       const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
-      const response = await freshnessCheckedStore.get(scope, idemFacts.token, context.fingerprint);
+      const response = await freshnessCheckedStore.get(
+        mutationReplayScopedKey(scope, idemFacts.token),
+        scope,
+        idemFacts.token,
+        context.fingerprint,
+      );
       return noJsReplayResponseOrConflict(
         response === undefined ? undefined : snapshotMutationReplayResponse(response),
       );
@@ -238,6 +245,7 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
     async reserve() {
       const context = await replayContext();
       const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
+      const replayKey = mutationReplayScopedKey(scope, idemFacts.token);
       const result = await reserveReplayBeforeRun<
         MutationEndpointReplayResponse,
         NoJsMutationReplayReservation
@@ -245,7 +253,14 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
         fingerprint: context.fingerprint,
         idem: idemFacts.token,
         scope,
-        store: freshnessCheckedStore,
+        store: {
+          get(_scope: string, _idem: string, fingerprint?: string) {
+            return freshnessCheckedStore.get(replayKey, scope, idemFacts.token, fingerprint);
+          },
+          reserve(_scope: string, _idem: string, fingerprint?: string) {
+            return freshnessCheckedStore.reserve(replayKey, scope, idemFacts.token, fingerprint);
+          },
+        },
       });
       if (result.kind === 'replayed') {
         return {

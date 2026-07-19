@@ -37,7 +37,7 @@ import {
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
 import { mintMutationIdemToken } from './mutation-idem.js';
-import { isDurableMutationReplayStore } from './replay.js';
+import { isDurableMutationReplayStore, mutationReplayScopedKey } from './replay.js';
 import { replayMutationWireBody } from './response.js';
 import { isDurableWebhookReplayStore } from './webhook.js';
 
@@ -402,7 +402,12 @@ describe('createPostgresAppRuntimeDb', () => {
     const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
     await initial.ready;
     const idem = mintMutationIdemToken();
-    const reservation = await initial.mutationReplayStore.reserve('legacy', idem, 'fingerprint');
+    const reservation = await initial.mutationReplayStore.reserve(
+      mutationReplayScopedKey('legacy', idem),
+      'legacy',
+      idem,
+      'fingerprint',
+    );
     expect(reservation).toBeDefined();
     await reservation?.commit({
       body: replayMutationWireBody('', { reason: 'Postgres legacy-cutover posture fixture' }),
@@ -537,12 +542,15 @@ describe('createPostgresAppRuntimeDb', () => {
     const repaired = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
     await repaired.ready;
     const idem = mintMutationIdemToken();
+    const replayKey = mutationReplayScopedKey('session:save', idem);
     const owner = await repaired.mutationReplayStore.reserve(
+      replayKey,
       'session:save',
       idem,
       'same-fingerprint',
     );
     const duplicate = await repaired.mutationReplayStore.reserve(
+      replayKey,
       'session:save',
       idem,
       'same-fingerprint',
