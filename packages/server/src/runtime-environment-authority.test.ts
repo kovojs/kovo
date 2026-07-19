@@ -4,7 +4,6 @@ const ENVIRONMENT_KEYS = [
   'IDENTITY_ENDPOINT',
   'KOVO_DATABASE_URL',
   'KOVO_LIVE_TARGET_SECRET',
-  'KOVO_VERIFY_ENDPOINT_POSTURE',
   'NODE_ENV',
   'OPERATOR_BOOT_TOKEN',
 ] as const;
@@ -73,7 +72,6 @@ describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', ()
   it('keeps production boot posture pinned after authored app code mutates process.env', async () => {
     vi.resetModules();
     setEnvironment('NODE_ENV', 'production');
-    setEnvironment('KOVO_VERIFY_ENDPOINT_POSTURE', undefined);
     setEnvironment('KOVO_DATABASE_URL', 'postgres://app@127.0.0.1:54321/app');
     setEnvironment('IDENTITY_ENDPOINT', 'http://127.0.0.1:40342/msi/token');
     setEnvironment('KOVO_LIVE_TARGET_SECRET', 'operator-live-target-secret-0123456789abcdef');

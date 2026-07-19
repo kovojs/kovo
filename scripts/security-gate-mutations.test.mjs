@@ -8,7 +8,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after finite browser-control enrollment', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(244);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(245);
   });
 
   it('enrolls behavioral request-body shape, allocation, and FormData mutants', () => {
@@ -506,6 +506,7 @@ describe('security-gate-mutations', () => {
       'better-auth-credential-gate/drop-source-identity',
       'drizzle-egress/allow-inexact-context-fetch-call',
       'request-ingress/recompute-vercel-prepared-verdict',
+      'server-response-posture/drop-endpoint-verification-choke',
       'server-egress/drop-dispatcher-pin',
       'server-egress/drop-origin-before-dns',
       'server-egress/drop-task-context-fetch-seal',

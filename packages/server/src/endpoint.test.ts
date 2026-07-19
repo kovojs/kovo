@@ -191,8 +191,6 @@ describe('server endpoints', () => {
   });
 
   it('pins reserved-header posture before an asynchronous endpoint handler runs', async () => {
-    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
     const reservedHeaders: string[] = [];
     const responsePosture: EndpointResponsePosture = {
       appOwnedSafety: true,
@@ -212,17 +210,12 @@ describe('server endpoints', () => {
       reason: 'late reserved header posture regression',
       response: responsePosture,
     });
-    try {
-      await expect(
-        runEndpoint(
-          declaration,
-          new Request('https://example.test/late-reserved-header', { method: 'POST' }),
-        ),
-      ).rejects.toThrow(/Set-Cookie/u);
-    } finally {
-      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
-    }
+    await expect(
+      runEndpoint(
+        declaration,
+        new Request('https://example.test/late-reserved-header', { method: 'POST' }),
+      ),
+    ).rejects.toThrow(/Set-Cookie/u);
   });
 
   it('retains one immutable nested endpoint declaration snapshot', () => {
@@ -292,7 +285,7 @@ describe('server endpoints', () => {
       async handler(request) {
         seen.push(request.headers.get('x-signature') ?? '');
         return new Response(await request.text(), {
-          headers: { 'content-type': 'application/json' },
+          headers: { 'cache-control': 'no-store', 'content-type': 'application/json' },
           status: 202,
         });
       },
@@ -331,7 +324,10 @@ describe('server endpoints', () => {
       csrfJustification: 'signed inventory webhook',
       async handler(request) {
         handlerCalls += 1;
-        return new Response(await request.text(), { status: 202 });
+        return new Response(await request.text(), {
+          headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' },
+          status: 202,
+        });
       },
       method: 'POST',
       reason: 'signed inventory webhook',
@@ -572,7 +568,9 @@ describe('server endpoints', () => {
       async handler(rawRequest) {
         expect('session' in rawRequest).toBe(false);
         expect((rawRequest as unknown as { session?: unknown }).session).toBeUndefined();
-        return new Response(`sessionless:${await rawRequest.text()}`);
+        return new Response(`sessionless:${await rawRequest.text()}`, {
+          headers: { 'Cache-Control': 'no-store' },
+        });
       },
       method: 'POST',
       reason: 'external machine caller',
@@ -606,7 +604,10 @@ describe('server endpoints', () => {
         // A handler must not be able to recover the cookie via request.clone() either.
         seenCookieViaClone = request.clone().headers.get('cookie');
         seenSignature = request.headers.get('x-signature') ?? '';
-        return new Response(await request.text(), { status: 202 });
+        return new Response(await request.text(), {
+          headers: { 'Cache-Control': 'no-store' },
+          status: 202,
+        });
       },
       method: 'POST',
       reason: 'signed webhook raw body dispatch',
@@ -728,6 +729,7 @@ describe('server endpoints', () => {
       handler: () =>
         new Response('ok', {
           headers: {
+            'Cache-Control': 'no-store',
             'Clear-Site-Data': '"cookies"',
             'Set-Cookie': 'sid=machine; Path=/',
           },
@@ -853,51 +855,42 @@ describe('server endpoints', () => {
     ).rejects.toThrow(/executable non-ambient verifier/u);
   });
 
-  it('verifies raw endpoint response posture when runtime verification is enabled', async () => {
-    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
-    try {
-      const mismatched = endpoint('/machine/posture-bad', {
-        csrf: false,
-        csrfJustification: 'runtime posture verification test',
-        handler: () => new Response('{"ok":true}', { headers: { 'Content-Type': 'text/plain' } }),
-        method: 'POST',
-        reason: 'runtime posture verification test',
-        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
-      });
-      await expect(
-        runEndpoint(
-          mismatched,
-          new Request('https://example.test/machine/posture-bad', { method: 'POST' }),
-        ),
-      ).rejects.toThrow(/response posture mismatch/u);
+  it('verifies raw endpoint response posture on every dispatch', async () => {
+    const mismatched = endpoint('/machine/posture-bad', {
+      csrf: false,
+      csrfJustification: 'runtime posture verification test',
+      handler: () => new Response('{"ok":true}', { headers: { 'Content-Type': 'text/plain' } }),
+      method: 'POST',
+      reason: 'runtime posture verification test',
+      response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+    });
+    await expect(
+      runEndpoint(
+        mismatched,
+        new Request('https://example.test/machine/posture-bad', { method: 'POST' }),
+      ),
+    ).rejects.toThrow(/response posture mismatch/u);
 
-      const matched = endpoint('/machine/posture-ok', {
-        csrf: false,
-        csrfJustification: 'runtime posture verification test',
-        handler: () =>
-          Response.json({ ok: true }, { headers: { 'Cache-Control': 'private, no-store' } }),
-        method: 'POST',
-        reason: 'runtime posture verification test',
-        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
-      });
-      await expect(
-        runEndpoint(
-          matched,
-          new Request('https://example.test/machine/posture-ok', { method: 'POST' }),
-        ),
-      ).resolves.toMatchObject({ status: 200 });
-    } finally {
-      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
-    }
+    const matched = endpoint('/machine/posture-ok', {
+      csrf: false,
+      csrfJustification: 'runtime posture verification test',
+      handler: () =>
+        Response.json({ ok: true }, { headers: { 'Cache-Control': 'private, no-store' } }),
+      method: 'POST',
+      reason: 'runtime posture verification test',
+      response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+    });
+    await expect(
+      runEndpoint(
+        matched,
+        new Request('https://example.test/machine/posture-ok', { method: 'POST' }),
+      ),
+    ).resolves.toMatchObject({ status: 200 });
   });
 
   it('keeps endpoint response posture fail-closed after an app handler poisons Array.push', async () => {
-    const previousVerify = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
     const nativePush = Array.prototype.push;
     let poisonHits = 0;
-    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
     const mismatched = endpoint('/machine/posture-push-poison', {
       csrf: false,
       csrfJustification: 'runtime posture poisoning regression',
@@ -926,8 +919,6 @@ describe('server endpoints', () => {
       error = caught;
     } finally {
       Array.prototype.push = nativePush;
-      if (previousVerify === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previousVerify;
     }
 
     expect(poisonHits).toBe(0);
@@ -935,287 +926,223 @@ describe('server endpoints', () => {
   });
 
   it('allows honest multi-body response posture declarations', async () => {
-    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
-    try {
-      const negotiated = endpoint('/machine/negotiated', {
-        csrf: false,
-        csrfJustification: 'runtime posture verification test',
-        handler: (request) =>
-          request.headers.get('accept')?.includes('application/json')
-            ? Response.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
-            : new Response('ok', {
-                headers: {
-                  'Cache-Control': 'no-store',
-                  'Content-Type': 'text/plain; charset=utf-8',
-                },
-              }),
-        method: 'GET',
-        reason: 'runtime negotiated response posture test',
-        response: { appOwnedSafety: true, body: ['json', 'text'], cache: 'no-store' },
-      });
+    const negotiated = endpoint('/machine/negotiated', {
+      csrf: false,
+      csrfJustification: 'runtime posture verification test',
+      handler: (request) =>
+        request.headers.get('accept')?.includes('application/json')
+          ? Response.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
+          : new Response('ok', {
+              headers: {
+                'Cache-Control': 'no-store',
+                'Content-Type': 'text/plain; charset=utf-8',
+              },
+            }),
+      method: 'GET',
+      reason: 'runtime negotiated response posture test',
+      response: { appOwnedSafety: true, body: ['json', 'text'], cache: 'no-store' },
+    });
 
-      await expect(
-        runEndpoint(
-          negotiated,
-          new Request('https://example.test/machine/negotiated', {
-            headers: { Accept: 'application/json' },
-          }),
-        ),
-      ).resolves.toMatchObject({ status: 200 });
-      await expect(
-        runEndpoint(negotiated, new Request('https://example.test/machine/negotiated')),
-      ).resolves.toMatchObject({ status: 200 });
-    } finally {
-      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
-    }
+    await expect(
+      runEndpoint(
+        negotiated,
+        new Request('https://example.test/machine/negotiated', {
+          headers: { Accept: 'application/json' },
+        }),
+      ),
+    ).resolves.toMatchObject({ status: 200 });
+    await expect(
+      runEndpoint(negotiated, new Request('https://example.test/machine/negotiated')),
+    ).resolves.toMatchObject({ status: 200 });
   });
 
   it('fails endpoint posture verification for cache, body, and content-type drift', async () => {
-    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
-    try {
-      const cases = [
-        {
-          handler: () => new Response('ok', { headers: { 'Content-Type': 'text/plain' } }),
-          path: '/machine/posture-cache',
-          response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
-          text: /Cache-Control: no-store/u,
-        },
-        {
-          handler: () =>
-            new Response('not a redirect', {
-              headers: { 'Cache-Control': 'no-store', Location: '/login' },
-            }),
-          path: '/machine/posture-body',
-          response: {
-            appOwnedSafety: true,
-            body: 'redirect',
-            cache: 'no-store',
-            reservedHeaders: ['Location'],
-          },
-          text: /body=redirect/u,
-        },
-        {
-          handler: () =>
-            new Response('{"ok":true}', {
-              headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain' },
-            }),
-          path: '/machine/posture-content-type',
-          response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
-          text: /content type is not JSON/u,
-        },
-      ] as const;
-
-      for (const fixture of cases) {
-        const mismatched = endpoint(fixture.path, {
-          csrf: false,
-          csrfJustification: 'runtime posture verification test',
-          handler: fixture.handler,
-          method: 'POST',
-          reason: 'runtime posture verification test',
-          response: fixture.response,
-        });
-
-        await expect(
-          runEndpoint(
-            mismatched,
-            new Request(`https://example.test${fixture.path}`, { method: 'POST' }),
-          ),
-        ).rejects.toThrow(fixture.text);
-      }
-    } finally {
-      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
-    }
-  });
-
-  it('flags reserved raw endpoint response headers unless explicitly declared', async () => {
-    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
-    try {
-      for (const [header, value, expected] of [
-        ['Kovo-Reauth', '/login', 'Kovo-*'],
-        ['Kovo-Build', 'build-a', 'Kovo-*'],
-        ['Kovo-Changes', '[]', 'Kovo-*'],
-        ['Set-Cookie', 'sid=1; Path=/', 'Set-Cookie'],
-        ['Location', '/login', 'Location'],
-        ['Content-Security-Policy', "default-src 'self'", 'content-security-policy'],
-      ] as const) {
-        const accidental = endpoint(`/machine/reserved/${header.toLowerCase()}`, {
-          csrf: false,
-          csrfJustification: 'runtime reserved header verification test',
-          handler: () =>
-            new Response('ok', { headers: { 'Cache-Control': 'no-store', [header]: value } }),
-          method: 'POST',
-          reason: 'runtime reserved header verification test',
-          response: rawTextResponse,
-        });
-
-        await expect(
-          runEndpoint(
-            accidental,
-            new Request(`https://example.test/machine/reserved/${header.toLowerCase()}`, {
-              method: 'POST',
-            }),
-          ),
-        ).rejects.toThrow(new RegExp(expected, 'iu'));
-      }
-
-      const declared = endpoint('/machine/reserved/declared', {
+    const cases = [
+      {
+        handler: () => new Response('ok', { headers: { 'Content-Type': 'text/plain' } }),
+        path: '/machine/posture-cache',
+        response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+        text: /Cache-Control: no-store/u,
+      },
+      {
         handler: () =>
-          new Response('ok', {
-            headers: {
-              'Cache-Control': 'no-store',
-              'Clear-Site-Data': '"cookies"',
-              'Content-Security-Policy': "default-src 'self'",
-              'Kovo-Reauth': '/login',
-              Location: '/login',
-              'Set-Cookie': 'sid=1; Path=/',
-            },
+          new Response('not a redirect', {
+            headers: { 'Cache-Control': 'no-store', Location: '/login' },
           }),
-        method: 'POST',
-        reason: 'runtime reserved header declaration test',
-        response: {
-          ...rawTextResponse,
-          reservedHeaders: [
-            'Clear-Site-Data',
-            'Content-Security-Policy',
-            'Kovo-*',
-            'Location',
-            'Set-Cookie',
-          ],
-        },
-      });
-
-      await expect(
-        runEndpoint(
-          declared,
-          new Request('https://example.test/machine/reserved/declared', { method: 'POST' }),
-        ),
-      ).resolves.toMatchObject({ status: 200 });
-    } finally {
-      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
-    }
-  });
-
-  it('requires raw endpoint external redirects to be allowlisted with a reason', async () => {
-    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
-    try {
-      const undeclared = endpoint('/machine/external-redirect', {
-        csrf: false,
-        csrfJustification: 'runtime redirect allowlist verification test',
-        handler: () =>
-          new Response(null, {
-            headers: {
-              'Cache-Control': 'no-store',
-              Location: 'https://accounts.example.test/oauth/start',
-            },
-            status: 303,
-          }),
-        method: 'POST',
-        reason: 'runtime redirect allowlist verification test',
+        path: '/machine/posture-body',
         response: {
           appOwnedSafety: true,
           body: 'redirect',
           cache: 'no-store',
           reservedHeaders: ['Location'],
         },
-      });
-
-      await expect(
-        runEndpoint(
-          undeclared,
-          new Request('https://example.test/machine/external-redirect', { method: 'POST' }),
-        ),
-      ).rejects.toThrow(/redirect Location must be same-origin/u);
-
-      const declared = endpoint('/machine/external-redirect-declared', {
-        csrf: false,
-        csrfJustification: 'runtime redirect allowlist verification test',
-        handler: () =>
-          new Response(null, {
-            headers: {
-              'Cache-Control': 'no-store',
-              Location: 'https://accounts.example.test/oauth/start',
-            },
-            status: 303,
-          }),
-        method: 'POST',
-        reason: 'runtime redirect allowlist verification test',
-        response: {
-          appOwnedSafety: true,
-          body: 'redirect',
-          cache: 'no-store',
-          redirectAllowlist: [
-            {
-              origin: 'https://accounts.example.test',
-              reason: 'Delegated OAuth flow redirects through the identity provider',
-            },
-          ],
-          reservedHeaders: ['Location'],
-        },
-      });
-
-      await expect(
-        runEndpoint(
-          declared,
-          new Request('https://example.test/machine/external-redirect-declared', {
-            method: 'POST',
-          }),
-        ),
-      ).resolves.toMatchObject({ status: 303 });
-    } finally {
-      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
-    }
-  });
-
-  it('enforces declared response posture in production by default', async () => {
-    const previousNodeEnv = process.env.NODE_ENV;
-    const previousVerify = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    process.env.NODE_ENV = 'production';
-    delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    try {
-      const mismatched = endpoint('/machine/production-posture-bad', {
-        csrf: false,
-        csrfJustification: 'runtime posture verification test',
+        text: /body=redirect/u,
+      },
+      {
         handler: () =>
           new Response('{"ok":true}', {
-            headers: { 'Cache-Control': 'public', 'Content-Type': 'text/plain' },
+            headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain' },
           }),
-        method: 'POST',
-        reason: 'runtime posture production verification test',
+        path: '/machine/posture-content-type',
         response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+        text: /content type is not JSON/u,
+      },
+    ] as const;
+
+    for (const fixture of cases) {
+      const mismatched = endpoint(fixture.path, {
+        csrf: false,
+        csrfJustification: 'runtime posture verification test',
+        handler: fixture.handler,
+        method: 'POST',
+        reason: 'runtime posture verification test',
+        response: fixture.response,
       });
 
       await expect(
         runEndpoint(
           mismatched,
-          new Request('https://example.test/machine/production-posture-bad', {
-            method: 'POST',
-          }),
+          new Request(`https://example.test${fixture.path}`, { method: 'POST' }),
         ),
-      ).rejects.toThrow(/response posture mismatch/u);
-    } finally {
-      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previousNodeEnv;
-      if (previousVerify === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previousVerify;
+      ).rejects.toThrow(fixture.text);
     }
   });
 
-  it.each([undefined, 'test', 'staging'] as const)(
+  it('flags reserved raw endpoint response headers unless explicitly declared', async () => {
+    for (const [header, value, expected] of [
+      ['Kovo-Reauth', '/login', 'Kovo-*'],
+      ['Kovo-Build', 'build-a', 'Kovo-*'],
+      ['Kovo-Changes', '[]', 'Kovo-*'],
+      ['Set-Cookie', 'sid=1; Path=/', 'Set-Cookie'],
+      ['Location', '/login', 'Location'],
+      ['Content-Security-Policy', "default-src 'self'", 'content-security-policy'],
+    ] as const) {
+      const accidental = endpoint(`/machine/reserved/${header.toLowerCase()}`, {
+        csrf: false,
+        csrfJustification: 'runtime reserved header verification test',
+        handler: () =>
+          new Response('ok', { headers: { 'Cache-Control': 'no-store', [header]: value } }),
+        method: 'POST',
+        reason: 'runtime reserved header verification test',
+        response: rawTextResponse,
+      });
+
+      await expect(
+        runEndpoint(
+          accidental,
+          new Request(`https://example.test/machine/reserved/${header.toLowerCase()}`, {
+            method: 'POST',
+          }),
+        ),
+      ).rejects.toThrow(new RegExp(expected, 'iu'));
+    }
+
+    const declared = endpoint('/machine/reserved/declared', {
+      handler: () =>
+        new Response('ok', {
+          headers: {
+            'Cache-Control': 'no-store',
+            'Clear-Site-Data': '"cookies"',
+            'Content-Security-Policy': "default-src 'self'",
+            'Kovo-Reauth': '/login',
+            Location: '/login',
+            'Set-Cookie': 'sid=1; Path=/',
+          },
+        }),
+      method: 'POST',
+      reason: 'runtime reserved header declaration test',
+      response: {
+        ...rawTextResponse,
+        reservedHeaders: [
+          'Clear-Site-Data',
+          'Content-Security-Policy',
+          'Kovo-*',
+          'Location',
+          'Set-Cookie',
+        ],
+      },
+    });
+
+    await expect(
+      runEndpoint(
+        declared,
+        new Request('https://example.test/machine/reserved/declared', { method: 'POST' }),
+      ),
+    ).resolves.toMatchObject({ status: 200 });
+  });
+
+  it('requires raw endpoint external redirects to be allowlisted with a reason', async () => {
+    const undeclared = endpoint('/machine/external-redirect', {
+      csrf: false,
+      csrfJustification: 'runtime redirect allowlist verification test',
+      handler: () =>
+        new Response(null, {
+          headers: {
+            'Cache-Control': 'no-store',
+            Location: 'https://accounts.example.test/oauth/start',
+          },
+          status: 303,
+        }),
+      method: 'POST',
+      reason: 'runtime redirect allowlist verification test',
+      response: {
+        appOwnedSafety: true,
+        body: 'redirect',
+        cache: 'no-store',
+        reservedHeaders: ['Location'],
+      },
+    });
+
+    await expect(
+      runEndpoint(
+        undeclared,
+        new Request('https://example.test/machine/external-redirect', { method: 'POST' }),
+      ),
+    ).rejects.toThrow(/redirect Location must be same-origin/u);
+
+    const declared = endpoint('/machine/external-redirect-declared', {
+      csrf: false,
+      csrfJustification: 'runtime redirect allowlist verification test',
+      handler: () =>
+        new Response(null, {
+          headers: {
+            'Cache-Control': 'no-store',
+            Location: 'https://accounts.example.test/oauth/start',
+          },
+          status: 303,
+        }),
+      method: 'POST',
+      reason: 'runtime redirect allowlist verification test',
+      response: {
+        appOwnedSafety: true,
+        body: 'redirect',
+        cache: 'no-store',
+        redirectAllowlist: [
+          {
+            origin: 'https://accounts.example.test',
+            reason: 'Delegated OAuth flow redirects through the identity provider',
+          },
+        ],
+        reservedHeaders: ['Location'],
+      },
+    });
+
+    await expect(
+      runEndpoint(
+        declared,
+        new Request('https://example.test/machine/external-redirect-declared', {
+          method: 'POST',
+        }),
+      ),
+    ).resolves.toMatchObject({ status: 303 });
+  });
+
+  it.each([undefined, 'development', 'test', 'staging', 'production'] as const)(
     'enforces declared response posture with NODE_ENV=%s for direct and custom runners',
     async (nodeEnvironment) => {
       const previousNodeEnv = process.env.NODE_ENV;
-      const previousVerify = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
       if (nodeEnvironment === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = nodeEnvironment;
-      delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
 
       const mismatched = endpoint(`/machine/${nodeEnvironment ?? 'unset'}-posture-bad`, {
         csrf: false,
@@ -1246,8 +1173,6 @@ describe('server endpoints', () => {
       } finally {
         if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
         else process.env.NODE_ENV = previousNodeEnv;
-        if (previousVerify === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-        else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previousVerify;
       }
     },
   );

@@ -90,7 +90,6 @@ describe('create-kovo starter (build integration: production response header art
           ...withRepoBinOnPath(),
           BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
           HOST: '127.0.0.1',
-          KOVO_VERIFY_ENDPOINT_POSTURE: '1',
           NODE_ENV: 'test',
           PORT: String(port),
         },

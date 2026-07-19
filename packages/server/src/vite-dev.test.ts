@@ -139,8 +139,6 @@ describe('server app shell Vite dev seam', () => {
   });
 
   it('records endpoint posture mismatches in the dev diagnostic ledger', async () => {
-    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     const app = createApp({
       endpoints: [
@@ -205,8 +203,6 @@ describe('server app shell Vite dev seam', () => {
       expect(diagnosticBody).toContain('Cache-Control: no-store');
       expect(diagnosticBody).toContain('content type is not JSON');
     } finally {
-      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
       });

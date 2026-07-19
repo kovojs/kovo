@@ -310,7 +310,14 @@ describe('closed app declaration semantics', () => {
       access: publicAccess('redirect allowlist snapshot regression'),
       csrf: false,
       csrfJustification: 'read-only redirect',
-      handler: () => Response.redirect('https://evil.example.test/phish', 302),
+      handler: () =>
+        new Response(null, {
+          headers: {
+            'Cache-Control': 'no-store',
+            Location: 'https://evil.example.test/phish',
+          },
+          status: 302,
+        }),
       method: 'GET',
       reason: 'redirect allowlist snapshot regression',
       response: {
@@ -318,6 +325,7 @@ describe('closed app declaration semantics', () => {
         body: 'redirect',
         cache: 'no-store',
         redirectAllowlist: [allowed],
+        reservedHeaders: ['Location'],
       },
     });
     const handler = createRequestHandler(createApp({ endpoints: [redirect] }));
@@ -326,8 +334,8 @@ describe('closed app declaration semantics', () => {
     allowed.reason = 'attacker replacement';
     const response = await handler(new Request('https://example.test/leave'));
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/');
+    expect(response.status).toBe(500);
+    expect(response.headers.get('location')).toBeNull();
   });
 
   it('pins injected client-module registry methods before immutable JavaScript dispatch', async () => {

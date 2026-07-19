@@ -13,24 +13,16 @@ interface EndpointPostureFact {
 
 describe('endpoint posture gate', () => {
   it('records declared endpoint fixture posture for kovo check', async () => {
-    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
+    const fact = await healthEndpointPosture();
+    await mkdir('.kovo', { recursive: true });
+    const graph = await readEndpointGraph();
+    await writeFile(
+      '.kovo/endpoint-posture.json',
+      `${JSON.stringify({ endpoints: graph.endpoints, endpointPosture: [fact] }, null, 2)}\n`,
+      'utf8',
+    );
 
-    try {
-      const fact = await healthEndpointPosture();
-      await mkdir('.kovo', { recursive: true });
-      const graph = await readEndpointGraph();
-      await writeFile(
-        '.kovo/endpoint-posture.json',
-        `${JSON.stringify({ endpoints: graph.endpoints, endpointPosture: [fact] }, null, 2)}\n`,
-        'utf8',
-      );
-
-      expect(fact.observed).toBe(true);
-    } finally {
-      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
-      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
-    }
+    expect(fact.observed).toBe(true);
   });
 });
 
@@ -45,7 +37,6 @@ async function healthEndpointPosture(): Promise<EndpointPostureFact> {
       env: {
         ...process.env,
         HOST: '127.0.0.1',
-        KOVO_VERIFY_ENDPOINT_POSTURE: '1',
         NODE_ENV: 'test',
         PORT: String(port),
       },

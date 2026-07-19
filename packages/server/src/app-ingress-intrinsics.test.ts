@@ -12,6 +12,15 @@ import { route } from './route.js';
 import { s } from './schema.js';
 import { webhook } from './webhook.js';
 
+function noStoreTextResponse(body: BodyInit | null, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  headers.set('Cache-Control', 'no-store');
+  if (body !== null && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'text/plain; charset=utf-8');
+  }
+  return new Response(body, { ...init, headers });
+}
+
 describe('request ingress intrinsic authority', () => {
   it('does not let a late global URL constructor cross-bind route capability bytes', async () => {
     const victimCapability = 'victim-route-capability';
@@ -166,7 +175,7 @@ describe('request ingress intrinsic authority', () => {
       csrf: false,
       csrfJustification: 'machine body-limit intrinsic regression',
       async handler(request) {
-        return new Response(await request.text());
+        return noStoreTextResponse(await request.text());
       },
       method: 'POST',
       reason: 'body-limit intrinsic regression',
@@ -217,7 +226,7 @@ describe('request ingress intrinsic authority', () => {
       csrfJustification: 'machine body chunk-budget regression',
       handler() {
         handlerCalls += 1;
-        return new Response('unexpected');
+        return noStoreTextResponse('unexpected');
       },
       method: 'POST',
       reason: 'body chunk-budget regression',
@@ -348,7 +357,7 @@ describe('request ingress intrinsic authority', () => {
       csrfJustification: 'machine body-auth intrinsic regression',
       async handler(request) {
         handlerBodies.push(await request.text());
-        return new Response('ok');
+        return noStoreTextResponse('ok');
       },
       method: 'POST',
       reason: 'body-auth intrinsic regression',
@@ -390,7 +399,7 @@ describe('request ingress intrinsic authority', () => {
       csrfJustification: 'machine pinned body dispatch regression',
       async handler(request) {
         handlerBodies.push(await request.text());
-        return new Response('ok');
+        return noStoreTextResponse('ok');
       },
       method: 'POST',
       reason: 'pinned body dispatch regression',
@@ -425,7 +434,7 @@ describe('request ingress intrinsic authority', () => {
       csrfJustification: 'machine header-auth intrinsic regression',
       handler(request) {
         endpointCalls.push(request.headers.get('x-machine-token') ?? 'missing');
-        return new Response('ok');
+        return noStoreTextResponse('ok');
       },
       method: 'POST',
       reason: 'header-auth intrinsic regression',
@@ -495,7 +504,7 @@ describe('request ingress intrinsic authority', () => {
       csrfJustification: 'machine pinned header dispatch regression',
       handler(request) {
         endpointCalls.push(request.headers.get('x-machine-token') ?? 'missing');
-        return new Response('ok');
+        return noStoreTextResponse('ok');
       },
       method: 'POST',
       reason: 'pinned header dispatch regression',

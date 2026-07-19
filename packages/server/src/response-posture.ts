@@ -34,7 +34,6 @@ import {
   endpointBrowserStateAuthExecuted,
 } from './endpoint-auth-proof.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
-import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import type {
   EndpointDeclaration,
   EndpointMethod,
@@ -626,16 +625,13 @@ function frameworkPeerAddress(request: Request): string | undefined {
   return value === '' ? undefined : value;
 }
 
-/** Enforce an endpoint's declared raw response posture when runtime verification is enabled. */
+/** Enforce an endpoint's declared raw response posture on every dispatch (SPEC §9.1). */
 export function assertEndpointResponsePosture(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   response: Response,
   options: { request?: Request } = {},
 ): void {
   assertEndpointBrowserStateResponsePosture(definition, response, options.request);
-  if (!shouldVerifyEndpointResponsePosture()) {
-    return;
-  }
   const headers = readNativeResponseHeaders(response);
   const status = readNativeResponseStatus(response);
   const failures: string[] = [];
@@ -721,12 +717,6 @@ function assertEndpointBrowserStateResponsePosture(
   throw endpointPostureError(definition, [
     `${joinResponsePostureValues(browserStateHeaders, ' and ')} requires an executable non-ambient verifier or a framework-owned self-verifying handler on a ${safeMethod ? 'safe-method' : 'csrf:false'} endpoint`,
   ]);
-}
-
-function shouldVerifyEndpointResponsePosture(): boolean {
-  if (runtimeEnvironmentValue('KOVO_VERIFY_ENDPOINT_POSTURE') === '1') return true;
-  const nodeEnvironment = runtimeEnvironmentValue('NODE_ENV');
-  return nodeEnvironment === 'development' || nodeEnvironment === 'production';
 }
 
 function finalizeResponseHeaders(

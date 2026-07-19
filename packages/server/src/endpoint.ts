@@ -103,7 +103,7 @@ export interface EndpointResponsePosture {
   redirectAllowlist?: readonly RedirectLocationAllowlistEntry[];
   /**
    * Reserved response headers this raw endpoint intentionally writes. Framework protocol,
-   * credential, redirect, and security-policy headers are rejected by the dev/CI posture verifier
+   * credential, redirect, and security-policy headers are rejected by the runtime posture verifier
    * unless named here, because raw endpoints bypass the framework response header sinks.
    */
   reservedHeaders?: readonly string[];

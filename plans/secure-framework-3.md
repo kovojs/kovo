@@ -167,30 +167,26 @@ packages/browser/src/inline-loader-security.test.ts`, `pnpm run check:inline-loa
 ## Tier 2 - Raw Escape Hatches And Operator Controls
 
 - [x] **Add reserved-header posture for raw endpoints.**
-  - Evidence: `runEndpoint()` returns the handler's raw `Response` after posture assertion
-    (`packages/server/src/endpoint.ts:170`), and the current dev/opt-in assertion checks cache,
-    body kind, and content type only (`packages/server/src/endpoint.ts:263`). Route file/stream
-    outcomes already filter reserved headers such as `set-cookie`, `content-type`, and
-    `x-content-type-options` (`packages/server/src/response.ts:489`).
+  - Evidence: `runEndpoint()` returns the handler's raw `Response` only after the unconditional
+    posture assertion and header snapshot in `packages/server/src/response-posture.ts`.
   - Work: extend `EndpointResponsePosture` with reserved/protocol header declarations, or add a
-    default dev/CI assertion that flags raw endpoint writes to framework protocol headers
+    default assertion that flags raw endpoint writes to framework protocol headers
     (`Kovo-*`), security headers, `Set-Cookie`, and redirects unless explicitly declared.
   - Acceptance: endpoint tests cover accidental `Kovo-Reauth`, `Kovo-Build`, `Kovo-Changes`,
     `Set-Cookie`, `Location`, and CSP overrides with precise diagnostics and a documented opt-out for
     legitimate machine endpoints.
   - Verified 2026-06-25: `EndpointResponsePosture.reservedHeaders` declares intentional raw endpoint
-    writes to framework protocol, credential, redirect, and security-policy headers; the dev/CI
+    writes to framework protocol, credential, redirect, and security-policy headers; the runtime
     endpoint posture verifier rejects undeclared `Kovo-Reauth`, `Kovo-Build`, `Kovo-Changes`,
     `Set-Cookie`, `Location`, and `Content-Security-Policy`. `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts`
     proves the diagnostics and declared opt-out path.
 
 - [x] **Promote endpoint posture verification into a first-class CI/starter gate.**
-  - Evidence: endpoint posture verification is skipped outside development unless
-    `KOVO_VERIFY_ENDPOINT_POSTURE=1` is set (`packages/server/src/endpoint.ts:267`), so production and
-    most CI runs can silently miss posture drift unless the operator knows the env knob.
+  - Evidence: endpoint dispatch now verifies declared cache/body/content-type/reserved-header/
+    redirect posture in every environment. The starter fixture remains a pre-deploy proof that
+    each declared endpoint's ordinary response is actually exercised.
   - Work: wire `kovo check` and generated starters to run endpoint posture verification against
-    declared endpoint examples or fixture requests, and document when runtime-only verification is the
-    right tool.
+    declared endpoint examples or fixture requests.
   - Acceptance: starter `check` fails on a mismatched raw endpoint cache/body/content-type/header
     posture without requiring a live production request.
   - Verified 2026-06-25: `kovo check endpoint-posture` reads

@@ -1109,6 +1109,8 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     body: 'json',
     cache: 'public',
   } satisfies EndpointResponsePosture;
+  const publicJson = (body: unknown): Response =>
+    Response.json(body, { headers: { 'Cache-Control': 'public, max-age=60' } });
 
   it('seals an endpoint lifecycle when its handler throws before returning a response', async () => {
     const events = new EventEmitter();
@@ -1277,7 +1279,10 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
         },
         method: 'GET',
         reason: 'framework-owned async browser CSRF bootstrap adapter',
-        response: publicJsonResponse,
+        response: {
+          ...publicJsonResponse,
+          reservedHeaders: ['Set-Cookie'],
+        },
       }),
     );
     const handler = createRequestHandler(
@@ -1332,6 +1337,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
           appOwnedSafety: true,
           body: 'stream',
           cache: 'public',
+          reservedHeaders: ['Set-Cookie'],
         },
       }),
     );
@@ -1746,7 +1752,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
             ),
           ]).then((responses) => responses.map((response) => response.status));
           const token = mintCsrfToken(request, csrf, { audience: outerAudience }).token;
-          return Response.json({ statuses, token });
+          return publicJson({ statuses, token });
         },
         method: 'GET',
         reason: 'framework-owned nested early-return lifecycle fixture',
@@ -1822,7 +1828,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
           new Request('https://shop.example.test/nested-preflight-isolation'),
         );
         const token = mintCsrfToken(request, csrf, { audience }).token;
-        return Response.json({ innerStatus: innerResponse.status, token });
+        return publicJson({ innerStatus: innerResponse.status, token });
       },
       method: 'GET',
       reason: 'nested preflight outer lifecycle isolation fixture',
@@ -1855,7 +1861,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
       auth: { kind: 'none', justification: 'nested same-request success control' },
       handler(request) {
         innerRequest = request;
-        return Response.json({ inner: true });
+        return publicJson({ inner: true });
       },
       method: 'GET',
       reason: 'nested same-request success lifecycle isolation fixture',
@@ -1881,7 +1887,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
         outerRequest = request;
         const innerResponse = await innerHandler(request);
         const token = mintCsrfToken(request, csrf, { audience }).token;
-        return Response.json({ innerStatus: innerResponse.status, token });
+        return publicJson({ innerStatus: innerResponse.status, token });
       },
       method: 'GET',
       reason: 'nested same-request outer success lifecycle fixture',
@@ -1938,7 +1944,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
       async handler(request) {
         markInnerEntered();
         await innerGate;
-        return Response.json({
+        return publicJson({
           aborted: request.signal.aborted,
           body: await request.text(),
         });
@@ -1975,7 +1981,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
         const token = mintCsrfToken(request, csrf, {
           audience: 'endpoint:/nested-same-body-submit',
         }).token;
-        return Response.json({ innerBody, innerStatus: innerResponse.status, token });
+        return publicJson({ innerBody, innerStatus: innerResponse.status, token });
       },
       method: 'POST',
       reason: 'nested same-request outer body and abort fixture',
@@ -2039,7 +2045,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
         const token = mintCsrfToken(request, csrf, {
           audience: 'endpoint:/nested-same-auth-submit',
         }).token;
-        return Response.json({ innerStatus: innerResponse.status, token });
+        return publicJson({ innerStatus: innerResponse.status, token });
       },
       method: 'GET',
       reason: 'nested same-request outer auth fixture',
@@ -2090,7 +2096,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
         const token = mintCsrfToken(request, csrf, {
           audience: 'endpoint:/nested-same-access-submit',
         }).token;
-        return Response.json({ innerStatus: innerResponse.status, token });
+        return publicJson({ innerStatus: innerResponse.status, token });
       },
       method: 'GET',
       reason: 'nested same-request outer access fixture',
@@ -2145,7 +2151,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
         const token = mintCsrfToken(request, csrf, {
           audience: 'endpoint:/nested-same-csrf-submit',
         }).token;
-        return Response.json({ innerStatus: innerResponse.status, token });
+        return publicJson({ innerStatus: innerResponse.status, token });
       },
       method: 'POST',
       reason: 'nested same-request outer CSRF fixture',
@@ -2254,14 +2260,20 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
         auth: { kind: 'custom', name: 'framework-immutable-csrf-response' },
         handler(request) {
           mintCsrfToken(request, csrf, { audience: 'endpoint:/immutable-csrf-response-submit' });
-          return Response.redirect('https://shop.example.test/next', 302);
+          return new Response(null, {
+            headers: {
+              'Cache-Control': 'no-store',
+              Location: '/next',
+            },
+            status: 302,
+          });
         },
         method: 'GET',
         reason: 'framework-owned immutable response CSRF fixture',
         response: {
           appOwnedSafety: true,
           body: 'redirect',
-          cache: 'custom',
+          cache: 'no-store',
           reservedHeaders: ['Location'],
         },
       }),
@@ -2312,7 +2324,12 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
           }
           return Response.json(
             { conflictRejected, sameCookie: first.setCookie === second.setCookie },
-            { headers: { 'Set-Cookie': first.setCookie } },
+            {
+              headers: {
+                'Cache-Control': 'private, no-store',
+                'Set-Cookie': first.setCookie,
+              },
+            },
           );
         },
         method: 'GET',
@@ -2321,6 +2338,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
           appOwnedSafety: true,
           body: 'json',
           cache: 'private',
+          reservedHeaders: ['Set-Cookie'],
         },
       }),
     );
@@ -2420,7 +2438,12 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
                 controller.close();
               },
             }),
-            { headers: { 'Content-Type': 'text/plain' } },
+            {
+              headers: {
+                'Cache-Control': 'private, no-store',
+                'Content-Type': 'text/plain',
+              },
+            },
           );
         },
         method: 'GET',

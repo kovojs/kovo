@@ -25,6 +25,15 @@ const ENDPOINT_CSRF_SECRET = 'endpoint-csrf-secret-0123456789abcdef012345';
 const MACHINE_HMAC_SECRET = 'endpoint-hmac-secret-0123456789abcdef012345';
 const APP_CSRF_SECRET = 'app-csrf-secret-0123456789abcdef012345';
 
+function rawEndpointResponse(body: BodyInit | null, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  if (!headers.has('Cache-Control')) headers.set('Cache-Control', 'no-store');
+  if (body !== null && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'text/plain; charset=utf-8');
+  }
+  return new Response(body, { ...init, headers });
+}
+
 describe('server app matched dispatch boundary', () => {
   it('owns SPEC §9.5 client-module dispatch through the app registry', async () => {
     const app = createApp();
@@ -75,7 +84,7 @@ describe('server app matched dispatch boundary', () => {
   it('owns SPEC §9.5 raw endpoint dispatch without app session leakage', async () => {
     const status = endpoint('/status', {
       handler(request) {
-        return new Response(`session:${'session' in request}`);
+        return rawEndpointResponse(`session:${'session' in request}`);
       },
       method: 'GET',
       reason: 'status endpoint session isolation test',
@@ -98,7 +107,7 @@ describe('server app matched dispatch boundary', () => {
   it('owns SPEC §9.5 raw endpoint dispatch without app db leakage', async () => {
     const status = endpoint('/status', {
       handler(request) {
-        return new Response(`db:${'db' in request}`);
+        return rawEndpointResponse(`db:${'db' in request}`);
       },
       method: 'GET',
       reason: 'status endpoint db isolation test',
@@ -121,7 +130,7 @@ describe('server app matched dispatch boundary', () => {
     const status = endpoint('/status', {
       db: true,
       handler(_request, context) {
-        return new Response(`ctx-db:${'db' in context}`);
+        return rawEndpointResponse(`ctx-db:${'db' in context}`);
       },
       method: 'GET',
       reason: 'status endpoint scoped db isolation test',
@@ -159,7 +168,7 @@ describe('server app matched dispatch boundary', () => {
       db: true,
       async handler(_request, context) {
         const scoped = await context.actAs('user-1');
-        return new Response(`${scoped.db.read.select()}:${scoped.db.write.insert()}`);
+        return rawEndpointResponse(`${scoped.db.read.select()}:${scoped.db.write.insert()}`);
       },
       method: 'POST',
       reason: 'orders endpoint actAs scoped db test',
@@ -208,7 +217,7 @@ describe('server app matched dispatch boundary', () => {
       async handler(_request, context) {
         handlerCalls += 1;
         const scoped = await context.actAs('attacker-selected-principal');
-        return new Response(String(scoped.db.write));
+        return rawEndpointResponse(String(scoped.db.write));
       },
       method: 'POST',
       reason: 'structural endpoint effective-method regression',
@@ -236,7 +245,7 @@ describe('server app matched dispatch boundary', () => {
 
   it('rejects cast structural lowercase endpoint methods while assembling the app', () => {
     const declaredGet = endpoint('/status/lowercase-structural-method', {
-      handler: () => new Response('must-not-dispatch'),
+      handler: () => rawEndpointResponse('must-not-dispatch'),
       method: 'GET',
       reason: 'lowercase structural endpoint method regression',
       response: rawTextResponse,
@@ -264,7 +273,7 @@ describe('server app matched dispatch boundary', () => {
         const scoped = await context.actAs('reader-1');
         // @ts-expect-error SPEC §9.1: safe endpoint methods do not expose a Writer.
         const write = scoped.db.write;
-        return new Response(
+        return rawEndpointResponse(
           `${scoped.db.read.select()}:${String(write)}:${request.headers.get('authorization')}`,
         );
       },
@@ -339,7 +348,7 @@ describe('server app matched dispatch boundary', () => {
           Headers.prototype.get = nativeHeaderGet;
           Object.defineProperty = nativeDefineProperty;
         }
-        return new Response('ok');
+        return rawEndpointResponse('ok');
       },
       method: 'GET',
       reason: 'actAs clone authority regression',
@@ -366,7 +375,7 @@ describe('server app matched dispatch boundary', () => {
     expect(dbPrincipals).toEqual(['machine-principal']);
   });
 
-  it('finalizes raw endpoint Set-Cookie and redirect headers at the app shell boundary', async () => {
+  it('finalizes raw endpoint Set-Cookie and enforces redirect declarations at the app shell boundary', async () => {
     let cookieVerifierCalls = 0;
     const cookieEndpoint = endpoint('/raw-cookie', {
       auth: {
@@ -378,7 +387,7 @@ describe('server app matched dispatch boundary', () => {
         }),
       },
       handler() {
-        return new Response('cookie', {
+        return rawEndpointResponse('cookie', {
           headers: {
             'Cache-Control': 'public, max-age=3600',
             'Set-Cookie': 'sid=abc; Path=/',
@@ -397,7 +406,7 @@ describe('server app matched dispatch boundary', () => {
     });
     const redirectEndpoint = endpoint('/raw-redirect', {
       handler() {
-        return new Response(null, {
+        return rawEndpointResponse(null, {
           headers: {
             'Cache-Control': 'no-store',
             Location: 'https://evil.example/phish',
@@ -416,7 +425,7 @@ describe('server app matched dispatch boundary', () => {
     });
     const allowedRedirectEndpoint = endpoint('/raw-redirect-allowed', {
       handler() {
-        return new Response(null, {
+        return rawEndpointResponse(null, {
           headers: {
             'Cache-Control': 'no-store',
             Location: 'https://accounts.example.test/oauth/start',
@@ -477,12 +486,11 @@ describe('server app matched dispatch boundary', () => {
     expect(cookie.headers.get('cache-control')).toBe('private, no-store');
     expect(cookie.headers.get('vary')).toBe('Accept-Encoding, Cookie');
 
-    const redirect = await dispatchMatchedAppRequest(
-      matchedAppRequest(app, new Request('https://shop.example.test/raw-redirect')),
-    );
-    expect(redirect.status).toBe(303);
-    expect(redirect.headers.get('location')).toBe('/');
-    expect(redirect.headers.getSetCookie()).toEqual([]);
+    await expect(
+      dispatchMatchedAppRequest(
+        matchedAppRequest(app, new Request('https://shop.example.test/raw-redirect')),
+      ),
+    ).rejects.toThrow(/redirect Location must be same-origin/u);
 
     const allowedRedirect = await dispatchMatchedAppRequest(
       matchedAppRequest(app, new Request('https://shop.example.test/raw-redirect-allowed')),
@@ -581,7 +589,7 @@ describe('server app matched dispatch boundary', () => {
       const updateEmail = endpoint('/account/email', {
         handler() {
           handlerCalls += 1;
-          return new Response('updated');
+          return rawEndpointResponse('updated');
         },
         method,
         reason: 'account email update endpoint',
@@ -612,7 +620,7 @@ describe('server app matched dispatch boundary', () => {
       const readOnly = endpoint('/safe-method', {
         handler() {
           handlerCalls += 1;
-          return new Response('read-only');
+          return rawEndpointResponse('read-only');
         },
         method,
         reason: 'closed safe-method runtime proof',
@@ -636,7 +644,7 @@ describe('server app matched dispatch boundary', () => {
     const updateEmail = endpoint('/account/poisoned-method', {
       handler() {
         handlerCalls += 1;
-        return new Response('updated');
+        return rawEndpointResponse('updated');
       },
       method: 'POST',
       reason: 'post-import request method poisoning regression',
@@ -667,7 +675,7 @@ describe('server app matched dispatch boundary', () => {
     const updateEmail = endpoint('/account/email', {
       handler() {
         handlerCalls += 1;
-        return new Response('updated');
+        return rawEndpointResponse('updated');
       },
       method: 'POST',
       reason: 'account email update endpoint',
@@ -696,7 +704,7 @@ describe('server app matched dispatch boundary', () => {
     const purge = endpoint('/cache/product', {
       handler() {
         handlerCalls += 1;
-        return new Response('purged');
+        return rawEndpointResponse('purged');
       },
       method: 'PURGE',
       reason: 'custom unsafe-method CSRF acceptance proof',
@@ -724,7 +732,7 @@ describe('server app matched dispatch boundary', () => {
       const purge = endpoint('/cache/product', {
         handler() {
           handlerCalls += 1;
-          return new Response('purged');
+          return rawEndpointResponse('purged');
         },
         method: 'PURGE',
         reason: 'custom unsafe-method CSRF origin-floor proof',
@@ -758,7 +766,7 @@ describe('server app matched dispatch boundary', () => {
       async handler(request) {
         handlerCalls += 1;
         seenBody = await request.text();
-        return new Response('updated');
+        return rawEndpointResponse('updated');
       },
       method: 'POST',
       reason: 'account email update endpoint',
@@ -791,7 +799,7 @@ describe('server app matched dispatch boundary', () => {
       async handler(request) {
         handlerCalls += 1;
         const body = await request.formData();
-        return new Response(String(body.get('name')));
+        return rawEndpointResponse(String(body.get('name')));
       },
       method: 'POST',
       reason: 'anonymous browser file metadata form',
@@ -826,7 +834,7 @@ describe('server app matched dispatch boundary', () => {
       async handler(request) {
         handlerCalls += 1;
         seenBody = await request.text();
-        return new Response('created');
+        return rawEndpointResponse('created');
       },
       method: 'POST',
       reason: 'anonymous browser file metadata JSON',
@@ -864,7 +872,7 @@ describe('server app matched dispatch boundary', () => {
     const updateEmail = endpoint('/account/email', {
       handler() {
         handlerCalls += 1;
-        return new Response('updated');
+        return rawEndpointResponse('updated');
       },
       method: 'POST',
       reason: 'account email update endpoint',
@@ -890,7 +898,7 @@ describe('server app matched dispatch boundary', () => {
     const updateEmail = endpoint('/account/email', {
       handler() {
         handlerCalls += 1;
-        return new Response('updated');
+        return rawEndpointResponse('updated');
       },
       method: 'POST',
       reason: 'account email update endpoint',
@@ -920,7 +928,7 @@ describe('server app matched dispatch boundary', () => {
     const updateEmail = endpoint('/account/email', {
       handler() {
         handlerCalls += 1;
-        return new Response('updated');
+        return rawEndpointResponse('updated');
       },
       method: 'POST',
       reason: 'account email update endpoint',
@@ -950,7 +958,7 @@ describe('server app matched dispatch boundary', () => {
       csrfJustification: 'signed webhook validates raw body',
       handler(request) {
         seenCookie = request.headers.get('cookie');
-        return new Response('ok', { status: 202 });
+        return rawEndpointResponse('ok', { status: 202 });
       },
       method: 'POST',
       reason: 'signed webhook raw body dispatch',
@@ -997,7 +1005,7 @@ describe('server app matched dispatch boundary', () => {
           request.headers.get('x-machine-signature'),
         ]);
         await context.actAs('machine-principal');
-        return new Response('ok', {
+        return rawEndpointResponse('ok', {
           headers: {
             'Cache-Control': 'no-store',
             'Clear-Site-Data': '"cookies"',
@@ -1055,7 +1063,7 @@ describe('server app matched dispatch boundary', () => {
       auth: { kind: 'verifier', name: verifier.resolved.scheme, verify: verifier },
       handler() {
         handlerCalls += 1;
-        return new Response('signed');
+        return rawEndpointResponse('signed');
       },
       method: 'POST',
       reason: 'signed machine endpoint',
@@ -1100,7 +1108,7 @@ describe('server app matched dispatch boundary', () => {
       csrfJustification: 'signed webhook validates raw body',
       async handler(request) {
         handlerCalls += 1;
-        return new Response(await request.text(), { status: 202 });
+        return rawEndpointResponse(await request.text(), { status: 202 });
       },
       method: 'POST',
       reason: 'signed webhook raw body dispatch',
@@ -1127,7 +1135,7 @@ describe('server app matched dispatch boundary', () => {
     const status = endpoint('/status', {
       handler() {
         handlerCalls += 1;
-        return new Response('ok');
+        return rawEndpointResponse('ok');
       },
       method: 'GET',
       reason: 'endpoint method mismatch dispatch test',
@@ -1149,7 +1157,7 @@ describe('server app matched dispatch boundary', () => {
     const status = endpoint('/status', {
       handler() {
         handlerCalls += 1;
-        return new Response('ok', {
+        return rawEndpointResponse('ok', {
           headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Status': 'ok' },
           status: 200,
         });

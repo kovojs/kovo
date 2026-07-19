@@ -123,6 +123,7 @@ const serverRequestBodyProvenancePath = path.join(
   repoRoot,
   'packages/server/src/request-body-provenance.ts',
 );
+const serverResponsePosturePath = path.join(repoRoot, 'packages/server/src/response-posture.ts');
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 
@@ -418,6 +419,10 @@ const formDataForEachProvenanceBranch =
   '            requestApply(callback, thisArg, [tagUntrustedFormEntry(pair[1])!, pair[0], proxy]);';
 const removedFormDataForEachProvenanceBranch =
   '            requestApply(callback, thisArg, [pair[1], pair[0], target]);';
+const endpointResponsePostureChokeBranch =
+  '  assertEndpointResponsePosture(definition, response, options);';
+const removedEndpointResponsePostureChokeBranch =
+  '  // endpoint response-posture choke removed by mutant';
 
 const canonicalPostMethodBranch =
   "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
@@ -3351,6 +3356,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: formDataForEachProvenanceBranch,
     sourceFile: serverUntrustedRequestBodyPath,
     test: assertFormDataForEachProvenanceBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes declared endpoint response-posture verification before header snapshot.',
+    expectedKiller:
+      'the combined endpoint posture/header-snapshot choke must reject cache, body, and content-type drift in every environment',
+    name: 'server-response-posture/drop-endpoint-verification-choke',
+    replacement: removedEndpointResponsePostureChokeBranch,
+    search: endpointResponsePostureChokeBranch,
+    sourceFile: serverResponsePosturePath,
+    test: assertEndpointResponsePostureChokeBehavior,
   },
   {
     baseModule: requestIngressPolicy,
@@ -6671,6 +6687,39 @@ function assertFormDataForEachProvenanceBehavior(moduleUnderTest) {
     return;
   }
   throw new Error('FormData.forEach exposed a coercible attacker-controlled scalar');
+}
+
+function assertEndpointResponsePostureChokeBehavior(moduleUnderTest) {
+  const definition = {
+    csrf: { exempt: true, justification: 'behavioral mutation fixture' },
+    handler: () => new Response('unreachable'),
+    method: 'POST',
+    mount: 'exact',
+    path: '/mutation-harness/endpoint-posture',
+    reason: 'behavioral endpoint response-posture mutation fixture',
+    response: {
+      appOwnedSafety: true,
+      body: 'json',
+      cache: 'no-store',
+    },
+  };
+  const response = new Response('{"ok":true}', {
+    headers: {
+      'Cache-Control': 'public, max-age=3600',
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+  });
+  try {
+    moduleUnderTest.assertEndpointResponsePostureAndSnapshot(definition, response, {
+      request: new Request('https://kovo.test/mutation-harness/endpoint-posture', {
+        method: 'POST',
+      }),
+    });
+  } catch (error) {
+    if (String(error).includes('response posture mismatch')) return;
+    throw error;
+  }
+  throw new Error('endpoint posture/header-snapshot choke admitted a mismatched raw Response');
 }
 
 async function assertRequestIngressMethodIdentityIsClosed(moduleUnderTest) {

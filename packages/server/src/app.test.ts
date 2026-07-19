@@ -85,6 +85,15 @@ const rawJsonResponse = {
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
 
+function noStoreTextResponse(body: BodyInit | null, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  headers.set('Cache-Control', 'no-store');
+  if (body !== null && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'text/plain; charset=utf-8');
+  }
+  return new Response(body, { ...init, headers });
+}
+
 function expectReservedSystemResponsePosture(response: Response, buildToken: string): void {
   expect(response.headers.get('cache-control')).toBe('private, no-store');
   expect(response.headers.get('vary')).toBe('Cookie');
@@ -2430,16 +2439,19 @@ describe('server createApp request shell', () => {
       csrfJustification: 'test endpoint uses a non-browser caller',
       handler(request) {
         const typed = request as Request & { db?: string; session?: { userId: string } };
-        return Response.json({
-          db: typed.db ?? null,
-          hasDb: 'db' in typed,
-          hasSession: 'session' in typed,
-          session: typed.session ?? null,
-        });
+        return Response.json(
+          {
+            db: typed.db ?? null,
+            hasDb: 'db' in typed,
+            hasSession: 'session' in typed,
+            session: typed.session ?? null,
+          },
+          { headers: { 'Cache-Control': 'no-store' } },
+        );
       },
       method: 'POST',
       reason: 'request extension preservation test',
-      response: rawTextResponse,
+      response: rawJsonResponse,
     });
     const handler = createRequestHandler(createApp({ endpoints: [upload] }));
     const request = new Request('https://example.test/extension-upload', {
@@ -2995,7 +3007,7 @@ describe('server createApp request shell', () => {
     const statusEndpoint = endpoint('/status', {
       handler(request) {
         expect('session' in request).toBe(false);
-        return new Response('endpoint');
+        return noStoreTextResponse('endpoint');
       },
       method: 'GET',
       reason: 'endpoint-before-route dispatch test',
@@ -3219,7 +3231,7 @@ describe('server createApp request shell', () => {
             csrfJustification: 'signed provider test endpoint',
             handler(request) {
               expect('session' in request).toBe(false);
-              return new Response(`endpoint-db:${'db' in request}`);
+              return noStoreTextResponse(`endpoint-db:${'db' in request}`);
             },
             method: 'POST',
             reason: 'provider webhook db wiring test',
