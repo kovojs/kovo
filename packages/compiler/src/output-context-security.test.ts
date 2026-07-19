@@ -398,6 +398,16 @@ export const FormSinks = component({
   // @kovo-security-certifies C13 dynamic-generated-control-target-closes
   it.each([
     [
+      'enhanced mutation identity',
+      '<form data-bind:data-mutation="state.mutation" action="/_m/account/delete" method="post">Delete</form>',
+      'data-mutation',
+    ],
+    [
+      'deferred stylesheet promotion',
+      '<link data-bind:data-kovo-deferred-style="state.promote" rel="preload" as="style" href="/private.css" />',
+      'data-kovo-deferred-style',
+    ],
+    [
       'module allowlist',
       '<output data-bind:data-kovo-module-allowlist="state.module">Result</output>',
       'data-kovo-module-allowlist',
@@ -434,6 +444,16 @@ export const FormSinks = component({
   );
 
   it.each([
+    [
+      'static spread mutation identity',
+      `<form {...{ 'data-bind:data-mutation': 'state.mutation' }}>Delete</form>`,
+      'data-mutation',
+    ],
+    [
+      'nested primitive deferred stylesheet marker',
+      `<Tooltip.Trigger asChild attrs={{ attrs: { 'data-bind:data-kovo-deferred-style': 'state.promote' } }}><link rel="preload" as="style" href="/private.css" /></Tooltip.Trigger>`,
+      'data-kovo-deferred-style',
+    ],
     [
       'static spread',
       `<output {...{ 'data-bind:data-stream-renderer': 'state.renderer' }}>Result</output>`,
