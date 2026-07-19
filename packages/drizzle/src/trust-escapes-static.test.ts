@@ -2305,6 +2305,117 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts).toEqual([]);
   });
 
+  // @kovo-security-certifies C13 finite-ir-starter-door-reconciliation
+  it('accepts exact finite-IR starter doors while keeping lookalike and aliased doors closed', () => {
+    const safe = sinksFor(`
+      import {
+        createApp,
+        createMemoryStorage,
+        createSigningKeyRing,
+        createStorageDownloadEndpoint,
+        mutation,
+        publicAccess,
+        publicScopedKey,
+        query,
+        route,
+        s,
+        task,
+      } from '@kovojs/server';
+
+      const signingKeys = createSigningKeyRing({
+        keys: [{
+          id: 'starter-2026',
+          secret: 'starter-test-signing-material-2026',
+          state: 'active',
+        }],
+      });
+      const storage = createMemoryStorage();
+      await storage.put(publicScopedKey('receipts/starter.txt'), 'starter proof', {
+        contentType: 'text/plain',
+      });
+      const download = createStorageDownloadEndpoint({
+        basePath: '/download',
+        secret: signingKeys,
+        storage,
+      });
+
+      export const parseStaticFile = query({
+        access: publicAccess('static file parser proof'),
+        load() {
+          const file = {
+            name: 'avatar.png',
+            size: 11,
+            type: 'image/png',
+            async arrayBuffer() { return new Uint8Array([0x89, 0x50]).buffer; },
+          };
+          try {
+            s.file().accept(['image/png']).parse(file);
+          } catch {}
+          return { ok: true };
+        },
+      });
+
+      export const follow = task('starter/follow', {
+        input: s.object({ id: s.string() }),
+        async run(_input) {},
+      });
+      export const enqueue = mutation({
+        input: s.object({ id: s.string() }),
+        async handler(input, request) {
+          await request.schedule(follow, { id: input.id }, {
+            key: publicScopedKey(\`starter:${'${input.id}'}\`),
+          });
+          return { ok: true };
+        },
+      });
+      export const capability = route('/capability', {
+        access: publicAccess('capability URL proof'),
+        async page(context) {
+          const signed = await context.signUrl({
+            expiresIn: 60_000,
+            key: publicScopedKey('receipts/starter.txt'),
+          });
+          return <a href={signed.url}>Download</a>;
+        },
+      });
+
+      export default createApp({
+        endpoints: [download],
+        mutations: [enqueue],
+        queries: [parseStaticFile],
+        routes: [capability],
+        tasks: [follow],
+      });
+    `);
+    expect(safe).toEqual([]);
+
+    for (const [label, declaration, key] of [
+      [
+        'foreign same-named key constructor',
+        "import { publicScopedKey } from './lookalike.js';",
+        "publicScopedKey('receipts/foreign.txt')",
+      ],
+      [
+        'aliased framework key constructor',
+        "import { publicScopedKey } from '@kovojs/server'; const mintKey = publicScopedKey;",
+        "mintKey('receipts/aliased.txt')",
+      ],
+      [
+        'computed framework key constructor',
+        "import * as server from '@kovojs/server';",
+        "server['publicScopedKey']('receipts/computed.txt')",
+      ],
+    ] as const) {
+      const facts = sinksFor(`
+        import { createMemoryStorage } from '@kovojs/server';
+        ${declaration}
+        const storage = createMemoryStorage();
+        await storage.put(${key}, 'unsafe');
+      `);
+      expect(facts.length, `${label}: ${JSON.stringify(facts)}`).toBeGreaterThan(0);
+    }
+  });
+
   it('accepts only an exact mutation request scheduling a pristine local task with plain input', () => {
     const safe = sinksFor(`
       import { mutation, s, task } from '@kovojs/server';

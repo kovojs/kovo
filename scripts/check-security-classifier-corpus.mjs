@@ -1366,6 +1366,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'finite-ir-starter-door-reconciliation',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 finite-ir-starter-door-reconciliation',
+          'accepts exact finite-IR starter doors while keeping lookalike and aliased doors closed',
+          "s.file().accept(['image/png']).parse(file)",
+          "await storage.put(publicScopedKey('receipts/starter.txt')",
+          "key: publicScopedKey(\\`starter:${'${input.id}'}\\`)",
+          "key: publicScopedKey('receipts/starter.txt')",
+          "'foreign same-named key constructor'",
+          "'aliased framework key constructor'",
+          "server['publicScopedKey']('receipts/computed.txt')",
+        ],
+      },
+      {
         id: 'generated-auth-environment-exact-grammar',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
