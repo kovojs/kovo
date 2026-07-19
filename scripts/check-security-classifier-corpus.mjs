@@ -2544,6 +2544,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'generated-readonly-app-db-finite-ir',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 generated-readonly-app-db-finite-ir',
+          'accepts only the exact generated readonlyAppDb read chain in the finite server IR',
+          "endpoint('/api/task-proof-count'",
+          '.where(eq(contacts.id',
+          "'local capability alias'",
+          "'computed read method'",
+          "'foreign same-named import'",
+          "'forged generated runtime export'",
+          "'mutated generated re-export'",
+        ],
+      },
+      {
         id: 'complete-mutation-form-security-fields',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [

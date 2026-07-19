@@ -2113,6 +2113,97 @@ export const contacts = pgTable('contacts', {
     ).toEqual([]);
   });
 
+  // @kovo-security-certifies C13 generated-readonly-app-db-finite-ir
+  it('accepts only the exact generated readonlyAppDb read chain in the finite server IR', () => {
+    const endpointSource = `
+import { endpoint, publicAccess } from '@kovojs/server';
+import { eq } from 'drizzle-orm';
+import { readonlyAppDb } from './db.js';
+import { contacts } from './schema.js';
+
+export const taskProofCount = endpoint('/api/task-proof-count', {
+  access: publicAccess('public task proof count'),
+  auth: { kind: 'none', justification: 'public read-only count' },
+  csrf: false,
+  csrfJustification: 'read-only GET endpoint',
+  method: 'GET',
+  async handler() {
+    const rows = await readonlyAppDb
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.id, 'task-proof'))
+      .limit(1);
+    return Response.json({ count: rows.length });
+  },
+  reason: 'read-only task proof count',
+  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+});
+`;
+    const schemaSource = `
+import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+export const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
+`;
+    const runtimeSource = `
+import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+import { contacts } from '../schema.js';
+const APP_TABLES = [contacts];
+const APP_SEED = [{ table: contacts, rows: [{ id: 'task-proof' }] }];
+const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
+export const appRuntimeReadonlyDb = appDatabase.readonlyDb;
+`;
+    const dbSource = `
+import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
+export const readonlyAppDb = appRuntimeReadonlyDb;
+`;
+    const project = (source: string, runtime = runtimeSource, db = dbSource) =>
+      kv449Project(source, [
+        { fileName: 'src/schema.ts', source: schemaSource },
+        { fileName: 'src/_kovo/app-runtime-db.ts', source: runtime },
+        { fileName: 'src/db.ts', source: db },
+      ]);
+
+    expect(project(endpointSource)).toEqual([]);
+
+    for (const [label, source] of [
+      [
+        'local capability alias',
+        endpointSource.replace(
+          'const rows = await readonlyAppDb',
+          'const database = readonlyAppDb;\n    const rows = await database',
+        ),
+      ],
+      [
+        'computed read method',
+        endpointSource.replace('readonlyAppDb\n      .select', "readonlyAppDb\n      ['select']"),
+      ],
+      [
+        'foreign same-named import',
+        endpointSource.replace("from './db.js'", "from './lookalike.js'"),
+      ],
+    ] as const) {
+      expect(project(source).length, label).toBeGreaterThan(0);
+    }
+
+    expect(
+      project(
+        endpointSource,
+        runtimeSource.replace(
+          'appDatabase.readonlyDb',
+          `{ select() { return { from() { return eval('forged'); } }; } }`,
+        ),
+      ).length,
+      'forged generated runtime export',
+    ).toBeGreaterThan(0);
+    expect(
+      project(
+        endpointSource,
+        runtimeSource,
+        `${dbSource}\nObject.defineProperty(readonlyAppDb, 'select', { value: () => ({}) });`,
+      ).length,
+      'mutated generated re-export',
+    ).toBeGreaterThan(0);
+  });
+
   it.each([
     [
       'a same-named imported trustedAssign',
