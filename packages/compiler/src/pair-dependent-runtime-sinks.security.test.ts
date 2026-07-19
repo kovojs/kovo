@@ -121,6 +121,11 @@ describe('element-context execution and isolation sinks', () => {
       '<iframe src="/untrusted/profile" sandbox={state.value} />',
       'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
     ],
+    [
+      'iframe source',
+      '<iframe src={state.value} sandbox="allow-forms" />',
+      'a dynamic iframe source can load same-origin attacker-controlled active content',
+    ],
   ])('rejects a dynamic %s', (_label, markup, expectedReason) => {
     const diagnostics = kv236Diagnostics(`
 export const ContextualSink = component({
@@ -143,6 +148,7 @@ export const ContextualSink = component({
       'iframe sandbox spread',
       '<iframe {...{ sandbox: state.value, src: "/untrusted/profile" }} />',
     ],
+    ['iframe source spread', '<iframe {...{ sandbox: "allow-forms", src: state.value }} />'],
     ['opaque script spread', '<script {...state.value} />'],
     ['opaque link spread', '<link {...state.value} />'],
     ['opaque iframe spread', '<iframe {...state.value} />'],
@@ -172,6 +178,10 @@ export const StaticContext = component({
       <link
         rel="stylesheet"
         href={trustedUrl(state.stylesheet, 'reviewed stylesheet asset')}
+      />
+      <iframe
+        sandbox="allow-forms"
+        src={trustedUrl(state.asset, 'reviewed embedded application')}
       />
     </>
   ),
