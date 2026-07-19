@@ -21,6 +21,7 @@ import {
 import type {
   CompileRouteModuleOptions,
   CompileRouteModuleResult,
+  EmittedFile,
   RoutePageComponentFact,
   RoutePageCssFact,
   RoutePageComponentPropFact,
@@ -176,26 +177,24 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
   const artifactFileName =
     stableOptions.artifactFileName ?? routeArtifactFileName(stableOptions.fileName);
 
+  const emittedFiles: readonly EmittedFile[] =
+    routePageCount === 0
+      ? []
+      : [
+          {
+            fileName: artifactFileName,
+            kind: 'route',
+            source: emitCompiledRouteModule({
+              artifactFileName,
+              routePages: stableRoutePages,
+              componentImportRewrites: stableOptions.componentImportRewrites ?? [],
+              source: stableOptions.source,
+              sourceFile,
+            }),
+          },
+        ];
   const stableResult = compilerSnapshotJsonValue(
-    {
-      files:
-        routePageCount === 0
-          ? []
-          : [
-              {
-                fileName: artifactFileName,
-                kind: 'route',
-                source: emitCompiledRouteModule({
-                  artifactFileName,
-                  routePages: stableRoutePages,
-                  componentImportRewrites: stableOptions.componentImportRewrites ?? [],
-                  source: stableOptions.source,
-                  sourceFile,
-                }),
-              },
-            ],
-      routePageFacts,
-    },
+    { files: emittedFiles, routePageFacts },
     'Compiler route module result',
   );
   const diagnosticCount = compilerArrayLength(diagnostics, 'Compiler route diagnostics');

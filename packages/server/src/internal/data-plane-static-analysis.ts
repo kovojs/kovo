@@ -7,7 +7,7 @@ import {
   resolve as builtinResolve,
 } from 'node:path';
 
-import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core';
 import {
   compilerSourceModuleSpecifiers,
   createCompilerSourceFileSystem,
@@ -120,9 +120,9 @@ export interface RuntimeMutationTouchSiteLike {
 }
 
 interface TouchGraphDiagnosticLike {
-  code: string;
+  code: DiagnosticCode;
   message: string;
-  severity?: string;
+  severity: DiagnosticSeverity;
   site: string;
 }
 
@@ -1389,7 +1389,7 @@ function registeredSqlSafetyDiagnostic(value: unknown): TouchGraphDiagnosticLike
       severity === 'lint' ||
       severity === 'notice')
   ) {
-    return value as TouchGraphDiagnosticLike;
+    return { code, message, severity, site };
   }
   throw new TypeError('Static SQL-safety diagnostic has malformed authority fields.');
 }

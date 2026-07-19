@@ -222,7 +222,7 @@ describe('anonymous mutation-form document cache posture', () => {
     expect(submissions).toBe(1);
   });
 
-  it('keeps unrelated public HTML cacheable merely because the request carries a Cookie', async () => {
+  it('refuses to generalize a Cookie-bearing document request into a public representation', async () => {
     const about = route('/about', { page: () => <main>Public information</main> });
     const handler = createRequestHandler(
       createApp({
@@ -238,8 +238,8 @@ describe('anonymous mutation-form document cache posture', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBeNull();
-    expect(response.headers.get('vary')).toBeNull();
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
   });
 
   it('selects the private posture before a deferred region can emit anonymous CSRF authority', async () => {
@@ -955,7 +955,7 @@ describe('anonymous mutation-form document cache posture', () => {
     await expect(response.text()).resolves.not.toBe('');
   });
 
-  it('keeps an eager route stream helper body eligible for its authored public cache policy', async () => {
+  it('keeps an eager route stream helper body on the conservative private cache floor', async () => {
     const download = route('/eager-route-body', {
       page: () =>
         respond.stream('public report', {
@@ -971,8 +971,8 @@ describe('anonymous mutation-form document cache posture', () => {
     );
 
     const response = await handler(new Request('https://shop.example.test/eager-route-body'));
-    expect(response.headers.get('cache-control')).toBe('public, max-age=60');
-    expect(response.headers.get('vary')).toBeNull();
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
     await expect(response.text()).resolves.toBe('public report');
   });
 });
@@ -2011,7 +2011,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     ).toBe(true);
   });
 
-  it('preserves body bytes and abort propagation when rekeying a same-request nested dispatch', async () => {
+  it('preserves body bytes while discarding a same-request nested result after ingress abort', async () => {
     let markInnerEntered!: () => void;
     const innerEntered = new Promise<void>((resolve) => {
       markInnerEntered = resolve;
@@ -2020,6 +2020,10 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     const innerGate = new Promise<void>((resolve) => {
       releaseInner = resolve;
     });
+    let markInnerObserved!: (value: { aborted: boolean; body: string }) => void;
+    const innerObserved = new Promise<{ aborted: boolean; body: string }>((resolve) => {
+      markInnerObserved = resolve;
+    });
     const innerEndpoint = endpoint('/nested-same-body', {
       auth: { kind: 'none', justification: 'nested body/abort isolation control' },
       csrf: false,
@@ -2027,10 +2031,12 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
       async handler(request) {
         markInnerEntered();
         await innerGate;
-        return publicJson({
+        const observedInner = {
           aborted: request.signal.aborted,
           body: await request.text(),
-        });
+        };
+        markInnerObserved(observedInner);
+        return publicJson(observedInner);
       },
       method: 'POST',
       reason: 'nested same-request body and abort lifecycle fixture',
@@ -2089,11 +2095,10 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
         signal: controller.signal,
       }),
     );
-    await expect(response.json()).resolves.toMatchObject({
-      innerBody: { aborted: true, body: '{"scope":"exact"}' },
-      innerStatus: 200,
-    });
-    expect(response.headers.getSetCookie()).toHaveLength(1);
+    expect(response.status).toBe(503);
+    await expect(response.text()).resolves.toBe('Service Unavailable');
+    await expect(innerObserved).resolves.toEqual({ aborted: true, body: '{"scope":"exact"}' });
+    expect(response.headers.getSetCookie()).toHaveLength(0);
   });
 
   it('keeps same-request nested auth denial from sealing the outer lifecycle', async () => {

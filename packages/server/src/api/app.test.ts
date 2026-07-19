@@ -1085,6 +1085,7 @@ describe('server app-shell public API barrels', () => {
       'guardAuditName',
       'installGeneratedTableSecurityManifestForCommand',
       'invalidate',
+      'registerGeneratedCacheInfluenceManifest',
       'registerGeneratedMutationTouchRegistry',
       'registerGeneratedQueryReadRegistry',
       'registerGeneratedTableSecurityManifest',

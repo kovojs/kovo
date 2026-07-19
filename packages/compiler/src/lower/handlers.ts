@@ -43,7 +43,7 @@ import {
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
 import type { BrowserSecurityOperationModel } from '../scan/model.js';
-import { normalizeComponentFileName } from '../shared.js';
+import { normalizeComponentFileName, sanitizeIdentifier } from '../shared.js';
 import { analyzeClientCaptures, type ClientCaptureAnalysis } from '../validate/client-capture.js';
 import type {
   BrowserSecurityOperationFact,
@@ -564,7 +564,9 @@ function uniqueAnonymousHandlerName(
   eventName: string,
   counts: Map<string, number>,
 ): string {
-  const base = `${componentName}$${tag}_${eventName}`;
+  // SPEC §5.2: host tag grammar includes '-' and ':', while generated module exports must remain
+  // JavaScript identifiers. Normalize the compiler-owned spelling before collision allocation.
+  const base = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(tag)}_${sanitizeIdentifier(eventName)}`;
   const count = (compilerMapGet(counts, base) ?? 0) + 1;
   compilerMapSet(counts, base, count);
 

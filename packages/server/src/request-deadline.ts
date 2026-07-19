@@ -14,6 +14,10 @@ import {
   securityStreamError,
 } from './response-security-intrinsics.js';
 import {
+  frameworkDocumentResponseBuildToken,
+  markFrameworkDocumentResponse,
+} from './response.js';
+import {
   createWitnessWeakMap,
   createWitnessWeakSet,
   witnessFreeze,
@@ -369,7 +373,13 @@ export function wrapRequestDeadlineResponse(
     status: securityResponseStatus(response),
     statusText: securityResponseStatusText(response),
   });
-  return wrappedResponse;
+  // SPEC §5.2.1/§9.5: body wrapping may not erase the private proof that authorizes Kovo-Build on
+  // framework-assembled documents. Static export consumes this identity witness and still rejects
+  // structurally forged reserved headers.
+  const buildToken = frameworkDocumentResponseBuildToken(response);
+  return buildToken === undefined
+    ? wrappedResponse
+    : markFrameworkDocumentResponse(wrappedResponse, buildToken);
 }
 
 /** @internal Deadline signal inherited by every Kovo-owned effect door in this request lifecycle. */
