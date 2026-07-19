@@ -132,6 +132,7 @@ const serverRequestBodyProvenancePath = path.join(
   'packages/server/src/request-body-provenance.ts',
 );
 const serverResponsePosturePath = path.join(repoRoot, 'packages/server/src/response-posture.ts');
+const serverGuardsPath = path.join(repoRoot, 'packages/server/src/guards.ts');
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 const serverSchemaPath = path.join(repoRoot, 'packages/server/src/schema.ts');
@@ -177,6 +178,10 @@ const authoredExecutableReferenceClosureBranch = [
 ].join('\n');
 const removedAuthoredExecutableReferenceClosureBranch =
   '    // authored executable-reference provenance closure removed by mutant';
+const lifecyclePrivateScopeCarrierPinBranch =
+  '  return pinnedPrivateScopeRequestCarrier(lifecycleRequest) as LifecycleRequest<';
+const removedLifecyclePrivateScopeCarrierPinBranch =
+  '  return lifecycleRequest as LifecycleRequest<';
 const dynamicBindingControlPlaneClosureBranch = [
   "  if (options.posture === 'dynamic-binding' && isGeneratedOnlySemanticAttribute(name)) {",
   '    return blockedDecision(',
@@ -2457,6 +2462,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: ownerScopeFinalAcceptedGuardConsumerBranch,
     sourceFile: drizzleStaticPath,
     test: assertOwnerScopeFinalAcceptedGuardConsumerIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
+      'Returns an app-owned private-scope subtree directly after lifecycle providers finish.',
+    expectedKiller:
+      'guard, session, and tenant values must be deep-pinned before guards and handlers observe them',
+    name: 'server-lifecycle/drop-private-scope-carrier-pin',
+    replacement: removedLifecyclePrivateScopeCarrierPinBranch,
+    search: lifecyclePrivateScopeCarrierPinBranch,
+    sourceFile: serverGuardsPath,
+    test: assertLifecyclePrivateScopeCarrierPinIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -5934,6 +5951,32 @@ async function assertAnalyzerSummaryStructuralProofIsEnforced(moduleUnderTest) {
   );
   if (privateKey !== undefined) {
     throw new Error(`unproved analyzer-summary body minted ${privateKey}`);
+  }
+}
+
+async function assertLifecyclePrivateScopeCarrierPinIsEnforced(moduleUnderTest) {
+  let reads = 0;
+  const privateGuard = {};
+  Object.defineProperty(privateGuard, 'ownerFlag', {
+    enumerable: true,
+    get() {
+      reads += 1;
+      return reads === 1;
+    },
+  });
+  let failure;
+  try {
+    await moduleUnderTest.resolveLifecycleRequest({ guard: privateGuard });
+  } catch (error) {
+    failure = error;
+  }
+  if (!/Lifecycle session records cannot contain accessors/u.test(String(failure))) {
+    throw new Error(
+      `private-scope carrier was not rejected before guard execution: ${String(failure)}`,
+    );
+  }
+  if (reads !== 0) {
+    throw new Error(`private-scope accessor executed ${String(reads)} time(s) during pinning`);
   }
 }
 

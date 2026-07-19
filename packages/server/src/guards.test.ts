@@ -1112,7 +1112,7 @@ describe('server guard and session primitives', () => {
     ]);
   });
 
-  it('runs guards.all on one live request so a later sibling can poison an accepted principal', async () => {
+  it('pins private guard data so a sibling cannot poison an accepted principal', async () => {
     type Request = { guard: { userId: string } };
     const request: Request = { guard: { userId: 'attacker' } };
     const guardedQuery = query('live-guard-principal', {
@@ -1131,12 +1131,8 @@ describe('server guard and session primitives', () => {
       reads: [],
     });
 
-    // This is the runtime counterexample behind OPP-28's closed guard-chain rule:
-    // the middle guard accepts `primed`, but the loader observes the later poison.
-    await expect(runQuery(guardedQuery, undefined, request)).resolves.toMatchObject({
-      ok: true,
-      value: 'attacker',
-    });
+    await expect(runQuery(guardedQuery, undefined, request)).rejects.toThrow(TypeError);
+    expect(request.guard.userId).toBe('attacker');
   });
 
   it('reaches the loader when an exact boolean principal is the terminal guard value', async () => {
@@ -1154,7 +1150,7 @@ describe('server guard and session primitives', () => {
     ).resolves.toMatchObject({ ok: true, value: true });
   });
 
-  it('lets prime then current accept an attacker-selected exact-true principal at runtime', async () => {
+  it('rejects a guard that tries to prime a private boolean principal at runtime', async () => {
     type Request = {
       args?: { flag: boolean };
       guard: { ownerFlag: boolean };
@@ -1173,7 +1169,32 @@ describe('server guard and session primitives', () => {
 
     await expect(
       runQuery(guardedQuery, { flag: true }, { guard: { ownerFlag: false } }),
-    ).resolves.toMatchObject({ ok: true, value: true });
+    ).rejects.toThrow(TypeError);
+  });
+
+  it('rejects an accessor-backed private principal before guard and loader can disagree', async () => {
+    type Request = { guard: { ownerFlag: boolean } };
+    let reads = 0;
+    const privateGuard = {} as { ownerFlag: boolean };
+    Object.defineProperty(privateGuard, 'ownerFlag', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return reads === 1;
+      },
+    });
+    const currentOwner = (carrier: Request): boolean => carrier.guard.ownerFlag;
+    const guardedQuery = query('accessor-boolean-owner-principal', {
+      guard: guards.all<Request>(currentOwner),
+      load: (_input: unknown, context?: QueryLoadContext<Request>) =>
+        currentOwner(context!.request),
+      reads: [],
+    });
+
+    await expect(runQuery(guardedQuery, undefined, { guard: privateGuard })).rejects.toThrow(
+      'Lifecycle session records cannot contain accessors.',
+    );
+    expect(reads).toBe(0);
   });
 
   it('keys default-scoped rate limiting by the proven session principal', () => {

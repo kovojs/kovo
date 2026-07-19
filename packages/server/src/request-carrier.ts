@@ -583,15 +583,18 @@ function snapshotRequestOwnProperties(
     const key = keyDescriptor.value;
     if (witnessSetHas(omitted, key) || witnessMapHas(overrides, key)) continue;
     const descriptor = witnessGetOwnPropertyDescriptor(target, key);
-    if (descriptor === undefined) continue;
-    const value = 'value' in descriptor ? descriptor.value : witnessReflectGet(target, key, target);
+    // App-owned accessors are executable code, not request data. Invoking one while pinning can
+    // create side effects and makes an absent lifecycle option observe authority that the later
+    // own-data checks would reject. Omit it from the carrier; inherited Web Request accessors are
+    // handled separately below against their known prototype.
+    if (descriptor === undefined || !('value' in descriptor)) continue;
     appendPinnedRequestKey(ownKeys, key);
     witnessMapSet(properties, key, {
-      data: 'value' in descriptor,
+      data: true,
       enumerable: descriptor.enumerable ?? false,
       frameworkOwned: false,
       own: true,
-      value: pinRequestCarrierValue(value, target),
+      value: pinRequestCarrierValue(descriptor.value, target),
     });
   }
 }

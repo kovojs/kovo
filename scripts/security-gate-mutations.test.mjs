@@ -7,8 +7,16 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
-  it('pins the exact forcing denominator after authorization correspondence and OPP-28 repair', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(256);
+  it('pins the exact forcing denominator after lifecycle private-scope closure', () => {
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(257);
+  });
+
+  it('executes the lifecycle private-scope pin mutant against a behavioral runtime oracle', () => {
+    expect(
+      SECURITY_GATE_MUTANTS.find(
+        (mutant) => mutant.name === 'server-lifecycle/drop-private-scope-carrier-pin',
+      ),
+    ).toEqual(expect.objectContaining({ behavioralTypeScript: true }));
   });
 
   it('enrolls behavioral request-body shape, allocation, and FormData mutants', () => {

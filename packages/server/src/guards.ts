@@ -15,6 +15,7 @@ import { inheritAnonymousCsrfLiveTargetBinding } from './csrf.js';
 import {
   authorityMetadataSource,
   pinnedRequestCarrier,
+  pinnedRequestCarrierOwnData,
   registerAuthorityNeutralRequestMetadata,
   requestForAuthorityNeutralMetadata,
   snapshotPinnedLifecycleValue,
@@ -1333,12 +1334,58 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     }
   }
 
-  return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
+  // SPEC §6.6 C9 / §10.3: every completed lifecycle exposes one framework-owned request
+  // snapshot, even when no provider added a property. Private-scope roots participate in static
+  // authorization proofs, so retaining an app-owned nested object would let an accessor or an
+  // asynchronous mutation return one value to the guard and another to the loader/handler.
+  // Materialize those roots only after providers finish: a DB provider may legitimately clone a
+  // native Request body, and pinning its stream before that clone would retain the pre-tee stream.
+  return pinnedPrivateScopeRequestCarrier(lifecycleRequest) as LifecycleRequest<
+    Request,
+    SessionValue,
+    DbValue
+  >;
+}
+
+function pinnedPrivateScopeRequestCarrier<Request>(request: Request): Request & object {
+  let carrier = pinnedRequestCarrier(request, []);
+  if (isObjectLike(request)) {
+    inheritAnonymousCsrfLiveTargetBinding(request, carrier);
+    inheritFrameworkPrincipalSnapshot(carrier, request);
+  }
+  registerAuthorityNeutralRequestMetadata(
+    carrier as unknown as globalThis.Request,
+    requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
+  );
+  carrier = pinPrivateScopeRequestRoot(carrier, 'guard');
+  carrier = pinPrivateScopeRequestRoot(carrier, 'session');
+  carrier = pinPrivateScopeRequestRoot(carrier, 'tenant');
+  return carrier;
+}
+
+function pinPrivateScopeRequestRoot<
+  Request extends object,
+  Key extends 'guard' | 'session' | 'tenant',
+>(request: Request, key: Key): Request & object {
+  const captured = pinnedRequestCarrierOwnData(request, key);
+  if (captured?.present === true) {
+    return requestWithProperty(request, key, snapshotPinnedLifecycleValue(captured.value));
+  }
+  if (key in request) {
+    // Inherited private-looking values are not authority. Drop them so built-in guards observe
+    // an anonymous/unresolved request rather than throwing on an otherwise valid Web Request.
+    return withoutRequestProperty(request, key);
+  }
+  return request;
 }
 
 function requestOwnDb(value: unknown): { present: false } | { present: true; value: unknown } {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) {
     return { present: false };
+  }
+  const pinned = pinnedRequestCarrierOwnData(value, 'db');
+  if (pinned !== undefined) {
+    return pinned.present ? { present: true, value: pinned.value } : { present: false };
   }
   const descriptor = witnessGetOwnPropertyDescriptor(value, 'db');
   return descriptor !== undefined && 'value' in descriptor
