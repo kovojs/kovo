@@ -106,6 +106,7 @@ import {
 export type {
   ExplainKind,
   KovoAccessExplainOptions,
+  KovoAuthLifecycleExplainOptions,
   KovoAuthorizationExplainOptions,
   KovoDocumentExplainOptions,
   KovoEndpointExplainOptions,
@@ -128,6 +129,7 @@ export {
 } from './graph-args.js';
 export { inputErrorMessage, readGraphInput, runGraphCommand } from './graph-input.js';
 import type { KovoCheckResult } from './shared.js';
+import { authLifecycleExplainResult } from './auth-lifecycle.js';
 import { modelBoundariesExplainResult } from './model-boundaries.js';
 import { sourcesSinksCheckResult, sourcesSinksExplainResult } from './sources-sinks.js';
 import {
@@ -179,6 +181,10 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
 
   const graph = input as CoreGraph.KovoExplainInput;
   const lines = [explainOutputVersion];
+
+  if ('authLifecycle' in options) {
+    return authLifecycleExplainResult(explainOutputVersion);
+  }
 
   if ('modelBoundaries' in options) {
     return modelBoundariesExplainResult(explainOutputVersion);

@@ -45,6 +45,6 @@ describe('kovo explain --auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
     const spec = readFileSync(new URL('../../../spec/06-type-system.md', import.meta.url), 'utf8');
     expect(spec).toContain('**Better Auth lifecycle ownership and non-claims (normative).**');
     expect(spec).toContain('exactly three Kovo-owned identity transitions');
-    expect(spec).toContain('reachable GET callback lifecycle is delegated and unsupported');
+    expect(spec).toMatch(/reachable GET\s+callback lifecycle is delegated and unsupported/u);
   });
 });

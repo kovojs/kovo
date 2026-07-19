@@ -79,6 +79,7 @@ export type {
   ExplainKind,
   KovoAuditOptions,
   KovoAccessExplainOptions,
+  KovoAuthLifecycleExplainOptions,
   KovoAuthorizationExplainOptions,
   KovoCheckFamily,
   KovoCheckInput,
@@ -147,7 +148,7 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
   explain(args, security) {
     const parsed = parseExplainArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
-    if ('modelBoundaries' in parsed.options) {
+    if ('authLifecycle' in parsed.options || 'modelBoundaries' in parsed.options) {
       return writeCommandResult(kovoExplain({}, parsed.options));
     }
     return writeCommandResult(

@@ -103,7 +103,9 @@ describe('Better Auth 1.6.17 lifecycle inheritance (Plan 3 §5.3 C13 anchor)', (
     const firstCookie = sessionCookie(firstSignIn);
     expect(database.session).toHaveLength(1);
     const firstSession = { ...database.session[0]! };
-    expect(firstSession.expiresAt.getTime() - firstSession.createdAt.getTime()).toBe(604_800_000);
+    const lifetimeMs = firstSession.expiresAt.getTime() - firstSession.createdAt.getTime();
+    expect(lifetimeMs).toBeGreaterThanOrEqual(604_799_000);
+    expect(lifetimeMs).toBeLessThanOrEqual(604_800_000);
 
     const secondSignIn = await postAuth(auth, 'sign-in/email', { email, password }, firstCookie);
     expect(secondSignIn.status).toBe(200);

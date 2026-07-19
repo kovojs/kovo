@@ -35,6 +35,7 @@ export const EXPLAIN_USAGE = [
   '       kovo explain --trust [graph.json]',
   '       kovo explain --capabilities [graph.json]',
   '       kovo explain --cookies [graph.json]',
+  '       kovo explain --auth-lifecycle',
   '       kovo explain --model-boundaries',
   '       kovo explain --authorization [graph.json]',
   '       kovo explain --access [--fail-on-findings] [graph.json]',
@@ -48,7 +49,7 @@ export const EXPLAIN_USAGE = [
  * literal here so the drift guard can compare against `explainUsage()`.
  */
 export const EXPLAIN_USAGE_LINE =
-  'kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --model-boundaries | kovo explain --authorization [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
+  'kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --auth-lifecycle | kovo explain --model-boundaries | kovo explain --authorization [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
 
 /** @internal Usage line emitted for `kovo add` (see `addUsage`). */
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
@@ -146,6 +147,7 @@ export const AUDIT_ARGV_SPEC = {
 export const EXPLAIN_ARGV_SPEC = {
   options: [
     { flag: '--access', kind: 'boolean' },
+    { flag: '--auth-lifecycle', kind: 'boolean' },
     { flag: '--authorization', kind: 'boolean' },
     { flag: '--capabilities', kind: 'boolean' },
     { flag: '--cookies', kind: 'boolean' },
@@ -566,6 +568,11 @@ export const COMMANDS_MANIFEST = [
           'Pair exact app guard facts with generated Postgres policies without claiming equivalence or live activation.',
       },
       {
+        flag: '--auth-lifecycle',
+        description:
+          'Print inherited Better Auth session defaults, Kovo-owned identity transitions, and unsupported lifecycle classes.',
+      },
+      {
         flag: '--model-boundaries',
         description:
           'Print bounded-model assumptions, finite bounds, modeled actions, and the explicit complement.',
@@ -588,6 +595,7 @@ export const COMMANDS_MANIFEST = [
       'kovo explain --capabilities',
       'kovo explain --cookies',
       'kovo explain --authorization',
+      'kovo explain --auth-lifecycle',
       'kovo explain --model-boundaries',
       'kovo explain --access --fail-on-findings',
       'kovo explain --unguarded --fail-on-findings',
