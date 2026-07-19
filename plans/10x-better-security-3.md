@@ -421,26 +421,36 @@ pass**. Requires §0.4 and §0.6 to mean anything.
 
 ### 2.1 `kovo.certificate/v1` and a standalone checker
 
-- [ ] Freeze the schema over the published `@kovojs/*` dist trees:
+- [x] Freeze the schema over the published `@kovojs/*` dist trees:
       `{artifacts:[{path,sha512}], domain:<the 7 capability kinds>, cap:{module→kinds[]}, edges:[[m,n]],
 roots:[{module,rootKind}], doors:[{module,site,escapeId}], opaque:[{module,reason}]}`, reusing
       verbatim the 7-member capability union already frozen at `packages/core/src/graph.ts:703-710` and
       the frozen `rootKind` union.
+  - Evidence: `pnpm run check:certificate` validates the exact schema and 184 sha512-bound packed
+    modules with the frozen 7-kind domain and root vocabulary.
 - [ ] Emit it alongside `dist/.kovo/graph.json`, with per-artifact sha512 computed exactly as
       `scripts/publish-packed-packages.mjs` computes tarball integrity.
-- [ ] `@kovojs/verify` as a standalone checker: three linear obligations (coverage, post-fixpoint
+  - Current gap: the CLI writes byte-stable `.kovo/certificate.json`, but the focused real-build test
+    is blocked before emission by the pre-existing KV448 reviewed-implementation digest drift.
+- [x] `@kovojs/verify` as a standalone checker: three linear obligations (coverage, post-fixpoint
       stability `cap[n] ⊆ cap[m]` per edge and `local(m) ⊆ cap[m]`, closure `cap[r] ⊆ doors(r)`) — no
       iteration, widening, budget, or recursion logic on the checker side. One pinned parser
       dependency, **zero Kovo imports**, mechanically enforced by extending `scripts/import-boundary.mjs`.
       Publish checker LOC and dependency closure as the honesty numbers.
-- [ ] **Three negative controls that must fail on three distinct obligations**, checker importing zero
+  - Evidence: `pnpm run check:imports` runs the standalone outside-process checker and reports 1,350
+    runtime LOC, one exact parser dependency (`es-module-lexer@2.1.0`), and zero Kovo imports.
+- [x] **Three negative controls that must fail on three distinct obligations**, checker importing zero
       Kovo code: (i) drop a capability from `cap[m]` that the module imports → _stability_ failure;
       (ii) inject `require('node:child_process')` into a shipped chunk without regenerating →
       _coverage_ failure; (iii) omit a real import edge → _coverage_ failure. If they do not fail
       cleanly, stop.
-- [ ] Adequacy audit of the lexical authority table (the checker's true TCB): enumerate known-unmodeled
+  - Evidence: `pnpm run check:certificate` passes 20/20 focused tests, including the three exact
+    controls plus an independent root-door closure failure.
+- [x] Adequacy audit of the lexical authority table (the checker's true TCB): enumerate known-unmodeled
       authority routes (re-exported bindings, computed dynamic import, `eval`/`new Function`, host
       globals, native addons, WASM) and require each to be modeled or listed in §4.6.
+  - Evidence: `security/certificate-lexical-authority.json` covers all seven routes, and
+    `scripts/kovo-certificate.test.mjs` fails any missing or drifted disposition.
 
 ### 2.2 Translation validation, folded into the same checker
 
