@@ -5334,8 +5334,18 @@ function requestExactMutationTaskScheduleOptionsArePlain(
     const value = Node.isPropertyAssignment(property)
       ? property.getInitializer()
       : property.getNameNode();
-    if (
-      !value ||
+    if (!value) {
+      return false;
+    }
+    if (member === 'key') {
+      const key = unwrapStaticExpression(value);
+      if (
+        !Node.isCallExpression(key) ||
+        !roots.every((root) => requestCallIsExactPublicScopedKey(key, root, session))
+      ) {
+        return false;
+      }
+    } else if (
       !roots.every((root) =>
         requestExactMutationTaskScheduleInputIsPlain(value, root, session, new Set()),
       )
@@ -6019,6 +6029,64 @@ function requestExactMutationTaskScheduleInputIsPlain(
   );
 }
 
+/**
+ * SPEC §6.6 / §9.1: `publicScopedKey` is reviewed construction of plain, runtime-witnessed key
+ * data. The legacy request graph admits only the same direct, pristine framework binding and
+ * compiler-provable plain argument as the finite IR; aliases, namespaces, computed members, and
+ * foreign same-named functions remain opaque.
+ */
+function requestCallIsExactPublicScopedKey(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  return !!(
+    !call.getQuestionDotTokenNode() &&
+    call.getArguments().length === 1 &&
+    (requestExactPristineDirectImport(
+      call.getExpression(),
+      '@kovojs/core',
+      'publicScopedKey',
+    ) ||
+      requestExactPristineDirectImport(
+        call.getExpression(),
+        '@kovojs/server',
+        'publicScopedKey',
+      )) &&
+    requestExactMutationTaskScheduleInputIsPlain(
+      call.getArguments()[0]!,
+      callable,
+      session,
+      new Set(),
+    )
+  );
+}
+
+function requestCallIsExactStaticPublicScopedKey(
+  call: import('ts-morph').CallExpression,
+): boolean {
+  const [key, ...extra] = call.getArguments();
+  const value = key ? unwrapStaticExpression(key) : undefined;
+  return !!(
+    !call.getQuestionDotTokenNode() &&
+    key &&
+    extra.length === 0 &&
+    isStringLiteralLike(value) &&
+    value.getLiteralText().length > 0 &&
+    value.getLiteralText().length <= 1_024 &&
+    (requestExactPristineDirectImport(
+      call.getExpression(),
+      '@kovojs/core',
+      'publicScopedKey',
+    ) ||
+      requestExactPristineDirectImport(
+        call.getExpression(),
+        '@kovojs/server',
+        'publicScopedKey',
+      ))
+  );
+}
+
 function requestRetainedConfigCallIsReviewed(
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
@@ -6048,6 +6116,7 @@ function requestRetainedConfigCallIsReviewed(
   if (requestCallIsExactMemoryStorageConstructor(call, session)) return true;
   if (requestCallIsExactMemoryStoragePut(call, session)) return true;
   if (requestCallIsExactStorageDownloadEndpoint(call, session)) return true;
+  if (requestCallIsExactStaticPublicScopedKey(call)) return true;
   if (requestCallIsExactClosedStylesheet(call)) return true;
   if (requestBuildConfigConstructorCallIsClosed(call)) return true;
   if (requestCallIsExactClosedRedirect(call)) return true;
@@ -8603,11 +8672,13 @@ function requestMemoryStoragePutUseIsExact(
   }
   const [key, body, options, ...extra] = call.getArguments();
   const keyValue = key ? unwrapStaticExpression(key) : undefined;
+  const scopedKey = keyValue && Node.isCallExpression(keyValue) ? keyValue : undefined;
   return !!(
-    isStringLiteralLike(keyValue) &&
+    (isStringLiteralLike(keyValue) ||
+      (scopedKey && requestCallIsExactStaticPublicScopedKey(scopedKey))) &&
     body &&
     extra.length === 0 &&
-    keyValue.getLiteralText().length > 0 &&
+    (!isStringLiteralLike(keyValue) || keyValue.getLiteralText().length > 0) &&
     requestExpressionIsClosedStaticData(body) &&
     (options === undefined || requestExpressionIsClosedStaticData(options)) &&
     requestExactMemoryStorageDeclarationForExpression(reference) === declaration
@@ -9638,16 +9709,25 @@ function requestRoutePageRootForSignUrl(
   return exact.length === 1 ? exact[0] : undefined;
 }
 
-function requestSignUrlOptionsAreExact(expression: Node): boolean {
+function requestSignUrlOptionsAreExact(
+  expression: Node,
+  root: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
   const values = requestExactPropertyAssignmentMap(
     expression,
     new Set(['expiresIn', 'key', 'method', 'oneTime', 'scope']),
   );
   const key = values?.get('key');
   const keyValue = key ? unwrapStaticExpression(key) : undefined;
-  if (!values || !isStringLiteralLike(keyValue)) return false;
-  const keyText = keyValue.getLiteralText();
-  if (keyText.length === 0 || keyText.length > 1_024) return false;
+  if (
+    !values ||
+    !keyValue ||
+    !Node.isCallExpression(keyValue) ||
+    !requestCallIsExactPublicScopedKey(keyValue, root, session)
+  ) {
+    return false;
+  }
   const method = values.get('method');
   const methodValue = method ? unwrapStaticExpression(method) : undefined;
   if (
@@ -9710,14 +9790,19 @@ function requestCallIsExactRoutePageSignUrl(
     callee.getQuestionDotTokenNode() ||
     callee.getName() !== 'signUrl' ||
     call.getQuestionDotTokenNode() ||
-    call.getArguments().length !== 1 ||
-    !requestSignUrlOptionsAreExact(call.getArguments()[0]!)
+    call.getArguments().length !== 1
   ) {
     return false;
   }
   const root = requestRoutePageRootForSignUrl(call, session, knownRoot);
   const receiver = unwrapStaticExpression(callee.getExpression());
-  if (!root || !Node.isIdentifier(receiver)) return false;
+  if (
+    !root ||
+    !Node.isIdentifier(receiver) ||
+    !requestSignUrlOptionsAreExact(call.getArguments()[0]!, root, session)
+  ) {
+    return false;
+  }
   const parameter = requestCallableParameters(root.declaration)[0];
   const name = parameter?.getNameNode();
   return !!(
@@ -19793,6 +19878,7 @@ function requestExpressionIsProtocolSafeUncached(
     if (requestCallCrossesDeferredRootAuthorityBoundary(node, callable, session)) return false;
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
+    if (requestCallIsExactPublicScopedKey(node, callable, session)) return true;
     if (
       requestCallIsExactAcceptedFileParse(node, session) ||
       requestCallIsExactStoredFileParseAsync(node, session)
@@ -24519,6 +24605,10 @@ function requestCallIsKnownSafe(
   }
 
   if (requestCallIsPromiseSettlement(call, callable, context)) return true;
+  if (requestCallIsExactPublicScopedKey(call, callable, context.provenance)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
   if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(call, context.provenance)) {
     scanRequestFunctionArguments(call, context);
     return true;

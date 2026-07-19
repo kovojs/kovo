@@ -2418,7 +2418,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
   it('accepts only an exact mutation request scheduling a pristine local task with plain input', () => {
     const safe = sinksFor(`
-      import { mutation, s, task } from '@kovojs/server';
+      import { mutation, publicScopedKey, s, task } from '@kovojs/server';
 
       export const reconcile = task('orders/reconcile', {
         input: s.object({ id: s.string() }),
@@ -2431,7 +2431,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           await request.schedule(reconcile, { id: input.id }, {
             afterMs: 10,
             coalesce: 'debounce',
-            key: \`reconcile:${'${input.id}'}\`,
+            key: publicScopedKey(\`reconcile:${'${input.id}'}\`),
           });
           const handle = await request.schedule(reconcile, { id: input.id }, { afterMs: 20 });
           return { cancelled: await request.cancel(handle) };
@@ -13024,13 +13024,13 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
   it('accepts only an exact pristine route-page context.signUrl capability result', () => {
     const safe = sinksFor(`
-      import { publicAccess, route } from '@kovojs/server';
+      import { publicAccess, publicScopedKey, route } from '@kovojs/server';
       export const capabilityPage = route('/capability', {
         access: publicAccess('capability proof'),
         async page(context) {
           const signed = await context.signUrl({
             expiresIn: 60_000,
-            key: 'receipts/proof.txt',
+            key: publicScopedKey('receipts/proof.txt'),
             method: 'GET',
             oneTime: false,
             scope: 'tenant-1',
