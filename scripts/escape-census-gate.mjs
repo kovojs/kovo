@@ -128,7 +128,7 @@ export function evaluateEscapeCensus(options) {
       packageRoots.set(packageName, aggregate);
     }
     for (const door of ESCAPE_CENSUS_DOORS) {
-      for (const root of roots.get(door)) aggregate.get(door).add(`${app}:${root}`);
+      for (const root of roots.get(door)) aggregate.get(door).add(JSON.stringify([app, root]));
     }
   }
 
@@ -162,7 +162,8 @@ export function evaluateEscapeCensus(options) {
   }
 
   appReports.sort(
-    (left, right) => left.package.localeCompare(right.package) || left.app.localeCompare(right.app),
+    (left, right) =>
+      compareStrings(left.package, right.package) || compareStrings(left.app, right.app),
   );
   return {
     findings: [...new Set(findings)].sort(),
@@ -457,6 +458,10 @@ function record(value) {
 
 function nonBlank(value) {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function compareStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 export function formatEscapeCensusReport(report) {

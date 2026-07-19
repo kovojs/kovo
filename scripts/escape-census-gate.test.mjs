@@ -224,7 +224,7 @@ describe('escape census gate (C13 anchor)', () => {
     );
 
     expect(result.findings).toContain(
-      '@fixture/app: trustedHtml escaped roots 2 exceed budget 1 (fixture:app.tsx:4, fixture:app.tsx:9)',
+      '@fixture/app: trustedHtml escaped roots 2 exceed budget 1 (["fixture","app.tsx:4"], ["fixture","app.tsx:9"])',
     );
   });
 
