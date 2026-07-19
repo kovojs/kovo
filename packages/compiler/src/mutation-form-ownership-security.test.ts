@@ -238,6 +238,42 @@ export const View = component({
     );
   });
 
+  it('rejects reactive direct-descendant submitter transport overrides before lowering', () => {
+    const result = compile(`
+export const save = mutation({
+  input: s.object({ email: s.string() }),
+  handler() { return null; },
+});
+export const View = component({
+  queries: { q: {} },
+  render: ({ q }) => (
+    <form mutation={save}>
+      <input name="email" value="victim@example.test" />
+      <button
+        formaction={q.action}
+        formenctype={q.enctype}
+        formmethod={q.method}
+        formnovalidate={q.noValidate}
+        formtarget={q.target}
+      >Save</button>
+    </form>
+  ),
+});
+`);
+
+    expect(result.diagnostics.filter((entry) => entry.code === 'KV242')).not.toEqual([]);
+    const server = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    for (const name of [
+      'formaction',
+      'formenctype',
+      'formmethod',
+      'formnovalidate',
+      'formtarget',
+    ]) {
+      expect(server).not.toContain(`data-bind:${name}`);
+    }
+  });
+
   it('accepts a statically separate native form association and closes dynamic ownership', () => {
     const safe = compile(`
 export const save = mutation('account/save', {
