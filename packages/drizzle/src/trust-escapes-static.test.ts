@@ -29,6 +29,10 @@ function sinksForFiles(files: readonly TrustEscapeSourceFileInput[]) {
   return collectUnregisteredSinksFromProject({ files });
 }
 
+function starterTemplateSource(relativePath: string): string {
+  return nodeFs.readFileSync(`packages/create-kovo/templates/src/${relativePath}`, 'utf8');
+}
+
 describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
   it('emits a trustedHtml escape with no justification when none is provided', () => {
     const escapes = trustEscapesFor(`
@@ -7598,6 +7602,174 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       ['wrong retention field', source({ replayProperty: 'mutationReplayStore: memoryReplay,' })],
     ] as const) {
       expect(sinksFor(candidate), label).not.toEqual([]);
+    }
+  });
+
+  it('accepts the complete generated runtime, auth, and source-derived query closure', () => {
+    const appSource = `
+      import { createApp } from '@kovojs/server';
+      import {
+        appAuthed,
+        appCsrf,
+        appSessionProvider,
+        appSignIn,
+        appSignOut,
+      } from './auth.js';
+      import {
+        appRuntimeDbProvider,
+        appRuntimeMutationReplayStore,
+      } from './_kovo/app-runtime-db.js';
+      import { contactsQuery } from './queries.js';
+      const app = createApp({
+        csrf: appCsrf,
+        db: appRuntimeDbProvider,
+        mutationReplayStore: appRuntimeMutationReplayStore,
+        mutations: [appSignIn, appSignOut],
+        queries: [contactsQuery],
+        routes: [],
+        sessionProvider: appSessionProvider,
+      });
+      void appAuthed;
+      export default app;
+    `;
+    const shared = [
+      { fileName: 'model.ts', source: starterTemplateSource('model.ts') },
+      { fileName: 'queries.ts', source: starterTemplateSource('queries.ts') },
+      { fileName: 'app.tsx', source: appSource },
+    ];
+    const postgresFiles = [
+      ...shared,
+      { fileName: 'schema.ts', source: starterTemplateSource('schema.ts') },
+      { fileName: 'db.ts', source: starterTemplateSource('db.ts') },
+      { fileName: 'auth.ts', source: starterTemplateSource('auth.ts') },
+      {
+        fileName: '_kovo/app-runtime-db-options.ts',
+        source: starterTemplateSource('_kovo/app-runtime-db-options.ts'),
+      },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: starterTemplateSource('_kovo/app-runtime-db.ts'),
+      },
+    ];
+    const sqliteFiles = [
+      ...shared,
+      { fileName: 'schema.ts', source: starterTemplateSource('schema.sqlite.ts') },
+      { fileName: 'db.ts', source: starterTemplateSource('db.sqlite.ts') },
+      { fileName: 'auth.ts', source: starterTemplateSource('auth.sqlite.ts') },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: starterTemplateSource('_kovo/app-runtime-db.sqlite.ts'),
+      },
+    ];
+
+    // SPEC §6.6/§10.3: generated modules expose only these finite capabilities; none of the
+    // raw runtime, system DB, Better Auth adapter, or boot-only seed callable crosses the boundary.
+    expect(sinksForFiles(postgresFiles), 'Postgres generated closure').toEqual([]);
+    expect(sinksForFiles(sqliteFiles), 'SQLite generated closure').toEqual([]);
+
+    const mutableQueryKey = postgresFiles.map((file) =>
+      file.fileName === 'queries.ts'
+        ? {
+            ...file,
+            source: `${file.source}\n(contactsQuery as { key: string }).key = 'forged';`,
+          }
+        : file,
+    );
+    expect(sinksForFiles(mutableQueryKey)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-protocol',
+          source: '<property-setter:contactsQuery>',
+        }),
+      ]),
+    );
+
+    for (const [label, replacement] of [
+      ['raw runtime export', 'appDatabase'],
+      [
+        'forged runtime provider',
+        `{ get db() { return eval('forged-runtime-provider'); } }.db`,
+      ],
+    ] as const) {
+      const hostile = postgresFiles.map((file) =>
+        file.fileName === '_kovo/app-runtime-db.ts'
+          ? {
+              ...file,
+              source: file.source.replace(
+                'export const appRuntimeDbProvider = appDatabase.db;',
+                `export const appRuntimeDbProvider = ${replacement};`,
+              ),
+            }
+          : file,
+      );
+      expect(sinksForFiles(hostile), label).not.toEqual([]);
+    }
+  });
+
+  it('accepts a source-derived query returning an exact context-owned rawRead result', () => {
+    const files = [
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { kovo } from '@kovojs/drizzle';
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          export const contacts = pgTable(
+            'contacts',
+            { classified: text('classified').notNull(), id: text('id').primaryKey() },
+            kovo({ domain: 'contacts', key: 'id', readOnly: true, secret: ['classified'] }),
+          );
+        `,
+      },
+      {
+        fileName: 'queries.ts',
+        source: `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { query } from '@kovojs/server';
+          export const contactsQuery = query({
+            async load(_input, context) {
+              const db = context?.db;
+              if (!db) throw new Error('query requires framework-provided context.db');
+              const items = await db.rawRead<{ id: string }>(
+                trustedSql(sql.raw<{ id: string }>('select id, classified from contacts'), {
+                  justification: 'reviewed static contacts read',
+                }),
+                { reads: ['contacts'] },
+              );
+              return { items };
+            },
+          });
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { createApp } from '@kovojs/server';
+          import { contactsQuery } from './queries.js';
+          export default createApp({ queries: [contactsQuery], routes: [] });
+        `,
+      },
+    ];
+    expect(sinksForFiles(files)).toEqual([]);
+
+    for (const [label, poison] of [
+      ['computed terminal', "db['rawRead']"],
+      ['extracted terminal', 'rawRead'],
+    ] as const) {
+      const hostile = files.map((file) =>
+        file.fileName === 'queries.ts'
+          ? {
+              ...file,
+              source:
+                label === 'extracted terminal'
+                  ? file.source.replace(
+                      'const items = await db.rawRead',
+                      'const rawRead = db.rawRead;\n              const items = await rawRead',
+                    )
+                  : file.source.replace('db.rawRead', poison),
+            }
+          : file,
+      );
+      expect(sinksForFiles(hostile), label).not.toEqual([]);
     }
   });
 

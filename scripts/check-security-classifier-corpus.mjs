@@ -1254,6 +1254,31 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'complete-generated-runtime-auth-query-closure',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'accepts the complete generated runtime, auth, and source-derived query closure',
+          "starterTemplateSource('queries.ts')",
+          'appRuntimeMutationReplayStore',
+          'Postgres generated closure',
+          'SQLite generated closure',
+          "(contactsQuery as { key: string }).key = 'forged'",
+          'forged-runtime-provider',
+        ],
+      },
+      {
+        id: 'named-query-context-owned-raw-read-closure',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'accepts a source-derived query returning an exact context-owned rawRead result',
+          'export const contactsQuery = query({',
+          'const db = context?.db;',
+          "{ reads: ['contacts'] }",
+          "db['rawRead']",
+          'const rawRead = db.rawRead;',
+        ],
+      },
+      {
         id: 'generated-runtime-constructor-and-pristine-data-closure',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
