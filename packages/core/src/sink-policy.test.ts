@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
+  BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES,
   BLOCKED_SVG_SMIL_ELEMENT_NAMES,
   blessSink,
   createFragmentHtml,
@@ -13,6 +14,7 @@ import {
   hasUnsafeCssUrl,
   isBlessedSink,
   isBlockedActiveEmbedElementName,
+  isBlockedDeclarativeShadowDomAttributeName,
   isBlockedSvgSmilElementName,
   isFragmentHtml,
   isRenderedFragmentHtml,
@@ -88,6 +90,7 @@ describe('shared runtime sink policy', () => {
   it('freezes every exported sink-classification policy', () => {
     const policies = [
       BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
+      BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES,
       BLOCKED_SVG_SMIL_ELEMENT_NAMES,
       FRAMEWORK_BLESSED_SINK_KINDS,
       RAW_HTML_SINK_NAMES,
@@ -101,7 +104,18 @@ describe('shared runtime sink policy', () => {
     }
 
     expect(FRAMEWORK_BLESSED_SINK_KINDS[0]).toBe('browser:response-fragment-html');
-    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual(['embed', 'object']);
+    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual([
+      'embed',
+      'frame',
+      'frameset',
+      'object',
+    ]);
+    expect(BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES).toEqual([
+      'shadowrootmode',
+      'shadowrootdelegatesfocus',
+      'shadowrootclonable',
+      'shadowrootserializable',
+    ]);
     expect(BLOCKED_SVG_SMIL_ELEMENT_NAMES).toEqual([
       'animate',
       'animatecolor',
@@ -124,10 +138,15 @@ describe('shared runtime sink policy', () => {
     expect(isBlockedSvgSmilElementName('a')).toBe(false);
   });
 
-  it('fails closed on unsandboxable active embeds independent of authored casing', () => {
+  it('fails closed on unsandboxable and obsolete active embeds independent of casing', () => {
     // SPEC §4.8 / §5.2 rule 10: this is the finite denominator, not a loop that can
     // become vacuously green when one disabled primitive disappears from the registry.
-    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual(['embed', 'object']);
+    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual([
+      'embed',
+      'frame',
+      'frameset',
+      'object',
+    ]);
     for (const name of BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES) {
       expect(isBlockedActiveEmbedElementName(name)).toBe(true);
       expect(isBlockedActiveEmbedElementName(name.toUpperCase())).toBe(true);
@@ -135,6 +154,16 @@ describe('shared runtime sink policy', () => {
 
     expect(isBlockedActiveEmbedElementName('iframe')).toBe(false);
     expect(isBlockedActiveEmbedElementName('video')).toBe(false);
+  });
+
+  it('classifies every declarative Shadow DOM control independent of authored casing', () => {
+    for (const name of BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES) {
+      expect(isBlockedDeclarativeShadowDomAttributeName(name)).toBe(true);
+      expect(isBlockedDeclarativeShadowDomAttributeName(name.toUpperCase())).toBe(true);
+    }
+
+    expect(isBlockedDeclarativeShadowDomAttributeName('data-shadowrootmode')).toBe(false);
+    expect(isBlockedDeclarativeShadowDomAttributeName('slot')).toBe(false);
   });
 
   it('classifies unsafe runtime sink families', () => {

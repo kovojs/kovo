@@ -1,5 +1,6 @@
 import {
   BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
+  BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES,
   BLOCKED_SVG_SMIL_ELEMENT_NAMES,
   createRenderedFragmentHtml,
   decideRuntimeAttributeWrite,
@@ -93,6 +94,55 @@ describe('browser response fragment apply', () => {
       }
     });
   }
+
+  it('strips declarative Shadow DOM before modular and inline fragment adoption', () => {
+    const incoming = (target: string) =>
+      [
+        `<section kovo-fragment-target="${target}">`,
+        '<template SHADOWROOTMODE="open" shadowRootDelegatesFocus shadowrootclonable shadowrootserializable>',
+        '<button id="shadow-control">hidden control</button>',
+        '</template>',
+        '</section>',
+      ].join('');
+    const assertInert = (target: string) => {
+      const host = document.querySelector<HTMLElement>(`[kovo-fragment-target="${target}"]`);
+      const template = host?.querySelector<HTMLTemplateElement>('template');
+      expect(host?.shadowRoot).toBeNull();
+      expect(template).toBeTruthy();
+      for (const name of BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES) {
+        expect(template?.getAttribute(name), name).toBeNull();
+      }
+      expect(template?.content.querySelector('#shadow-control')?.textContent).toBe(
+        'hidden control',
+      );
+
+      const replay = document.createElement('div') as HTMLDivElement & {
+        setHTMLUnsafe?: (html: string) => void;
+      };
+      const serialized = template?.outerHTML ?? '';
+      if (typeof replay.setHTMLUnsafe === 'function') replay.setHTMLUnsafe(serialized);
+      else replay.innerHTML = serialized;
+      expect(replay.shadowRoot).toBeNull();
+    };
+
+    const modular = document.createElement('section');
+    modular.setAttribute('kovo-fragment-target', 'modular-shadow');
+    document.body.append(modular);
+    applyHtmlResponseFragments(
+      [{ html: fragmentHtml(incoming('modular-shadow')), target: 'modular-shadow' }],
+      (name) => document.querySelector(`[kovo-fragment-target="${name}"]`),
+    );
+    assertInert('modular-shadow');
+
+    const inline = document.createElement('section');
+    inline.setAttribute('kovo-fragment-target', 'inline-shadow');
+    document.body.append(inline);
+    installInlineKovoLoader(async () => ({}));
+    (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+      `<kovo-fragment target="inline-shadow">${incoming('inline-shadow')}</kovo-fragment>`,
+    );
+    assertInert('inline-shadow');
+  });
 
   // @kovo-security-certifies C13 compiler-wire-control-plane-preserved
   it('preserves and executes compiler-emitted fragment interactivity', async () => {
@@ -595,6 +645,23 @@ describe('browser response fragment apply', () => {
     }
     expect(
       __responseFragmentApplySanitizerParityForTests.isBlockedActiveEmbedElementName('iframe'),
+    ).toBe(false);
+    for (const name of BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES) {
+      expect(
+        __responseFragmentApplySanitizerParityForTests.isBlockedDeclarativeShadowDomAttributeName(
+          name,
+        ),
+      ).toBe(true);
+      expect(
+        __responseFragmentApplySanitizerParityForTests.isBlockedDeclarativeShadowDomAttributeName(
+          name.toUpperCase(),
+        ),
+      ).toBe(true);
+    }
+    expect(
+      __responseFragmentApplySanitizerParityForTests.isBlockedDeclarativeShadowDomAttributeName(
+        'slot',
+      ),
     ).toBe(false);
   });
 });

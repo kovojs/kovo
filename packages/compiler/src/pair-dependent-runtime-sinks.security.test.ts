@@ -220,3 +220,66 @@ export const StaticContext = component({
     ).toEqual([]);
   });
 });
+
+describe('declarative Shadow DOM and obsolete frame primitives', () => {
+  it.each([
+    ['static mode', '<template shadowrootmode="open"><span>secret</span></template>'],
+    [
+      'mixed-case direct control',
+      '<template shadowRootDelegatesFocus><span>secret</span></template>',
+    ],
+    [
+      'dynamic direct control',
+      '<template shadowrootclonable={state.enabled}><span>secret</span></template>',
+    ],
+    [
+      'binding control',
+      '<template data-bind:ShadowRootSerializable="state.enabled"><span>secret</span></template>',
+    ],
+    [
+      'derive control',
+      '<template data-derive="profile.mode" data-derive-attr="ShadowRootMode"><span>secret</span></template>',
+    ],
+    [
+      'static spread control',
+      '<template {...{ shadowRootMode: "open" }}><span>secret</span></template>',
+    ],
+    ['opaque spread', '<template {...state.attributes}><span>secret</span></template>'],
+  ])('rejects a %s with KV236', (_label, markup) => {
+    expect(
+      kv236Diagnostics(`
+export const ShadowBoundary = component({
+  state: () => ({ attributes: {}, enabled: true }),
+  render: (_queries, state) => (${markup}),
+});
+`),
+    ).toEqual([
+      expect.objectContaining({
+        help: expect.stringContaining('light DOM'),
+        message: expect.stringContaining('declarative Shadow DOM'),
+      }),
+    ]);
+  });
+
+  it('keeps ordinary inert templates available', () => {
+    expect(
+      kv236Diagnostics(`
+export const LightDomTemplate = component({
+  render: () => <template data-kind="row"><span>row</span></template>,
+});
+`),
+    ).toEqual([]);
+  });
+
+  it.each(['frame', 'frameset'])('rejects the obsolete <%s> primitive', (tag) => {
+    expect(
+      kv236Diagnostics(`
+export const ObsoleteFrame = component({
+  render: () => <${tag} src="/safe/account" />,
+});
+`),
+    ).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('sandbox boundary') }),
+    ]);
+  });
+});

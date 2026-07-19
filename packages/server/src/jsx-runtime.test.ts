@@ -1121,7 +1121,15 @@ describe('server jsx runtime', () => {
   });
 
   it('omits unsandboxable object and embed documents at the direct JSX runtime floor', () => {
-    for (const tag of ['object', 'OBJECT', 'embed', 'EmBeD'] as const) {
+    for (const tag of [
+      'object',
+      'OBJECT',
+      'embed',
+      'EmBeD',
+      'frame',
+      'FRAME',
+      'frameset',
+    ] as const) {
       expect(
         html(
           jsx(tag, {
@@ -1133,6 +1141,24 @@ describe('server jsx runtime', () => {
         ),
       ).toBe('');
     }
+  });
+
+  it('keeps templates inert by stripping every declarative Shadow DOM construction channel', () => {
+    expect(
+      html(
+        jsx('template', {
+          'data-bind:shadowrootclonable': 'state.clonable',
+          'data-derive': 'profile.mode',
+          'data-derive-attr': 'ShadowRootSerializable',
+          children: jsx('span', { children: 'light-DOM template content' }),
+          shadowRootDelegatesFocus: true,
+          shadowrootmode: 'open',
+          title: 'ordinary inert template',
+        }),
+      ),
+    ).toBe(
+      '<template data-derive="profile.mode" title="ordinary inert template"><span>light-DOM template content</span></template>',
+    );
   });
 
   it('refuses spread-delivered executable attributes from the final runtime attribute set', () => {

@@ -283,6 +283,35 @@ describe('query binding helpers', () => {
     expect(embed.attributes).toEqual([]);
   });
 
+  it('strips declarative Shadow DOM controls and their live binding stamps', () => {
+    const root = new FakeMorphRoot();
+    const template = new FakeQueryPlanElement(
+      {
+        'data-bind:shadowrootmode': 'page.mode',
+        'data-bind:ShadowRootClonable': 'page.clonable',
+        'data-derive': 'page.serializable',
+        'data-derive-attr': 'ShadowRootSerializable',
+        shadowRootDelegatesFocus: '',
+        shadowrootmode: 'open',
+        title: 'ordinary inert template',
+      },
+      { tagName: 'TEMPLATE', textContent: 'dormant light-DOM content' },
+    );
+    root.planElements.push(template);
+
+    applyQueryBindings(root, 'page', {
+      clonable: true,
+      mode: 'closed',
+      serializable: true,
+    });
+
+    expect(template.attributes).toEqual([
+      { name: 'data-derive', value: 'page.serializable' },
+      { name: 'title', value: 'ordinary inert template' },
+    ]);
+    expect(template.textContent).toBe('dormant light-DOM content');
+  });
+
   it('applies optional binding path segments and removes empty attribute bindings', () => {
     const root = new FakeMorphRoot();
     const name = new FakeQueryBindingElement('deal.contact?.name', { textContent: 'Ada' });

@@ -371,6 +371,38 @@ describe('inline loader output security', () => {
       }
     });
 
+    it(`${label}: strips declarative Shadow DOM controls before a live write`, async () => {
+      const state = { clonable: true, mode: 'closed', serializable: true };
+      const element = new BoundTriggerElement(
+        {
+          'data-bind:shadowrootmode': 'state.mode',
+          'data-bind:ShadowRootClonable': 'state.clonable',
+          'data-derive': 'state.serializable',
+          'data-derive-attr': 'ShadowRootSerializable',
+          'kovo-state': JSON.stringify(state),
+          'on:click': '/c/client.js#commitShadow',
+          shadowRootDelegatesFocus: '',
+          shadowrootmode: 'open',
+          title: 'ordinary inert template',
+        },
+        'TEMPLATE',
+      );
+
+      await dispatchInlineDelegatedClick(
+        element,
+        async () => ({ commitShadow() {} }),
+        installSource,
+        ['/c/client.js'],
+      );
+
+      expect(element.attributes).toEqual([
+        { name: 'data-derive', value: 'state.serializable' },
+        { name: 'kovo-state', value: JSON.stringify(state) },
+        { name: 'on:click', value: '/c/client.js#commitShadow' },
+        { name: 'title', value: 'ordinary inert template' },
+      ]);
+    });
+
     it(`${label}: H12 inerts SMIL target/value bindings in either transition order`, async () => {
       const payload = "javascript:(document.body.dataset.kovoSmilXss='inline',void 0)";
       for (const [index, transfer] of ['values', 'from', 'to', 'by'].entries()) {
