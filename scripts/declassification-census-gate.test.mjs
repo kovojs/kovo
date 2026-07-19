@@ -70,6 +70,9 @@ export function run(value) {
   trustedReveal(value, { justification: 'foreign function' });
   return text;
 }
+export function shadowed(revealSecret, value) {
+  return revealSecret(value, 'parameter is not the imported capability');
+}
 `);
 
     expect(sites).toHaveLength(1);

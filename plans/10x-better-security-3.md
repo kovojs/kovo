@@ -607,9 +607,11 @@ bar on the first attempt. Nothing in plan-1 or plan-2 counts, trends, or ratchet
 string. `trustedReveal` is self-declared `method:'arbitrary-fn'`. `drainSecretRevealAuditFacts` is
 documented as a bounded (newest 256) **destructive** drain — explicitly not a complete record. (~2 pm)
 
-- [ ] Versioned census of every declassification site (the 17 non-test `.reveal`/`revealSecret`/
-      `trustedReveal`/`revealUntrusted` sites plus `serverValue`, `trustedAssign`, `publishToClient`),
-      re-derived from source by a gate that fails on drift.
+- [x] Versioned census of every authored non-test `.reveal` / `revealSecret` / `trustedReveal` /
+      `revealUntrusted` / `serverValue` / `trustedAssign` / `publishToClient` call, re-derived from
+      source by a gate that fails on site, code, capability-identity, or door drift.
+  - Evidence: `pnpm run check:declassification-census` inventories the current 15 exact sites and
+    passes 7/7 closed-vocabulary and new/deleted/code/identity/door mutation controls.
 - [ ] Replace `SecretRevealReason` (a string) with a typed `DeclassifyPolicy = closed-registry purpose ×
 door id × owner scope`; `reveal('some string')` must stop typechecking.
 - [ ] Robustness rule over the existing security IR: a declassify node whose **enabling condition or
