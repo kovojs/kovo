@@ -750,7 +750,7 @@
     },
     {
       "path": "@kovojs/verify/dist/translation.mjs",
-      "sha512": "sha512-E398SvfyrHskJfwg38VTWfA9URvtvBYoI8wEf3+pbbxicXAwoCFjbNlwn72rmVlOyBNHQuclvgNFAXW009+bQg=="
+      "sha512": "sha512-Uh4bKVIW1SRmG8JJjQLzdCq0znEOC57CJXCqTmcH4PFibsf5kL40rbxjeTKoba03O94YbywdPJH9kfO+368pVg=="
     }
   ],
   "cap": {

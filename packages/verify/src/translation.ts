@@ -392,7 +392,12 @@ function normalizeSecretFieldNames(
   if (rows === undefined) return undefined;
   const names: string[] = [];
   for (const [index, item] of rows.entries()) {
-    if (typeof item !== 'string' || item.length > 1024 || item.includes('\0')) {
+    if (
+      typeof item !== 'string' ||
+      item.length === 0 ||
+      item.length > 1024 ||
+      item.includes('\0')
+    ) {
       pushFinding(
         findings,
         'decision-record',
@@ -436,15 +441,42 @@ function checkArtifactCoverage(
   findings: KovoEmittedTranslationFinding[],
 ): void {
   for (const artifact of artifacts) {
-    if (artifactRelations.has(artifact.kind)) continue;
-    pushFinding(
-      findings,
-      'artifact-coverage',
-      'artifact-kind-unreviewed',
-      `${artifact.fileName} has unreviewed emitted kind ${JSON.stringify(artifact.kind)}`,
-      artifact.kind,
-    );
+    if (!artifactRelations.has(artifact.kind)) {
+      pushFinding(
+        findings,
+        'artifact-coverage',
+        'artifact-kind-unreviewed',
+        `${artifact.fileName} has unreviewed emitted kind ${JSON.stringify(artifact.kind)}`,
+        artifact.kind,
+      );
+    }
+    const inferredKind = artifactKindFromReviewedFileName(artifact.fileName);
+    if (inferredKind === undefined) {
+      pushFinding(
+        findings,
+        'artifact-coverage',
+        'artifact-filename-unreviewed',
+        `${artifact.fileName} does not match a reviewed emitted filename shape`,
+        artifact.kind,
+      );
+    } else if (inferredKind !== artifact.kind) {
+      pushFinding(
+        findings,
+        'artifact-coverage',
+        'artifact-kind-mismatch',
+        `${artifact.fileName} implies ${inferredKind} but is tagged ${artifact.kind}`,
+        artifact.kind,
+      );
+    }
   }
+}
+
+function artifactKindFromReviewedFileName(fileName: string): string | undefined {
+  if (fileName.endsWith('.client.js')) return 'client';
+  if (fileName.endsWith('.server.js')) return 'server';
+  if (fileName.endsWith('.css')) return 'css';
+  if (fileName === 'generated/registries.d.ts') return 'registry';
+  return undefined;
 }
 
 function checkClientImports(
@@ -574,8 +606,12 @@ function sourceCarriesField(
   tokens: readonly SourceToken[],
   field: string,
 ): boolean {
-  if (identifier(field)) return identifierWords(decodeIdentifierEscapes(source)).includes(field);
-  return tokens.some((token) => token.kind === 'string' && token.value === field);
+  const decodedSource = decodeIdentifierEscapes(source);
+  if (identifier(field)) return identifierWords(decodedSource).includes(field);
+  return (
+    decodedSource.includes(field) ||
+    tokens.some((token) => token.kind === 'string' && token.value === field)
+  );
 }
 
 function decodeIdentifierEscapes(source: string): string {

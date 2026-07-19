@@ -61,6 +61,19 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
       ]),
     );
 
+    const unicode = validTranslation();
+    unicode.decision = { ...unicode.decision, secretFieldNames: ['密码'] };
+    artifact(unicode, 'registry').source += '\ninterface Leak { 密码: string }\n';
+    expect(verifyEmittedTranslation(unicode).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactKind: 'registry',
+          code: 'secret-field-emitted',
+          relation: 'secret-field-absence',
+        }),
+      ]),
+    );
+
     for (const kind of ['client', 'registry'] as const) {
       const input = validTranslation();
       artifact(input, kind).source += '\ninterface Leak { passwordHash: string }\n';
@@ -84,6 +97,17 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'artifact-kind-unreviewed',
+          relation: 'artifact-coverage',
+        }),
+      ]),
+    );
+
+    const mislabeled = validTranslation();
+    artifact(mislabeled, 'client').kind = 'css';
+    expect(verifyEmittedTranslation(mislabeled).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'artifact-kind-mismatch',
           relation: 'artifact-coverage',
         }),
       ]),
