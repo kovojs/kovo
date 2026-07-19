@@ -646,7 +646,7 @@ function emitRegistryCssPhase(
         fact.component,
         parsed.options.fileName,
         index === 0 ? componentSecurityOperationFacts(lowered.model, client.versionedHandlers) : [],
-        index === 0 ? componentSecuritySemanticGraphFacts(parsed.originalModel) : undefined,
+        index === 0 ? componentSecuritySemanticGraphFacts(lowered.model) : undefined,
       ),
   );
   const cssAssets = cssSource
@@ -787,7 +787,7 @@ function emitServerPhase(
   );
 
   return {
-    serverModule: emitServerModule(serverRenderedSource, lowered.model, parsed.originalModel),
+    serverModule: emitServerModule(serverRenderedSource, lowered.model),
     serverRender,
     serverRenderedSource,
   };

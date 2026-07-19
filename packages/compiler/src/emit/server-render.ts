@@ -92,12 +92,11 @@ export interface ServerRenderComponentStampTarget {
 export function emitServerModule(
   renderedSource: string,
   model?: ComponentModuleModel,
-  semanticModel: ComponentModuleModel | undefined = model,
 ): EmittedServerModule {
   const sourceWithManifest =
     model === undefined
       ? renderedSource
-      : appendServerSecurityOperationManifest(renderedSource, model, semanticModel ?? model);
+      : appendServerSecurityOperationManifest(renderedSource, model);
   return {
     executableSource: renderSourceModule(sourceWithManifest, ''),
     source: renderSourceModule(sourceWithManifest, 'export '),
@@ -109,7 +108,6 @@ const GENERATED_SERVER_SECURITY_MANIFEST = '__kovoSecurityOperationManifest_v1';
 function appendServerSecurityOperationManifest(
   renderedSource: string,
   model: ComponentModuleModel,
-  semanticModel: ComponentModuleModel,
 ): string {
   const operations = serverSecurityOperationFacts(model);
   if (operations.length === 0) return renderedSource;
@@ -118,7 +116,7 @@ function appendServerSecurityOperationManifest(
     securityOperationIrSchema,
     'Server security-operation schema',
   );
-  const semanticGraph = componentSecuritySemanticGraphFacts(semanticModel);
+  const semanticGraph = componentSecuritySemanticGraphFacts(model);
   const semanticGraphSource =
     semanticGraph === undefined
       ? 'undefined'
