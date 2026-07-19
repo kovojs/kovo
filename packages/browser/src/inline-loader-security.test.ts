@@ -256,6 +256,72 @@ describe('inline loader output security', () => {
       }
     });
 
+    it(`${label}: preserves reviewed execution and isolation controls`, async () => {
+      const cases = [
+        {
+          attribute: 'src',
+          binding: 'src',
+          current: '/reviewed/runtime.js',
+          tagName: 'SCRIPT',
+          value: '/uploads/attacker.js',
+        },
+        {
+          attribute: 'type',
+          binding: 'type',
+          current: 'application/json',
+          tagName: 'SCRIPT',
+          value: 'module',
+        },
+        {
+          attribute: 'href',
+          binding: 'href',
+          current: '/reviewed/theme.css',
+          tagName: 'LINK',
+          value: '/uploads/attacker.css',
+        },
+        {
+          attribute: 'rel',
+          binding: 'rel',
+          current: 'icon',
+          tagName: 'LINK',
+          value: 'stylesheet',
+        },
+        {
+          attribute: 'sandbox',
+          binding: 'sandbox',
+          current: 'allow-forms',
+          tagName: 'IFRAME',
+          value: 'allow-scripts allow-same-origin',
+        },
+        {
+          attribute: 'sandbox',
+          binding: 'sandbox',
+          current: 'allow-forms',
+          tagName: 'IFRAME',
+          value: null,
+        },
+      ] as const;
+
+      for (const testCase of cases) {
+        const element = new BoundTriggerElement(
+          {
+            [testCase.attribute]: testCase.current,
+            [`data-bind:${testCase.binding}`]: 'state.value',
+            'kovo-state': JSON.stringify({ value: testCase.value }),
+            'on:click': '/c/client.js#commit',
+          },
+          testCase.tagName,
+        );
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({ commit() {} }),
+          installSource,
+          ['/c/client.js'],
+        );
+        expect(element.getAttribute(testCase.attribute), testCase.tagName).toBe(testCase.current);
+      }
+    });
+
     it(`${label}: H12 inerts SMIL target/value bindings in either transition order`, async () => {
       const payload = "javascript:(document.body.dataset.kovoSmilXss='inline',void 0)";
       for (const [index, transfer] of ['values', 'from', 'to', 'by'].entries()) {
