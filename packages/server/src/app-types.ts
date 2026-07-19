@@ -162,11 +162,19 @@ export interface AppRequestRateLimitOptions {
  */
 export interface AppRequestLimitOptions extends AppRequestRateLimitOptions {
   /**
+   * End-to-end request deadline in milliseconds. The framework aborts owned effects and discards
+   * a response that has not crossed the response mint door in time. Must be 1..300,000; arbitrary
+   * synchronous JavaScript remains cooperatively, not forcibly, cancellable (SPEC §9.5).
+   */
+  deadlineMs?: number;
+  /**
    * Maximum accepted request body size. The shell rejects an oversized `Content-Length`
    * before dispatch and wraps body readers so chunked/missing-length bodies fail with 413
    * before parse. Must be between 0 and 67,108,864 bytes; the gate cannot be disabled.
    */
   maxBodyBytes?: number;
+  /** Maximum concurrently admitted requests for this app instance (1..10,000; SPEC §9.5). */
+  maxInFlight?: number;
   /**
    * Maximum array length a framework-owned query/list result may ship to the client wire.
    * Defaults to the API4 resource-consumption floor; an audited large-read surface may raise it
@@ -207,7 +215,9 @@ export interface ResolvedAppRequestRateLimitOptions {
 /** Normalized request-shell load-shedding posture stored on `KovoApp`. */
 export interface ResolvedAppRequestLimitOptions extends ResolvedAppRequestRateLimitOptions {
   clientIp?: (request: Request) => string | undefined;
+  deadlineMs: number;
   maxBodyBytes: number;
+  maxInFlight: number;
   maxQueryListItems: number;
   mutations: ResolvedAppRequestRateLimitOptions;
   queries: ResolvedAppRequestRateLimitOptions;

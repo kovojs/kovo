@@ -45,10 +45,22 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
     expect(defaults.maxInFlight).toBe(256);
 
     for (const [requestLimits, message] of [
-      [{ deadlineMs: false }, 'requestLimits.deadlineMs }) must be an integer between 1 and 300000'],
-      [{ deadlineMs: 300_001 }, 'requestLimits.deadlineMs }) must be an integer between 1 and 300000'],
-      [{ maxInFlight: false }, 'requestLimits.maxInFlight }) must be an integer between 1 and 10000'],
-      [{ maxInFlight: 10_001 }, 'requestLimits.maxInFlight }) must be an integer between 1 and 10000'],
+      [
+        { deadlineMs: false },
+        'requestLimits.deadlineMs }) must be an integer between 1 and 300000',
+      ],
+      [
+        { deadlineMs: 300_001 },
+        'requestLimits.deadlineMs }) must be an integer between 1 and 300000',
+      ],
+      [
+        { maxInFlight: false },
+        'requestLimits.maxInFlight }) must be an integer between 1 and 10000',
+      ],
+      [
+        { maxInFlight: 10_001 },
+        'requestLimits.maxInFlight }) must be an integer between 1 and 10000',
+      ],
     ] as const) {
       expect(() => createApp({ requestLimits: requestLimits as never })).toThrow(message);
     }
@@ -139,10 +151,14 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
         });
       });
     });
-    const handlerCalls = vi.fn(async (_request: Request, context: { actAs(id: string): unknown }) => {
-      await context.actAs('deadline-test-principal');
-      return noStoreResponse('must-not-run');
-    });
+    let handlerPassedDbWait = false;
+    const handlerCalls = vi.fn(
+      async (_request: Request, context: { actAs(id: string): unknown }) => {
+        await context.actAs('deadline-test-principal');
+        handlerPassedDbWait = true;
+        return noStoreResponse('must-not-run');
+      },
+    );
     const dbEndpoint = endpoint('/db-wait', {
       auth: { justification: 'deadline DB test endpoint', kind: 'none' },
       db: true,
@@ -164,7 +180,8 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
     expect(response.status).toBe(503);
     expect(db).toHaveBeenCalledTimes(1);
     expect(dbSignal?.aborted).toBe(true);
-    expect(handlerCalls).not.toHaveBeenCalled();
+    expect(handlerCalls).toHaveBeenCalledTimes(1);
+    expect(handlerPassedDbWait).toBe(false);
   });
 
   // C13-style red anchor for disconnect release before the finite deadline elapses.

@@ -49,6 +49,13 @@
       "role": "request-authority"
     },
     {
+      "id": "server.request-deadline",
+      "path": "packages/server/src/request-deadline.ts",
+      "binding": "requestDeadlineContext",
+      "mode": "isolated",
+      "role": "request-authority"
+    },
+    {
       "id": "server.response-lifecycle",
       "path": "packages/server/src/response-lifecycle-context.ts",
       "binding": "responseLifecycleStorage",
@@ -78,6 +85,6 @@
     "test": "keeps seeded concurrent principals disjoint through awaits, streams, and thenable traps",
     "seed": "0x4b564f56",
     "requests": 24,
-    "logicalCells": 8
+    "logicalCells": 9
   }
 }

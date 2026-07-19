@@ -17,13 +17,16 @@ import type {
 } from './endpoint.js';
 import { appSystemResponse } from './app-system-response.js';
 import {
+  completeAppRequestDeadline,
   pinRequestIngressSurface,
   frameworkLoadShedErrorResponse,
   MAX_APP_REQUEST_BODY_BYTES,
   preDispatchLoadShedResponse,
+  requestWithDeadlineCapability,
   requestWithBodyLimit,
   RequestBodyLimitExceededError,
   requestWithVerifiedBodyLimit,
+  runWithAppRequestDeadline,
   type LoadShedSurface,
 } from './app-load-shed.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
@@ -104,29 +107,42 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       surface,
       buildToken,
       maxBodyBytes,
+      request,
     );
     if (loadShed) return loadShed;
+    const deadlineRequest = requestWithDeadlineCapability(request);
+    limitedRequest = deadlineRequest;
+    return await runWithAppRequestDeadline(
+      deadlineRequest,
+      {
+        ...(buildToken === undefined ? {} : { buildToken }),
+        method,
+        surface,
+      },
+      async () => {
+        if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);
 
-    if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);
+        if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {
+          return kovoSecurityReportResponse(app, deadlineRequest);
+        }
 
-    if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {
-      return kovoSecurityReportResponse(app, request);
-    }
-
-    const dispatchRequest =
-      match.kind === 'endpoint' || match.kind === 'mutation'
-        ? await requestWithVerifiedBodyLimit(request, maxBodyBytes)
-        : request;
-    limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
-    return await dispatchMatchedAppRequest({
-      app,
-      match,
-      method,
-      request: limitedRequest,
-      ...(reservedKey === undefined ? {} : { reservedKey }),
-      url,
-    });
+        const dispatchRequest =
+          match.kind === 'endpoint' || match.kind === 'mutation'
+            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)
+            : deadlineRequest;
+        limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
+        return dispatchMatchedAppRequest({
+          app,
+          match,
+          method,
+          request: limitedRequest,
+          ...(reservedKey === undefined ? {} : { reservedKey }),
+          url,
+        });
+      },
+    );
   } catch (error) {
+    completeAppRequestDeadline(limitedRequest);
     if (error instanceof RequestBodyLimitExceededError) {
       return appSystemResponse('Payload Too Large', {
         buildToken,

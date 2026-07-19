@@ -92,6 +92,7 @@ import {
   runSqliteAsyncTransaction,
 } from './sql-safe-handle.js';
 import { runWithRequestInputProvenance } from './request-input-provenance.js';
+import { assertCurrentRequestDeadlineActive } from './request-deadline.js';
 import { pinnedRequestCarrier } from './request-carrier.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import {
@@ -550,6 +551,7 @@ async function runMutationWithTrackedInput<
     setSessionRevocationClearSiteData: () => void;
   };
   const runHandler = async (handlerRequest: GuardedRequest): Promise<Value> => {
+    assertCurrentRequestDeadlineActive('mutation transaction');
     const authorityNeutralHandlerRequest = csrfExempt
       ? (withoutRequestProperty(handlerRequest, 'clientIp') as GuardedRequest)
       : handlerRequest;
@@ -558,6 +560,10 @@ async function runMutationWithTrackedInput<
       options.taskScheduler,
     );
     const handlerValue = await definition.handler(input, scheduledHandlerRequest, context);
+    // This checkpoint still runs inside the framework/custom transaction callback. Expiry here
+    // throws before callback success can request COMMIT; expiry after callback success is an
+    // ambiguous/post-commit case and is discarded at the response door, never called rollback.
+    assertCurrentRequestDeadlineActive('mutation transaction');
 
     if (isMutationFail(handlerValue)) {
       throw new MutationRollback(handlerValue);
@@ -570,6 +576,7 @@ async function runMutationWithTrackedInput<
   let value: Value;
 
   try {
+    assertCurrentRequestDeadlineActive('mutation transaction');
     value = definition.transaction
       ? await runExactlyOnceAdapter(
           (run) => definition.transaction!(lifecycleRequest, run),
@@ -627,6 +634,7 @@ async function runInDefaultTransaction<Request, GuardedRequest, Value>(
   runHandler: (handlerRequest: GuardedRequest) => Promise<Value>,
   guardedRequest: GuardedRequest,
 ): Promise<Value> {
+  assertCurrentRequestDeadlineActive('mutation transaction');
   const db = transactionCapableRequestDb(lifecycleRequest);
   if (!db) return runHandler(guardedRequest);
 

@@ -101,12 +101,13 @@ export function validateAsyncContextConfinement({ document, files, rootDir = rep
     if (derived.id !== row.id) {
       findings.push(`${site}: derived id ${derived.id} does not match census ${row.id}`);
     }
-    const requiredRunner =
+    const hasRequiredRunner =
       row.mode === 'isolated'
-        ? 'runWithIsolatedFrameworkAsyncContext'
-        : 'runWithFrameworkAsyncContext';
-    if (!derived.uses.has(requiredRunner)) {
-      findings.push(`${site}: ${row.mode} cell never uses ${requiredRunner}`);
+        ? derived.uses.has('runWithIsolatedFrameworkAsyncContext') ||
+          derived.uses.has('runWithRevocableIsolatedFrameworkAsyncContext')
+        : derived.uses.has('runWithFrameworkAsyncContext');
+    if (!hasRequiredRunner) {
+      findings.push(`${site}: ${row.mode} cell never uses its confinement runner`);
     }
     if (!derived.uses.has('currentFrameworkAsyncContextValue')) {
       findings.push(`${site}: cell has no exact current-lifecycle read`);
@@ -744,7 +745,7 @@ function validateOracle(oracle, sources, expectedLogicalCells, findings) {
     !source.includes('ReadableStream') ||
     !source.includes('thenableCheckpoint') ||
     !source.includes('requestCount = 24') ||
-    !source.includes('cellCount = 8')
+    !source.includes(`cellCount = ${expectedLogicalCells}`)
   ) {
     findings.push(`${oracle.path}: seeded concurrency oracle lost a required interleaving family`);
   }
