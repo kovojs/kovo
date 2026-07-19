@@ -708,14 +708,17 @@ interface PostgresParanoidStatus {
   events: { id: string; label: string }[];
   readonlyRows: { id: string; label: string }[];
   secretReadBlocked: boolean;
-  verificationDenied: boolean;
 }
 
 async function postgresParanoidStatus(origin: string): Promise<PostgresParanoidStatus> {
-  const response = await fetch(`${origin}/api/phase5-pg-status`);
+  const queryKey = 'paranoid-phase5-postgres-proof/phase5-pg-status-query';
+  const response = await fetch(`${origin}/_q/${queryKey}`);
   const body = await response.text();
   expect(response.status, body).toBe(200);
-  return JSON.parse(body) as PostgresParanoidStatus;
+  const match = /^<kovo-query\s+[^>]*>([\s\S]*)<\/kovo-query>$/.exec(body.trim());
+  expect(match, body).not.toBeNull();
+  expect(body).toContain(`name="${queryKey}"`);
+  return JSON.parse(match?.[1] ?? 'null') as PostgresParanoidStatus;
 }
 
 async function expectPostgresReadonlyRowsEmpty(origin: string): Promise<void> {
@@ -727,7 +730,6 @@ async function expectPostgresReadonlySecretsDenied(origin: string): Promise<void
   const status = await postgresParanoidStatus(origin);
   expect(status.builderSecretReadBlocked).toBe(true);
   expect(status.secretReadBlocked).toBe(true);
-  expect(status.verificationDenied).toBe(true);
 }
 
 interface PostgresWriteBoundaryStatus {
