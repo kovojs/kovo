@@ -137,12 +137,20 @@ For confidential-at-rest columns, encrypt before the write:
 
 ```text
 // Source-verified shape from packages/server/src/confidential-at-rest.ts
-import { encryptAtRest } from '@kovojs/server';
+import {
+  createConfidentialAtRestCipher,
+  createSigningKeyRing,
+  encryptAtRest,
+} from '@kovojs/server';
 
 declare const env: { SSN_KEY: string };
-declare const input: { ssn: string };
+declare const input: { id: string; ssn: string };
 
-const ciphertext = encryptAtRest(input.ssn, env.SSN_KEY, { aad: 'profiles.ssn', keyId: 'v2' });
+const roots = createSigningKeyRing({
+  keys: [{ id: 'v2', secret: env.SSN_KEY, state: 'active' }],
+});
+const ssnCipher = createConfidentialAtRestCipher(roots, { audience: 'profiles.ssn' });
+const ciphertext = encryptAtRest(input.ssn, ssnCipher, { aad: `profile:${input.id}` });
 ```
 
 ## Handle failure

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
 import type { JsonValue, Redirect, ScopedKey } from '@kovojs/core';
 import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
@@ -16,7 +16,7 @@ import {
   resolveCsrfLiveTargetBinding,
   type CsrfOptions,
 } from './csrf.js';
-import { signingKeyRingFromSecret } from './keyring.js';
+import { createLiveTargetCryptoHandle } from './crypto-authority.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
@@ -39,13 +39,10 @@ import {
 import {
   witnessArrayAppend,
   createWitnessSet,
-  witnessGetPrototypeOf,
   witnessIsArray,
   witnessGetOwnPropertyDescriptor,
-  witnessReflectApply,
   witnessSetAdd,
   witnessSetHas,
-  witnessString,
 } from './security-witness-intrinsics.js';
 import {
   securityNumberIsInteger,
@@ -54,36 +51,7 @@ import {
 } from './response-security-intrinsics.js';
 import { mutationWireJsonParse } from './mutation-wire-intrinsics.js';
 
-const NativeBuffer = Buffer;
 const developmentLiveTargetAttestationSecret = randomBytes(32).toString('base64url');
-const nativeBufferFrom = NativeBuffer.from;
-const nativeBufferByteLength = NativeBuffer.byteLength;
-const hashControl = createHash('sha256');
-const hashPrototype = witnessGetPrototypeOf(hashControl);
-const nativeHashUpdate =
-  hashPrototype === null
-    ? undefined
-    : witnessGetOwnPropertyDescriptor(hashPrototype, 'update')?.value;
-const nativeHashDigest =
-  hashPrototype === null
-    ? undefined
-    : witnessGetOwnPropertyDescriptor(hashPrototype, 'digest')?.value;
-if (typeof nativeHashUpdate !== 'function' || typeof nativeHashDigest !== 'function') {
-  throw new TypeError('Kovo live-target attestation hash controls are unavailable.');
-}
-if (witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, ['🙂', 'utf8']) !== 4) {
-  throw new TypeError(
-    'Kovo live-target attestation byte-length control failed its semantic check.',
-  );
-}
-const hashSemanticControl = createHash('sha256');
-witnessReflectApply(nativeHashUpdate, hashSemanticControl, ['abc']);
-if (
-  witnessReflectApply<string>(nativeHashDigest, hashSemanticControl, ['hex']) !==
-  'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
-) {
-  throw new TypeError('Kovo live-target attestation hash controls failed their semantic check.');
-}
 
 /**
  * @internal Mutation-wire protocol type (SPEC.md §9.1). Renderer for a fragment patched
@@ -674,17 +642,9 @@ function createLiveTargetAttestationInternal<Request>(
 ): string {
   const payload = liveTargetAttestationPayload(descriptor, options, mintAnonymousForResponse);
   if (options.csrf === undefined || options.csrf === false) {
-    return signingKeyRingFromSecret(liveTargetAttestationSecret()).sign({
-      audience: 'mutation-live-target',
-      payload,
-      purpose: 'live-target-attestation',
-    }).signature;
+    return createLiveTargetCryptoHandle(liveTargetAttestationSecret()).sign(payload).signature;
   }
-  return signingKeyRingFromSecret(options.csrf.secret).sign({
-    audience: 'mutation-live-target',
-    payload,
-    purpose: 'live-target-attestation',
-  }).signature;
+  return createLiveTargetCryptoHandle(options.csrf.secret).sign(payload).signature;
 }
 
 function verifyLiveTargetDescriptor<Request>(
@@ -697,12 +657,16 @@ function verifyLiveTargetDescriptor<Request>(
   if (descriptor.attestation === undefined) {
     return false;
   }
-  let expected: string;
   try {
     if (typeof options.liveTargetAudience !== 'string' || options.liveTargetAudience.length === 0) {
       return false;
     }
-    expected = createLiveTargetAttestation(descriptor, {
+    const unsigned = {
+      component: descriptor.component,
+      props: descriptor.props,
+      target: descriptor.target,
+    };
+    const payload = liveTargetAttestationPayload(unsigned, {
       buildToken: options.liveTargetAudience,
       ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
       request: options.request,
@@ -710,10 +674,14 @@ function verifyLiveTargetDescriptor<Request>(
         ? {}
         : { sourceUrl: options.liveTargetSourceUrl }),
     });
+    const secret =
+      options.csrf === undefined || options.csrf === false
+        ? liveTargetAttestationSecret()
+        : options.csrf.secret;
+    return createLiveTargetCryptoHandle(secret).verify(payload, descriptor.attestation).ok;
   } catch {
     return false;
   }
-  return secureEqual(descriptor.attestation, expected);
 }
 
 function liveTargetAttestationSecret(): string {
@@ -851,25 +819,6 @@ function requiredLiveTargetDescriptorString(source: object, property: string): s
     );
   }
   return descriptor.value;
-}
-
-function secureEqual(left: string, right: string): boolean {
-  return timingSafeEqual(digestComparableAttestation(left), digestComparableAttestation(right));
-}
-
-function digestComparableAttestation(value: string): Buffer {
-  const bytes = witnessReflectApply<Buffer>(nativeBufferFrom, NativeBuffer, [value]);
-  const byteLength = witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, [
-    value,
-    'utf8',
-  ]);
-  const hash = createHash('sha256');
-  witnessReflectApply(nativeHashUpdate, hash, ['kovo-live-target-attestation-v1']);
-  witnessReflectApply(nativeHashUpdate, hash, ['\0']);
-  witnessReflectApply(nativeHashUpdate, hash, [witnessString(byteLength)]);
-  witnessReflectApply(nativeHashUpdate, hash, ['\0']);
-  witnessReflectApply(nativeHashUpdate, hash, [bytes]);
-  return witnessReflectApply(nativeHashDigest, hash, []);
 }
 
 function dedupe(values: readonly string[]): string[] {

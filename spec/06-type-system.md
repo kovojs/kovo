@@ -345,9 +345,11 @@ provider signing material out of public verifier metadata. Types and private bra
 the runtime witness, closed registry, and acquisition gates are the enforcement.
 
 The closed registry is `kovo-crypto-purpose-registry/v1`. Every framework derivation is
-HKDF-SHA256 over its root with public salt `kovo-crypto-authority-v1` and an injective,
-length-framed info tuple `(registry-version, purpose, audience, algorithm)`. A row fixes the literal
-purpose, algorithm, allowed operation set, root source, and bounded audience grammar. An absent,
+HKDF-SHA256 over its root with public salt `kovo-crypto-authority-v1`. Its fixed-width info is the
+SHA-256 commitment of the injective, length-framed tuple
+`(registry-version, purpose, audience, algorithm)`; no bounded audience bytes are truncated to meet
+provider-specific HKDF info limits. A row fixes the literal purpose, algorithm, allowed operation
+set, root source, and bounded audience grammar. An absent,
 dynamic, malformed, algorithm-mismatched, or operation-mismatched row fails before derivation.
 HMAC-SHA256 is the v1 symmetric signature/PRF algorithm; SHA-256 is the v1 non-keyed digest;
 AES-256-GCM with a fresh 96-bit IV and 128-bit tag is the v1 confidential-at-rest algorithm. A

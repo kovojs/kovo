@@ -53,8 +53,19 @@ export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
 export { trustedAssign, serverValue } from './write-governance.js';
 export type { TrustedAssignOptions } from './write-governance.js';
-export { encryptAtRest } from './confidential-at-rest.js';
-export type { EncryptedAtRest, EncryptAtRestOptions } from './confidential-at-rest.js';
+export {
+  createConfidentialAtRestCipher,
+  decryptAtRest,
+  encryptAtRest,
+  rewrapAtRest,
+} from './confidential-at-rest.js';
+export type {
+  ConfidentialAtRestCipher,
+  ConfidentialAtRestCipherOptions,
+  DecryptAtRestOptions,
+  EncryptedAtRest,
+  EncryptAtRestOptions,
+} from './confidential-at-rest.js';
 // SPEC §6.6 / KV424 and plans/most-secure-web-framework.md SINK-02: shell command
 // execution is exposed as a framework-owned `execFile` primitive. This is a
 // runtime-DiD floor plus a type-only Command surface; raw `child_process` remains
@@ -76,17 +87,15 @@ export { EgressBlockedError, EgressConfigError } from './egress.js';
 export type { EgressOptions, PrivateAddressClass } from './egress.js';
 export { createSigningKeyRing } from './keyring.js';
 export type {
+  ActiveSigningKey,
   FrameworkCsrfSigningSecret,
-  SigningInput,
+  PreviousSigningKey,
+  RevokedSigningKey,
   SigningKey,
   SigningKeyRing,
   SigningKeyRingOptions,
   SigningKeyState,
-  SigningRejectReason,
-  SigningResult,
   SigningSecret,
-  SigningVerifyInput,
-  SigningVerifyResult,
 } from './keyring.js';
 // SPEC §6.6 / §9.1 / plans/secure-framework.md Phase 5 follow-up: the framework-owned storage
 // download ROUTE that hosts the capability verify sink. `createStorageDownloadEndpoint` builds a

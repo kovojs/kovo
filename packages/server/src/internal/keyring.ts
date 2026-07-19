@@ -5,3 +5,6 @@
  * first-party integration packages mint this capability (SPEC §6.6 C9).
  */
 export { createFrameworkCsrfSigningSecret } from '../keyring.js';
+/** @internal Fixed Better Auth bucket authority; no generic HMAC surface. */
+export { createBetterAuthRateLimitCryptoHandle } from '../crypto-authority.js';
+export type { BetterAuthRateLimitCryptoHandle } from '../crypto-authority.js';

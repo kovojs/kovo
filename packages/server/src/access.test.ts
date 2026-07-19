@@ -580,9 +580,10 @@ describe('structured access metadata', () => {
       secret: authoredSecret,
     };
     const verifier = hmacSignature(options);
-    // Public byte-shaped config is audit metadata, not the executable source of truth. Mutating
-    // it before createApp() must not make canonicalization rebuild different authentication.
-    (verifier.config.secret as Uint8Array).set(new TextEncoder().encode(NEW_SNAPSHOT_HMAC_SECRET));
+    // Public inspection metadata never contains provider signing material; the private verify
+    // authority owns its construction-time snapshot.
+    expect(verifier.config).not.toHaveProperty('secret');
+    expect(verifier.resolved).not.toHaveProperty('secret');
     const declared = webhook('/hmac-verifier-snapshot', {
       handler: () => {
         handlerCalls += 1;

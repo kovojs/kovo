@@ -19,7 +19,8 @@ import {
   sealAnonymousCsrfResponseRequestAndSnapshotSetCookies,
   type CsrfOptions,
 } from './csrf.js';
-import { signSessionFingerprintWithSecret, type SigningSecret } from './keyring.js';
+import { createSessionFingerprintCryptoHandle } from './crypto-authority.js';
+import type { SigningSecret } from './keyring.js';
 import {
   createSignUrl,
   storageDownloadEndpointInfo,
@@ -668,7 +669,9 @@ function createUnavailableSignUrl(message: string): ReturnType<typeof createSign
  * `principalPostureFromRequest`; unresolved session carriers intentionally do not reach this helper.
  */
 function hmacSessionFingerprint(input: string, secret: SigningSecret | undefined): string {
-  return signSessionFingerprintWithSecret(secret ?? fallbackBroadcastFingerprintSecret, input);
+  return createSessionFingerprintCryptoHandle(secret ?? fallbackBroadcastFingerprintSecret).sign(
+    input,
+  ).signature;
 }
 
 export async function renderAppErrorDocumentResponse(

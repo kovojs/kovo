@@ -744,10 +744,10 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     const result = confidentialFacts(
       [
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-        'import { encryptAtRest } from "@kovojs/server";',
+        'import { encryptAtRest, type ConfidentialAtRestCipher } from "@kovojs/server";',
         'import { profiles } from "./schema";',
-        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }, key: Uint8Array) => {',
-        '  await db.update(profiles).set({ ssn: encryptAtRest(input.ssn, key, { aad: "profiles.ssn" }) }).where(eq(profiles.id, input.id));',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }, cipher: ConfidentialAtRestCipher) => {',
+        '  await db.update(profiles).set({ ssn: encryptAtRest(input.ssn, cipher, { aad: "profile:" + input.id }) }).where(eq(profiles.id, input.id));',
         '};',
       ].join('\n'),
     );
@@ -760,8 +760,8 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
         'import * as server from "@kovojs/server";',
         'import { profiles } from "./schema";',
-        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }, key: Uint8Array) => {',
-        '  const encrypted = server.encryptAtRest(input.ssn, key, { aad: "profiles.ssn" });',
+        'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }, cipher: server.ConfidentialAtRestCipher) => {',
+        '  const encrypted = server.encryptAtRest(input.ssn, cipher, { aad: "profile:" + input.id });',
         '  await db.update(profiles).set({ ssn: encrypted }).where(eq(profiles.id, input.id));',
         '};',
       ].join('\n'),

@@ -12,6 +12,7 @@ import {
   signCapability,
   verifyCapability,
 } from './capability-url.js';
+import { createCapabilityCryptoHandle } from './crypto-authority.js';
 import { createSigningKeyRing } from './keyring.js';
 
 const SECRET = 'capability-url-test-secret-at-least-32-characters-long';
@@ -30,11 +31,9 @@ function legacyV2OneTimeCapabilityToken(key: string, expiry: number): string {
   const ring = createSigningKeyRing({
     keys: [{ id: keyId, secret: SECRET, state: 'active' }],
   });
-  const signed = ring.sign({
-    audience: 'storage-download',
-    payload: Buffer.from(canonical, 'utf8'),
-    purpose: 'capability-url',
-  });
+  const signed = createCapabilityCryptoHandle(ring, 'storage-download').sign(
+    Buffer.from(canonical, 'utf8'),
+  );
   const payload = `{"v":"${version}","i":"${keyId}","m":"${method}","k":"${key}","e":${String(expiry)},"o":1,"n":"${nonce}"}`;
   return `${Buffer.from(payload, 'utf8').toString('base64url')}.${signed.signature}`;
 }
@@ -333,7 +332,12 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     const rotated = createSigningKeyRing({
       keys: [
         { id: 'new', secret: NEW_SECRET, state: 'active' },
-        { id: 'old', secret: OLD_SECRET, state: 'previous' },
+        {
+          acceptUntil: Date.now() + 60_000,
+          id: 'old',
+          secret: OLD_SECRET,
+          state: 'previous',
+        },
       ],
     });
 
@@ -362,7 +366,7 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     const revoked = createSigningKeyRing({
       keys: [
         { id: 'new', secret: NEW_SECRET, state: 'active' },
-        { id: 'old', secret: OLD_SECRET, state: 'revoked' },
+        { id: 'old', state: 'revoked' },
       ],
     });
 

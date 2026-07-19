@@ -1,7 +1,7 @@
 {
   "$comment": "SPEC §6.6 exact-path crypto acquisition ratchet. Existing IDs may retire; a new or widened row requires an explicit reviewed architecture change.",
   "schema": "kovo-crypto-acquisition-doors/v1",
-  "maximumCryptoAcquisitionFiles": 34,
+  "maximumCryptoAcquisitionFiles": 31,
   "entries": [
     {
       "id": "crypto-door-001",
@@ -51,17 +51,6 @@
         "randomUUID"
       ],
       "tier": "example-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
-    },
-    {
-      "id": "crypto-door-006",
-      "file": "packages/better-auth/src/internal/rate-limit-storage.ts",
-      "kind": "crypto-acquisition",
-      "operations": [
-        "subtle.importKey",
-        "subtle.sign"
-      ],
-      "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
     {
@@ -189,6 +178,16 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
+      "id": "crypto-door-core-verifier-authority",
+      "file": "packages/core/src/internal/crypto-authority.ts",
+      "kind": "crypto-acquisition",
+      "operations": [
+        "subtle"
+      ],
+      "tier": "server-runtime",
+      "review": "Environment-neutral, boot-pinned, verify-only provider HMAC authority; no secret or signing operation crosses its private witness."
+    },
+    {
       "id": "crypto-door-019",
       "file": "packages/core/src/internal/filesystem-intrinsics.ts",
       "kind": "crypto-acquisition",
@@ -225,16 +224,6 @@
       "operations": [
         "createHash",
         "randomUUID"
-      ],
-      "tier": "server-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
-    },
-    {
-      "id": "crypto-door-023",
-      "file": "packages/core/src/verifier.ts",
-      "kind": "crypto-acquisition",
-      "operations": [
-        "subtle"
       ],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
@@ -301,26 +290,20 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
-      "id": "crypto-door-030",
-      "file": "packages/server/src/confidential-at-rest-intrinsics.ts",
+      "id": "crypto-door-server-authority",
+      "file": "packages/server/src/crypto-authority.ts",
       "kind": "crypto-acquisition",
       "operations": [
         "createCipheriv",
-        "randomBytes"
-      ],
-      "tier": "server-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
-    },
-    {
-      "id": "crypto-door-031",
-      "file": "packages/server/src/html.ts",
-      "kind": "crypto-acquisition",
-      "operations": [
+        "createDecipheriv",
+        "createHash",
         "createHmac",
+        "hkdfSync",
+        "randomBytes",
         "timingSafeEqual"
       ],
       "tier": "server-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+      "review": "Boot-pinned, known-answer-tested primitive owner; only closed purpose-minimal handles leave this module."
     },
     {
       "id": "crypto-door-032",
@@ -330,18 +313,6 @@
         "createHash",
         "createHmac",
         "randomUUID"
-      ],
-      "tier": "server-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
-    },
-    {
-      "id": "crypto-door-033",
-      "file": "packages/server/src/keyring.ts",
-      "kind": "crypto-acquisition",
-      "operations": [
-        "createHash",
-        "createHmac",
-        "timingSafeEqual"
       ],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
@@ -361,9 +332,7 @@
       "file": "packages/server/src/mutation-wire.ts",
       "kind": "crypto-acquisition",
       "operations": [
-        "createHash",
-        "randomBytes",
-        "timingSafeEqual"
+        "randomBytes"
       ],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."

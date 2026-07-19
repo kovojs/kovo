@@ -75,9 +75,12 @@ describe('framework-owned security bootstrap', () => {
     } as typeof mutableCrypto.randomBytes;
     syncBuiltinESMExports();
     const confidential = await import('./confidential-at-rest.ts?root-selective-node-crypto');
-    const envelope = confidential.encryptAtRest('victim-secret', Buffer.alloc(32, 0x33), {
-      aad: 'aad',
+    const { createSigningKeyRing } = await import('./keyring.ts');
+    const ring = createSigningKeyRing({
+      keys: [{ id: 'current', secret: Buffer.alloc(32, 0x33), state: 'active' }],
     });
+    const cipher = confidential.createConfidentialAtRestCipher(ring, { audience: 'profiles.ssn' });
+    const envelope = confidential.encryptAtRest('victim-secret', cipher, { aad: 'aad' });
     const iv = envelope.split('.')[2];
 
     expect(iv).not.toBe(Buffer.alloc(12, 0x6b).toString('base64url'));

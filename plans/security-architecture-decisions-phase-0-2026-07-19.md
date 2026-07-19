@@ -52,9 +52,10 @@ metadata never contains the secret. This is a runtime authority boundary, not a 
 
 The compatibility suite is fixed for v1: SHA-256 for unkeyed digests, RFC 5869 HKDF-SHA256 for
 framework key derivation, HMAC-SHA256 for symmetric signatures/PRFs, and AES-256-GCM with a 96-bit
-random IV and 128-bit tag for confidential-at-rest data. Derivation info is the injective,
-length-framed tuple `(registry-version, purpose, audience, algorithm)` under the public
-`kovo-crypto-authority-v1` salt. Purpose is selected only by a checked-in
+random IV and 128-bit tag for confidential-at-rest data. Derivation info is the SHA-256 commitment
+of the injective, length-framed tuple `(registry-version, purpose, audience, algorithm)` under the
+public `kovo-crypto-authority-v1` salt. The fixed-width commitment avoids provider-specific HKDF
+info limits without truncating any bounded audience bytes. Purpose is selected only by a checked-in
 `kovo-crypto-purpose-registry/v1` row; each row fixes its algorithm, operations, root source, and
 audience grammar. There is no public string-selected derivation API or compatibility fallback.
 Provider-owned webhook signatures are verified with the provider's raw protocol key and therefore

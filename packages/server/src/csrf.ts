@@ -9,6 +9,7 @@ import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
 import { escapeWireAttribute, renderedHtml, type RenderedHtml } from './html.js';
 import { currentJsxFrameworkContext, type JsxAnonymousCsrfBinding } from './jsx-context.js';
+import { createCsrfCryptoHandle } from './crypto-authority.js';
 import {
   isFrameworkCsrfSigningSecret,
   isSigningKeyRing,
@@ -638,12 +639,11 @@ export function validateCsrfToken<Request>(
   if (!submittedMac) return false;
 
   return (
-    signingKeyRingFromSecret(options.secret).verify({
-      audience: csrfAudience(options, context.audience),
-      payload: binding.framed,
-      purpose: csrfPurpose(binding.kind),
-      signature: submittedMac,
-    }).ok === true
+    createCsrfCryptoHandle(
+      options.secret,
+      csrfPurpose(binding.kind),
+      csrfAudience(options, context.audience),
+    ).verify(binding.framed, submittedMac).ok === true
   );
 }
 
@@ -1394,11 +1394,8 @@ const CSRF_MAC_BYTES = 32;
 
 function createCsrfToken(binding: CsrfBinding, secret: SigningSecret, audience: string): string {
   const mac = securityBufferFrom(
-    signingKeyRingFromSecret(secret).sign({
-      audience,
-      payload: binding.framed,
-      purpose: csrfPurpose(binding.kind),
-    }).signature,
+    createCsrfCryptoHandle(secret, csrfPurpose(binding.kind), audience).sign(binding.framed)
+      .signature,
     'base64url',
   );
   const mask = securityRandomBytes(CSRF_MAC_BYTES);
