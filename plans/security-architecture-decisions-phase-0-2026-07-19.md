@@ -31,6 +31,42 @@ There is no public structural brand, `Symbol.for()` witness, caller-supplied pri
 This prevents accidental/cast construction; it does not isolate deliberately malicious same-process
 app code from the framework process, which remains outside SPEC §6.6's app-level proof.
 
+### Crypto authority: closed purposes, HKDF-SHA256, and opaque least-operation handles
+
+Kovo will treat direct secret-crypto acquisition as raw authority. The module-closure vocabulary
+separates `crypto-acquisition` from low-privilege, non-keyed `digest`: a namespace/default crypto
+import, WebCrypto/global crypto access, entropy, keyed hashing, password hashing, signing, or
+encryption is `crypto-acquisition`; only an exact named non-keyed digest import is `digest`. A
+repository ratchet records every temporary direct acquisition by exact source path and operation and
+may shrink without review. Adding or widening a row is an explicit security-architecture change,
+not an ordinary census refresh.
+
+The server realm will have one boot-pinned `crypto-authority.ts` primitive owner with known-answer
+tests for HKDF-SHA256, HMAC-SHA256, fixed-width comparison, and AES-256-GCM. Callers receive only
+framework-witnessed, purpose-minimal handles (for example CSRF sign/verify, capability sign/verify,
+Better Auth bucket PRF, rendered-HTML validation, or confidential-at-rest seal/open), never a
+generic signer, sealer, primitive table, or raw derived key. The environment-neutral webhook
+verifier retains its WebCrypto implementation in the core realm, but routes it through the same
+least-operation rule: a verify-only handle owns imported provider material and public verifier
+metadata never contains the secret. This is a runtime authority boundary, not a type-brand proof.
+
+The compatibility suite is fixed for v1: SHA-256 for unkeyed digests, RFC 5869 HKDF-SHA256 for
+framework key derivation, HMAC-SHA256 for symmetric signatures/PRFs, and AES-256-GCM with a 96-bit
+random IV and 128-bit tag for confidential-at-rest data. Derivation info is the injective,
+length-framed tuple `(registry-version, purpose, audience, algorithm)` under the public
+`kovo-crypto-authority-v1` salt. Purpose is selected only by a checked-in
+`kovo-crypto-purpose-registry/v1` row; each row fixes its algorithm, operations, root source, and
+audience grammar. There is no public string-selected derivation API or compatibility fallback.
+Provider-owned webhook signatures are verified with the provider's raw protocol key and therefore
+are not silently re-derived into a different wire protocol.
+
+Signing and at-rest roots share one declarative active/previous/revoked lifecycle. Exactly one key
+is active. A previous key requires a finite `acceptUntil` and verifies/opens only before that
+framework-clock deadline; a revoked key carries no usable secret. New signatures and ciphertexts
+always use the active key. On expiry/revocation Kovo overwrites authority-owned Buffer copies on a
+best-effort basis. This is memory hygiene only: caller strings/buffers, engine/native copies,
+allocator snapshots, crash dumps, and already-created crypto objects are not proven zeroized.
+
 ### Principal epoch: persistent monotone source, current-at-verify or closed
 
 The authoritative source is a persistent per-principal epoch in the selected identity provider or

@@ -323,6 +323,56 @@ fails closed and is never replaced by an anonymous fallback within that request.
 
 **Security soundness (normative).** The Prime Principle (§2) rests on the same sound-subset discipline, bounded by six rules. (1) **The compiler performs no TypeScript type inference of its own** — security classification is carried by AST symbol-identity provenance, sink classification, and fail-closed runtime checks; a branded type (`Secret<T>`, a `public()` brand, and the like) is `tsc`-time ergonomics and defense-in-depth, never the enforcement. (2) **Runtime taint is unsound** — JS string operations and template literals produce fresh primitives with no surviving metadata, so request-derived provenance for confidentiality, write-eligibility, and input shape is proven _statically_ at the AST (where the path is still code), never by runtime value-tracking; runtime contributes only _sink validation_ (checking a final value's grammar, shape, or resolved IP, which survives transforms). (3) **By-construction and defense-in-depth are distinguished and labeled.** Where static analysis can prove the unsafe state inexpressible, the guarantee is by-construction (output-safety §5.2 rule 10, the confidentiality boundary, default-deny authorization, write-provenance). Where it cannot — outbound egress, a read-only-handle runtime proxy, Content-Security-Policy / Trusted Types, log redaction — the control is a fail-closed runtime floor: sound at its sink but bypassable by privileged same-process code, and it MUST be documented as defense-in-depth rather than a proof. (4) **Advanced TypeScript types are preferred when they narrow author mistakes without becoming the trust boundary.** Validated branded constructors are appropriate for strong signing material; module-private `unique symbol` brands are appropriate for framework-owned sentinels; branded escaped/trusted/rendered HTML values are appropriate for UI composition; exact header-bag and discriminated-union types are appropriate for preserving multi-value headers and explicit posture choices. Public structural brands, casts, and type-only assertions MUST NOT be accepted as security evidence unless a runtime constructor, AST/provenance gate, or fail-closed sink also enforces the invariant. (5) **Boundary decisions over caller-owned carriers must classify-and-pin or reconstruct.** Once a runtime boundary classifies, normalizes, or validates a caller-owned value, the sink MUST consume either an immutable framework-owned pinned carrier for that exact classified value or a reconstructed fixed output; the sink MUST NOT re-read mutable caller bytes after classification and still claim the earlier decision. Browser sinks MUST classify platform behavior that depends on a tuple of attributes from the same pinned element snapshot, not validate each string in isolation; hidden `_charset_` substitution is the canonical HTML example (§13.2). Spec §10.3 C15 names the concrete sink obligations. (6) **Authority-bearing controls have a framework-owned bootstrap trust root.** Every supported Kovo compiler, dev, build, export, generated-server, worker, and test runner MUST evaluate the framework security bootstrap before any authored app module, Vite/plugin module, generated module, or other caller-controlled dependency in that realm. The bootstrap eagerly captures the exact compiler/runtime controls later used by security decisions; late mutation can therefore only replace unused public bindings, not the pinned controls. Function source text, names/arity, native-looking descriptors, and finite positive/negative probe corpora are health diagnostics only and MUST NOT be accepted as provenance for a control captured after caller code ran. A host preload (`NODE_OPTIONS`, embedding code, loader hook, VM setup, or equivalent) that executes before the supported Kovo entry is privileged same-process host compromise and outside the app-level framework claim; a platform that cannot guarantee bootstrap order MUST move authority computation into a genuinely pristine isolate with a fail-closed typed RPC boundary. Tests for import-order mutation MUST enter through the same bootstrap-first runner and poison controls only after that boundary, including the first entropy/hash/command use rather than relying on second-use detection. **Agent/LLM honesty:** Kovo does not claim prompt-injection immunity (OWASP LLM01-class attacks remain possible when an app lets a model read adversarial text or call tools). The framework claim is narrower: default-deny guards, the outbound-egress deny floor, structured sinks, and future capability-bounded tool adapters reduce the blast radius of a compromised model action, but they do not make malicious prompts or retrieved content harmless.
 
+**Cryptographic authority and lifecycle (normative).** Raw secret-crypto acquisition is a capability,
+not an authority-free implementation detail. The capability-closure vocabulary distinguishes
+`crypto-acquisition` from `digest`. An exact named import of a reviewed non-keyed SHA-256 digest
+primitive may classify as `digest`; a namespace/default crypto import, WebCrypto/global crypto,
+entropy, keyed hashing, password hashing, signing, encryption, or an ambiguous import MUST classify
+as `crypto-acquisition`. Either capability reached from an untrusted root closes with KV448 unless
+the exact framework export is a reviewed door. Kovo's repository gate separately records every
+remaining production direct acquisition by exact path, class, and operation. That high-authority
+path set MUST be a non-increasing ratchet: adding or widening a row requires an explicit reviewed
+architecture change, while deleting or narrowing one requires no compatibility mode.
+
+The server runtime has one primitive-owning crypto authority. It captures its Node crypto and byte
+controls during the bootstrap-before-app boundary and runs known-answer checks for RFC 5869
+HKDF-SHA256, HMAC-SHA256, fixed-width equality, and AES-256-GCM before serving. It MUST NOT expose a
+generic signer, sealer, primitive table, or derived key. Each consumer receives an exact
+framework-witnessed frozen handle containing only the operations for one registered purpose. The
+environment-neutral webhook verifier uses the corresponding core-realm WebCrypto authority because
+core cannot import the Node server runtime; that authority is verify-only, boot-captured, and keeps
+provider signing material out of public verifier metadata. Types and private brands are ergonomics;
+the runtime witness, closed registry, and acquisition gates are the enforcement.
+
+The closed registry is `kovo-crypto-purpose-registry/v1`. Every framework derivation is
+HKDF-SHA256 over its root with public salt `kovo-crypto-authority-v1` and an injective,
+length-framed info tuple `(registry-version, purpose, audience, algorithm)`. A row fixes the literal
+purpose, algorithm, allowed operation set, root source, and bounded audience grammar. An absent,
+dynamic, malformed, algorithm-mismatched, or operation-mismatched row fails before derivation.
+HMAC-SHA256 is the v1 symmetric signature/PRF algorithm; SHA-256 is the v1 non-keyed digest;
+AES-256-GCM with a fresh 96-bit IV and 128-bit tag is the v1 confidential-at-rest algorithm. A
+provider-owned webhook HMAC is verified with the provider's raw protocol key through a verify-only
+handle and is not HKDF-derived, because changing that key would break the external wire protocol.
+
+Framework key rings are opaque configuration carriers, not generic signing objects. Exactly one
+entry is `active`; `previous` entries require a finite `acceptUntil` epoch-millisecond deadline;
+`revoked` entries carry no usable secret. New signatures and seals use only the active key.
+Verification and opening may use the active key or a previous key strictly before its deadline;
+unknown, expired, and revoked ids fail closed. On expiry/revocation the authority overwrites its own
+retained Buffer copy on a best-effort basis. This is memory hygiene, not a JavaScript zeroization
+guarantee: caller strings/buffers, VM and native-library copies, allocator snapshots, crash dumps,
+and keys already copied into a crypto implementation can remain.
+
+The confidential-at-rest envelope is unconditionally
+`kovo-aes256gcm-v2.<key-id>.<iv-base64url>.<tag-base64url>.<ciphertext-base64url>`; v1 has no
+compatibility fallback. The key id is chosen by the active ring, never by the caller. The authority
+derives the key for registered purpose `confidential-at-rest` and the bounded declared string
+audience, then authenticates the exact envelope version, key id, purpose, audience, and caller AAD
+as one length-framed AES-GCM AAD value. Opening performs a bounded canonical parse, selects only an
+eligible ring key by the authenticated id, and authenticates before returning plaintext. Tampered
+version, id, IV, tag, ciphertext, audience, or AAD; an unknown/revoked/expired key; and a raw-key
+call shape all fail closed.
+
 **Trusted application-code boundary (normative).** Kovo does not sandbox app-authored server modules or third-party packages that execute in the server realm. The public-import and provenance rules in §5.2 prevent unsupported or accidental authority use inside the supported authoring subset; they are not a claim that deliberately hostile same-realm code cannot recover ambient JavaScript authority through `Function`, dynamic loading, reflection, native addons, or equivalent language/host facilities. Such code is privileged application compromise, not a remote-input framework boundary. Deployments that execute mutually untrusted plugins or generated server code MUST place that code in a separate process or genuinely isolated realm and expose only a fail-closed typed RPC capability surface. Finite syntax deny-lists and intrinsic pinning may remain defense-in-depth, but MUST NOT be described or tested as a sandbox proof.
 
 **Capability-closed untrusted roots (normative, supported-subset static gate).** Before evaluating
