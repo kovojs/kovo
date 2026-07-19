@@ -413,8 +413,11 @@ Measurements are versioned and reproducible:
   - Evidence: `pnpm run check:security-fuzz-campaign` validates the six-family, 17-case manifest,
     nightly/release budgets, 249-mutant denominator, scheduled workflow, replay artifacts, and exact
     release command; `pnpm exec vitest run scripts/security-fuzz-campaign.test.mjs` passes 15/15.
-- [ ] Define a fixed weekly internal adversarial charter and seeded canaries, then record R without
+- [x] Define a fixed weekly internal adversarial charter and seeded canaries, then record R without
       changing the scope, prompt family, investigator count, or elapsed budget between rounds.
+  - Evidence: `security/security-convergence-audit-charter.json` freezes the scope, three-prompt
+    family, one-investigator/30-minute budget, deduplication rule, and two canaries; the exact-SHA
+    `security/security-convergence-audit-round-2026-07-18.json` records `R=1` with 2/2 recall.
 - [ ] Record third-party audit owner, authorization/budget, selection criteria, frozen scope,
       deliverables, disclosure handling, and retest requirement. Perform a design review after
       Phase 2 and the implementation audit only after Phases 3–4 stabilize.
