@@ -1006,7 +1006,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "{ reads: ['contacts'] }",
           "db['rawRead']",
           'const rawRead = db.rawRead;',
-          'expect(hasRequestHandlerClosure(files, semanticSources)).toBe(false)',
+          'expect(hasRequestProcessClosure(files, semanticSources)).toBe(false)',
         ],
       },
       {
