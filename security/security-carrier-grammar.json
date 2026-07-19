@@ -1496,6 +1496,24 @@
       "corpus": "drizzle-analyzer-provenance",
       "production": "positive-control",
       "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "cache-influence-static-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness closes the finite cache-influence axes, roles, and verdict relation."
+    },
+    {
+      "anchor": "cache-influence-real-intermediary",
+      "corpus": "finite-security-operation-ir",
+      "production": "platform-differential",
+      "reason": "This witness compares framework cache posture with a real HTTP intermediary's reuse behavior."
+    },
+    {
+      "anchor": "cache-generality-manifest-drift",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness rejects authored intent, manifest, and Vary derivation drift."
     }
   ]
 }
