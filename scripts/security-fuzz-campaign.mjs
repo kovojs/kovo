@@ -150,6 +150,19 @@ const allowedDecisionRoles = new Set([
   'normative-with-differential-triage',
 ]);
 
+const securityFuzzReplayEnvironmentPattern = /^KOVO_[A-Z0-9_]*FUZZ_REPLAY_FILE$/u;
+
+export function createSecurityFuzzChildEnvironment(
+  environment,
+  inheritedEnvironment = process.env,
+) {
+  const childEnvironment = { ...inheritedEnvironment, ...environment };
+  for (const name of Object.keys(childEnvironment)) {
+    if (securityFuzzReplayEnvironmentPattern.test(name)) delete childEnvironment[name];
+  }
+  return childEnvironment;
+}
+
 export function loadSecurityFuzzCampaign({
   campaignPath = defaultSecurityFuzzCampaignPath,
   rootDir = repoRoot(),
@@ -840,7 +853,7 @@ async function executeInvocation(invocation, { rootDir, stream, timeoutMs }) {
   return await new Promise((resolve) => {
     const child = spawn(invocation.command, invocation.args, {
       cwd: rootDir,
-      env: { ...process.env, ...invocation.environment },
+      env: createSecurityFuzzChildEnvironment(invocation.environment),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
