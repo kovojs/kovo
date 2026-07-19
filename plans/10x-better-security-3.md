@@ -181,16 +181,24 @@ identity object every later certificate, advisory, and attestation needs does no
 `.github/` has no security policy. A framework selling security cannot carry "report privately to the
 maintainers" with no SLA into v1. (~0.5 pm)
 
-- [ ] Real reporting section in `SECURITY.md` (GitHub private vulnerability reporting enabled,
-      monitored channel, ack ≤3 business days / triage ≤10 / coordinated release ≤90, embargo terms),
-      written **outside** the ```json fence so `check:security-guarantee` still parses. Add a test that
-      fails if the contact line disappears.
-- [ ] `STABILITY.md` supported-version window, stated honestly for technical preview: latest minor
+- [x] Add a real reporting section outside the guarantee JSON fence, a stable private-report contact
+      line, conditional ack ≤3 business days / triage ≤10 / coordinated release ≤90 targets, and
+      embargo terms. Fail the guarantee gate if the contact line disappears; state honestly that the
+      intended GitHub route is currently disabled rather than presenting it as operational.
+  - Evidence: `pnpm exec vitest --run scripts/check-security-guarantee.test.mjs` and
+    `pnpm run check:security-guarantee`.
+- [ ] Enable GitHub private vulnerability reporting, assign a monitored owner or rotation, and run a
+      successful private-report response drill before launch.
+  - External evidence gap: `gh api repos/kovojs/kovo/private-vulnerability-reporting` returned
+    `{"enabled":false}` on 2026-07-19.
+- [x] `STABILITY.md` supported-version window, stated honestly for technical preview: latest minor
       only, no backports. Add `site/public/.well-known/security.txt` and a `Security response
 readiness` row (status `pending`) to `rules/prelaunch-checklist.md`.
-- [ ] Retraction closure in `scripts/check-security-guarantee.mjs`: withdrawn/superseded guarantee
+- [x] Retraction closure in `scripts/check-security-guarantee.mjs`: withdrawn/superseded guarantee
       states plus a `retracts` binding, so a guarantee cannot be silently re-asserted over an open
       advisory. The register today only ever **adds**.
+  - Evidence: `scripts/check-security-guarantee.test.mjs` covers unknown, duplicate, missing, and
+    inconsistent retractions and replacement chains.
 
 ### 0.6 Hermetic proof stage (underwrites every certificate in this plan)
 
