@@ -76,6 +76,8 @@ export interface RuntimeTableSecurityWireTable {
   authzPolicy?: RuntimeTableSecurityWireAuthzPolicy;
   authorizationClassifications: readonly RuntimeTableSecurityAuthorizationClassification[];
   columns: readonly RuntimeTableSecurityWireColumn[];
+  dialect?: 'postgres' | 'sqlite';
+  domain?: string;
   governedColumnKeys: readonly string[];
   name: string;
   owner?: RuntimeTableSecurityWireOwner;
@@ -346,10 +348,24 @@ function snapshotRuntimeTableSecurityTable(
   }
   const ownerValue = optionalRuntimeTableSecurityValue(value, 'owner', label);
   const ownerViaValue = optionalRuntimeTableSecurityValue(value, 'ownerVia', label);
+  const dialectValue = optionalRuntimeTableSecurityValue(value, 'dialect', label);
+  const domainValue = optionalRuntimeTableSecurityValue(value, 'domain', label);
+  if (
+    dialectValue !== undefined &&
+    dialectValue !== 'postgres' &&
+    dialectValue !== 'sqlite'
+  ) {
+    throw new TypeError(`Runtime table-security ${label}.dialect must be postgres or sqlite.`);
+  }
+  if (domainValue !== undefined && (typeof domainValue !== 'string' || domainValue.length === 0)) {
+    throw new TypeError(`Runtime table-security ${label}.domain must be a non-empty string.`);
+  }
   return freezeBuildSecurityValue({
     ...(authzPolicy === undefined ? {} : { authzPolicy }),
     authorizationClassifications: freezeBuildSecurityValue(authorizationClassifications),
     columns: freezeBuildSecurityValue(columns),
+    ...(dialectValue === undefined ? {} : { dialect: dialectValue }),
+    ...(domainValue === undefined ? {} : { domain: domainValue }),
     governedColumnKeys: snapshotRuntimeTableSecurityStrings(
       governedValue,
       `${label}.governedColumnKeys`,

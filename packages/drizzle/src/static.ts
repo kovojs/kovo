@@ -4207,6 +4207,8 @@ export interface RuntimeTableSecurityManifestTable {
   authzPolicy?: RuntimeTableSecurityManifestAuthzPolicy;
   authorizationClassifications: readonly AuthzCensusClassification[];
   columns: readonly RuntimeTableSecurityManifestColumn[];
+  dialect: 'postgres' | 'sqlite';
+  domain?: string;
   governedColumnKeys: readonly string[];
   name: string;
   owner?: RuntimeTableSecurityManifestOwner;
@@ -4294,6 +4296,18 @@ function runtimeTableSecurityManifestFromProjectExtraction(
         : { columnKey: ownerColumn.key, columnName: ownerColumn.name };
     const ownerVia = runtimeManifestOwnerVia(draft, drafts, extraction.tableNamesBySymbol);
     const authzPolicy = runtimeManifestAuthzPolicy(draft);
+    const tableFactory = runtimeManifestTableFactoryName(draft.initializer);
+    const dialect =
+      tableFactory === 'pgTable'
+        ? ('postgres' as const)
+        : tableFactory === 'sqliteTable'
+          ? ('sqlite' as const)
+          : undefined;
+    if (dialect === undefined) {
+      throw new TypeError(
+        `KV414: compiler-bound table ${draft.name} has no supported Postgres/SQLite dialect identity (SPEC §10.3).`,
+      );
+    }
     const secretDeclared = domainAnnotation?.secret !== undefined;
     const secretColumnKeys = runtimeManifestAnnotatedColumnKeys(
       draft.columns,
@@ -4325,6 +4339,10 @@ function runtimeTableSecurityManifestFromProjectExtraction(
       ...(authzPolicy === undefined ? {} : { authzPolicy }),
       authorizationClassifications: classifications,
       columns: draft.columns,
+      dialect,
+      ...(domainAnnotation === undefined
+        ? {}
+        : { domain: extractedDomainKey(domainAnnotation.domain) }),
       governedColumnKeys: [...governedColumnKeys].sort(compareRuntimeManifestStrings),
       name: draft.name,
       ...(owner === undefined ? {} : { owner }),

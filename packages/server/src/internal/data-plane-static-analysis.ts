@@ -77,6 +77,7 @@ export interface StaticDataPlaneBuildFacts {
   queryShapeFacts: readonly QueryShapeFact[];
   queryWriteReachability: readonly CoreGraph.QueryWriteReachabilityFact[];
   revealed?: readonly CoreGraph.RevealExplainFact[];
+  runtimeTableSecurityManifest?: RuntimeRegistryWireFacts['tableSecurity'];
   scopeAudits: readonly CoreGraph.ScopeAuditFact[];
   sqlSafetyDiagnostics: readonly CoreGraph.SqlSafetyDiagnosticFact[];
   toctouFacts: readonly CoreGraph.ToctouFact[];
@@ -142,7 +143,7 @@ interface StaticBuildAnalysisFactsLike {
   touchGraph: unknown;
 }
 
-const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-19.reveal-facts.v1';
+const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-19.authorization-table-identity.v1';
 const existsSync = builtinExistsSync;
 const dirname = builtinDirname;
 const relative = builtinRelative;
@@ -355,6 +356,10 @@ export async function staticDataPlaneBuildFacts(
       );
     }
   }
+  const runtimeTableSecurityManifest =
+    rawFacts.runtimeTableSecurityManifest === undefined
+      ? undefined
+      : runtimeRegistryTableSecurityFromFacts(rawFacts.runtimeTableSecurityManifest);
   const result: StaticDataPlaneBuildFacts = {
     massAssignmentFacts: snapshotDenseArray(
       rawFacts.massAssignmentFacts ?? [],
@@ -368,6 +373,10 @@ export async function staticDataPlaneBuildFacts(
       'Static query-write facts',
     ),
     revealed: snapshotDenseArray(rawFacts.revealed ?? [], 'Static query reveal facts'),
+    ...(runtimeTableSecurityManifest === undefined ||
+    runtimeTableSecurityManifest.tables.length === 0
+      ? {}
+      : { runtimeTableSecurityManifest }),
     scopeAudits: snapshotDenseArray(rawFacts.scopeAudits ?? [], 'Static scope-audit facts'),
     sqlSafetyDiagnostics,
     toctouFacts: projectToctouFacts(rawFacts.toctouFacts),
