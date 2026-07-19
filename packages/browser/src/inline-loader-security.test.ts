@@ -177,13 +177,17 @@ describe('inline loader output security', () => {
       const element = new BoundTriggerElement({
         'aria-label': 'old',
         'data-bind:aria-label': 'state.label',
+        'data-bind:data-kovo-deferred-style': 'state.promoteStyle',
         'data-bind:data-kovo-module-allowlist': 'state.module',
+        'data-bind:data-mutation': 'state.mutation',
         'data-bind:data-stream-renderer': 'state.renderer',
         'data-bind:on:click': 'state.handler',
+        'data-kovo-deferred-style': '',
         'data-kovo-module-allowlist': '/c/client.js',
+        'data-mutation': 'account/delete',
         'data-stream-renderer': '/c/victim.client.js#render',
         'kovo-state':
-          '{"handler":"/c/attacker.client.js#run","label":"Ready","module":"/c/attacker.client.js","renderer":"/c/attacker.client.js#render"}',
+          '{"handler":"/c/attacker.client.js#run","label":"Ready","module":"/c/attacker.client.js","mutation":"account/delete","promoteStyle":true,"renderer":"/c/attacker.client.js#render"}',
         'on:click': '/c/client.js#commitReserved',
       });
 
@@ -194,7 +198,9 @@ describe('inline loader output security', () => {
         ['/c/client.js'],
       );
 
+      expect(element.getAttribute('data-kovo-deferred-style')).toBeNull();
       expect(element.getAttribute('data-kovo-module-allowlist')).toBeNull();
+      expect(element.getAttribute('data-mutation')).toBeNull();
       expect(element.getAttribute('data-stream-renderer')).toBeNull();
       expect(element.getAttribute('on:click')).toBeNull();
       expect(element.getAttribute('aria-label')).toBe('Ready');
