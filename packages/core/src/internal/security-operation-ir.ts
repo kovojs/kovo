@@ -20,7 +20,7 @@ export const securityOperationIrSchema = 'kovo-security-operation-ir/v1' as cons
  *
  * @internal
  */
-export const securitySemanticGraphSchema = 'kovo-security-semantic-graph/v1' as const;
+export const securitySemanticGraphSchema = 'kovo-security-semantic-graph/v2' as const;
 
 /** @internal Closed browser-effect inventory; C9 maps every entry to one reviewed boundary owner. */
 export const browserSecurityOperationKinds = freezeSecurityValue([
@@ -162,12 +162,41 @@ export type SecuritySemanticTrace = SecuritySemanticProvedTrace | SecuritySemant
 export interface SecuritySemanticSummary {
   readonly authorityInputs: readonly string[];
   readonly callable: string;
+  /** Exact authored declaration identity within the root's immutable source snapshot. */
+  readonly callableSpan: { readonly end: number; readonly start: number };
   readonly operationKinds: readonly ServerSecurityOperationKind[];
+  readonly verdict: 'closed' | 'proved';
+}
+
+/** @internal Exact authored factory/callback identity that owns one semantic root. */
+export interface SecuritySemanticRootBinding {
+  readonly callback: 'handler' | 'load' | 'run';
+  /** Exact authored callback identity within the root's immutable source snapshot. */
+  readonly callableSpan: { readonly end: number; readonly start: number };
+  readonly factory: 'endpoint' | 'mutation' | 'query' | 'task' | 'webhook';
+  /** Exact enrolled factory invocation within the same immutable source snapshot. */
+  readonly factoryCallSpan: { readonly end: number; readonly start: number };
+  readonly root: string;
+}
+
+/** @internal One exact helper call-site fact backing a bottom-up semantic summary. */
+export interface SecuritySemanticHelperInvocationFact {
+  /** Exact authored argument identities, in source order, for this invocation. */
+  readonly argumentSpans: readonly { readonly end: number; readonly start: number }[];
+  readonly authorityInputs: readonly string[];
+  readonly callable: string;
+  readonly callableSpan: { readonly end: number; readonly start: number };
+  readonly callSpan: { readonly end: number; readonly start: number };
+  readonly operationKinds: readonly ServerSecurityOperationKind[];
+  /** Complete ordered root-to-helper transfer prefix for this exact invocation. */
+  readonly transfers: readonly string[];
   readonly verdict: 'closed' | 'proved';
 }
 
 /** @internal Root-scoped normalized provenance facts. */
 export interface SecuritySemanticRoot {
+  readonly binding: SecuritySemanticRootBinding;
+  readonly helperInvocations: readonly SecuritySemanticHelperInvocationFact[];
   readonly root: string;
   readonly summaries: readonly SecuritySemanticSummary[];
   readonly traces: readonly SecuritySemanticTrace[];

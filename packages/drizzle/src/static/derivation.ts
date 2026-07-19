@@ -68,7 +68,6 @@ import {
   queryLoadCallbackFunctions,
   resolvedSymbolKey,
   selectProjectionArgument,
-  serverSummaryKeysForSourceFile,
   sessionProvenanceContextForNodes,
   staticQueryDeclarationFromCall,
   staticAccessExpression,
@@ -230,7 +229,8 @@ function tableSyntheticNameForDerivation(synthetic: string): string {
 /** All callback bodies in a file that may carry a Drizzle write call, with resolvable keys. */
 function deriveWriteCallbacks(sourceFile: SourceFile): DeriveCallback[] {
   const callbacks: DeriveCallback[] = [];
-  const seen = new Set<number>();
+  const keyedStarts = new Set<number>();
+  const seen = new Set<string>();
   const push = (fn: Node | undefined, key?: string): void => {
     if (!fn) return;
     let body: Node;
@@ -239,8 +239,12 @@ function deriveWriteCallbacks(sourceFile: SourceFile): DeriveCallback[] {
     } catch {
       return;
     }
-    if (seen.has(fn.getStart())) return;
-    seen.add(fn.getStart());
+    const start = fn.getStart();
+    if (key === undefined && keyedStarts.has(start)) return;
+    const identity = `${start}:${key ?? '<anonymous>'}`;
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    if (key !== undefined) keyedStarts.add(start);
     callbacks.push(key === undefined ? { body, fn } : { body, fn, key });
   };
 
@@ -248,6 +252,12 @@ function deriveWriteCallbacks(sourceFile: SourceFile): DeriveCallback[] {
   for (const callback of projectDomainWriteCallbacks(sourceFile).values()) {
     push(callback.fn, callback.name);
   }
+  // SPEC §10.5: exact mutation handlers are keyed write roots. Enroll them before the generic
+  // object-literal callback walk so source-position dedupe preserves the mutation key instead of
+  // retaining an anonymous copy of the same handler body.
+  forEachMutationConfig(sourceFile, (key, config) => {
+    push(mutationHandlerCallback(config), key);
+  });
   // Top-level function declarations / variable-assigned callbacks.
   for (const fn of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
     push(fn, fn.getName());
@@ -949,10 +959,10 @@ function dedupeEffectFacts(facts: readonly SymbolicEffectFact[]): SymbolicEffect
 // column (both AUTO-governed), and every column named in `kovo({ governed })`.
 //
 // Two-tier escape (author-assertion, audit-grade):
-//   serverValue(value, reason)   — discharges a NON-input value (serverValue(input.x,…) still fails).
+//   serverValue(value, reason)   — discharges only independently proven non-input provenance.
 //   trustedAssign(value, reason)   — the louder audited path for a deliberate privileged write.
-// Helper false-positives are resolved by `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })`,
-// which the symbol-provenance engine reads as `server` provenance.
+// Opaque helpers remain unknown. App-authored metadata cannot mint server
+// provenance; use a directly analyzable value or the explicit audited escape.
 
 /**
  * SPEC §10.3/§11.1 — flag every write that lands request-input (or unprovable)
@@ -1011,13 +1021,11 @@ function extractMassAssignmentFromDeriveExtraction(
       if (extraction.conditionalTableTargetsBySyntheticName.has(tableSynthetic)) return undefined;
       return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
     };
-    const serverSummaryKeys = serverSummaryKeysForSourceFile(sourceFile);
     for (const callback of deriveWriteCallbacks(sourceFile)) {
       const receivers = projectDrizzleReceivers(callback.fn);
       const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
       const symbolContext = symbolProvenanceContextForNodes([callback.body], {
         inputRoots: callbackInputRootNodes(callback.fn),
-        serverSummaryKeys,
       });
       const passwordSinkSymbolKeys = passwordSinkAliasKeysForNodes([callback.body]);
       const encryptedAtRestSymbolKeys = encryptedAtRestAliasKeysForNodes([callback.body]);
@@ -1400,8 +1408,8 @@ function dynamicColumnMassAssignmentFact(
  * A `.values(input)` / `.set(input)` / `{ ...input }` spread on a governed table. The
  * spread can populate any governed column, so a non-server-provable spread is rejected
  * wholesale (one finding per governed column it could reach is noisy; we emit a single
- * `via:'spread'` finding keyed on the offending expression). A spread proven `server`
- * (e.g. a `kovoAnalyzerSummary('server')` row-builder) passes.
+ * `via:'spread'` finding keyed on the offending expression). Only a spread whose
+ * provenance is structurally proven server-derived passes.
  */
 function spreadMassAssignmentFacts(
   expression: Node,
@@ -1439,9 +1447,9 @@ interface GovernedValueVerdict {
 
 /**
  * Classify a value flowing into a governed column. Fail-closed:
- *  - `serverValue(x, reason)` passes only when `x` is NON-input (serverValue(input.x,…) fails).
+ *  - `serverValue(x, reason)` passes only with positive literal/private/server proof.
  *  - `trustedAssign(x, reason)` is the audited privileged write — always passes (recorded).
- *  - literal / `server` (req.session/guard/tenant or a `kovoAnalyzerSummary('server')` helper) passes.
+ *  - literal / structurally proven `server` (req.session/guard/tenant) passes.
  *  - `input` provenance → reject (`input`).
  *  - anything else (unprovable / opaque helper) → reject (`unknown`, fail-closed).
  */
@@ -1459,19 +1467,16 @@ function governedValueVerdict(
     }
     if (isPrivilegedHelperCall(callee, 'serverValue')) {
       const inner = expression.getArguments()[0];
-      // serverValue discharges only a NON-input argument; serverValue(input.x,…) still fails.
-      if (!inner) return { ok: true, provenance: 'unknown' };
+      // SPEC §6.6/§10.3: `serverValue` is a narrow assertion over an independently
+      // proven value. Missing or opaque input is not proof of non-input provenance.
+      if (!inner) {
+        return { ok: false, provenance: 'unknown', detail: expression.getText() };
+      }
       if (privateScopeSourceForExpression(inner, context.sessionContext)) {
         return { ok: true, provenance: 'unknown' };
       }
       const innerVerdict = governedValueVerdict(inner, context);
-      return innerVerdict.provenance === 'input'
-        ? {
-            ok: false,
-            provenance: 'input',
-            ...(innerVerdict.detail ? { detail: innerVerdict.detail } : {}),
-          }
-        : { ok: true, provenance: 'unknown' };
+      return innerVerdict.ok ? { ok: true, provenance: 'unknown' } : innerVerdict;
     }
   }
 
@@ -1482,7 +1487,6 @@ function governedValueVerdict(
   if (privateScopeForExpression(expression, context.sessionContext)) {
     return { ok: true, provenance: 'unknown' };
   }
-  // A `kovoAnalyzerSummary('server')` helper call resolves to `server` provenance.
   const symbolProvenance = symbolProvenanceForExpression(expression, context.symbolContext);
   if (symbolProvenance.kind === 'server') return { ok: true, provenance: 'unknown' };
   if (symbolProvenance.kind === 'literal') return { ok: true, provenance: 'unknown' };

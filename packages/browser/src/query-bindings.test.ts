@@ -116,6 +116,202 @@ describe('query binding helpers', () => {
     expect(JSON.stringify(events)).not.toContain('alert');
   });
 
+  it('fails closed for pair-dependent base and meta-refresh binding transitions', () => {
+    const root = new FakeMorphRoot();
+    const base = new FakeQueryPlanElement(
+      {
+        'data-bind:href': 'page.base',
+        href: '/safe/',
+      },
+      { tagName: 'BASE' },
+    );
+    const metaContent = new FakeQueryPlanElement(
+      {
+        content: 'safe',
+        'data-bind:content': 'page.refresh',
+        'http-equiv': 'ReFrEsH',
+      },
+      { tagName: 'META' },
+    );
+    const metaEquiv = new FakeQueryPlanElement(
+      {
+        content: '0; url=https://attacker.example/collect',
+        'data-bind:http-equiv': 'page.equiv',
+      },
+      { tagName: 'META' },
+    );
+    const description = new FakeQueryPlanElement(
+      {
+        content: 'old',
+        'data-bind:content': 'page.description',
+        name: 'description',
+      },
+      { tagName: 'META' },
+    );
+    root.planElements.push(base, metaContent, metaEquiv, description);
+
+    applyQueryBindings(root, 'page', {
+      base: 'https://attacker.example/',
+      description: 'Account overview',
+      equiv: ' refresh ',
+      refresh: '0; url=https://attacker.example/collect',
+    });
+
+    expect(base.getAttribute('href')).toBeNull();
+    expect(metaContent.getAttribute('content')).toBeNull();
+    expect(metaEquiv.getAttribute('http-equiv')).toBeNull();
+    expect(metaEquiv.getAttribute('content')).toBe('0; url=https://attacker.example/collect');
+    expect(description.getAttribute('content')).toBe('Account overview');
+  });
+
+  it('preserves reviewed execution and isolation controls across hostile binding writes', () => {
+    const root = new FakeMorphRoot();
+    const scriptSource = new FakeQueryPlanElement(
+      { 'data-bind:src': 'page.script', src: '/reviewed/runtime.js' },
+      { tagName: 'SCRIPT' },
+    );
+    const scriptType = new FakeQueryPlanElement(
+      {
+        'data-bind:type': 'page.scriptType',
+        src: '/reviewed/data.json',
+        type: 'application/json',
+      },
+      { tagName: 'SCRIPT' },
+    );
+    const svgScriptHref = new FakeQueryPlanElement(
+      { 'data-bind:href': 'page.svgScript', href: '/reviewed/svg-runtime.js' },
+      { tagName: 'SCRIPT' },
+    );
+    const mathEncoding = new FakeQueryPlanElement(
+      { 'data-bind:encoding': 'page.encoding', encoding: 'text/plain' },
+      { tagName: 'ANNOTATION-XML' },
+    );
+    const stylesheet = new FakeQueryPlanElement(
+      { 'data-bind:href': 'page.stylesheet', href: '/reviewed/theme.css', rel: 'stylesheet' },
+      { tagName: 'LINK' },
+    );
+    const linkRelationship = new FakeQueryPlanElement(
+      { 'data-bind:rel': 'page.relationship', href: '/reviewed/icon.svg', rel: 'icon' },
+      { tagName: 'LINK' },
+    );
+    const iframeSandbox = new FakeQueryPlanElement(
+      {
+        'data-bind:sandbox': 'page.sandbox',
+        sandbox: 'allow-forms',
+        src: '/untrusted/profile',
+      },
+      { tagName: 'IFRAME' },
+    );
+    const iframeSource = new FakeQueryPlanElement(
+      {
+        'data-bind:src': 'page.frameSource',
+        sandbox: 'allow-forms',
+        src: '/reviewed/profile',
+      },
+      { tagName: 'IFRAME' },
+    );
+    const iframeNullSandbox = new FakeQueryPlanElement(
+      {
+        'data-bind:sandbox': 'page.nullSandbox',
+        sandbox: 'allow-forms',
+        src: '/untrusted/comments',
+      },
+      { tagName: 'IFRAME' },
+    );
+    root.planElements.push(
+      scriptSource,
+      scriptType,
+      svgScriptHref,
+      mathEncoding,
+      stylesheet,
+      linkRelationship,
+      iframeSandbox,
+      iframeNullSandbox,
+      iframeSource,
+    );
+
+    applyQueryBindings(root, 'page', {
+      nullSandbox: null,
+      frameSource: '/uploads/attacker.html',
+      relationship: 'stylesheet',
+      sandbox: 'allow-scripts allow-same-origin',
+      script: '/uploads/attacker.js',
+      scriptType: 'module',
+      svgScript: '/uploads/attacker-svg.js',
+      encoding: 'text/html',
+      stylesheet: '/uploads/attacker.css',
+    });
+
+    expect(scriptSource.getAttribute('src')).toBe('/reviewed/runtime.js');
+    expect(scriptType.getAttribute('type')).toBe('application/json');
+    expect(svgScriptHref.getAttribute('href')).toBe('/reviewed/svg-runtime.js');
+    expect(mathEncoding.getAttribute('encoding')).toBe('text/plain');
+    expect(stylesheet.getAttribute('href')).toBe('/reviewed/theme.css');
+    expect(linkRelationship.getAttribute('rel')).toBe('icon');
+    expect(iframeSandbox.getAttribute('sandbox')).toBe('allow-forms');
+    expect(iframeNullSandbox.getAttribute('sandbox')).toBe('allow-forms');
+    expect(iframeSource.getAttribute('src')).toBe('/reviewed/profile');
+  });
+
+  it('inerts object and embed before a live binding can activate same-origin HTML', () => {
+    const root = new FakeMorphRoot();
+    const object = new FakeQueryPlanElement(
+      {
+        'data-bind:data': 'page.objectUrl',
+        data: '/reviewed/file.pdf',
+        type: 'application/pdf',
+      },
+      { tagName: 'OBJECT', textContent: 'fallback' },
+    );
+    const embed = new FakeQueryPlanElement(
+      {
+        'data-bind:src': 'page.embedUrl',
+        src: '/reviewed/file.pdf',
+        type: 'application/pdf',
+      },
+      { tagName: 'EMBED' },
+    );
+    root.planElements.push(object, embed);
+
+    applyQueryBindings(root, 'page', {
+      embedUrl: '/safe/account',
+      objectUrl: '/safe/account',
+    });
+
+    expect(object.attributes).toEqual([]);
+    expect(object.textContent).toBe('');
+    expect(embed.attributes).toEqual([]);
+  });
+
+  it('strips declarative Shadow DOM controls and their live binding stamps', () => {
+    const root = new FakeMorphRoot();
+    const template = new FakeQueryPlanElement(
+      {
+        'data-bind:shadowrootmode': 'page.mode',
+        'data-bind:ShadowRootClonable': 'page.clonable',
+        'data-derive': 'page.serializable',
+        'data-derive-attr': 'ShadowRootSerializable',
+        shadowRootDelegatesFocus: '',
+        shadowrootmode: 'open',
+        title: 'ordinary inert template',
+      },
+      { tagName: 'TEMPLATE', textContent: 'dormant light-DOM content' },
+    );
+    root.planElements.push(template);
+
+    applyQueryBindings(root, 'page', {
+      clonable: true,
+      mode: 'closed',
+      serializable: true,
+    });
+
+    expect(template.attributes).toEqual([
+      { name: 'data-derive', value: 'page.serializable' },
+      { name: 'title', value: 'ordinary inert template' },
+    ]);
+    expect(template.textContent).toBe('dormant light-DOM content');
+  });
+
   it('applies optional binding path segments and removes empty attribute bindings', () => {
     const root = new FakeMorphRoot();
     const name = new FakeQueryBindingElement('deal.contact?.name', { textContent: 'Ada' });
@@ -289,6 +485,72 @@ describe('query binding helpers', () => {
       templateStamps: [],
     });
     expect(host.getAttribute('aria-label')).toBeNull();
+  });
+
+  it('removes query- and state-selected compiler control-plane attributes', async () => {
+    const queryRoot = new FakeMorphRoot();
+    const queryTarget = new FakeQueryPlanElement({
+      'aria-label': 'old',
+      'data-bind:aria-label': 'cart.label',
+      'data-bind:data-kovo-deferred-style': 'cart.promoteStyle',
+      'data-bind:data-kovo-module-allowlist': 'cart.module',
+      'data-bind:data-mutation': 'cart.mutation',
+      'data-bind:data-stream-renderer': 'cart.renderer',
+      'data-bind:on:click': 'cart.handler',
+      'data-kovo-deferred-style': '',
+      'data-kovo-module-allowlist': '/c/victim.client.js',
+      'data-mutation': 'account/delete',
+      'data-stream-renderer': '/c/victim.client.js#render',
+      'on:click': '/c/victim.client.js#run',
+    });
+    queryRoot.planElements.push(queryTarget);
+
+    applyQueryBindings(queryRoot, 'cart', {
+      handler: '/c/attacker.client.js#run',
+      label: 'Ready',
+      module: '/c/attacker.client.js',
+      mutation: 'account/delete',
+      promoteStyle: true,
+      renderer: '/c/attacker.client.js#render',
+    });
+
+    expect(queryTarget.getAttribute('data-kovo-deferred-style')).toBeNull();
+    expect(queryTarget.getAttribute('data-kovo-module-allowlist')).toBeNull();
+    expect(queryTarget.getAttribute('data-mutation')).toBeNull();
+    expect(queryTarget.getAttribute('data-stream-renderer')).toBeNull();
+    expect(queryTarget.getAttribute('on:click')).toBeNull();
+    expect(queryTarget.getAttribute('aria-label')).toBe('Ready');
+
+    const stateTarget = new FakeStatefulBindingElement({
+      'data-bind:data-kovo-deferred-style': 'state.promoteStyle',
+      'data-bind:data-kovo-module-allowlist': 'state.module',
+      'data-bind:data-mutation': 'state.mutation',
+      'data-bind:data-stream-renderer': 'state.renderer',
+      'data-bind:on:click': 'state.handler',
+      'data-bind:title': 'state.title',
+      'data-kovo-deferred-style': '',
+      'data-kovo-module-allowlist': '/c/victim.client.js',
+      'data-mutation': 'account/delete',
+      'data-stream-renderer': '/c/victim.client.js#render',
+      'kovo-state': '{}',
+      'on:click': '/c/victim.client.js#run',
+    });
+
+    await applyStateBindings(stateTarget, {
+      handler: '/c/attacker.client.js#run',
+      module: '/c/attacker.client.js',
+      mutation: 'account/delete',
+      promoteStyle: true,
+      renderer: '/c/attacker.client.js#render',
+      title: 'Ready',
+    });
+
+    expect(stateTarget.getAttribute('data-kovo-deferred-style')).toBeNull();
+    expect(stateTarget.getAttribute('data-kovo-module-allowlist')).toBeNull();
+    expect(stateTarget.getAttribute('data-mutation')).toBeNull();
+    expect(stateTarget.getAttribute('data-stream-renderer')).toBeNull();
+    expect(stateTarget.getAttribute('on:click')).toBeNull();
+    expect(stateTarget.getAttribute('title')).toBe('Ready');
   });
 
   it('applies same-island state bindings without query dependencies', async () => {

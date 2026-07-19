@@ -28,7 +28,6 @@ export const ProductPage = component({
         asChild
         attrs={{
           class: 'primitive',
-          'on:click': '/c/primitive#click',
           'data-state': 'closed',
         }}
       >
@@ -64,7 +63,7 @@ export const ProductPage = component({
     expect(serverSource).toContain('class="primitive nav-link"');
     expect(serverSource).toContain('href="/products/p1"');
     expect(serverSource).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/product-page\.client\.js#ProductPage\$selectProduct \/c\/primitive#click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/product-page\.client\.js#ProductPage\$selectProduct"/,
     );
     expect(serverSource).toContain('data-state="closed"');
     expect(serverSource).toContain('commandfor="details" command="show-modal"');
@@ -83,7 +82,7 @@ export const ProductPage = component({
     expect(serverSource).toContain('data-style-src="product-page.tsx#badge"');
     expect(serverSource).toMatch(/class="kv-product-page-bg-[^"]+ kv-product-page-fg-[^"]+"/);
     expect(clientSource).toContain(
-      "import { derive, handler, kovoStyleProperty, runQueryUpdatePlan } from '@kovojs/browser/generated';",
+      "import { derive, kovoStyleProperty, runQueryUpdatePlan, securityHandler } from '@kovojs/browser/generated';",
     );
     expect(clientSource).toContain(
       'export const ProductPage$a_title_derive = derive(["product"], (product) => product.name.toUpperCase());',
@@ -141,6 +140,7 @@ export const ProductPage = component({
         "primitive-spreads",
         "dynamic-spread-control-boundary",
         "primitive-composition",
+        "effective-element-context",
         "link-navigation",
         "platform-behaviors",
         "href-attributes",
@@ -149,6 +149,7 @@ export const ProductPage = component({
         "primitive-reactive-attributes",
         "inline-text-bindings",
         "static-text-escaping",
+        "effective-element-context-output-facts",
         "helper-import-insertion",
       ]
     `);

@@ -103,6 +103,7 @@ export {
 
 /** @internal */
 /** @internal */ export type {
+  CompilerSecuritySemanticSource,
   TrustEscapeProjectOptions,
   TrustEscapeSourceFileInput,
 } from './trust-escapes-static.js';
@@ -7377,6 +7378,7 @@ export {
   emptySessionProvenanceContext,
   opaqueAliasReasonForExpression,
   privateScopeForExpression,
+  privateScopeHelperCallCarrierIsProven,
   privateScopeKey,
   privateScopeSourceForExpression,
   sessionProvenanceContextForNodes,
@@ -7387,7 +7389,6 @@ export {
   joinSymbolProvenance,
   provenInputProvenanceForExpression,
   provenServerProvenanceForExpression,
-  serverSummaryKeysForSourceFile,
   symbolProvenanceContextForNodes,
   symbolProvenanceForExpression,
   type SymbolProvenance,

@@ -19,7 +19,7 @@ import {
   readMutationResponseBodyChunks,
 } from '../../browser/src/wire-parser.js';
 import { readInlineMutationResponseBodyChunks } from '../../browser/src/wire-response-scanner.js';
-import { compileComponentModule } from '../../compiler/src/index.js';
+import { compileCompilerEmittedFixture } from '../../compiler/src/test-support.js';
 import {
   executeGeneratedClientArtifact,
   GeneratedFixtureElement,
@@ -33,7 +33,8 @@ import { createVerificationFakeDb } from './verification-fixtures.js';
 describe('compiler/browser oracle contract', () => {
   it('executes one fixture through compiled query plans, modular wire apply, inline apply, and verifier coverage', () => {
     const fixture = crossPackageOracleFixture();
-    const compiled = compileComponentModule({
+    expect(fixture.component.sourceProvenance).toBe('compiler-emitted');
+    const compiled = compileCompilerEmittedFixture({
       fileName: fixture.component.fileName,
       queryShapes: fixture.component.queryShapes,
       registryFacts: fixture.component.registryFacts,

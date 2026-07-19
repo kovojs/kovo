@@ -588,6 +588,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   assert.deepEqual(fact.hardRuleTitlesCovered, [
     ...fact.compilerRuleTitles,
     'Output safety is contextual and default-on',
+    'Security-critical effects lower to a finite compiler-owned IR',
     'Inputs (mandatory)',
     'Stamping points (mandatory)',
     'Comparison (mandatory, server and client)',

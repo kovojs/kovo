@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, compileComponentModule } from './index.js';
+import { assertFixpoint } from './index.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 // SECURITY_FINDINGS.md C1: the @kovojs/server jsx runtime emits text children verbatim, so the
 // compiler wraps static data-path text interpolations in escapeText(...) during lowering, making

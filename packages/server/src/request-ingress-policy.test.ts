@@ -206,7 +206,7 @@ describe('SPEC §9.5 finite request-ingress classifier', () => {
   });
 
   it('classifies request-target form before URL or route dispatch', () => {
-    for (const rawTarget of ['/', '/a/b?x=1', '/_m/cart/add?source=buy']) {
+    for (const rawTarget of ['/', '/a/b?x=1', '/_m/cart/add?source=buy', '/_q/queries/cart/cart']) {
       expect(classifier.classify(http1({ rawTarget })), rawTarget).toMatchObject({
         ok: true,
         target: rawTarget,

@@ -16,6 +16,7 @@ import {
 } from './response-security-intrinsics.js';
 import {
   createWitnessWeakMap,
+  createWitnessWeakSet,
   witnessGetOwnPropertyDescriptor,
   witnessGetPrototypeOf,
   witnessDefineProperty,
@@ -23,6 +24,8 @@ import {
   witnessReflectGet,
   witnessWeakMapGet,
   witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import { requestForAuthorityNeutralMetadata } from './request-carrier.js';
 import { MAX_REQUEST_QUERY_ENTRIES } from './request-url-limits.js';
@@ -100,6 +103,22 @@ const formDataExactEntries = createWitnessWeakMap<
   object,
   (readonly [string, FormDataEntryValue])[]
 >();
+const requestInputShapeBudgetErrors = createWitnessWeakSet<object>();
+
+/** @internal Recognize only the parser's unforgeable KV430 form-entry/part ceiling outcome. */
+export function requestInputShapeBudgetExceeded(error: unknown): boolean {
+  return (
+    (typeof error === 'object' || typeof error === 'function') &&
+    error !== null &&
+    witnessWeakSetHas(requestInputShapeBudgetErrors, error)
+  );
+}
+
+function requestInputShapeBudgetError(message: string): TypeError {
+  const error = new TypeError(`KV430 input shape budget: ${message}`);
+  witnessWeakSetAdd(requestInputShapeBudgetErrors, error);
+  return error;
+}
 
 const streamControlRequest = new NativeRequest('https://kovo.invalid/stream', {
   body: 'control',
@@ -566,7 +585,7 @@ function parseUrlEncodedForm(bytes: Uint8Array): FormData {
     const end = next === -1 ? body.length : next;
     entries += 1;
     if (entries > MAX_REQUEST_INPUT_ENTRIES) {
-      throw new TypeError('Kovo refused a URL-encoded form with too many entries.');
+      throw requestInputShapeBudgetError('Kovo refused a URL-encoded form with too many entries.');
     }
     const pair = securityStringSlice(body, position, end);
     if (pair.length !== 0) {
@@ -720,7 +739,7 @@ function parseMultipartForm(bytes: Uint8Array, boundary: string): FormData {
     position += 2;
     parts += 1;
     if (parts > MAX_REQUEST_INPUT_ENTRIES) {
-      throw new TypeError('Kovo refused a multipart form with too many parts.');
+      throw requestInputShapeBudgetError('Kovo refused a multipart form with too many parts.');
     }
 
     const headerEnd = indexOfBytes(bytes, headerTerminator, position);

@@ -350,17 +350,9 @@ export function enhancedMutationFormLowering(
     ` action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
     'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
   );
-  compilerArrayAppend(
-    semanticAttributes,
-    ` data-mutation="${escapeAttribute(mutationKey)}"`,
-    'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
-  );
-  if (streaming)
-    compilerArrayAppend(
-      semanticAttributes,
-      ' data-mutation-stream="true"',
-      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
-    );
+  // data-mutation* are generated-only control-plane stamps. Render equivalence compares the
+  // authored form's visible/native semantics (method/action/enctype), while byte/fixpoint gates
+  // separately prove the exact compiler-owned runtime markers (SPEC.md §5.2 rule 3).
   const generatedAttributeNameValues = ['action', 'data-mutation', 'data-mutation-stream'];
   if (generateEnctype)
     compilerArrayAppend(

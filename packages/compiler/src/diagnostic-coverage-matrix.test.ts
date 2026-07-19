@@ -1444,13 +1444,13 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV449",
           "fileName": "finite-security-ir-bad.tsx",
-          "help": "Would lower to: a compiler-owned kovo-security-operation-ir/v1 operation with an exact reviewed door and explain-visible target.
-      Blocked reason: the handler uses an unknown/computed raw DOM or capability operation, an unreviewed executable call, an unjustified exceptional door, or a hand-written mutation form that cannot carry the complete server-stamped CSRF plus Kovo-Idem field set.
+          "help": "Would lower to: a compiler-owned kovo-security-operation-ir/v1 operation with an exact reviewed door plus a kovo-security-semantic-graph/v2 root-binding-to-invocation-to-sink trace.
+      Blocked reason: the handler uses an unknown/computed raw DOM or capability operation, an unreviewed executable call, an unjustified exceptional door, an unsupported/recursive/budget-exhausted helper transfer, or a hand-written mutation form that cannot carry the complete server-stamped CSRF plus Kovo-Idem field set.
       Fixes: use typed <form mutation={definition}> (or the exact mutationFormAttributes(definition) JSX spread); use component state, delegated event reads, reviewed focus/dialog/form operations, managed DB/egress/response APIs, or a named trustedSql/trustedHtml/raw-response door with its required justification.
-      SPEC §4.3, §5.2, §6.6, and §9.1 make the finite compiler-owned operation set fail closed. There is no general raw-DOM/capability or hand-authored lowered-IR escape; only the named exceptional doors documented by their owning sink are accepted.
+      SPEC §4.3, §5.2, §6.6, and §9.1 make the finite compiler-owned operation set and its bounded helper summaries fail closed. Server diagnostics name root, ordered transfers, sink, and the exact closed reason. There is no general raw-DOM/capability or hand-authored lowered-IR escape; only the named exceptional doors documented by their owning sink are accepted.
       Escape: trustedSql, trustedHtml, and endpoint/webhook raw Response are the only exceptional IR operations, and each remains visible in kovo explain with its justification/posture.",
           "length": 22,
-          "message": "Security-critical operation is outside the compiler-owned finite IR. raw browser assignment event.target.innerHTML is not a finite operation.",
+          "message": "Security-critical operation is outside the compiler-owned finite IR. semantic root=serialized-browser-handler:onClick@72; transfers=<direct>; sink=raw browser assignment event.target.innerHTML is not a finite operation; verdict=closed:unsupported-authority-use.",
           "severity": "error",
           "start": {
             "column": 42,

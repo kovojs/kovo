@@ -2,13 +2,18 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue, type StaticLiteralValue } from '../scan/object.js';
-import type { JsxAttributeModel, ObjectLiteralEntry } from '../scan/parse.js';
+import {
+  parserFactHasFrameworkTrustedUrl,
+  type JsxAttributeModel,
+  type ObjectLiteralEntry,
+} from '../scan/parse.js';
 import { dedupeBy, escapeAttribute, splitDepValue } from '../shared.js';
 import {
   compilerArrayJoin,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerCreateWeakMap,
   compilerDefineOwnDataProperty,
   compilerJsonStringify,
   compilerMapGet,
@@ -21,6 +26,8 @@ import {
   compilerStringSlice,
   compilerStringStartsWith,
   compilerStringTrim,
+  compilerWeakMapGet,
+  compilerWeakMapSet,
 } from '../compiler-security-intrinsics.js';
 
 export type AttributeMergeDiagnosticCode = 'KV231' | 'KV232' | 'KV233' | 'KV317';
@@ -48,6 +55,13 @@ export type MergeableAttributeValue =
   | { kind: 'expression'; source: string }
   | { kind: 'number'; value: number }
   | { kind: 'string'; value: string };
+
+const frameworkTrustedUrlValues = compilerCreateWeakMap<MergeableAttributeValue, true>();
+
+/** @internal Exact parser provenance retained without widening the public merge-value shape. */
+export function mergeableAttributeHasFrameworkTrustedUrl(attribute: MergeableAttribute): boolean {
+  return compilerWeakMapGet(frameworkTrustedUrlValues, attribute.value) === true;
+}
 
 /**
  * Result of {@link mergePrimitiveAndAuthorAttributes}: the merged attribute list plus any
@@ -277,7 +291,7 @@ function primitiveObjectEntryAttribute(
 ): MergeableAttribute | null | undefined {
   if (entry.value === undefined) return null;
 
-  const value = staticAttributeValue(entry.value);
+  const value = staticAttributeValue(entry.value, parserFactHasFrameworkTrustedUrl(entry));
   if (value === null) return null;
   if (value === undefined || isAbsentAttributeValue(value)) return undefined;
 
@@ -298,14 +312,32 @@ function jsxAttributeValue(attribute: JsxAttributeModel): MergeableAttributeValu
       }
     );
   }
-  if (attribute.expression !== undefined)
-    return { kind: 'expression', source: attribute.expression };
+  if (attribute.expression !== undefined) {
+    const value: MergeableAttributeValue = {
+      kind: 'expression',
+      source: attribute.expression,
+    };
+    if (parserFactHasFrameworkTrustedUrl(attribute)) {
+      compilerWeakMapSet(frameworkTrustedUrlValues, value, true);
+    }
+    return value;
+  }
   return { kind: 'boolean', value: true };
 }
 
-function staticAttributeValue(source: string): MergeableAttributeValue | null | undefined {
+function staticAttributeValue(
+  source: string,
+  trustedUrl = false,
+): MergeableAttributeValue | null | undefined {
   const value = literalValue(source);
-  if (value === undefined) return { kind: 'expression', source: compilerStringTrim(source) };
+  if (value === undefined) {
+    const expression: MergeableAttributeValue = {
+      kind: 'expression',
+      source: compilerStringTrim(source),
+    };
+    if (trustedUrl) compilerWeakMapSet(frameworkTrustedUrlValues, expression, true);
+    return expression;
+  }
   return staticLiteralAttributeValue(value, source);
 }
 

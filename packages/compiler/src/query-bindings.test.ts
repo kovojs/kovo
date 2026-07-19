@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from './index.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 import {
   queryShapeFactDiagnostics,
   queryShapeRegistryTypeFacts,

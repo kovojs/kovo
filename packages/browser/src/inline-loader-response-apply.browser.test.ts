@@ -246,6 +246,55 @@ describe('browser inline loader response apply', () => {
     expect(feedLink?.getAttribute('style')).toBeNull();
   });
 
+  it('preserves reviewed finite browser controls through generated inline keyed morphs', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section kovo-fragment-target="controls" kovo-key="controls">',
+      '<a kovo-key="anchor" target="_blank" rel="noopener"',
+      ' referrerpolicy="strict-origin" ping="/forbidden">reviewed</a>',
+      '<script kovo-key="script" type="application/json" integrity="sha384-reviewed"',
+      ' nonce="forbidden" language="javascript"></script>',
+      '<iframe kovo-key="frame" src="/reviewed" sandbox="allow-scripts"></iframe>',
+      '<meta kovo-key="meta" name="description" content="reviewed">',
+      '</section>',
+    ].join('');
+    document.body.append(root);
+
+    installTestInlineKovoLoader(async () => ({}));
+    (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+      [
+        '<kovo-fragment target="controls">',
+        '<section kovo-fragment-target="controls" kovo-key="controls">',
+        '<a kovo-key="anchor" target="attacker-window" rel="opener"',
+        ' referrerpolicy="unsafe-url" ping="/collect">attacker</a>',
+        '<script kovo-key="script" type="module" integrity=""',
+        ' nonce="attacker" language="vbscript"></script>',
+        '<iframe kovo-key="frame" src="/attacker"',
+        ' sandbox="allow-scripts allow-same-origin"></iframe>',
+        '<meta kovo-key="meta" name="referrer" content="unsafe-url">',
+        '</section>',
+        '</kovo-fragment>',
+      ].join(''),
+    );
+
+    const anchor = root.querySelector('[kovo-key="anchor"]');
+    const script = root.querySelector('[kovo-key="script"]');
+    const frame = root.querySelector('[kovo-key="frame"]');
+    const meta = root.querySelector('[kovo-key="meta"]');
+    expect(anchor?.getAttribute('target')).toBe('_blank');
+    expect(anchor?.getAttribute('rel')).toBe('noopener');
+    expect(anchor?.getAttribute('referrerpolicy')).toBe('strict-origin');
+    expect(anchor?.getAttribute('ping')).toBeNull();
+    expect(script?.getAttribute('type')).toBe('application/json');
+    expect(script?.getAttribute('integrity')).toBe('sha384-reviewed');
+    expect(script?.getAttribute('nonce')).toBeNull();
+    expect(script?.getAttribute('language')).toBeNull();
+    expect(frame?.getAttribute('src')).toBe('/reviewed');
+    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(meta?.getAttribute('name')).toBe('description');
+    expect(meta?.getAttribute('content')).toBeNull();
+  });
+
   it('pins CustomEvent construction for the inline server-query handoff', () => {
     const NativeCustomEvent = CustomEvent;
     let received: CustomEvent | undefined;

@@ -386,6 +386,16 @@ export function registerFrameworkIdentityProject(
   }
 }
 
+/** @internal Resolve one relative module against the compiler-registered source project. */
+export function resolveFrameworkIdentityProjectSourceFile(
+  importingSourceFile: TypeScript.SourceFile,
+  specifier: string,
+): TypeScript.SourceFile | undefined {
+  return isRelativeSpecifier(specifier)
+    ? resolveProjectSourceFile(importingSourceFile, specifier)
+    : undefined;
+}
+
 /** @internal Return the call expression whose span exactly matches a parser model span. */
 export function callExpressionAtSpan(
   ts: FrameworkIdentityTypeScript,
@@ -475,6 +485,9 @@ function declarationIdentity(
   if (ts.isImportSpecifier(declaration)) {
     const importDeclaration = declaration.parent.parent.parent;
     if (!ts.isImportDeclaration(importDeclaration)) return undefined;
+    if (declaration.isTypeOnly || importDeclaration.importClause?.isTypeOnly === true) {
+      return undefined;
+    }
     if (!ts.isStringLiteralLike(importDeclaration.moduleSpecifier)) return undefined;
     const importedName = declaration.propertyName?.text ?? declaration.name.text;
     const specifier = importDeclaration.moduleSpecifier.text;
@@ -533,6 +546,7 @@ function namespaceMemberIdentity(
         const importDeclaration = declaration.parent.parent;
         if (
           ts.isImportDeclaration(importDeclaration) &&
+          importDeclaration.importClause?.isTypeOnly !== true &&
           ts.isStringLiteralLike(importDeclaration.moduleSpecifier)
         ) {
           const specifier = importDeclaration.moduleSpecifier.text;
@@ -1132,6 +1146,7 @@ function exportedIdentity(
       'Framework identity source statements',
     );
     if (ts.isExportDeclaration(statement)) {
+      if (statement.isTypeOnly) continue;
       const moduleSpecifier = statement.moduleSpecifier;
       const exportClause = statement.exportClause;
       if (exportClause && ts.isNamedExports(exportClause)) {
@@ -1141,6 +1156,7 @@ function exportedIdentity(
             elementIndex,
             'Framework identity export elements',
           );
+          if (element.isTypeOnly) continue;
           if (element.name.text !== exportName) continue;
           const importedName = element.propertyName?.text ?? element.name.text;
           if (moduleSpecifier === undefined) {

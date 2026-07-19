@@ -1,3 +1,6 @@
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -251,12 +254,14 @@ describe('linear pattern engine (KV434)', () => {
   });
 
   it('keeps a seeded differential fuzzer over the supported grammar', () => {
-    const rng = mulberry32(0x434);
-    const cases = Number.parseInt(process.env.KOVO_LINEAR_REGEX_FUZZ_CASES ?? '1500', 10);
+    const seed = configuredFuzzSeed();
+    const replay = configuredDifferentialReplay();
+    const rng = mulberry32(seed);
+    const cases = replay === undefined ? configuredFuzzCases() : 1;
     for (let i = 0; i < cases; i += 1) {
-      const source = randomPattern(rng, 0);
-      const flags = randomFlags(rng);
-      const input = randomInput(rng);
+      const source = replay?.source ?? randomPattern(rng, 0);
+      const flags = replay?.flags ?? randomFlags(rng);
+      const input = replay?.input ?? randomInput(rng);
       const program = compileLinearPattern(source, flags);
       if (isPinnedMillionCaseCounterexample(source, flags, input)) {
         expect(
@@ -266,10 +271,23 @@ describe('linear pattern engine (KV434)', () => {
         continue;
       }
       const regex = new RegExp(source, flags);
-      expect(
-        testLinearPattern(program, input),
-        `${source}/${flags} on ${JSON.stringify(input)}`,
-      ).toBe(regex.test(input));
+      const actual = testLinearPattern(program, input);
+      const expected = regex.test(input);
+      if (actual !== expected) {
+        const minimizedInput = minimizeDifferentialInput(program, regex, input);
+        const artifact = persistDifferentialCounterexample({
+          actual: testLinearPattern(program, minimizedInput),
+          caseIndex: i,
+          expected: regex.test(minimizedInput),
+          flags,
+          input: minimizedInput,
+          seed,
+          source,
+        });
+        throw new Error(
+          `KOVO_CROSS_IMPLEMENTATION_DISAGREEMENT source=${JSON.stringify(source)} flags=${JSON.stringify(flags)} input=${JSON.stringify(minimizedInput)} replay=${artifact}`,
+        );
+      }
     }
   }, 300_000);
 
@@ -359,6 +377,129 @@ function mulberry32(seed: number): Rng {
     value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
     return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+interface DifferentialCounterexample {
+  readonly flags: string;
+  readonly input: string;
+  readonly source: string;
+}
+
+function configuredFuzzSeed(): number {
+  const source = process.env.KOVO_LINEAR_REGEX_FUZZ_SEED ?? '0x00000434';
+  if (!/^(?:0x[0-9a-f]{1,8}|[0-9]{1,10})$/iu.test(source)) {
+    throw new Error('KOVO_LINEAR_REGEX_FUZZ_SEED must be one unsigned 32-bit integer');
+  }
+  const seed = Number(source);
+  if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffff_ffff) {
+    throw new Error('KOVO_LINEAR_REGEX_FUZZ_SEED must be one unsigned 32-bit integer');
+  }
+  return seed;
+}
+
+function configuredFuzzCases(): number {
+  const source = process.env.KOVO_LINEAR_REGEX_FUZZ_CASES ?? '1500';
+  if (!/^[1-9][0-9]{0,6}$/u.test(source)) {
+    throw new Error('KOVO_LINEAR_REGEX_FUZZ_CASES must be an integer from 1 through 1000000');
+  }
+  const cases = Number(source);
+  if (cases > 1_000_000) {
+    throw new Error('KOVO_LINEAR_REGEX_FUZZ_CASES must be an integer from 1 through 1000000');
+  }
+  return cases;
+}
+
+function configuredDifferentialReplay(): DifferentialCounterexample | undefined {
+  const replayPath = process.env.KOVO_LINEAR_REGEX_FUZZ_REPLAY_FILE;
+  if (replayPath === undefined) return undefined;
+  const document = JSON.parse(readFileSync(path.resolve(replayPath), 'utf8')) as {
+    readonly counterexample?: Partial<DifferentialCounterexample>;
+  };
+  const counterexample = document.counterexample;
+  if (
+    typeof counterexample?.source !== 'string' ||
+    typeof counterexample.flags !== 'string' ||
+    typeof counterexample.input !== 'string'
+  ) {
+    throw new Error('KOVO_LINEAR_REGEX_FUZZ_REPLAY_FILE has no replayable counterexample');
+  }
+  return {
+    flags: counterexample.flags,
+    input: counterexample.input,
+    source: counterexample.source,
+  };
+}
+
+function minimizeDifferentialInput(
+  program: ReturnType<typeof compileLinearPattern>,
+  regex: RegExp,
+  sourceInput: string,
+): string {
+  const disagrees = (input: string): boolean =>
+    testLinearPattern(program, input) !== regex.test(input);
+  let input = sourceInput;
+  let chunkSize = Math.max(1, Math.ceil(input.length / 2));
+  while (chunkSize >= 1 && input.length > 0) {
+    let reduced = false;
+    for (let start = 0; start < input.length; start += chunkSize) {
+      const candidate = input.slice(0, start) + input.slice(start + chunkSize);
+      if (disagrees(candidate)) {
+        input = candidate;
+        reduced = true;
+        break;
+      }
+    }
+    if (!reduced) chunkSize = Math.floor(chunkSize / 2);
+  }
+  return input;
+}
+
+function persistDifferentialCounterexample(options: {
+  readonly actual: boolean;
+  readonly caseIndex: number;
+  readonly expected: boolean;
+  readonly flags: string;
+  readonly input: string;
+  readonly seed: number;
+  readonly source: string;
+}): string {
+  const root = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)));
+  const profile = process.env.KOVO_SECURITY_FUZZ_PROFILE ?? 'standalone';
+  const relativePath = path.join(
+    '.kovo/security-failures/security-fuzz-campaign',
+    profile,
+    'redos',
+    'supported-grammar-differential',
+    'minimized-generated-counterexample.json',
+  );
+  const absolutePath = path.join(root, relativePath);
+  mkdirSync(path.dirname(absolutePath), { recursive: true });
+  const document = {
+    schema: 'kovo.security-fuzz-counterexample/v1',
+    campaignVersion: 1,
+    family: 'redos',
+    caseId: 'supported-grammar-differential',
+    classification: 'cross-implementation-disagreement-triage',
+    safetyVerdict: 'undetermined',
+    seed: `0x${options.seed.toString(16).padStart(8, '0')}`,
+    generatedCaseIndex: options.caseIndex,
+    minimization: 'deterministic deletion-minimal input for the generated pattern',
+    counterexample: {
+      actual: options.actual,
+      expected: options.expected,
+      flags: options.flags,
+      input: options.input,
+      source: options.source,
+    },
+    replay: {
+      command: `KOVO_LINEAR_REGEX_FUZZ_REPLAY_FILE=${relativePath} pnpm exec vitest --run packages/server/src/redos.test.ts --testNamePattern 'keeps a seeded differential fuzzer over the supported grammar$' --no-file-parallelism --reporter=dot`,
+      environment: {
+        KOVO_LINEAR_REGEX_FUZZ_REPLAY_FILE: relativePath,
+      },
+    },
+  };
+  writeFileSync(absolutePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
+  return relativePath;
 }
 
 function randomPattern(rng: Rng, depth: number): string {

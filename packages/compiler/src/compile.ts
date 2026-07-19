@@ -646,7 +646,7 @@ function emitRegistryCssPhase(
         fact.component,
         parsed.options.fileName,
         index === 0 ? componentSecurityOperationFacts(lowered.model, client.versionedHandlers) : [],
-        index === 0 ? componentSecuritySemanticGraphFacts(lowered.model) : undefined,
+        index === 0 ? componentSecuritySemanticGraphFacts(parsed.originalModel) : undefined,
       ),
   );
   const cssAssets = cssSource
@@ -787,7 +787,7 @@ function emitServerPhase(
   );
 
   return {
-    serverModule: emitServerModule(serverRenderedSource, lowered.model),
+    serverModule: emitServerModule(serverRenderedSource, lowered.model, parsed.originalModel),
     serverRender,
     serverRenderedSource,
   };
@@ -851,6 +851,9 @@ function verifyComponentPhase(
 
   const registryFactsOptions = {
     fileName: parsed.compileOptions.fileName,
+    ...(parsed.compileOptions.extraFiles?.length
+      ? { extraFiles: parsed.compileOptions.extraFiles }
+      : {}),
     ...(parsed.compileOptions.registryFacts
       ? { registryFacts: parsed.compileOptions.registryFacts }
       : {}),

@@ -1,7 +1,8 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule, deriveAppGraph } from './index.js';
+import { deriveAppGraph } from './index.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 const kv230 = diagnosticDefinitions.KV230;
 const kv303 = diagnosticDefinitions.KV303;

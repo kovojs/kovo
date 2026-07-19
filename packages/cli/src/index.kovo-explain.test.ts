@@ -82,11 +82,31 @@ describe('kovo explain', () => {
                 budgets: { callDepth: 16, nodes: 50_000, operations: 4_096, summaries: 256 },
                 roots: [
                   {
+                    binding: {
+                      callback: 'handler',
+                      callableSpan: { end: 90, start: 50 },
+                      factory: 'endpoint',
+                      factoryCallSpan: { end: 100, start: 40 },
+                      root: 'endpoint:/report',
+                    },
+                    helperInvocations: [
+                      {
+                        argumentSpans: [{ end: 75, start: 68 }],
+                        authorityInputs: ['arg0=context'],
+                        callable: 'local:consume',
+                        callableSpan: { end: 30, start: 10 },
+                        callSpan: { end: 80, start: 60 },
+                        operationKinds: ['server.egress.request'],
+                        transfers: ['local:consume[arg0=context]'],
+                        verdict: 'proved',
+                      },
+                    ],
                     root: 'endpoint:/report',
                     summaries: [
                       {
                         authorityInputs: ['arg0=context'],
                         callable: 'local:consume',
+                        callableSpan: { end: 30, start: 10 },
                         operationKinds: ['server.egress.request'],
                         verdict: 'proved',
                       },
@@ -105,7 +125,7 @@ describe('kovo explain', () => {
                     ],
                   },
                 ],
-                schema: 'kovo-security-semantic-graph/v1',
+                schema: 'kovo-security-semantic-graph/v2',
               },
               styleRules: [
                 {
@@ -143,6 +163,8 @@ describe('kovo explain', () => {
         'HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
         'OPERATION server.helper.call door=local-call-edge root=endpoint:/report target=local:consume justification=-',
         'OPERATION server.output.trusted-html door=trustedHtml root=- target=trustedHtml justification=reviewed static empty state',
+        'SEMANTIC-ROOT root=endpoint:/report factory=endpoint callback=handler factory-span=40:100 callable-span=50:90',
+        'SEMANTIC-INVOKE root=endpoint:/report call-span=60:80 argument-spans=68:75 callable=local:consume callable-span=10:30 authority-inputs=arg0=context effects=server.egress.request transfers=local:consume[arg0=context] verdict=proved',
         'SEMANTIC-SUMMARY root=endpoint:/report callable=local:consume authority-inputs=arg0=context effects=server.egress.request verdict=proved',
         'SEMANTIC-TRACE root=endpoint:/report transfers=local:consume[arg0=context] sink=server.egress.request:outbound verdict=proved',
         'SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal',

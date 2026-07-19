@@ -129,6 +129,7 @@ export default defineConfig({
                         clickPrevented,
                         effectiveOrigin: globalThis.origin,
                         fetchCalls,
+                        formErrorCode: form.getAttribute('data-error-code'),
                         id: data.id,
                         importCalls,
                         locationOrigin: location.origin,

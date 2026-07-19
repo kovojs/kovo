@@ -39,6 +39,7 @@ export interface OracleComponentFixture {
     };
     routes: readonly ['/oracle'];
   };
+  sourceProvenance: 'compiler-emitted';
   source: string;
 }
 
@@ -135,6 +136,7 @@ export function crossPackageOracleFixture(): CrossPackageOracleFixture {
       },
       routes: ['/oracle'],
     },
+    sourceProvenance: 'compiler-emitted',
     source: [
       "import { component } from '@kovojs/core';",
       '',

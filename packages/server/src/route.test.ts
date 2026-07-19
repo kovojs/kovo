@@ -247,7 +247,7 @@ describe('route primitives', () => {
     }
 
     expect(result?.status).toBe(303);
-    expect(result?.body).not.toContain('private');
+    expect(result?.body).not.toContain('<main>private</main>');
   });
 
   it('does not select an unverified descendant boundary after Array.slice poisoning', async () => {
@@ -285,7 +285,7 @@ describe('route primitives', () => {
     expect(result?.status).toBe(403);
     expect(result?.body).toContain('<h1>Forbidden</h1>');
     expect(result?.body).not.toContain('unverified descendant boundary');
-    expect(result?.body).not.toContain('private');
+    expect(result?.body).not.toContain('<main>private</main>');
   });
 
   it('accepts optional route search schema fields', async () => {

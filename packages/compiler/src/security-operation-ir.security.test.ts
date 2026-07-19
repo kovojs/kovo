@@ -1,7 +1,7 @@
 // @kovo-security-classifier-corpus finite-security-operation-ir
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from './index.js';
+import { assertFixpoint, compileComponentModule } from './index.js';
 
 function compile(source: string) {
   return compileComponentModule({
@@ -12,6 +12,21 @@ function compile(source: string) {
 
 function kv449(source: string) {
   return compile(source).diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
+}
+
+function kv235(source: string) {
+  return compile(source).diagnostics.filter((diagnostic) => diagnostic.code === 'KV235');
+}
+
+function kv449Project(
+  source: string,
+  extraFiles: readonly { readonly fileName: string; readonly source: string }[],
+) {
+  return compileComponentModule({
+    extraFiles,
+    fileName: 'src/finite-security-ir.tsx',
+    source,
+  }).diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
 }
 
 describe('SPEC §4.3/§5.2 finite compiler-owned security IR', () => {
@@ -66,6 +81,300 @@ export const api = endpoint('/api', {
     );
   });
 
+  // @kovo-security-certifies C13 runtime-selected-handler-ref-closes
+  it.each([
+    ['direct lowercase', 'on:click={profile.handler}'],
+    ['direct ASCII-case variant', 'ON:CLICK={profile.handler}'],
+    ['static spread lowercase', "{...{ 'on:click': profile.handler }}"],
+    ['static spread ASCII-case variant', "{...{ 'On:Click': profile.handler }}"],
+  ])('closes a runtime-selected handler reference through %s', (_label, attributes) => {
+    const source = `
+export const DynamicRef = component({
+  render: ({ profile }) => <button ${attributes}>Run</button>,
+});
+`;
+
+    expect(kv449(source)).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'runtime-selected on:* handler reference is not compiler-authorized',
+        ),
+      }),
+    ]);
+  });
+
+  it.each([
+    [
+      'handler ref',
+      "'on:click': profile.executableRef",
+      'runtime-selected on:* handler reference is not compiler-authorized',
+    ],
+    [
+      'derive ref',
+      "'data-bind:hidden': profile.executableRef",
+      'runtime-selected executable reference is not compiler-authorized',
+    ],
+    [
+      'derive property ref',
+      "'data-bind-prop:checked': profile.executableRef",
+      'runtime-selected executable reference is not compiler-authorized',
+    ],
+    [
+      'stream renderer ref',
+      "'data-stream-renderer': profile.executableRef",
+      'runtime-selected executable reference is not compiler-authorized',
+    ],
+    [
+      'module allowlist authority',
+      "'data-kovo-module-allowlist': profile.executableRef",
+      'runtime-selected executable reference is not compiler-authorized',
+    ],
+  ])(
+    'closes a runtime-selected %s merged through primitive attrs',
+    (_label, attribute, message) => {
+      const source = `
+export const DynamicPrimitiveRef = component({
+  render: ({ profile }) => (
+    <Tooltip.Trigger asChild attrs={{ ${attribute} }}>
+      <button>Run</button>
+    </Tooltip.Trigger>
+  ),
+});
+`;
+
+      expect(kv449(source)).toEqual([
+        expect.objectContaining({
+          message: expect.stringContaining(message),
+        }),
+      ]);
+    },
+  );
+
+  it.each([
+    ['derive text ref (direct)', 'data-bind={profile.executableRef}'],
+    ['derive attribute ref (direct ASCII-case)', 'DATA-BIND:HIDDEN={profile.executableRef}'],
+    ['derive property ref (direct)', 'data-bind-prop:checked={profile.executableRef}'],
+    [
+      'stream renderer ref (direct ASCII-case)',
+      'data-stream-text="assistant:a1" DATA-STREAM-RENDERER={profile.executableRef}',
+    ],
+    [
+      'module allowlist authority (direct ASCII-case)',
+      'DATA-KOVO-MODULE-ALLOWLIST={profile.executableRef}',
+    ],
+    ['derive text ref (static-key spread)', "{...{ 'data-bind': profile.executableRef }}"],
+    [
+      'derive attribute ref (static-key spread)',
+      "{...{ 'data-bind:hidden': profile.executableRef }}",
+    ],
+    [
+      'derive property ref (static-key spread)',
+      "{...{ 'data-bind-prop:checked': profile.executableRef }}",
+    ],
+    [
+      'stream renderer ref (static-key spread)',
+      'data-stream-text="assistant:a1" {...{ \'data-stream-renderer\': profile.executableRef }}',
+    ],
+    [
+      'module allowlist authority (static-key spread)',
+      "{...{ 'data-kovo-module-allowlist': profile.executableRef }}",
+    ],
+  ])('closes a runtime-selected executable selector through %s', (_label, attributes) => {
+    const source = `
+export const DynamicExecutableRef = component({
+  render: ({ profile }) => <output ${attributes}>Result</output>,
+});
+`;
+
+    expect(kv449(source)).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'runtime-selected executable reference is not compiler-authorized',
+        ),
+      }),
+    ]);
+  });
+
+  it('keeps compiler-emitted executable references accepted only through fixpoint provenance', () => {
+    const result = compile(`
+import { component } from '@kovojs/core';
+export const TypedRefs = component({
+  state: () => ({ checked: false }),
+  render: () => (
+    <button checked={state.checked} onClick={() => { state.checked = !state.checked; }}>
+      Toggle
+    </button>
+  ),
+});
+`);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toEqual([]);
+    expect(serverSource).toContain('on:click=');
+    expect(serverSource).toContain('data-bind:checked=');
+    expect(serverSource).toContain('data-bind-prop:checked=');
+    expect(serverSource).toContain('data-kovo-module-allowlist=');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('keeps opaque app spreads behind runtime executable-selector stripping', () => {
+    const runtimeFilteredNestedSpread = compile(`
+export const RuntimeFiltered = component({
+  render: ({ profile }) => (
+    <button {...profile.attrs}>Opaque spread</button>
+  ),
+});
+`);
+    expect(
+      runtimeFilteredNestedSpread.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449'),
+    ).toEqual([]);
+    expect(
+      runtimeFilteredNestedSpread.files.find((file) => file.kind === 'server')?.source,
+    ).toContain('kovoSafeJsxSpread');
+  });
+
+  // @kovo-security-certifies C13 authored-executable-ref-provenance-closes
+  it.each([
+    ['direct handler', 'on:click="/c/other.client.js#privileged"'],
+    ['direct handler ASCII-case variant', "ON:CLICK={'/c/other.client.js#privileged'}"],
+    ['static-spread handler', "{...{ 'on:click': '/c/other.client.js#privileged' }}"],
+    [
+      'static-spread handler ASCII-case variant',
+      "{...{ 'On:Click': '/c/other.client.js#privileged' }}",
+    ],
+    ['text derive module ref', 'data-bind="/c/other.client.js#privileged"'],
+    ['attribute derive module ref', 'data-bind:hidden="/c/other.client.js#privileged"'],
+    ['text binding path', 'data-bind="cart.count"'],
+    ['attribute binding path', 'data-bind:hidden="state.hidden"'],
+    ['static-spread text binding path', "{...{ 'data-bind': 'cart.count' }}"],
+    ['static-spread attribute binding path', "{...{ 'data-bind:hidden': 'state.hidden' }}"],
+    ['property derive module ref', 'data-bind-prop:checked="/c/other.client.js#privileged"'],
+    ['property binding path', 'data-bind-prop:checked="state.checked"'],
+    [
+      'stream renderer module ref',
+      'data-stream-text="assistant:a1" data-stream-renderer="/c/other.client.js#privileged"',
+    ],
+    ['module allowlist authority', 'data-kovo-module-allowlist="/c/other.client.js"'],
+  ])(
+    'closes app-authored static lowered executable references through %s',
+    (_label, attributes) => {
+      const source = `
+import { component } from '@kovojs/core';
+export const Raw = component({
+  render: () => <button ${attributes}>Run</button>,
+});
+`;
+
+      expect(kv235(source)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: expect.stringContaining(
+              'App source hand-authors an executable lowered-IR reference',
+            ),
+          }),
+        ]),
+      );
+    },
+  );
+
+  it.each([
+    ['handler ref', "'on:click': '/c/other.client.js#privileged'"],
+    ['derive ref', "'data-bind:hidden': '/c/other.client.js#privileged'"],
+    ['text binding path', "'data-bind': 'cart.count'"],
+    ['attribute binding path', "'data-bind:hidden': 'state.hidden'"],
+    ['derive property ref', "'data-bind-prop:checked': '/c/other.client.js#privileged'"],
+    ['derive property path', "'data-bind-prop:checked': 'cart.checked'"],
+    ['stream renderer ref', "'data-stream-renderer': '/c/other.client.js#privileged'"],
+    ['module allowlist authority', "'data-kovo-module-allowlist': '/c/other.client.js'"],
+  ])(
+    'closes app-authored static lowered %s merged through primitive attrs',
+    (_label, attribute) => {
+      const source = `
+import { component } from '@kovojs/core';
+export const RawPrimitive = component({
+  render: () => (
+    <Tooltip.Trigger asChild attrs={{ ${attribute} }}>
+      <button>Run</button>
+    </Tooltip.Trigger>
+  ),
+});
+`;
+
+      expect(kv235(source)).toEqual([
+        expect.objectContaining({
+          message: expect.stringContaining(
+            'App source hand-authors an executable lowered-IR reference',
+          ),
+        }),
+      ]);
+    },
+  );
+
+  it('closes duplicate and nested static-spread executable selectors by authored provenance', () => {
+    const diagnostics = kv235(`
+import { component } from '@kovojs/core';
+export const Nested = component({
+  render: () => (
+    <button {...{
+      'on:click': '/c/other.client.js#first',
+      ...{ 'On:Click': '/c/other.client.js#second' },
+      'data-bind-prop:checked': 'cart.checked',
+    }}>Run</button>
+  ),
+});
+`);
+
+    expect(diagnostics).toHaveLength(3);
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('on:click'),
+        expect.stringContaining('On:Click'),
+        expect.stringContaining('data-bind-prop:checked'),
+      ]),
+    );
+  });
+
+  it('closes duplicate and nested primitive attrs without trusting the carrier tag', () => {
+    const diagnostics = kv235(`
+import { component } from '@kovojs/core';
+export const NestedPrimitive = component({
+  render: () => (
+    <Tooltip.Trigger {...{ attrs: {
+      'on:click': '/c/other.client.js#first',
+      'On:Click': '/c/other.client.js#second',
+      'data-bind-prop:checked': 'state.checked',
+    } }}>
+      <button>Run</button>
+    </Tooltip.Trigger>
+  ),
+});
+`);
+
+    expect(diagnostics).toHaveLength(3);
+  });
+
+  it('keeps typed event and execution-trigger inputs on compiler-owned lowering', () => {
+    const result = compile(`
+import { component } from '@kovojs/core';
+export const Typed = component({
+  state: () => ({ ready: false }),
+  render: () => (
+    <section>
+      <button onClick={() => { state.ready = true; }}>Run</button>
+      <output onIdle={() => { state.ready = true; }}>Idle</output>
+      <output onVisible={() => { state.ready = true; }}>Visible</output>
+    </section>
+  ),
+});
+`);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toEqual([]);
+    expect(serverSource).toContain('on:click=');
+    expect(serverSource).toContain('on:idle=');
+    expect(serverSource).toContain('on:visible=');
+  });
+
   it('accepts realistic state, delegated-event, reviewed primitive, focus, form, and timer effects', () => {
     const result = compile(`
 import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
@@ -94,6 +403,28 @@ export const Demo = component({
     ['raw browser-global method', "document.body.insertAdjacentHTML('beforeend', html)"],
     ['raw storage capability', "localStorage.setItem('token', token)"],
   ])('rejects %s because it is outside the operation set', (_label, operation) => {
+    const diagnostics = kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain(
+      'Security-critical operation is outside the compiler-owned finite IR.',
+    );
+  });
+
+  it.each([
+    ['innerHTML assignment', "event.target.innerHTML = '<strong>owned</strong>'"],
+    ['outerHTML assignment', "event.target.outerHTML = '<strong>owned</strong>'"],
+    ['direct eval', "eval('owned()')"],
+    ['string setTimeout', "setTimeout('owned()', 0)"],
+    ['string setInterval', "setInterval('owned()', 0)"],
+    ['document.write', "document.write('<strong>owned</strong>')"],
+    ['document.writeln', "document.writeln('<strong>owned</strong>')"],
+    ['Function constructor', "new Function('return 1')"],
+  ])('preserves the historical TASK B closed verdict for %s', (_label, operation) => {
     const diagnostics = kv449(`
 export const Demo = component({
   render: () => <button onClick={() => { ${operation}; }}>Run</button>,
@@ -168,10 +499,41 @@ export const Demo = component({
     expect(browserSource).toContain('"kind":"browser.timer.schedule"');
   });
 
+  it.each([
+    ['direct string timer', "setTimeout('owned()', 0)"],
+    ['timer alias', 'const later = setInterval; later(`owned()`, 0)'],
+    ['global timer member', 'globalThis.setTimeout(`owned-${input}`, 0)'],
+  ])('closes %s through the finite browser timer operation', (_label, operation) => {
+    const diagnostics = kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain('semantic root=serialized-browser-handler:onClick@');
+    expect(diagnostics[0]?.message).toContain('transfers=<direct>');
+    expect(diagnostics[0]?.message).toContain('string timer callbacks execute source text');
+    expect(diagnostics[0]?.message).toContain('verdict=closed:unsupported-authority-use');
+  });
+
+  it('closes a captured unknown receiver mutation instead of silently treating it as scalar code', () => {
+    const diagnostics = kv449(`
+const element = document.createElement('div');
+export const Demo = component({
+  render: () => <button onClick={() => { element.innerHTML = '<script>owned</script>'; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain('browser assignment element.innerHTML');
+    expect(diagnostics[0]?.message).toContain('verdict=closed:unknown-operation');
+  });
+
   it('accepts exact structured server operations and named justified exceptional doors', () => {
     const diagnostics = kv449(`
 import { trustedHtml } from '@kovojs/browser';
-import { trustedSql } from '@kovojs/drizzle';
+import { sql, trustedSql } from '@kovojs/drizzle';
 import { endpoint } from '@kovojs/server';
 
 export const report = endpoint('/report', {
@@ -188,6 +550,412 @@ export const report = endpoint('/report', {
     expect(diagnostics).toEqual([]);
   });
 
+  it('accepts exact reviewed command and module-scope storage capability doors', () => {
+    const diagnostics = kv449(`
+import {
+  cmd,
+  commandAllowlist,
+  createFileSystemStorage,
+  mutation,
+  runCommand,
+} from '@kovojs/server';
+const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixed health probe' });
+const command = cmd('/usr/bin/true', [], { allow });
+const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+export const verify = mutation({
+  async handler() {
+    await runCommand(command);
+    await storage.stat('fixed-key');
+    return { ok: true };
+  },
+});
+`);
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  // @kovo-security-classifier-corpus C13 finite-ir-reviewed-data-doors
+  it('accepts exact reviewed secret, raw SQL, table-alias, and managed-read operations', () => {
+    const diagnostics = kv449Project(
+      `
+import { secret, trustedReveal } from '@kovojs/core';
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { endpoint, declareSecretReadCapability } from '@kovojs/server';
+import { eq } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { accounts, items } from './schema.js';
+
+export const report = endpoint('/report', {
+  db: true,
+  async handler(_request, context) {
+    const scoped = await context.actAs('reviewed-fixture-principal');
+    const db = scoped.db.read;
+    const owned = alias(accounts, 'reviewed_accounts');
+    const statement = trustedSql(sql.raw('select id, classified from accounts'), {
+      justification: 'reviewed static secret read',
+    });
+    declareSecretReadCapability(statement, {
+      columns: ['classified'],
+      justification: 'review the classified fixture value on the server',
+      source: 'accounts.classified',
+      table: 'accounts',
+    });
+    const rawRows = await db.all(statement);
+    const rows = await db
+      .select({ classified: owned.classified, id: owned.id })
+      .from(owned)
+      .innerJoin(items, eq(items.accountId, owned.id))
+      .union(db.select({ classified: accounts.classified, id: accounts.id }).from(accounts));
+    const reviewed = trustedReveal(secret(rows[0]?.classified ?? rawRows[0]?.classified), {
+      justification: 'publish the reviewed fixture projection',
+      method: 'server-projection',
+      source: 'accounts.classified',
+    });
+    return Response.json({ reviewed });
+  },
+});
+`,
+      [
+        {
+          fileName: 'src/schema.ts',
+          source: `
+import { pgTable, text } from 'drizzle-orm/pg-core';
+export const accounts = pgTable('accounts', {
+  classified: text('classified').notNull(),
+  id: text('id').primaryKey(),
+});
+export const items = pgTable('items', {
+  accountId: text('account_id').notNull(),
+  id: text('id').primaryKey(),
+});
+`,
+        },
+      ],
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  // @kovo-security-classifier-corpus C13 finite-ir-declared-secret-read-execution
+  it('classifies one exactly declared secret-read execute call as a managed query read', () => {
+    expect(
+      kv449(`
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability, query } from '@kovojs/server';
+export const report = query({
+  async load(_input, context) {
+    const statement = trustedSql(sql.raw('select id, classified from accounts'), {
+      justification: 'reviewed static secret read',
+    });
+    declareSecretReadCapability(statement, {
+      columns: ['classified'],
+      justification: 'review the classified fixture value on the server',
+      source: 'accounts.classified',
+      table: 'accounts',
+    });
+    const result = await context.db.execute(statement);
+    return { items: result.rows ?? [] };
+  },
+});
+`),
+    ).toEqual([]);
+
+    for (const source of [
+      `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { query } from '@kovojs/server';
+export const report = query({ async load(_input, context) {
+  const statement = trustedSql(sql.raw('select id from accounts'), { justification: 'undeclared' });
+  return context.db.execute(statement);
+} });
+`,
+      `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability, query } from '@kovojs/server';
+export const report = query({ async load(_input, context) {
+  const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
+  const escaped = statement;
+  declareSecretReadCapability(statement, { columns: ['classified'], justification: 'reviewed', source: 'accounts.classified', table: 'accounts' });
+  return context.db.execute(escaped);
+} });
+`,
+      `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability, query } from '@kovojs/server';
+export const report = query({ async load(_input, context) {
+  const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
+  const result = await context.db.execute(statement);
+  declareSecretReadCapability(statement, { columns: ['classified'], justification: 'late', source: 'accounts.classified', table: 'accounts' });
+  return result;
+} });
+`,
+    ]) {
+      expect(kv449(source)).not.toEqual([]);
+    }
+  });
+
+  it.each([
+    [
+      'request-derived sql.raw text',
+      `import { sql, trustedSql } from '@kovojs/drizzle';`,
+      `return trustedSql(sql.raw(input.statement), { justification: 'dynamic text is not reviewed' });`,
+    ],
+    [
+      'an aliased sql.raw callable',
+      `import { sql, trustedSql } from '@kovojs/drizzle';`,
+      `const raw = sql.raw;
+       return trustedSql(raw('select 1'), { justification: 'aliased raw callable' });`,
+    ],
+    [
+      'a renamed declared-secret capability import',
+      `import { declareSecretReadCapability as declareRead } from '@kovojs/server';`,
+      `declareRead(statement, { columns: ['classified'], justification: 'renamed', source: 'accounts.classified', table: 'accounts' });`,
+    ],
+    [
+      'a declared-secret lookalike',
+      `import { declareSecretReadCapability } from './lookalike.js';`,
+      `declareSecretReadCapability(statement, { columns: ['classified'], justification: 'foreign', source: 'accounts.classified', table: 'accounts' });`,
+    ],
+    [
+      'computed declared-secret metadata',
+      `import { declareSecretReadCapability } from '@kovojs/server';`,
+      `declareSecretReadCapability(statement, { [input.key]: ['classified'], justification: 'computed', source: 'accounts.classified', table: 'accounts' });`,
+    ],
+    [
+      'an aliased trustedReveal import',
+      `import { trustedReveal as reveal } from '@kovojs/core';`,
+      `return reveal(input.value, { justification: 'renamed reveal' });`,
+    ],
+    [
+      'a dynamically justified trustedReveal',
+      `import { trustedReveal } from '@kovojs/core';`,
+      `return trustedReveal(input.value, { justification: input.reason });`,
+    ],
+    [
+      'authority passed to trustedReveal',
+      `import { trustedReveal } from '@kovojs/core';`,
+      `return trustedReveal(context.db, { justification: 'authority laundering' });`,
+    ],
+    [
+      'an aliased secret constructor',
+      `import { secret as box } from '@kovojs/core';`,
+      `return box(input.value);`,
+    ],
+    [
+      'an extra secret-constructor argument',
+      `import { secret } from '@kovojs/core';`,
+      `return secret(input.value, 'forged');`,
+    ],
+    [
+      'authority passed to the secret constructor',
+      `import { secret } from '@kovojs/core';`,
+      `return secret(context.db);`,
+    ],
+    [
+      'an aliased Drizzle table-alias callable',
+      `import { alias } from 'drizzle-orm/pg-core';`,
+      `const makeAlias = alias;
+       return makeAlias(input.table, 'accounts');`,
+    ],
+    [
+      'a replaced Drizzle table-alias binding',
+      `import { alias } from 'drizzle-orm/pg-core';`,
+      `alias = input.alias;
+       return alias(input.table, 'accounts');`,
+    ],
+    [
+      'a computed managed-read continuation',
+      ``,
+      `return context.db.select()[input.operation](input.value);`,
+    ],
+    [
+      'authority passed to a managed innerJoin continuation',
+      ``,
+      `return context.db.select().from(input.table).innerJoin(context.db, input.predicate);`,
+    ],
+    [
+      'a foreign executable passed to a managed union continuation',
+      `import { buildForeignQuery } from './lookalike.js';`,
+      `return context.db.select().from(input.table).union(buildForeignQuery());`,
+    ],
+  ])('keeps %s outside the exact reviewed finite-IR doors', (_label, moduleDeclarations, body) => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+${moduleDeclarations}
+export const report = endpoint('/report', {
+  db: true,
+  handler(input, context) {
+    const statement = input.statement;
+    ${body}
+    return Response.json({ ok: true });
+  },
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('keeps lookalike, aliased, mutable, and request-time capability doors closed', () => {
+    expect(
+      kv449(`
+import { runCommand } from 'foreign-command-package';
+import { mutation } from '@kovojs/server';
+export const verify = mutation({ handler() { return runCommand(command); } });
+`),
+    ).not.toEqual([]);
+    expect(
+      kv449(`
+import { mutation, runCommand } from '@kovojs/server';
+const invoke = runCommand;
+export const verify = mutation({ handler() { return invoke(command); } });
+`),
+    ).not.toEqual([]);
+    expect(
+      kv449(`
+import { createFileSystemStorage, mutation } from '@kovojs/server';
+let storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+storage = replacement;
+export const verify = mutation({ handler() { return storage.stat('fixed-key'); } });
+`),
+    ).not.toEqual([]);
+    expect(
+      kv449(`
+import { createFileSystemStorage, mutation } from '@kovojs/server';
+export const verify = mutation({
+  handler(input) {
+    const storage = createFileSystemStorage({ root: input.root });
+    return storage.stat('fixed-key');
+  },
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('treats an exact raw endpoint Response as a reviewed outcome, not escaped authority', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler() {
+    const response = new Response('ok', {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+    return response;
+  },
+});
+`);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(serverSource).toContain(
+      '{"door":"Response","kind":"server.response.raw","target":"new Response","justification":"endpoint access/CSRF posture"}',
+    );
+  });
+
+  it('classifies exact module and global Response aliases as reviewed endpoint outcomes', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+const RawResponse = Response;
+export const report = endpoint('/report', {
+  handler(input) {
+    return input.global
+      ? globalThis.Response.json({ ok: true })
+      : new RawResponse('ok');
+  },
+});
+`);
+    const rawOperations =
+      result.componentGraphFacts[0]?.securityOperations?.filter(
+        (operation) => operation.kind === 'server.response.raw',
+      ) ?? [];
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(rawOperations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ target: 'globalThis.Response.json' }),
+        expect.objectContaining({ target: 'new Response' }),
+      ]),
+    );
+  });
+
+  it.each([
+    ['module Response alias', 'const RawResponse = Response;', "return new RawResponse('raw')"],
+    [
+      'zero-authority helper outcome',
+      "function raw() { return new Response('raw'); }",
+      'return raw()',
+    ],
+    [
+      'module Response container',
+      'const responses = { RawResponse: Response };',
+      "return new responses.RawResponse('raw')",
+    ],
+    [
+      'constructor-return helper',
+      'function responseConstructor() { return Response; }',
+      "return new (responseConstructor())('raw')",
+    ],
+    [
+      'module constructor-return alias',
+      'function identity(value) { return value; } const RawResponse = identity(Response);',
+      "return new RawResponse('raw')",
+    ],
+    ['global Response member', '', "return new globalThis.Response('raw')"],
+  ])('closes raw mutation Response through %s', (_label, prelude, outcome) => {
+    const diagnostics = kv449(`
+import { mutation } from '@kovojs/server';
+${prelude}
+export const update = mutation({
+  handler() { ${outcome}; },
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes('semantic root='))).toBe(
+      true,
+    );
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes('verdict=closed:'))).toBe(
+      true,
+    );
+  });
+
+  it('keeps scalar request URL projections plain through a local URL parser and helper summary', () => {
+    const diagnostics = kv449(`
+import { query } from '@kovojs/server';
+function page(url) {
+  return { target: url.searchParams.get('target') ?? '/' };
+}
+export const report = query({
+  reads: [],
+  load(_input, context) {
+    return page(new URL(context?.request.url ?? 'http://app.test/'));
+  },
+});
+`);
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it.each([
+    ['raw Response from a mutation', "return new Response('raw')"],
+    [
+      'raw Response hidden in a structured endpoint outcome',
+      "return { response: new Response('raw') }",
+    ],
+    ['raw Response thrown by an endpoint', "throw new Response('raw')"],
+    ['server authority passed through a local constructor', 'return new Box(ctx.db)'],
+  ])('keeps %s outside the reviewed response-outcome subset', (_label, handlerBody) => {
+    const surface = _label.includes('mutation') ? 'mutation' : 'endpoint';
+    expect(
+      kv449(`
+import { endpoint, mutation } from '@kovojs/server';
+class Box { constructor(value) { this.value = value; } }
+export const report = ${surface}(${surface === 'endpoint' ? "'/report', " : ''}{
+  handler(_input, ctx) { ${handlerBody}; },
+});
+`),
+    ).not.toEqual([]);
+  });
+
   it('preserves exact framework identity through namespace exceptional-door imports', () => {
     const result = compile(`
 import * as browser from '@kovojs/browser';
@@ -195,7 +963,7 @@ import * as drizzle from '@kovojs/drizzle';
 import { endpoint } from '@kovojs/server';
 export const report = endpoint('/report', {
   async handler(_input, ctx) {
-    await ctx.db.execute(drizzle.trustedSql(sql\`select 1\`, {
+    await ctx.db.execute(drizzle.trustedSql(drizzle.sql\`select 1\`, {
       justification: 'reviewed namespace query',
     }));
     return Response.json({
@@ -322,6 +1090,29 @@ export const report = endpoint('/report', {
     });
   });
 
+  it('keeps authority-returning assertion helpers outside the normalized helper subset', () => {
+    const diagnostics = kv449(`
+import { query } from '@kovojs/server';
+function requireDb(context) {
+  if (!context.db) throw new Error('missing managed db');
+  return context.db;
+}
+export const catalog = query('catalog/read', {
+  load(_input, context) {
+    const db = requireDb(context);
+    return db.select();
+  },
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(
+      diagnostics.some((diagnostic) =>
+        diagnostic.message.includes('server capability cannot escape a structured handler outcome'),
+      ),
+    ).toBe(true);
+  });
+
   it('discharges multi-hop helper edges through bottom-up normalized summaries', () => {
     const result = compile(`
 import { endpoint } from '@kovojs/server';
@@ -343,25 +1134,61 @@ export const report = endpoint('/report', {
     const semanticGraph = result.componentGraphFacts[0]?.securitySemanticGraph;
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
-    expect(serverSource).toContain('kovo-security-semantic-graph/v1');
+    expect(serverSource).toContain('kovo-security-semantic-graph/v2');
     expect(serverSource).toContain('local:consume[arg0=context]');
     expect(serverSource).toContain('local:dial[arg0=operation:server.egress.request]');
     expect(semanticGraph?.roots).toContainEqual(
       expect.objectContaining({
+        binding: expect.objectContaining({
+          callback: 'handler',
+          callableSpan: expect.objectContaining({
+            end: expect.any(Number),
+            start: expect.any(Number),
+          }),
+          factory: 'endpoint',
+          factoryCallSpan: expect.objectContaining({
+            end: expect.any(Number),
+            start: expect.any(Number),
+          }),
+          root: 'endpoint:/report',
+        }),
+        helperInvocations: expect.arrayContaining([
+          expect.objectContaining({
+            authorityInputs: ['arg0=context'],
+            callable: 'local:consume',
+            callSpan: expect.objectContaining({
+              end: expect.any(Number),
+              start: expect.any(Number),
+            }),
+            operationKinds: ['server.egress.request'],
+            transfers: ['local:consume[arg0=context]'],
+            verdict: 'proved',
+          }),
+          expect.objectContaining({
+            authorityInputs: ['arg0=operation:server.egress.request'],
+            callable: 'local:dial',
+            operationKinds: ['server.egress.request'],
+            transfers: [
+              'local:consume[arg0=context]',
+              'local:dial[arg0=operation:server.egress.request]',
+            ],
+            verdict: 'proved',
+          }),
+        ]),
         root: 'endpoint:/report',
         summaries: expect.arrayContaining([
-          {
+          expect.objectContaining({
             authorityInputs: ['arg0=operation:server.egress.request'],
             callable: 'local:dial',
             operationKinds: ['server.egress.request'],
             verdict: 'proved',
-          },
-          {
+          }),
+          expect.objectContaining({
             authorityInputs: ['arg0=context'],
             callable: 'local:consume',
             operationKinds: ['server.egress.request'],
             verdict: 'proved',
-          },
+          }),
         ]),
         traces: expect.arrayContaining([
           {
@@ -382,6 +1209,73 @@ export const report = endpoint('/report', {
     );
   });
 
+  it('binds every semantic-v2 span to authored bytes across structural lowering', () => {
+    // SPEC §5.2: semantic proof coordinates belong to the immutable authored source. Style and
+    // handler lowering rewrite multiple earlier regions, so facts emitted from the lowered model
+    // would point past these exact factory, callback, helper, call, and argument byte ranges.
+    const helperSource = `async function dial(outbound, url) {
+  return outbound(url);
+}`;
+    const callSource = `dial(ctx.fetch, 'https://api.example.test/report')`;
+    const handlerSource = `async handler(_input, ctx) {
+    await ${callSource};
+    return Response.json({ ok: true });
+  }`;
+    const factorySource = `endpoint('/report', {
+  ${handlerSource},
+})`;
+    const source = `
+import { component } from '@kovojs/core';
+import { endpoint } from '@kovojs/server';
+import * as style from '@kovojs/style';
+
+const styles = style.create({
+  root: { color: 'teal' },
+});
+
+export const Styled = component({
+  state: () => ({ active: false }),
+  render: () => (
+    <button style={styles.root} onClick={() => { state.active = !state.active; }}>Styled</button>
+  ),
+});
+
+${helperSource}
+
+export const report = ${factorySource};
+`;
+    const result = compile(source);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const semanticGraph = result.componentGraphFacts[0]?.securitySemanticGraph;
+    const root = semanticGraph?.roots.find((candidate) => candidate.root === 'endpoint:/report');
+    const invocation = root?.helperInvocations.find(
+      (candidate) => candidate.callable === 'local:dial',
+    );
+    const summary = root?.summaries.find((candidate) => candidate.callable === 'local:dial');
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(serverSource).not.toContain('style={styles.root}');
+    expect(serverSource).toContain(JSON.stringify(semanticGraph));
+    expect(root).toBeDefined();
+    expect(invocation).toBeDefined();
+    expect(summary).toBeDefined();
+    expect(
+      source.slice(root!.binding.factoryCallSpan.start, root!.binding.factoryCallSpan.end),
+    ).toBe(factorySource);
+    expect(source.slice(root!.binding.callableSpan.start, root!.binding.callableSpan.end)).toBe(
+      handlerSource,
+    );
+    expect(source.slice(invocation!.callableSpan.start, invocation!.callableSpan.end)).toBe(
+      helperSource,
+    );
+    expect(source.slice(summary!.callableSpan.start, summary!.callableSpan.end)).toBe(helperSource);
+    expect(source.slice(invocation!.callSpan.start, invocation!.callSpan.end)).toBe(callSource);
+    expect(invocation!.argumentSpans.map((span) => source.slice(span.start, span.end))).toEqual([
+      'ctx.fetch',
+      "'https://api.example.test/report'",
+    ]);
+  });
+
   it('keeps helper summaries context-sensitive to exact authority inputs', () => {
     const result = compile(`
 import { endpoint } from '@kovojs/server';
@@ -400,18 +1294,18 @@ export const report = endpoint('/report', {
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
     expect(summaries).toEqual(
       expect.arrayContaining([
-        {
+        expect.objectContaining({
           authorityInputs: ['arg0=database'],
           callable: 'local:inspect',
           operationKinds: [],
           verdict: 'proved',
-        },
-        {
+        }),
+        expect.objectContaining({
           authorityInputs: ['arg0=storage'],
           callable: 'local:inspect',
           operationKinds: [],
           verdict: 'proved',
-        },
+        }),
       ]),
     );
   });
@@ -546,7 +1440,7 @@ export const report = endpoint('/report', {
     );
   });
 
-  it('closes every normalized semantic resource budget with its exact reason', () => {
+  it('closes the normalized semantic node budget with its exact reason', () => {
     const oversizedBody = Array.from({ length: 50_100 }, () => ';').join('\n');
     expect(
       kv449(`
@@ -556,7 +1450,9 @@ export const report = endpoint('/report', {
 });
 `).some((diagnostic) => diagnostic.message.includes('budget-node-count')),
     ).toBe(true);
+  }, 60_000);
 
+  it('closes the normalized semantic operation budget with its exact reason', () => {
     const operations = Array.from({ length: 4_097 }, () => 'ctx.db.select();').join('\n');
     expect(
       kv449(`
@@ -566,7 +1462,9 @@ export const report = endpoint('/report', {
 });
 `).some((diagnostic) => diagnostic.message.includes('budget-operation-count')),
     ).toBe(true);
+  }, 60_000);
 
+  it('closes the normalized semantic summary budget with its exact reason', () => {
     const helperCount = 257;
     const helpers = Array.from(
       { length: helperCount },
@@ -585,7 +1483,9 @@ export const report = endpoint('/report', {
 });
 `).some((diagnostic) => diagnostic.message.includes('budget-summary-count')),
     ).toBe(true);
+  }, 60_000);
 
+  it('reuses normalized semantic summaries without exhausting the summary budget', () => {
     const repeatedCalls = Array.from({ length: 300 }, () => 'read(ctx.db);').join('\n');
     expect(
       kv449(`
@@ -597,6 +1497,225 @@ export const report = endpoint('/report', {
 `),
     ).toEqual([]);
   }, 60_000);
+
+  it.each([
+    ['direct assignment', 'helper = replacement;'],
+    ['array destructuring assignment', '[helper] = [replacement];'],
+    ['array rest assignment', '[...helper] = [replacement];'],
+    ['object shorthand assignment', '({ helper } = { helper: replacement });'],
+    ['object property assignment', '({ next: helper } = { next: replacement });'],
+    ['object rest assignment', '({ ...helper } = { next: replacement });'],
+    ['prefix update', '++helper;'],
+    ['postfix update', 'helper++;'],
+  ])('keeps %s closed through the conservative source index', (_label, assignment) => {
+    // SPEC §6.6 / C13: indexing is a performance repair, not a narrower reassignment classifier.
+    // Preserve the old spelling-based closure across every assignment-target shape it recognized.
+    const diagnostics = kv449(`
+import { endpoint } from '@kovojs/server';
+function helper(database) { return database.select(); }
+function replacement(_database) { return null; }
+${assignment}
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+  });
+
+  it('preserves indexed declaration multiplicity, order, hoisting, and lexical shadowing', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+const helper = (database) => database.select();
+const helper = (database) => database.select();
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+`),
+    ).not.toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+const helper = (database) => database.select();
+`),
+    ).not.toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+function helper(database) { return database.select(); }
+export const report = endpoint('/report', {
+  handler(_input, ctx) {
+    {
+      let helper = (_database) => null;
+      helper(ctx.db);
+    }
+    return Response.json({ ok: true });
+  },
+});
+`),
+    ).not.toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+function helper(database) { return database.select(); }
+`),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'function declarations',
+      `function helper(database) { return database.select(); }
+function helper(database) { return database.select(); }`,
+    ],
+    [
+      'const declarations',
+      `const helper = (database) => database.select();
+const helper = (database) => database.select();`,
+    ],
+    [
+      'import declarations',
+      `import { helper } from 'first-foreign-package';
+import { other as helper } from 'second-foreign-package';`,
+    ],
+  ])('fails closed for duplicate indexed %s', (_label, declarations) => {
+    // SPEC §6.6: an indexed lookup must retain the old exact-one-declaration requirement.
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+${declarations}
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('distinguishes hoisted function callables from ordered const callables', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+function helper(database) { return database.select(); }
+`),
+    ).toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+const helper = (database) => database.select();
+`),
+    ).not.toEqual([]);
+  });
+
+  it('indexes exported const and function helper declarations with their original ordering', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const helper = (database) => database.select();
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+`),
+    ).toEqual([]);
+
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) { helper(ctx.db); return Response.json({ ok: true }); },
+});
+export function helper(database) { return database.select(); }
+`),
+    ).toEqual([]);
+  });
+
+  it('keeps same-spelling shadow assignments conservatively closing module aliases', () => {
+    // The pre-index classifier was deliberately name-wide: even a lexically shadowed assignment
+    // closed an authority-bearing module alias. The source index must remain a C13 superset.
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+const RawResponse = Response;
+function unrelated() {
+  let RawResponse = 'plain';
+  RawResponse = 'still plain';
+  return RawResponse;
+}
+export const report = endpoint('/report', {
+  handler() { return RawResponse.json({ ok: true }); },
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('keeps cached module facts immutable across parent, sibling, and root overlays', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+const RawResponse = Response;
+function nestedResponse() {
+  return RawResponse.json({ nested: true });
+}
+function first(database) {
+  const RawResponse = database;
+  nestedResponse();
+  return database.select();
+}
+function second(database) {
+  return database.select();
+}
+export const report = endpoint('/report', {
+  handler(_input, ctx) {
+    first(ctx.db);
+    second(ctx.db);
+    return RawResponse.json({ ok: true });
+  },
+});
+export const clean = endpoint('/clean', {
+  handler() { return RawResponse.json({ clean: true }); },
+});
+`);
+    const roots = result.componentGraphFacts[0]?.securitySemanticGraph?.roots ?? [];
+    const report = roots.find((root) => root.root === 'endpoint:/report');
+    const clean = roots.find((root) => root.root === 'endpoint:/clean');
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).not.toEqual([]);
+    expect(report?.summaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ callable: 'local:first', verdict: 'closed' }),
+        expect.objectContaining({ callable: 'local:second', verdict: 'proved' }),
+      ]),
+    );
+    expect(report?.helperInvocations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ callable: 'local:nestedResponse', verdict: 'closed' }),
+      ]),
+    );
+    expect(clean?.traces.every((trace) => trace.verdict === 'proved')).toBe(true);
+    expect(clean?.traces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: expect.objectContaining({ kind: 'server.response.raw' }),
+          verdict: 'proved',
+        }),
+      ]),
+    );
+  });
 
   it.each([
     [
@@ -711,19 +1830,35 @@ ${declaration}
   });
 
   it('rejects managed database writes from an enrolled query root', () => {
-    const diagnostics = kv449(`
+    const result = compile(`
 import { query } from '@kovojs/server';
 export const root = query('catalog/read', {
   async load(_input, ctx) {
     await ctx.db.insert('catalog');
+    await ctx.db.write('catalog', { refreshed: true });
     return null;
   },
 });
 `);
+    const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
 
     expect(diagnostics).not.toEqual([]);
     expect(diagnostics[0]?.message).toContain(
       'query loaders cannot perform a managed database write',
+    );
+    expect(result.componentGraphFacts[0]?.securityOperations).toEqual(
+      expect.arrayContaining([
+        {
+          door: 'managed-db',
+          kind: 'server.database.write',
+          target: 'ctx.db.insert',
+        },
+        {
+          door: 'managed-db',
+          kind: 'server.database.write',
+          target: 'ctx.db.write',
+        },
+      ]),
     );
   });
 
@@ -783,6 +1918,7 @@ import { endpoint, mutation } from '@kovojs/server';
 export const save = mutation('save', {
   handler(_input, request, context) {
     const found = request.db.products.get('p1');
+    request.db.read('products', 'p1');
     request.db.write('products', { ...found, stock: 1 });
     context.invalidate(products);
     return found;
@@ -807,6 +1943,328 @@ export const report = endpoint('/report', {
     expect(serverSource).toContain('"kind":"server.task.compose"');
   });
 
+  it('accepts the starter database chains and exact plain-data identities without widening the finite IR', () => {
+    expect(
+      kv449Project(
+        `
+import { mutation, query, trustedAssign } from '@kovojs/server';
+import { eq } from 'drizzle-orm';
+import { contacts } from './schema.js';
+
+async function writeContact(db, row) {
+  const id = crypto.randomUUID();
+  await db.insert(contacts).values({
+    id: trustedAssign(id, 'framework-generated opaque identifier'),
+    email: row.email,
+  });
+}
+
+export const save = mutation('contacts/save', {
+  async handler(input, request) {
+    const [existing] = await request.db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.email, input.email))
+      .limit(1);
+    if (!existing) await writeContact(request.db, input);
+    return { id: existing?.id ?? null };
+  },
+});
+
+export const list = query('contacts/list', {
+  async load(_input, context) {
+    const db = context?.db;
+    if (!db) throw new Error('missing managed database');
+    return {
+      items: await db.select({ id: contacts.id }).from(contacts).orderBy(contacts.id),
+    };
+  },
+});
+`,
+        [
+          {
+            fileName: 'src/schema.ts',
+            source: `
+import { pgTable, text } from 'drizzle-orm/pg-core';
+export const contacts = pgTable('contacts', {
+  email: text('email').notNull(),
+  id: text('id').primaryKey(),
+});
+`,
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'a same-named imported trustedAssign',
+      `import { trustedAssign } from './lookalike.js';`,
+      `return trustedAssign(input.id, 'not a framework identity');`,
+    ],
+    [
+      'a same-named local trustedAssign that returns a privileged outcome',
+      ``,
+      `function trustedAssign() { return new Response('raw'); }
+       return trustedAssign();`,
+    ],
+    [
+      'a getter-carried trustedAssign lookalike',
+      ``,
+      `const helpers = { get trustedAssign() { return () => new Response('raw'); } };
+       return helpers.trustedAssign(input.id, 'getter');`,
+    ],
+    [
+      'a replaced exact trustedAssign binding',
+      `import { trustedAssign } from '@kovojs/server';`,
+      `trustedAssign = () => new Response('raw');
+       return trustedAssign(input.id, 'replaced');`,
+    ],
+    [
+      'a mutable trustedAssign container',
+      `import { trustedAssign } from '@kovojs/server';`,
+      `const helpers = { trustedAssign };
+       helpers.trustedAssign = () => new Response('raw');
+       return helpers.trustedAssign(input.id, 'container');`,
+    ],
+    [
+      'an exact trustedAssign call carrying managed authority',
+      `import { trustedAssign } from '@kovojs/server';`,
+      `return trustedAssign(request.db, 'authority laundering');`,
+    ],
+  ])(
+    'does not grant reviewed data-helper identity through %s',
+    (_label, moduleDeclarations, handlerBody) => {
+      expect(
+        kv449(`
+import { mutation } from '@kovojs/server';
+${moduleDeclarations}
+export const save = mutation('contacts/save', {
+  handler(input, request) {
+    ${handlerBody}
+  },
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each([
+    [
+      'a same-named imported crypto object',
+      `import { crypto } from './lookalike.js';`,
+      `return crypto.randomUUID();`,
+    ],
+    [
+      'a same-named local crypto object',
+      ``,
+      `const crypto = { randomUUID() { return new Response('raw'); } };
+       return crypto.randomUUID();`,
+    ],
+    [
+      'a getter-carried randomUUID lookalike',
+      ``,
+      `const entropy = { get randomUUID() { return () => new Response('raw'); } };
+       return entropy.randomUUID();`,
+    ],
+    [
+      'an ambient crypto container alias',
+      ``,
+      `const entropy = crypto;
+       return entropy.randomUUID();`,
+    ],
+    [
+      'a replaced ambient crypto member',
+      ``,
+      `crypto.randomUUID = () => 'fixed';
+       return crypto.randomUUID();`,
+    ],
+  ])('keeps randomUUID closed through %s', (_label, moduleDeclarations, handlerBody) => {
+    expect(
+      kv449(`
+import { mutation } from '@kovojs/server';
+${moduleDeclarations}
+export const save = mutation('contacts/save', {
+  handler() {
+    ${handlerBody}
+  },
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    [
+      'an imported Error lookalike',
+      `import { Error } from './lookalike.js';`,
+      `throw new Error('raw');`,
+    ],
+    [
+      'a local Error lookalike',
+      ``,
+      `class Error { constructor() { return new Response('raw'); } } throw new Error();`,
+    ],
+    ['an Error constructor alias', ``, `const Failure = Error; throw new Failure('aliased');`],
+    ['a replaced ambient Error binding', ``, `Error = class {}; throw new Error('replaced');`],
+  ])(
+    'keeps the ambient Error constructor closed through %s',
+    (_label, moduleDeclarations, handlerBody) => {
+      expect(
+        kv449(`
+import { query } from '@kovojs/server';
+${moduleDeclarations}
+export const list = query('contacts/list', {
+  load() { ${handlerBody} },
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each([
+    [
+      'an imported same-named builder method',
+      `import { builder } from './lookalike.js';`,
+      `return builder.from(contacts);`,
+    ],
+    [
+      'a same-named local builder method that returns a privileged outcome',
+      ``,
+      `const builder = { from() { return new Response('raw'); } };
+       return builder.from(contacts);`,
+    ],
+    [
+      'a getter-carried builder method',
+      ``,
+      `const builder = { get from() { return () => new Response('raw'); } };
+       return builder.from(contacts);`,
+    ],
+    [
+      'a mutable managed-builder container',
+      `import { foreignFrom } from './lookalike.js';`,
+      `const builder = request.db.select();
+       builder.from = foreignFrom;
+       return builder.from(contacts);`,
+    ],
+    [
+      'an unreviewed managed-builder continuation',
+      ``,
+      `return request.db.select().dropEverything();`,
+    ],
+    [
+      'a reviewed managed-builder continuation carrying authority',
+      ``,
+      `return request.db.select().where(request.db);`,
+    ],
+  ])(
+    'does not recognize finite database continuations through %s',
+    (_label, moduleDeclarations, handlerBody) => {
+      expect(
+        kv449(`
+import { mutation } from '@kovojs/server';
+import { contacts } from './schema.js';
+${moduleDeclarations}
+export const save = mutation('contacts/save', {
+  handler(_input, request) {
+    ${handlerBody}
+  },
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each([
+    [
+      'a getter-backed export passed to from',
+      `export const contacts = { get id() { return new Response('getter'); } };`,
+      `return request.db.select().from(contacts);`,
+    ],
+    [
+      'a Proxy export passed to where',
+      `export const contacts = new Proxy({}, { get() { return new Response('proxy'); } });`,
+      `return request.db.select().where(contacts);`,
+    ],
+    [
+      'a callable export passed to orderBy',
+      `export function contacts() { return new Response('callable'); }`,
+      `return request.db.select().orderBy(contacts);`,
+    ],
+    [
+      'a reassigned table export passed to limit',
+      `import { pgTable } from 'drizzle-orm/pg-core';
+       export const contacts = pgTable('contacts', {});
+       contacts = new Proxy({}, {});`,
+      `return request.db.select().limit(contacts);`,
+    ],
+  ])('rejects imported executable database data through %s', (_label, schemaSource, call) => {
+    expect(
+      kv449Project(
+        `
+import { mutation } from '@kovojs/server';
+import { contacts } from './schema.js';
+export const save = mutation('contacts/save', {
+  handler(_input, request) { ${call} },
+});
+`,
+        [{ fileName: 'src/schema.ts', source: schemaSource }],
+      ),
+    ).not.toEqual([]);
+  });
+
+  it('classifies exact static managed relational reads through direct and scoped read handles', () => {
+    const result = compile(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  db: true,
+  async handler(_request, context) {
+    const direct = await context.db.query.accounts.findFirst({
+      columns: { id: true },
+    });
+    const scope = await context.actAs('owner-1');
+    const reader = scope.db.read;
+    const rows = await reader.query.orders.findMany({
+      columns: { id: true },
+    });
+    return Response.json({ direct, rows });
+  },
+});
+`);
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(serverSource).toContain('"kind":"server.database.read"');
+    expect(serverSource).toContain('"target":"context.db.query.accounts.findFirst"');
+    expect(serverSource).toContain('"target":"reader.query.orders.findMany"');
+  });
+
+  it.each([
+    ['computed relational table', 'await ctx.db.query[table].findMany()'],
+    ['computed relational terminal', 'await ctx.db.query.accounts[method]()'],
+    ['unknown relational terminal', 'await ctx.db.query.accounts.removeEverything()'],
+    ['extra relational namespace', 'await ctx.db.query.schema.accounts.findMany()'],
+    ['unknown managed namespace chain', 'await ctx.db.schema.accounts.findMany()'],
+    ['computed read-namespace terminal', 'await ctx.db.read[operation]()'],
+    ['extra read namespace', 'await ctx.db.read.schema.accounts.findMany()'],
+    ['extra write namespace', 'await ctx.db.write.schema.insert()'],
+    ['raw-driver-shaped namespace', 'await ctx.db.driver.execute("drop table accounts")'],
+    ['raw-pool-shaped namespace', 'await ctx.db.pool.query("select 1")'],
+    ['table-namespace write terminal', 'await ctx.db.products.delete("p1")'],
+  ])('rejects %s instead of widening managed relational reads', (_label, operation) => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(_input, ctx) {
+    ${operation};
+    return Response.json({ ok: true });
+  },
+});
+`),
+    ).not.toEqual([]);
+  });
+
   it.each([
     ['unknown managed database method', 'await ctx.db.dropEverything()'],
     ['computed managed database method', 'await ctx.db[operation]()'],
@@ -824,7 +2282,7 @@ export const save = mutation('save', { handler: async (_input, _request, ctx) =>
     expect(
       kv449(`
 import { trustedHtml } from '@kovojs/browser';
-import { trustedSql } from '@kovojs/drizzle';
+import { sql, trustedSql } from '@kovojs/drizzle';
 import { endpoint } from '@kovojs/server';
 export const report = endpoint('/report', {
   handler(_input, ctx) {

@@ -7,6 +7,16 @@ import {
 
 import { SAFE_URL_SCHEMES, URL_ATTRIBUTE_NAMES } from './security-url.js';
 import type { SecurityOperationKind } from './security-operation-ir.js';
+import {
+  ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+  SAFE_IFRAME_SANDBOX_TOKENS,
+} from './sink-policy.js';
+
+/** @internal Canonical finite browser-control proof carried by the HTML C9 row. */
+export interface FiniteBrowserControlSinkProof {
+  readonly controlTuples: typeof ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES;
+  readonly iframeSandboxTokens: typeof SAFE_IFRAME_SANDBOX_TOKENS;
+}
 
 /** @internal */
 export interface SourceSinkInventoryEntry {
@@ -14,6 +24,8 @@ export interface SourceSinkInventoryEntry {
   context: string;
   diagnostic: string;
   escapeHatch: string;
+  /** Present only when this sink owns the canonical finite browser-control denominator. */
+  finiteBrowserControlProof?: FiniteBrowserControlSinkProof;
   firstParser: string;
   guard: string;
   runtimeGuard: string;
@@ -157,10 +169,14 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     context: 'html.text+attribute+url+script-json+style+srcdoc',
     diagnostic: 'KV236',
     escapeHatch: 'trustedHtml|trustedUrl',
+    finiteBrowserControlProof: {
+      controlTuples: ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+      iframeSandboxTokens: SAFE_IFRAME_SANDBOX_TOKENS,
+    },
     firstParser: 'tsx-lowered-output-context',
     guard: `contextual-encoding+url-scheme-allowlist:${SAFE_URL_SCHEMES.join('|')}`,
     runtimeGuard:
-      'server-renderer+browser-output-helpers-drop-unsafe-url-attrs+server-meta-refresh-first-attribute-pair',
+      'server-renderer+browser-output-helpers-drop-unsafe-url-attrs+server-meta-refresh-first-attribute-pair+canonical-finite-browser-control-tuples+finite-iframe-sandbox-token-policy',
     schema: [
       `compiler-output-context-facts:urlAttrs=${URL_ATTRIBUTE_NAMES.join('|')}`,
       'JSX-text',
@@ -186,6 +202,10 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     testEvidence: [
       existingEvidence.outputContext,
       existingEvidence.browserOutput,
+      'packages/core/src/sink-policy.test.ts',
+      'packages/compiler/src/pair-dependent-runtime-sinks.security.test.ts',
+      'packages/browser/src/inline-loader-security.test.ts',
+      'packages/browser/src/response-fragment-apply.browser.test.ts',
       'packages/server/src/jsx-runtime.test.ts',
       'tests/integration/specs/meta-refresh-sink.spec.ts',
     ],
@@ -470,7 +490,11 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
     family: 'html.dom.output',
     negativeTestEvidence: [
       'packages/compiler/src/output-context-security.test.ts',
+      'packages/compiler/src/pair-dependent-runtime-sinks.security.test.ts',
       'packages/browser/src/mutation-response-dom.browser.test.ts',
+      'packages/browser/src/inline-loader-security.test.ts',
+      'packages/browser/src/response-fragment-apply.browser.test.ts',
+      'packages/core/src/sink-policy.test.ts',
       'packages/server/src/jsx-runtime.test.ts',
       'tests/integration/specs/meta-refresh-sink.spec.ts',
     ],
@@ -483,6 +507,12 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'srcdoc',
       'event attributes',
       'ASCII-case duplicate meta refresh navigation',
+      'exact 60-tuple element-context browser-control denominator',
+      'disabled attribution, browsing-topics, shared-storage, payment, and CSP nonce capabilities',
+      'reviewed fullscreen, form browsing-context, and HTML/SVG credential-mode controls',
+      'iframe source without a reviewed sandbox',
+      'iframe sandbox unknown token',
+      'iframe sandbox allow-scripts plus allow-same-origin isolation lift',
       'SVG payload',
       'nested fragment payload',
       'streamed model text',
@@ -491,6 +521,8 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
     ],
     positiveTestEvidence: [
       'packages/compiler/src/output-context-security.test.ts',
+      'packages/compiler/src/pair-dependent-runtime-sinks.security.test.ts',
+      'packages/core/src/sink-policy.test.ts',
       'packages/server/src/jsx-runtime.test.ts',
     ],
   },
@@ -1117,6 +1149,11 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     censusFamilies: ['html.dom.output', 'document.shell.output', 'css.style.output'],
     hostileValueEvidence: [
       'packages/browser/src/security-output.test.ts',
+      'packages/core/src/sink-policy.test.ts',
+      'packages/compiler/src/pair-dependent-runtime-sinks.security.test.ts',
+      'packages/browser/src/inline-loader-security.test.ts',
+      'packages/browser/src/response-fragment-apply.browser.test.ts',
+      'packages/server/src/jsx-runtime.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     ],
     mechanism: 'reconstruct',
@@ -1137,9 +1174,15 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     owner: '@kovojs/compiler/output-context',
     proofEvidence: [
       'packages/browser/src/security-output.test.ts',
+      'packages/core/src/internal/source-sink-registry.test.ts',
+      'packages/core/src/sink-policy.test.ts',
+      'packages/compiler/src/pair-dependent-runtime-sinks.security.test.ts',
+      'packages/browser/src/inline-loader-security.test.ts',
+      'packages/browser/src/response-fragment-apply.browser.test.ts',
+      'packages/server/src/jsx-runtime.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     ],
-    proofGate: 'pnpm run check:sink-policy',
+    proofGate: 'pnpm run check:security-classifier-corpus',
     sink: 'HTML/render output',
     soleDoor: 'escaped render pipeline + explicit trusted output escape hatches',
     specAnchor: 'SPEC.md §4.8; spec/11-verification.md §11.4',

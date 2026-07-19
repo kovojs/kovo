@@ -395,6 +395,101 @@ export const FormSinks = component({
     );
   });
 
+  // @kovo-security-certifies C13 dynamic-generated-control-target-closes
+  it.each([
+    [
+      'enhanced mutation identity',
+      '<form data-bind:data-mutation="state.mutation" action="/_m/account/delete" method="post">Delete</form>',
+      'data-mutation',
+    ],
+    [
+      'deferred stylesheet promotion',
+      '<link data-bind:data-kovo-deferred-style="state.promote" rel="preload" as="style" href="/private.css" />',
+      'data-kovo-deferred-style',
+    ],
+    [
+      'module allowlist',
+      '<output data-bind:data-kovo-module-allowlist="state.module">Result</output>',
+      'data-kovo-module-allowlist',
+    ],
+    [
+      'stream renderer',
+      '<output data-bind:data-stream-renderer="state.renderer">Result</output>',
+      'data-stream-renderer',
+    ],
+    [
+      'delegated handler',
+      '<output data-derive="/c/result.client.js#derive" data-derive-attr="on:click">Result</output>',
+      'on:click',
+    ],
+  ] as const)(
+    'rejects a direct dynamic binding targeting the generated %s control plane',
+    (_label, markup, target) => {
+      const result = compileComponentModule({
+        fileName: 'dynamic-generated-control.tsx',
+        source: `export const DynamicControl = component({ render: () => (${markup}) });`,
+      });
+
+      expect(result.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'KV236',
+            message: expect.stringContaining(
+              `dynamically targets compiler-generated control-plane attribute "${target}"`,
+            ),
+          }),
+        ]),
+      );
+    },
+  );
+
+  it.each([
+    [
+      'static spread mutation identity',
+      `<form {...{ 'data-bind:data-mutation': 'state.mutation' }}>Delete</form>`,
+      'data-mutation',
+    ],
+    [
+      'nested primitive deferred stylesheet marker',
+      `<Tooltip.Trigger asChild attrs={{ attrs: { 'data-bind:data-kovo-deferred-style': 'state.promote' } }}><link rel="preload" as="style" href="/private.css" /></Tooltip.Trigger>`,
+      'data-kovo-deferred-style',
+    ],
+    [
+      'static spread',
+      `<output {...{ 'data-bind:data-stream-renderer': 'state.renderer' }}>Result</output>`,
+      'data-stream-renderer',
+    ],
+    [
+      'static spread derive target',
+      `<output {...{ 'data-derive': '/c/result.client.js#derive', 'data-derive-attr': 'data-kovo-module-allowlist' }}>Result</output>`,
+      'data-kovo-module-allowlist',
+    ],
+    [
+      'nested primitive attrs',
+      `<Tooltip.Trigger asChild attrs={{ attrs: { 'data-bind:data-kovo-module-allowlist': 'state.module' } }}><output>Result</output></Tooltip.Trigger>`,
+      'data-kovo-module-allowlist',
+    ],
+  ] as const)(
+    'rejects a dynamic generated-control target smuggled through %s',
+    (_label, markup, target) => {
+      const result = compileComponentModule({
+        fileName: 'dynamic-generated-control-carrier.tsx',
+        source: `export const DynamicControl = component({ render: () => (${markup}) });`,
+      });
+
+      expect(result.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'KV236',
+            message: expect.stringContaining(
+              `dynamically targets compiler-generated control-plane attribute "${target}"`,
+            ),
+          }),
+        ]),
+      );
+    },
+  );
+
   // F4: ftp must be in the compiler URL-scheme allowlist (SPEC §4.8:347)
   it('allows ftp: literal URL attributes without KV236', () => {
     const result = compileComponentModule({
@@ -570,7 +665,7 @@ export const DynamicControlSpread = component({
     expect(serverSource).toMatch(/on:click="\/c\/.*#DynamicControlSpread\$button_click"/);
   });
 
-  it('keeps dynamic meta attributes behind the runtime pair sink through render equivalence', () => {
+  it('rejects an opaque dynamic meta spread while preserving render-equivalence evidence', () => {
     const result = compileComponentModule({
       fileName: 'persisted-meta.tsx',
       source: `
@@ -582,7 +677,11 @@ export const PersistedMeta = component({
     });
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('opaque <meta> spread'),
+      }),
+    ]);
     expect(result.loweredSource).toContain('{...kovoSafeJsxSpread(page.remoteMeta)}');
     expect(serverSource).toContain('{...kovoSafeJsxSpread(page.remoteMeta)}');
     expect(result.renderEquivalenceChecks.every(({ ok }) => ok)).toBe(true);
@@ -943,6 +1042,13 @@ describe('KV236 direct ≡ spread ≡ attrs-merge channel symmetry (P2-1 / S4)',
     // `attrs` value never lowers to a child sink, so it must stay green even with an unsafe scheme.
     const messages = kv236Messages(
       `export const Plain = component({ render: () => <div attrs={{ href: "javascript:alert(1)" }}>x</div> });`,
+    );
+    expect(messages).toEqual([]);
+  });
+
+  it('does not treat an attrs object inside a plain-element spread as a primitive merge', () => {
+    const messages = kv236Messages(
+      `export const PlainSpread = component({ render: () => <div {...{ attrs: { 'data-bind:data-kovo-module-allowlist': 'state.module' } }}>x</div> });`,
     );
     expect(messages).toEqual([]);
   });

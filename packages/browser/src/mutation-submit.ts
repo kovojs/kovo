@@ -16,7 +16,9 @@ import {
 import {
   closestEnhancedMutationForm,
   consumeEnhancedMutationNativeFallback,
+  hasTypedMutationIdentity,
   isEnhancedMutationNativeFallback,
+  markInvalidTypedMutationTransport,
   readEligibleEnhancedMutationTransport,
   recoverEnhancedMutationDocument,
   updateUploadProgressElements,
@@ -102,7 +104,15 @@ export async function dispatchEnhancedFormSubmit(
   // neither enhanced transport nor an authored delegated submit handler can re-enter it.
   if (consumeEnhancedMutationNativeFallback(form)) return true;
   const transport = readEligibleEnhancedMutationTransport(form, eventFacts.submitter);
-  if (!transport) return false;
+  if (!transport) {
+    if (!hasTypedMutationIdentity(form)) return false;
+    // SPEC §§6.3/9.1: data-mutation owns a fixed POST /_m/<key> transport. A mismatched
+    // submitter/action is DOM tampering, not an ordinary native-form fallback: allowing the
+    // browser to continue could serialize CSRF/idempotency authority into a GET URL.
+    if (!preventRuntimeDelegatedEventDefault(event)) return false;
+    markInvalidTypedMutationTransport(form);
+    return true;
+  }
 
   // Construct fallible request authority before suppressing the browser's native path. If this
   // preparation fails, the submit event remains unprevented and retains the rendered no-JS token.
@@ -166,7 +176,10 @@ export function isEnhancedSubmitEvent(
   const form = closestEnhancedMutationForm(eventFacts.target);
   // Classification must not consume the marker before dispatch sees the same synchronous event.
   if (form === null || isEnhancedMutationNativeFallback(form)) return false;
-  return readEligibleEnhancedMutationTransport(form, eventFacts.submitter) !== undefined;
+  return (
+    hasTypedMutationIdentity(form) ||
+    readEligibleEnhancedMutationTransport(form, eventFacts.submitter) !== undefined
+  );
 }
 
 function formDataForSubmit(form: EnhancedFormElementLike, submitter: unknown): FormData {

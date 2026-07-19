@@ -196,7 +196,7 @@ describe('loader enhanced mutation submits', () => {
     ['a cross-origin formaction', { formaction: 'https://attacker.test/_m/cart/add' }],
     ['a non-POST formmethod', { formmethod: 'get' }],
   ])(
-    'leaves typed mutation submitters with %s to native submission',
+    'fails closed instead of natively submitting typed mutation authority through %s',
     async (_label, attributes) => {
       const loaderRoot = new FakeRoot();
       const fetch = vi.fn();
@@ -230,8 +230,10 @@ describe('loader enhanced mutation submits', () => {
         type: 'submit',
       });
 
-      expect(preventDefault).not.toHaveBeenCalled();
+      expect(preventDefault).toHaveBeenCalledTimes(1);
       expect(fetch).not.toHaveBeenCalled();
+      expect(form.getAttribute('data-error-code')).toBe('INVALID_MUTATION_TRANSPORT');
+      expect(form.getAttribute('kovo-error')).toBe('');
     },
   );
 

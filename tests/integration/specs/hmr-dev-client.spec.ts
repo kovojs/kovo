@@ -247,7 +247,7 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
   }
 });
 
-test('dev HMR client replaces the document with server diagnostics', async ({ page }) => {
+test('dev HMR client reloads the canonical document with server diagnostics', async ({ page }) => {
   const failedModule = '/c/src/components/ProductCard.client.js?v=failed';
   const diagnostics = createKovoAppShellDevDiagnosticLedger();
   const app = createApp({
@@ -278,9 +278,8 @@ test('dev HMR client replaces the document with server diagnostics', async ({ pa
       moduleHrefs: [failedModule],
       source: 'export const ProductCard = component({ render: () => <p><div /></p> });',
     });
-    const refreshResponse = page.waitForResponse(
-      (response) =>
-        response.url().includes('/@kovo/hmr/refresh/route') && response.status() === 500,
+    const documentResponse = page.waitForResponse(
+      (response) => response.url() === `${server.origin}/` && response.status() === 500,
     );
     await page.evaluate(() => {
       const hot = (
@@ -290,7 +289,7 @@ test('dev HMR client replaces the document with server diagnostics', async ({ pa
       ).__kovoHot;
       hot?.['kovo:diagnostics']?.();
     });
-    await refreshResponse;
+    await documentResponse;
 
     await expect(page.locator('.kovo-diagnostic-code')).toHaveText('KV225');
     await expect(page.locator('body')).toContainText(
@@ -943,17 +942,19 @@ const hmrQuery = query('hmr', {
 export const HmrSourceCard = component({
   ${options.refreshable ? 'queries: { hmr: hmrQuery },' : ''}
   ${options.css ? `css: ${JSON.stringify(options.css)},` : ''}
-  render: () => (
+  state: () => ({ handler: '' }),
+  render: (_queries, state) => (
     <section>
       <label for="hmr-source-input">Draft</label>
       <input id="hmr-source-input" kovo-key="input" value=${JSON.stringify(options.inputValue)} />
       <output id="hmr-source-output" kovo-key="output">${options.outputText}</output>
       <button
+        data-handler={state.handler}
         id="hmr-source-button"
         kovo-key="button"
         type="button"
         onClick={() => {
-          event.target.dataset.handler = ${JSON.stringify(options.handlerText)};
+          state.handler = ${JSON.stringify(options.handlerText)};
         }}>
         Run
       </button>

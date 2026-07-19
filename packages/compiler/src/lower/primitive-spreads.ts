@@ -5,6 +5,7 @@ import {
   type JsxIrElement,
 } from '../jsx-ir.js';
 import { literalStringValue } from '../scan/object.js';
+import { parserFactHasFrameworkTrustedUrl, type ObjectLiteralEntry } from '../scan/parse.js';
 import {
   compilerArrayLength,
   compilerDefineOwnDataProperty,
@@ -111,9 +112,7 @@ function hasMutationSubmitterTransportEntry(entries: readonly { key: string }[])
   return false;
 }
 
-function spreadObjectAttributes(
-  entries: readonly { key: string; value?: string }[],
-): JsxIrAttribute[] | null {
+function spreadObjectAttributes(entries: readonly ObjectLiteralEntry[]): JsxIrAttribute[] | null {
   const attributes: JsxIrAttribute[] = [];
   const length = compilerArrayLength(entries, 'Static spread object entries');
   for (let index = 0; index < length; index += 1) {
@@ -122,7 +121,7 @@ function spreadObjectAttributes(
       index,
       'Static spread object entries',
     ) as (typeof entries)[number];
-    const value = spreadObjectAttributeValue(entry.value);
+    const value = spreadObjectAttributeValue(entry.value, parserFactHasFrameworkTrustedUrl(entry));
     if (value === null) return null;
     if (!value) continue;
     appendSpreadFact(
@@ -145,6 +144,7 @@ function spreadObjectAttributes(
 
 function spreadObjectAttributeValue(
   value: string | undefined,
+  frameworkTrustedUrl = false,
 ): JsxIrAttributeValue | null | undefined {
   if (value === undefined) return null;
   const trimmed = compilerStringTrim(value);
@@ -156,7 +156,11 @@ function spreadObjectAttributeValue(
     const number = compilerNumberValue(trimmed);
     if (compilerNumberIsFinite(number)) return { kind: 'number', value: number };
   }
-  return { kind: 'expression', source: trimmed };
+  return {
+    kind: 'expression',
+    source: trimmed,
+    ...(frameworkTrustedUrl ? { trustedUrl: true as const } : {}),
+  };
 }
 
 function appendSpreadFact<Value>(target: Value[], value: Value, label: string): void {

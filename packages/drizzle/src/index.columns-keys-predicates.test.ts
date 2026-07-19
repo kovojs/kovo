@@ -1447,14 +1447,19 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { mutation, s } from "@kovojs/server";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
-            '  const sessionId = request.session?.id;',
-            '  if (!sessionId) throw new Error("auth required");',
-            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
-            '}',
+            'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+            'export const voteUp = mutation("voteUp", {',
+            '  input: s.object({ targetId: s.string() }),',
+            '  async handler({ targetId }: { targetId: string }, request: AppRequest) {',
+            '    const sessionId = request.session?.id;',
+            '    if (!sessionId) throw new Error("auth required");',
+            '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+            '  },',
+            '});',
           ].join('\n'),
         },
       ],
@@ -1467,7 +1472,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             domain: 'question',
             keys: 'arg:targetId',
-            site: 'question.domain.ts:9',
+            site: 'question.domain.ts:13',
             via: 'questions',
           },
         ],
@@ -1488,16 +1493,21 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         source: [
           'import { and, eq } from "drizzle-orm";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          'import { mutation, s } from "@kovojs/server";',
           '',
           'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
           'export const votes = pgTable("votes", {}, kovo({ domain: "vote", key: "sessionId,id" }));',
           '',
-          'export async function voteUp({ id, targetId, userId }: { id: string; targetId: string; userId: string }, db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }) {',
-          '  const sessionId = request.session?.id;',
-          '  if (!sessionId) throw new Error("auth required");',
-          '  await db.insert(votes).values({ sessionId, id, targetId, userId, value: 1 });',
-          '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
-          '}',
+          'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+          'export const voteUp = mutation("voteUp", {',
+          '  input: s.object({ id: s.string(), targetId: s.string(), userId: s.string() }),',
+          '  async handler({ id, targetId, userId }: { id: string; targetId: string; userId: string }, request: AppRequest) {',
+          '    const sessionId = request.session?.id;',
+          '    if (!sessionId) throw new Error("auth required");',
+          '    await request.db.insert(votes).values({ sessionId, id, targetId, userId, value: 1 });',
+          '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+          '  },',
+          '});',
         ].join('\n'),
       },
     ];
@@ -1507,10 +1517,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         domain: 'question',
         keys: 'arg:targetId',
-        site: 'question.domain.ts:11',
+        site: 'question.domain.ts:15',
         via: 'questions',
       },
-      { domain: 'vote', keys: null, site: 'question.domain.ts:10', via: 'votes' },
+      { domain: 'vote', keys: null, site: 'question.domain.ts:14', via: 'votes' },
     ]);
     expect(diagnosticsForTouchGraph(graph)).toEqual([]);
     expect(extractSymbolicEffectsFromProject({ files }).map((fact) => fact.effect)).toEqual([
@@ -1550,15 +1560,20 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         source: [
           'import { and, eq } from "drizzle-orm";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          'import { mutation, s } from "@kovojs/server";',
           '',
           'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
           '',
-          'export async function syncTwoQuestions(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, firstId: string, secondId: string) {',
-          '  const sessionId = request.session?.id;',
-          '  if (!sessionId) throw new Error("auth required");',
-          '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, firstId)));',
-          '  await db.update(questions).set({ score: 2 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, secondId)));',
-          '}',
+          'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+          'export const syncTwoQuestions = mutation("syncTwoQuestions", {',
+          '  input: s.object({ firstId: s.string(), secondId: s.string() }),',
+          '  async handler({ firstId, secondId }: { firstId: string; secondId: string }, request: AppRequest) {',
+          '    const sessionId = request.session?.id;',
+          '    if (!sessionId) throw new Error("auth required");',
+          '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, firstId)));',
+          '    await request.db.update(questions).set({ score: 2 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, secondId)));',
+          '  },',
+          '});',
         ].join('\n'),
       },
     ];
@@ -1602,14 +1617,19 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { mutation, s } from "@kovojs/server";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
-            '  const sessionId = request.session?.id;',
-            '  if (!sessionId) return;',
-            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
-            '}',
+            'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+            'export const voteUp = mutation("voteUp", {',
+            '  input: s.object({ targetId: s.string() }),',
+            '  async handler({ targetId }: { targetId: string }, request: AppRequest) {',
+            '    const sessionId = request.session?.id;',
+            '    if (!sessionId) return;',
+            '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+            '  },',
+            '});',
           ].join('\n'),
         },
       ],
@@ -1619,14 +1639,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         domain: 'question',
         keys: 'arg:targetId',
-        site: 'question.domain.ts:9',
+        site: 'question.domain.ts:13',
         via: 'questions',
       },
     ]);
     expect(diagnosticsForTouchGraph(graph)).toEqual([]);
   });
 
-  it('accepts framework fail exits as nullable session guards', () => {
+  it('accepts returned framework failure outcomes as nullable session guards', () => {
     const graph = extractTouchGraphFromProject({
       files: [
         pgDatabaseTypes([
@@ -1637,15 +1657,20 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-            'declare function fail(status: number): never;',
+            'import { mutation, s } from "@kovojs/server";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
-            '  const sessionId = request.session?.id;',
-            '  if (!sessionId) fail(401);',
-            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
-            '}',
+            'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+            'type MutationContext = { fail(code: string, data: Record<string, never>): unknown };',
+            'export const voteUp = mutation("voteUp", {',
+            '  input: s.object({ targetId: s.string() }),',
+            '  async handler({ targetId }: { targetId: string }, request: AppRequest, context: MutationContext) {',
+            '    const sessionId = request.session?.id;',
+            '    if (!sessionId) return context.fail("AUTH_REQUIRED", {});',
+            '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+            '  },',
+            '});',
           ].join('\n'),
         },
       ],
@@ -1655,11 +1680,93 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         domain: 'question',
         keys: 'arg:targetId',
-        site: 'question.domain.ts:10',
+        site: 'question.domain.ts:14',
         via: 'questions',
       },
     ]);
     expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+  });
+
+  it('does not treat a bare framework failure outcome as a nullable session exit', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'question.domain.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { mutation, s } from "@kovojs/server";',
+            '',
+            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            '',
+            'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+            'type MutationContext = { fail(code: string, data: Record<string, never>): unknown };',
+            'export const voteUp = mutation("voteUp", {',
+            '  input: s.object({ targetId: s.string() }),',
+            '  async handler({ targetId }: { targetId: string }, request: AppRequest, context: MutationContext) {',
+            '    const sessionId = request.session?.id;',
+            '    if (!sessionId) context.fail("AUTH_REQUIRED", {});',
+            '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: null,
+        predicate: 'non-eq',
+        site: 'question.domain.ts:14',
+        via: 'questions',
+      },
+    ]);
+  });
+
+  it('does not trust a name-laundered bare fail call as a nullable session exit', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'question.domain.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { mutation, s } from "@kovojs/server";',
+            'declare function fail(status: number): never;',
+            '',
+            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            '',
+            'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+            'export const voteUp = mutation("voteUp", {',
+            '  input: s.object({ targetId: s.string() }),',
+            '  async handler({ targetId }: { targetId: string }, request: AppRequest) {',
+            '    const sessionId = request.session?.id;',
+            '    if (!sessionId) fail(401);',
+            '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: null,
+        predicate: 'non-eq',
+        site: 'question.domain.ts:14',
+        via: 'questions',
+      },
+    ]);
   });
 
   it('accepts direct nullable session access after a dominating guard', () => {
@@ -1673,13 +1780,18 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { mutation, s } from "@kovojs/server";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
-            '  if (!request.session?.id) throw new Error("auth required");',
-            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, request.session.id), eq(questions.id, targetId)));',
-            '}',
+            'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+            'export const voteUp = mutation("voteUp", {',
+            '  input: s.object({ targetId: s.string() }),',
+            '  async handler({ targetId }: { targetId: string }, request: AppRequest) {',
+            '    if (!request.session?.id) throw new Error("auth required");',
+            '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, request.session.id), eq(questions.id, targetId)));',
+            '  },',
+            '});',
           ].join('\n'),
         },
       ],
@@ -1689,7 +1801,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         domain: 'question',
         keys: 'arg:targetId',
-        site: 'question.domain.ts:8',
+        site: 'question.domain.ts:12',
         via: 'questions',
       },
     ]);
@@ -1707,12 +1819,17 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { mutation, s } from "@kovojs/server";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
-            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, request.session.id), eq(questions.id, targetId)));',
-            '}',
+            'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+            'export const voteUp = mutation("voteUp", {',
+            '  input: s.object({ targetId: s.string() }),',
+            '  async handler({ targetId }: { targetId: string }, request: AppRequest) {',
+            '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, request.session.id), eq(questions.id, targetId)));',
+            '  },',
+            '});',
           ].join('\n'),
         },
       ],
@@ -1723,7 +1840,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         domain: 'question',
         keys: null,
         predicate: 'non-eq',
-        site: 'question.domain.ts:7',
+        site: 'question.domain.ts:11',
         via: 'questions',
       },
     ]);
@@ -1740,14 +1857,19 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { mutation, s } from "@kovojs/server";',
             '',
             'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
-            'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
-            '  const observed = request.session?.id;',
-            '  if (!request.session?.id) throw new Error("auth required");',
-            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, request.session.id), eq(questions.id, targetId)));',
-            '}',
+            'type AppRequest = { db: PgAsyncDatabase<any, any>; session?: { id?: string } | null };',
+            'export const voteUp = mutation("voteUp", {',
+            '  input: s.object({ targetId: s.string() }),',
+            '  async handler({ targetId }: { targetId: string }, request: AppRequest) {',
+            '    const observed = request.session?.id;',
+            '    if (!request.session?.id) throw new Error("auth required");',
+            '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, request.session.id), eq(questions.id, targetId)));',
+            '  },',
+            '});',
           ].join('\n'),
         },
       ],
@@ -1758,7 +1880,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         domain: 'question',
         keys: null,
         predicate: 'non-eq',
-        site: 'question.domain.ts:9',
+        site: 'question.domain.ts:13',
         via: 'questions',
       },
     ]);

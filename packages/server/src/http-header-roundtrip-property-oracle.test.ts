@@ -126,8 +126,18 @@ describe('real HTTP header reconstruction property oracle (SPEC §9.1/§9.5; C9)
 
       const liveObservation = await observeHeaderRoundTrips(live.baseUrl);
       const generatedObservation = await observeHeaderRoundTrips(generated.baseUrl);
-      expect(generatedObservation).toEqual(liveObservation);
+      // SPEC §9.1/§9.5 owns the safety verdict for each implementation. A parity mismatch is
+      // independently actionable, but it is triage evidence rather than a substitute oracle.
       assertNormativeHeaderProperties(liveObservation);
+      assertNormativeHeaderProperties(generatedObservation);
+      try {
+        expect(generatedObservation).toEqual(liveObservation);
+      } catch (error) {
+        throw new Error(
+          'KOVO_CROSS_IMPLEMENTATION_DISAGREEMENT live and generated Node header observations differ',
+          { cause: error },
+        );
+      }
     } finally {
       await generated?.close();
       await live?.close();

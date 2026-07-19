@@ -97,6 +97,17 @@ attributes such as `key`, `kovo-key`, `style`, and `styles`.
 
 Components render to **light DOM** as plain, never-registered elements — no shadow roots, no `customElements.define`, no upgrade step (rationale in §3.1). The load-bearing DOM identity is the derived `kovo-c` leaf; the compiler omits it when the host tag already spells the derived leaf (`<cart-badge>` — dashed tags are inert sugar) and emits it on native hosts (`<tr kovo-c="cart-row">`, so table content-model nesting works). Query-backed server-refreshable roots also carry a derived `kovo-fragment-target`; for singleton components this is the DOM leaf (`cart-badge`), while repeated instances append stable authored identity (`product-form:p2`). Registry and type identities are separately namespaced by module path (§6.1), so global uniqueness never lengthens the ordinary DOM leaf. If two distinct registry keys would put the same DOM leaf on one page, the composition pass derives a stable disambiguated `kovo-c` value from the registry key and reports it through component explain output; fragment target identities use the same disambiguated leaf before any instance suffix. StyleX-authored component styles compile to globally collision-free atomic classes and dedupe into declared stylesheet assets; raw co-located CSS remains an escape hatch scoped to the derived host leaf (`@scope`, donut-scoped out of nested islands) (§13.1). With no shadow boundary, IDREF wiring (`commandfor`, `for`, `aria-*`), native form participation, and find-in-page work document-wide — the L0 layer and no-JS form fallback depend on it. The compiler validates JSX nesting against the HTML content model (**KV225**): markup the parser would re-parent (`<div>` in `<p>`, `<tr>` outside a table) makes served HTML and parsed DOM disagree, silently breaking morph identity and fragment targets — a compile error, not a runtime surprise.
 
+**Declarative Shadow DOM is disabled.** A `<template>` carrying `shadowrootmode`,
+`shadowrootdelegatesfocus`, `shadowrootclonable`, or `shadowrootserializable` (ASCII casing
+insensitive) is **KV236**, including direct/static/dynamic attributes, binding or derive targets,
+static spreads, and opaque spreads. There is no app-authored suppression. The server renderer, live
+binding paths, inline loader, and response-fragment sanitizer remove those controls and their
+control-targeting stamps before output or detached-tree adoption, while preserving ordinary inert
+template content. This runtime floor covers uncompiled JSX and hostile response bytes; it does not
+make declarative shadow roots an alternate component API. For the same finite-output reason, Kovo
+does not render or adopt unsandboxable `object`/`embed` or obsolete `frame`/`frameset` primitives;
+use a reviewed sandboxed `iframe` or ordinary navigation/download link instead (§4.8, §5.2 rule 10).
+
 Everything is inspectable in the Elements panel: dependencies (`kovo-deps`), data (the JSON), behavior (`on:*` attributes), pending mutations (`kovo-pending`, §10.3).
 
 ### 4.3 Handlers and closures
@@ -333,7 +344,57 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 - the `style` attribute and `<style>` element text;
 - `srcdoc`;
 - `<script>` element text and `<script type="application/json">` island bodies (§9.1 governs the byte-level encoding for the latter).
+- element-context execution, request, and isolation controls form one finite denominator of exactly
+  39 element/attribute tuples: `script` × (`src`, `href`, `xlink:href`, `type`, `nomodule`,
+  `integrity`, `crossorigin`, `referrerpolicy`, `charset`, `nonce`, `language`); `link` × (`href`,
+  `rel`, `type`, `media`, `disabled`, `integrity`, `crossorigin`, `referrerpolicy`, `as`, `nonce`);
+  `iframe` × (`src`, `sandbox`, `allow`, `credentialless`, `csp`, `referrerpolicy`, `name`);
+  `annotation-xml[encoding]`; `a` and `area` × (`target`, `rel`, `referrerpolicy`, `ping`);
+  `img[referrerpolicy]`; and `meta[name]`. Every listed control is static-only: a direct dynamic
+  value, dynamic removal, or opaque spread is KV236. The parser-request controls are included as
+  tuples, not treated as independent strings: changing a script/link `integrity`, credential mode,
+  destination/type, or referrer policy after the parser starts a request cannot retroactively secure
+  that request. Script scheduling hints (`async`, `defer`, `fetchpriority`) are deliberately outside
+  this denominator because they schedule an already-reviewed resource rather than select its
+  authority or isolation posture.
+  The URL halves (`script[src|href|xlink:href]`, `link[href]`, and `iframe[src]`) may instead hold an
+  exact `trustedUrl(value, auditedReason)`; `trustedUrl` suppresses no other tuple. Live bindings and
+  keyed fragment morphs preserve the reviewed current value (including absence) rather than apply
+  or remove a blocked control; newly adopted fragment nodes pass the same static-value floor before
+  adoption. Compiler, server JSX, modular binding/fragment code, and the generated inline loader
+  consume the same closed classifier, and the conformance corpus asserts every tuple non-vacuously.
+- the finite browser-control denominator has these stronger value rules. `referrerpolicy` is limited
+  to `no-referrer`, `same-origin`, `strict-origin`, or `strict-origin-when-cross-origin`, so an
+  element cannot weaken Kovo's `strict-origin-when-cross-origin` response-header floor. Anchor and
+  area `target` accepts only `_blank`, `_self`, `_parent`, or `_top` (never an opener-bearing named
+  browsing context), and their `rel` token list must not contain `opener`. Anchor/area `ping` is
+  disabled outright because its reporting headers can disclose the source URL. `meta[name=referrer]`
+  is disabled because it can override the response-header posture. Script/link `nonce` is
+  framework-owned and disabled in authored output under Kovo's hash-locked CSP, and obsolete
+  `script[language]` is disabled. These bans have no trusted-value suppression.
+  An `iframe[src]` additionally requires a present, statically reviewed `sandbox` attribute; a
+  trusted URL never suppresses that relational boundary. `sandbox` is an ASCII-whitespace token
+  set with the exact admitted tokens `allow-forms`, `allow-modals`, `allow-orientation-lock`,
+  `allow-pointer-lock`, `allow-presentation`, `allow-same-origin`, and `allow-scripts`. Unknown or
+  newly introduced tokens fail closed. `allow-scripts` and `allow-same-origin` may each appear but
+  MUST NOT be combined, because a same-origin scripted child can remove its own sandbox.
+  Navigation/popup/storage/download escapes — including every `allow-top-navigation*` token,
+  `allow-popups`, `allow-popups-to-escape-sandbox`, `allow-storage-access-by-user-activation`, and
+  `allow-downloads` — are not admitted. The compiler rejects missing or unsafe sandbox posture;
+  server JSX and modular/generated live or fragment floors remove the active `src` (and any unsafe
+  `sandbox`) before adoption or update.
+- document-wide navigation elements are outside the app-authored output surface: `<base>` is
+  disabled because even a safe-scheme value retargets every later relative URL, and
+  `<meta http-equiv="refresh">` is disabled because `http-equiv` plus `content` is one executable
+  navigation sink whose attributes may be committed in either order. The compiler reports KV236
+  for `<base>` and for a statically or directly dynamically refresh-capable `<meta>`; opaque spread
+  values are reconstructed and classified by the element-aware runtime pair sink. Server rendering
+  and live binding updates remove attempts that reach that floor. Ordinary metadata such as
+  `<meta name="description" content={...}>` and statically non-refresh `http-equiv` values remain
+  valid. There is no trusted-value suppression for document-wide navigation; use Kovo router or
+  response navigation outcomes and framework deployment-base configuration instead.
 - generic SVG SMIL execution primitives — `<animate>`, `<animateColor>`, `<animateMotion>`, `<animateTransform>`, `<discard>`, and `<set>` — are disabled outright in framework-generated or framework-managed DOM. SMIL's `attributeName` target and its `values`/`from`/`to`/`by` transfers are one temporal sink: the target may be an ancestor or an `href="#id"` sibling, and live bindings may commit target and transfer values in either order. The compiler reports **KV236** for these intrinsic elements even when the apparent target is benign; server JSX omits them, and fragment/live-update runtimes inert them before adoption or update. There is no plain-JSX trusted-value suppression for this ban; reviewed raw `trustedHtml(...)` remains the explicit whole-markup authority described below.
+- unsandboxable active embeds — `<object>` and `<embed>` — are disabled outright in framework-generated or framework-managed DOM. Either element can load same-origin HTML with the embedding document's authority, but neither provides the isolation contract of `iframe[sandbox]`; CSP `object-src 'none'` remains defense in depth rather than the proof. The compiler reports **KV236**, server JSX omits the element, and fragment/live-update runtimes remove its attributes and fallback descendants before adoption or update. Use a sandboxed iframe or an ordinary download/navigation link instead; there is no plain-JSX trusted-value suppression for this ban.
 
 Every `data-bind:<attr>` write into a URL-scheme attribute MUST scheme-allowlist its resolved value at both render and loader update time; a value resolving to a denied scheme is dropped to the attribute's empty semantics (the attribute is removed, per the `?.` rule above), never written verbatim. A binding into an unsafe context with no escape hatch is **KV236** with the usual teaching menu: change the projection, extract a derive that returns a safe value, or — for genuinely author-trusted markup/URLs — opt in via the trusted-HTML escape hatch.
 

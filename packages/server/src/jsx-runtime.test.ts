@@ -825,10 +825,12 @@ describe('server jsx runtime', () => {
     );
   });
 
-  it('M3: compiler-owned spread reconstruction omits the runtime control-attribute census', () => {
+  it('M3: compiler-owned spread reconstruction omits every executable selector family', () => {
     const record = {
       'ON:LOAD': '/c/account.client.js#deleteAccount',
       'DaTa-BiNd': '/c/account.client.js#derive',
+      'DATA-BIND:HIDDEN': '/c/account.client.js#deriveHidden',
+      'data-bind-prop:checked': '/c/account.client.js#deriveChecked',
       'DATA-DERIVE': '/c/account.client.js#derive',
       'aria-label': 'Profile',
       class: 'card',
@@ -899,6 +901,8 @@ describe('server jsx runtime', () => {
       formMethod: 'get',
       formNoValidate: true,
       formTarget: '_blank',
+      FORMTARGET: 'attacker-window',
+      formtarget: '_parent',
       method: 'get',
     };
 
@@ -910,6 +914,8 @@ describe('server jsx runtime', () => {
       formMethod: 'get',
       formNoValidate: true,
       formTarget: '_blank',
+      FORMTARGET: 'attacker-window',
+      formtarget: '_parent',
     });
     expect(kovoSafeJsxSpread(record, 'mutation-submitter')).toEqual({
       ACTION: 'https://outside.example/save',
@@ -1118,6 +1124,47 @@ describe('server jsx runtime', () => {
     ).toBe('<svg><a id="sibling-target">target</a></svg>');
   });
 
+  it('omits unsandboxable object and embed documents at the direct JSX runtime floor', () => {
+    for (const tag of [
+      'object',
+      'OBJECT',
+      'embed',
+      'EmBeD',
+      'frame',
+      'FRAME',
+      'frameset',
+    ] as const) {
+      expect(
+        html(
+          jsx(tag, {
+            children: jsx('script', { children: 'globalThis.compromised = true' }),
+            data: '/safe/account',
+            src: '/safe/account',
+            type: 'text/html',
+          }),
+        ),
+      ).toBe('');
+    }
+  });
+
+  it('keeps templates inert by stripping every declarative Shadow DOM construction channel', () => {
+    expect(
+      html(
+        jsx('template', {
+          'data-bind:shadowrootclonable': 'state.clonable',
+          'data-derive': 'profile.mode',
+          'data-derive-attr': 'ShadowRootSerializable',
+          children: jsx('span', { children: 'light-DOM template content' }),
+          shadowRootDelegatesFocus: true,
+          shadowrootmode: 'open',
+          title: 'ordinary inert template',
+        }),
+      ),
+    ).toBe(
+      '<template data-derive="profile.mode" title="ordinary inert template"><span>light-DOM template content</span></template>',
+    );
+  });
+
   it('refuses spread-delivered executable attributes from the final runtime attribute set', () => {
     const spread = {
       content: '0; url=javascript:alert(1)',
@@ -1166,6 +1213,189 @@ describe('server jsx runtime', () => {
         }),
       ),
     ).toBe('<meta httpEquiv="ReFrEsH">');
+  });
+
+  it('enforces static browser-control values at the direct and opaque-spread JSX floor', () => {
+    expect(
+      html(
+        jsx('script', {
+          attributionsrc: 'https://attacker.example/register',
+          charset: 'utf-8',
+          crossorigin: 'anonymous',
+          integrity: 'sha384-reviewed',
+          language: 'javascript',
+          nonce: 'reused-nonce',
+          referrerpolicy: 'strict-origin',
+          src: '/runtime.js',
+          type: 'module',
+        }),
+      ),
+    ).toBe(
+      '<script charset="utf-8" crossorigin="anonymous" integrity="sha384-reviewed" referrerpolicy="strict-origin" src="/runtime.js" type="module"></script>',
+    );
+    expect(html(jsx('style', { nonce: 'reused-nonce' }))).toBe('<style></style>');
+    expect(
+      html(
+        jsx('a', {
+          ...kovoSafeJsxSpread({
+            attributiondestination: 'https://attacker.example',
+            attributionsourceid: '123',
+            attributionsourcenonce: 'nonce',
+            attributionsrc: 'https://attacker.example/register',
+            href: 'https://outside.example/',
+            ping: '/collect',
+            referrerpolicy: 'unsafe-url',
+            rel: 'nofollow OPENER',
+            target: 'attacker-window',
+            title: 'kept',
+          }),
+          children: 'Go',
+        }),
+      ),
+    ).toBe('<a href="https://outside.example/" title="kept">Go</a>');
+    expect(
+      html(
+        jsx('area', {
+          attributionsrc: 'https://attacker.example/register',
+          ping: '/collect',
+          referrerPolicy: 'no-referrer',
+          rel: 'noopener',
+          target: '_blank',
+        }),
+      ),
+    ).toBe('<area referrerPolicy="no-referrer" rel="noopener" target="_blank">');
+    expect(
+      html(
+        jsx('iframe', {
+          allowfullscreen: true,
+          allowpaymentrequest: true,
+          browsingtopics: true,
+          sharedstoragewritable: true,
+          title: 'safe',
+        }),
+      ),
+    ).toBe('<iframe allowfullscreen title="safe"></iframe>');
+    expect(
+      html(
+        jsx('form', {
+          children: [
+            jsx('button', { children: 'Pay', formtarget: '_self' }),
+            jsx('input', { formtarget: '_top' }),
+          ],
+          rel: 'noopener noreferrer',
+          target: '_blank',
+        }),
+      ),
+    ).toBe(
+      '<form rel="noopener noreferrer" target="_blank"><button formtarget="_self">Pay</button><input formtarget="_top"></form>',
+    );
+    expect(html(jsx('form', { rel: 'opener', target: 'attacker-window', title: 'safe' }))).toBe(
+      '<form title="safe"></form>',
+    );
+    expect(
+      html(
+        jsx('div', {
+          children: [
+            jsx('img', {
+              attributionsrc: 'https://attacker.example/register',
+              crossorigin: 'anonymous',
+              sharedstoragewritable: true,
+            }),
+            jsx('audio', { crossorigin: 'anonymous' }),
+            jsx('video', { crossorigin: 'use-credentials' }),
+            jsx('svg', {
+              children: jsx('image', { crossorigin: 'anonymous', href: '/reviewed.svg' }),
+            }),
+          ],
+        }),
+      ),
+    ).toBe(
+      '<div><img crossorigin="anonymous"><audio crossorigin="anonymous"></audio><video crossorigin="use-credentials"></video><svg><image crossorigin="anonymous" href="/reviewed.svg"></image></svg></div>',
+    );
+  });
+
+  it('keeps runtime iframe sources behind the finite reviewed sandbox posture', () => {
+    expect(
+      html(
+        jsx('iframe', {
+          src: '/forms',
+          sandbox: 'allow-forms allow-modals',
+          title: 'forms',
+        }),
+      ),
+    ).toBe('<iframe src="/forms" sandbox="allow-forms allow-modals" title="forms"></iframe>');
+    expect(
+      html(
+        jsx('iframe', {
+          src: trustedUrl(
+            'data:text/html,<script>parent.pwned=true</script>',
+            'reviewed active frame',
+          ),
+          sandbox: 'allow-scripts',
+        }),
+      ),
+    ).toBe(
+      '<iframe src="data:text/html,&lt;script&gt;parent.pwned=true&lt;/script&gt;" sandbox="allow-scripts"></iframe>',
+    );
+
+    for (const props of [
+      { src: '/missing-boundary', title: 'missing' },
+      {
+        src: '/lifted-boundary',
+        sandbox: 'allow-scripts allow-same-origin',
+        title: 'pair',
+      },
+      {
+        src: '/top-navigation',
+        sandbox: 'allow-top-navigation-by-user-activation',
+        title: 'top',
+      },
+      {
+        src: '/popup-escape',
+        sandbox: 'allow-popups-to-escape-sandbox',
+        title: 'popup',
+      },
+      {
+        src: '/storage-access',
+        sandbox: 'allow-storage-access-by-user-activation',
+        title: 'storage',
+      },
+      { src: '/non-string-sandbox', sandbox: { allowScripts: true }, title: 'object' },
+    ]) {
+      expect(html(jsx('iframe', props)), props.title).toBe(
+        `<iframe title="${props.title}"></iframe>`,
+      );
+    }
+  });
+
+  it('disables meta referrer policy at the runtime JSX floor', () => {
+    expect(html(jsx('meta', { name: 'referrer', content: 'unsafe-url' }))).toBe('');
+    expect(
+      html(
+        jsx('META', {
+          ...kovoSafeJsxSpread({ content: 'no-referrer', name: ' ReFeRrEr ' }),
+        }),
+      ),
+    ).toBe('');
+    expect(html(jsx('meta', { name: 'description', content: 'Account' }))).toBe(
+      '<meta name="description" content="Account">',
+    );
+  });
+
+  it('drops the document-wide base element at the runtime JSX floor', () => {
+    const events: RuntimeSinkSecurityEvent[] = [];
+    const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
+    try {
+      expect(html(jsx('BASE', { href: 'https://attacker.example/', target: '_self' }))).toBe('');
+      expect(html(jsx('base', { ...kovoSafeJsxSpread({ href: '/same-origin/' }) }))).toBe('');
+    } finally {
+      restore();
+    }
+
+    expect(events.map(({ action, family, sink }) => ({ action, family, sink }))).toEqual([
+      { action: 'remove', family: 'url', sink: 'base' },
+      { action: 'remove', family: 'url', sink: 'base' },
+    ]);
   });
 
   it('classifies meta refresh from the browser-effective first ASCII-case-folded attribute', () => {

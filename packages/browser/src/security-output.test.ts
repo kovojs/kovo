@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES,
+} from '@kovojs/core/internal/semantic-attributes';
+import {
   setRuntimeSinkSecurityEventHandler,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
@@ -463,6 +467,78 @@ describe('runtime output-context helpers', () => {
     // Safe attributes still work normally.
     expect(kovoBoundAttributeValue('data-value', 'hello')).toBe('hello');
     expect(kovoBoundAttributeValue('aria-label', 'Close')).toBe('Close');
+  });
+
+  it('returns an explicit no-write sentinel for reviewed element-context controls', () => {
+    expect(
+      kovoBoundAttributeValue('src', '/uploads/attacker.js', { elementName: 'SCRIPT' }),
+    ).toBeUndefined();
+    expect(kovoBoundAttributeValue('rel', 'stylesheet', { elementName: 'LINK' })).toBeUndefined();
+    expect(kovoBoundAttributeValue('sandbox', null, { elementName: 'IFRAME' })).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue('allowfullscreen', true, { elementName: 'IFRAME' }),
+    ).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue('target', 'attacker-window', { elementName: 'FORM' }),
+    ).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue('crossorigin', 'use-credentials', { elementName: 'IMG' }),
+    ).toBeUndefined();
+    for (const [elementName, attribute] of [
+      ['A', 'attributionsrc'],
+      ['A', 'attributiondestination'],
+      ['A', 'attributionsourceid'],
+      ['A', 'attributionsourcenonce'],
+      ['AREA', 'attributionsrc'],
+      ['IMG', 'attributionsrc'],
+      ['SCRIPT', 'attributionsrc'],
+      ['IFRAME', 'browsingtopics'],
+      ['IFRAME', 'allowpaymentrequest'],
+      ['IFRAME', 'sharedstoragewritable'],
+      ['IMG', 'sharedstoragewritable'],
+      ['STYLE', 'nonce'],
+    ] as const) {
+      expect(
+        kovoBoundAttributeValue(attribute, 'https://attacker.example/register', { elementName }),
+        `${elementName}[${attribute}]`,
+      ).toBeNull();
+    }
+    expect(
+      kovoBoundAttributeValue('src', '/uploads/attacker.html', { elementName: 'IFRAME' }),
+    ).toBeNull();
+    expect(
+      kovoBoundAttributeValue('src', '/reviewed/profile', {
+        effectiveIframeSandbox: 'allow-forms',
+        elementName: 'IFRAME',
+      }),
+    ).toBeUndefined();
+    expect(
+      kovoBoundAttributeValue(
+        'src',
+        trustedUrl('data:text/javascript,export default 1', 'reviewed executable asset'),
+        { elementName: 'SCRIPT' },
+      ),
+    ).toBe('data:text/javascript,export default 1');
+  });
+
+  // @kovo-security-certifies C13 modular-dynamic-control-plane-runtime-floor
+  it('removes compiler-generated control-plane names from modular dynamic bindings', () => {
+    const reservedNames = [
+      ...GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
+      ...GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES.map((prefix) => `${prefix}probe`),
+    ];
+
+    for (const name of reservedNames) {
+      expect(kovoBoundAttributeValue(name, '/c/attacker.client.js#run'), name).toBeNull();
+      expect(
+        kovoBoundAttributeValue(name.toUpperCase(), '/c/attacker.client.js#run'),
+        `${name} ASCII case`,
+      ).toBeNull();
+    }
+
+    expect(kovoBoundAttributeValue('aria-label', 'Ready')).toBe('Ready');
+    expect(kovoBoundAttributeValue('data-state', 'ready')).toBe('ready');
+    expect(kovoBoundAttributeValue('title', 'Ready')).toBe('Ready');
   });
 
   it('drains one redacted KV236 event per blocked browser output sink write', () => {

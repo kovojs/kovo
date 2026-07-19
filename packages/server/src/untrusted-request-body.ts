@@ -19,11 +19,16 @@ import {
   requestIsFormData,
   requestIsPlainRecord,
   requestIterableIterator,
+  requestInputShapeBudgetExceeded,
   requestJson,
   requestParseJson,
   requestReflectGet,
   requestRegisterFormDataProxy,
 } from './request-body-intrinsics.js';
+import {
+  revealRequestProvenanceContainer,
+  tagRequestProvenanceValue,
+} from './request-body-provenance.js';
 import {
   securityArrayIsArray,
   securityArrayJoin,
@@ -34,15 +39,26 @@ import {
   securityStringTrim,
   securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
-import { witnessGetOwnPropertyDescriptor, witnessProxy } from './security-witness-intrinsics.js';
+import { assertShapeWithinBudget, isShapeBudgetError } from './schema.js';
+import {
+  createWitnessWeakMap,
+  witnessDefineProperty,
+  witnessGetOwnPropertyDescriptor,
+  witnessObjectIs,
+  witnessProxy,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 const formDataIteratorSymbol = Symbol.iterator;
+const untrustedFormDataProxies = createWitnessWeakMap<object, FormData>();
 
 export type UntrustedRequestBodyCarrier = 'json' | 'form';
 
 export type UntrustedRequestBodyFailureReason =
   | 'invalid-form'
   | 'invalid-json'
+  | 'shape-budget'
   | 'unsupported-content-type';
 
 export type UntrustedRequestBodyResult =
@@ -51,7 +67,7 @@ export type UntrustedRequestBodyResult =
 
 export type UntrustedJsonBodyResult =
   | { ok: true; value: unknown }
-  | { ok: false; reason: 'invalid-json' };
+  | { ok: false; reason: 'invalid-json' | 'shape-budget' };
 
 /**
  * @internal SPEC §5.2 rule 11 / fundamental-fixes-followup-3 DEC-D: request header
@@ -102,17 +118,21 @@ export async function readUntrustedRequestBody(
   const carrier = requestBodyCarrier(requestHeader(request, 'content-type'));
 
   if (carrier === 'json') {
+    let decoded: unknown;
     try {
-      return { carrier, ok: true, value: tagUntrustedRequestValue(await requestJson(request)) };
+      decoded = await requestJson(request);
     } catch {
       return { ok: false, reason: 'invalid-json' };
     }
+    if (!requestShapeIsWithinBudget(decoded)) return { ok: false, reason: 'shape-budget' };
+    return { carrier, ok: true, value: tagUntrustedRequestValue(decoded) };
   }
 
   if (carrier === 'form') {
     try {
       return { carrier, ok: true, value: tagUntrustedRequestValue(await requestFormData(request)) };
-    } catch {
+    } catch (error) {
+      if (requestInputShapeBudgetExceeded(error)) return { ok: false, reason: 'shape-budget' };
       return { ok: false, reason: 'invalid-form' };
     }
   }
@@ -128,13 +148,23 @@ export async function readUntrustedRequestBody(
 export function parseUntrustedJsonBodyBytes(rawBody: Uint8Array): UntrustedJsonBodyResult {
   if (securityUint8ArrayLength(rawBody) === 0) return { ok: true, value: {} };
 
+  let decoded: unknown;
   try {
-    return {
-      ok: true,
-      value: tagUntrustedRequestValue(requestParseJson(requestDecodeUtf8(rawBody))),
-    };
+    decoded = requestParseJson(requestDecodeUtf8(rawBody));
   } catch {
     return { ok: false, reason: 'invalid-json' };
+  }
+  if (!requestShapeIsWithinBudget(decoded)) return { ok: false, reason: 'shape-budget' };
+  return { ok: true, value: tagUntrustedRequestValue(decoded) };
+}
+
+function requestShapeIsWithinBudget(value: unknown): boolean {
+  try {
+    assertShapeWithinBudget(value);
+    return true;
+  } catch (error) {
+    if (isShapeBudgetError(error)) return false;
+    throw error;
   }
 }
 
@@ -175,71 +205,145 @@ function isObjectLike(value: unknown): value is object {
 
 /** @internal SPEC §5.2 rule 11 / DEC-D: request input tags are DX provenance, not enforcement. */
 export function tagUntrustedRequestValue(value: unknown): unknown {
-  if (requestIsFormData(value)) {
-    return tagUntrustedFormData(value);
-  }
-  if (securityArrayIsArray(value)) {
-    const tagged: unknown[] = [];
-    for (let index = 0; index < value.length; index += 1) {
-      securityArrayPush(tagged, tagUntrustedRequestValue(stableRecordValue(value, index)));
-    }
-    return tagged;
-  }
-  if (requestIsPlainRecord(value)) {
-    const tagged = requestCreateNullRecord<unknown>() as Record<string, unknown>;
-    const keys = securityObjectKeys(value);
-    for (let index = 0; index < keys.length; index += 1) {
-      const key = keys[index]!;
-      tagged[key] = tagUntrustedRequestValue(stableRecordValue(value, key));
-    }
-    return tagged;
-  }
-  if (value === undefined) return value;
-  return untrusted(value);
+  return tagRequestProvenanceValue(value, tagUntrustedRequestLeaf);
 }
 
 /** @internal SPEC §5.2 rule 11: reveal request provenance tags only after a validating choke. */
 export function revealUntrustedRequestValue(value: unknown, reason: string): unknown {
-  if (isUntrusted(value))
-    return revealUntrustedRequestValue(revealUntrusted(value, reason), reason);
-  if (requestIsFormData(value)) {
-    const revealed = requestCreateFormData();
-    const entries = requestFormDataEntries(value);
-    for (let index = 0; index < entries.length; index += 1) {
-      const pair = entries[index]!;
-      const key = pair[0];
-      const entry = pair[1];
-      const entryValue = revealUntrustedRequestValue(entry, reason);
-      if (typeof entryValue === 'string' || requestIsBlob(entryValue)) {
-        requestFormDataAppend(revealed, key, entryValue);
-      }
+  const seen = createWitnessWeakMap<object, object>();
+  const frames: RevealFrame[] = [];
+  const root = materializeRevealedRequestValue(value, reason, seen, frames);
+
+  while (frames.length > 0) {
+    const frame = popRevealFrame(frames);
+    if (frame === undefined) break;
+    if (frame.index >= frame.length) continue;
+
+    const property: PropertyKey = frame.array ? frame.index : frame.keys[frame.index]!;
+    frame.index += 1;
+    securityArrayPush(frames, frame);
+    const child = materializeRevealedRequestValue(
+      stableRecordValue(frame.source, property),
+      reason,
+      seen,
+      frames,
+    );
+    if (frame.array) {
+      securityArrayPush(frame.target as unknown[], child);
+    } else {
+      witnessDefineProperty(frame.target, property, {
+        configurable: true,
+        enumerable: true,
+        value: child,
+        writable: true,
+      });
     }
-    return revealed;
   }
-  if (securityArrayIsArray(value)) {
-    const revealed: unknown[] = [];
-    for (let index = 0; index < value.length; index += 1) {
-      securityArrayPush(
-        revealed,
-        revealUntrustedRequestValue(stableRecordValue(value, index), reason),
-      );
+
+  return root;
+}
+
+interface RevealFrame {
+  readonly array: boolean;
+  readonly keys: readonly string[];
+  readonly length: number;
+  readonly source: object;
+  readonly target: Record<PropertyKey, unknown> | unknown[];
+  index: number;
+}
+
+function materializeRevealedRequestValue(
+  value: unknown,
+  reason: string,
+  seen: WeakMap<object, object>,
+  frames: RevealFrame[],
+): unknown {
+  value = revealRequestValue(value, reason);
+  if (requestIsFormData(value)) return revealUntrustedFormData(value, reason);
+  if (!securityArrayIsArray(value) && !requestIsPlainRecord(value)) return value;
+
+  const cached = witnessWeakMapGet(seen, value);
+  if (cached !== undefined) return cached;
+  const array = securityArrayIsArray(value);
+  const target = array ? [] : (requestCreateNullRecord<unknown>() as Record<PropertyKey, unknown>);
+  witnessWeakMapSet(seen, value, target);
+  const keys = array ? [] : securityObjectKeys(value);
+  securityArrayPush(frames, {
+    array,
+    index: 0,
+    keys,
+    length: array ? stableArrayLength(value as unknown[]) : keys.length,
+    source: value,
+    target,
+  });
+  return target;
+}
+
+function revealRequestValue(value: unknown, reason: string): unknown {
+  for (let depth = 0; depth < 16; depth += 1) {
+    if (isUntrusted(value)) {
+      value = revealUntrusted(value, reason);
+      continue;
     }
-    return revealed;
+    return revealRequestProvenanceContainer(value);
   }
-  if (requestIsPlainRecord(value)) {
-    const revealed = requestCreateNullRecord<unknown>() as Record<string, unknown>;
-    const keys = securityObjectKeys(value);
-    for (let index = 0; index < keys.length; index += 1) {
-      const key = keys[index]!;
-      revealed[key] = revealUntrustedRequestValue(stableRecordValue(value, key), reason);
+  throw new TypeError('Kovo refused an unbounded request provenance carrier.');
+}
+
+function revealUntrustedFormData(value: FormData, reason: string): FormData {
+  const revealed = requestCreateFormData();
+  const entries = requestFormDataEntries(value);
+  for (let index = 0; index < entries.length; index += 1) {
+    const pair = entries[index]!;
+    const entryValue = revealRequestValue(pair[1], reason);
+    if (typeof entryValue === 'string' || requestIsBlob(entryValue)) {
+      requestFormDataAppend(revealed, pair[0], entryValue);
     }
-    return revealed;
   }
-  return value;
+  return revealed;
+}
+
+function tagUntrustedRequestLeaf(value: unknown): unknown {
+  if (requestIsFormData(value)) return tagUntrustedFormData(value);
+  if (value === undefined) return value;
+  return untrusted(value);
 }
 
 function stableRecordValue(value: object, property: PropertyKey): unknown {
-  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  const before = witnessGetOwnPropertyDescriptor(value, property);
+  const after = witnessGetOwnPropertyDescriptor(value, property);
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError('Kovo request carriers require stable own data properties.');
+  }
+  return before.value;
+}
+
+function stableArrayLength(value: readonly unknown[]): number {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, 'length');
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'number'
+  ) {
+    throw new TypeError('Kovo request carriers require stable own data properties.');
+  }
+  return descriptor.value;
+}
+
+function popRevealFrame(frames: RevealFrame[]): RevealFrame | undefined {
+  if (frames.length === 0) return undefined;
+  const index = frames.length - 1;
+  const descriptor = witnessGetOwnPropertyDescriptor(frames, index);
+  frames.length = index;
   if (descriptor === undefined || !('value' in descriptor)) {
     throw new TypeError('Kovo request carriers require stable own data properties.');
   }
@@ -247,6 +351,8 @@ function stableRecordValue(value: object, property: PropertyKey): unknown {
 }
 
 function tagUntrustedFormData(form: FormData): FormData {
+  const existing = witnessWeakMapGet(untrustedFormDataProxies, form);
+  if (existing !== undefined) return existing;
   const proxy = witnessProxy(form, {
     get(target, property, receiver) {
       if (property === 'get') {
@@ -297,6 +403,8 @@ function tagUntrustedFormData(form: FormData): FormData {
     },
   });
   requestRegisterFormDataProxy(proxy, form);
+  witnessWeakMapSet(untrustedFormDataProxies, form, proxy);
+  witnessWeakMapSet(untrustedFormDataProxies, proxy, proxy);
   return proxy;
 }
 

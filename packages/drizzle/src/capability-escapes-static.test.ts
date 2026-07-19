@@ -366,7 +366,7 @@ describe('@kovojs/drizzle static build trust-fact aggregate', () => {
     });
   });
 
-  it('keeps the lightweight project prefilter closed for an otherwise unmarked opaque call', () => {
+  it('keeps the aggregate closed for an otherwise unmarked opaque call', () => {
     const facts = collectStaticBuildTrustFactsFromProject({
       files: [
         {
@@ -387,6 +387,103 @@ describe('@kovojs/drizzle static build trust-fact aggregate', () => {
         source: 'input.callback',
       }),
     ]);
+  });
+
+  // SPEC §6.6 / C13: the build aggregate and the standalone TASK B collector consume the same
+  // immutable source snapshot. Root spelling is never a sound reason to skip authoritative analysis.
+  it.each([
+    {
+      files: [
+        {
+          fileName: 'server-barrel.ts',
+          source: `export { mutation as defineWrite } from '@kovojs/server';`,
+        },
+        {
+          fileName: 'app.ts',
+          source: `
+            import { defineWrite } from './server-barrel.js';
+            export const unsafe = defineWrite({
+              handler() { return globalThis['pro\\u0063ess'].env.SECRET; },
+            });
+          `,
+        },
+      ],
+      label: 'a local framework-factory re-export',
+    },
+    {
+      files: [
+        {
+          fileName: 'app.ts',
+          source: `
+            import * as server from '@kovojs/server';
+            const api = server;
+            export const unsafe = api.mutation({
+              handler() { return globalThis['pro\\u0063ess'].env.SECRET; },
+            });
+          `,
+        },
+      ],
+      label: 'a namespace alias',
+    },
+    {
+      files: [
+        {
+          fileName: 'app.ts',
+          source: `
+            import { mutation } from '@kovojs/server';
+            export const unsafe = mutation({
+              ['handler']() { return globalThis['pro\\u0063ess'].env.SECRET; },
+            });
+          `,
+        },
+      ],
+      label: 'a computed callback property',
+    },
+    {
+      files: [
+        {
+          fileName: 'server-barrel.ts',
+          source: `export { mut\\u0061tion as defineWrite } from '@kovojs/server';`,
+        },
+        {
+          fileName: 'app.ts',
+          source: `
+            import { defineWrite } from './server-barrel.js';
+            const callbacks = {
+              handler() { return globalThis['pro\\u0063ess'].env.SECRET; },
+            };
+            export const unsafe = defineWrite({ ...callbacks });
+          `,
+        },
+      ],
+      label: 'a spread callback record',
+    },
+    {
+      files: [
+        {
+          fileName: 'app.ts',
+          source: `
+            import { query as frameworkQuery } from '@kovojs/server';
+            const defineRead = true ? frameworkQuery : frameworkQuery;
+            export const unsafe = defineRead({
+              load() { return globalThis['pro\\u0063ess'].env.SECRET; },
+            });
+          `,
+        },
+      ],
+      label: 'a conditionally projected root factory',
+    },
+  ])('matches standalone TASK B facts through $label', ({ files }) => {
+    const standalone = {
+      capabilities: collectCapabilityEscapesFromProject({ files }),
+      cookieDowngrades: collectCookieDowngradesFromProject({ files }),
+      unregisteredSinks: collectUnregisteredSinksFromProject({ files }),
+    };
+
+    expect(standalone.unregisteredSinks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'node:process.env' })]),
+    );
+    expect(collectStaticBuildTrustFactsFromProject({ files })).toEqual(standalone);
   });
 });
 

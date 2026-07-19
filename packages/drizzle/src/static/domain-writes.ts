@@ -739,6 +739,7 @@ import { staticAccessExpression, staticAccessName } from './summaries.js';
     if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
       return expression;
     }
+    return referencedWriteCallbackFunction(expression);
   }
 
   return undefined;

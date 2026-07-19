@@ -3,6 +3,7 @@ import * as ts from 'typescript';
 import {
   canonicalFrameworkExportForExpression,
   expressionResolvesToFrameworkExport,
+  frameworkCatalogExportForModuleSpecifier,
   frameworkExport,
   frameworkExportEquals,
   registerFrameworkIdentityProject,
@@ -20,6 +21,7 @@ import {
   compilerCreateMap,
   compilerCreateNullRecord,
   compilerCreateSet,
+  compilerCreateWeakMap,
   compilerDefineOwnDataProperty,
   compilerJsonStringify,
   compilerMapForEach,
@@ -47,6 +49,8 @@ import {
   compilerStringToLowerCase,
   compilerStringToUpperCase,
   compilerStringTrim,
+  compilerWeakMapGet,
+  compilerWeakMapSet,
 } from '../compiler-security-intrinsics.js';
 import { deriveMutationKey } from '../mutation-names.js';
 import { mutationFormProvenanceAttributeName } from '../mutation-form-provenance.js';
@@ -73,6 +77,7 @@ import type {
   ComponentModel,
   ComponentModuleModel,
   ComponentOptionEntry,
+  CompilerJsxRuntimeImportModel,
   DocumentElementActionModel,
   HandlerWriteSinkFact,
   HandlerWriteSinkOperationKind,
@@ -80,6 +85,7 @@ import type {
   HandlerWriteSinkSurface,
   IdentifierReferenceModel,
   JsxCommentModel,
+  JsxAttributeModel,
   JsxElementChildBody,
   JsxElementModel,
   JsxExpressionModel,
@@ -113,6 +119,13 @@ export type * from './model.js';
 
 ensureTypescriptRuntime(ts);
 
+const frameworkTrustedUrlFacts = compilerCreateWeakMap<object, true>();
+
+/** @internal Exact parser-owned trustedUrl identity without widening serialized model shapes. */
+export function parserFactHasFrameworkTrustedUrl(fact: object): boolean {
+  return compilerWeakMapGet(frameworkTrustedUrlFacts, fact) === true;
+}
+
 interface ComponentFactoryBindings {
   readonly sourceFile: ts.SourceFile;
 }
@@ -137,6 +150,13 @@ const CSRF_TOKEN_IDENTITIES: readonly FrameworkExportIdentity[] = [
   frameworkExport('@kovojs/server', 'csrfToken'),
   frameworkExport('@kovojs/server', 'mintCsrfToken'),
 ];
+const JSX_RUNTIME_FACTORY_IDENTITIES = {
+  createElement: frameworkExport('@kovojs/server', 'createElement'),
+  jsx: frameworkExport('@kovojs/server', 'jsx'),
+  jsxDEV: frameworkExport('@kovojs/server', 'jsxDEV'),
+  jsxs: frameworkExport('@kovojs/server', 'jsxs'),
+} as const;
+const TRUSTED_URL_IDENTITY = frameworkExport('@kovojs/browser', 'trustedUrl');
 const SERVER_CALL_FACTORY_IDENTITIES: readonly FrameworkExportIdentity[] = [
   ENDPOINT_FACTORY_IDENTITY,
   MUTATION_FACTORY_IDENTITY,
@@ -302,6 +322,7 @@ export function parseComponentModule(
   }
   const componentFactories = componentFactoryBindings(sourceFile);
   const calls: CallExpressionModel[] = [];
+  const compilerJsxRuntimeImports: CompilerJsxRuntimeImportModel[] = [];
   const componentIdentityAssignments: ComponentIdentityAssignmentModel[] = [];
   const components: ComponentModel[] = [];
   const endpointHandlers: MutationHandlerModel[] = [];
@@ -332,6 +353,11 @@ export function parseComponentModule(
   const domainBindings = domainBindingKeys(sourceFile);
 
   const visit = (node: ts.Node): void => {
+    appendDenseValues(
+      compilerJsxRuntimeImports,
+      compilerJsxRuntimeImportModels(sourceFile, node),
+      'Compiler JSX-runtime import models',
+    );
     const identityAssignment = componentIdentityAssignmentModel(sourceFile, node);
     if (identityAssignment !== null) {
       compilerArrayAppend(
@@ -412,9 +438,17 @@ export function parseComponentModule(
         : frameworkIdentityIn(factoryIdentity, CSRF_TOKEN_IDENTITIES)
           ? 'csrf-token'
           : undefined;
+      const frameworkJsxRuntimeFactory = jsxRuntimeFactoryName(factoryIdentity);
       compilerArrayAppend(
         calls,
-        callExpressionModel(sourceFile, source, node, frameworkFactory, frameworkSecurityOperation),
+        callExpressionModel(
+          sourceFile,
+          source,
+          node,
+          frameworkFactory,
+          frameworkSecurityOperation,
+          frameworkJsxRuntimeFactory,
+        ),
         'Call models',
       );
       if (frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)) {
@@ -468,6 +502,7 @@ export function parseComponentModule(
 
   const model: ComponentModuleModel = {
     calls,
+    compilerJsxRuntimeImports,
     componentIdentityAssignments,
     components,
     endpointHandlers,
@@ -538,6 +573,148 @@ function moduleSpecifierModel(node: ts.Node): ModuleSpecifierModel | null {
   }
 
   return null;
+}
+
+function compilerJsxRuntimeImportModels(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+): CompilerJsxRuntimeImportModel[] {
+  if (ts.isImportDeclaration(node) && ts.isStringLiteralLike(node.moduleSpecifier)) {
+    const clause = node.importClause;
+    if (!clause || clause.isTypeOnly) return [];
+    const specifier = jsxRuntimeSpecifier(node.moduleSpecifier.text);
+    if (specifier === undefined) return [];
+    const factories: CompilerJsxRuntimeImportModel['factories'][number][] = [];
+    const bindings = clause.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      compilerArrayAppend(factories, '*', 'Compiler JSX-runtime imported factories');
+    } else if (bindings && ts.isNamedImports(bindings)) {
+      const elements = bindings.elements;
+      const length = compilerArrayLength(elements, 'Compiler JSX-runtime named imports');
+      for (let index = 0; index < length; index += 1) {
+        const element = compilerOwnDataValue(
+          elements,
+          index,
+          'Compiler JSX-runtime named imports',
+        ) as ts.ImportSpecifier | undefined;
+        if (!element || element.isTypeOnly) continue;
+        const factory = jsxRuntimeFactoryNameForSpecifier(
+          specifier,
+          element.propertyName?.text ?? element.name.text,
+        );
+        if (factory !== undefined) {
+          compilerArrayAppend(factories, factory, 'Compiler JSX-runtime imported factories');
+        }
+      }
+    }
+    return jsxRuntimeImportFact(node.moduleSpecifier, specifier, factories);
+  }
+
+  if (
+    ts.isImportEqualsDeclaration(node) &&
+    !node.isTypeOnly &&
+    ts.isExternalModuleReference(node.moduleReference) &&
+    node.moduleReference.expression &&
+    ts.isStringLiteralLike(node.moduleReference.expression)
+  ) {
+    const expression = node.moduleReference.expression;
+    const specifier = jsxRuntimeSpecifier(expression.text);
+    return specifier === undefined ? [] : jsxRuntimeImportFact(expression, specifier, ['*']);
+  }
+
+  if (
+    ts.isExportDeclaration(node) &&
+    !node.isTypeOnly &&
+    node.moduleSpecifier &&
+    ts.isStringLiteralLike(node.moduleSpecifier)
+  ) {
+    const specifier = jsxRuntimeSpecifier(node.moduleSpecifier.text);
+    if (specifier === undefined) return [];
+    const factories: CompilerJsxRuntimeImportModel['factories'][number][] = [];
+    if (!node.exportClause || ts.isNamespaceExport(node.exportClause)) {
+      compilerArrayAppend(factories, '*', 'Compiler JSX-runtime re-exported factories');
+    } else if (ts.isNamedExports(node.exportClause)) {
+      const elements = node.exportClause.elements;
+      const length = compilerArrayLength(elements, 'Compiler JSX-runtime named re-exports');
+      for (let index = 0; index < length; index += 1) {
+        const element = compilerOwnDataValue(
+          elements,
+          index,
+          'Compiler JSX-runtime named re-exports',
+        ) as ts.ExportSpecifier | undefined;
+        if (!element || element.isTypeOnly) continue;
+        const factory = jsxRuntimeFactoryNameForSpecifier(
+          specifier,
+          element.propertyName?.text ?? element.name.text,
+        );
+        if (factory !== undefined) {
+          compilerArrayAppend(factories, factory, 'Compiler JSX-runtime re-exported factories');
+        }
+      }
+    }
+    return jsxRuntimeImportFact(node.moduleSpecifier, specifier, factories);
+  }
+
+  if (!ts.isCallExpression(node)) return [];
+  const argument = callArgument(node, 0);
+  if (!argument || !ts.isStringLiteralLike(argument)) return [];
+  const specifier = jsxRuntimeSpecifier(argument.text);
+  if (specifier === undefined) return [];
+  if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+    return jsxRuntimeImportFact(argument, specifier, ['*']);
+  }
+  if (
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'require' &&
+    identifierResolvesToUnshadowedGlobal(sourceFile, node.expression, 'require')
+  ) {
+    return jsxRuntimeImportFact(argument, specifier, ['*']);
+  }
+  return [];
+}
+
+function jsxRuntimeImportFact(
+  moduleSpecifier: ts.StringLiteralLike,
+  specifier: CompilerJsxRuntimeImportModel['specifier'],
+  factories: readonly CompilerJsxRuntimeImportModel['factories'][number][],
+): CompilerJsxRuntimeImportModel[] {
+  if (factories.length === 0) return [];
+  return [
+    {
+      end: moduleSpecifier.getEnd(),
+      factories,
+      specifier,
+      start: moduleSpecifier.getStart(),
+    },
+  ];
+}
+
+function jsxRuntimeSpecifier(
+  value: string,
+): CompilerJsxRuntimeImportModel['specifier'] | undefined {
+  return value === '@kovojs/server/jsx-runtime' || value === '@kovojs/server/jsx-dev-runtime'
+    ? value
+    : undefined;
+}
+
+function jsxRuntimeFactoryNameForSpecifier(
+  specifier: CompilerJsxRuntimeImportModel['specifier'],
+  exportName: string,
+): Exclude<CompilerJsxRuntimeImportModel['factories'][number], '*'> | undefined {
+  const identity = frameworkCatalogExportForModuleSpecifier(specifier, exportName);
+  return jsxRuntimeFactoryName(identity);
+}
+
+function jsxRuntimeFactoryName(
+  identity: FrameworkExportIdentity | undefined,
+): Exclude<CompilerJsxRuntimeImportModel['factories'][number], '*'> | undefined {
+  if (frameworkExportEquals(identity, JSX_RUNTIME_FACTORY_IDENTITIES.createElement)) {
+    return 'createElement';
+  }
+  if (frameworkExportEquals(identity, JSX_RUNTIME_FACTORY_IDENTITIES.jsx)) return 'jsx';
+  if (frameworkExportEquals(identity, JSX_RUNTIME_FACTORY_IDENTITIES.jsxDEV)) return 'jsxDEV';
+  if (frameworkExportEquals(identity, JSX_RUNTIME_FACTORY_IDENTITIES.jsxs)) return 'jsxs';
+  return undefined;
 }
 
 function namedImportModels(node: ts.Node): NamedImportModel[] {
@@ -2319,6 +2496,8 @@ function mutationHandlerModels(
           'mutation',
           parameters,
           `mutation:${owner.value}`,
+          handler,
+          call,
         ),
         ...(handlerReadsAmbientCookie(body, parameters)
           ? { readsAmbientCookie: true as const }
@@ -3280,6 +3459,8 @@ function endpointHandlerModels(
           'endpoint',
           entry.parameters,
           `endpoint:${owner.value}`,
+          entry.handler,
+          call,
         ),
       },
       'Endpoint handler models',
@@ -3501,7 +3682,15 @@ function queryLoadHandlerModels(
       result,
       {
         ...entry.model,
-        ...serverSecurityOperationModel(sourceFile, entry.body, 'query', entry.parameters, root),
+        ...serverSecurityOperationModel(
+          sourceFile,
+          entry.body,
+          'query',
+          entry.parameters,
+          root,
+          entry.handler,
+          call,
+        ),
       },
       'Query load handler models',
     );
@@ -3575,6 +3764,8 @@ function webhookHandlerModels(
           'webhook',
           entry.parameters,
           `webhook:${owner.value}`,
+          entry.handler,
+          call,
         ),
       },
       'Webhook handler models',
@@ -3654,6 +3845,8 @@ function taskRunHandlerModels(
           'task',
           handler.parameters,
           `task:${key}`,
+          handler.handler,
+          call,
         ),
       },
       'Task run handler models',
@@ -4228,11 +4421,19 @@ function serverSecurityOperationModel(
   surface: SecurityOperationSurface,
   parameters: readonly ts.ParameterDeclaration[],
   root: string,
+  handler: HandlerPropertyEntry['handler'],
+  factoryCall: ts.CallExpression,
 ): Pick<
   MutationHandlerModel,
   'securityOperations' | 'securityOperationViolations' | 'securitySemanticRoot'
 > {
-  const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters, root);
+  const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters, root, {
+    callback: surface === 'query' ? 'load' : surface === 'task' ? 'run' : 'handler',
+    callableSpan: { end: handler.getEnd(), start: handler.getStart(sourceFile) },
+    factory: surface,
+    factoryCallSpan: { end: factoryCall.getEnd(), start: factoryCall.getStart(sourceFile) },
+    root,
+  });
   const securityOperations: ServerSecurityOperationModel[] = [
     {
       door: 'handler-root',
@@ -4767,34 +4968,32 @@ function objectLiteralEntries(
       const key = propertyNameText(property.name, { staticStringValues });
       if (!key) continue;
 
-      compilerArrayAppend(
-        result,
-        {
-          key,
-          ...(ts.isObjectLiteralExpression(property.initializer)
-            ? {
-                objectEntries: objectLiteralEntries(
-                  sourceFile,
-                  source,
-                  property.initializer,
-                  staticStringValues,
-                ),
-              }
-            : {}),
-          ...staticConstructorTypeEntry(sourceFile, property.initializer),
-          ...(ts.isStringLiteralLike(property.initializer) ||
-          ts.isNoSubstitutionTemplateLiteral(property.initializer)
-            ? { staticStringValue: property.initializer.text }
-            : {}),
-          ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
-          value: compilerStringSlice(
-            source,
-            property.initializer.getStart(sourceFile),
-            property.initializer.getEnd(),
-          ),
-        },
-        'Object literal entries',
-      );
+      const entry: ObjectLiteralEntry = {
+        key,
+        ...(ts.isObjectLiteralExpression(property.initializer)
+          ? {
+              objectEntries: objectLiteralEntries(
+                sourceFile,
+                source,
+                property.initializer,
+                staticStringValues,
+              ),
+            }
+          : {}),
+        ...staticConstructorTypeEntry(sourceFile, property.initializer),
+        ...(ts.isStringLiteralLike(property.initializer) ||
+        ts.isNoSubstitutionTemplateLiteral(property.initializer)
+          ? { staticStringValue: property.initializer.text }
+          : {}),
+        ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
+        value: compilerStringSlice(
+          source,
+          property.initializer.getStart(sourceFile),
+          property.initializer.getEnd(),
+        ),
+      };
+      recordFrameworkTrustedUrlFact(entry, sourceFile, property.initializer);
+      compilerArrayAppend(result, entry, 'Object literal entries');
       continue;
     }
 
@@ -4935,22 +5134,23 @@ function jsxAttributeModels(
     const expression = jsxAttributeExpression(sourceFile, source, property);
     const name = property.name.getText(sourceFile);
     const eventFacts = jsxAttributeEventFacts(name);
-    compilerArrayAppend(
-      result,
-      {
-        ...eventFacts,
-        ...(unreviewedComponentTag && eventFacts.domEventName !== undefined
-          ? { componentEventProp: true as const }
-          : {}),
-        end: property.getEnd(),
-        leadingStart: attributeLeadingStart(source, property.getStart(sourceFile)),
-        name,
-        start: property.getStart(sourceFile),
-        ...(expression === null ? {} : expression),
-        ...(value === undefined ? {} : { value }),
-      },
-      'JSX attributes',
-    );
+    const attribute: JsxAttributeModel = {
+      ...eventFacts,
+      ...(unreviewedComponentTag && eventFacts.domEventName !== undefined
+        ? { componentEventProp: true as const }
+        : {}),
+      end: property.getEnd(),
+      leadingStart: attributeLeadingStart(source, property.getStart(sourceFile)),
+      name,
+      start: property.getStart(sourceFile),
+      ...(expression === null ? {} : expression),
+      ...(value === undefined ? {} : { value }),
+    };
+    const initializer = property.initializer;
+    if (initializer && ts.isJsxExpression(initializer) && initializer.expression) {
+      recordFrameworkTrustedUrlFact(attribute, sourceFile, initializer.expression);
+    }
+    compilerArrayAppend(result, attribute, 'JSX attributes');
   }
   return result;
 }
@@ -5174,14 +5374,12 @@ function completeStaticJsxWireAttributeEntries(
     // own `['__proto__']` key is harmless here but keeping both shapes opaque avoids inventing an
     // own attribute for the setter spelling.
     if (!key || key === '__proto__') return undefined;
-    compilerArrayAppend(
-      entries,
-      {
-        key,
-        value: staticJsxWireAttributeValue(sourceFile, property.initializer),
-      },
-      'Static JSX wire spread entries',
-    );
+    const entry: StaticJsxWireAttributeEntry = {
+      key,
+      value: staticJsxWireAttributeValue(sourceFile, property.initializer),
+    };
+    recordFrameworkTrustedUrlFact(entry, sourceFile, property.initializer);
+    compilerArrayAppend(entries, entry, 'Static JSX wire spread entries');
   }
   return entries;
 }
@@ -5449,6 +5647,7 @@ function callExpressionModel(
   node: ts.CallExpression,
   frameworkFactory: CallExpressionModel['frameworkFactory'],
   frameworkSecurityOperation: CallExpressionModel['frameworkSecurityOperation'],
+  frameworkJsxRuntimeFactory: CallExpressionModel['frameworkJsxRuntimeFactory'],
 ): CallExpressionModel {
   const argumentSources: string[] = [];
   const argumentArrowFunctionParts: (ArrowFunctionPartsModel | null)[] = [];
@@ -5518,6 +5717,7 @@ function callExpressionModel(
     ...exportedConstInitializerName(node),
     ...(frameworkFactory === undefined ? {} : { frameworkFactory }),
     ...(frameworkSecurityOperation === undefined ? {} : { frameworkSecurityOperation }),
+    ...(frameworkJsxRuntimeFactory === undefined ? {} : { frameworkJsxRuntimeFactory }),
     name: node.expression.getText(sourceFile),
     start: node.getStart(sourceFile),
   };
@@ -5825,6 +6025,27 @@ function jsxAttributeExpression(
     ...jsxAttributeExpressionStaticValue(initializer.expression),
     ...zeroArgArrowModel(sourceFile, source, initializer.expression),
   };
+}
+
+function recordFrameworkTrustedUrlFact(
+  fact: object,
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): void {
+  const candidate = unwrapExpression(expression);
+  if (!ts.isCallExpression(candidate)) return;
+  if (
+    !frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        candidate.expression,
+      ),
+      TRUSTED_URL_IDENTITY,
+    )
+  )
+    return;
+  compilerWeakMapSet(frameworkTrustedUrlFacts, fact, true);
 }
 
 function jsxAttributeExpressionStaticValue(

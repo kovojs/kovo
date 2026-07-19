@@ -6,6 +6,7 @@ import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-t
 import { reconcileKeyed } from './keyed-reconciler.js';
 import {
   applyResponseFragments,
+  preservesReviewedHtmlElementContextAttribute,
   sanitizeHtmlResponseElementTree,
   setSafeHtmlResponseAttribute,
 } from './response-fragment-apply.js';
@@ -289,11 +290,15 @@ export function sanitizeDomElementTree(
   return sanitizeHtmlResponseElementTree(element, security);
 }
 
-function sanitizeDomNodes(nodes: readonly Node[], security = requireBrowserDomSecurity()): void {
+function sanitizeDomNodes(
+  nodes: readonly Node[],
+  security = requireBrowserDomSecurity(),
+  preserveReviewedContext = false,
+): void {
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index];
     if (node && security.readElementTagName(node) !== undefined) {
-      sanitizeDomElementTree(node as Element, security);
+      sanitizeHtmlResponseElementTree(node as Element, security, preserveReviewedContext);
     }
   }
 }
@@ -436,7 +441,10 @@ function syncDomAttributes(
     const attribute = currentAttributes[index];
     if (!attribute) continue;
     if (attribute.name === 'kovo-state' && currentState !== null) continue;
-    if (!security.hasElementAttribute(next, attribute.name)) {
+    if (
+      !security.hasElementAttribute(next, attribute.name) &&
+      !preservesReviewedHtmlElementContextAttribute(current, attribute.name, security)
+    ) {
       security.removeElementAttribute(current, attribute.name);
     }
   }
@@ -446,7 +454,7 @@ function syncDomAttributes(
     const attribute = nextAttributes[index];
     if (!attribute) continue;
     if (attribute.name === 'kovo-state' && currentState !== null) continue;
-    setSafeHtmlResponseAttribute(current, attribute.name, attribute.value, security);
+    setSafeHtmlResponseAttribute(current, attribute.name, attribute.value, security, true);
   }
 }
 
@@ -611,7 +619,10 @@ function morphDomChildren(
 
   // Reconciliation itself is not an authority boundary: sanitize the exact dense
   // output plan immediately before the boot-pinned replaceChildren commit.
-  sanitizeDomNodes(desiredNodes, security);
+  // Every incoming node was sanitized before reconciliation. This final exact-plan pass must keep
+  // compiler-reviewed controls on reused nodes, including trustedUrl values whose provenance is no
+  // longer representable after serialization into the live DOM.
+  sanitizeDomNodes(desiredNodes, security, true);
   // `replaceChildren` adopts the already-reconciled node plan in one boot-pinned native
   // commit. Reused keyed nodes retain identity; removed nodes are discarded atomically.
   security.replaceElementChildren(current, desiredNodes);

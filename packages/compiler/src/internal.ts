@@ -10,6 +10,7 @@ export { factHash } from './fact-hash.js';
 export {
   analyzeCapabilityClosure,
   collectCapabilityPackageRequests,
+  isCompilerOwnedCapabilityPackage,
   packageCapabilitySummarySchema,
 } from './security/capability-closure.js';
 export type {

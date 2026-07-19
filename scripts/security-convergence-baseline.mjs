@@ -15,12 +15,31 @@ import {
   runSecurityGateMutationHarness,
 } from './security-gate-mutations.mjs';
 
-const BASELINE_SCHEMA = 'kovo-security-convergence-baseline/v1';
+const BASELINE_SCHEMA = 'kovo-security-convergence-baseline/v2';
 const CHARTER_SCHEMA = 'kovo-security-audit-charter/v1';
 const DEFAULT_BASELINE_FILE = 'security/security-convergence-baseline.json';
 const DEFAULT_CHARTER_FILE = 'security/security-convergence-audit-charter.json';
 const TRUST_STATIC_FILE = 'packages/drizzle/src/trust-escapes-static.ts';
 const EGRESS_FILE = 'packages/server/src/egress.ts';
+
+// Keep this scope explicit. These are the production files that own the enumerative static
+// classifier predicates measured by P. A classifier move must update this list, which changes the
+// committed path digest and the per-file rows instead of silently shrinking the denominator.
+export const SECURITY_PREDICATE_PRODUCTION_FILES = Object.freeze([
+  TRUST_STATIC_FILE,
+  'packages/compiler/src/scan/security-operation-ir.ts',
+  'packages/compiler/src/scan/capability-closure.ts',
+  'packages/compiler/src/security/capability-closure.ts',
+  'packages/compiler/src/scan/parse.ts',
+  'packages/cli/src/commands/build-export.ts',
+  'packages/cli/src/commands/compile.ts',
+  'packages/compiler/src/security/capability-closure-model.ts',
+  'packages/compiler/src/validate/security-operation-ir.ts',
+  'packages/compiler/src/validate/pipeline.ts',
+  'packages/compiler/src/compile.ts',
+  'packages/compiler/src/emit/server-render.ts',
+  'packages/compiler/src/lower/handlers.ts',
+]);
 
 const EGRESS_RANGE_TABLES = [
   'IANA_IPV4_SPECIAL_PURPOSE_PREFIXES',
@@ -32,7 +51,14 @@ export function collectSecurityConvergenceSnapshot(options = {}) {
   const root = options.repoRoot ?? findRepoRoot();
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
-  const trustSource = readText(TRUST_STATIC_FILE);
+  const predicateSources = SECURITY_PREDICATE_PRODUCTION_FILES.map((file) => ({
+    file,
+    source: readText(file),
+  }));
+  const trustSource = predicateSources.find((row) => row.file === TRUST_STATIC_FILE)?.source;
+  if (trustSource === undefined) {
+    throw new TypeError(`${TRUST_STATIC_FILE} must remain in the production predicate scope.`);
+  }
   const egressSource = readText(EGRESS_FILE);
   const charterSource = readText(options.charterFile ?? DEFAULT_CHARTER_FILE);
   const charter = JSON.parse(charterSource);
@@ -40,7 +66,7 @@ export function collectSecurityConvergenceSnapshot(options = {}) {
     throw new TypeError(`Security audit charter must use ${CHARTER_SCHEMA}.`);
   }
 
-  const trustStatic = measureTrustStaticObligations(trustSource);
+  const staticPredicates = measureProductionPredicateObligations(predicateSources);
   const imperativeDom = measureImperativeDomSinkLexicon(trustSource);
   const egress = measureEgressObligations(egressSource);
   const corpora = options.corpora ?? REQUIRED_CLASSIFIER_CORPORA;
@@ -60,15 +86,16 @@ export function collectSecurityConvergenceSnapshot(options = {}) {
       mutantNames: mutants.map((mutant) => mutant.name).sort(compareText),
     },
     p: {
+      category: 'conservative-production-predicate-lower-bound',
       egress,
       imperativeDom,
       total:
-        trustStatic.total +
+        staticPredicates.total +
         imperativeDom.sinkNames.length +
         egress.rangeEntryCount +
         egress.exactMetadataAddressCount +
         egress.opaqueAllowPathCount,
-      trustStatic,
+      staticPredicates,
     },
     g: {
       acceptedFullApps: 0,
@@ -90,8 +117,31 @@ export function collectSecurityConvergenceSnapshot(options = {}) {
   };
 }
 
-export function measureTrustStaticObligations(source) {
-  const sourceFile = parseTypescript(source, TRUST_STATIC_FILE);
+export function measureProductionPredicateObligations(sources) {
+  const sourcePaths = sources.map(({ file }) => file);
+  if (new Set(sourcePaths).size !== sourcePaths.length) {
+    throw new TypeError('Security predicate production scope must not contain duplicate files.');
+  }
+  const files = sources
+    .map(({ file, source }) => ({
+      file,
+      sourceSha256: sha256(source),
+      ...measureStaticPredicateObligations(source, file),
+    }))
+    .sort((left, right) => compareText(left.file, right.file));
+  const scopeFiles = files.map((row) => row.file);
+  return {
+    fileCount: files.length,
+    files,
+    rowsSha256: sha256(JSON.stringify(files)),
+    scopeFiles,
+    scopeSha256: sha256(JSON.stringify(scopeFiles)),
+    total: files.reduce((count, row) => count + row.total, 0),
+  };
+}
+
+export function measureStaticPredicateObligations(source, fileName = 'security-predicates.ts') {
+  const sourceFile = parseTypescript(source, fileName);
   const inventories = [];
 
   for (const statement of sourceFile.statements) {
@@ -121,17 +171,12 @@ export function measureTrustStaticObligations(source) {
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === 'Node' &&
+      isSyntaxGuardNamespace(node.expression.expression) &&
       /^is[A-Z]/u.test(node.expression.name.text)
     ) {
       syntaxGuardSites += 1;
     }
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'SyntaxKind'
-    ) {
+    if (ts.isPropertyAccessExpression(node) && isSyntaxKindNamespace(node.expression)) {
       syntaxKindSites += 1;
     }
     if (
@@ -192,7 +237,9 @@ export function measureTrustStaticObligations(source) {
 
 export function measureImperativeDomSinkLexicon(source) {
   const sourceFile = parseTypescript(source, TRUST_STATIC_FILE);
-  const functionNames = new Set(['unregisteredSinksForSourceFile', 'dangerousCallSink']);
+  // The former raw-handler callback classifier was deleted under C13. Only the residual global
+  // dangerous-call recognizer used by authoritative request/process reachability belongs here.
+  const functionNames = new Set(['dangerousCallSink']);
   const sinkNames = new Set();
 
   for (const statement of sourceFile.statements) {
@@ -395,24 +442,22 @@ export async function main(options = {}) {
   }
   if (findings.length > 0) {
     process.stderr.write(
-      'security-convergence-baseline/v1 FAIL: deterministic metrics changed; review and record a new exact-SHA row.\n',
+      `${BASELINE_SCHEMA} FAIL: deterministic metrics changed; review and record a new exact-SHA row.\n`,
     );
     return false;
   }
   if (options.live === true) {
     const live = await measureLiveSecurityConvergence({ repoRoot: root });
     if (live.m.survivors.length > 0) {
-      process.stderr.write(
-        `security-convergence-baseline/v1 FAIL survivors=${live.m.survivors.length}\n`,
-      );
+      process.stderr.write(`${BASELINE_SCHEMA} FAIL survivors=${live.m.survivors.length}\n`);
       return false;
     }
     process.stdout.write(
-      `security-convergence-baseline/v1 LIVE mutants=${live.m.killed}/${live.m.total} greenMs=${live.g.durationMs} peakRssBytes=${live.g.peakRssBytes}\n`,
+      `${BASELINE_SCHEMA} LIVE mutants=${live.m.killed}/${live.m.total} greenMs=${live.g.durationMs} peakRssBytes=${live.g.peakRssBytes}\n`,
     );
   } else {
     process.stdout.write(
-      `security-convergence-baseline/v2 OK sha=${baseline.currentSnapshot.measuredCodeSha} mutants=${actual.m.mutantCount} P=${actual.p.total} greenRows=${actual.g.acceptedFixtureRows} c13=${actual.c13.corpusCount}/${actual.c13.anchorCount}\n`,
+      `${BASELINE_SCHEMA} OK sha=${baseline.currentSnapshot.measuredCodeSha} mutants=${actual.m.mutantCount} P=${actual.p.total} greenRows=${actual.g.acceptedFixtureRows} c13=${actual.c13.corpusCount}/${actual.c13.anchorCount}\n`,
     );
   }
   return true;
@@ -442,25 +487,39 @@ function unwrapExpression(expression) {
 }
 
 function staticInventory(initializer) {
-  if (ts.isArrayLiteralExpression(initializer)) {
-    return { count: initializer.elements.length, kind: 'array' };
+  const unwrapped = unwrapExpression(initializer);
+  if (ts.isArrayLiteralExpression(unwrapped)) {
+    return { count: unwrapped.elements.length, kind: 'array' };
   }
-  if (ts.isObjectLiteralExpression(initializer)) {
-    return { count: initializer.properties.length, kind: 'record' };
+  if (ts.isObjectLiteralExpression(unwrapped)) {
+    return { count: unwrapped.properties.length, kind: 'record' };
   }
   if (
-    ts.isNewExpression(initializer) &&
-    ts.isIdentifier(initializer.expression) &&
-    (initializer.expression.text === 'Set' || initializer.expression.text === 'Map')
+    ts.isNewExpression(unwrapped) &&
+    ts.isIdentifier(unwrapped.expression) &&
+    (unwrapped.expression.text === 'Set' || unwrapped.expression.text === 'Map')
   ) {
-    const count = arrayLiteralEntryCount(initializer.arguments?.[0]);
-    if (count === 0 && initializer.arguments?.[0] !== undefined) return undefined;
-    return { count, kind: initializer.expression.text.toLowerCase() };
+    const count = staticArrayEntryCount(unwrapped.arguments?.[0]);
+    if (count === undefined) return undefined;
+    return { count, kind: unwrapped.expression.text.toLowerCase() };
+  }
+  if (
+    ts.isCallExpression(unwrapped) &&
+    ts.isPropertyAccessExpression(unwrapped.expression) &&
+    (unwrapped.expression.name.text === 'map' || unwrapped.expression.name.text === 'filter')
+  ) {
+    const count = staticArrayEntryCount(unwrapped.expression.expression);
+    if (count === undefined) return undefined;
+    return { count, kind: `array-${unwrapped.expression.name.text}` };
   }
   return undefined;
 }
 
 function arrayLiteralEntryCount(expression) {
+  return staticArrayEntryCount(expression) ?? 0;
+}
+
+function staticArrayEntryCount(expression) {
   if (!expression) return 0;
   const unwrapped = unwrapExpression(expression);
   if (ts.isArrayLiteralExpression(unwrapped)) return unwrapped.elements.length;
@@ -469,9 +528,9 @@ function arrayLiteralEntryCount(expression) {
     ts.isPropertyAccessExpression(unwrapped.expression) &&
     (unwrapped.expression.name.text === 'map' || unwrapped.expression.name.text === 'filter')
   ) {
-    return arrayLiteralEntryCount(unwrapped.expression.expression);
+    return staticArrayEntryCount(unwrapped.expression.expression);
   }
-  return 0;
+  return undefined;
 }
 
 function isEqualityOperator(kind) {
@@ -485,6 +544,22 @@ function isEqualityOperator(kind) {
 
 function isStaticNameLiteral(node) {
   return ts.isStringLiteralLike(node) || ts.isNumericLiteral(node);
+}
+
+function isSyntaxGuardNamespace(node) {
+  return (
+    (ts.isIdentifier(node) && node.text === 'Node') || (ts.isIdentifier(node) && node.text === 'ts')
+  );
+}
+
+function isSyntaxKindNamespace(node) {
+  if (ts.isIdentifier(node)) return node.text === 'SyntaxKind';
+  return (
+    ts.isPropertyAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'ts' &&
+    node.name.text === 'SyntaxKind'
+  );
 }
 
 function staticStringOperand(node) {

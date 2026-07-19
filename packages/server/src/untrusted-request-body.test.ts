@@ -1,10 +1,10 @@
-import { inspect } from 'node:util';
+import { inspect, types as utilTypes } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
 import { query, renderQueryEndpointResponse } from './query.js';
 import { parseRouteRequest, route } from './route.js';
-import { s } from './schema.js';
+import { assertShapeWithinBudget, s } from './schema.js';
 import {
   parseUntrustedJsonBodyBytes,
   readUntrustedCookieValue,
@@ -92,6 +92,93 @@ describe('untrusted request body parser', () => {
     });
   });
 
+  it('reports KV430 shape-budget failure for valid deeply nested JSON without a RangeError', async () => {
+    const depth = 10_000;
+    const body = `${'['.repeat(depth)}0${']'.repeat(depth)}`;
+    expect(() => JSON.parse(body)).not.toThrow();
+
+    await expect(
+      readUntrustedRequestBody(
+        new Request('https://kovo.test/_m/deep', {
+          body,
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'shape-budget' });
+    expect(parseUntrustedJsonBodyBytes(new TextEncoder().encode(body))).toEqual({
+      ok: false,
+      reason: 'shape-budget',
+    });
+  });
+
+  it('rejects JSON breadth before allocating provenance boxes for every scalar', async () => {
+    const entries = 10_001;
+    const body = `[${'0,'.repeat(entries - 1)}0]`;
+
+    await expect(
+      readUntrustedRequestBody(
+        new Request('https://kovo.test/_m/wide', {
+          body,
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'shape-budget' });
+  });
+
+  it('uses lazy provenance containers for a near-node-limit scalar tree', () => {
+    const input = Array.from({ length: 20 }, (_, container) =>
+      Array.from({ length: container === 19 ? 9_979 : 10_000 }, (_, index) => index),
+    );
+    expect(() => assertShapeWithinBudget(input)).not.toThrow();
+
+    const tagged = tagUntrustedRequestValue(input) as unknown[][];
+    expect(utilTypes.isProxy(tagged)).toBe(true);
+    const firstContainer = tagged[0]!;
+    expect(utilTypes.isProxy(firstContainer)).toBe(true);
+
+    const firstRead = firstContainer[0];
+    const secondRead = firstContainer[0];
+    expect(isUntrusted(firstRead)).toBe(true);
+    expect(isUntrusted(secondRead)).toBe(true);
+    expect(firstRead).not.toBe(secondRead);
+    expect(revealUntrusted(firstRead, 'test validates lazy request leaf')).toBe(0);
+    expect(revealUntrusted(secondRead, 'test validates lazy request leaf')).toBe(0);
+  });
+
+  it('tags and reveals a deeply nested provenance tree iteratively', () => {
+    let deep: unknown = 'leaf';
+    const depth = 10_000;
+    for (let index = 0; index < depth; index += 1) deep = { child: deep };
+
+    const tagged = tagUntrustedRequestValue(deep);
+    const revealed = revealUntrustedRequestValue(tagged, 'test validates iterative provenance');
+    let cursor = revealed;
+    for (let index = 0; index < depth; index += 1) {
+      cursor = (cursor as { child: unknown }).child;
+    }
+    expect(cursor).toBe('leaf');
+  });
+
+  it('does not invoke hostile accessors while tagging or revealing request records', () => {
+    let getterCalls = 0;
+    const hostile = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(hostile, 'value', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return 'owned';
+      },
+    });
+
+    expect(() => tagUntrustedRequestValue(hostile)).toThrow(/stable own data properties/u);
+    expect(() => revealUntrustedRequestValue(hostile, 'hostile descriptor test')).toThrow(
+      /stable own data properties/u,
+    );
+    expect(getterCalls).toBe(0);
+  });
+
   it('tags decoded JSON body leaves as non-coercible untrusted request values', async () => {
     const result = await readUntrustedRequestBody(
       new Request('https://kovo.test/m', {
@@ -105,6 +192,10 @@ describe('untrusted request body parser', () => {
     if (!result.ok) return;
     const value = result.value as { name: unknown; nested: { bio: unknown } };
     expect(isUntrusted(value.name)).toBe(true);
+    expect(Object.keys(value)).toEqual(['name', 'nested']);
+    expect(isUntrusted(Reflect.get(value, 'name'))).toBe(true);
+    expect(isUntrusted(Object.getOwnPropertyDescriptor(value, 'name')?.value)).toBe(true);
+    expect(isUntrusted(Object.assign({}, value).name)).toBe(true);
     expect(() => String(value.name)).toThrow(/KV426/);
     expect(() => JSON.stringify(result.value)).toThrow(/KV426/);
     expect(inspect(value.name)).toBe('[untrusted]');

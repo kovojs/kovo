@@ -12,6 +12,7 @@ import {
   mutationHandlers,
   mutationSessionAuthorityFacts,
   parseComponentModule,
+  parserFactHasFrameworkTrustedUrl,
   soleJsxExpressionChild,
   taskRunHandlers,
   webhookRecordChanges,
@@ -70,6 +71,111 @@ import { type AccordionItemProps, AccordionTrigger as Trigger } from '@kovojs/ui
         localName: 'Trigger',
         moduleSpecifier: '@kovojs/ui/accordion',
       },
+    ]);
+  });
+
+  it('records exact JSX-runtime ABI imports and resolves aliased and namespace calls', () => {
+    const source = `
+import { jsx as build, type JSX } from '@kovojs/server/jsx-runtime';
+import * as devRuntime from '@kovojs/server/jsx-dev-runtime';
+
+build('script', { src: value });
+devRuntime.jsxDEV('link', { href: value, rel: 'stylesheet' });
+`;
+    const model = parseComponentModule('runtime-helper.ts', source);
+
+    expect(model.compilerJsxRuntimeImports).toEqual([
+      expect.objectContaining({
+        factories: ['jsx'],
+        specifier: '@kovojs/server/jsx-runtime',
+      }),
+      expect.objectContaining({
+        factories: ['*'],
+        specifier: '@kovojs/server/jsx-dev-runtime',
+      }),
+    ]);
+    expect(
+      callExpressions(model)
+        .filter((call) => call.frameworkJsxRuntimeFactory !== undefined)
+        .map((call) => [call.name, call.frameworkJsxRuntimeFactory]),
+    ).toEqual([
+      ['build', 'jsx'],
+      ['devRuntime.jsxDEV', 'jsxDEV'],
+    ]);
+  });
+
+  it('does not assign JSX-runtime identity to type-only imports or local lookalikes', () => {
+    const source = `
+import type { JSX } from '@kovojs/server/jsx-runtime';
+const jsx = (tag, props) => ({ tag, props });
+function render(jsx) { return jsx('script', {}); }
+jsx('div', {});
+`;
+    const model = parseComponentModule('local-runtime-lookalike.ts', source);
+
+    expect(model.compilerJsxRuntimeImports).toEqual([]);
+    expect(
+      callExpressions(model).filter((call) => call.frameworkJsxRuntimeFactory !== undefined),
+    ).toEqual([]);
+  });
+
+  it('records exact trustedUrl provenance on direct and attrs-object expressions', () => {
+    const source = `
+import { trustedUrl as reviewedUrl } from '@kovojs/browser';
+import * as browser from '@kovojs/browser';
+import type { trustedUrl as typedUrl } from '@kovojs/browser';
+const trustedUrl = (value) => value;
+
+export const Contexts = component({
+  render: (_queries, state) => (
+    <>
+      <script src={reviewedUrl(state.script, 'reviewed')} />
+      <link href={browser.trustedUrl(state.stylesheet, 'reviewed')} />
+      <script {...{ src: reviewedUrl(state.script, 'reviewed spread') }} />
+      <link {...{ ...{ href: browser.trustedUrl(state.stylesheet, 'reviewed nested spread') } }} />
+      <iframe src={trustedUrl(state.frame, 'lookalike')} />
+      <iframe src={typedUrl(state.frame, 'type only')} />
+      <Tooltip.Trigger attrs={{
+        src: reviewedUrl(state.script, 'reviewed'),
+        href: browser.trustedUrl(state.stylesheet, 'reviewed'),
+        sandbox: trustedUrl(state.sandbox, 'lookalike'),
+      }} />
+    </>
+  ),
+});
+`;
+    const elements = jsxElements(parseComponentModule('trusted-url-facts.tsx', source));
+    const attribute = (tag: string, occurrence = 0) =>
+      elements.filter((element) => element.tag === tag)[occurrence]?.attributes[0];
+
+    expect(attribute('script')).toMatchObject({ name: 'src' });
+    expect(attribute('link')).toMatchObject({ name: 'href' });
+    expect(parserFactHasFrameworkTrustedUrl(attribute('script')!)).toBe(true);
+    expect(parserFactHasFrameworkTrustedUrl(attribute('link')!)).toBe(true);
+    const directSpread = elements.filter((element) => element.tag === 'script')[1]
+      ?.spreadAttributes[0];
+    expect(directSpread?.objectEntries?.[0]).toMatchObject({ key: 'src' });
+    expect(directSpread?.staticWireAttributeEntries?.[0]).toMatchObject({ key: 'src' });
+    expect(parserFactHasFrameworkTrustedUrl(directSpread!.objectEntries![0]!)).toBe(true);
+    expect(parserFactHasFrameworkTrustedUrl(directSpread!.staticWireAttributeEntries![0]!)).toBe(
+      true,
+    );
+    const nestedSpread = elements.filter((element) => element.tag === 'link')[1]
+      ?.spreadAttributes[0];
+    expect(nestedSpread?.objectEntries).toBeUndefined();
+    expect(nestedSpread?.staticWireAttributeEntries?.[0]).toMatchObject({ key: 'href' });
+    expect(parserFactHasFrameworkTrustedUrl(nestedSpread!.staticWireAttributeEntries![0]!)).toBe(
+      true,
+    );
+    expect(parserFactHasFrameworkTrustedUrl(attribute('iframe', 0)!)).toBe(false);
+    expect(parserFactHasFrameworkTrustedUrl(attribute('iframe', 1)!)).toBe(false);
+    const attrsEntries = attribute('Tooltip.Trigger')?.expressionObjectEntries ?? [];
+    expect(
+      attrsEntries.map((entry) => [entry.key, parserFactHasFrameworkTrustedUrl(entry)]),
+    ).toEqual([
+      ['src', true],
+      ['href', true],
+      ['sandbox', false],
     ]);
   });
 

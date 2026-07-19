@@ -865,7 +865,7 @@ describe('diagnostic registry', () => {
           "code": "KV438",
           "help": "Would lower to: a write whose governed columns (owner/principal columns, the primary key, and columns marked kovo({ governed: true })) receive only server-derived, literal, or explicitly-asserted values — never raw request input.
       Blocked reason: a governed column (owner/principal/role/privilege/identity) set from request input — directly, through an alias/destructure, or via a .values(input) / .set(input) spread — is mass assignment: a client can over-write a field the server never meant to expose (privilege escalation, ownership takeover, balance tampering).
-      Fixes: assign the column from a server value (req.session/guard/tenant), a literal, or a same-package helper declared kovoAnalyzerSummary(fn, { returns: { kind: "server" } }); discharge a proven non-input value with serverValue(value, reason); for a deliberate privileged write use trustedAssign(input.x, reason) (the audited path, surfaced in kovo explain --writes).
+      Fixes: assign the column from a structurally proven server/private value (req.session/guard/tenant) or a literal; serverValue(value, reason) accepts only an independently proven non-input value and rejects opaque helpers; for a deliberate privileged write use trustedAssign(input.x, reason) (the audited path, surfaced in kovo explain --writes). App analyzer summaries cannot declare server provenance.
       SPEC §10.3/§11.1 and secure-framework Phase 3: governed-column write-provenance is by-construction (input-reaching a governed column fails the build, fail-closed on unprovable provenance); serverValue/trustedAssign are author-assertion escapes (audit-grade).",
           "message": "Request input reaches a governed column (mass assignment).",
           "severity": "error",
@@ -917,7 +917,7 @@ describe('diagnostic registry', () => {
         },
         "KV449": {
           "code": "KV449",
-          "help": "Would lower to: a compiler-owned kovo-security-operation-ir/v1 operation with an exact reviewed door plus a kovo-security-semantic-graph/v1 root-to-transfer-to-sink trace.
+          "help": "Would lower to: a compiler-owned kovo-security-operation-ir/v1 operation with an exact reviewed door plus a kovo-security-semantic-graph/v2 root-binding-to-invocation-to-sink trace.
       Blocked reason: the handler uses an unknown/computed raw DOM or capability operation, an unreviewed executable call, an unjustified exceptional door, an unsupported/recursive/budget-exhausted helper transfer, or a hand-written mutation form that cannot carry the complete server-stamped CSRF plus Kovo-Idem field set.
       Fixes: use typed <form mutation={definition}> (or the exact mutationFormAttributes(definition) JSX spread); use component state, delegated event reads, reviewed focus/dialog/form operations, managed DB/egress/response APIs, or a named trustedSql/trustedHtml/raw-response door with its required justification.
       SPEC §4.3, §5.2, §6.6, and §9.1 make the finite compiler-owned operation set and its bounded helper summaries fail closed. Server diagnostics name root, ordered transfers, sink, and the exact closed reason. There is no general raw-DOM/capability or hand-authored lowered-IR escape; only the named exceptional doors documented by their owning sink are accepted.

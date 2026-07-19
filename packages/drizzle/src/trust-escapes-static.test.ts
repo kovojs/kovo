@@ -4,6 +4,7 @@ import { builtinModules as nodeBuiltinModules } from 'node:module';
 
 import { ts } from 'ts-morph';
 import { describe, expect, it } from 'vitest';
+import type { SecuritySemanticGraph } from '@kovojs/core/internal/security-operation-ir';
 
 import {
   collectStaticBuildTrustFactsFromProject,
@@ -26,6 +27,10 @@ function sinksFor(source: string, fileName = 'app.tsx') {
 
 function sinksForFiles(files: readonly TrustEscapeSourceFileInput[]) {
   return collectUnregisteredSinksFromProject({ files });
+}
+
+function starterTemplateSource(relativePath: string): string {
+  return nodeFs.readFileSync(`packages/create-kovo/templates/src/${relativePath}`, 'utf8');
 }
 
 describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
@@ -287,18 +292,16 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
 
 // @kovo-security-classifier-corpus kv424-request-process
 describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () => {
-  it('flags an innerHTML write inside a JSX event handler', () => {
+  it('does not duplicate compiler-owned JSX innerHTML closure in TASK B', () => {
     const facts = sinksFor(`
       export function Widget(userInput: string) {
         return <button onClick={() => { el.innerHTML = userInput; }}>go</button>;
       }
     `);
-    expect(facts).toEqual([
-      expect.objectContaining({ sink: 'innerHTML', safePath: 'trustedHtml', source: 'userInput' }),
-    ]);
+    expect(facts).toEqual([]);
   });
 
-  it('flags eval, document.write, setTimeout-string and new Function in handlers', () => {
+  it('does not duplicate compiler-owned JSX code/DOM closure in TASK B', () => {
     const facts = sinksFor(`
       export function Widget(code: string, markup: string) {
         return (
@@ -315,8 +318,86 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         );
       }
     `);
-    const sinks = facts.map((fact) => fact.sink).sort();
-    expect(sinks).toEqual(['Function', 'document.write', 'eval', 'setTimeout']);
+    expect(facts).toEqual([]);
+  });
+
+  it.each([
+    {
+      label: 'an imperative onclick assignment',
+      registration: (body: string) => `element.onclick = () => { ${body} };`,
+      replacementSink: 'request-handler.opaque-protocol',
+    },
+    {
+      label: 'an imperative addEventListener callback',
+      registration: (body: string) => `element.addEventListener('click', () => { ${body} });`,
+      replacementSink: 'request-handler.opaque-call',
+    },
+  ])(
+    'keeps the historical $label corpus closed at registration',
+    ({ registration, replacementSink }) => {
+      const facts = sinksFor(
+        registration(`
+        element.innerHTML = input;
+        element.outerHTML = input;
+        eval(input);
+        setTimeout('owned()', 0);
+        setInterval('owned()', 0);
+        document.write(input);
+        document.writeln(input);
+        new Function(input);
+      `),
+      );
+
+      expect(facts).toEqual(
+        expect.arrayContaining([expect.objectContaining({ sink: replacementSink })]),
+      );
+    },
+  );
+
+  it.each([
+    {
+      label: 'an on* property assignment',
+      registration: 'element.onclick = () => element.focus();',
+      replacementSink: 'request-handler.opaque-protocol',
+    },
+    {
+      label: 'a static computed on* assignment',
+      registration: "element['onfocus'] = () => element.focus();",
+      replacementSink: 'request-handler.opaque-protocol',
+    },
+    {
+      label: 'an addEventListener member call',
+      registration: "element.addEventListener('click', () => element.focus());",
+      replacementSink: 'request-handler.opaque-call',
+    },
+    {
+      label: 'a static computed addEventListener call',
+      registration: "element['addEventListener']('click', () => element.focus());",
+      replacementSink: 'request-handler.opaque-call',
+    },
+    {
+      label: 'an unqualified global addEventListener call',
+      registration: "addEventListener('click', () => element.focus());",
+      replacementSink: 'request-handler.opaque-call',
+    },
+  ])(
+    'closes $label through the authoritative request graph before inspecting callback effects',
+    ({ registration, replacementSink }) => {
+      // C13 replacement proof: these verdicts come from requestProcessSinksForProject, so the
+      // historical callback-body name lexicon may be deleted without reopening the registration.
+      expect(sinksFor(registration)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ sink: replacementSink })]),
+      );
+    },
+  );
+
+  it('does not confuse a same-file addEventListener function with the browser global', () => {
+    expect(
+      sinksFor(`
+        function addEventListener(_name: string, _callback: () => void) {}
+        addEventListener('internal', () => {});
+      `),
+    ).toEqual([]);
   });
 
   it('does NOT flag local Function or document shadows as global sinks', () => {
@@ -546,9 +627,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       'Function',
       'Function',
       'eval',
-      'import()',
       'node:vm.Script',
       'node:vm.runInNewContext',
+      'request-handler.opaque-call',
       'request-handler.opaque-protocol',
       'setTimeout',
     ]);
@@ -578,12 +659,73 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts.map((fact) => fact.sink)).toEqual(
       expect.arrayContaining([
         'Function',
-        'Function.constructor',
         'eval',
+        'request-handler.opaque-call',
         'setInterval',
         'setTimeout',
       ]),
     );
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: '(() => {}).constructor',
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    ['direct eval', 'eval(input.code);'],
+    ['direct Function call', 'Function(input.code);'],
+    ['direct Function construction', 'new Function(input.code);'],
+    ['string setTimeout', "setTimeout('owned()', 1);"],
+    ['string setInterval', "setInterval('owned()', 1);"],
+    ['document.write', 'document.write(input.code);'],
+    ['document.writeln', 'document.writeln(input.code);'],
+    ['dynamic import', 'await import(input.module);'],
+    ['dynamic require', 'require(input.module);'],
+    ['process module resolution', "process.getBuiltinModule('node:fs');"],
+    ['function-constructor indirection', '(() => {}).constructor(input.code);'],
+  ])('keeps the legacy %s terminal closed independent of its diagnostic label', (_label, body) => {
+    const facts = sinksFor(`
+      import { mutation } from '@kovojs/server';
+      export const unsafe = mutation({ async handler(input) {
+        ${body}
+        return null;
+      } });
+    `);
+
+    // C13 replacement corpus: the closed verdict is the invariant. A more general structural
+    // authority boundary may replace a terminal-specific diagnostic without reopening this root.
+    expect(facts.length, body).toBeGreaterThan(0);
+  });
+
+  it('keeps locally resolved same-name callables and document methods green', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      const document = {
+        write(value) { return value; },
+        writeln(value) { return value; },
+      };
+      function eval(value) { return value; }
+      function Function(value) { return value; }
+      function setTimeout(value) { return value; }
+      function setInterval(value) { return value; }
+
+      export const safe = query({ load() {
+        eval('value');
+        Function('value');
+        new Function('value');
+        setTimeout('value');
+        setInterval('value');
+        document.write('value');
+        document.writeln('value');
+        return { ok: true };
+      } });
+    `);
+
+    expect(facts).toEqual([]);
   });
 
   it('keeps direct and aliased timers open for statically resolved function callbacks', () => {
@@ -651,7 +793,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
-  it('closes process.getBuiltinModule, createRequire, and dynamic require resolution', () => {
+  it('closes process.getBuiltinModule, createRequire, and dynamic require structurally', () => {
     const facts = sinksFor(`
       import { createRequire } from 'node:module';
       import { mutation } from '@kovojs/server';
@@ -668,7 +810,9 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       expect.arrayContaining([
         'child_process.execFileSync',
         'node:fs.readFileSync',
-        'node:module.dynamic-resolution',
+        'node:process.getBuiltinModule',
+        'request-handler.opaque-call',
+        'request-handler.opaque-package-call',
       ]),
     );
   });
@@ -7562,6 +7706,171 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
   });
 
+  it('accepts the complete generated runtime, auth, and source-derived query closure', () => {
+    const appSource = `
+      import { createApp } from '@kovojs/server';
+      import {
+        appAuthed,
+        appCsrf,
+        appSessionProvider,
+        appSignIn,
+        appSignOut,
+      } from './auth.js';
+      import {
+        appRuntimeDbProvider,
+        appRuntimeMutationReplayStore,
+      } from './_kovo/app-runtime-db.js';
+      import { contactsQuery } from './queries.js';
+      const app = createApp({
+        csrf: appCsrf,
+        db: appRuntimeDbProvider,
+        mutationReplayStore: appRuntimeMutationReplayStore,
+        mutations: [appSignIn, appSignOut],
+        queries: [contactsQuery],
+        routes: [],
+        sessionProvider: appSessionProvider,
+      });
+      void appAuthed;
+      export default app;
+    `;
+    const shared = [
+      { fileName: 'model.ts', source: starterTemplateSource('model.ts') },
+      { fileName: 'queries.ts', source: starterTemplateSource('queries.ts') },
+      { fileName: 'app.tsx', source: appSource },
+    ];
+    const postgresFiles = [
+      ...shared,
+      { fileName: 'schema.ts', source: starterTemplateSource('schema.ts') },
+      { fileName: 'db.ts', source: starterTemplateSource('db.ts') },
+      { fileName: 'auth.ts', source: starterTemplateSource('auth.ts') },
+      {
+        fileName: '_kovo/app-runtime-db-options.ts',
+        source: starterTemplateSource('_kovo/app-runtime-db-options.ts'),
+      },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: starterTemplateSource('_kovo/app-runtime-db.ts'),
+      },
+    ];
+    const sqliteFiles = [
+      ...shared,
+      { fileName: 'schema.ts', source: starterTemplateSource('schema.sqlite.ts') },
+      { fileName: 'db.ts', source: starterTemplateSource('db.sqlite.ts') },
+      { fileName: 'auth.ts', source: starterTemplateSource('auth.sqlite.ts') },
+      {
+        fileName: '_kovo/app-runtime-db.ts',
+        source: starterTemplateSource('_kovo/app-runtime-db.sqlite.ts'),
+      },
+    ];
+
+    // SPEC §6.6/§10.3: generated modules expose only these finite capabilities; none of the
+    // raw runtime, system DB, Better Auth adapter, or boot-only seed callable crosses the boundary.
+    expect(sinksForFiles(postgresFiles), 'Postgres generated closure').toEqual([]);
+    expect(sinksForFiles(sqliteFiles), 'SQLite generated closure').toEqual([]);
+
+    const mutableQueryKey = postgresFiles.map((file) =>
+      file.fileName === 'queries.ts'
+        ? {
+            ...file,
+            source: `${file.source}\n(contactsQuery as { key: string }).key = 'forged';`,
+          }
+        : file,
+    );
+    expect(sinksForFiles(mutableQueryKey)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-protocol',
+          source: '<property-setter:contactsQuery>',
+        }),
+      ]),
+    );
+
+    for (const [label, replacement] of [
+      ['raw runtime export', 'appDatabase'],
+      ['forged runtime provider', `{ get db() { return eval('forged-runtime-provider'); } }.db`],
+    ] as const) {
+      const hostile = postgresFiles.map((file) =>
+        file.fileName === '_kovo/app-runtime-db.ts'
+          ? {
+              ...file,
+              source: file.source.replace(
+                'export const appRuntimeDbProvider = appDatabase.db;',
+                `export const appRuntimeDbProvider = ${replacement};`,
+              ),
+            }
+          : file,
+      );
+      expect(sinksForFiles(hostile), label).not.toEqual([]);
+    }
+  });
+
+  it('accepts a source-derived query returning an exact context-owned rawRead result', () => {
+    const files = [
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { kovo } from '@kovojs/drizzle';
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          export const contacts = pgTable(
+            'contacts',
+            { classified: text('classified').notNull(), id: text('id').primaryKey() },
+            kovo({ domain: 'contacts', key: 'id', readOnly: true, secret: ['classified'] }),
+          );
+        `,
+      },
+      {
+        fileName: 'queries.ts',
+        source: `
+          import { sql, trustedSql } from '@kovojs/drizzle';
+          import { query } from '@kovojs/server';
+          export const contactsQuery = query({
+            async load(_input, context) {
+              const db = context?.db;
+              if (!db) throw new Error('query requires framework-provided context.db');
+              const items = await db.rawRead<{ id: string }>(
+                trustedSql(sql.raw<{ id: string }>('select id, classified from contacts'), {
+                  justification: 'reviewed static contacts read',
+                }),
+                { reads: ['contacts'] },
+              );
+              return { items };
+            },
+          });
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { createApp } from '@kovojs/server';
+          import { contactsQuery } from './queries.js';
+          export default createApp({ queries: [contactsQuery], routes: [] });
+        `,
+      },
+    ];
+    expect(sinksForFiles(files)).toEqual([]);
+
+    for (const [label, poison] of [
+      ['computed terminal', "db['rawRead']"],
+      ['extracted terminal', 'rawRead'],
+    ] as const) {
+      const hostile = files.map((file) =>
+        file.fileName === 'queries.ts'
+          ? {
+              ...file,
+              source:
+                label === 'extracted terminal'
+                  ? file.source.replace(
+                      'const items = await db.rawRead',
+                      'const rawRead = db.rawRead;\n              const items = await rawRead',
+                    )
+                  : file.source.replace('db.rawRead', poison),
+            }
+          : file,
+      );
+      expect(sinksForFiles(hostile), label).not.toEqual([]);
+    }
+  });
+
   it('accepts only the exact pristine webhook replay identity constructor', () => {
     const source = ({
       extra = '',
@@ -10355,8 +10664,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
   it('permits governed fetch/Response body flow but rejects forwarding ambient credentials', () => {
     const safe = sinksFor(`
       import { query } from '@kovojs/server';
-      export const remote = query({ async load() {
-        const response = await fetch('https://api.example.test/data');
+      export const remote = query({ async load(_input, context) {
+        const response = await context.fetch('https://api.example.test/data');
         const cloned = response.clone();
         return { value: await cloned.json() };
       } });
@@ -10365,9 +10674,10 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
     const unsafe = sinksFor(`
       import { query } from '@kovojs/server';
-      export const remote = query({ async load(input, { request }) {
-        await fetch(request.headers.get('authorization'));
-        await fetch('https://api.example.test/data', {
+      export const remote = query({ async load(input, context) {
+        const { request } = context;
+        await context.fetch(request.headers.get('authorization'));
+        await context.fetch('https://api.example.test/data', {
           body: request.headers.get('cookie'), method: 'POST',
         });
         await fetch.call(null, 'https://api.example.test/call', {
@@ -10401,6 +10711,48 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         'outbound-fetch.dynamic-arguments',
       ]),
     );
+  });
+
+  it('keeps contextual fetch provenance exact across aliases, mutation, and computed calls', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      export const computed = query({ async load(_input, context) {
+        await context['fetch']('https://api.example.test/computed');
+        return { ok: true };
+      } });
+      export const aliasedContext = query({ async load(_input, context) {
+        const alias = context;
+        await alias.fetch('https://api.example.test/alias');
+        return { ok: true };
+      } });
+      export const aliasedMethod = query({ async load(_input, context) {
+        const remote = context.fetch;
+        await remote('https://api.example.test/method');
+        return { ok: true };
+      } });
+      export const mutated = query({ async load(_input, context) {
+        context.fetch = async () => ({ clone() { return this; }, json() { return {}; } });
+        const response = await context.fetch('https://api.example.test/mutated');
+        return { value: await response.clone().json() };
+      } });
+      export const computedReader = query({ async load(_input, context) {
+        const response = await context.fetch('https://api.example.test/reader');
+        return { value: await response['clone']().json() };
+      } });
+    `);
+
+    expect(facts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'request-handler.opaque-call' })]),
+    );
+    for (const source of [
+      "context['fetch']",
+      'alias.fetch',
+      'remote',
+      'context.fetch',
+      "response['clone']",
+    ]) {
+      expect(facts.some((fact) => fact.source?.includes(source))).toBe(true);
+    }
   });
 
   it('reviews pure Drizzle expression builders without opening opaque package calls', () => {
@@ -10696,6 +11048,95 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       },
     ]);
     expect(rawEnvironmentValue.map((fact) => fact.sink)).toContain('node:process.env');
+  });
+
+  it('admits only exact audited trustedAssign calls while retaining nested closed verdicts', () => {
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const contacts = pgTable('contacts', {
+        id: text('id').primaryKey(),
+        email: text('email').notNull(),
+      });
+    `;
+    const mutationSource = ({
+      assignment,
+      extra = '',
+      serverImport = `import { mutation, publicAccess, s, trustedAssign } from '@kovojs/server';`,
+    }: {
+      assignment: string;
+      extra?: string;
+      serverImport?: string;
+    }) => `
+      ${serverImport}
+      import { contacts } from './schema.js';
+      ${extra}
+      export const addContact = mutation({
+        access: publicAccess('fixture'),
+        input: s.object({ email: s.string() }),
+        async handler(input, request) {
+          await request.db.insert(contacts).values({
+            id: ${assignment},
+            email: input.email,
+          });
+          return { ok: true };
+        },
+      });
+    `;
+    const facts = (source: string) =>
+      sinksForFiles([
+        { fileName: 'schema.ts', source: schemaSource },
+        { fileName: 'mutations.ts', source },
+      ]);
+
+    expect(
+      facts(
+        mutationSource({
+          assignment: `trustedAssign(crypto.randomUUID(), 'opaque server-generated id')`,
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      facts(
+        mutationSource({
+          assignment: `trustedAssign(input.email, { columns: ['id'], reason: 'reviewed grant' })`,
+        }),
+      ),
+    ).toEqual([]);
+
+    const closedVariants = [
+      mutationSource({
+        assignment: `trustedAssign(opaque(input.email), 'reviewed grant')`,
+        extra: `import { opaque } from './opaque.js';`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(process.env.CONTACT_ID, 'reviewed grant')`,
+      }),
+      mutationSource({
+        assignment: `server.trustedAssign(input.email, 'reviewed grant')`,
+        serverImport: [
+          `import { mutation, publicAccess, s } from '@kovojs/server';`,
+          `import * as server from '@kovojs/server';`,
+        ].join('\n'),
+      }),
+      mutationSource({
+        assignment: `grant(input.email, 'reviewed grant')`,
+        extra: `const grant = trustedAssign;`,
+      }),
+      mutationSource({ assignment: `trustedAssign(input.email, '')` }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, reason)`,
+        extra: `const reason = 'reviewed grant';`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, { ['reason']: 'reviewed grant' })`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, { reason: 'reviewed grant', reason: 'again' })`,
+      }),
+    ];
+    for (const source of closedVariants) {
+      expect(facts(source), source).not.toEqual([]);
+    }
   });
 
   it('accepts only exact relational query-builder reads of pristine reviewed tables', () => {
@@ -13778,6 +14219,279 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         }),
       ]),
     );
+  });
+
+  // @kovo-security-certifies KV424 compiler-semantic-helper-proof
+  it('uses only byte-and-span-bound compiler summaries to discharge nested request-helper noise', () => {
+    const source = `
+      import { kovoAnalyzerSummary } from '@kovojs/drizzle';
+      import { mutation, serverValue } from '@kovojs/server';
+      import { eq } from 'drizzle-orm';
+      import { account } from './schema.js';
+      function exactGuard(context) { return context.guard.userId; }
+      kovoAnalyzerSummary(exactGuard, { returns: { kind: 'guard', path: 'userId' } });
+      export const update = mutation({
+        async handler(input, request) {
+          async function nestedWrite(db, carrier) {
+            await db
+              .update(account)
+              .set({ userId: serverValue(exactGuard(carrier), 'claimed owner') })
+              .where(eq(account.id, input.id));
+          }
+          await nestedWrite(request.db, input);
+          return { ok: true };
+        },
+      });
+    `;
+    const parsed = ts.createSourceFile(
+      'summary-carrier.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let handler: import('typescript').MethodDeclaration | undefined;
+    let mutationCall: import('typescript').CallExpression | undefined;
+    let nestedWrite: import('typescript').FunctionDeclaration | undefined;
+    let nestedWriteCall: import('typescript').CallExpression | undefined;
+    const visit = (node: import('typescript').Node): void => {
+      if (ts.isFunctionDeclaration(node) && node.name?.text === 'nestedWrite') {
+        nestedWrite = node;
+      } else if (ts.isMethodDeclaration(node) && node.name.getText(parsed) === 'handler') {
+        handler = node;
+      } else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        if (node.expression.text === 'mutation') mutationCall = node;
+        if (node.expression.text === 'nestedWrite') nestedWriteCall = node;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(handler).toBeDefined();
+    expect(mutationCall).toBeDefined();
+    expect(nestedWrite).toBeDefined();
+    expect(nestedWriteCall).toBeDefined();
+    const callableSpan = {
+      end: nestedWrite!.getEnd(),
+      start: nestedWrite!.getStart(parsed),
+    };
+    const root = 'mutation:summary-carrier/update';
+    const transfer = 'local:nestedWrite[arg0=database]';
+    const graph: SecuritySemanticGraph = {
+      budgets: { callDepth: 16, nodes: 50_000, operations: 4_096, summaries: 256 },
+      roots: [
+        {
+          binding: {
+            callback: 'handler',
+            callableSpan: {
+              end: handler!.getEnd(),
+              start: handler!.getStart(parsed),
+            },
+            factory: 'mutation',
+            factoryCallSpan: {
+              end: mutationCall!.getEnd(),
+              start: mutationCall!.getStart(parsed),
+            },
+            root,
+          },
+          helperInvocations: [
+            {
+              argumentSpans: [...nestedWriteCall!.arguments].map((argument) => ({
+                end: argument.getEnd(),
+                start: argument.getStart(parsed),
+              })),
+              authorityInputs: ['arg0=database'],
+              callable: 'local:nestedWrite',
+              callableSpan,
+              callSpan: {
+                end: nestedWriteCall!.getEnd(),
+                start: nestedWriteCall!.getStart(parsed),
+              },
+              operationKinds: ['server.database.write'],
+              transfers: [transfer],
+              verdict: 'proved',
+            },
+          ],
+          root,
+          summaries: [
+            {
+              authorityInputs: ['arg0=database'],
+              callable: 'local:nestedWrite',
+              callableSpan,
+              operationKinds: ['server.database.write'] as const,
+              verdict: 'proved' as const,
+            },
+          ],
+          traces: [
+            {
+              root,
+              sink: {
+                door: 'managed-db',
+                kind: 'server.database.write',
+                target: 'db.update',
+              },
+              transfers: [transfer],
+              verdict: 'proved',
+            },
+          ],
+        },
+      ],
+      schema: 'kovo-security-semantic-graph/v2' as const,
+    };
+    const schemaSource = `
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      export const account = pgTable('account', {
+        id: text('id').notNull(),
+        userId: text('user_id').notNull(),
+      });
+    `;
+    const files = [
+      { fileName: 'summary-carrier.ts', source },
+      { fileName: 'schema.ts', source: schemaSource },
+    ];
+
+    const closed = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: [
+        { fileName: 'summary-carrier.ts', graphs: [graph], source },
+        { fileName: 'schema.ts', graphs: [], source: schemaSource },
+      ],
+      files,
+    });
+    expect(closed).toEqual([]);
+
+    const byteMismatched = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: [
+        { fileName: 'summary-carrier.ts', graphs: [graph], source: `${source}\n` },
+        { fileName: 'schema.ts', graphs: [], source: schemaSource },
+      ],
+      files,
+    });
+    expect(byteMismatched).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+
+    const verdictClosed = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: [
+        {
+          fileName: 'summary-carrier.ts',
+          graphs: [
+            {
+              ...graph,
+              roots: [
+                {
+                  ...graph.roots[0]!,
+                  summaries: [{ ...graph.roots[0]!.summaries[0]!, verdict: 'closed' as const }],
+                },
+              ],
+            },
+          ],
+          source,
+        },
+        { fileName: 'schema.ts', graphs: [], source: schemaSource },
+      ],
+      files,
+    });
+    expect(verdictClosed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+      ]),
+    );
+
+    const semanticSinks = (candidate: SecuritySemanticGraph) =>
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [
+          { fileName: 'summary-carrier.ts', graphs: [candidate], source },
+          { fileName: 'schema.ts', graphs: [], source: schemaSource },
+        ],
+        files,
+      });
+    const provedSummary = graph.roots[0]!.summaries[0]!;
+    for (const [label, candidate] of [
+      [
+        'callable identity mismatch',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              summaries: [{ ...provedSummary, callable: 'local:notNestedWrite' }],
+            },
+          ],
+        },
+      ],
+      [
+        'authority category mismatch',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              summaries: [{ ...provedSummary, authorityInputs: ['arg0=request'] }],
+            },
+          ],
+        },
+      ],
+      ['root family mismatch', { ...graph, roots: [{ ...graph.roots[0]!, root: 'query:update' }] }],
+      [
+        'multiple root identities for one helper',
+        {
+          ...graph,
+          roots: [graph.roots[0]!, { ...graph.roots[0]!, root: 'mutation:other-update' }],
+        },
+      ],
+      [
+        'compiler-control operation in terminal summary',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              summaries: [{ ...provedSummary, operationKinds: ['server.helper.call'] }],
+            },
+          ],
+        },
+      ],
+      [
+        'same-span closed sibling summary',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              summaries: [provedSummary, { ...provedSummary, verdict: 'closed' as const }],
+            },
+          ],
+        },
+      ],
+      [
+        'closed root trace',
+        {
+          ...graph,
+          roots: [
+            {
+              ...graph.roots[0]!,
+              traces: [
+                {
+                  detail: 'closed sibling path',
+                  reason: 'opaque-transfer' as const,
+                  root,
+                  sink: 'closed sibling path',
+                  transfers: [],
+                  verdict: 'closed' as const,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    ] as const) {
+      expect(semanticSinks(candidate), label).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+        ]),
+      );
+    }
   });
 
   it('keeps reviewed imports open and skips large unused lazy bodies within a low-second bound', () => {

@@ -1393,10 +1393,20 @@ export async function runWebhook<
 
   const bodyResult = parseWebhookBody(rawBody);
   if (!bodyResult.ok) {
+    if (bodyResult.reason === 'shape-budget') {
+      return {
+        changes: [],
+        replayed: false,
+        response: webhookJsonResponse(422, {
+          error: { code: 'VALIDATION', payload: { reason: 'shape-budget' } },
+          ok: false,
+        }),
+      };
+    }
     return {
       changes: [],
       replayed: false,
-      response: webhookResponse(400, bodyResult.message),
+      response: webhookResponse(400, 'Invalid JSON webhook body'),
     };
   }
 
@@ -1811,11 +1821,8 @@ async function verifyWebhook(
   });
 }
 
-function parseWebhookBody(
-  rawBody: Uint8Array,
-): { ok: true; value: unknown } | { message: string; ok: false } {
-  const result = parseUntrustedJsonBodyBytes(rawBody);
-  return result.ok ? result : { message: 'Invalid JSON webhook body', ok: false };
+function parseWebhookBody(rawBody: Uint8Array) {
+  return parseUntrustedJsonBodyBytes(rawBody);
 }
 
 async function parseLooseWebhookInput<InputSchema extends Schema<unknown>>(

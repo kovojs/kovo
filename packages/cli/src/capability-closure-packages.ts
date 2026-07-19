@@ -1,12 +1,15 @@
 import { createHash as builtinCreateHash } from 'node:crypto';
 import {
   existsSync as builtinExistsSync,
+  lstatSync as builtinLstatSync,
   readFileSync as builtinReadFileSync,
+  readdirSync as builtinReaddirSync,
   realpathSync as builtinRealpathSync,
 } from 'node:fs';
 import { createRequire as builtinCreateRequire } from 'node:module';
 import {
   dirname as builtinDirname,
+  isAbsolute as builtinIsAbsolute,
   join as builtinJoin,
   parse as builtinParsePath,
   relative as builtinRelative,
@@ -14,6 +17,7 @@ import {
 import { fileURLToPath as builtinFileURLToPath, pathToFileURL } from 'node:url';
 
 import {
+  isCompilerOwnedCapabilityPackage,
   packageCapabilitySummarySchema,
   type CapabilityPackageRequest,
   type PackageCapabilitySummary,
@@ -26,6 +30,14 @@ import {
 const capabilitySummaryDocumentSchema = 'kovo-package-capability-summaries/v1' as const;
 const nativeImportMetaResolve = (specifier: string, parent: string): string =>
   import.meta.resolve(specifier, parent);
+const frameworkSourceImplementationPrefix = 'kovo-source-tree-sha256:';
+const frameworkPackedImplementationPrefix = 'kovo-packed-tree-sha256:';
+const frameworkCompilerSelfSourceImplementationPrefix = 'kovo-compiler-self-source-tree-sha256:';
+const frameworkCompilerSelfPackedImplementationPrefix = 'kovo-compiler-self-packed-tree-sha256:';
+const frameworkCompilerPackage = '@kovojs/compiler';
+const frameworkCompilerSourceCatalogFile =
+  'src/security/framework-public-runtime-export-posture.generated.ts';
+const frameworkCompilerPackedCatalogFiles = new Set(['dist/internal.mjs', 'dist/internal.mjs.map']);
 
 const capabilityKinds = new Set<RawCapabilityKind>([
   'database-driver',
@@ -43,14 +55,26 @@ const dispositions = new Set<PackageCapabilitySummaryExport['disposition']>([
   'raw',
 ]);
 
+interface CapabilityPackageResolutionOptions {
+  /** @internal Test/performance observer; never supplies or alters identity. */
+  readonly onImplementationTreeWalk?: (packageRoot: string, layout: 'packed' | 'source') => void;
+}
+
 /** Resolve exact package identity/conditional-export facts without evaluating package code. */
 export function resolveCapabilityPackages(
   requests: readonly CapabilityPackageRequest[],
   importerPath: string,
+  options: CapabilityPackageResolutionOptions = {},
 ): ResolvedCapabilityPackage[] {
   const facts: ResolvedCapabilityPackage[] = [];
+  const implementationDigestCache = new Map<string, string | undefined>();
   for (const request of requests) {
-    const fact = resolveCapabilityPackage(request.specifier, importerPath);
+    const fact = resolveCapabilityPackage(
+      request.specifier,
+      importerPath,
+      implementationDigestCache,
+      options,
+    );
     if (fact !== undefined) facts.push(fact);
   }
   return facts.sort((left, right) => left.specifier.localeCompare(right.specifier));
@@ -99,6 +123,8 @@ export function capabilityManifestFingerprint(manifest: Readonly<Record<string, 
 function resolveCapabilityPackage(
   specifier: string,
   importerPath: string,
+  implementationDigestCache: Map<string, string | undefined>,
+  options: CapabilityPackageResolutionOptions,
 ): ResolvedCapabilityPackage | undefined {
   const packageName = packageNameForSpecifier(specifier);
   const manifestPath = resolvedPackageManifestPath(specifier, packageName, importerPath);
@@ -117,9 +143,22 @@ function resolveCapabilityPackage(
   const observedVersion = ownValue(manifest, 'version');
   if (typeof observedName !== 'string' || typeof observedVersion !== 'string') return undefined;
   const exportResolution = packageExportResolution(manifest, packageSubpath(specifier));
+  const implementationDigest =
+    exportResolution.resolved &&
+    observedName === packageName &&
+    isCompilerOwnedCapabilityPackage(observedName)
+      ? installedFrameworkImplementationDigest(
+          builtinDirname(manifestPath),
+          observedName,
+          exportResolution.targets,
+          implementationDigestCache,
+          options,
+        )
+      : undefined;
   return {
     conditions: exportResolution.conditions,
     exportStatus: exportResolution.resolved ? 'resolved' : 'unresolved',
+    ...(implementationDigest === undefined ? {} : { implementationDigest }),
     manifestFingerprint: capabilityManifestFingerprint(manifest),
     packageName: observedName,
     packageVersion: observedVersion,
@@ -136,13 +175,17 @@ function resolvedPackageManifestPath(
   const require = builtinCreateRequire(importerUrl);
   const candidates: string[] = [];
   try {
-    candidates.push(require.resolve(`${packageName}/package.json`));
+    const resolved = require.resolve(`${packageName}/package.json`);
+    if (builtinIsAbsolute(resolved)) candidates.push(resolved);
   } catch {
     // Export maps commonly hide package.json; resolve executable targets below.
   }
   for (const request of [specifier, packageName]) {
     try {
-      candidates.push(require.resolve(request));
+      const resolved = require.resolve(request);
+      // Node built-ins resolve to `node:*` (or a bare built-in name), not a filesystem path.
+      // They remain visible to the raw-capability classifier but cannot own package metadata.
+      if (builtinIsAbsolute(resolved)) candidates.push(resolved);
     } catch {
       // The ESM condition can still resolve an import-only package.
     }
@@ -161,7 +204,12 @@ function resolvedPackageManifestPath(
 }
 
 function findOwningPackageManifest(start: string, packageName: string): string | undefined {
-  let current = builtinDirname(builtinRealpathSync(start));
+  let current: string;
+  try {
+    current = builtinDirname(builtinRealpathSync(start));
+  } catch {
+    return undefined;
+  }
   const root = builtinParsePath(current).root;
   for (let depth = 0; depth < 64; depth += 1) {
     const candidate = builtinJoin(current, 'package.json');
@@ -182,25 +230,33 @@ function findOwningPackageManifest(start: string, packageName: string): string |
 function packageExportResolution(
   manifest: Readonly<Record<string, unknown>>,
   subpath: string,
-): { conditions: string[]; resolved: boolean } {
+): { conditions: string[]; resolved: boolean; targets: string[] } {
   const exportsValue = ownValue(manifest, 'exports');
   if (exportsValue === undefined) {
     const main = ownValue(manifest, 'main');
     const module = ownValue(manifest, 'module');
+    const targets = [main, module].filter(
+      (value): value is string => typeof value === 'string' && value.length > 0,
+    );
     return {
       conditions: ['default'],
-      resolved:
-        subpath === '.' &&
-        ((typeof main === 'string' && main.length > 0) ||
-          (typeof module === 'string' && module.length > 0)),
+      resolved: subpath === '.' && targets.length > 0,
+      targets,
     };
   }
   const target = selectExportTarget(exportsValue, subpath);
-  if (target === undefined || target === null) return { conditions: [], resolved: false };
+  if (target === undefined || target === null) {
+    return { conditions: [], resolved: false, targets: [] };
+  }
   const conditions = new Set<string>();
-  const hasTarget = collectExportConditions(target, conditions);
+  const targets = new Set<string>();
+  const hasTarget = collectExportConditions(target, conditions, targets);
   if (conditions.size === 0 && hasTarget) conditions.add('default');
-  return { conditions: [...conditions].sort(), resolved: hasTarget };
+  return {
+    conditions: [...conditions].sort(),
+    resolved: hasTarget,
+    targets: [...targets].sort(),
+  };
 }
 
 function selectExportTarget(exportsValue: unknown, subpath: string): unknown {
@@ -215,12 +271,21 @@ function selectExportTarget(exportsValue: unknown, subpath: string): unknown {
   return pattern === undefined ? undefined : ownValue(exportsValue, pattern);
 }
 
-function collectExportConditions(value: unknown, conditions: Set<string>): boolean {
-  if (typeof value === 'string') return value.length > 0;
+function collectExportConditions(
+  value: unknown,
+  conditions: Set<string>,
+  targets: Set<string>,
+): boolean {
+  if (typeof value === 'string') {
+    if (value.length > 0) targets.add(value);
+    return value.length > 0;
+  }
   if (value === null) return false;
   if (Array.isArray(value)) {
     let found = false;
-    for (const entry of value) found = collectExportConditions(entry, conditions) || found;
+    for (const entry of value) {
+      found = collectExportConditions(entry, conditions, targets) || found;
+    }
     return found;
   }
   if (!isRecord(value)) return false;
@@ -228,9 +293,253 @@ function collectExportConditions(value: unknown, conditions: Set<string>): boole
   for (const key of Object.keys(value)) {
     if (key === '.' || key.startsWith('./')) return false;
     conditions.add(key);
-    found = collectExportConditions(ownValue(value, key), conditions) || found;
+    found = collectExportConditions(ownValue(value, key), conditions, targets) || found;
   }
   return found;
+}
+
+function installedFrameworkImplementationDigest(
+  packageRoot: string,
+  packageName: string,
+  targets: readonly string[],
+  cache: Map<string, string | undefined>,
+  options: CapabilityPackageResolutionOptions,
+): string | undefined {
+  const layout = implementationLayout(packageRoot, targets);
+  if (layout === undefined) return undefined;
+  try {
+    const realPackageRoot = builtinRealpathSync(packageRoot);
+    const cacheKey = `${realPackageRoot}\0${layout}`;
+    if (cache.has(cacheKey)) return cache.get(cacheKey);
+    options.onImplementationTreeWalk?.(realPackageRoot, layout);
+    const digest =
+      layout === 'source'
+        ? sourceTreeSha256(realPackageRoot, packageName)
+        : packedTreeSha256(realPackageRoot, packageName);
+    const implementationDigest = `${layout === 'source' ? frameworkSourceImplementationPrefix : frameworkPackedImplementationPrefix}${digest}`;
+    cache.set(cacheKey, implementationDigest);
+    return implementationDigest;
+  } catch {
+    // A missing, escaping, symlinked, or structurally unexpected implementation is not identity.
+    // The compiler observes the absent digest and closes the first-party verdict (SPEC §6.6).
+    try {
+      cache.set(`${builtinRealpathSync(packageRoot)}\0${layout}`, undefined);
+    } catch {
+      // No stable real root means there is no cacheable installed identity.
+    }
+    return undefined;
+  }
+}
+
+function implementationLayout(
+  packageRoot: string,
+  targets: readonly string[],
+): 'packed' | 'source' | undefined {
+  let layout: 'packed' | 'source' | undefined;
+  for (const target of targets) {
+    if (!target.startsWith('./')) return undefined;
+    const relativeTarget = slashPath(
+      builtinRelative(packageRoot, builtinJoin(packageRoot, target)),
+    );
+    if (
+      relativeTarget === '' ||
+      relativeTarget === '..' ||
+      relativeTarget.startsWith('../') ||
+      builtinIsAbsolute(relativeTarget)
+    ) {
+      return undefined;
+    }
+    const targetLayout = relativeTarget.startsWith('src/')
+      ? 'source'
+      : relativeTarget.startsWith('dist/')
+        ? 'packed'
+        : undefined;
+    if (targetLayout === undefined || (layout !== undefined && layout !== targetLayout)) {
+      return undefined;
+    }
+    layout = targetLayout;
+  }
+  return layout;
+}
+
+function sourceTreeSha256(packageRoot: string, packageName: string): string {
+  const sourceRoot = builtinJoin(packageRoot, 'src');
+  if (!builtinExistsSync(sourceRoot)) throw new Error('source implementation is missing');
+  if (!builtinLstatSync(sourceRoot).isDirectory()) {
+    throw new Error('source implementation root is not a directory');
+  }
+  const files: string[] = [];
+  visitImplementationTree(sourceRoot, (fileName) => files.push(fileName));
+  let normalizedCompilerCatalog = false;
+  const digest = digestFiles(packageRoot, files, (fileName) => {
+    const relativeFileName = slashPath(builtinRelative(packageRoot, fileName));
+    const bytes = Buffer.from(builtinReadFileSync(fileName));
+    if (
+      packageName === frameworkCompilerPackage &&
+      relativeFileName === frameworkCompilerSourceCatalogFile
+    ) {
+      const normalized = normalizeCompilerCatalogSelfDigests(bytes);
+      requireExactCompilerSelfDigests(normalized);
+      normalizedCompilerCatalog = true;
+      return normalized.bytes;
+    }
+    if (countFrameworkDigestMarkers(bytes) > 0) {
+      throw new Error('framework digest escaped the compiler catalog artifact');
+    }
+    return bytes;
+  });
+  if (packageName === frameworkCompilerPackage && !normalizedCompilerCatalog) {
+    throw new Error('compiler source catalog artifact is missing');
+  }
+  return digest;
+}
+
+function packedTreeSha256(packageRoot: string, packageName: string): string {
+  const distRoot = builtinJoin(packageRoot, 'dist');
+  if (!builtinExistsSync(distRoot)) throw new Error('packed implementation is missing');
+  if (!builtinLstatSync(distRoot).isDirectory()) {
+    throw new Error('packed implementation root is not a directory');
+  }
+  const files: string[] = [];
+  visitImplementationTree(distRoot, (fileName) => files.push(fileName));
+  const normalizedCatalogs = new Set<string>();
+  const digest = digestFiles(packageRoot, files, (fileName) => {
+    const relativeFileName = slashPath(builtinRelative(packageRoot, fileName));
+    const bytes = Buffer.from(builtinReadFileSync(fileName));
+    const isCompilerCatalog =
+      packageName === frameworkCompilerPackage &&
+      frameworkCompilerPackedCatalogFiles.has(relativeFileName);
+    if (isCompilerCatalog) {
+      const normalized = normalizeCompilerCatalogSelfDigests(bytes);
+      requireExactCompilerSelfDigests(normalized);
+      normalizedCatalogs.add(relativeFileName);
+      return normalized.bytes;
+    }
+    if (countFrameworkDigestMarkers(bytes) > 0) {
+      throw new Error('framework digest escaped the compiler catalog artifact');
+    }
+    return bytes;
+  });
+  if (
+    packageName === frameworkCompilerPackage &&
+    normalizedCatalogs.size !== frameworkCompilerPackedCatalogFiles.size
+  ) {
+    throw new Error('compiler catalog artifact is missing');
+  }
+  return digest;
+}
+
+function visitImplementationTree(
+  directory: string,
+  appendFile: (fileName: string, entryName: string) => void,
+): void {
+  for (const entry of builtinReaddirSync(directory, { withFileTypes: true })) {
+    const absolute = builtinJoin(directory, entry.name);
+    if (entry.isDirectory()) {
+      visitImplementationTree(absolute, appendFile);
+      continue;
+    }
+    if (!entry.isFile()) throw new Error('implementation tree contains a non-file entry');
+    appendFile(absolute, entry.name);
+  }
+}
+
+function digestFiles(
+  packageRoot: string,
+  files: readonly string[],
+  readFile: (fileName: string) => Buffer | undefined,
+): string {
+  const hash = builtinCreateHash('sha256');
+  for (const fileName of [...files].sort(compareStrings)) {
+    hash.update(slashPath(builtinRelative(packageRoot, fileName)));
+    hash.update('\0');
+    const bytes = readFile(fileName);
+    if (bytes !== undefined) hash.update(bytes);
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+function normalizeCompilerCatalogSelfDigests(input: Buffer): {
+  bytes: Buffer;
+  packedMatches: number;
+  sourceMatches: number;
+} {
+  const bytes = Buffer.from(input);
+  const sourceMatches = normalizeDigestPayloads(
+    bytes,
+    frameworkCompilerSelfSourceImplementationPrefix,
+  );
+  const packedMatches = normalizeDigestPayloads(
+    bytes,
+    frameworkCompilerSelfPackedImplementationPrefix,
+  );
+  return { bytes, packedMatches, sourceMatches };
+}
+
+function requireExactCompilerSelfDigests(normalized: {
+  packedMatches: number;
+  sourceMatches: number;
+}): void {
+  if (normalized.sourceMatches !== 1 || normalized.packedMatches !== 1) {
+    throw new Error('compiler catalog self-digests are ambiguous');
+  }
+}
+
+function normalizeDigestPayloads(bytes: Buffer, prefixText: string): number {
+  const prefix = Buffer.from(prefixText);
+  let matches = 0;
+  let offset = 0;
+  while (offset < bytes.length) {
+    const found = bytes.indexOf(prefix, offset);
+    if (found < 0) break;
+    const start = found + prefix.length;
+    const end = start + 64;
+    const candidate = bytes.subarray(start, end).toString('ascii');
+    const next = bytes[end];
+    if (/^[a-f0-9]{64}$/u.test(candidate) && (next === undefined || !isLowerHexByte(next))) {
+      bytes.fill(0x30, start, end);
+      matches += 1;
+    }
+    offset = Math.max(end, found + 1);
+  }
+  return matches;
+}
+
+function countFrameworkDigestMarkers(input: Buffer): number {
+  return [
+    frameworkSourceImplementationPrefix,
+    frameworkPackedImplementationPrefix,
+    frameworkCompilerSelfSourceImplementationPrefix,
+    frameworkCompilerSelfPackedImplementationPrefix,
+  ].reduce((count, prefix) => count + countDigestPayloads(input, prefix), 0);
+}
+
+function countDigestPayloads(input: Buffer, prefixText: string): number {
+  const prefix = Buffer.from(prefixText);
+  let matches = 0;
+  let offset = 0;
+  while (offset < input.length) {
+    const found = input.indexOf(prefix, offset);
+    if (found < 0) break;
+    const start = found + prefix.length;
+    const end = start + 64;
+    const candidate = input.subarray(start, end).toString('ascii');
+    const next = input[end];
+    if (/^[a-f0-9]{64}$/u.test(candidate) && (next === undefined || !isLowerHexByte(next))) {
+      matches += 1;
+    }
+    offset = Math.max(end, found + 1);
+  }
+  return matches;
+}
+
+function isLowerHexByte(value: number): boolean {
+  return (value >= 0x30 && value <= 0x39) || (value >= 0x61 && value <= 0x66);
+}
+
+function compareStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function exportPatternMatches(pattern: string, subpath: string): boolean {

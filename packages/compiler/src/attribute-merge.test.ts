@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from './index.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 describe('compiler attribute merge diagnostics', () => {
   it('merges primitive attrs-function records into the author element on the wire', () => {
@@ -16,7 +16,6 @@ export const PrimitiveMerge = component({
         attrs={{
           class: 'primitive base',
           style: 'color: red;',
-          'on:click': '/c/primitive#click',
           id: 'primitive-trigger',
           'aria-controls': 'primitive-panel',
           'aria-label': 'Primitive label',
@@ -33,7 +32,6 @@ export const PrimitiveMerge = component({
             {...attrs}
             class="author base"
             style="background: blue;"
-            on:click="/c/author#click"
             id="author-trigger"
             aria-controls="author-panel"
             aria-label="Author label"
@@ -59,7 +57,6 @@ export const PrimitiveMerge = component({
 
     expect(serverSource).toContain('class="primitive base author"');
     expect(serverSource).toContain('style="color: red; background: blue"');
-    expect(serverSource).toContain('on:click="/c/author#click /c/primitive#click"');
     expect(serverSource).toContain('id="author-trigger"');
     expect(serverSource).toContain('aria-controls="author-panel"');
     expect(serverSource).toContain('aria-label="Author label"');

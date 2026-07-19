@@ -1294,27 +1294,9 @@ async function refreshLiveTargets(event) {
 hot.on("kovo:component-render", (event) => {
   refreshLiveTargets(event).catch(reload);
 });
-async function refreshRoute() {
-  const currentUrl = location.origin + location.pathname + location.search;
-  const url = new URL("${kovoHmrRouteRefreshPath}", currentUrl);
-  url.searchParams.set("url", currentUrl);
-  const build = currentBuild();
-  if (build) url.searchParams.set("oldBuild", build);
-  const response = await fetch(url, {
-    headers: {
-      Accept: "text/html",
-      "Kovo-Current-Url": currentUrl,
-    },
-  });
-  const contentType = response.headers.get("Content-Type") || "";
-  if (!contentType.toLowerCase().includes("text/html")) return reload();
-  document.open();
-  document.write(await response.text());
-  document.close();
-}
-hot.on("kovo:diagnostics", () => {
-  refreshRoute().catch(reload);
-});
+// SPEC §5.2 rule 10: a whole-document refresh must re-enter the canonical server document sink.
+// Do not introduce a second raw HTML parser through document.write in the dev-only client.
+hot.on("kovo:diagnostics", reload);
 hot.on("kovo:route-shell", reload);
 hot.on("kovo:full-reload", reload);
 `;

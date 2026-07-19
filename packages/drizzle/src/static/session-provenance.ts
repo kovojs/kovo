@@ -1,11 +1,17 @@
 import {
   Node,
   SyntaxKind,
+  type ArrowFunction,
   type BindingElement,
   type CallExpression,
+  type FunctionDeclaration,
+  type FunctionExpression,
+  type MethodDeclaration,
   type ObjectBindingPattern,
   type ObjectLiteralExpression,
+  type ParameterDeclaration,
   type SourceFile,
+  type Type,
   type VariableDeclaration,
 } from 'ts-morph';
 
@@ -32,8 +38,9 @@ import { expressionResolvesToFrameworkExport, frameworkExport } from './framewor
   sourceFile: SourceFile,
   bodies: readonly Node[],
 ): SessionProvenanceContext {
-  // advanced-analyzer.md Layer 1: helper provenance must come from explicit typed
-  // analyzer summaries, not arbitrary helper source-body inference.
+  // SPEC §6.6/§10.3: an app-authored declaration is only a candidate marker. It
+  // cannot mint private-scope provenance. The analyzer admits the helper below
+  // only after proving an exact same-file, one-parameter/one-return projection.
   const helpers = analyzerHelperSummariesForSourceFile(sourceFile);
   const aliases = new Map<string, SessionAlias>();
   const opaqueAliases = new Map<string, string>();
@@ -67,13 +74,13 @@ function analyzerHelperSummariesForSourceFile(
     if (!helper || !summary) continue;
 
     const key = helperSymbolKeyForSummary(helper);
-    const provenance = analyzerSummaryReturnProvenance(summary);
-    if (!provenance) continue;
-    if (key) summaries.set(key, provenance);
-    const helperName = summaryHelperName(helper);
-    if (helperName) summaries.set(`name:${helperName}`, provenance);
+    const declared = analyzerSummaryReturnProvenance(summary);
+    const proven = exactLocalPrivateScopeHelperProvenance(helper, sourceFile);
+    if (!key || !declared || !proven) continue;
+    if (privateScopeKey(declared) !== privateScopeKey(proven)) continue;
+    summaries.set(key, proven);
   }
-  addLocalHelperSummaryAliases(sourceFile, summaries);
+  addLocalHelperSummaryAliases(sourceFile, new Map(summaries), summaries);
   return summaries;
 }
 
@@ -85,13 +92,138 @@ function helperSymbolKeyForSummary(node: Node): string | undefined {
   return resolvedSymbolKey(symbol);
 }
 
-function summaryHelperName(node: Node): string | undefined {
+type ExactLocalFunction =
+  | ArrowFunction
+  | FunctionDeclaration
+  | FunctionExpression
+  | MethodDeclaration;
+
+function exactLocalPrivateScopeHelperProvenance(
+  node: Node,
+  sourceFile: SourceFile,
+): PrivateScopeProvenance | undefined {
+  const helper = exactLocalFunctionDeclaration(node, sourceFile);
+  if (!helper) return undefined;
+  if (!Node.isArrowFunction(helper) && helper.getAsteriskToken()) return undefined;
+
+  const parameters = helper.getParameters();
+  if (parameters.length !== 1) return undefined;
+  const parameterDeclaration = parameters[0];
+  if (
+    !parameterDeclaration ||
+    parameterDeclaration.getInitializer() ||
+    parameterDeclaration.getDotDotDotToken()
+  ) {
+    return undefined;
+  }
+  const parameter = parameterDeclaration.getNameNode();
+  if (!parameter || !Node.isIdentifier(parameter)) return undefined;
+
+  const returned = exactSingleReturnExpression(helper);
+  if (!returned) return undefined;
+  const segments = staticAccessSegments(returned);
+  if (!segments || !Node.isIdentifier(segments.root)) return undefined;
+
+  const parameterKey = resolvedSymbolKey(parameter.getSymbol());
+  const rootKey = resolvedSymbolKey(symbolForIdentifierReference(segments.root));
+  if (!parameterKey || rootKey !== parameterKey) return undefined;
+
+  const privateScopeIndex = segments.path.findIndex(isPrivateScopeKind);
+  if (privateScopeIndex < 0) return undefined;
+  // The parameter is already the enrolled request/context carrier. Only a direct private member
+  // or its exact `.request` projection can precede guard/session/tenant; arbitrary wrappers such
+  // as `context.input.guard` are attacker-controlled data, not principal provenance.
+  if (!privateScopePathHasExactCarrierPrefix(segments.path, privateScopeIndex)) return undefined;
+  const kind = segments.path[privateScopeIndex];
+  if (!isPrivateScopeKind(kind)) return undefined;
+  return {
+    kind,
+    path: segments.path.slice(privateScopeIndex + 1).join('.'),
+    requiresGuard: false,
+  };
+}
+
+function exactLocalFunctionDeclaration(
+  node: Node,
+  sourceFile: SourceFile,
+): ExactLocalFunction | undefined {
   const expression = unwrappedStaticExpressionNode(node);
-  return Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+  const symbol = Node.isIdentifier(expression)
+    ? symbolForIdentifierReference(expression)
+    : expression.getSymbol();
+  const declarations = symbol
+    ?.getDeclarations()
+    .filter((declaration) => declaration.getSourceFile() === sourceFile);
+  if (declarations?.length !== 1) return undefined;
+
+  let declaration: Node | undefined = declarations[0];
+  if (Node.isVariableDeclaration(declaration)) {
+    if (!isConstVariableBindingDeclaration(declaration)) return undefined;
+    declaration = declaration.getInitializer();
+  } else if (!Node.isFunctionDeclaration(declaration)) {
+    // SPEC §6.6/§10.3: the positive grammar is deliberately limited to one direct,
+    // immutable same-file callable binding. A method/property declaration lives behind a mutable
+    // object identity: Object.assign/defineProperty, Reflect.set, aliases, and opaque mutators can
+    // replace it without mutating the property's TypeScript symbol. Enumerating those write shapes
+    // is not a proof, so object-carried summary targets fail closed unconditionally.
+    return undefined;
+  }
+  const helper =
+    declaration &&
+    (Node.isArrowFunction(declaration) ||
+      Node.isFunctionDeclaration(declaration) ||
+      Node.isFunctionExpression(declaration))
+      ? declaration
+      : undefined;
+  const symbolKey = resolvedSymbolKey(symbol);
+  return helper && symbolKey && !sourceFileMutatesSymbol(sourceFile, symbolKey)
+    ? helper
+    : undefined;
+}
+
+function sourceFileMutatesSymbol(sourceFile: SourceFile, symbolKey: string): boolean {
+  for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    if (nodeContainsSymbolKey(assignment.getLeft(), symbolKey)) return true;
+  }
+  for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+    if (nodeContainsSymbolKey(deletion.getExpression(), symbolKey)) return true;
+  }
+  for (const unary of sourceFile.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression)) {
+    const operator = unary.getOperatorToken();
+    if (operator !== SyntaxKind.PlusPlusToken && operator !== SyntaxKind.MinusMinusToken) continue;
+    if (nodeContainsSymbolKey(unary.getOperand(), symbolKey)) return true;
+  }
+  for (const unary of sourceFile.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression)) {
+    const operator = unary.getOperatorToken();
+    if (operator !== SyntaxKind.PlusPlusToken && operator !== SyntaxKind.MinusMinusToken) continue;
+    if (nodeContainsSymbolKey(unary.getOperand(), symbolKey)) return true;
+  }
+  return false;
+}
+
+function nodeContainsSymbolKey(node: Node, symbolKey: string): boolean {
+  return [node, ...node.getDescendants()].some((candidate) => {
+    const symbol = Node.isIdentifier(candidate)
+      ? (symbolForIdentifierReference(candidate) ?? candidate.getSymbol())
+      : candidate.getSymbol();
+    return resolvedSymbolKey(symbol) === symbolKey;
+  });
+}
+
+function exactSingleReturnExpression(helper: ExactLocalFunction): Node | undefined {
+  const body = helper.getBody();
+  if (!body) return undefined;
+  if (!Node.isBlock(body)) return body;
+  const statements = body.getStatements();
+  if (statements.length !== 1 || !Node.isReturnStatement(statements[0])) return undefined;
+  return statements[0].getExpression();
 }
 
 function addLocalHelperSummaryAliases(
   sourceFile: SourceFile,
+  directSummaries: ReadonlyMap<string, PrivateScopeProvenance>,
   summaries: Map<string, PrivateScopeProvenance>,
 ): void {
   for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
@@ -105,12 +237,14 @@ function addLocalHelperSummaryAliases(
     const initializer = declaration.getInitializer();
     if (!initializer) continue;
 
-    const provenance = helperSummaryForStaticReference(initializer, summaries);
+    // SPEC §6.6 permits one direct immutable alias of a structurally proved helper. Resolve every
+    // alias from the pre-alias snapshot so a declaration encountered earlier in this walk cannot
+    // become provenance for a second hop.
+    const provenance = helperSummaryForStaticReference(initializer, directSummaries);
     if (!provenance) continue;
 
     const key = resolvedSymbolKey(symbolForIdentifierReference(name) ?? name.getSymbol());
     if (key) summaries.set(key, provenance);
-    summaries.set(`name:${name.getText()}`, provenance);
   }
 }
 
@@ -120,10 +254,7 @@ function helperSummaryForStaticReference(
 ): PrivateScopeProvenance | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
-  const name = Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
-  return (
-    (key ? summaries.get(key) : undefined) ?? (name ? summaries.get(`name:${name}`) : undefined)
-  );
+  return key ? summaries.get(key) : undefined;
 }
 
 function analyzerSummaryReturnProvenance(node: Node): PrivateScopeProvenance | undefined {
@@ -167,6 +298,14 @@ function isPrivateScopeKind(kind: string | undefined): kind is PrivateScopeKind 
   return kind === 'guard' || kind === 'session' || kind === 'tenant';
 }
 
+/** @internal The sole admitted path from an enrolled carrier to private principal state. */
+export function privateScopePathHasExactCarrierPrefix(
+  path: readonly string[],
+  privateIndex: number,
+): boolean {
+  return privateIndex === 0 || (privateIndex === 1 && path[0] === 'request');
+}
+
 function addSessionAliasesForVariableDeclaration(
   declaration: VariableDeclaration,
   context: SessionProvenanceContext,
@@ -177,9 +316,12 @@ function addSessionAliasesForVariableDeclaration(
 
   const nameNode = declaration.getNameNode();
   if (Node.isIdentifier(nameNode)) {
+    const initializerExpression = unwrappedStaticExpressionNode(initializer);
     const provenance =
-      privateScopeForExpression(initializer, context) ??
-      directPrivateScopeForExpression(initializer);
+      isConstVariableBindingDeclaration(declaration) && !Node.isIdentifier(initializerExpression)
+        ? (privateScopeForExpression(initializer, context) ??
+          directPrivateScopeForExpression(initializer))
+        : undefined;
     const key = resolvedSymbolKey(symbolForIdentifierReference(nameNode) ?? nameNode.getSymbol());
     if (provenance && key) {
       aliases.set(key, {
@@ -220,7 +362,7 @@ function addSessionAliasesForVariableDeclaration(
 
 function isPrivateScopeCarrierExpression(node: Node): boolean {
   const segments = staticAccessSegments(node);
-  return segments !== undefined && isPrivateScopeCarrierRoot(segments.root);
+  return segments !== undefined && privateScopeCarrierBindingIsProven(segments.root, node);
 }
 
 function addPrivateScopeAliasesForObjectBindingPattern(
@@ -326,6 +468,10 @@ function objectBindingPrivateScopeProvenance(
   segments: readonly string[],
   segmentElements: readonly BindingElement[],
 ): PrivateScopeProvenance | undefined {
+  // A binding default is executable fallback data, not a projection. In particular,
+  // `const { userId = input.userId } = request.guard` must never preserve private provenance.
+  if (segmentElements.some((element) => element.getInitializer() !== undefined)) return undefined;
+
   if (base) {
     const provenance: PrivateScopeProvenance = {
       kind: base.kind,
@@ -341,6 +487,11 @@ function objectBindingPrivateScopeProvenance(
 
   const privateIndex = segments.findIndex(isPrivateScopeKind);
   if (privateIndex < 0) return undefined;
+  // Keep destructured carrier projections on the same finite prefix grammar as direct reads.
+  // Otherwise `const { input: { guard: { userId } } } = context` would launder an
+  // app-controlled input subtree into private provenance even though the equivalent direct
+  // `context.input.guard.userId` access is rejected (SPEC §6.5/§6.6).
+  if (!privateScopePathHasExactCarrierPrefix(segments, privateIndex)) return undefined;
   return {
     kind: segments[privateIndex] as PrivateScopeKind,
     path: segments.slice(privateIndex + 1).join('.'),
@@ -367,44 +518,461 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
   const direct = directPrivateScopeForExpression(expression);
   if (direct) {
     return !direct.requiresGuard || directPrivateScopeGuardDominatesUse(direct, expression)
-      ? { kind: direct.kind, path: direct.path }
+      ? { kind: direct.kind, path: direct.path, requiresGuard: false }
       : undefined;
   }
 
   if (Node.isIdentifier(expression)) {
-    const key = resolvedSymbolKey(
-      symbolForIdentifierReference(expression) ?? expression.getSymbol(),
-    );
-    if (
-      (key ? context.opaqueAliases.get(key) : undefined) ??
-      context.opaqueAliases.get(`name:${expression.getText()}`)
-    ) {
-      return undefined;
-    }
-    const alias =
-      (key ? context.aliases.get(key) : undefined) ??
-      [...context.aliases.values()].find((candidate) => candidate.name === expression.getText());
-    return alias && (!alias.requiresGuard || sessionAliasGuardDominatesUse(alias, expression))
-      ? { kind: alias.kind, path: alias.path }
-      : undefined;
+    if (opaqueAliasReasonForExpression(expression, context)) return undefined;
+    const alias = privateScopeAliasForIdentifier(expression, context);
+    if (!alias || !isConstVariableBindingDeclaration(alias.declaration)) return undefined;
+    const stable = alias.requiresGuard
+      ? sessionAliasGuardDominatesUse(alias, expression)
+      : privateScopeAliasIsStableAtUse(alias, expression);
+    return stable ? { kind: alias.kind, path: alias.path } : undefined;
   }
 
   if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
-    const objectProperty = localObjectPropertyPrivateScope(expression, context, depth);
-    if (objectProperty) return objectProperty;
-
-    const base = privateScopeForExpression(expression.getExpression(), context, depth + 1);
-    const name = staticAccessName(expression);
-    return base && name
-      ? { kind: base.kind, path: joinPrivateScopePath(base.path, name) }
-      : undefined;
+    // Direct framework-carrier chains were handled above. Extending a local object/container alias
+    // would trust a mutable property cell that reflective or opaque writes can replace.
+    return undefined;
   }
 
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    return helperSummaryForCallCallee(callee, context.helpers);
+    return privateScopeHelperCallCarrierIsProven(expression)
+      ? helperSummaryForCallCallee(callee, context.helpers)
+      : undefined;
   }
 
+  return undefined;
+}
+
+/**
+ * Exact call-site half of the private-helper proof. The verified helper's sole
+ * parameter must receive the request/context carrier itself, never client input,
+ * an object/container field, or another opaque expression (SPEC §6.6/§10.3).
+ *
+ * @internal
+ */
+export function privateScopeHelperCallCarrierIsProven(call: CallExpression): boolean {
+  const args = call.getArguments();
+  // SPEC §6.6/§10.3 requires the exact carrier as the sole argument. Extra argument evaluation can
+  // mutate that carrier before the helper body reads it, including through a strict-TS widened
+  // direct alias; a spread is an independent evaluation channel even when its static tuple is empty.
+  if (args.length !== 1 || args.some(Node.isSpreadElement)) return false;
+  const carrier = args[0];
+  return carrier !== undefined && privateScopeCarrierBindingIsProven(carrier, call);
+}
+
+/** @internal Exact structural-role and whole-callback integrity proof for a private carrier use. */
+export function privateScopeCarrierBindingIsProven(carrier: Node, auditedUse: Node): boolean {
+  const root = unwrappedStaticExpressionNode(carrier);
+  // SPEC §6.6/§10.3 admits only a structurally enrolled request/context parameter. `this` is the
+  // caller-controlled receiver/definition object and cannot mint private principal provenance.
+  if (Node.isThisExpression(root)) return false;
+  if (!Node.isIdentifier(root)) return false;
+
+  const symbol = symbolForIdentifierReference(root) ?? root.getSymbol();
+  const parameters = symbol
+    ?.getDeclarations()
+    .filter((declaration): declaration is ParameterDeclaration =>
+      Node.isParameterDeclaration(declaration),
+    );
+  if (parameters?.length !== 1) return false;
+  const parameter = parameters[0];
+  if (
+    !parameter ||
+    parameter.getInitializer() ||
+    parameter.getDotDotDotToken() ||
+    !Node.isIdentifier(parameter.getNameNode())
+  ) {
+    return false;
+  }
+
+  const callable = parameter.getParent();
+  if (
+    !Node.isArrowFunction(callable) &&
+    !Node.isFunctionDeclaration(callable) &&
+    !Node.isFunctionExpression(callable) &&
+    !Node.isMethodDeclaration(callable)
+  ) {
+    return false;
+  }
+  const callableParameters = callable.getParameters();
+  const index = callableParameters.indexOf(parameter);
+  if (index < 0) return false;
+
+  const frameworkRole = exactFrameworkPrivateScopeCarrierRole(callable, index);
+  if (frameworkRole !== true) return false;
+
+  return privateScopeCarrierBindingIsStableAtUse(parameter, callable, auditedUse);
+}
+
+const PRIVATE_SCOPE_SAFE_CAPABILITY_RECEIVERS: ReadonlySet<string> = new Set([
+  'cancel',
+  'db',
+  'fail',
+  'fetch',
+  'invalidate',
+  'readonlyAppDb',
+  'recordChange',
+  'runMutation',
+  'runQuery',
+  'runTask',
+  'schedule',
+  'storage',
+  'tx',
+]);
+
+const PRIVATE_SCOPE_SAFE_DRIZZLE_PROOF_CALLS: ReadonlySet<string> = new Set([
+  'and',
+  'eq',
+  'gt',
+  'gte',
+  'inArray',
+  'isNotNull',
+  'isNull',
+  'lt',
+  'lte',
+  'not',
+  'or',
+]);
+
+function privateScopeCarrierBindingIsStableAtUse(
+  parameter: ParameterDeclaration,
+  callable: ExactLocalFunction,
+  auditedUse: Node,
+): boolean {
+  const parameterName = parameter.getNameNode();
+  if (!Node.isIdentifier(parameterName)) return false;
+  const parameterKey = resolvedSymbolKey(parameterName.getSymbol());
+  const body = callable.getBody();
+  if (!parameterKey || !body) return false;
+
+  // Binding immutability is necessary but not sufficient: replacing `context.request`, passing the
+  // carrier to an opaque mutator, or first capturing it through an alias all invalidate private
+  // provenance. Scan the exact enrolled callback body and admit only finite read/capability uses.
+  if (sourceFileMutatesSymbol(callable.getSourceFile(), parameterKey)) return false;
+
+  for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const initializer = declaration.getInitializer();
+    if (!initializer || !nodeContainsSymbolKey(initializer, parameterKey)) continue;
+    if (nodeContains(initializer, auditedUse)) continue;
+    // A dominated read may be captured into an immutable scalar for a later predicate. The
+    // callback carrier itself, its private object branches, and containers remain non-transferable:
+    // `const alias = request` and `const guard = request.guard` still close every proof.
+    if (exactPrivateScopeScalarProjection(initializer, parameterKey)) continue;
+    if (
+      privateScopeCarrierReferencesHaveReviewedConsumers(initializer, parameterKey, body, auditedUse)
+    ) {
+      continue;
+    }
+    return false;
+  }
+
+  for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+    const operator = assignment.getOperatorToken().getKind();
+    if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
+    if (nodeContains(assignment, auditedUse)) continue;
+    if (nodeContainsSymbolKey(assignment.getRight(), parameterKey)) return false;
+  }
+
+  for (const call of body.getDescendantsOfKind(SyntaxKind.NewExpression)) {
+    if (nodeContains(call, auditedUse)) continue;
+    if (call.getArguments().some((argument) => nodeContainsSymbolKey(argument, parameterKey))) {
+      return false;
+    }
+  }
+
+  for (const tagged of body.getDescendantsOfKind(SyntaxKind.TaggedTemplateExpression)) {
+    if (nodeContains(tagged, auditedUse)) continue;
+    if (nodeContainsSymbolKey(tagged.getTemplate(), parameterKey)) return false;
+  }
+
+  for (const reference of body.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    const referenceKey = resolvedSymbolKey(
+      symbolForIdentifierReference(reference) ?? reference.getSymbol(),
+    );
+    if (referenceKey !== parameterKey || nodeContains(auditedUse, reference)) continue;
+    if (!privateScopeCarrierReferenceHasReviewedConsumer(reference, parameterKey, body)) return false;
+  }
+
+  return true;
+}
+
+function privateScopeCarrierReferencesHaveReviewedConsumers(
+  node: Node,
+  parameterKey: string,
+  body: Node,
+  auditedUse: Node,
+): boolean {
+  const references = [node, ...node.getDescendantsOfKind(SyntaxKind.Identifier)].filter(
+    Node.isIdentifier,
+  );
+  let found = false;
+  for (const reference of references) {
+    const referenceKey = resolvedSymbolKey(
+      symbolForIdentifierReference(reference) ?? reference.getSymbol(),
+    );
+    if (referenceKey !== parameterKey) continue;
+    found = true;
+    if (nodeContains(auditedUse, reference)) continue;
+    if (!privateScopeCarrierReferenceHasReviewedConsumer(reference, parameterKey, body)) {
+      return false;
+    }
+  }
+  return found;
+}
+
+function privateScopeCarrierReferenceHasReviewedConsumer(
+  reference: import('ts-morph').Identifier,
+  parameterKey: string,
+  body: Node,
+): boolean {
+  const call = nearestCallExpressionAncestor(reference, body);
+  if (!call) {
+    return exactPrivateScopeScalarProjectionIsReviewedRead(reference, parameterKey);
+  }
+  if (nodeContains(call.getExpression(), reference)) {
+    const access = staticAccessSegments(call.getExpression());
+    if (!access || resolvedSymbolKey(access.root.getSymbol()) !== parameterKey) return false;
+    const receiver = access.path[0];
+    return !!receiver && PRIVATE_SCOPE_SAFE_CAPABILITY_RECEIVERS.has(receiver);
+  }
+  // Classify the nearest consumer, not every enclosing builder call. For
+  // `where(eq(owner, request.guard.id))`, the framework carrier reaches only the exact Drizzle
+  // `eq` proof call; the enclosing `where` receives SQL IR, not the request object. A bare carrier
+  // passed to Object.assign, an opaque helper, or a cross-file mutator still reaches that opaque
+  // call as its nearest consumer and closes the proof.
+  return (
+    exactPrivateScopeProjectionCall(call, parameterKey) ||
+    exactDrizzlePrivateScopeProofCall(call) ||
+    exactFrameworkPrivateScopeValueCall(call) ||
+    exactFinitePrivateScopeProofConsumer(call)
+  );
+}
+
+function exactPrivateScopeScalarProjectionIsReviewedRead(
+  reference: import('ts-morph').Identifier,
+  parameterKey: string,
+): boolean {
+  let current: Node | undefined = reference;
+  let projection: Node | undefined;
+  while (current) {
+    if (exactPrivateScopeScalarProjection(current, parameterKey)) projection = current;
+    const parent = current.getParent();
+    if (!parent || Node.isStatement(parent) || Node.isCallExpression(parent)) break;
+    current = parent;
+  }
+  if (!projection) return false;
+
+  const declaration = projection.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const initializer = declaration?.getInitializer();
+  if (
+    initializer &&
+    sameSourceNode(
+      unwrappedStaticExpressionNode(initializer),
+      unwrappedStaticExpressionNode(projection),
+    )
+  ) {
+    return true;
+  }
+
+  const branch = projection.getFirstAncestorByKind(SyntaxKind.IfStatement);
+  return !!branch && nodeContains(branch.getExpression(), projection);
+}
+
+function exactPrivateScopeScalarProjection(node: Node, parameterKey: string): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  const segments = staticAccessSegments(expression);
+  if (!segments || !Node.isIdentifier(segments.root)) return false;
+  const rootKey = resolvedSymbolKey(
+    symbolForIdentifierReference(segments.root) ?? segments.root.getSymbol(),
+  );
+  if (rootKey !== parameterKey) return false;
+
+  const privateIndex = segments.path.findIndex(isPrivateScopeKind);
+  if (privateIndex < 0 || privateIndex === segments.path.length - 1) return false;
+  if (!privateScopePathHasExactCarrierPrefix(segments.path, privateIndex)) return false;
+  return definitelyImmutablePrivateScopeScalarType(expression.getType());
+}
+
+function definitelyImmutablePrivateScopeScalarType(type: Type): boolean {
+  if (type.isUnion()) {
+    const members = type.getUnionTypes();
+    return members.length > 0 && members.every(definitelyImmutablePrivateScopeScalarType);
+  }
+  return (
+    type.isString() ||
+    type.isStringLiteral() ||
+    type.isNumber() ||
+    type.isNumberLiteral() ||
+    type.isBoolean() ||
+    type.isBooleanLiteral() ||
+    type.isBigInt() ||
+    type.isBigIntLiteral() ||
+    type.isNull() ||
+    type.isUndefined()
+  );
+}
+
+function exactPrivateScopeProjectionCall(call: CallExpression, parameterKey: string): boolean {
+  const [firstArgument, ...remainingArguments] = call.getArguments();
+  if (!firstArgument || remainingArguments.length !== 0) return false;
+  const argument = unwrappedStaticExpressionNode(firstArgument);
+  if (!Node.isIdentifier(argument)) return false;
+  const argumentKey = resolvedSymbolKey(
+    symbolForIdentifierReference(argument) ?? argument.getSymbol(),
+  );
+  if (argumentKey !== parameterKey) return false;
+  return (
+    exactLocalPrivateScopeHelperProvenance(call.getExpression(), call.getSourceFile()) !== undefined
+  );
+}
+
+function exactDrizzlePrivateScopeProofCall(call: CallExpression): boolean {
+  const callee = unwrappedStaticExpressionNode(call.getExpression());
+  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  if (!name || !PRIVATE_SCOPE_SAFE_DRIZZLE_PROOF_CALLS.has(name)) return false;
+  const symbol = Node.isIdentifier(callee)
+    ? symbolForIdentifierReference(callee)
+    : callee.getSymbol();
+  return (
+    symbol?.getDeclarations().some((declaration) => {
+      const fileName = declaration.getSourceFile().getFilePath().replaceAll('\\', '/');
+      if (fileName.includes('/drizzle-orm/')) return true;
+      const imported = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+      return imported?.getModuleSpecifierValue().startsWith('drizzle-orm') === true;
+    }) === true
+  );
+}
+
+function exactFrameworkPrivateScopeValueCall(call: CallExpression): boolean {
+  return expressionResolvesToFrameworkExport(
+    call.getExpression(),
+    frameworkExport('@kovojs/server', 'serverValue'),
+  );
+}
+
+/**
+ * Preserve the already-supported single-principal membership grammar when an enrolled callback
+ * contains more than one direct carrier read. The whole-callback integrity scan sees each sibling
+ * read through its nearest call (`Object.freeze`, `Array.of`, `Array.from`, or literal-array
+ * `concat`) rather than through the enclosing real Drizzle `inArray` call. Admit only an exact,
+ * unshadowed single-element wrapper chain whose next call is an exact Drizzle proof consumer;
+ * opaque outer consumers and mutable/local containers still close provenance (SPEC §6.6/§10.3).
+ */
+function exactFinitePrivateScopeProofConsumer(call: CallExpression): boolean {
+  let current: CallExpression | undefined = call;
+  while (current && exactSinglePrincipalCollectionCall(current)) {
+    const consumer = nearestEnclosingCallExpression(current);
+    if (!consumer) return false;
+    if (exactDrizzlePrivateScopeProofCall(consumer)) return true;
+    current = consumer;
+  }
+  return false;
+}
+
+function exactSinglePrincipalCollectionCall(call: CallExpression): boolean {
+  const callee = unwrappedStaticExpressionNode(call.getExpression());
+  if (!Node.isPropertyAccessExpression(callee)) return false;
+
+  const receiver = unwrappedStaticExpressionNode(callee.getExpression());
+  const name = callee.getName();
+  const args = call.getArguments();
+  if (name === 'freeze') {
+    return (
+      exactUnshadowedGlobalIdentifier(receiver, 'Object') &&
+      args.length === 1 &&
+      exactLiteralArrayElements(args[0])?.length === 1
+    );
+  }
+  if (name === 'of') {
+    if (!exactUnshadowedGlobalIdentifier(receiver, 'Array') || args.length !== 1) return false;
+    const [arg] = args;
+    return (
+      !!arg &&
+      (!Node.isSpreadElement(arg) || exactLiteralArrayElements(arg.getExpression())?.length === 1)
+    );
+  }
+  if (name === 'from') {
+    return (
+      exactUnshadowedGlobalIdentifier(receiver, 'Array') &&
+      args.length === 1 &&
+      !!args[0] &&
+      !Node.isSpreadElement(args[0]) &&
+      exactLiteralArrayElements(args[0])?.length === 1
+    );
+  }
+  if (name !== 'concat' || args.some(Node.isSpreadElement)) return false;
+
+  const receiverElements = exactLiteralArrayElements(receiver);
+  if (!receiverElements) return false;
+  let elementCount = receiverElements.length;
+  for (const arg of args) {
+    const arrayElements = exactLiteralArrayElements(arg);
+    elementCount += arrayElements?.length ?? 1;
+  }
+  return elementCount === 1;
+}
+
+function exactLiteralArrayElements(node: Node | undefined): readonly Node[] | undefined {
+  if (!node) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isArrayLiteralExpression(expression)) return undefined;
+  const elements = expression.getElements();
+  return elements.some(Node.isSpreadElement) ? undefined : elements;
+}
+
+function exactUnshadowedGlobalIdentifier(node: Node, name: 'Array' | 'Object'): boolean {
+  if (!Node.isIdentifier(node) || node.getText() !== name) return false;
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  return !(symbol?.getDeclarations() ?? []).some(
+    (declaration) =>
+      declaration.getSourceFile().getFilePath() === node.getSourceFile().getFilePath(),
+  );
+}
+
+function nearestEnclosingCallExpression(node: Node): CallExpression | undefined {
+  let current = node.getParent();
+  while (current) {
+    if (Node.isCallExpression(current)) return current;
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+function exactFrameworkPrivateScopeCarrierRole(
+  callable: ExactLocalFunction,
+  index: number,
+): boolean | undefined {
+  const owner = Node.isMethodDeclaration(callable)
+    ? callable
+    : callable.getParentIfKind(SyntaxKind.PropertyAssignment);
+  const record = owner?.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const declaration = record?.getParentIfKind(SyntaxKind.CallExpression);
+  const callback = owner ? propertyNameText(owner.getNameNode()) : undefined;
+  if (!declaration || !callback) return undefined;
+
+  const exactFactory = (name: 'endpoint' | 'mutation' | 'query' | 'task' | 'webhook'): boolean =>
+    expressionResolvesToFrameworkExport(
+      declaration.getExpression(),
+      frameworkExport('@kovojs/server', name),
+    );
+  if (exactFactory('endpoint') && callback === 'handler') return index === 0;
+  if (exactFactory('mutation')) {
+    if (callback === 'handler') return index === 1;
+    if (callback === 'guard') return index === 0;
+    return false;
+  }
+  if (exactFactory('query')) {
+    if (callback === 'load') return index === 1;
+    if (callback === 'guard') return index === 0;
+    return false;
+  }
+  if (exactFactory('task') && callback === 'run') return index === 1;
+  if (exactFactory('webhook') && callback === 'handler') return index === 1;
   return undefined;
 }
 
@@ -428,7 +996,7 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
 
   if (Node.isIdentifier(expression)) {
     const alias = privateScopeAliasForIdentifier(expression, context);
-    if (alias && isConstVariableBindingDeclaration(alias.declaration)) {
+    if (alias && privateScopeAliasIsStableAtUse(alias, expression)) {
       return { kind: alias.kind, path: alias.path };
     }
 
@@ -436,21 +1004,28 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
     const declaration = symbol?.getDeclarations()?.[0];
     if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
     if (!isConstVariableBindingDeclaration(declaration)) return undefined;
+    if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+    if (
+      !privateScopeBindingIsStableAtUse(
+        declaration,
+        declaration.getNameNode().getText(),
+        expression,
+      )
+    ) {
+      return undefined;
+    }
     const initializer = declaration.getInitializer();
+    if (initializer && Node.isIdentifier(unwrappedStaticExpressionNode(initializer)))
+      return undefined;
     return initializer
       ? privateScopeSourceForExpression(initializer, context, depth + 1)
       : undefined;
   }
 
   if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
-    const objectProperty = localObjectPropertyPrivateScope(expression, context, depth);
-    if (objectProperty) return objectProperty;
-
-    const base = privateScopeSourceForExpression(expression.getExpression(), context, depth + 1);
-    const name = staticAccessName(expression);
-    return base && name
-      ? { kind: base.kind, path: joinPrivateScopePath(base.path, name) }
-      : undefined;
+    // `serverValue` shares the same direct-carrier grammar. A const receiver does not make one of
+    // its property cells immutable, so local object/tuple projections remain unknown.
+    return undefined;
   }
 
   if (Node.isBinaryExpression(expression) && isSafePrivateScopeFallbackExpression(expression)) {
@@ -476,15 +1051,109 @@ function isConstVariableBindingDeclaration(declaration: Node): boolean {
   );
 }
 
-function privateScopeAliasForIdentifier(
+/**
+ * SPEC §6.6/§10.3 finite local-value rule. `const` prevents rebinding but does not make an
+ * object value immutable, so any use between capture and the audited sink is an escape/mutation
+ * opportunity and closes provenance. This is intentionally stricter than a write-shape blacklist.
+ *
+ * @internal
+ */
+export function privateScopeAliasIsStableAtUse(alias: SessionAlias, use: Node): boolean {
+  return privateScopeBindingIsStableAtUse(alias.declaration, alias.name, use);
+}
+
+/** @internal */ export function privateScopeIdentifierBindingIsStableAtUse(
+  identifier: Node,
+  use: Node,
+): boolean {
+  const expression = unwrappedStaticExpressionNode(identifier);
+  if (!Node.isIdentifier(expression)) return false;
+  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  return declaration && Node.isVariableDeclaration(declaration)
+    ? privateScopeBindingIsStableAtUse(declaration, expression.getText(), use)
+    : false;
+}
+
+function privateScopeBindingIsStableAtUse(declaration: Node, name: string, use: Node): boolean {
+  if (!isConstVariableBindingDeclaration(declaration)) return false;
+
+  const variable = Node.isVariableDeclaration(declaration)
+    ? declaration
+    : declaration.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const declarationList = variable?.getParentIfKind(SyntaxKind.VariableDeclarationList);
+  if (!variable || !declarationList || declarationList.getDeclarations().length !== 1) return false;
+
+  const declared = blockStatementAncestor(declaration);
+  const used = blockStatementAncestor(use);
+  if (!declared || !used || !sameSourceNode(declared.block, used.block)) return false;
+
+  const statements = declared.block.getStatements();
+  const declarationIndex = statements.findIndex((statement) =>
+    sameSourceNode(statement, declared.statement),
+  );
+  const useIndex = statements.findIndex((statement) => sameSourceNode(statement, used.statement));
+  if (declarationIndex < 0 || useIndex <= declarationIndex) return false;
+
+  const nameNode =
+    Node.isIdentifier(variable.getNameNode()) && variable.getNameNode().getText() === name
+      ? variable.getNameNode()
+      : Node.isBindingElement(declaration) &&
+          Node.isIdentifier(declaration.getNameNode()) &&
+          declaration.getNameNode().getText() === name
+        ? declaration.getNameNode()
+        : undefined;
+  const bindingKey = nameNode
+    ? resolvedSymbolKey(symbolForIdentifierReference(nameNode) ?? nameNode.getSymbol())
+    : undefined;
+  if (!nameNode || !bindingKey) return false;
+  const bindingIsImmutableScalar = definitelyImmutablePrivateScopeScalarType(nameNode.getType());
+
+  // Scan through the whole sink statement, not merely preceding statements. Query builders may
+  // evaluate another argument before `.where(...)`, and they may retain an object parameter until
+  // dispatch; either an earlier or later same-statement escape can therefore rewrite the value.
+  return !use
+    .getSourceFile()
+    .getDescendantsOfKind(SyntaxKind.Identifier)
+    .some((candidate) => {
+      if (sameSourceNode(candidate, use)) return false;
+      if (
+        candidate.getStart() < variable.getEnd() ||
+        candidate.getEnd() > used.statement.getEnd()
+      ) {
+        return false;
+      }
+      const candidateKey = resolvedSymbolKey(
+        symbolForIdentifierReference(candidate) ?? candidate.getSymbol(),
+      );
+      if (candidateKey !== bindingKey) return false;
+      return !(
+        bindingIsImmutableScalar &&
+        privateScopeScalarReferenceHasReviewedConsumer(candidate, used.statement)
+      );
+    });
+}
+
+function privateScopeScalarReferenceHasReviewedConsumer(
+  reference: import('ts-morph').Identifier,
+  boundary: Node,
+): boolean {
+  const call = nearestCallExpressionAncestor(reference, boundary);
+  return (
+    !!call &&
+    (exactDrizzlePrivateScopeProofCall(call) ||
+      exactFrameworkPrivateScopeValueCall(call) ||
+      exactFinitePrivateScopeProofConsumer(call))
+  );
+}
+
+/** @internal Exact-symbol lookup shared by every private-alias consumer. */
+export function privateScopeAliasForIdentifier(
   expression: Node & { getText(): string },
   context: SessionProvenanceContext,
 ): SessionAlias | undefined {
   const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
-  return (
-    (key ? context.aliases.get(key) : undefined) ??
-    [...context.aliases.values()].find((candidate) => candidate.name === expression.getText())
-  );
+  return key ? context.aliases.get(key) : context.aliases.get(`name:${expression.getText()}`);
 }
 
 function isSafePrivateScopeFallbackExpression(node: Node): boolean {
@@ -505,72 +1174,12 @@ function literalFallbackExpression(node: Node): boolean {
   );
 }
 
-function localObjectPropertyPrivateScope(
-  node: Node,
-  context: SessionProvenanceContext,
-  depth: number,
-): PrivateScopeProvenance | undefined {
-  if (depth > 4) return undefined;
-  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
-    return undefined;
-  }
-
-  const property = staticAccessName(node);
-  if (!property) return undefined;
-
-  const base = unwrappedStaticExpressionNode(node.getExpression());
-  if (!Node.isIdentifier(base)) return undefined;
-
-  const symbol = symbolForIdentifierReference(base) ?? base.getSymbol();
-  const declaration = symbol?.getDeclarations()?.[0];
-  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
-  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
-
-  const declarationList = declaration.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-
-  const initializer = declaration.getInitializer();
-  const object = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
-
-  const value = objectLiteralStaticPropertyValue(object, property);
-  if (!value) return undefined;
-  return (
-    privateScopeForExpression(value, context, depth + 1) ?? directPrivateScopeForExpression(value)
-  );
-}
-
-function objectLiteralStaticPropertyValue(
-  object: ObjectLiteralExpression,
-  name: string,
-): Node | undefined {
-  let value: Node | undefined;
-  for (const property of object.getProperties()) {
-    if (Node.isSpreadAssignment(property)) return undefined;
-
-    if (Node.isPropertyAssignment(property)) {
-      if (propertyNameText(property.getNameNode()) !== name) continue;
-      if (value) return undefined;
-      value = property.getInitializer();
-      continue;
-    }
-    if (Node.isShorthandPropertyAssignment(property)) {
-      if (propertyNameText(property.getNameNode()) !== name) continue;
-      if (value) return undefined;
-      value = property.getNameNode();
-    }
-  }
-  return value;
-}
-
 function helperSummaryForCallCallee(
   callee: Node,
   helpers: ReadonlyMap<string, PrivateScopeProvenance>,
 ): PrivateScopeProvenance | undefined {
   const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
-  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
-  return (key ? helpers.get(key) : undefined) ?? (name ? helpers.get(`name:${name}`) : undefined);
+  return key ? helpers.get(key) : undefined;
 }
 
 /** @internal */ export function opaqueAliasReasonForExpression(
@@ -580,10 +1189,9 @@ function helperSummaryForCallCallee(
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isIdentifier(expression)) return undefined;
   const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
-  return (
-    (key ? context.opaqueAliases.get(key) : undefined) ??
-    context.opaqueAliases.get(`name:${expression.getText()}`)
-  );
+  return key
+    ? context.opaqueAliases.get(key)
+    : context.opaqueAliases.get(`name:${expression.getText()}`);
 }
 
 function unsummarizedHelperReasonForExpression(node: Node): string | undefined {
@@ -591,47 +1199,21 @@ function unsummarizedHelperReasonForExpression(node: Node): string | undefined {
   return Node.isCallExpression(expression) ? unsummarizedHelperReason(expression) : undefined;
 }
 
-/**
- * SPEC §6.5/§10.3 (KV414 IDOR + KV438 mass-assignment): the request-context carrier
- * roots the framework exposes `session`/`guard`/`tenant` on. A `session`/`guard`/`tenant`
- * member is trusted *server* private scope ONLY when it hangs off one of these — the
- * value SPEC §6.5 surfaces as `req.session.*`. Mirrors the compiler's request-accessor
- * recognition (`validate/trusted-html-provenance.ts` `{req,request}` and
- * `validate/component-contracts.ts` `{ctx,context}`), unified here.
- */
-const PRIVATE_SCOPE_CARRIER_ROOT_NAMES: ReadonlySet<string> = new Set([
-  'req',
-  'request',
-  'ctx',
-  'context',
-]);
-
-/**
- * True when the access root is a proven request/session/context carrier (or `this`).
- * Fail-closed: any other root — notably a validated-input binding like `input`/`args`,
- * whose static type and shape are byte-identical to a request carrier — is NOT a
- * carrier, so a `session`/`guard`/`tenant`-named *input field* (e.g.
- * `input.session.userId`, `input.tenant`) falls through to the symbol-provenance
- * input/args reject instead of laundering client data into server private scope (H3/H5).
- * Over-rejecting an unconventionally-named carrier is the safe SPEC §6.6 direction.
- */
-function isPrivateScopeCarrierRoot(root: Node): boolean {
-  const expression = unwrappedStaticExpressionNode(root);
-  if (Node.isThisExpression(expression)) return true;
-  if (!Node.isIdentifier(expression)) return false;
-  return PRIVATE_SCOPE_CARRIER_ROOT_NAMES.has(expression.getText());
-}
-
 function directPrivateScopeForExpression(node: Node): PrivateScopeProvenance | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   const segments = staticAccessSegments(node);
   if (!segments) return undefined;
-  // Anchor the session/guard/tenant name match to a proven carrier root (SPEC §6.5):
-  // an input-rooted `.session.`/`.guard.`/`.tenant.` access is client data, not server scope.
-  if (!isPrivateScopeCarrierRoot(segments.root)) return undefined;
+  // Anchor the session/guard/tenant match to the exact framework callback role and stable binding
+  // (SPEC §6.5/§6.6). Parameter spelling is neither proof nor a restriction: validated input named
+  // `context` stays input, while an exact framework carrier may use any local identifier.
+  if (!privateScopeCarrierBindingIsProven(segments.root, expression)) return undefined;
   for (const kind of ['guard', 'session', 'tenant'] as const) {
     const index = segments.path.indexOf(kind);
     if (index < 0) continue;
+    // Query contexts expose private request state through `.request`; other enrolled callbacks
+    // receive the request directly. A carrier's app-controlled `.input.guard`-style subtree is
+    // never principal provenance merely because one of its nested property names matches.
+    if (!privateScopePathHasExactCarrierPrefix(segments.path, index)) continue;
     return {
       kind,
       path: segments.path.slice(index + 1).join('.'),
@@ -748,7 +1330,7 @@ function sameSourceNode(left: Node, right: Node): boolean {
 function isAcceptedSessionGuard(statement: Node, aliasName: string): boolean {
   if (!Node.isIfStatement(statement)) return false;
   if (!isFalsyIdentifierCheck(statement.getExpression(), aliasName)) return false;
-  return statementExits(statement.getThenStatement());
+  return privateScopeStatementDefinitelyExits(statement.getThenStatement());
 }
 
 function isAcceptedDirectPrivateScopeGuard(
@@ -757,7 +1339,7 @@ function isAcceptedDirectPrivateScopeGuard(
 ): boolean {
   if (!Node.isIfStatement(statement)) return false;
   if (!isFalsyDirectPrivateScopeCheck(statement.getExpression(), target)) return false;
-  return statementExits(statement.getThenStatement());
+  return privateScopeStatementDefinitelyExits(statement.getThenStatement());
 }
 
 function isFalsyIdentifierCheck(expression: Node, aliasName: string): boolean {
@@ -777,18 +1359,16 @@ function isFalsyDirectPrivateScopeCheck(expression: Node, target: PrivateScopePr
   return direct !== undefined && privateScopeMatches(direct, target);
 }
 
-function statementExits(statement: Node): boolean {
+/** @internal Finite control-flow exit grammar for private-principal dominance. */
+export function privateScopeStatementDefinitelyExits(statement: Node): boolean {
   if (Node.isReturnStatement(statement) || Node.isThrowStatement(statement)) return true;
   if (Node.isBlock(statement)) {
     const [first] = statement.getStatements();
-    return first ? statementExits(first) : false;
+    return first ? privateScopeStatementDefinitelyExits(first) : false;
   }
-  if (!Node.isExpressionStatement(statement)) return false;
-  const expression = unwrappedStaticExpressionNode(statement.getExpression());
-  if (!Node.isCallExpression(expression)) return false;
-  const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
-  return name === 'fail' || name === 'redirect' || name === 'notFound';
+  // Framework failure/redirect/not-found helpers return typed outcomes. A bare expression call—
+  // exact or merely same-named—does not exit JavaScript control flow; the app must return it.
+  return false;
 }
 
 function statementReassignsAlias(statement: Node, aliasName: string): boolean {

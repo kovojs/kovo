@@ -673,8 +673,8 @@ import { createApp, publicAccess, query, route } from '@kovojs/server';
 const fields = { id: {}, name: {} };
 export const safeQuery = query({
   access: publicAccess('governed fetch and Drizzle expression audit'),
-  async load() {
-    const response = await fetch('https://api.example.test/data');
+  async load(_input, context) {
+    const response = await context.fetch('https://api.example.test/data');
     return {
       predicate: Boolean(and(eq(fields.id, 'fixed'), isNotNull(fields.name))),
       value: await response.clone().json(),
@@ -682,6 +682,7 @@ export const safeQuery = query({
   },
 });
 export default createApp({
+  egress: { allowDestinations: ['https://api.example.test'] },
   queries: [safeQuery],
   routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
 });
@@ -701,15 +702,16 @@ export default createApp({
       `import { createApp, publicAccess, query, route } from '@kovojs/server';
 export const unsafeQuery = query({
   access: publicAccess('outbound credential audit'),
-  async load(_input, { request }) {
-    await fetch('https://api.example.test/data', {
-      body: request.headers.get('authorization'),
+  async load(_input, context) {
+    await context.fetch('https://api.example.test/data', {
+      body: context.request.headers.get('authorization'),
       method: 'POST',
     });
     return { ok: true };
   },
 });
 export default createApp({
+  egress: { allowDestinations: ['https://api.example.test'] },
   queries: [unsafeQuery],
   routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
 });
@@ -721,6 +723,33 @@ export default createApp({
     expect(result, result.stderr).toMatchObject({ code: 1 });
     expect(result.stderr).toContain('ERROR KV424');
     expect(result.stderr).toContain('sink=outbound-fetch.request.header.Authorization');
+  }, 120_000);
+
+  it('keeps raw global fetch KV448-closed even when its destination is allowlisted', async () => {
+    const root = fixture('raw-fetch-closed');
+    writeFileSync(
+      join(root, 'app.mjs'),
+      `import { createApp, publicAccess, query, route } from '@kovojs/server';
+export const unsafeQuery = query({
+  access: publicAccess('raw outbound network audit'),
+  async load() {
+    const response = await fetch('https://api.example.test/data');
+    return { value: await response.json() };
+  },
+});
+export default createApp({
+  egress: { allowDestinations: ['https://api.example.test'] },
+  queries: [unsafeQuery],
+  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+});
+`,
+      'utf8',
+    );
+
+    const result = await check(root);
+    expect(result, result.stderr).toMatchObject({ code: 1 });
+    expect(result.stderr).toContain('ERROR KV448');
+    expect(result.stderr).toContain('raw network authority (global fetch)');
   }, 120_000);
 
   it('rejects the strict request-derived process, filesystem, code, command, and storage matrix', async () => {

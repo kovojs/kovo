@@ -1,25 +1,38 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
+  BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES,
   BLOCKED_SVG_SMIL_ELEMENT_NAMES,
   blessSink,
   createFragmentHtml,
   createRenderedFragmentHtml,
   decideRuntimeAttributeWrite,
+  ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+  elementContextSecurityControl,
+  elementContextSecurityStaticValueIssue,
+  elementHasContextSecurityControls,
   FRAMEWORK_BLESSED_SINK_KINDS,
   fragmentHtmlContent,
   hasUnsafeCssText,
   hasUnsafeCssUrl,
   isBlessedSink,
+  isBlockedActiveEmbedElementName,
+  isBlockedDeclarativeShadowDomAttributeName,
   isBlockedSvgSmilElementName,
   isFragmentHtml,
   isRenderedFragmentHtml,
   RAW_HTML_SINK_NAMES,
   renderedFragmentHtmlContent,
+  SAFE_IFRAME_SANDBOX_TOKENS,
   sanitizeRuntimeSrcset,
   SRCSET_ATTRIBUTE_NAMES,
   runtimeSinkFamilyForAttribute,
 } from './internal/sink-policy.js';
+import {
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
+  GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES,
+} from './internal/semantic-attributes.js';
 
 describe('shared Blessed<Sink> witness substrate (SPEC §6.6)', () => {
   it('recognizes only values minted through the module-private witness registry', () => {
@@ -81,6 +94,8 @@ describe('shared Blessed<Sink> witness substrate (SPEC §6.6)', () => {
 describe('shared runtime sink policy', () => {
   it('freezes every exported sink-classification policy', () => {
     const policies = [
+      BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
+      BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES,
       BLOCKED_SVG_SMIL_ELEMENT_NAMES,
       FRAMEWORK_BLESSED_SINK_KINDS,
       RAW_HTML_SINK_NAMES,
@@ -94,6 +109,13 @@ describe('shared runtime sink policy', () => {
     }
 
     expect(FRAMEWORK_BLESSED_SINK_KINDS[0]).toBe('browser:response-fragment-html');
+    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual(['embed', 'frame', 'frameset', 'object']);
+    expect(BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES).toEqual([
+      'shadowrootmode',
+      'shadowrootdelegatesfocus',
+      'shadowrootclonable',
+      'shadowrootserializable',
+    ]);
     expect(BLOCKED_SVG_SMIL_ELEMENT_NAMES).toEqual([
       'animate',
       'animatecolor',
@@ -114,6 +136,29 @@ describe('shared runtime sink policy', () => {
 
     expect(isBlockedSvgSmilElementName('svg')).toBe(false);
     expect(isBlockedSvgSmilElementName('a')).toBe(false);
+  });
+
+  it('fails closed on unsandboxable and obsolete active embeds independent of casing', () => {
+    // SPEC §4.8 / §5.2 rule 10: this is the finite denominator, not a loop that can
+    // become vacuously green when one disabled primitive disappears from the registry.
+    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual(['embed', 'frame', 'frameset', 'object']);
+    for (const name of BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES) {
+      expect(isBlockedActiveEmbedElementName(name)).toBe(true);
+      expect(isBlockedActiveEmbedElementName(name.toUpperCase())).toBe(true);
+    }
+
+    expect(isBlockedActiveEmbedElementName('iframe')).toBe(false);
+    expect(isBlockedActiveEmbedElementName('video')).toBe(false);
+  });
+
+  it('classifies every declarative Shadow DOM control independent of authored casing', () => {
+    for (const name of BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES) {
+      expect(isBlockedDeclarativeShadowDomAttributeName(name)).toBe(true);
+      expect(isBlockedDeclarativeShadowDomAttributeName(name.toUpperCase())).toBe(true);
+    }
+
+    expect(isBlockedDeclarativeShadowDomAttributeName('data-shadowrootmode')).toBe(false);
+    expect(isBlockedDeclarativeShadowDomAttributeName('slot')).toBe(false);
   });
 
   it('classifies unsafe runtime sink families', () => {
@@ -176,6 +221,352 @@ describe('shared runtime sink policy', () => {
       'remove',
     );
     expect(decideRuntimeAttributeWrite('style', 'min-height: 120px').action).toBe('allow');
+  });
+
+  // @kovo-security-certifies C13 dynamic-binding-control-plane-runtime-floor
+  it('removes every generated-only semantic attribute only for dynamic-binding writes', () => {
+    const reservedNames = [
+      ...GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
+      ...GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES.map((prefix) => `${prefix}probe`),
+    ];
+
+    for (const name of reservedNames) {
+      expect(
+        decideRuntimeAttributeWrite(name.toUpperCase(), '/c/attacker.client.js#run', {
+          posture: 'dynamic-binding',
+        }),
+        name,
+      ).toMatchObject({ action: 'remove', family: 'framework-control' });
+      expect(
+        decideRuntimeAttributeWrite(name, '/c/compiler.client.js#run'),
+        `${name} compiler wire`,
+      ).toMatchObject({ action: 'allow' });
+    }
+
+    for (const name of ['aria-label', 'data-state', 'hidden', 'title', 'value']) {
+      expect(
+        decideRuntimeAttributeWrite(name, 'visible', { posture: 'dynamic-binding' }),
+        name,
+      ).toMatchObject({ action: 'allow' });
+    }
+
+    // Fixed high-impact witnesses keep entry-deletion mutants from shrinking the denominator and
+    // then vacuously passing the manifest-driven loop above.
+    for (const name of ['data-kovo-deferred-style', 'data-mutation']) {
+      expect(
+        decideRuntimeAttributeWrite(name, 'attacker-selected', {
+          posture: 'dynamic-binding',
+        }),
+        `${name} fixed denominator witness`,
+      ).toMatchObject({ action: 'remove', family: 'framework-control' });
+    }
+  });
+
+  it('classifies document-navigation and element-context writes with closed actions', () => {
+    expect(
+      decideRuntimeAttributeWrite('href', '/safe/', {
+        elementName: 'BASE',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'remove', family: 'url' });
+    expect(
+      decideRuntimeAttributeWrite('content', '0; url=https://attacker.example/', {
+        effectiveHttpEquiv: ' ReFrEsH ',
+        elementName: 'meta',
+        posture: 'dynamic-binding',
+      }),
+    ).toMatchObject({ action: 'remove' });
+    expect(
+      decideRuntimeAttributeWrite('http-equiv', 'refresh', {
+        elementName: 'meta',
+        posture: 'dynamic-binding',
+      }),
+    ).toMatchObject({ action: 'remove' });
+
+    for (const [elementName, name] of [
+      ['script', 'src'],
+      ['script', 'type'],
+      ['link', 'href'],
+      ['link', 'rel'],
+      ['iframe', 'src'],
+      ['iframe', 'sandbox'],
+    ] as const) {
+      expect(
+        decideRuntimeAttributeWrite(name, '/uploads/attacker', {
+          ...(elementName === 'iframe' && name === 'src'
+            ? { effectiveIframeSandbox: 'allow-forms' }
+            : {}),
+          elementName,
+          posture: 'dynamic-binding',
+        }),
+        `${elementName}[${name}]`,
+      ).toMatchObject({ action: 'preserve' });
+    }
+
+    expect(
+      decideRuntimeAttributeWrite('src', 'data:text/javascript,alert(1)', {
+        elementName: 'script',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'allow', value: 'data:text/javascript,alert(1)' });
+    expect(
+      decideRuntimeAttributeWrite('title', 'Profile', {
+        elementName: 'iframe',
+        posture: 'dynamic-binding',
+      }),
+    ).toMatchObject({ action: 'allow', value: 'Profile' });
+  });
+
+  // @kovo-security-certifies C13 finite-browser-control-tuple-denominator
+  it('owns one exact non-vacuous 60-tuple browser-control denominator', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(60);
+    const keys = new Set(
+      ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.map(([tag, attribute]) => `${tag}[${attribute}]`),
+    );
+    expect(keys.size).toBe(60);
+    for (const witness of [
+      'script[integrity]',
+      'script[nonce]',
+      'style[nonce]',
+      'link[as]',
+      'iframe[allowfullscreen]',
+      'iframe[credentialless]',
+      'iframe[browsingtopics]',
+      'iframe[allowpaymentrequest]',
+      'iframe[sharedstoragewritable]',
+      'a[target]',
+      'a[attributionsrc]',
+      'a[attributiondestination]',
+      'a[attributionsourceid]',
+      'a[attributionsourcenonce]',
+      'area[ping]',
+      'area[attributionsrc]',
+      'form[target]',
+      'form[rel]',
+      'button[formtarget]',
+      'input[formtarget]',
+      'img[referrerpolicy]',
+      'img[crossorigin]',
+      'img[attributionsrc]',
+      'img[sharedstoragewritable]',
+      'script[attributionsrc]',
+      'audio[crossorigin]',
+      'video[crossorigin]',
+      'image[crossorigin]',
+      'meta[name]',
+    ]) {
+      expect(keys.has(witness), witness).toBe(true);
+    }
+
+    for (const [
+      tag,
+      attribute,
+      acceptsTrustedUrl,
+      staticPolicy,
+    ] of ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES) {
+      expect(elementHasContextSecurityControls(tag), tag).toBe(true);
+      expect(
+        elementContextSecurityControl(tag.toUpperCase(), attribute.toUpperCase()),
+      ).toMatchObject({ acceptsTrustedUrl, staticPolicy });
+      expect(
+        decideRuntimeAttributeWrite(attribute, '/attacker-selected', {
+          ...(tag === 'iframe' && attribute === 'src'
+            ? { effectiveIframeSandbox: 'allow-forms' }
+            : {}),
+          elementName: tag,
+          posture: 'dynamic-binding',
+        }).action,
+        `${tag}[${attribute}] dynamic`,
+      ).toBe(staticPolicy === 'disabled' ? 'remove' : 'preserve');
+      if (acceptsTrustedUrl) {
+        expect(
+          decideRuntimeAttributeWrite(attribute, 'data:text/html,attacker', {
+            ...(tag === 'iframe' && attribute === 'src'
+              ? { effectiveIframeSandbox: 'allow-scripts' }
+              : {}),
+            elementName: tag,
+            posture: 'dynamic-binding',
+            trustedUrl: true,
+          }).action,
+          `${tag}[${attribute}] trusted URL`,
+        ).toBe('allow');
+      }
+    }
+    for (const schedulingOnly of ['async', 'defer', 'fetchpriority']) {
+      expect(elementContextSecurityControl('script', schedulingOnly)).toBeUndefined();
+    }
+  });
+
+  it('closes hidden network capabilities and reviews fullscreen, form targets, and credentials', () => {
+    expect(elementContextSecurityControl('iframe', 'allowfullscreen')).toMatchObject({
+      acceptsTrustedUrl: false,
+      staticPolicy: 'allow',
+    });
+    for (const [tag, attribute] of [
+      ['a', 'attributionsrc'],
+      ['a', 'attributiondestination'],
+      ['a', 'attributionsourceid'],
+      ['a', 'attributionsourcenonce'],
+      ['area', 'attributionsrc'],
+      ['img', 'attributionsrc'],
+      ['script', 'attributionsrc'],
+      ['iframe', 'browsingtopics'],
+      ['iframe', 'allowpaymentrequest'],
+      ['iframe', 'sharedstoragewritable'],
+      ['img', 'sharedstoragewritable'],
+      ['style', 'nonce'],
+    ] as const) {
+      expect(elementContextSecurityControl(tag, attribute), `${tag}[${attribute}]`).toMatchObject({
+        acceptsTrustedUrl: false,
+        staticPolicy: 'disabled',
+      });
+      expect(
+        elementContextSecurityStaticValueIssue(tag, attribute, ''),
+        `${tag}[${attribute}]`,
+      ).toBe(elementContextSecurityControl(tag, attribute)?.reason);
+    }
+    for (const [tag, attribute] of [
+      ['img', 'crossorigin'],
+      ['audio', 'crossorigin'],
+      ['video', 'crossorigin'],
+      ['image', 'crossorigin'],
+    ] as const) {
+      expect(elementContextSecurityControl(tag, attribute), `${tag}[${attribute}]`).toMatchObject({
+        acceptsTrustedUrl: false,
+        staticPolicy: 'allow',
+      });
+    }
+    for (const [tag, attribute, safeValue, unsafeValue] of [
+      ['form', 'target', '_blank', 'attacker-window'],
+      ['button', 'formtarget', '_self', 'attacker-window'],
+      ['input', 'formtarget', '_top', 'attacker-window'],
+      ['form', 'rel', 'noopener noreferrer', 'opener'],
+    ] as const) {
+      expect(elementContextSecurityStaticValueIssue(tag, attribute, safeValue)).toBeUndefined();
+      expect(elementContextSecurityStaticValueIssue(tag, attribute, unsafeValue)).toContain(
+        tag === 'form' && attribute === 'rel' ? 'opener' : 'browsing context',
+      );
+    }
+  });
+
+  it('applies finite static policy to referrers, browsing contexts, opener, and reporting', () => {
+    for (const policy of [
+      'no-referrer',
+      'same-origin',
+      'strict-origin',
+      'strict-origin-when-cross-origin',
+    ]) {
+      expect(elementContextSecurityStaticValueIssue('a', 'referrerpolicy', policy)).toBeUndefined();
+    }
+    for (const policy of [
+      'unsafe-url',
+      'no-referrer-when-downgrade',
+      'origin',
+      'origin-when-cross-origin',
+      'invalid',
+      '',
+    ]) {
+      expect(
+        elementContextSecurityStaticValueIssue('img', 'referrerpolicy', policy),
+        policy,
+      ).toContain('allowed values');
+    }
+    for (const target of ['_blank', '_self', '_parent', '_top']) {
+      expect(elementContextSecurityStaticValueIssue('a', 'target', target)).toBeUndefined();
+    }
+    expect(elementContextSecurityStaticValueIssue('a', 'target', 'attacker-window')).toContain(
+      'named browsing context',
+    );
+    for (const namedLookalike of [' _blank ', '\u00a0_blank\u00a0']) {
+      expect(elementContextSecurityStaticValueIssue('a', 'target', namedLookalike)).toContain(
+        'named browsing context',
+      );
+    }
+    expect(
+      elementContextSecurityStaticValueIssue('area', 'rel', 'nofollow OPENER noreferrer'),
+    ).toContain('window.opener');
+    expect(
+      elementContextSecurityStaticValueIssue('a', 'rel', 'noopener noreferrer'),
+    ).toBeUndefined();
+    expect(elementContextSecurityStaticValueIssue('a', 'ping', '/telemetry')).toContain(
+      'Ping-From',
+    );
+    expect(elementContextSecurityStaticValueIssue('script', 'nonce', 'reused')).toContain(
+      'framework-owned',
+    );
+    expect(elementContextSecurityStaticValueIssue('script', 'language', 'javascript')).toContain(
+      'obsolete',
+    );
+    expect(elementContextSecurityStaticValueIssue('meta', 'name', 'referrer')).toContain(
+      'response header',
+    );
+    expect(elementContextSecurityStaticValueIssue('meta', 'name', 'description')).toBeUndefined();
+  });
+
+  it('keeps iframe sources behind a finite sandbox token set and a mandatory boundary', () => {
+    expect(SAFE_IFRAME_SANDBOX_TOKENS).toEqual([
+      'allow-forms',
+      'allow-modals',
+      'allow-orientation-lock',
+      'allow-pointer-lock',
+      'allow-presentation',
+      'allow-same-origin',
+      'allow-scripts',
+    ]);
+    for (const sandbox of [
+      '',
+      'allow-forms',
+      'ALLOW-SCRIPTS',
+      'allow-same-origin\tallow-forms',
+      'allow-modals allow-pointer-lock allow-presentation',
+    ]) {
+      expect(
+        elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox),
+        sandbox,
+      ).toBeUndefined();
+    }
+    for (const sandbox of [
+      'allow-scripts allow-same-origin',
+      'allow-top-navigation',
+      'allow-top-navigation-by-user-activation',
+      'allow-top-navigation-to-custom-protocols',
+      'allow-popups',
+      'allow-popups-to-escape-sandbox',
+      'allow-storage-access-by-user-activation',
+      'allow-downloads',
+      'future-browser-capability',
+    ]) {
+      expect(
+        elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox),
+        sandbox,
+      ).toContain('isolation boundary');
+    }
+
+    expect(
+      decideRuntimeAttributeWrite('src', '/account', {
+        elementName: 'iframe',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'remove' });
+    expect(
+      decideRuntimeAttributeWrite('src', '/account', {
+        effectiveIframeSandbox: 'allow-scripts allow-same-origin',
+        elementName: 'iframe',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'remove' });
+    expect(
+      decideRuntimeAttributeWrite('src', '/account', {
+        effectiveIframeSandbox: 'allow-scripts',
+        elementName: 'iframe',
+        posture: 'dynamic-binding',
+        trustedUrl: true,
+      }),
+    ).toMatchObject({ action: 'allow' });
   });
 
   it('parses srcset and drops unsafe candidates without dropping safe candidates', () => {

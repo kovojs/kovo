@@ -9,6 +9,7 @@ export const GENERATED_ARTIFACT_CATEGORIES = Object.freeze({
 });
 
 export const GENERATED_ARTIFACT_GENERATORS = Object.freeze({
+  frameworkExportPosture: 'framework-export-posture',
   icons: 'icons',
   uiRegistry: 'ui-registry',
   prodEmit: 'prod-emit',
@@ -54,6 +55,19 @@ export const generatedArtifactInventory = Object.freeze([
     gitPathspecs: Object.freeze(['packages/create-kovo/templates/graph.json']),
     pathPatterns: Object.freeze([/^packages\/create-kovo\/templates\/graph\.json$/]),
     spec: 'SPEC.md §5.2 rule 8',
+  },
+  {
+    id: 'framework-public-runtime-export-posture',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.frameworkExportPosture,
+    generatorCheckCommand: Object.freeze(['node', 'scripts/framework-export-posture-gate.mjs']),
+    pathPatterns: Object.freeze([
+      /^packages\/compiler\/src\/security\/framework-public-runtime-export-posture\.generated\.ts$/,
+    ]),
+    spec: 'SPEC.md §6.6 first-party least-authority package posture',
   },
   {
     id: 'icon-generated-components',

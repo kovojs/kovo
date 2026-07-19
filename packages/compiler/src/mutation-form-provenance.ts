@@ -13,6 +13,29 @@ export type MutationFormControlAttributeName =
 
 export type MutationFormTransportAttributeName = 'action' | 'enctype' | 'method';
 
+export type MutationFormAttributesReturnedKey =
+  | 'action'
+  | 'data-mutation'
+  | 'enhance'
+  | 'enctype'
+  | 'method'
+  | 'mutation';
+
+/**
+ * SPEC §6.3: the exact framework helper returns this finite key set. Output-context validation may
+ * use the set only after proving the call's @kovojs/server export provenance; a same-named local
+ * helper remains opaque. If the public helper ever grows another key, this reviewed denominator
+ * must grow with it before that key can cross an element-context sink.
+ */
+const mutationFormAttributesReturnedKeys: readonly MutationFormAttributesReturnedKey[] = [
+  'action',
+  'data-mutation',
+  'enhance',
+  'enctype',
+  'method',
+  'mutation',
+];
+
 export type MutationSubmitterTransportAttributeName =
   | 'form'
   | 'formaction'
@@ -101,6 +124,15 @@ export function isImportedMutationFormAttributesCall(attribute: JsxSpreadAttribu
     attribute.expressionCallImportedName === 'mutationFormAttributes' &&
     attribute.expressionCallModuleSpecifier === '@kovojs/server'
   );
+}
+
+/** Exact framework-export provenance plus the helper's finite returned-key summary. */
+export function frameworkMutationFormAttributesReturnedKeys(
+  attribute: JsxSpreadAttributeModel,
+): readonly MutationFormAttributesReturnedKey[] | undefined {
+  return isImportedMutationFormAttributesCall(attribute)
+    ? mutationFormAttributesReturnedKeys
+    : undefined;
 }
 
 /** Parser-owned HTML intrinsic identity; component spellings never receive this fact. */

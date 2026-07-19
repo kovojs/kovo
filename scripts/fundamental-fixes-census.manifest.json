@@ -12,7 +12,7 @@
       "kind": "write-capable-handle",
       "owner": ["H"],
       "status": "closed",
-      "evidence": "Three independent layers close the readonly-handle rows: the Reader<Db> type/runtime proxy matrix, default and SQLite computed-method production-build rejection, and a paranoid served query that reaches the real runtime KV433 membrane without writing a row.",
+      "evidence": "Three independent layers close the readonly-handle rows: the Reader<Db> type/runtime proxy matrix, default and SQLite computed-method production-build rejection, and finite-IR KV449 rejection of a direct query write even when the dedicated KV433 finding is advisory.",
       "evidenceBundles": [
         "m1-prod-artifact-readonly-floor",
         "h-managed-db-runtime-type",
@@ -20,16 +20,16 @@
         "m3-security-gate-mutations"
       ],
       "m1": {
-        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot covers default and SQLite static rejection plus the paranoid served KV433 runtime floor; managed-db.test.ts covers the Reader<Db> type/runtime matrix",
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot covers default and SQLite static rejection plus fatal finite-IR KV449 under advisory KV433; managed-db.test.ts separately covers the Reader<Db> type/runtime matrix",
         "dialects": {
-          "postgres": "The default production build rejects computed readonly write methods before emission; the paranoid default served query then proves a direct context.db insert reaches runtime KV433 and preserves zero rows",
+          "postgres": "The default production build rejects computed readonly write methods before emission; advisory KV433 mode still rejects a direct context.db insert as KV449 and emits no artifact",
           "sqlite": "The SQLite production build rejects computed readonly write methods before emission; the shared managed-proxy matrix covers all/get/values/transaction/$client/session/futureStatement and the ordinary SQLite artifact serves a positive readonly query"
         },
         "independentReviewer": "A 2026-07-15 read-only redesign review verified that the static rejection, genuine served runtime query, and managed-proxy proofs remain separate and do not certify a synthetic helper"
       },
       "m2": {
-        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) for both fail-before-emission cases and buildParanoidProductionArtifact(root) before serving the dedicated runtime-floor query",
-        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the KV433 readonly-managed-handle production artifact proof"
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) for both fail-before-emission cases and buildParanoidProductionArtifact(root) to prove KV449 remains fatal when KV433 is advisory",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the finite-IR query-write production-build refusal"
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB failed-validation and dialect-matrix/census enforcement mutants"
@@ -41,7 +41,7 @@
       "kind": "write-capable-handle",
       "owner": ["H"],
       "status": "closed",
-      "evidence": "managed-db.test.ts proves all/get/values and denied-property runtime behavior; the transaction production tests prove default/SQLite static rejection and the genuine served KV433 runtime floor; the security build and mutation gates enroll those proofs.",
+      "evidence": "managed-db.test.ts proves all/get/values and denied-property runtime behavior; the transaction production tests prove default/SQLite static rejection and fatal finite-IR KV449 under advisory KV433; the security build and mutation gates enroll those proofs.",
       "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
       "evidenceBundles": [
         "h-managed-db-runtime-type",
@@ -52,14 +52,14 @@
       "m1": {
         "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
         "dialects": {
-          "postgres": "The shared runtime proxy matrix blocks all/get/values; the default build rejects computed write aliases and the served default query proves KV433 preserves zero rows",
+          "postgres": "The shared runtime proxy matrix blocks all/get/values; the default build rejects computed write aliases and advisory KV433 still cannot bypass fatal finite-IR KV449",
           "sqlite": "The shared runtime proxy matrix blocks all/get/values; the SQLite build rejects computed write aliases and its ordinary artifact serves a positive readonly query"
         },
         "independentReviewer": "A 2026-07-15 read-only redesign review verified the current static/runtime proof split"
       },
       "m2": {
-        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts uses real ordinary and paranoid kovo production builds",
-        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the KV433 real-build proof"
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts uses real ordinary and paranoid kovo production-build preflights",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the KV449 real-build refusal"
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
@@ -70,7 +70,7 @@
       "kind": "write-capable-handle",
       "owner": ["H"],
       "status": "closed",
-      "evidence": "managed-db.test.ts proves transaction and future/unknown properties fail closed; the transaction production tests prove both dialects reject computed escapes before emission and a real served query reaches KV433 without writing.",
+      "evidence": "managed-db.test.ts proves transaction and future/unknown properties fail closed; the transaction production tests prove both dialects reject computed escapes before emission and a direct query write remains KV449-closed when KV433 is advisory.",
       "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
       "evidenceBundles": [
         "h-managed-db-runtime-type",
@@ -81,14 +81,14 @@
       "m1": {
         "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
         "dialects": {
-          "postgres": "The shared runtime proxy matrix blocks transaction/futureStatement; the default production build rejects computed escapes and the served query hits KV433",
+          "postgres": "The shared runtime proxy matrix blocks transaction/futureStatement; the default production build rejects computed escapes and the advisory-KV433 build still fails on KV449",
           "sqlite": "The shared runtime proxy matrix blocks transaction/futureStatement; the SQLite production build rejects computed escapes before emission"
         },
         "independentReviewer": "A 2026-07-15 read-only redesign review verified the current static/runtime proof split"
       },
       "m2": {
-        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts uses real ordinary and paranoid kovo production builds",
-        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the KV433 real-build proof"
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts uses real ordinary and paranoid kovo production-build preflights",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the KV449 real-build refusal"
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
@@ -99,7 +99,7 @@
       "kind": "write-capable-handle",
       "owner": ["H"],
       "status": "closed",
-      "evidence": "Public GET write shapes are rejected before artifact emission for default and SQLite; a dedicated public query in a paranoid production artifact then proves the runtime KV433 floor returns a generic 500 and preserves zero rows.",
+      "evidence": "Public GET write shapes are rejected before artifact emission for default and SQLite; a dedicated public query remains fatal KV449 in advisory-KV433 mode, while managed-db.test.ts independently proves the runtime proxy blocks writes.",
       "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
       "evidenceBundles": [
         "m1-prod-artifact-readonly-floor",
@@ -109,14 +109,14 @@
       "m1": {
         "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
         "dialects": {
-          "postgres": "The default production build rejects the hostile computed-method shape; the paranoid served query attempts a direct insert and KV433 preserves zero rows",
+          "postgres": "The default production build rejects the hostile computed-method shape; the advisory-KV433 build rejects a direct insert as KV449 before artifact emission",
           "sqlite": "The SQLite production build rejects the hostile computed-method shape before emission; the shared runtime proxy remains dialect-independent"
         },
-        "independentReviewer": "A 2026-07-15 read-only redesign review verified that rejected hostile source is not smuggled into an ordinary served artifact"
+        "independentReviewer": "A 2026-07-15 read-only redesign review verified the static/runtime proof split; the newer finite IR strengthens the static side by making the hostile query unbuildable"
       },
       "m2": {
-        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts uses buildProductionArtifact(root) for both static failures and buildParanoidProductionArtifact(root) for the served runtime floor",
-        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the KV433 real-build proof"
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts uses buildProductionArtifact(root) for both static failures and buildParanoidProductionArtifact(root) for the advisory-KV433/fatal-KV449 proof",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the KV449 real-build refusal"
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
@@ -127,7 +127,7 @@
       "kind": "write-capable-handle",
       "owner": ["H"],
       "status": "closed",
-      "evidence": "packages/server/src/managed-db.test.ts contains the compiler-backed Reader<Db> type proof and runtime proxy matrix; the served paranoid production query proves a deliberate cast still reaches runtime KV433.",
+      "evidence": "packages/server/src/managed-db.test.ts contains the compiler-backed Reader<Db> type proof and direct runtime proxy matrix; the production-build proof shows a deliberate query-write cast remains KV449-closed even when KV433 is advisory.",
       "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
       "evidenceBundles": [
         "h-managed-db-runtime-type",
@@ -135,16 +135,16 @@
         "m3-security-gate-mutations"
       ],
       "m1": {
-        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot for the matching public query runtime floor",
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot for the matching public-query finite-IR refusal",
         "dialects": {
-          "postgres": "The compiler hides write verbs; the default served query deliberately casts around the type and is still stopped by runtime KV433",
+          "postgres": "The Reader type hides write verbs; a deliberate cast is blocked by the direct runtime proxy matrix, and the same authored query-write shape is rejected as KV449 before emission",
           "sqlite": "The compiler proof is dialect-independent; the SQLite hostile build is rejected before emission and the positive artifact keeps readonly reads available"
         },
         "independentReviewer": "A 2026-07-15 read-only redesign review verified that the type guardrail and runtime security proof remain distinct"
       },
       "m2": {
-        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts serves a real paranoid production artifact for the public query runtime floor",
-        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the real-build proof; managed-db.test.ts separately runs the compiler-backed Reader<Db> assertion"
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts runs a real paranoid production-build preflight and proves no unsafe query artifact is emitted",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the real-build refusal; managed-db.test.ts separately runs the compiler-backed Reader<Db> and runtime-proxy assertions"
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
@@ -4204,7 +4204,7 @@
     },
     "m1-prod-artifact-readonly-floor": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
-      "evidence": "Production tests separate default/SQLite fail-before-emission checks, ordinary positive served artifacts, and a paranoid served query that proves the independent KV433 runtime floor."
+      "evidence": "Production tests separate default/SQLite fail-before-emission checks, ordinary positive served artifacts, and an advisory-KV433 build that remains fatal KV449; managed-db.test.ts independently proves the runtime KV433 proxy floor."
     },
     "m1-prod-artifact-transactions": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot",

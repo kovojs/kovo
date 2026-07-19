@@ -121,7 +121,7 @@ export const LLMS_ONLY_EXAMPLES = [
       'A minimal reference app showing Kovo authentication and authorization: a bounded local-only auth fixture, sign-in/sign-out mutations with CSRF protection, role and authed guards on routes, and fixed Better Auth bindings for deployable apps.',
     dir: 'examples/reference',
     url: '/examples/reference.md',
-    sources: ['src/auth.ts', 'src/app.ts', 'src/app-shell.ts'],
+    sources: ['src/auth.ts', 'src/app.tsx', 'src/app-shell.ts'],
   },
 ];
 

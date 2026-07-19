@@ -44,10 +44,17 @@ Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1
   `button`/`input[type=button|reset]` do not participate. Repeated same-name controls that are not
   one radio group or one submitter group remain **KV242** until an authored array/multivalue
   primitive declares their semantics. `input[type=image]` remains KV242 because the browser derives
-  coordinate-suffixed names (`name.x`/`name.y`), and submitter `formaction`/`formmethod`/`formenctype`
-  overrides cannot replace the compiler-owned mutation transport. A control `type` that is not a
+  coordinate-suffixed names (`name.x`/`name.y`), and submitter `form`/`formaction`/`formmethod`/
+  `formenctype`/`formtarget`/`formnovalidate` controls cannot replace or escape the compiler-owned
+  mutation transport. Direct, reactive, spread, composed, or externally associated overrides are
+  KV242 and must not survive into `data-bind:*` or emitted update-plan stamps. A control `type` that is not a
   static string (or statically absent) is also KV242 because changing it at runtime could change
-  successful-control and submitter-override semantics after compilation.
+  successful-control and submitter-override semantics after compilation. The browser runtime is
+  the fail-closed floor: once `data-mutation` identifies a typed form, any effective method/action
+  that is not the exact same-origin `POST /_m/<mutation-key>` transport is prevented, marked
+  `INVALID_MUTATION_TRANSPORT`, and never allowed to fall through to native submission. In
+  particular, a tampered `formmethod="get"` cannot serialize CSRF, idempotency, or form-field values
+  into a URL. Ordinary native forms without compiler-owned `data-mutation` retain native behavior.
 - `Kovo-Changes` is the sanitized wire summary of committed writes: each entry is `{domain, keys}`. It never includes mutation input, user-provided values, failure reasons, stack traces, or internal diagnostic detail; richer typed change records are internal compiler/runtime artifacts.
 - `<kovo-query>` replaces the client's query value and runs that query's update plan — bindings, named derives, stamps — across every dependent island. No runtime dependency tracking: the plan is the DOM itself (§4.8). Query JSON serialized inline MUST be encoded for the exact context it lands in so attacker-controlled JSON string content cannot end the host element early. A `<script type="application/json" kovo-query="…">` initial-page island is HTML **script-data** (entities are not decoded), so its JSON MUST escape `<` as the JSON unicode escape `\u003c` — `&lt;` would not decode there and would corrupt the value. A post-mutation `<kovo-query>{…}</kovo-query>` element has **parsed** content, so its JSON MUST HTML-escape (`<`→`&lt;`, `>`→`&gt;`, `&`→`&amp;`). Both neutralize the `</script`/`<!--`/`<script` break-out; JSON quoting alone escapes neither and is insufficient. This is a normative renderer rule with a conformance test (`tests/integration/specs/xss-escaping.spec.ts`), and it binds every transport that re-emits an island — including the §9.3 BroadcastChannel rebroadcast, which forwards already-encoded bytes and never re-serializes raw values.
 - `<kovo-fragment>` is **DOM-morphed** by default (idiomorph-class algorithm): user-agent and DOM-resident state — focus, scroll position, selection, in-flight CSS transitions, and `<details>`/media element UA state — survives. The morph carries **no serialization of island-local `kovo-state`**, so a refreshed parent re-emits any nested island at its render-time default state (§4.5 rule 3 re-renders the full subtree from declared queries ∪ stamped props); island-private local state is therefore **not** preserved across a fragment morph of an enclosing target. The compiler forbids the position that would silently lose it: an island declaring local `state` may not render inside another component's server-refreshable fragment target (**KV420**, §4.5). `mode="append"` is the explicit append vocabulary for pagination ("load more") and streams; `mode="prepend"` is its companion for "load older" feeds, inserting the patch at the **start** of the target. Both are ordered keyed inserts: a row whose `kovo-key` is already present is **deduped** (matched/skipped, never re-inserted) per §13.2, so a re-shipped page never duplicates rows. `mode="prepend"` additionally carries a **normative scroll-anchor guarantee** — the runtime treats the patched target as the scroll container and adjusts its `scrollTop` by the inserted height so previously-visible content stays fixed (no viewport jump when older content lands above). This is a framework guarantee, not an app knob. The read-side companion is a keyed-delta `<kovo-query … delta>` whose `lists.<path>` upsert merges the page into the SAME held query instance (§9.1.1) — `prepend`-flagged so new rows accumulate at the front of the held array — so "load more"/"load older" fetch only the new page and never re-ship prior rows. Patched-in islands are inert-until-touched like everything else — _a fragment update is a tiny navigation, not a different programming model._
@@ -150,6 +157,21 @@ same component render function with the same typed failure state in `forms.<muta
 expected failure UI is normal TSX (`<FieldError>`, `<FormError>`, or direct `forms` reads) rather
 than a separate response template. `ctx.submit`'s `onError` receives the same typed union. Expected
 failure responses never use committed invalidation or `Kovo-Targets` success selection.
+
+**KV430 request-body posture (normative).** After successful JSON decoding, Kovo MUST enforce the
+iterative depth/breadth/node budget before provenance decoration, schema traversal, CSRF-token field
+extraction, or handler dispatch. URL-encoded segment and multipart-part ceilings enter the same
+posture. Provenance decoration MUST keep every app-visible scalar read non-coercible and untrusted,
+including reads through own-property descriptors, `Reflect.get`, `Object.assign`, and serialization,
+but MUST NOT eagerly allocate one persistent poison object per scalar leaf; the validation-only raw
+container view is module-private and unforgeable. A CSRF-exempt mutation that exceeds one of these
+ceilings answers **422** with `{"code":"VALIDATION","payload":{"reason":"shape-budget"}}`. A
+CSRF-protected mutation or endpoint cannot safely recover its submitted token from an over-budget
+carrier and therefore fails through the ordinary CSRF response without exposing the body verdict.
+After webhook authentication, malformed JSON remains **400** `Invalid JSON webhook body`, while a
+valid JSON body that exceeds KV430 answers **422** with
+`{"error":{"code":"VALIDATION","payload":{"reason":"shape-budget"}},"ok":false}`. None of
+these expected input refusals calls the app's unexpected-error hook or handler.
 
 Declared `fail()` payloads are client-bound wire values and MUST satisfy the same `JsonValue`
 vocabulary as query values and island state: JSON primitives, arrays, and plain objects only. An
@@ -300,6 +322,14 @@ The shell owns document assembly. The default document contains the doctype, `<h
 Unexpected-error shells are app config with safe defaults: 404, 403, and 500 documents may be supplied by the app, while unexpected failures still use the stable no-internals bodies from §9.2 when no shell is provided. The shell resolves `db` and `sessionProvider` once before route, query, or mutation guards; route/query guard failures use the §6.5 unauthenticated redirect and 403 contract.
 
 Static export replays synthetic GET `Request`s through the same handler. An exportable route writes `.html`, referenced immutable `/c/` modules, and static assets; there is no second render path. Export is L0/L1 only: a route with a guard, unproven session dependence, mutation-only interaction, or a param path without explicit static-path enumeration fails or skips loudly with **KV229** according to the configured export policy. Exported documents disable server refetch assumptions; the no-JS document is the artifact.
+
+**Static subresource integrity (normative).** Once exact bytes are known, static export adds a
+SHA-384 `integrity` value to first-party module-script, modulepreload, stylesheet, and style-preload
+tags. An authored integrity assertion is accepted only when there is exactly one
+ASCII-case-insensitive `integrity` attribute and its decoded value exactly equals the computed hash.
+An empty placeholder, duplicate, malformed value, stale hash, or mismatch aborts export; the build
+never hides a disagreement by deleting or replacing author text. A tag with no authored assertion
+receives exactly one computed value before the artifact is published.
 
 #### 9.5.1 Dev HMR
 

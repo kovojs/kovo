@@ -21,6 +21,7 @@ import {
   securityWeakSetAdd,
   securityWeakSetHas,
 } from '#security-witness-intrinsics';
+import { isGeneratedOnlySemanticAttribute } from './semantic-attributes.js';
 
 /**
  * @internal URL sink facts for server render, browser runtime writes, and compiler
@@ -66,9 +67,61 @@ export const BLOCKED_SVG_SMIL_ELEMENT_NAMES = freezeSecurityValue([
   'set',
 ] as const);
 
+/**
+ * @internal Active embedded-document elements Kovo refuses to render or adopt.
+ *
+ * SPEC.md §4.8 / §5.2 rule 10: unlike a modern iframe, `object`, `embed`, and obsolete
+ * `frame`/`frameset` output have no reviewable sandbox boundary. A same-origin HTML resource can
+ * therefore execute with the embedding document's origin and directly reach its parent. Kovo's
+ * technical-preview surface disables the primitives instead of relying on CSP or obsolete parsing.
+ */
+export const BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES = freezeSecurityValue([
+  'embed',
+  'frame',
+  'frameset',
+  'object',
+] as const);
+
+/**
+ * @internal Declarative Shadow DOM controls Kovo refuses on `<template>`.
+ *
+ * SPEC.md §4.2: component output is light DOM. A declarative shadow root changes the DOM tree
+ * during parsing and can hide executable or authority-bearing descendants from Kovo's ordinary
+ * light-DOM traversal. These controls are therefore outside the authored/runtime output surface.
+ */
+export const BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES = freezeSecurityValue([
+  'shadowrootmode',
+  'shadowrootdelegatesfocus',
+  'shadowrootclonable',
+  'shadowrootserializable',
+] as const);
+
+/**
+ * @internal Finite sandbox relaxations that retain the iframe isolation boundary.
+ *
+ * Unknown tokens fail closed so a future browser token cannot silently acquire authority. Tokens
+ * that escape into new/top-level browsing contexts, storage access, or downloads are intentionally
+ * absent. `allow-scripts` and `allow-same-origin` are individually useful, but their combination is
+ * rejected below because a same-origin child can then remove its own sandbox attribute.
+ */
+export const SAFE_IFRAME_SANDBOX_TOKENS = freezeSecurityValue([
+  'allow-forms',
+  'allow-modals',
+  'allow-orientation-lock',
+  'allow-pointer-lock',
+  'allow-presentation',
+  'allow-same-origin',
+  'allow-scripts',
+] as const);
+
 const urlAttributeNames = securitySetOf<string>(URL_ATTRIBUTE_NAMES);
 const safeUrlSchemes = securitySetOf<string>(SAFE_URL_SCHEMES);
 const blockedSvgSmilElementNames = securitySetOf<string>(BLOCKED_SVG_SMIL_ELEMENT_NAMES);
+const blockedActiveEmbedElementNames = securitySetOf<string>(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES);
+const blockedDeclarativeShadowDomAttributeNames = securitySetOf<string>(
+  BLOCKED_DECLARATIVE_SHADOW_DOM_ATTRIBUTE_NAMES,
+);
+const safeIframeSandboxTokens = securitySetOf<string>(SAFE_IFRAME_SANDBOX_TOKENS);
 const urlSchemePattern = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 const htmlColonReferencePattern = /&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/;
 
@@ -80,6 +133,565 @@ export function isUrlAttributeName(name: string): boolean {
 /** @internal True when an intrinsic element is a disabled SVG SMIL execution primitive. */
 export function isBlockedSvgSmilElementName(name: string): boolean {
   return securitySetHas(blockedSvgSmilElementNames, securityStringToLowerCase(name));
+}
+
+/** @internal True when an intrinsic element is an unsandboxable active embed primitive. */
+export function isBlockedActiveEmbedElementName(name: string): boolean {
+  return securitySetHas(blockedActiveEmbedElementNames, securityStringToLowerCase(name));
+}
+
+/** @internal True when an attribute can opt a `<template>` into declarative Shadow DOM. */
+export function isBlockedDeclarativeShadowDomAttributeName(name: string): boolean {
+  return securitySetHas(blockedDeclarativeShadowDomAttributeNames, securityStringToLowerCase(name));
+}
+
+/** @internal One finite element/attribute security-control classification. */
+export interface ElementContextSecurityControl {
+  readonly acceptsTrustedUrl: boolean;
+  readonly reason: string;
+  readonly staticPolicy:
+    | 'allow'
+    | 'disabled'
+    | 'iframe-sandbox-tokens'
+    | 'meta-referrer-name'
+    | 'referrer-policy'
+    | 'rel-no-opener'
+    | 'target-keyword';
+}
+
+/**
+ * @internal Canonical finite denominator for browser activation, isolation, and navigation
+ * controls. The compiler, modular browser runtime, fragment morph, and generated inline loader
+ * all consume this manifest; adding a browser control in only one path is a security regression.
+ */
+export const ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES = freezeSecurityValue([
+  freezeSecurityValue([
+    'script',
+    'src',
+    true,
+    'allow',
+    'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'href',
+    true,
+    'allow',
+    'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'xlink:href',
+    true,
+    'allow',
+    'a dynamic script source can execute same-origin attacker-controlled JavaScript',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'type',
+    false,
+    'allow',
+    'a dynamic script type can turn an inert data block into executable JavaScript',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'nomodule',
+    false,
+    'allow',
+    'script nomodule posture must be fixed before parser-time execution selection',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'integrity',
+    false,
+    'allow',
+    'script integrity must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'crossorigin',
+    false,
+    'allow',
+    'script credential mode must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'script referrer policy must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'charset',
+    false,
+    'allow',
+    'script decoding posture must be fixed before fetched bytes are decoded',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'nonce',
+    false,
+    'disabled',
+    'script nonces are framework-owned authority; Kovo documents use hash-locked CSP',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'language',
+    false,
+    'disabled',
+    'the obsolete script language switch is disabled',
+  ] as const),
+  freezeSecurityValue([
+    'script',
+    'attributionsrc',
+    false,
+    'disabled',
+    'script attribution reporting is disabled because it can issue background registration requests',
+  ] as const),
+  freezeSecurityValue([
+    'style',
+    'nonce',
+    false,
+    'disabled',
+    'style nonces are framework-owned authority; Kovo documents use hash-locked CSP',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'href',
+    true,
+    'allow',
+    'a dynamic stylesheet URL can apply attacker-controlled CSS',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'rel',
+    false,
+    'allow',
+    'a dynamic link relationship can turn an inert resource into an active stylesheet',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'type',
+    false,
+    'allow',
+    'link resource type must be fixed before the parser chooses the resource destination',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'media',
+    false,
+    'allow',
+    'link media activation must be fixed before the resource is selected',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'disabled',
+    false,
+    'allow',
+    'link disabled posture must be fixed before stylesheet activation',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'integrity',
+    false,
+    'allow',
+    'link integrity must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'crossorigin',
+    false,
+    'allow',
+    'link credential mode must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'link referrer policy must be fixed before the parser starts the subresource request',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'as',
+    false,
+    'allow',
+    'link destination classification must be fixed before preload policy is selected',
+  ] as const),
+  freezeSecurityValue([
+    'link',
+    'nonce',
+    false,
+    'disabled',
+    'link nonces are framework-owned authority; Kovo documents use hash-locked CSP',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'src',
+    true,
+    'allow',
+    'a dynamic iframe source can load same-origin attacker-controlled active content',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'sandbox',
+    false,
+    'iframe-sandbox-tokens',
+    'a dynamic iframe sandbox value can remove the embedded-document isolation boundary',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'allow',
+    false,
+    'allow',
+    'iframe permissions policy must be fixed before embedded content receives capabilities',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'allowfullscreen',
+    false,
+    'allow',
+    'iframe fullscreen permission must be fixed before embedded content receives that capability',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'allowpaymentrequest',
+    false,
+    'disabled',
+    'legacy iframe Payment Request delegation is disabled pending a named reviewed capability door',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'browsingtopics',
+    false,
+    'disabled',
+    'iframe browsing-topics disclosure is disabled because it adds interest data to the request',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'credentialless',
+    false,
+    'allow',
+    'iframe credentialless posture must be fixed before the navigation starts',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'sharedstoragewritable',
+    false,
+    'disabled',
+    'iframe shared-storage writes are disabled pending a named reviewed capability door',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'csp',
+    false,
+    'allow',
+    'iframe embedded CSP must be fixed before the navigation starts',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'iframe referrer policy must be fixed before the navigation starts',
+  ] as const),
+  freezeSecurityValue([
+    'iframe',
+    'name',
+    false,
+    'allow',
+    'iframe browsing-context identity must remain compiler-reviewed',
+  ] as const),
+  freezeSecurityValue([
+    'annotation-xml',
+    'encoding',
+    false,
+    'allow',
+    'a dynamic MathML annotation encoding can activate inert descendants as HTML',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'target',
+    false,
+    'target-keyword',
+    'anchor target must not mint an opener-bearing named browsing context',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'rel',
+    false,
+    'rel-no-opener',
+    'anchor relationship must not opt back into window.opener authority',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'anchor referrer policy must not weaken the document confidentiality floor',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'ping',
+    false,
+    'disabled',
+    'anchor ping reporting is disabled because Ping-From can disclose the source URL',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'attributionsrc',
+    false,
+    'disabled',
+    'anchor attribution reporting is disabled because it can issue background registration requests',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'attributiondestination',
+    false,
+    'disabled',
+    'WebKit private-click attribution destinations are disabled pending a named reviewed capability door',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'attributionsourceid',
+    false,
+    'disabled',
+    'WebKit private-click attribution source identifiers are disabled pending a named reviewed capability door',
+  ] as const),
+  freezeSecurityValue([
+    'a',
+    'attributionsourcenonce',
+    false,
+    'disabled',
+    'WebKit private-click attribution nonces are disabled pending a named reviewed capability door',
+  ] as const),
+  freezeSecurityValue([
+    'area',
+    'target',
+    false,
+    'target-keyword',
+    'area target must not mint an opener-bearing named browsing context',
+  ] as const),
+  freezeSecurityValue([
+    'area',
+    'rel',
+    false,
+    'rel-no-opener',
+    'area relationship must not opt back into window.opener authority',
+  ] as const),
+  freezeSecurityValue([
+    'area',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'area referrer policy must not weaken the document confidentiality floor',
+  ] as const),
+  freezeSecurityValue([
+    'area',
+    'ping',
+    false,
+    'disabled',
+    'area ping reporting is disabled because Ping-From can disclose the source URL',
+  ] as const),
+  freezeSecurityValue([
+    'area',
+    'attributionsrc',
+    false,
+    'disabled',
+    'area attribution reporting is disabled because it can issue background registration requests',
+  ] as const),
+  freezeSecurityValue([
+    'form',
+    'target',
+    false,
+    'target-keyword',
+    'form target must not mint an opener-bearing named browsing context',
+  ] as const),
+  freezeSecurityValue([
+    'form',
+    'rel',
+    false,
+    'rel-no-opener',
+    'form relationship must not opt back into window.opener authority',
+  ] as const),
+  freezeSecurityValue([
+    'button',
+    'formtarget',
+    false,
+    'target-keyword',
+    'button form target must not mint an opener-bearing named browsing context',
+  ] as const),
+  freezeSecurityValue([
+    'input',
+    'formtarget',
+    false,
+    'target-keyword',
+    'input form target must not mint an opener-bearing named browsing context',
+  ] as const),
+  freezeSecurityValue([
+    'img',
+    'referrerpolicy',
+    false,
+    'referrer-policy',
+    'image referrer policy must be fixed before the request starts',
+  ] as const),
+  freezeSecurityValue([
+    'img',
+    'crossorigin',
+    false,
+    'allow',
+    'image credential mode must be fixed before the request starts',
+  ] as const),
+  freezeSecurityValue([
+    'img',
+    'attributionsrc',
+    false,
+    'disabled',
+    'image attribution reporting is disabled because it can issue background registration requests',
+  ] as const),
+  freezeSecurityValue([
+    'img',
+    'sharedstoragewritable',
+    false,
+    'disabled',
+    'image shared-storage writes are disabled pending a named reviewed capability door',
+  ] as const),
+  freezeSecurityValue([
+    'audio',
+    'crossorigin',
+    false,
+    'allow',
+    'audio credential mode must be fixed before resource selection starts',
+  ] as const),
+  freezeSecurityValue([
+    'video',
+    'crossorigin',
+    false,
+    'allow',
+    'video credential mode must be fixed before resource selection starts',
+  ] as const),
+  freezeSecurityValue([
+    'image',
+    'crossorigin',
+    false,
+    'allow',
+    'SVG image credential mode must be fixed before the request starts',
+  ] as const),
+  freezeSecurityValue([
+    'meta',
+    'name',
+    false,
+    'meta-referrer-name',
+    'meta referrer policy is disabled because it can weaken the document response header',
+  ] as const),
+] as const);
+
+/**
+ * @internal Finite registry for attributes whose safety depends on their owning element.
+ *
+ * Compiler and runtime paths consume this same classifier so a URL-scheme-safe value cannot
+ * bypass execution, isolation, or foreign-content activation review (SPEC §4.8, §5.2 rule 10).
+ */
+export function elementContextSecurityControl(
+  elementName: string,
+  attributeName: string,
+): ElementContextSecurityControl | undefined {
+  const tag = securityStringToLowerCase(elementName);
+  const attribute = securityStringToLowerCase(attributeName);
+  for (let index = 0; index < ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.length; index += 1) {
+    const control = ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES[index];
+    if (control === undefined || control[0] !== tag || control[1] !== attribute) continue;
+    return {
+      acceptsTrustedUrl: control[2],
+      staticPolicy: control[3],
+      reason: control[4],
+    };
+  }
+  return undefined;
+}
+
+/** @internal True when an element participates in the finite browser-control denominator. */
+export function elementHasContextSecurityControls(elementName: string): boolean {
+  const tag = securityStringToLowerCase(elementName);
+  for (let index = 0; index < ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.length; index += 1) {
+    if (ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES[index]?.[0] === tag) return true;
+  }
+  return false;
+}
+
+/** @internal Validate a compiler/server/fragment-reviewed static control value. */
+export function elementContextSecurityStaticValueIssue(
+  elementName: string,
+  attributeName: string,
+  value: string,
+): string | undefined {
+  const control = elementContextSecurityControl(elementName, attributeName);
+  if (control === undefined || control.staticPolicy === 'allow') return undefined;
+  if (control.staticPolicy === 'disabled') return control.reason;
+
+  const exact = securityStringToLowerCase(value);
+  const normalized = securityStringToLowerCase(securityStringTrim(value));
+  if (control.staticPolicy === 'iframe-sandbox-tokens') {
+    return iframeSandboxStaticValueIssue(normalized, control.reason);
+  }
+  if (control.staticPolicy === 'meta-referrer-name') {
+    return normalized === 'referrer' ? control.reason : undefined;
+  }
+  if (control.staticPolicy === 'referrer-policy') {
+    return normalized === 'no-referrer' ||
+      normalized === 'same-origin' ||
+      normalized === 'strict-origin' ||
+      normalized === 'strict-origin-when-cross-origin'
+      ? undefined
+      : `${control.reason}; allowed values are no-referrer, same-origin, strict-origin, and strict-origin-when-cross-origin`;
+  }
+  if (control.staticPolicy === 'target-keyword') {
+    // Target keywords are not whitespace-token values. Whitespace around `_blank` creates a named
+    // browsing context rather than spelling the keyword, so it must not normalize into allowlist.
+    return exact === '_blank' || exact === '_self' || exact === '_parent' || exact === '_top'
+      ? undefined
+      : `${control.reason}; only _blank, _self, _parent, and _top are allowed`;
+  }
+  if (control.staticPolicy === 'rel-no-opener') {
+    return asciiWhitespaceTokenListContains(normalized, 'opener') ? control.reason : undefined;
+  }
+  return control.reason;
+}
+
+function iframeSandboxStaticValueIssue(value: string, reason: string): string | undefined {
+  let start = 0;
+  let allowsSameOrigin = false;
+  let allowsScripts = false;
+  for (let index = 0; index <= value.length; index += 1) {
+    const code = index < value.length ? securityStringCharCodeAt(value, index) : 0x20;
+    const whitespace = code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
+    if (!whitespace) continue;
+    if (start < index) {
+      const token = securityStringSlice(value, start, index);
+      if (!securitySetHas(safeIframeSandboxTokens, token)) {
+        return `${reason}; allowed tokens are allow-forms, allow-modals, allow-orientation-lock, allow-pointer-lock, allow-presentation, allow-same-origin, and allow-scripts`;
+      }
+      if (token === 'allow-same-origin') allowsSameOrigin = true;
+      if (token === 'allow-scripts') allowsScripts = true;
+    }
+    start = index + 1;
+  }
+  return allowsSameOrigin && allowsScripts
+    ? `${reason}; allow-scripts and allow-same-origin cannot be combined`
+    : undefined;
+}
+
+function asciiWhitespaceTokenListContains(value: string, expected: string): boolean {
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const code = index < value.length ? securityStringCharCodeAt(value, index) : 0x20;
+    const whitespace = code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
+    if (!whitespace) continue;
+    if (start < index && securityStringSlice(value, start, index) === expected) return true;
+    start = index + 1;
+  }
+  return false;
 }
 
 /**
@@ -153,6 +765,7 @@ export type RuntimeSinkFamily =
   | 'attribute'
   | 'css-text'
   | 'event-handler'
+  | 'framework-control'
   | 'header'
   | 'raw-html'
   | 'srcdoc'
@@ -160,7 +773,7 @@ export type RuntimeSinkFamily =
   | 'url';
 
 /** @internal Runtime fail-closed action for a dynamic sink write. */
-export type RuntimeSinkAction = 'allow' | 'neutralize' | 'remove';
+export type RuntimeSinkAction = 'allow' | 'neutralize' | 'preserve' | 'remove';
 
 /** @internal Structured event for blocked runtime sink writes (SPEC.md §4.8 / KV236). */
 export interface RuntimeSinkSecurityEvent {
@@ -186,6 +799,22 @@ export interface RuntimeSinkDecision {
   event?: RuntimeSinkSecurityEvent;
   family: RuntimeSinkFamily;
   value?: string;
+}
+
+/** @internal Provenance posture for one runtime attribute write. */
+type RuntimeAttributeWritePosture = 'compiler-wire' | 'dynamic-binding';
+
+/** @internal Runtime attribute-write context; compiler wire is preserved unless explicitly narrowed. */
+interface RuntimeAttributeWriteOptions {
+  /** Browser-effective element name for pair/context-dependent attributes. */
+  elementName?: string | undefined;
+  /** Existing meta pragma posture before the proposed write is committed. */
+  effectiveHttpEquiv?: string | null | undefined;
+  /** Existing/final iframe sandbox posture before an active source is committed. */
+  effectiveIframeSandbox?: string | null | undefined;
+  posture?: RuntimeAttributeWritePosture;
+  /** Exact module-private TrustedUrl witness already verified by the browser package. */
+  trustedUrl?: boolean;
 }
 
 /** @internal Attribute names whose value is a srcset candidate list, not one plain URL. */
@@ -344,8 +973,22 @@ export function contextualOutputSinkFamilyForAttribute(name: string): RuntimeSin
  * @internal Decide a dynamic attribute write. Unsafe sinks return `remove`; unsafe plain URL
  * attributes return `neutralize` with `#` to preserve the existing server/browser ABI.
  */
-export function decideRuntimeAttributeWrite(name: string, value: string): RuntimeSinkDecision {
+export function decideRuntimeAttributeWrite(
+  name: string,
+  value: string,
+  options: RuntimeAttributeWriteOptions = {},
+): RuntimeSinkDecision {
+  if (options.posture === 'dynamic-binding' && isGeneratedOnlySemanticAttribute(name)) {
+    return blockedDecision(
+      name,
+      'framework-control',
+      value,
+      'dynamic binding cannot mint or replace compiler-generated control-plane markup',
+    );
+  }
   const family = runtimeSinkFamilyForAttribute(name);
+  const elementContextDecision = decideRuntimeElementContextWrite(name, value, family, options);
+  if (elementContextDecision !== undefined) return elementContextDecision;
 
   if (family === 'event-handler' || family === 'srcdoc' || family === 'raw-html') {
     return blockedDecision(name, family, value, 'runtime write would create executable markup');
@@ -380,11 +1023,81 @@ export function decideRuntimeAttributeWrite(name: string, value: string): Runtim
     return { action: 'allow', family, value };
   }
 
-  if (family === 'url' && hasUnsafeUrlScheme(value)) {
+  if (family === 'url' && options.trustedUrl !== true && hasUnsafeUrlScheme(value)) {
     return neutralizedDecision(name, family, '#', value, 'URL scheme is not allowed');
   }
 
   return { action: 'allow', family, value };
+}
+
+/**
+ * SPEC §4.8 / §5.2 rule 10: some individually harmless attribute strings become executable or
+ * remove isolation because of their element and sibling attributes. Dynamic writes either inert
+ * the complete document-navigation primitive or preserve the compiler-reviewed live value.
+ */
+function decideRuntimeElementContextWrite(
+  name: string,
+  value: string,
+  family: RuntimeSinkFamily,
+  options: RuntimeAttributeWriteOptions,
+): RuntimeSinkDecision | undefined {
+  const tag = securityStringToLowerCase(options.elementName ?? '');
+  const attribute = securityStringToLowerCase(name);
+
+  if (tag === 'base') {
+    return blockedDecision(
+      name,
+      family,
+      value,
+      'base elements cannot receive document-wide URL-resolution controls',
+    );
+  }
+  if (tag === 'meta') {
+    if (
+      attribute === 'content' &&
+      securityStringToLowerCase(securityStringTrim(options.effectiveHttpEquiv ?? '')) === 'refresh'
+    ) {
+      return blockedDecision(
+        name,
+        family,
+        value,
+        'meta refresh content is an executable document-navigation sink',
+      );
+    }
+    if (
+      options.posture === 'dynamic-binding' &&
+      (attribute === 'http-equiv' || attribute === 'httpequiv') &&
+      securityStringToLowerCase(securityStringTrim(value)) === 'refresh'
+    ) {
+      return blockedDecision(
+        name,
+        family,
+        value,
+        'dynamic meta refresh posture is an executable document-navigation sink',
+      );
+    }
+  }
+
+  if (tag === 'iframe' && attribute === 'src') {
+    const sandbox = options.effectiveIframeSandbox;
+    const issue =
+      sandbox === undefined || sandbox === null
+        ? 'iframe sources require a statically reviewed sandbox attribute'
+        : elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox);
+    if (issue !== undefined) return blockedDecision(name, family, value, issue);
+  }
+
+  const control = elementContextSecurityControl(tag, attribute);
+  if (control === undefined) return undefined;
+  if (options.posture !== 'dynamic-binding') {
+    const issue = elementContextSecurityStaticValueIssue(tag, attribute, value);
+    return issue === undefined ? undefined : blockedDecision(name, family, value, issue);
+  }
+  if (control.staticPolicy === 'disabled') {
+    return blockedDecision(name, family, value, control.reason);
+  }
+  if (control.acceptsTrustedUrl && options.trustedUrl === true) return undefined;
+  return preservedDecision(name, family, value, control.reason);
 }
 
 /** @internal Sanitize a srcset candidate list by dropping unsafe URL candidates. */
@@ -521,6 +1234,19 @@ function blockedDecision(
   return {
     action: 'remove',
     event: runtimeSinkSecurityEvent(sink, family, value, 'remove', reason),
+    family,
+  };
+}
+
+function preservedDecision(
+  sink: string,
+  family: RuntimeSinkFamily,
+  value: string,
+  reason: string,
+): RuntimeSinkDecision {
+  return {
+    action: 'preserve',
+    event: runtimeSinkSecurityEvent(sink, family, value, 'preserve', reason),
     family,
   };
 }

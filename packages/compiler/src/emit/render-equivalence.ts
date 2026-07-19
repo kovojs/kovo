@@ -135,7 +135,11 @@ export function semanticRenderEquivalenceCheck(
       ok: false,
     };
   }
-  const actualModel = parseComponentModule(artifact, actualSource);
+  const actualModel = parseComponentModule(
+    artifact,
+    actualSource,
+    options.extraFiles?.length ? { frameworkIdentityFiles: options.extraFiles } : {},
+  );
   const actual = semanticRenderModel(actualModel);
   const normalizedExpected = normalizeSemanticHtmlForComparison(expected);
   const normalizedActual = normalizeSemanticHtmlForComparison(actual);
@@ -387,6 +391,7 @@ for (let index = 0; index < semanticVoidElementNames.length; index += 1) {
 }
 
 interface SemanticRenderContext {
+  extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
   fileName?: string;
   registryFacts?: RegistryFacts;
 }
@@ -769,7 +774,9 @@ function renderSemanticAttributeWithName(
   name: string,
   attribute: JsxAttributeModel,
 ): string | null {
-  if (isGeneratedOnlySemanticAttribute(attribute.name)) return null;
+  // Classification follows the emitted wire name. Typed sugar such as streamText lowers to a
+  // generated-only data-stream-text control and must be ignored on both sides of the differential.
+  if (isGeneratedOnlySemanticAttribute(name)) return null;
   if (attribute.domEventName) return null;
   if (compilerStringStartsWith(attribute.name, 'on') && attribute.name.length > 2) {
     const eventInitial = compilerStringCharCodeAt(attribute.name, 2);

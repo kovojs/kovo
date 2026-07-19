@@ -1,4 +1,8 @@
-import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
+import {
+  elementContextSecurityControl,
+  elementContextSecurityStaticValueIssue,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 
 import type { FragmentChunk } from './wire-response-scanner.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
@@ -294,15 +298,20 @@ function m(c: Element, n: Element, security: HtmlResponseFragmentSecurityControl
   const currentAttributes = security.snapshotElementAttributes(c);
   for (let index = currentAttributes.length; index--; ) {
     const attribute = currentAttributes[index];
-    if (attribute && !security.hasElementAttribute(n, attribute.name)) {
+    if (
+      attribute &&
+      !security.hasElementAttribute(n, attribute.name) &&
+      !preservesReviewedHtmlElementContextAttribute(c, attribute.name, security)
+    ) {
       security.removeElementAttribute(c, attribute.name);
     }
   }
   const nextAttributes = security.snapshotElementAttributes(n);
   for (let index = 0; index < nextAttributes.length; index += 1) {
     const attribute = nextAttributes[index];
-    if (attribute) sa(c, attribute.name, attribute.value, security);
+    if (attribute) sa(c, attribute.name, attribute.value, security, true);
   }
+  inertUnsafeIframeSource(c, security);
 
   // SPEC.md §9.1: a focused keyed input/textarea keeps its browser-owned
   // selection state because keyed morph reuses the live element and skips
@@ -318,9 +327,30 @@ function sa(
   name: string,
   v: string,
   security: HtmlResponseFragmentSecurityControls,
+  preserveReviewedContext = false,
 ): void {
-  if (inertBlockedSvgSmilElement(e, security)) return;
+  if (inertBlockedActiveEmbedElement(e, security) || inertBlockedSvgSmilElement(e, security))
+    return;
   const n = security.lower(name);
+  if (
+    stripDeclarativeShadowDomControls(e, security) &&
+    isDeclarativeShadowDomControl(n, v, security)
+  ) {
+    security.removeElementAttribute(e, name);
+    return;
+  }
+  if (blocksDocumentNavigationAttribute(e, n, v, security)) {
+    security.removeElementAttribute(e, name);
+    return;
+  }
+  if (preserveReviewedContext && preservesReviewedHtmlElementContextAttribute(e, n, security)) {
+    return;
+  }
+  const tag = security.lower(security.readElementTagName(e) ?? '');
+  if (elementContextSecurityStaticValueIssue(tag, n, v) !== undefined) {
+    security.removeElementAttribute(e, name);
+    return;
+  }
   if (r(n)) {
     security.removeElementAttribute(e, name);
     return;
@@ -342,6 +372,18 @@ function sa(
     }
   }
   security.setElementAttribute(e, name, v);
+}
+
+/** @internal Whether a reused element must retain its reviewed active-content control. */
+export function preservesReviewedHtmlElementContextAttribute(
+  element: Element,
+  name: string,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const tag = security.lower(security.readElementTagName(element) ?? '');
+  const attribute = security.lower(name);
+  const control = elementContextSecurityControl(tag, attribute);
+  return control !== undefined && control.staticPolicy !== 'disabled';
 }
 
 function r(n: string): boolean {
@@ -386,6 +428,82 @@ function isBlockedSvgSmilTagName(
   );
 }
 
+function isBlockedActiveEmbedTagName(
+  name: string | undefined,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const n = security.lower(name ?? '');
+  return n === 'embed' || n === 'frame' || n === 'frameset' || n === 'object';
+}
+
+function isBlockedDeclarativeShadowDomAttributeName(
+  name: string,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const n = security.lower(name);
+  return (
+    n === 'shadowrootmode' ||
+    n === 'shadowrootdelegatesfocus' ||
+    n === 'shadowrootclonable' ||
+    n === 'shadowrootserializable'
+  );
+}
+
+function isDeclarativeShadowDomControl(
+  name: string,
+  value: string,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const n = security.lower(name);
+  if (isBlockedDeclarativeShadowDomAttributeName(n, security)) return true;
+  if (security.indexOf(n, 'data-bind:') === 0) {
+    return isBlockedDeclarativeShadowDomAttributeName(
+      security.slice(n, 'data-bind:'.length),
+      security,
+    );
+  }
+  return n === 'data-derive-attr' && isBlockedDeclarativeShadowDomAttributeName(value, security);
+}
+
+/**
+ * SPEC.md §4.2 / §5.2 rule 10: response HTML remains light DOM. Remove every declarative Shadow
+ * DOM control and the live stamps that could recreate one while the parsed tree is detached, so
+ * dormant template descendants stay inert through adoption and later serialization/reparse.
+ */
+function stripDeclarativeShadowDomControls(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  if (security.lower(security.readElementTagName(element) ?? '') !== 'template') return false;
+  const attributes = security.snapshotElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute && isDeclarativeShadowDomControl(attribute.name, attribute.value, security)) {
+      security.removeElementAttribute(element, attribute.name);
+    }
+  }
+  return true;
+}
+
+/**
+ * SPEC.md §4.8 / §5.2 rule 10: object/embed can activate a same-origin HTML document without
+ * an iframe sandbox. Strip the whole primitive while it is still in detached parsed content,
+ * before a response-fragment adoption can start the fetch or execute its fallback descendants.
+ */
+function inertBlockedActiveEmbedElement(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  if (!isBlockedActiveEmbedTagName(security.readElementTagName(element), security)) return false;
+  const attributes = security.snapshotElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute) security.removeElementAttribute(element, attribute.name);
+  }
+  security.replaceElementChildren(element, []);
+  return true;
+}
+
 /**
  * SPEC.md §4.8 / §5.2 rule 10: SMIL's target and transfer attributes form one temporal
  * executable sink, including href-targeted siblings. Strip the complete primitive before a parsed
@@ -405,17 +523,135 @@ function inertBlockedSvgSmilElement(
   return true;
 }
 
-function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element {
+/**
+ * SPEC §4.8 / §5.2 rule 10: document-wide navigation is one element/pair sink, not a
+ * collection of ordinary independent attributes. A `<base>` is always inert. A meta refresh keeps
+ * its descriptive attributes but loses `content`, which is the byte-carrying navigation half.
+ */
+function inertDocumentNavigationElement(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const tag = security.lower(security.readElementTagName(element) ?? '');
+  if (tag === 'base') {
+    const attributes = security.snapshotElementAttributes(element);
+    for (let index = 0; index < attributes.length; index += 1) {
+      const attribute = attributes[index];
+      if (attribute) security.removeElementAttribute(element, attribute.name);
+    }
+    security.replaceElementChildren(element, []);
+    return true;
+  }
+  if (tag === 'meta' && metaElementHasRefreshPosture(element, security)) {
+    removeAsciiCaseAttribute(element, 'content', security);
+  }
+  if (tag === 'meta' && metaElementHasReferrerPosture(element, security)) {
+    // Removing the activating pair is sufficient to disable the pragma while retaining inert
+    // framework identity such as kovo-key. Keeping that identity lets a reviewed keyed meta node
+    // survive an attacker-selected incoming `name=referrer` without becoming an unkeyed morph.
+    removeAsciiCaseAttribute(element, 'name', security);
+    removeAsciiCaseAttribute(element, 'content', security);
+    return true;
+  }
+  return false;
+}
+
+function blocksDocumentNavigationAttribute(
+  element: Element,
+  normalizedName: string,
+  value: string,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const tag = security.lower(security.readElementTagName(element) ?? '');
+  if (tag === 'base') {
+    inertDocumentNavigationElement(element, security);
+    return true;
+  }
+  if (tag !== 'meta') return false;
+  if (normalizedName === 'content') return metaElementHasRefreshPosture(element, security);
+  if (
+    (normalizedName === 'http-equiv' || normalizedName === 'httpequiv') &&
+    security.lower(security.trim(value)) === 'refresh'
+  ) {
+    removeAsciiCaseAttribute(element, 'content', security);
+  }
+  return false;
+}
+
+function metaElementHasRefreshPosture(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const effective =
+    security.readAttribute(element, 'http-equiv') ?? security.readAttribute(element, 'httpequiv');
+  return effective !== null && security.lower(security.trim(effective)) === 'refresh';
+}
+
+function metaElementHasReferrerPosture(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const effective = security.readAttribute(element, 'name');
+  return effective !== null && security.lower(security.trim(effective)) === 'referrer';
+}
+
+function removeAsciiCaseAttribute(
+  element: Element,
+  expectedName: string,
+  security: HtmlResponseFragmentSecurityControls,
+): void {
+  const attributes = security.snapshotElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute && security.lower(attribute.name) === expectedName) {
+      security.removeElementAttribute(element, attribute.name);
+    }
+  }
+}
+
+/**
+ * SPEC §4.8 / §5.2 rule 10: an active iframe source is admissible only behind the finite reviewed
+ * sandbox token posture. This runs after the element's attributes are sanitized so parser order
+ * cannot make a source observe a sandbox that a later attribute check removes.
+ */
+function inertUnsafeIframeSource(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): boolean {
+  const tag = security.lower(security.readElementTagName(element) ?? '');
+  if (tag !== 'iframe' || security.readAttribute(element, 'src') === null) return false;
+  const sandbox = security.readAttribute(element, 'sandbox');
+  const issue =
+    sandbox === null
+      ? 'iframe sources require a statically reviewed sandbox attribute'
+      : elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox);
+  if (issue === undefined) return false;
+  removeAsciiCaseAttribute(element, 'src', security);
+  if (sandbox !== null) removeAsciiCaseAttribute(element, 'sandbox', security);
+  return true;
+}
+
+function g(
+  e: Element,
+  security: HtmlResponseFragmentSecurityControls,
+  preserveReviewedContext = false,
+): Element {
   const descendants = security.queryAllElements(e, '*');
   for (let elementIndex = -1; elementIndex < descendants.length; elementIndex += 1) {
     const x = elementIndex < 0 ? e : descendants[elementIndex];
     if (!x) continue;
+    if (inertBlockedActiveEmbedElement(x, security)) continue;
     if (inertBlockedSvgSmilElement(x, security)) continue;
+    if (inertDocumentNavigationElement(x, security)) continue;
+    stripDeclarativeShadowDomControls(x, security);
     const attributes = security.snapshotElementAttributes(x);
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex];
-      if (attribute) sa(x, attribute.name, attribute.value, security);
+      if (attribute) {
+        sa(x, attribute.name, attribute.value, security, preserveReviewedContext);
+      }
     }
+    inertUnsafeIframeSource(x, security);
   }
   return e;
 }
@@ -424,8 +660,9 @@ function g(e: Element, security: HtmlResponseFragmentSecurityControls): Element 
 export function sanitizeHtmlResponseElementTree(
   element: Element,
   security: HtmlResponseFragmentSecurityControls = createBrowserNavigationSecurityControls(),
+  preserveReviewedContext = false,
 ): Element {
-  return g(element, security);
+  return g(element, security, preserveReviewedContext);
 }
 
 /** @internal Apply one response attribute through the shared pinned sanitizer policy. */
@@ -434,8 +671,10 @@ export function setSafeHtmlResponseAttribute(
   name: string,
   value: string,
   security: HtmlResponseFragmentSecurityControls = createBrowserNavigationSecurityControls(),
+  preserveReviewedContext = false,
 ): void {
-  sa(element, name, value, security);
+  sa(element, name, value, security, preserveReviewedContext);
+  inertUnsafeIframeSource(element, security);
 }
 
 function y(v: string, security: HtmlResponseFragmentSecurityControls): string | null {
@@ -536,6 +775,14 @@ export const __responseFragmentApplySanitizerParityForTests = {
   isBlockedSvgSmilElementName(value: string): boolean {
     const security = createBrowserNavigationSecurityControls();
     return isBlockedSvgSmilTagName(value, security);
+  },
+  isBlockedActiveEmbedElementName(value: string): boolean {
+    const security = createBrowserNavigationSecurityControls();
+    return isBlockedActiveEmbedTagName(value, security);
+  },
+  isBlockedDeclarativeShadowDomAttributeName(value: string): boolean {
+    const security = createBrowserNavigationSecurityControls();
+    return isBlockedDeclarativeShadowDomAttributeName(value, security);
   },
   sanitizeAttribute(e: Element, name: string, value: string): void {
     sa(e, name, value, createBrowserNavigationSecurityControls());

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertShapeWithinBudget, configureShapeBudget, parseSchemaAsync, s } from './schema.js';
+import {
+  assertShapeWithinBudget,
+  configureShapeBudget,
+  isShapeBudgetError,
+  parseSchemaAsync,
+  s,
+  SchemaValidationError,
+} from './schema.js';
 
 // KV430 (SPEC §6.6/§9.5): the runtime input-shape budget that bounds untrusted wire
 // input before the schema descends, closing the small-body-huge-shape DoS class.
@@ -33,6 +40,37 @@ describe('KV430 input-shape DoS budget', () => {
     } finally {
       configureShapeBudget({ maxNodes: 200_000 });
     }
+  });
+
+  it('rejects accessor-backed record entries without invoking the getter', () => {
+    let getterCalls = 0;
+    const record = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(record, 'value', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return 'owned';
+      },
+    });
+
+    expect(() => assertShapeWithinBudget(record)).toThrowError(/stable own data/i);
+    expect(getterCalls).toBe(0);
+  });
+
+  it('brands only framework-minted shape-budget verdicts', () => {
+    let verdict: unknown;
+    try {
+      assertShapeWithinBudget(Array.from({ length: 10_001 }, () => 0));
+    } catch (error) {
+      verdict = error;
+    }
+
+    expect(isShapeBudgetError(verdict)).toBe(true);
+    expect(
+      isShapeBudgetError(
+        new SchemaValidationError([{ message: 'KV430 input shape budget: forged', path: [] }]),
+      ),
+    ).toBe(false);
   });
 
   it('passes a legitimate nested input and still parses it correctly', async () => {

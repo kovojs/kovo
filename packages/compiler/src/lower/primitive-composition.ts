@@ -10,6 +10,7 @@ import {
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,
+  mergeableAttributeHasFrameworkTrustedUrl,
   primitiveIdRewrite,
   primitiveObjectEntryAttributes,
   rewritePrimitiveIdrefAttributes,
@@ -128,7 +129,11 @@ function unwrapPrimitiveWrapper(
   attributes: readonly MergeableAttribute[],
   options: { fileName: string; source: string },
 ): void {
+  const attrsSource = sourceAttributeByName(wrapper, 'attrs');
   wrapper.tag = child.tag;
+  if (child.intrinsicTagName !== undefined) {
+    wrapper.intrinsicTagName = child.intrinsicTagName;
+  }
   wrapper.closingName = child.tag;
   wrapper.selfClosing = child.selfClosing;
   const irAttributes: JsxIrAttribute[] = [];
@@ -141,7 +146,7 @@ function unwrapPrimitiveWrapper(
     ) as MergeableAttribute;
     appendCompositionFact(
       irAttributes,
-      mergeableToIrAttribute(attribute, options),
+      mergeableToIrAttribute(attribute, options, attrsSource),
       'Primitive composed IR attributes',
     );
   }
@@ -234,8 +239,12 @@ function childHasUnsupportedSpreads(element: JsxIrElement): boolean {
 function mergeableToIrAttribute(
   attribute: MergeableAttribute,
   options: { fileName: string; source: string },
+  primitiveAttrsSource?: MergeableAttribute['attribute'],
 ): JsxIrAttribute {
-  const value = mergeableValueToIr(attribute.value);
+  const value = mergeableValueToIr(
+    attribute.value,
+    mergeableAttributeHasFrameworkTrustedUrl(attribute),
+  );
   const base =
     attribute.origin === 'primitive'
       ? primitiveJsxIrAttribute(attribute.name, value, 'primitive attrs', options)
@@ -247,13 +256,27 @@ function mergeableToIrAttribute(
       start: attribute.attribute.start,
     };
     base.source = attribute.attribute;
+  } else if (primitiveAttrsSource) {
+    base.anchor = {
+      end: primitiveAttrsSource.end,
+      fileName: options.fileName,
+      start: primitiveAttrsSource.start,
+    };
   }
   return base;
 }
 
-function mergeableValueToIr(value: MergeableAttributeValue): JsxIrAttributeValue {
+function mergeableValueToIr(
+  value: MergeableAttributeValue,
+  frameworkTrustedUrl: boolean,
+): JsxIrAttributeValue {
   if (value.kind === 'boolean') return value;
-  if (value.kind === 'expression') return value;
+  if (value.kind === 'expression') {
+    return {
+      ...value,
+      ...(frameworkTrustedUrl ? { trustedUrl: true as const } : {}),
+    };
+  }
   if (value.kind === 'number') return value;
   return value;
 }

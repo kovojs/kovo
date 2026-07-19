@@ -29,27 +29,26 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = immutablePolicySet([
 
 export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 
-/** Private server-side provenance kinds that the analyzer may use as proof inputs. */
+/** Private server-side provenance kinds used by exact local helper projections. */
 export type KovoAnalyzerPrivateScopeKind = 'guard' | 'session' | 'tenant';
 
 /**
- * The return-provenance kinds a `kovoAnalyzerSummary` may declare. The private-scope
- * kinds (`guard`/`session`/`tenant`) carry a `path` and feed the §10.3 IDOR/session
- * proof. The `server` kind (SPEC §11.1, secure-framework Phase 3) declares that the
- * helper returns a server-derived value with NO request-input provenance — it
- * discharges the write-provenance gate (KV438) for a legitimate server-computed
- * governed value (e.g. `resolveOwner()`), without the looser/false-positive-prone
- * reflexive `serverValue` wrap. It carries no path.
+ * The return-provenance kinds a `kovoAnalyzerSummary` may mark for structural
+ * verification. A declaration never grants provenance by itself: the analyzer must
+ * prove the body and path of one direct same-file function declaration or `const`
+ * arrow/function binding (SPEC §6.6/§10.3).
  */
-export type KovoAnalyzerReturnKind = KovoAnalyzerPrivateScopeKind | 'server';
+export type KovoAnalyzerReturnKind = KovoAnalyzerPrivateScopeKind;
 
 /**
- * A declared analyzer summary for a pure helper. The helper body is not inspected
- * for provenance; the static analyzer consumes this typed declaration instead.
+ * A candidate marker for a private-scope helper. Security verdicts use only the
+ * analyzer's exact structural proof. Object properties, methods, imports, aliased
+ * marker targets, mutable bindings, multi-statement bodies, and mismatched projections
+ * remain unknown regardless of this marker (SPEC §6.6).
  */
-export type KovoAnalyzerFunctionSummary =
-  | { returns: { kind: KovoAnalyzerPrivateScopeKind; path: string } }
-  | { returns: { kind: 'server'; path?: string } };
+export type KovoAnalyzerFunctionSummary = {
+  returns: { kind: KovoAnalyzerPrivateScopeKind; path: string };
+};
 
 /**
  * A column reference inside a Kovo annotation: either the column name as a
@@ -313,20 +312,37 @@ function assertKnownKovoAnnotationFields(
 }
 
 /**
- * Declare a typed provenance summary for a same-package helper that participates
- * in server-side invalidation or optimistic-update proof. The runtime value is
- * the original helper; only the analyzer consumes the summary object.
+ * Mark one direct same-file private-scope helper as a candidate for exact structural
+ * verification. The helper argument must be the bare identifier of a function
+ * declaration or a `const` initialized directly by an arrow or function expression.
+ * Object properties, methods, imports, aliased marker targets, and mutable bindings
+ * remain unknown.
  *
- * @param helper - The pure helper being summarized.
- * @param summary - A typed private-scope provenance summary.
+ * The marker is not an author assertion and cannot grant a security verdict. The
+ * analyzer independently inspects the helper body and accepts only a one-parameter,
+ * one-return literal projection that exactly matches `kind` and `path` (SPEC §6.6).
+ * The one-parameter TypeScript shape is an author-time guardrail, not the proof. The
+ * runtime value is the original helper.
+ *
+ * After the marker is proven, one direct immutable same-file
+ * `const alias = provenHelper` may preserve its identity at an invocation. Property,
+ * element, destructured/container, chained, imported, opaque, and mutable aliases do
+ * not preserve provenance.
+ *
+ * @param helper - The direct one-parameter helper candidate.
+ * @param summary - The private-scope projection the analyzer must independently verify.
  * @returns The original helper, unchanged at runtime.
  * @example
  * import { kovoAnalyzerSummary } from '@kovojs/drizzle';
  *
+ * function requireSessionId(context: { request: { session: { id: string } } }) {
+ *   return context.request.session.id;
+ * }
+ *
  * kovoAnalyzerSummary(requireSessionId, { returns: { kind: 'session', path: 'id' } });
  */
 export function kovoAnalyzerSummary<T extends (...args: never[]) => unknown>(
-  helper: T,
+  helper: Parameters<T> extends [unknown] ? T : never,
   summary: KovoAnalyzerFunctionSummary,
 ): T {
   void summary;

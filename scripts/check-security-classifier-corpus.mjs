@@ -97,6 +97,10 @@ const PACKED_RUNTIME_BOOTSTRAP_IMPORT = "import '../dist/server/src/runtime-boot
 // executes every other test in each file, so isolation cannot narrow the corpus.
 const LOAD_ISOLATED_TEST_CONFIGS = [
   {
+    file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+    freshTestNames: ['closes the normalized semantic summary budget with its exact reason'],
+  },
+  {
     file: 'packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts',
     freshTestNames: ['keeps 120 distinct iterable and parameter-pattern safe misses bounded'],
   },
@@ -605,6 +609,24 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'active-embed-element-regression',
+        file: 'packages/core/src/sink-policy.test.ts',
+        snippets: [
+          'fails closed on unsandboxable and obsolete active embeds independent of casing',
+          'expect(isBlockedActiveEmbedElementName(name)).toBe(true)',
+          'expect(isBlockedActiveEmbedElementName(name.toUpperCase())).toBe(true)',
+        ],
+      },
+      {
+        id: 'declarative-shadow-dom-control-regression',
+        file: 'packages/core/src/sink-policy.test.ts',
+        snippets: [
+          'classifies every declarative Shadow DOM control independent of authored casing',
+          'expect(isBlockedDeclarativeShadowDomAttributeName(name)).toBe(true)',
+          'expect(isBlockedDeclarativeShadowDomAttributeName(name.toUpperCase())).toBe(true)',
+        ],
+      },
+      {
         id: 'redirect-url-mechanism',
         file: 'packages/core/src/internal/source-sink-registry.test.ts',
         snippets: ["['redirect URL', 'reconstruct']"],
@@ -985,11 +1007,39 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'kv424-request-process',
     marker: '@kovo-security-classifier-corpus kv424-request-process',
     testFiles: [
+      'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
+      'packages/drizzle/src/capability-escapes-static.test.ts',
       'packages/drizzle/src/trust-escapes-static.test.ts',
       'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
       'packages/drizzle/src/index.toctou-readonly.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'compiler-semantic-context-raw-read-consistency',
+        file: 'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
+        snippets: [
+          'keeps a const-bound trustedSql rawRead closed without a compiler-owned semantic edge',
+          'const db = context?.db;',
+          'const statement = trustedSql(',
+          "{ reads: ['contacts'] }",
+          "db['rawRead']",
+          'const rawRead = db.rawRead;',
+          'expect(hasRequestProcessClosure(files, semanticSources)).toBe(true)',
+        ],
+      },
+      {
+        id: 'static-build-task-b-authoritative-consistency',
+        file: 'packages/drizzle/src/capability-escapes-static.test.ts',
+        snippets: [
+          'matches standalone TASK B facts through $label',
+          'a local framework-factory re-export',
+          'a namespace alias',
+          'a computed callback property',
+          'a spread callback record',
+          'a conditionally projected root factory',
+          'expect(collectStaticBuildTrustFactsFromProject({ files })).toEqual(standalone)',
+        ],
+      },
       {
         id: 'existing-dangerous-sink-closed-verdicts',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
@@ -998,6 +1048,23 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'document.write(markup)',
           'setTimeout("doThing()", 100)',
           'new Function("return 1")',
+        ],
+      },
+      {
+        id: 'compiler-semantic-helper-proof-is-source-bound-and-fail-closed',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'uses only byte-and-span-bound compiler summaries to discharge nested request-helper noise',
+          'compilerSecuritySemanticSources',
+          'callableSpan',
+          'byteMismatched',
+          "verdict: 'closed' as const",
+          'callable identity mismatch',
+          'authority category mismatch',
+          'root family mismatch',
+          'multiple root identities for one helper',
+          'same-span closed sibling summary',
+          'closed root trace',
         ],
       },
       {
@@ -1083,6 +1150,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'reviewed-context-fetch-response-provenance',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'permits governed fetch/Response body flow but rejects forwarding ambient credentials',
+          "const response = await context.fetch('https://api.example.test/data')",
+          'return { value: await cloned.json() }',
+          'keeps contextual fetch provenance exact across aliases, mutation, and computed calls',
+          "await context['fetch']('https://api.example.test/computed')",
+          'const alias = context;',
+          'const remote = context.fetch;',
+          'context.fetch = async () =>',
+          "response['clone']().json()",
+        ],
+      },
+      {
         id: 'framework-owned-file-storage-controls',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
@@ -1154,6 +1236,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'trusted-assign-audited-escape-closed-grammar',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'admits only exact audited trustedAssign calls while retaining nested closed verdicts',
+          "trustedAssign(opaque(input.email), 'reviewed grant')",
+          "trustedAssign(process.env.CONTACT_ID, 'reviewed grant')",
+          "server.trustedAssign(input.email, 'reviewed grant')",
+          'const grant = trustedAssign;',
+          "trustedAssign(input.email, { ['reason']: 'reviewed grant' })",
+          "trustedAssign(input.email, { reason: 'reviewed grant', reason: 'again' })",
+        ],
+      },
+      {
         id: 'module-scope-authority-controls',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
@@ -1188,6 +1283,31 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'bindings.seedDemoUser',
           'export const appSeedDemoUser = bindings.seedDemoUser;',
           'class SeedAtBoot { static { void bindings.seedDemoUser(); } }',
+        ],
+      },
+      {
+        id: 'complete-generated-runtime-auth-query-closure',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'accepts the complete generated runtime, auth, and source-derived query closure',
+          "starterTemplateSource('queries.ts')",
+          'appRuntimeMutationReplayStore',
+          'Postgres generated closure',
+          'SQLite generated closure',
+          "(contactsQuery as { key: string }).key = 'forged'",
+          'forged-runtime-provider',
+        ],
+      },
+      {
+        id: 'named-query-context-owned-raw-read-closure',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'accepts a source-derived query returning an exact context-owned rawRead result',
+          'export const contactsQuery = query({',
+          'const db = context?.db;',
+          "{ reads: ['contacts'] }",
+          "db['rawRead']",
+          'const rawRead = db.rawRead;',
         ],
       },
       {
@@ -1786,16 +1906,29 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: [
       'packages/compiler/src/capability-closure.security.test.ts',
       'packages/cli/src/capability-closure-packages.test.ts',
+      'scripts/framework-export-posture-gate.test.mjs',
     ],
     verdictAnchors: [
       {
         id: 'complete-root-census',
         file: 'packages/compiler/src/capability-closure.security.test.ts',
         snippets: [
-          'censuses every supported untrusted-data root kind',
+          'censuses every shipping untrusted-data root kind',
+          "'application'",
           "'scheduled-task'",
           "'serialized-browser-handler'",
           "'webhook'",
+        ],
+      },
+      {
+        id: 'application-and-custom-adapter-roots',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          'roots createApp lifecycle modules and closes their raw authority',
+          'accepts the documented bootstrap-first separated custom Node adapter',
+          'rejects a custom adapter that loads its handler before runtime bootstrap',
+          'rejects runtime bootstrap in an inline toNodeHandler module',
+          'rejects runtime bootstrap imported by the request handler instead of its adapter entry',
         ],
       },
       {
@@ -1826,8 +1959,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/compiler/src/capability-closure.security.test.ts',
         snippets: [
           'keeps supported framework network, filesystem, process, and database doors open',
-          'classifies public testing and Vite subpaths as reviewed capability doors',
+          'request-closes public testing and Vite tooling subpaths',
           'preserves raw driver closure while allowing reviewed Drizzle schema/query construction',
+        ],
+      },
+      {
+        id: 'first-party-runtime-export-posture',
+        file: 'scripts/framework-export-posture-gate.test.mjs',
+        snippets: [
+          'binds every manifest-public runtime value and module initializer to reviewed posture',
+          'kills omission, duplicate, and newly exported-member mutants',
+          'digests every regular production source asset and normalizes only exact compiler self fields',
+          'kills security-role omission across auth, secret, SQL, authorization, CSRF, and replay exports',
+          "rootKind: 'application'",
         ],
       },
       {
@@ -1844,7 +1988,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   {
     id: 'finite-security-operation-ir',
     marker: '@kovo-security-classifier-corpus finite-security-operation-ir',
-    testFiles: ['packages/compiler/src/security-operation-ir.security.test.ts'],
+    testFiles: [
+      'packages/browser/src/inline-loader-security.test.ts',
+      'packages/browser/src/query-bindings.test.ts',
+      'packages/browser/src/response-fragment-apply.browser.test.ts',
+      'packages/browser/src/security-output.test.ts',
+      'packages/compiler/src/output-context-security.test.ts',
+      'packages/compiler/src/security-operation-ir.security.test.ts',
+      'packages/compiler/src/executable-reference-attributes.test.ts',
+      'packages/compiler/src/execution-triggers.test.ts',
+      'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
+      'packages/core/src/sink-policy.test.ts',
+      'packages/cli/src/index.kovo-compile.test.ts',
+      'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
+      'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
+    ],
     verdictAnchors: [
       {
         id: 'exact-emitted-browser-and-server-operation-manifests',
@@ -1864,6 +2022,158 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'tabsTriggerClick',
           "Object(next)['focus']?.call(next)",
           'requestSubmit',
+        ],
+      },
+      {
+        id: 'runtime-selected-executable-reference-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 runtime-selected-handler-ref-closes',
+          'closes a runtime-selected handler reference through %s',
+          'direct ASCII-case variant',
+          'static spread ASCII-case variant',
+          'closes a runtime-selected %s merged through primitive attrs',
+          'runtime-selected on:* handler reference is not compiler-authorized',
+          'closes a runtime-selected executable selector through %s',
+          'derive property ref (static-key spread)',
+          'stream renderer ref (static-key spread)',
+          'module allowlist authority (static-key spread)',
+          'runtime-selected executable reference is not compiler-authorized',
+          'keeps compiler-emitted executable references accepted only through fixpoint provenance',
+          'kovoSafeJsxSpread',
+        ],
+      },
+      {
+        id: 'runtime-executable-selector-spread-closure',
+        file: 'packages/server/src/jsx-runtime.test.ts',
+        snippets: [
+          'compiler-owned spread reconstruction omits every executable selector family',
+          "'ON:LOAD'",
+          "'DATA-BIND:HIDDEN'",
+          "'data-bind-prop:checked'",
+          "'data-kovo-module-allowlist'",
+          "'data-stream-renderer'",
+        ],
+      },
+      {
+        id: 'authored-executable-reference-provenance-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 authored-executable-ref-provenance-closes',
+          'closes app-authored static lowered executable references through %s',
+          'static-spread handler ASCII-case variant',
+          'property derive module ref',
+          'text binding path',
+          'attribute binding path',
+          'static-spread text binding path',
+          'static-spread attribute binding path',
+          'stream renderer module ref',
+          'module allowlist authority',
+          'closes app-authored static lowered %s merged through primitive attrs',
+          'closes duplicate and nested static-spread executable selectors by authored provenance',
+          'closes duplicate and nested primitive attrs without trusting the carrier tag',
+          'keeps typed event and execution-trigger inputs on compiler-owned lowering',
+        ],
+      },
+      {
+        id: 'typed-event-runtime-vocabulary-closure',
+        file: 'packages/compiler/src/execution-triggers.test.ts',
+        snippets: [
+          'pins typed events to the exact runtime-installed delegation vocabulary',
+          'onAnimationEnd',
+          'onBeforeToggle',
+          'onPointerEnter',
+          'onDblClick',
+          'on:dblclick',
+        ],
+      },
+      {
+        id: 'dynamic-generated-control-target-closure',
+        file: 'packages/compiler/src/output-context-security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dynamic-generated-control-target-closes',
+          'rejects a direct dynamic binding targeting the generated %s control plane',
+          'data-bind:data-kovo-module-allowlist',
+          'data-bind:data-stream-renderer',
+          'data-derive-attr="on:click"',
+          'rejects a dynamic generated-control target smuggled through %s',
+          'nested primitive attrs',
+          'dynamically targets compiler-generated control-plane attribute',
+          'does not treat an attrs object inside a plain-element spread as a primitive merge',
+        ],
+      },
+      {
+        id: 'dynamic-binding-control-plane-runtime-floor',
+        file: 'packages/core/src/sink-policy.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dynamic-binding-control-plane-runtime-floor',
+          'removes every generated-only semantic attribute only for dynamic-binding writes',
+          'GENERATED_ONLY_SEMANTIC_ATTRIBUTES',
+          'GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES',
+          "posture: 'dynamic-binding'",
+          "family: 'framework-control'",
+          'compiler wire',
+        ],
+      },
+      {
+        id: 'modular-dynamic-control-plane-runtime-floor',
+        file: 'packages/browser/src/security-output.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 modular-dynamic-control-plane-runtime-floor',
+          'removes compiler-generated control-plane names from modular dynamic bindings',
+          'GENERATED_ONLY_SEMANTIC_ATTRIBUTES',
+          'GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES',
+          "kovoBoundAttributeValue(name.toUpperCase(), '/c/attacker.client.js#run')",
+          "kovoBoundAttributeValue('data-state', 'ready')",
+        ],
+      },
+      {
+        id: 'inline-dynamic-control-plane-runtime-floor',
+        file: 'packages/browser/src/inline-loader-security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 inline-dynamic-control-plane-runtime-floor',
+          'removes state-selected compiler control-plane attributes',
+          'for (const [label, installSource] of inlineSourceInstallCases)',
+          'data-bind:data-kovo-module-allowlist',
+          'data-bind:data-stream-renderer',
+          'data-bind:on:click',
+        ],
+      },
+      {
+        id: 'compiler-wire-control-plane-preserved',
+        file: 'packages/browser/src/response-fragment-apply.browser.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 compiler-wire-control-plane-preserved',
+          'preserves and executes compiler-emitted fragment interactivity',
+          'on:click="/c/fragment.client.js#run"',
+          'data-kovo-module-allowlist="/c/fragment.client.js"',
+          'data-stream-renderer="/c/fragment.client.js#render"',
+          "expect(imports).toContain('/c/fragment.client.js')",
+        ],
+      },
+      {
+        id: 'executable-reference-selector-denominator',
+        file: 'packages/compiler/src/executable-reference-attributes.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 executable-reference-selector-denominator',
+          'keeps one finite ASCII-case-normalized classifier for both compiler gates',
+          'censuses every runtime executable-selector consumer against the shared inventory',
+          'GENERATED_ONLY_SEMANTIC_ATTRIBUTES',
+          'GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES',
+          "readRuntimeElementAttribute(element, 'on:' + eventType)",
+          "bns.readAttribute(el, 'data-stream-renderer')",
+          "readModuleMarkerAttribute(marker, 'data-kovo-module-allowlist')",
+        ],
+      },
+      {
+        id: 'string-timer-and-unknown-browser-receiver-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'closes %s through the finite browser timer operation',
+          'string timer callbacks execute source text',
+          'semantic root=serialized-browser-handler:onClick@',
+          'closes a captured unknown receiver mutation instead of silently treating it as scalar code',
+          'verdict=closed:unknown-operation',
         ],
       },
       {
@@ -1902,6 +2212,104 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'raw-response-alias-helper-and-global-provenance-closure',
+        file: 'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
+        snippets: [
+          'fails closed when a mutation launders raw Response through %s',
+          'a module-scope immutable alias',
+          'a same-file helper without an authority argument',
+          'an immutable zero-authority helper alias',
+          'an immutable zero-authority helper container',
+          'an ambient constructor identity wrapper',
+          'a destructuring-reassigned helper',
+          'an intervening loop binding',
+          'qualified ambient access',
+          'return globalThis.Response.json({ ok: true });',
+          'fails closed when a handler-local helper container launders raw Response',
+          'fails closed when a helper-container method is replaced before invocation',
+          'an unreviewed zero-authority constructor',
+          'Function.call on a helper container',
+          'Function.apply on a helper container',
+          'Function.bind on a helper container',
+          'tag invocation on a local helper',
+          'an imported opaque outcome',
+          'an imported namespace member outcome',
+          'an imported thenable awaited as an outcome',
+          'an inline callback that invokes a raw helper',
+          'an imported Array.from callback',
+          'a same-file Array.map callback reference',
+          'a same-file Promise executor reference',
+          'fails closed for imported protocol execution through %s',
+          'a direct parameter initializer',
+          'a destructuring parameter initializer',
+          'fails closed for imported operands at %s',
+          'fails closed when imported authority moves through %s',
+          'fails closed when a generic local operation receives imported authority at %s',
+          'a nested helper default inside an immediate callback',
+          'an object binding default',
+          'implicit arguments authority',
+          'fails closed for a sole rest-parameter handler',
+          'fails closed for implicit this-bound definition authority',
+          'an enum initializer',
+          'using disposal',
+          'fails closed for imported proxy execution through %s',
+          'expect(kv449(prefix, body)).not.toEqual([])',
+        ],
+      },
+      {
+        id: 'cross-file-zero-authority-response-helper-closure',
+        file: 'packages/cli/src/index.kovo-compile.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 cross-file-zero-authority-helper-closes',
+          'export const RawResponse = Response; export function raw()',
+          "import { RawResponse, raw } from './raw-helper.js';",
+          'const alias = raw;',
+          'const helpers = { raw };',
+          "import * as rawHelpers from './raw-helper.js';",
+          "return new RawResponse('raw')",
+          "toContain('foreign server helper raw')",
+          "toContain('foreign server constructor')",
+        ],
+      },
+      {
+        id: 'nested-input-helper-cannot-hide-owner-read',
+        file: 'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
+        snippets: [
+          'fails closed when an input-named nested helper hides an owner read',
+          'async function nested(context: { guard: { userId: string } })',
+          'return nested(input);',
+          'expect(full.check.output).toMatch(/KV406|KV414/u)',
+        ],
+      },
+      {
+        id: 'private-summary-finite-call-grammar',
+        file: 'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 private-summary-sole-carrier-argument',
+          'a strict-TS widened direct alias with side-effecting extra argument evaluation',
+          'current(context, ...noArguments)',
+          '@kovo-security-certifies C13 private-summary-one-direct-alias',
+          'keeps a two-hop private helper alias chain outside OPP-28 proof',
+          'emits KV438 for a widened private helper alias with extra argument evaluation',
+          'emits KV438 for a two-hop private helper alias chain',
+        ],
+      },
+      {
+        id: 'exact-mutation-private-scope-transfer-and-write-effects',
+        file: 'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 handler-semantic-summary-direct-request-transfer',
+          'requestTenantId(request)',
+          'unsummarizedTenantId(request)',
+          'helperContainer.requestTenantId(request)',
+          'helperAlias(request)',
+          'reboundTenantId(request)',
+          "candidate.writeKey === 'account/exact'",
+          "toEqual(['account/shared-one', 'account/shared-two'])",
+          "path: 'targetId'",
+        ],
+      },
+      {
         id: 'server-authority-alias-helper-and-transfer-closure',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
@@ -1919,7 +2327,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
           'discharges multi-hop helper edges through bottom-up normalized summaries',
-          'kovo-security-semantic-graph/v1',
+          'kovo-security-semantic-graph/v2',
           'local:consume[arg0=context]',
           'local:dial[arg0=operation:server.egress.request]',
           'shows root, transfers, sink, and closed reason for helper alias mutation',
@@ -1961,6 +2369,23 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'server.database.read',
           'server.database.write',
           'server.task.compose',
+        ],
+      },
+      {
+        id: 'starter-exact-data-identities-and-database-continuations',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          'accepts the starter database chains and exact plain-data identities without widening the finite IR',
+          'crypto.randomUUID()',
+          "trustedAssign(id, 'framework-generated opaque identifier')",
+          '.from(contacts).orderBy(contacts.id)',
+          'does not grant reviewed data-helper identity through %s',
+          'keeps randomUUID closed through %s',
+          'keeps the ambient Error constructor closed through %s',
+          'does not recognize finite database continuations through %s',
+          'rejects imported executable database data through %s',
+          'new Proxy({}, { get()',
+          'request.db.select().dropEverything()',
         ],
       },
       {
@@ -2442,6 +2867,95 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'nested false spread with no enumerable keys',
           'keeps emitted runtime sink authority for statically omitted spread values',
           'accepts wire-stable DOM and submitted identities',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'drizzle-analyzer-provenance',
+    marker: '@kovo-security-classifier-corpus drizzle-analyzer-provenance',
+    testFiles: [
+      'packages/drizzle/src/index.scope-audits.test.ts',
+      'packages/drizzle/src/index.mass-assignment.test.ts',
+      'packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts',
+      'packages/drizzle/src/index.summary-callable-stability.test.ts',
+    ],
+    verdictAnchors: [
+      {
+        id: 'private-summary-structural-proof-boundary',
+        file: 'packages/drizzle/src/index.scope-audits.test.ts',
+        snippets: [
+          'accepts an explicitly summarized guard principal from an exact query context',
+          'rejects guard/session/tenant declarations that do not match exact local structure',
+          'forgedGuard(input)',
+          'forgedSession(input)',
+          'forgedTenant(input)',
+          'exactGuard(input)',
+          'function rest(...ctx: any[])',
+          'function* generated',
+          'kovoAnalyzerSummary(importedGuard',
+          "{ name: 'mismatchedOrders', scope: 'unknown' }",
+          'renamedCarrierOrders',
+          "{ name: 'renamedCarrierOrders', scope: 'unknown' }",
+        ],
+      },
+      {
+        id: 'private-summary-direct-callable-stability',
+        file: 'packages/drizzle/src/index.summary-callable-stability.test.ts',
+        snippets: [
+          'analyzer-summary callable stability',
+          'fails closed after %s',
+          'Object.assign',
+          'Object.defineProperty',
+          'Reflect.set',
+          'an opaque mutator',
+          'later receiver reassignment',
+          'a reflectively replaced direct-helper container',
+          'a frozen-syntax callable container',
+          'outside the direct-callable positive grammar',
+          'a direct function declaration',
+          'replaces a private value-container cell',
+          'a reassigned local value binding',
+          'a reflectively mutated local value',
+          'an aliased local value escape',
+          'an opaque local value escape',
+          'a private-value conditional condition contains %s',
+          'an inline assignment',
+          'a private value escapes earlier in the audited sink statement',
+          'Object.assign(userId, { value: input.userId })',
+        ],
+      },
+      {
+        id: 'server-summary-cannot-launder-attacker-input',
+        file: 'packages/drizzle/src/index.mass-assignment.test.ts',
+        snippets: [
+          'rejects app-declared server provenance for a helper returning attacker input',
+          'function resolveOwner(input: { ownerId: string }) { return input.ownerId; }',
+          "detail: 'resolveOwner(input)'",
+          'keeps declared and plain helper calls unknown',
+        ],
+      },
+      {
+        id: 'server-value-requires-positive-non-input-proof',
+        file: 'packages/drizzle/src/index.mass-assignment.test.ts',
+        snippets: [
+          'rejects serverValue when opaque helper flow is not proven non-input',
+          'serverValue(opaque(input.role)',
+          'serverValue(container.role',
+          'rejects serverValue private provenance through a %s value-container write',
+          'serverValue(principal.ownerId',
+          'rejects serverValue with no value argument',
+          "detail: 'serverValue()'",
+        ],
+      },
+      {
+        id: 'exact-private-helper-positive-control',
+        file: 'packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts',
+        snippets: [
+          'uses exact structurally verified same-file session helper provenance',
+          'return request.session.id;',
+          'const existing = await request.db.select({ id: questions.id }).from(questions).where(eq(questions.sessionId, sessionId));',
+          "{ kind: 'session', path: 'id' }",
         ],
       },
     ],
@@ -2991,20 +3505,40 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
       continue;
     }
     const codeBlocks = source.matchAll(/```(?:ts|tsx)\n([\s\S]*?)```/gu);
-    let covered = 0;
+    let adapterBlocks = 0;
+    let handlerBlocks = 0;
     for (const block of codeBlocks) {
       const code = block[1] ?? '';
-      if (!code.includes('createRequestHandler')) continue;
-      covered += 1;
+      if (code.includes('createRequestHandler')) {
+        handlerBlocks += 1;
+        if (
+          !code.includes('export const handler = createRequestHandler(app);') ||
+          code.includes('runtime-bootstrap') ||
+          /from\s+['"]node:/u.test(code)
+        ) {
+          findings.push(
+            `request-safe-runtime: ${file} handler block ${handlerBlocks} must export a host-independent createRequestHandler(app) module`,
+          );
+        }
+      }
+      if (!code.includes('toNodeHandler')) continue;
+      adapterBlocks += 1;
       const firstImport = code.split('\n').find((line) => line.trimStart().startsWith('import '));
-      if (firstImport?.trim() !== RUNTIME_BOOTSTRAP_IMPORT) {
+      if (
+        firstImport?.trim() !== RUNTIME_BOOTSTRAP_IMPORT ||
+        !code.includes("from './handler.js'") ||
+        !code.includes('toNodeHandler(handler)') ||
+        code.includes('createRequestHandler')
+      ) {
         findings.push(
-          `request-safe-runtime: ${file} createRequestHandler block ${covered} must start imports with ${RUNTIME_BOOTSTRAP_IMPORT}`,
+          `request-safe-runtime: ${file} adapter block ${adapterBlocks} must be bootstrap-first and import one separated handler`,
         );
       }
     }
-    if (covered === 0) {
-      findings.push(`request-safe-runtime: ${file} has no createRequestHandler bootstrap example`);
+    if (handlerBlocks === 0 || adapterBlocks === 0) {
+      findings.push(
+        `request-safe-runtime: ${file} must document both a host-independent handler and bootstrap-first separated adapter`,
+      );
     }
   }
   return findings;

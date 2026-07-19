@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { BLOCKED_SVG_SMIL_ELEMENT_NAMES } from '@kovojs/core/internal/sink-policy';
+import {
+  BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES,
+  BLOCKED_SVG_SMIL_ELEMENT_NAMES,
+  ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+} from '@kovojs/core/internal/sink-policy';
 
 import {
   dispatchInlineDelegatedClick,
@@ -170,6 +174,208 @@ describe('inline loader output security', () => {
       expect(element.getAttribute('srcset')).toBe('/safe.png 1x');
       expect(element.getAttribute('style')).toBeNull();
       expect(element.getAttribute('xlink:href')).toBe('#');
+    });
+
+    // @kovo-security-certifies C13 inline-dynamic-control-plane-runtime-floor
+    it(`${label}: removes state-selected compiler control-plane attributes`, async () => {
+      const element = new BoundTriggerElement({
+        'aria-label': 'old',
+        'data-bind:aria-label': 'state.label',
+        'data-bind:data-kovo-deferred-style': 'state.promoteStyle',
+        'data-bind:data-kovo-module-allowlist': 'state.module',
+        'data-bind:data-mutation': 'state.mutation',
+        'data-bind:data-stream-renderer': 'state.renderer',
+        'data-bind:on:click': 'state.handler',
+        'data-kovo-deferred-style': '',
+        'data-kovo-module-allowlist': '/c/client.js',
+        'data-mutation': 'account/delete',
+        'data-stream-renderer': '/c/victim.client.js#render',
+        'kovo-state':
+          '{"handler":"/c/attacker.client.js#run","label":"Ready","module":"/c/attacker.client.js","mutation":"account/delete","promoteStyle":true,"renderer":"/c/attacker.client.js#render"}',
+        'on:click': '/c/client.js#commitReserved',
+      });
+
+      await dispatchInlineDelegatedClick(
+        element,
+        async () => ({ commitReserved() {} }),
+        installSource,
+        ['/c/client.js'],
+      );
+
+      expect(element.getAttribute('data-kovo-deferred-style')).toBeNull();
+      expect(element.getAttribute('data-kovo-module-allowlist')).toBeNull();
+      expect(element.getAttribute('data-mutation')).toBeNull();
+      expect(element.getAttribute('data-stream-renderer')).toBeNull();
+      expect(element.getAttribute('on:click')).toBeNull();
+      expect(element.getAttribute('aria-label')).toBe('Ready');
+    });
+
+    it(`${label}: removes pair-dependent base and meta-refresh binding transitions`, async () => {
+      const cases = [
+        {
+          attributes: {
+            'data-bind:href': 'state.value',
+            href: '/safe/',
+            'kovo-state': '{"value":"https://attacker.example/"}',
+            'on:click': '/c/client.js#commit',
+          },
+          blocked: 'href',
+          tagName: 'BASE',
+        },
+        {
+          attributes: {
+            content: 'safe',
+            'data-bind:content': 'state.value',
+            'http-equiv': 'ReFrEsH',
+            'kovo-state': '{"value":"0; url=https://attacker.example/collect"}',
+            'on:click': '/c/client.js#commit',
+          },
+          blocked: 'content',
+          tagName: 'META',
+        },
+        {
+          attributes: {
+            content: '0; url=https://attacker.example/collect',
+            'data-bind:http-equiv': 'state.value',
+            'kovo-state': '{"value":" refresh "}',
+            'on:click': '/c/client.js#commit',
+          },
+          blocked: 'http-equiv',
+          tagName: 'META',
+        },
+      ] as const;
+
+      for (const testCase of cases) {
+        const element = new BoundTriggerElement({ ...testCase.attributes }, testCase.tagName);
+        await dispatchInlineDelegatedClick(element, async () => ({ commit() {} }), installSource, [
+          '/c/client.js',
+        ]);
+        expect(element.getAttribute(testCase.blocked), testCase.tagName).toBeNull();
+      }
+    });
+
+    it(`${label}: enforces the exact finite browser-control denominator on live writes`, async () => {
+      expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(60);
+
+      for (let index = 0; index < ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.length; index += 1) {
+        const [tagName, attribute, , staticPolicy] =
+          ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES[index]!;
+        const current =
+          staticPolicy === 'referrer-policy'
+            ? 'strict-origin'
+            : staticPolicy === 'target-keyword'
+              ? '_blank'
+              : staticPolicy === 'rel-no-opener'
+                ? 'noopener noreferrer'
+                : staticPolicy === 'iframe-sandbox-tokens'
+                  ? 'allow-forms'
+                  : staticPolicy === 'meta-referrer-name'
+                    ? 'description'
+                    : `reviewed-${index}`;
+        const element = new BoundTriggerElement(
+          {
+            ...(tagName === 'iframe' && attribute !== 'sandbox' ? { sandbox: 'allow-forms' } : {}),
+            [attribute]: current,
+            [`data-bind:${attribute}`]: 'state.value',
+            'kovo-state': '{"value":"attacker-selected"}',
+            'on:click': '/c/client.js#commit',
+          },
+          tagName.toUpperCase(),
+        );
+        await dispatchInlineDelegatedClick(element, async () => ({ commit() {} }), installSource, [
+          '/c/client.js',
+        ]);
+        expect(element.getAttribute(attribute), `${tagName}[${attribute}]`).toBe(
+          staticPolicy === 'disabled' ? null : current,
+        );
+      }
+    });
+
+    it(`${label}: strips an iframe source without the finite reviewed sandbox posture`, async () => {
+      for (const [sandbox, expectedSource] of [
+        [undefined, null],
+        ['allow-scripts allow-same-origin', null],
+        ['allow-top-navigation-by-user-activation', null],
+        ['allow-popups-to-escape-sandbox', null],
+        ['allow-storage-access-by-user-activation', null],
+        ['allow-scripts', '/reviewed'],
+      ] as const) {
+        const element = new BoundTriggerElement(
+          {
+            ...(sandbox === undefined ? {} : { sandbox }),
+            src: '/reviewed',
+            'data-bind:title': 'state.title',
+            'kovo-state': '{"title":"updated"}',
+            'on:click': '/c/client.js#commitFrame',
+          },
+          'IFRAME',
+        );
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({ commitFrame() {} }),
+          installSource,
+          ['/c/client.js'],
+        );
+        expect(element.getAttribute('src'), sandbox ?? 'missing').toBe(expectedSource);
+        if (expectedSource === null) expect(element.getAttribute('sandbox')).toBeNull();
+      }
+    });
+
+    it(`${label}: inerts unsandboxable active embeds before a live write`, async () => {
+      for (const tagName of BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES) {
+        const activationAttribute = tagName === 'object' ? 'data' : 'src';
+        const element = new BoundTriggerElement(
+          {
+            [activationAttribute]: '/reviewed/file.pdf',
+            [`data-bind:${activationAttribute}`]: 'state.url',
+            'kovo-state': JSON.stringify({ url: '/safe/account' }),
+            'on:click': '/c/client.js#commitEmbed',
+            type: 'application/pdf',
+          },
+          tagName.toUpperCase(),
+        );
+
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({ commitEmbed() {} }),
+          installSource,
+          ['/c/client.js'],
+        );
+
+        expect(element.attributes, tagName).toEqual([]);
+      }
+    });
+
+    it(`${label}: strips declarative Shadow DOM controls before a live write`, async () => {
+      const state = { clonable: true, mode: 'closed', serializable: true };
+      const element = new BoundTriggerElement(
+        {
+          'data-bind:shadowrootmode': 'state.mode',
+          'data-bind:ShadowRootClonable': 'state.clonable',
+          'data-derive': 'state.serializable',
+          'data-derive-attr': 'ShadowRootSerializable',
+          'kovo-state': JSON.stringify(state),
+          'on:click': '/c/client.js#commitShadow',
+          shadowRootDelegatesFocus: '',
+          shadowrootmode: 'open',
+          title: 'ordinary inert template',
+        },
+        'TEMPLATE',
+      );
+
+      await dispatchInlineDelegatedClick(
+        element,
+        async () => ({ commitShadow() {} }),
+        installSource,
+        ['/c/client.js'],
+      );
+
+      expect(element.attributes).toEqual([
+        { name: 'data-derive', value: 'state.serializable' },
+        { name: 'kovo-state', value: JSON.stringify(state) },
+        { name: 'on:click', value: '/c/client.js#commitShadow' },
+        { name: 'title', value: 'ordinary inert template' },
+      ]);
     });
 
     it(`${label}: H12 inerts SMIL target/value bindings in either transition order`, async () => {

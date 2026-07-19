@@ -40,6 +40,7 @@ import {
 } from '../jsx-ir.js';
 import {
   parseComponentModule,
+  parserFactHasFrameworkTrustedUrl,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -61,7 +62,14 @@ import {
   mutationSubmitterTransportAttributeName,
 } from '../mutation-form-provenance.js';
 import { localMutationKey } from '../mutation-form-binding.js';
-import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
+import {
+  effectiveElementContextDeriveFact,
+  runtimeOutputHelpers,
+  stylePropertyExpression,
+  validateEffectiveElementContextOutputFacts,
+  validateEffectiveElementContextSecurity,
+  type EffectiveElementContextDeriveFact,
+} from '../security/output-context.js';
 import {
   bindPropStampAttributeName,
   escapeAttribute,
@@ -186,6 +194,7 @@ export const structuralJsxPhaseOrder = [
   'primitive-spreads',
   'dynamic-spread-control-boundary',
   'primitive-composition',
+  'effective-element-context',
   'link-navigation',
   'platform-behaviors',
   'href-attributes',
@@ -194,6 +203,7 @@ export const structuralJsxPhaseOrder = [
   'primitive-reactive-attributes',
   'inline-text-bindings',
   'static-text-escaping',
+  'effective-element-context-output-facts',
   'helper-import-insertion',
 ] as const;
 
@@ -205,6 +215,7 @@ export function lowerStructuralJsx(
   const tree = createJsxIrTree(model, options);
   const diagnostics: CompilerDiagnostic[] = [];
   const outputContexts: GeneratedOutputWriteFact[] = [];
+  const effectiveElementContextDerives: EffectiveElementContextDeriveFact[] = [];
   const platformSubstitutions: PlatformSubstitution[] = [];
   const viewTransitionStamps: ViewTransitionStamp[] = [];
   const deriveExports: string[] = [];
@@ -225,6 +236,12 @@ export function lowerStructuralJsx(
     diagnostics,
     lowerPrimitiveComposition(tree.elements, options),
     'Primitive composition diagnostics',
+  );
+  const effectiveElementContexts = validateEffectiveElementContextSecurity(options, tree.roots);
+  appendCompilerFacts(
+    diagnostics,
+    effectiveElementContexts.diagnostics,
+    'Effective element-context diagnostics',
   );
   lowerNavigationLinks(tree.elements, options);
   lowerPlatformBehaviors(model, tree.elements, options, platformSubstitutions, diagnostics);
@@ -250,6 +267,7 @@ export function lowerStructuralJsx(
       stateDerives,
       outputContexts,
       nameCounts,
+      effectiveElementContextDerives,
     ) || needsStylePropertyHelper;
   needsStylePropertyHelper =
     lowerPrimitiveReactiveAttributes(
@@ -282,6 +300,15 @@ export function lowerStructuralJsx(
     outputContexts,
   );
   const escapeApplied = inlineTextEscapeApplied || staticTextEscapeApplied;
+  appendCompilerFacts(
+    diagnostics,
+    validateEffectiveElementContextOutputFacts(
+      options,
+      effectiveElementContexts.facts,
+      effectiveElementContextDerives,
+    ),
+    'Effective element-context output diagnostics',
+  );
 
   const compilerEscapeImports: string[] = [];
   if (escapeApplied && !hasCompilerEscapeImport(model, 'escapeText')) {
@@ -500,6 +527,37 @@ function mutationFormProvenanceDiagnostics(
     }
     const associatedMutationForm = mutationFormForSubmitter(element, mutationForms);
     const directTransport = mutationSubmitterDirectTransport(element.element);
+    if (associatedMutationForm !== null) {
+      const source = associatedMutationForm.element;
+      const lexicalDescendant =
+        element.element.start >= source.openingEnd && element.element.end <= source.closingStart;
+      const forbidden: JsxAttributeModel[] = [];
+      if (lexicalDescendant) {
+        appendCompilerFacts(
+          forbidden,
+          directTransport.formAssociations,
+          'Typed mutation submitter form associations',
+        );
+      }
+      appendCompilerFacts(
+        forbidden,
+        directTransport.overrides,
+        'Typed mutation submitter transport overrides',
+      );
+      for (let overrideIndex = 0; overrideIndex < forbidden.length; overrideIndex += 1) {
+        const attribute = forbidden[overrideIndex]!;
+        appendCompilerFact(
+          diagnostics,
+          mutationFormProvenanceDiagnostic(
+            options,
+            attribute,
+            `${attribute.name} cannot override compiler-owned typed mutation transport; remove the submitter transport attribute or use a separate native form`,
+          ),
+          'Typed mutation submitter diagnostics',
+        );
+        removeJsxIrSourceAttribute(element, attribute);
+      }
+    }
     if (
       associatedMutationForm === null &&
       mutationForms.length > 0 &&
@@ -669,9 +727,11 @@ function mutationFormForSubmitter(
 }
 
 function mutationSubmitterDirectTransport(element: JsxElementModel): {
+  formAssociations: JsxAttributeModel[];
   hasFormAssociation: boolean;
   overrides: JsxAttributeModel[];
 } {
+  const formAssociations: JsxAttributeModel[] = [];
   let hasFormAssociation = false;
   const overrides: JsxAttributeModel[] = [];
   const attributes = compilerSnapshotDenseArray(
@@ -684,11 +744,12 @@ function mutationSubmitterDirectTransport(element: JsxElementModel): {
     const transport = mutationSubmitterTransportAttributeName(attribute.name);
     if (transport === 'form') {
       hasFormAssociation = true;
+      appendCompilerFact(formAssociations, attribute, 'Direct mutation form associations');
     } else if (transport !== null) {
       appendCompilerFact(overrides, attribute, 'Direct mutation submitter overrides');
     }
   }
-  return { hasFormAssociation, overrides };
+  return { formAssociations, hasFormAssociation, overrides };
 }
 
 function componentMutationSubmitterOverrideDiagnostics(
@@ -2925,6 +2986,7 @@ function lowerInlineAttributeDerivesInIr(
   stateDerives: StateDeriveFact[],
   outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
+  effectiveElementContextDerives: EffectiveElementContextDeriveFact[],
 ): boolean {
   let needsStylePropertyHelper = false;
   const elementLength = compilerArrayLength(elements, 'Inline derive JSX elements');
@@ -2973,6 +3035,7 @@ function lowerInlineAttributeDerivesInIr(
         stateDerives,
         outputContexts,
         nameCounts,
+        effectiveElementContextDerives,
         forceQueryBindings,
       );
     }
@@ -2987,6 +3050,7 @@ function lowerAttributeDerive(
   stateDerives: StateDeriveFact[],
   outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
+  effectiveElementContextDerives?: EffectiveElementContextDeriveFact[],
   forceQueryBinding = false,
 ): void {
   const expression = executableJavaScriptExpression(
@@ -2997,7 +3061,7 @@ function lowerAttributeDerive(
   const deriveInputs = candidate.inputs ?? [candidate.query];
   const deriveParams = candidate.params ?? [deriveParam(candidate)];
 
-  const { stampName } = emitDerive({
+  const { exportName, stampName } = emitDerive({
     baseName: candidate.baseName,
     nameCounts,
     stampPrefix: candidate.query,
@@ -3037,6 +3101,21 @@ function lowerAttributeDerive(
     }),
     outputContexts,
   });
+  if (effectiveElementContextDerives !== undefined) {
+    const deriveFact = effectiveElementContextDeriveFact(
+      candidate.element.intrinsicTagName,
+      candidate.targetAttr,
+      candidate.attribute,
+      exportName,
+    );
+    if (deriveFact !== undefined) {
+      appendCompilerFact(
+        effectiveElementContextDerives,
+        deriveFact,
+        'Effective element-context derives',
+      );
+    }
+  }
 
   // SPEC.md §4.8 data-bind-prop: for property-authoritative attributes, also emit
   // the live-property stamp wherever a data-bind:<attr> sibling is produced (state
@@ -4744,7 +4823,11 @@ function sourceAttributeToIr(
     attribute.value !== undefined
       ? { kind: 'string', value: attribute.value }
       : attribute.expression !== undefined
-        ? { kind: 'expression', source: attribute.expression }
+        ? {
+            kind: 'expression',
+            source: attribute.expression,
+            ...(parserFactHasFrameworkTrustedUrl(attribute) ? { trustedUrl: true as const } : {}),
+          }
         : { kind: 'boolean', value: true };
   return generatedJsxIrAttribute(
     attribute.name,

@@ -407,6 +407,32 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     }
 
     for (const semanticRoot of component.securitySemanticGraph?.roots ?? []) {
+      lines.push(
+        [
+          'SEMANTIC-ROOT',
+          `root=${semanticRoot.root}`,
+          `factory=${semanticRoot.binding.factory}`,
+          `callback=${semanticRoot.binding.callback}`,
+          `factory-span=${semanticRoot.binding.factoryCallSpan.start}:${semanticRoot.binding.factoryCallSpan.end}`,
+          `callable-span=${semanticRoot.binding.callableSpan.start}:${semanticRoot.binding.callableSpan.end}`,
+        ].join(' '),
+      );
+      for (const invocation of semanticRoot.helperInvocations) {
+        lines.push(
+          [
+            'SEMANTIC-INVOKE',
+            `root=${semanticRoot.root}`,
+            `call-span=${invocation.callSpan.start}:${invocation.callSpan.end}`,
+            `argument-spans=${list(invocation.argumentSpans.map((span) => `${span.start}:${span.end}`))}`,
+            `callable=${invocation.callable}`,
+            `callable-span=${invocation.callableSpan.start}:${invocation.callableSpan.end}`,
+            `authority-inputs=${list(invocation.authorityInputs)}`,
+            `effects=${list(invocation.operationKinds)}`,
+            `transfers=${list(invocation.transfers)}`,
+            `verdict=${invocation.verdict}`,
+          ].join(' '),
+        );
+      }
       for (const summary of semanticRoot.summaries) {
         lines.push(
           [

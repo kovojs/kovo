@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { trustedHtml } from '@kovojs/browser';
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
 import * as style from '@kovojs/style';
 
 // Two-pane example page (ported from scripts/examples.mjs renderExampleSplit): a
@@ -200,7 +200,7 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
           {appHref ? (
             <iframe
               style={exampleSplitStyles.frame}
-              src={appHref}
+              src={trustedUrl(appHref, 'configured docs example application')}
               title={`${title} running app`}
               loading="lazy"
               sandbox="allow-scripts allow-same-origin"

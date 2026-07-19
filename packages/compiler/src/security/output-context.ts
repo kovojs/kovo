@@ -4,19 +4,29 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
-import { isBlockedSvgSmilElementName } from '@kovojs/core/internal/sink-policy';
+import {
+  ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+  elementContextSecurityControl,
+  elementContextSecurityStaticValueIssue,
+  elementHasContextSecurityControls,
+  isBlockedActiveEmbedElementName,
+  isBlockedDeclarativeShadowDomAttributeName,
+  isBlockedSvgSmilElementName,
+} from '@kovojs/core/internal/sink-policy';
 import {
   htmlAttributeWireValuePosture,
   htmlElementWireValueIssue,
   htmlTextWireValuePosture,
   htmlWireValueIssue,
+  isGeneratedOnlySemanticAttribute,
   type HtmlWireValuePosture,
 } from '@kovojs/core/internal/semantic-attributes';
 import * as ts from 'typescript';
 
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticFor, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   compilerArrayAppend,
+  compilerArrayJoin,
   compilerArrayLength,
   compilerJsonStringify,
   compilerOwnDataValue,
@@ -30,19 +40,27 @@ import {
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import {
+  frameworkMutationFormAttributesReturnedKeys,
+  mutationSubmitterTransportAttributeName,
+} from '../mutation-form-provenance.js';
+import {
   isUrlAttribute,
   expressionResolvesToTrustedHtmlBrand,
+  expressionResolvesToTrustedUrlPureBrand,
   trustedHtmlBrandLocalNames,
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
 import { literalStringValue } from '../scan/object.js';
+import type { JsxIrAttribute, JsxIrChild, JsxIrElement } from '../jsx-ir.js';
 import {
   jsxElements,
   jsxExpressions,
+  parserFactHasFrameworkTrustedUrl,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
   type JsxExpressionModel,
+  type JsxSpreadAttributeModel,
   type ObjectLiteralEntry,
   type SourceSpan,
   type StaticJsxWireAttributeEntry,
@@ -77,7 +95,7 @@ export function validateOutputContexts(
     const element = outputArrayValue(elements, index, 'Output-context JSX elements');
     appendOutputItems(
       found,
-      validateElementAttributes(diagnostics, element, compilerOwnedStyleSpans),
+      validateElementAttributes(diagnostics, model, element, compilerOwnedStyleSpans),
       'Output-context attribute diagnostics',
     );
     appendOutputItems(
@@ -99,6 +117,241 @@ export function validateOutputContexts(
   );
 
   return found;
+}
+
+/** Typed post-composition fact for one dynamic effective intrinsic element control. */
+export interface EffectiveElementContextFact {
+  readonly attribute: string;
+  readonly element: string;
+  readonly reason: string;
+  readonly span?: SourceSpan;
+  readonly trustedUrl: boolean;
+}
+
+/** Compiler-internal proof attached to one emitted client derive. */
+export interface EffectiveElementContextDeriveFact {
+  readonly attribute: string;
+  readonly element: string;
+  readonly exportName: string;
+  readonly reason: string;
+  readonly span: SourceSpan;
+  readonly trustedUrl: boolean;
+}
+
+/**
+ * SPEC §4.8 / §5.2 rule 10: validate the effective intrinsic tree after static spreads and
+ * primitive `asChild` composition have selected the actual element/attribute owner. The original
+ * parser model cannot see attributes moved from a primitive's `attrs` bag onto its intrinsic child;
+ * this typed IR invariant is therefore the final initial-SSR verdict for those merged controls.
+ */
+export function validateEffectiveElementContextSecurity(
+  options: { fileName: string; source: string },
+  roots: readonly JsxIrElement[],
+): { diagnostics: readonly CompilerDiagnostic[]; facts: readonly EffectiveElementContextFact[] } {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const facts: EffectiveElementContextFact[] = [];
+  const visit = (element: JsxIrElement): void => {
+    if (element.removed) return;
+    const tag = element.intrinsicTagName;
+    if (tag !== undefined) {
+      appendEffectiveElementContextAttributes(
+        options,
+        element,
+        tag,
+        element.attributes,
+        facts,
+        diagnostics,
+      );
+      appendEffectiveElementContextAttributes(
+        options,
+        element,
+        tag,
+        element.generatedAttributes,
+        facts,
+        diagnostics,
+      );
+    }
+    const childLength = compilerArrayLength(element.children, 'Effective element-context children');
+    for (let index = 0; index < childLength; index += 1) {
+      const child = outputArrayValue(
+        element.children,
+        index,
+        'Effective element-context children',
+      ) as JsxIrChild;
+      if (child.kind === 'element') visit(child);
+    }
+  };
+  const rootLength = compilerArrayLength(roots, 'Effective element-context roots');
+  for (let index = 0; index < rootLength; index += 1) {
+    visit(outputArrayValue(roots, index, 'Effective element-context roots'));
+  }
+  return { diagnostics, facts };
+}
+
+function appendEffectiveElementContextAttributes(
+  options: { fileName: string; source: string },
+  element: JsxIrElement,
+  tag: string,
+  attributes: readonly JsxIrAttribute[],
+  facts: EffectiveElementContextFact[],
+  diagnostics: CompilerDiagnostic[],
+): void {
+  const length = compilerArrayLength(attributes, 'Effective element-context attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Effective element-context attributes');
+    const control = elementContextSecurityControl(tag, attribute.name);
+    if (control === undefined || attribute.value.kind !== 'expression') continue;
+    const fact: EffectiveElementContextFact = {
+      attribute: compilerStringToLowerCase(attribute.name),
+      element: compilerStringToLowerCase(tag),
+      reason: control.reason,
+      ...(attribute.anchor === undefined
+        ? element.provenance.anchor === undefined
+          ? {}
+          : {
+              span: {
+                end: element.provenance.anchor.end,
+                start: element.provenance.anchor.start,
+              },
+            }
+        : { span: { end: attribute.anchor.end, start: attribute.anchor.start } }),
+      trustedUrl: attribute.value.trustedUrl === true,
+    };
+    compilerArrayAppend(facts, fact, 'Effective element-context facts');
+    if (fact.trustedUrl && control.acceptsTrustedUrl) continue;
+    // The original-source validator owns diagnostics for unchanged intrinsic JSX. This invariant
+    // still records those facts so emitted derives must correlate with them, while only diagnosing
+    // controls whose effective owner was created by structural composition.
+    if (element.ownership === 'author') continue;
+    compilerArrayAppend(
+      diagnostics,
+      effectiveElementContextDiagnostic(options, fact, control.reason),
+      'Effective element-context diagnostics',
+    );
+  }
+}
+
+/**
+ * Construct the typed proof for a client derive from parser-owned identity and the effective IR
+ * owner. Keeping this ledger private avoids widening CompileResult's public output-context API.
+ */
+export function effectiveElementContextDeriveFact(
+  element: string | undefined,
+  targetAttribute: string,
+  sourceAttribute: JsxAttributeModel,
+  exportName: string,
+): EffectiveElementContextDeriveFact | undefined {
+  if (element === undefined) return undefined;
+  const tag = compilerStringToLowerCase(element);
+  const attribute = compilerStringToLowerCase(targetAttribute);
+  const control = elementContextSecurityControl(tag, attribute);
+  if (control === undefined) return undefined;
+  return {
+    attribute,
+    element: tag,
+    exportName,
+    reason: control.reason,
+    span: { end: sourceAttribute.end, start: sourceAttribute.start },
+    trustedUrl: parserFactHasFrameworkTrustedUrl(sourceAttribute),
+  };
+}
+
+/**
+ * Verify that emitted live-derive facts retain the exact trustedUrl verdict from the effective
+ * initial element. Compiler-owned `data-bind:*` stamps are intentionally not treated as authored
+ * controls; the linked output fact, rather than the stamp string, owns the client-write verdict.
+ */
+export function validateEffectiveElementContextOutputFacts(
+  options: { fileName: string; source: string },
+  effectiveFacts: readonly EffectiveElementContextFact[],
+  outputFacts: readonly EffectiveElementContextDeriveFact[],
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const outputLength = compilerArrayLength(outputFacts, 'Effective element-context output facts');
+  for (let index = 0; index < outputLength; index += 1) {
+    const output = outputArrayValue(outputFacts, index, 'Effective element-context output facts');
+    const tag = output.element;
+    const attribute = output.attribute;
+    const control = elementContextSecurityControl(tag, attribute);
+    if (control === undefined) {
+      compilerArrayAppend(
+        diagnostics,
+        effectiveElementContextDiagnostic(
+          options,
+          output,
+          `emitted derive ${output.exportName} has no closed element-context registry verdict`,
+        ),
+        'Effective element-context output diagnostics',
+      );
+      continue;
+    }
+
+    let match: EffectiveElementContextFact | undefined;
+    const effectiveLength = compilerArrayLength(
+      effectiveFacts,
+      'Initial effective element-context facts',
+    );
+    for (let factIndex = 0; factIndex < effectiveLength; factIndex += 1) {
+      const fact = outputArrayValue(
+        effectiveFacts,
+        factIndex,
+        'Initial effective element-context facts',
+      );
+      if (
+        fact.element === tag &&
+        fact.attribute === attribute &&
+        fact.span?.start === output.span.start &&
+        fact.span.end === output.span.end
+      ) {
+        match = fact;
+        break;
+      }
+    }
+
+    // An exact same-span match proves that the emitted derive retained the parser verdict. Unsafe
+    // matching facts were already rejected by the original/effective initial-output validator.
+    if (match !== undefined && match.trustedUrl === output.trustedUrl) continue;
+    compilerArrayAppend(
+      diagnostics,
+      effectiveElementContextDiagnostic(
+        options,
+        output,
+        match === undefined
+          ? `emitted derive ${output.exportName} has no matching final <${tag}> ${attribute} control fact`
+          : output.trustedUrl
+            ? `emitted derive ${output.exportName} claims trustedUrl without matching exact parser provenance`
+            : `emitted derive ${output.exportName} lost its required exact trustedUrl provenance`,
+      ),
+      'Effective element-context output diagnostics',
+    );
+  }
+  return diagnostics;
+}
+
+function effectiveElementContextDiagnostic(
+  options: { fileName: string; source: string },
+  fact: EffectiveElementContextFact,
+  reason: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(
+      options.fileName,
+      'KV236',
+      options.source,
+      fact.span?.start,
+      fact.span === undefined ? undefined : fact.span.end - fact.span.start,
+    ),
+    help: compilerArrayJoin(
+      [
+        `Blocked reason: ${reason}.`,
+        'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
+        'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
+        'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed after structural lowering.',
+      ],
+      '\n',
+    ),
+    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+  };
 }
 
 /**
@@ -256,12 +509,38 @@ export function collectTrustedHtmlOutputContextFacts(
 
 function validateElementAttributes(
   diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
   element: JsxElementModel,
   compilerOwnedStyleSpans: readonly SourceSpan[],
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
   let hasExternalEscape = false;
   const attributeLength = compilerArrayLength(element.attributes, 'Element attributes');
+  if (
+    element.intrinsicTagName !== undefined &&
+    isBlockedActiveEmbedElementName(element.intrinsicTagName)
+  ) {
+    compilerArrayAppend(
+      found,
+      {
+        ...diagnostics.at(
+          'KV236',
+          {
+            start: element.start,
+            length: element.openingEnd - element.start,
+          },
+          `<${element.intrinsicTagName}> is disabled because it can create an embedded browsing context without a reviewable sandbox boundary`,
+        ),
+        help: [
+          'Blocked reason: object/embed and obsolete frame/frameset output can load or contain same-origin HTML without a reviewable modern iframe sandbox boundary.',
+          'Fixes: use a sandboxed <iframe> for active content, or an ordinary download/navigation link for a file.',
+          'SPEC §4.8 and §5.2 rule 10 require contextual output safety independent of CSP.',
+          'Escape: there is no plain JSX suppression for disabled active embed elements.',
+        ].join('\n'),
+      },
+      'Active embed element diagnostics',
+    );
+  }
   if (
     element.intrinsicTagName !== undefined &&
     isBlockedSvgSmilElementName(element.intrinsicTagName)
@@ -287,6 +566,26 @@ function validateElementAttributes(
       'SVG SMIL element diagnostics',
     );
   }
+  appendOutputItems(
+    found,
+    validateDeclarativeShadowDomElement(diagnostics, element),
+    'Declarative Shadow DOM diagnostics',
+  );
+  appendOutputItems(
+    found,
+    validateDocumentNavigationElements(diagnostics, element),
+    'Document navigation element diagnostics',
+  );
+  appendOutputItems(
+    found,
+    validateElementContextSecuritySinks(diagnostics, model, element),
+    'Element-context security diagnostics',
+  );
+  appendOutputItems(
+    found,
+    validateIframeSandboxBoundary(diagnostics, model, element),
+    'Iframe sandbox boundary diagnostics',
+  );
   appendOutputItems(
     found,
     validateCrossAttributeWireSemantics(diagnostics, element),
@@ -322,6 +621,20 @@ function validateElementAttributes(
         found,
         validateStyleAttribute(diagnostics, attribute),
         'Style attribute diagnostics',
+      );
+      continue;
+    }
+
+    const generatedControlTarget = dynamicGeneratedControlPlaneTarget(attribute);
+    if (generatedControlTarget !== null) {
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(
+          diagnostics,
+          `${attribute.name} dynamically targets compiler-generated control-plane attribute "${generatedControlTarget}"`,
+          { start: attribute.start, length: attribute.end - attribute.start },
+        ),
+        'Element attribute diagnostics',
       );
       continue;
     }
@@ -460,6 +773,545 @@ function validateElementAttributes(
   return found;
 }
 
+/**
+ * SPEC §4.2 / §5.2 rule 10: Kovo components are light-DOM components. Declarative Shadow DOM
+ * changes parser output before the runtime can traverse it, so every `<template>` construction
+ * channel is closed: direct attributes, bindings/derives, statically visible spreads, and opaque
+ * spreads. The runtime membrane remains the floor for uncompiled JSX and response bytes.
+ */
+function validateDeclarativeShadowDomElement(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  if (element.intrinsicTagName !== 'template') return [];
+
+  const attributes = element.attributes;
+  const attributeLength = compilerArrayLength(attributes, 'Declarative Shadow DOM attributes');
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Declarative Shadow DOM attributes');
+    const issue = declarativeShadowDomControlIssue(
+      attribute.name,
+      staticDirectAttributeValue(attribute),
+    );
+    if (issue !== undefined) {
+      return [declarativeShadowDomDiagnostic(diagnostics, element, issue)];
+    }
+  }
+
+  const spreads = element.spreadAttributes;
+  const spreadLength = compilerArrayLength(spreads, 'Declarative Shadow DOM spreads');
+  for (let index = 0; index < spreadLength; index += 1) {
+    const spread = outputArrayValue(spreads, index, 'Declarative Shadow DOM spreads');
+    if (spread.staticWireAttributeEntries !== undefined) {
+      const entries = spread.staticWireAttributeEntries;
+      const entryLength = compilerArrayLength(entries, 'Static declarative Shadow DOM entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(
+          entries,
+          entryIndex,
+          'Static declarative Shadow DOM entries',
+        );
+        const issue = declarativeShadowDomControlIssue(
+          entry.key,
+          staticWireSpreadAttributeValue(entry),
+        );
+        if (issue !== undefined) {
+          return [declarativeShadowDomDiagnostic(diagnostics, element, issue)];
+        }
+      }
+      continue;
+    }
+    if (spread.objectEntries !== undefined) {
+      const entries = spread.objectEntries;
+      const entryLength = compilerArrayLength(entries, 'Declarative Shadow DOM spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(
+          entries,
+          entryIndex,
+          'Declarative Shadow DOM spread entries',
+        );
+        const issue = declarativeShadowDomControlIssue(
+          entry.key,
+          staticSpreadAttributeValue(entry),
+        );
+        if (issue !== undefined) {
+          return [declarativeShadowDomDiagnostic(diagnostics, element, issue)];
+        }
+      }
+      continue;
+    }
+    return [
+      declarativeShadowDomDiagnostic(
+        diagnostics,
+        element,
+        'an opaque <template> spread could create a declarative Shadow DOM control',
+      ),
+    ];
+  }
+  return [];
+}
+
+function declarativeShadowDomControlIssue(
+  name: string,
+  value: StaticRenderedAttributeValue,
+): string | undefined {
+  const normalizedName = compilerStringToLowerCase(name);
+  if (isBlockedDeclarativeShadowDomAttributeName(normalizedName)) {
+    return `<template> ${normalizedName} would create or configure declarative Shadow DOM`;
+  }
+  if (compilerStringStartsWith(normalizedName, 'data-bind:')) {
+    const target = compilerStringSlice(normalizedName, 'data-bind:'.length);
+    return isBlockedDeclarativeShadowDomAttributeName(target)
+      ? `a live binding could create <template> ${target}`
+      : undefined;
+  }
+  if (normalizedName !== 'data-derive-attr') return undefined;
+  if (value.kind === 'unknown') {
+    return 'an unproved template derive target could create a declarative Shadow DOM control';
+  }
+  if (value.kind === 'omitted') return undefined;
+  const target = compilerStringToLowerCase(value.value);
+  return isBlockedDeclarativeShadowDomAttributeName(target)
+    ? `a derive could create <template> ${target}`
+    : undefined;
+}
+
+function declarativeShadowDomDiagnostic(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+  reason: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnostics.at('KV236', {
+      start: element.start,
+      length: element.openingEnd - element.start,
+    }),
+    help: [
+      `Blocked reason: ${reason}.`,
+      'Kovo component output is light DOM; parser-created shadow roots would hide descendants from framework traversal and document-wide IDREF/form behavior.',
+      'Fixes: keep the template inert and render its content into ordinary light DOM.',
+      'SPEC §4.2 and §5.2 rule 10 make declarative Shadow DOM unavailable in authored output.',
+      'Escape: there is no app-authored declarative Shadow DOM suppression.',
+    ].join('\n'),
+    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}; declarative Shadow DOM is disabled.`,
+  };
+}
+
+/**
+ * SPEC §4.8 / §5.2 rule 10: `<base>` and meta refresh are document-wide navigation
+ * capabilities, not ordinary URL/text attributes. Per-attribute URL sanitization cannot prove the
+ * pair semantics of `meta[http-equiv=refresh] content`, and a safe-scheme `<base href>` can still
+ * retarget every later relative URL in the document. Kovo therefore keeps both effects outside
+ * the finite authored output surface. Static aliases/spreads are inspected from parser-owned wire
+ * facts; an opaque meta spread closes because it could mint the forbidden pair.
+ */
+function validateDocumentNavigationElements(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  if (element.intrinsicTagName === 'base') {
+    return [
+      documentNavigationDiagnostic(
+        diagnostics,
+        element,
+        '<base> is disabled because it changes document-wide relative URL resolution',
+        [
+          'Fixes: configure the deployment/router base through Kovo and emit root-relative application URLs.',
+          'Escape: there is no app-authored <base> suppression.',
+        ],
+      ),
+    ];
+  }
+  if (element.intrinsicTagName !== 'meta') return [];
+
+  const attributes = element.attributes;
+  const attributeLength = compilerArrayLength(attributes, 'Meta navigation attributes');
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Meta navigation attributes');
+    const issue = metaRefreshAttributeIssue(attribute);
+    if (issue === undefined) continue;
+    return [documentNavigationDiagnostic(diagnostics, element, issue, metaRefreshFixes)];
+  }
+
+  const spreads = element.spreadAttributes;
+  const spreadLength = compilerArrayLength(spreads, 'Meta navigation spreads');
+  for (let index = 0; index < spreadLength; index += 1) {
+    const spread = outputArrayValue(spreads, index, 'Meta navigation spreads');
+    if (spread.staticWireAttributeEntries !== undefined) {
+      const entries = spread.staticWireAttributeEntries;
+      const entryLength = compilerArrayLength(entries, 'Static meta navigation spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(
+          entries,
+          entryIndex,
+          'Static meta navigation spread entries',
+        );
+        const issue = metaRefreshWireEntryIssue(entry);
+        if (issue !== undefined) {
+          return [documentNavigationDiagnostic(diagnostics, element, issue, metaRefreshFixes)];
+        }
+      }
+      continue;
+    }
+    if (spread.objectEntries !== undefined) {
+      const entries = spread.objectEntries;
+      const entryLength = compilerArrayLength(entries, 'Meta navigation spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(entries, entryIndex, 'Meta navigation spread entries');
+        const folded = compilerStringToLowerCase(entry.key);
+        if (folded !== 'http-equiv' && folded !== 'httpequiv') continue;
+        const value = staticSpreadAttributeValue(entry);
+        if (value.kind === 'unknown' || metaRefreshValue(value)) {
+          return [
+            documentNavigationDiagnostic(
+              diagnostics,
+              element,
+              value.kind === 'unknown'
+                ? 'an unproved meta http-equiv spread could create refresh navigation'
+                : 'meta refresh is disabled because its content is an executable navigation sink',
+              metaRefreshFixes,
+            ),
+          ];
+        }
+      }
+      continue;
+    }
+    // Opaque spreads are reconstructed by kovoSafeJsxSpread and classified by the server's
+    // element-aware pair sink. This is one of the inherently runtime facts assigned to the real
+    // sink by SPEC §6.6; do not guess at its keys here.
+  }
+  return [];
+}
+
+/**
+ * SPEC §5.2 rule 10 / §6.3: two opaque-looking authored spellings have a narrower runtime shape
+ * than an arbitrary carrier. The exact mutationFormAttributes export has a finite returned-key
+ * summary, while unresolved button/input spreads are always reconstructed through the
+ * mutation-submitter boundary, which removes every submitter transport name. Both checks remain
+ * tied to the shared finite browser-control denominator so adding a new uncovered control closes
+ * the compiler verdict automatically.
+ */
+function opaqueSpreadHasClosedElementContextControls(
+  tag: string,
+  spread: JsxSpreadAttributeModel,
+): boolean {
+  if (tag === 'form') {
+    const keys = frameworkMutationFormAttributesReturnedKeys(spread);
+    if (keys === undefined) return false;
+    const keyLength = compilerArrayLength(keys, 'mutationFormAttributes returned keys');
+    for (let index = 0; index < keyLength; index += 1) {
+      const key = outputArrayValue(keys, index, 'mutationFormAttributes returned keys');
+      if (elementContextSecurityControl(tag, key) !== undefined) return false;
+    }
+    return true;
+  }
+
+  if (tag !== 'button' && tag !== 'input') return false;
+  let foundControl = false;
+  const tupleLength = compilerArrayLength(
+    ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+    'Element-context security controls',
+  );
+  for (let index = 0; index < tupleLength; index += 1) {
+    const tuple = outputArrayValue(
+      ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+      index,
+      'Element-context security controls',
+    );
+    if (tuple[0] !== tag) continue;
+    foundControl = true;
+    if (mutationSubmitterTransportAttributeName(tuple[1]) === null) return false;
+  }
+  return foundControl;
+}
+
+/**
+ * SPEC §4.8 / §5.2 rule 10: a URL scheme is not the complete security context for elements that
+ * execute fetched bytes or carry an isolation boundary. `script[src]`, stylesheet links, and an
+ * iframe's `sandbox` attribute can all become unsafe while every individual string remains a
+ * syntactically safe relative/HTTPS value. Keep those decisions in the finite element-context
+ * surface and close opaque spreads instead of treating them as ordinary attributes.
+ */
+function validateElementContextSecuritySinks(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  const tag = element.intrinsicTagName;
+  if (tag === undefined || !elementHasContextSecurityControls(tag)) return [];
+
+  const attributes = element.attributes;
+  const attributeLength = compilerArrayLength(attributes, 'Element-context attributes');
+  for (let index = 0; index < attributeLength; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Element-context attributes');
+    const reason = directElementContextSinkIssue(model, tag, attribute);
+    if (reason !== undefined) {
+      return [elementContextSecurityDiagnostic(diagnostics, element, reason)];
+    }
+  }
+
+  const spreads = element.spreadAttributes;
+  const spreadLength = compilerArrayLength(spreads, 'Element-context spreads');
+  for (let index = 0; index < spreadLength; index += 1) {
+    const spread = outputArrayValue(spreads, index, 'Element-context spreads');
+    if (spread.staticWireAttributeEntries !== undefined) {
+      const entries = spread.staticWireAttributeEntries;
+      const entryLength = compilerArrayLength(entries, 'Static element-context spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(
+          entries,
+          entryIndex,
+          'Static element-context spread entries',
+        );
+        const target = compilerStringToLowerCase(entry.key);
+        if (
+          parserFactHasFrameworkTrustedUrl(entry) &&
+          elementContextSecurityControl(tag, target)?.acceptsTrustedUrl === true
+        ) {
+          continue;
+        }
+        const reason = renderedElementContextSinkIssue(
+          tag,
+          target,
+          staticWireSpreadAttributeValue(entry),
+        );
+        if (reason !== undefined) {
+          return [elementContextSecurityDiagnostic(diagnostics, element, reason)];
+        }
+      }
+      continue;
+    }
+    if (spread.objectEntries !== undefined) {
+      const entries = spread.objectEntries;
+      const entryLength = compilerArrayLength(entries, 'Element-context spread entries');
+      for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+        const entry = outputArrayValue(entries, entryIndex, 'Element-context spread entries');
+        const target = compilerStringToLowerCase(entry.key);
+        if (
+          parserFactHasFrameworkTrustedUrl(entry) &&
+          elementContextSecurityControl(tag, target)?.acceptsTrustedUrl === true
+        ) {
+          continue;
+        }
+        const reason = renderedElementContextSinkIssue(
+          tag,
+          target,
+          staticSpreadAttributeValue(entry),
+        );
+        if (reason !== undefined) {
+          return [elementContextSecurityDiagnostic(diagnostics, element, reason)];
+        }
+      }
+      continue;
+    }
+    if (opaqueSpreadHasClosedElementContextControls(tag, spread)) continue;
+    return [
+      elementContextSecurityDiagnostic(
+        diagnostics,
+        element,
+        `an opaque <${tag}> spread could replace an execution or isolation control`,
+      ),
+    ];
+  }
+  return [];
+}
+
+/**
+ * SPEC §4.8 / §5.2 rule 10: a reviewed sandbox is mandatory whenever an iframe has an active
+ * source. Per-attribute checks validate the token set; this relational check proves presence from
+ * the final JSX/spread wire order. Unknown non-branded sources already receive their own KV236.
+ */
+function validateIframeSandboxBoundary(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): CompilerDiagnostic[] {
+  if (element.intrinsicTagName !== 'iframe') return [];
+  const states = staticEffectiveElementWireAttributeStates(element);
+  if (states === undefined) return [];
+  const source = effectiveStaticRenderedAttribute(states, 'src');
+  if (source.kind === 'omitted') return [];
+  if (source.kind === 'unknown' && !elementHasTrustedIframeSource(model, element)) return [];
+  const sandbox = effectiveStaticRenderedAttribute(states, 'sandbox');
+  if (sandbox.kind !== 'omitted') return [];
+  return [
+    elementContextSecurityDiagnostic(
+      diagnostics,
+      element,
+      'iframe sources require a statically reviewed sandbox attribute',
+    ),
+  ];
+}
+
+function elementHasTrustedIframeSource(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): boolean {
+  const attributes = element.attributes;
+  const length = compilerArrayLength(attributes, 'Trusted iframe source attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = outputArrayValue(attributes, index, 'Trusted iframe source attributes');
+    if (compilerStringToLowerCase(attribute.name) !== 'src') continue;
+    if (attributeExpressionIsTrustedUrlBrand(model, attribute)) return true;
+  }
+  return false;
+}
+
+function directElementContextSinkIssue(
+  model: ComponentModuleModel,
+  tag: string,
+  attribute: JsxAttributeModel,
+): string | undefined {
+  const dynamicTarget = dynamicAttributeName(attribute);
+  const target = compilerStringToLowerCase(dynamicTarget ?? attribute.name);
+  const value =
+    dynamicTarget === null ? staticDirectAttributeValue(attribute) : ({ kind: 'unknown' } as const);
+  if (
+    value.kind === 'unknown' &&
+    elementContextSecurityControl(tag, target)?.acceptsTrustedUrl === true &&
+    attributeExpressionIsTrustedUrlBrand(model, attribute)
+  ) {
+    return undefined;
+  }
+  return renderedElementContextSinkIssue(tag, target, value);
+}
+
+function renderedElementContextSinkIssue(
+  tag: string,
+  target: string,
+  value: StaticRenderedAttributeValue,
+): string | undefined {
+  if (value.kind === 'omitted') return undefined;
+  if (value.kind === 'unknown') return elementContextSecurityControl(tag, target)?.reason;
+  return elementContextSecurityStaticValueIssue(tag, target, value.value);
+}
+
+function attributeExpressionIsTrustedUrlBrand(
+  model: ComponentModuleModel,
+  attribute: JsxAttributeModel,
+): boolean {
+  if (attribute.expressionStart === undefined || attribute.expressionEnd === undefined)
+    return false;
+  const expressions = jsxExpressions(model);
+  const expressionLength = compilerArrayLength(expressions, 'Trusted URL attribute expressions');
+  for (let index = 0; index < expressionLength; index += 1) {
+    const expression = outputArrayValue(expressions, index, 'Trusted URL attribute expressions');
+    if (
+      expression.start !== attribute.expressionStart ||
+      expression.end !== attribute.expressionEnd
+    ) {
+      continue;
+    }
+    const astExpression = expressionAtSpan(
+      ts as FrameworkIdentityTypeScript,
+      model.sourceFile,
+      expression,
+    );
+    return (
+      astExpression !== undefined &&
+      ts.isCallExpression(astExpression) &&
+      expressionResolvesToTrustedUrlPureBrand(model.sourceFile, astExpression.expression)
+    );
+  }
+  return false;
+}
+
+function elementContextSecurityDiagnostic(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+  reason: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnostics.at('KV236', {
+      start: element.start,
+      length: element.openingEnd - element.start,
+    }),
+    help: compilerArrayJoin(
+      [
+        `Blocked reason: ${reason}.`,
+        'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
+        'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
+        'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed.',
+      ],
+      '\n',
+    ),
+    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+  };
+}
+
+const metaRefreshFixes = [
+  'Fixes: perform navigation through Kovo response/router outcomes, or use ordinary non-refresh metadata with a statically proved http-equiv value.',
+  'Escape: there is no app-authored meta-refresh suppression.',
+] as const;
+
+function metaRefreshAttributeIssue(attribute: JsxAttributeModel): string | undefined {
+  const foldedName = compilerStringToLowerCase(attribute.name);
+  if (compilerStringStartsWith(foldedName, 'data-bind:')) {
+    const target = compilerStringSlice(foldedName, 'data-bind:'.length);
+    return target === 'http-equiv' || target === 'httpequiv'
+      ? 'a dynamic meta http-equiv binding could create refresh navigation'
+      : undefined;
+  }
+  if (foldedName === 'data-derive-attr') {
+    const target =
+      typeof attribute.value === 'string' ? compilerStringToLowerCase(attribute.value) : undefined;
+    return target === 'http-equiv' || target === 'httpequiv'
+      ? 'a dynamic meta http-equiv derive could create refresh navigation'
+      : undefined;
+  }
+  if (foldedName !== 'http-equiv' && foldedName !== 'httpequiv') return undefined;
+  const value = staticDirectAttributeValue(attribute);
+  if (value.kind === 'unknown') {
+    return 'a dynamic meta http-equiv value could create refresh navigation';
+  }
+  return metaRefreshValue(value)
+    ? 'meta refresh is disabled because its content is an executable navigation sink'
+    : undefined;
+}
+
+function metaRefreshWireEntryIssue(entry: StaticJsxWireAttributeEntry): string | undefined {
+  const folded = compilerStringToLowerCase(entry.key);
+  if (folded !== 'http-equiv' && folded !== 'httpequiv') return undefined;
+  const value = staticWireSpreadAttributeValue(entry);
+  if (value.kind === 'unknown') {
+    return 'an unproved meta http-equiv spread could create refresh navigation';
+  }
+  return metaRefreshValue(value)
+    ? 'meta refresh is disabled because its content is an executable navigation sink'
+    : undefined;
+}
+
+function metaRefreshValue(value: StaticRenderedAttributeValue): boolean {
+  return (
+    value.kind === 'known' &&
+    compilerStringToLowerCase(compilerStringTrim(value.value)) === 'refresh'
+  );
+}
+
+function documentNavigationDiagnostic(
+  diagnostics: DiagnosticFactory,
+  element: JsxElementModel,
+  reason: string,
+  fixes: readonly [string, string],
+): CompilerDiagnostic {
+  return {
+    ...diagnostics.at('KV236', {
+      start: element.start,
+      length: element.openingEnd - element.start,
+    }),
+    help: compilerArrayJoin(
+      [
+        `Blocked reason: ${reason}.`,
+        fixes[0],
+        fixes[1],
+        'SPEC §4.8 and §5.2 rule 10 require security-sensitive browser output contexts to fail closed.',
+      ],
+      '\n',
+    ),
+    message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+  };
+}
+
 type StaticRenderedAttributeValue =
   | { kind: 'known'; value: string }
   | { kind: 'omitted' }
@@ -506,6 +1358,20 @@ function validateCrossAttributeWireSemantics(
 function staticEffectiveInputWireAttributes(
   element: JsxElementModel,
 ): { name?: string; type?: string } | undefined {
+  const states = staticEffectiveElementWireAttributeStates(element);
+  if (states === undefined) return undefined;
+  const type = effectiveStaticRenderedAttribute(states, 'type');
+  const name = effectiveStaticRenderedAttribute(states, 'name');
+  if (type.kind === 'unknown' || name.kind === 'unknown') return undefined;
+  return {
+    ...(name.kind === 'known' ? { name: name.value } : {}),
+    ...(type.kind === 'known' ? { type: type.value } : {}),
+  };
+}
+
+function staticEffectiveElementWireAttributeStates(
+  element: JsxElementModel,
+): StaticRenderedAttributeState[] | undefined {
   const states: StaticRenderedAttributeState[] = [];
   let attributeIndex = 0;
   let spreadIndex = 0;
@@ -555,13 +1421,7 @@ function staticEffectiveInputWireAttributes(
     spreadIndex += 1;
   }
 
-  const type = effectiveStaticRenderedAttribute(states, 'type');
-  const name = effectiveStaticRenderedAttribute(states, 'name');
-  if (type.kind === 'unknown' || name.kind === 'unknown') return undefined;
-  return {
-    ...(name.kind === 'known' ? { name: name.value } : {}),
-    ...(type.kind === 'known' ? { type: type.value } : {}),
-  };
+  return states;
 }
 
 function staticDirectAttributeValue(attribute: JsxAttributeModel): StaticRenderedAttributeValue {
@@ -599,7 +1459,7 @@ function setStaticRenderedAttribute(
   value: StaticRenderedAttributeValue,
 ): void {
   const folded = compilerStringToLowerCase(key);
-  if (folded !== 'name' && folded !== 'type') return;
+  if (folded !== 'name' && folded !== 'type' && folded !== 'src' && folded !== 'sandbox') return;
   const length = compilerArrayLength(states, 'Static rendered input attributes');
   for (let index = 0; index < length; index += 1) {
     const state = outputArrayValue(states, index, 'Static rendered input attributes');
@@ -612,7 +1472,7 @@ function setStaticRenderedAttribute(
 
 function effectiveStaticRenderedAttribute(
   states: readonly StaticRenderedAttributeState[],
-  expectedName: 'name' | 'type',
+  expectedName: 'name' | 'sandbox' | 'src' | 'type',
 ): StaticRenderedAttributeValue {
   const length = compilerArrayLength(states, 'Static effective input attributes');
   for (let index = 0; index < length; index += 1) {
@@ -730,6 +1590,8 @@ function validatePrimitiveAttrsEntries(
         attribute.expressionObjectEntries,
         { end: attribute.end, start: attribute.start },
         hasExternalEscape,
+        undefined,
+        true,
       ),
       'Primitive attrs entry diagnostics',
     );
@@ -752,11 +1614,31 @@ function validateStaticObjectEntrySinks(
   span: SourceSpan,
   hasExternalEscape: boolean,
   intrinsicTagName?: string,
+  descendIntoPrimitiveAttrs = false,
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
   const length = compilerArrayLength(entries, 'Static object sink entries');
   for (let index = 0; index < length; index += 1) {
     const entry = outputArrayValue(entries, index, 'Static object sink entries');
+    if (
+      descendIntoPrimitiveAttrs &&
+      compilerStringToLowerCase(entry.key) === 'attrs' &&
+      entry.objectEntries !== undefined
+    ) {
+      appendOutputItems(
+        found,
+        validateStaticObjectEntrySinks(
+          diagnostics,
+          entry.objectEntries,
+          span,
+          hasExternalEscape,
+          intrinsicTagName,
+          true,
+        ),
+        'Nested static object sink diagnostics',
+      );
+      continue;
+    }
     if (entry.value === undefined) continue;
     const literal = entry.staticStringValue ?? literalStringValue(entry.value);
     if (literal === null) continue;
@@ -773,6 +1655,20 @@ function validateStaticObjectEntrySinks(
       validateWireStableAttribute(diagnostics, intrinsicTagName, synthetic, span),
       'Static wire-stable spread diagnostics',
     );
+
+    const generatedControlTarget = dynamicGeneratedControlPlaneTarget(synthetic);
+    if (generatedControlTarget !== null) {
+      compilerArrayAppend(
+        found,
+        outputContextDiagnostic(
+          diagnostics,
+          `${synthetic.name} dynamically targets compiler-generated control-plane attribute "${generatedControlTarget}"`,
+          { start: span.start, length: span.end - span.start },
+        ),
+        'Static generated-control diagnostics',
+      );
+      continue;
+    }
 
     if (isUrlAttribute(synthetic.name)) {
       appendOutputItems(
@@ -1003,13 +1899,20 @@ function literalAttributeStringValue(attribute: JsxAttributeModel): string | nul
  * For `data-derive-attr` with value "foo" the dynamic name is "foo".
  */
 function dynamicAttributeName(attribute: JsxAttributeModel): string | null {
-  if (compilerStringStartsWith(attribute.name, 'data-bind:')) {
-    return compilerStringSlice(attribute.name, 'data-bind:'.length);
+  const normalizedAttributeName = compilerStringToLowerCase(attribute.name);
+  if (compilerStringStartsWith(normalizedAttributeName, 'data-bind:')) {
+    return compilerStringSlice(normalizedAttributeName, 'data-bind:'.length);
   }
-  if (attribute.name === 'data-derive-attr' && typeof attribute.value === 'string') {
-    return attribute.value;
+  if (normalizedAttributeName === 'data-derive-attr' && typeof attribute.value === 'string') {
+    return compilerStringToLowerCase(attribute.value);
   }
   return null;
+}
+
+/** Returns the normalized generated-only target of one dynamic binding, when present. */
+function dynamicGeneratedControlPlaneTarget(attribute: JsxAttributeModel): string | null {
+  const name = dynamicAttributeName(attribute);
+  return name !== null && isGeneratedOnlySemanticAttribute(name) ? name : null;
 }
 
 /** Returns true when the attribute dynamically targets an on* event-handler sink. */

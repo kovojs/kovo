@@ -87,6 +87,20 @@ export function isEnhancedForm(form: EnhancedMutationFormLike | EventElementLike
   );
 }
 
+/** @internal True only for a compiler-owned typed mutation form identity. */
+export function hasTypedMutationIdentity(
+  form: EnhancedMutationFormLike | EventElementLike,
+): boolean {
+  const mutationKey = browserFormSecurity.readAttribute(form, 'data-mutation');
+  return typeof mutationKey === 'string' && mutationKey.length > 0;
+}
+
+/** @internal Prevent a tampered typed form from falling through to native token submission. */
+export function markInvalidTypedMutationTransport(form: EnhancedFormElementLike): void {
+  form.setAttribute?.('data-error-code', 'INVALID_MUTATION_TRANSPORT');
+  form.setAttribute?.('kovo-error', '');
+}
+
 export function readEligibleEnhancedMutationTransport(
   form: EnhancedMutationFormLike,
   submitter?: unknown,

@@ -9,6 +9,7 @@ import {
   frameworkExport,
   frameworkIdentityExpressionKindRows,
   registerFrameworkIdentityProject,
+  resolveFrameworkIdentityProjectSourceFile,
 } from './framework-identity.js';
 
 const trustedHtmlIdentity = frameworkExport('@kovojs/browser', 'trustedHtml');
@@ -101,6 +102,25 @@ function expectedExpressionSyntaxKinds(): readonly ts.SyntaxKind[] {
 }
 
 describe('framework identity resolver', () => {
+  it('resolves only registered local schema modules and exact Drizzle table factories', () => {
+    const schema = sourceFile(
+      '/app/schema.ts',
+      "import { pgTable } from 'drizzle-orm/pg-core'; export const contacts = pgTable('contacts', {});",
+    );
+    const usage = sourceFile('/app/usage.tsx', "import { contacts } from './schema.js';");
+
+    registerFrameworkIdentityProject(usage, [schema]);
+
+    expect(resolveFrameworkIdentityProjectSourceFile(usage, './schema.js')).toBe(schema);
+    expect(frameworkCatalogExportForModuleSpecifier('drizzle-orm/pg-core', 'pgTable')).toEqual({
+      exportName: 'pgTable',
+      module: 'drizzle-orm',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('drizzle-orm/pg-core', 'notATableFactory'),
+    ).toBeUndefined();
+  });
+
   it('catalogs createApp as the app-authoring root by exact package identity', () => {
     expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createApp')).toEqual({
       exportName: 'createApp',
@@ -280,6 +300,73 @@ describe('framework identity resolver', () => {
     ).toEqual(trustedHtmlIdentity);
     expect(
       canonicalFrameworkExportForExpression(ts, usage, initializerByName(usage, 'opaque')),
+    ).toBeUndefined();
+  });
+
+  it('does not grant runtime identity through type-only imports or re-exports', () => {
+    const direct = sourceFile(
+      '/app/direct.tsx',
+      [
+        "import type { trustedHtml as namedType } from '@kovojs/browser';",
+        "import { type trustedHtml as mixedType } from '@kovojs/browser';",
+        "import type * as browserTypes from '@kovojs/browser';",
+        "namedType('<b>named</b>');",
+        "mixedType('<b>mixed</b>');",
+        "browserTypes.trustedHtml('<b>namespace</b>');",
+      ].join('\n'),
+    );
+
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        direct,
+        callExpressionByText(direct, 'namedType').expression,
+      ),
+    ).toBeUndefined();
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        direct,
+        callExpressionByText(direct, 'mixedType').expression,
+      ),
+    ).toBeUndefined();
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        direct,
+        callExpressionByText(direct, 'browserTypes.trustedHtml').expression,
+      ),
+    ).toBeUndefined();
+
+    const namedBarrel = sourceFile(
+      '/app/named-barrel.ts',
+      "export type { trustedHtml as html } from '@kovojs/browser';",
+    );
+    const starBarrel = sourceFile('/app/star-barrel.ts', "export type * from '@kovojs/browser';");
+    const usage = sourceFile(
+      '/app/usage.tsx',
+      [
+        "import { html } from './named-barrel.js';",
+        "import { trustedHtml as starHtml } from './star-barrel.js';",
+        "html('<b>named barrel</b>');",
+        "starHtml('<b>star barrel</b>');",
+      ].join('\n'),
+    );
+    registerFrameworkIdentityProject(usage, [namedBarrel, starBarrel]);
+
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        usage,
+        callExpressionByText(usage, 'html').expression,
+      ),
+    ).toBeUndefined();
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        usage,
+        callExpressionByText(usage, 'starHtml').expression,
+      ),
     ).toBeUndefined();
   });
 

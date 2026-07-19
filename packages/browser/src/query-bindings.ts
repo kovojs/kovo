@@ -1,5 +1,10 @@
 import { parseKovoModuleRef, type KovoModuleRef } from '@kovojs/core/internal/module-ref';
-import { isBlockedSvgSmilElementName } from '@kovojs/core/internal/sink-policy';
+import {
+  elementContextSecurityStaticValueIssue,
+  isBlockedActiveEmbedElementName,
+  isBlockedDeclarativeShadowDomAttributeName,
+  isBlockedSvgSmilElementName,
+} from '@kovojs/core/internal/sink-policy';
 
 import { applyBindProp, BIND_PROP_PREFIX } from './bind-prop.js';
 import { domAttributes } from './dom-like.js';
@@ -848,8 +853,25 @@ function writeQueryPlanElement(element: QueryBindingElement, rendered: string): 
   element.textContent = rendered;
 }
 
-function removeBoundAttribute(element: QueryBindingElement, name: string): void {
-  if (inertBlockedSvgSmilBindingElement(element)) return;
+function removeBoundAttribute(
+  element: QueryBindingElement,
+  name: string,
+  securityDecisionApplied = false,
+): void {
+  if (
+    stripDeclarativeShadowDomBindingControls(element) &&
+    isDeclarativeShadowDomBindingControl(name, '')
+  ) {
+    return;
+  }
+  if (inertBlockedActiveBindingElement(element)) return;
+  inertUnsafeIframeBindingSource(element);
+  if (
+    !securityDecisionApplied &&
+    kovoBoundAttributeValue(name, null, boundAttributeWriteContext(element)) === undefined
+  ) {
+    return;
+  }
   // SPEC §5.2.4: closing a <dialog> by removing `open` never exits the top layer;
   // route through dialog.close() so a show-modal dialog leaves the top layer.
   if (name === 'open' && reconcileDialogOpen(element, null)) return;
@@ -930,7 +952,14 @@ function reconcileDialogOpen(element: QueryBindingElement, value: unknown): bool
 }
 
 function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {
-  if (inertBlockedSvgSmilBindingElement(element)) return;
+  if (
+    stripDeclarativeShadowDomBindingControls(element) &&
+    isDeclarativeShadowDomBindingControl(name, value)
+  ) {
+    return;
+  }
+  if (inertBlockedActiveBindingElement(element)) return;
+  inertUnsafeIframeBindingSource(element);
   // J3 (SPEC §4.6/§4.8): HTML boolean-presence attributes must remove on false/null/undefined,
   // and set to '' (present) on any other value including true, '', and non-null strings.
   // This covers both query-source raw booleans and state-derive '' / null patterns.
@@ -950,10 +979,12 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
 
   // SPEC §1 and §5.2: generated/client-updated attributes use the shared output-context model so
   // security behavior remains auditable in emitted code and in the live update path.
-  // F2: kovoBoundAttributeValue returns null for blocked sinks; remove any prior value.
-  const rendered = kovoBoundAttributeValue(name, value);
+  // F2 / SPEC §4.8: `null` removes a blocked primitive; `undefined` preserves the compiler-reviewed
+  // live value when the element/attribute pair is itself the execution or isolation control.
+  const rendered = kovoBoundAttributeValue(name, value, boundAttributeWriteContext(element));
+  if (rendered === undefined) return;
   if (rendered === null) {
-    removeBoundAttribute(element, name);
+    removeBoundAttribute(element, name, true);
     return;
   }
   setBindingAttribute(element, name, rendered);
@@ -966,6 +997,20 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
   if ((name === 'scrollTop' || name === 'scrolltop') && element.scrollTop !== undefined) {
     element.scrollTop = securityNumber(value) || 0;
   }
+}
+
+function boundAttributeWriteContext(element: QueryBindingElement): {
+  effectiveHttpEquiv: string | null;
+  effectiveIframeSandbox: string | null;
+  elementName?: string;
+} {
+  const elementName = readBindingTagName(element);
+  return {
+    effectiveHttpEquiv:
+      readBindingAttribute(element, 'http-equiv') ?? readBindingAttribute(element, 'httpequiv'),
+    effectiveIframeSandbox: readBindingAttribute(element, 'sandbox'),
+    ...(elementName === undefined ? {} : { elementName }),
+  };
 }
 
 function formatBoundValue(value: unknown): string {
@@ -1168,17 +1213,72 @@ function bindingElementAttributes(
 }
 
 /**
- * SPEC.md §4.8 / §5.2 rule 10: a live binding can change a SMIL target before or after its
- * transfer value. Removing the whole attribute set makes both transition orders inert and also
- * retires the binding stamps so a later commit cannot rebuild the primitive.
+ * SPEC.md §4.8 / §5.2 rule 10: live writes cannot rebuild disabled active elements. SMIL can
+ * change a transfer target in either order; object/embed can execute a same-origin document
+ * without a sandbox. Clearing attributes, children, and binding stamps makes both classes inert.
  */
-function inertBlockedSvgSmilBindingElement(element: QueryBindingElement): boolean {
+function inertBlockedActiveBindingElement(element: QueryBindingElement): boolean {
   const tagName = readBindingTagName(element);
-  if (tagName === undefined || !isBlockedSvgSmilElementName(tagName)) return false;
+  if (
+    tagName === undefined ||
+    (!isBlockedSvgSmilElementName(tagName) && !isBlockedActiveEmbedElementName(tagName))
+  ) {
+    return false;
+  }
   const attributes = bindingElementAttributes(element);
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index];
     if (attribute) removeBindingAttribute(element, attribute.name);
   }
+  writeQueryPlanElement(element, '');
+  return true;
+}
+
+/**
+ * SPEC.md §4.2 / §5.2 rule 10: a live update must not turn an inert template into a parser-created
+ * shadow boundary. Strip both the browser controls and the binding/derive stamps that could
+ * recreate them while leaving ordinary inert template content and metadata intact.
+ */
+function stripDeclarativeShadowDomBindingControls(element: QueryBindingElement): boolean {
+  const tagName = readBindingTagName(element);
+  if (tagName === undefined || securityStringToLowerCase(tagName) !== 'template') return false;
+  const attributes = bindingElementAttributes(element);
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute && isDeclarativeShadowDomBindingControl(attribute.name, attribute.value)) {
+      removeBindingAttribute(element, attribute.name);
+    }
+  }
+  return true;
+}
+
+function isDeclarativeShadowDomBindingControl(name: string, value: unknown): boolean {
+  const normalizedName = securityStringToLowerCase(name);
+  if (isBlockedDeclarativeShadowDomAttributeName(normalizedName)) return true;
+  if (securityStringStartsWith(normalizedName, 'data-bind:')) {
+    return isBlockedDeclarativeShadowDomAttributeName(
+      securityStringSlice(normalizedName, 'data-bind:'.length),
+    );
+  }
+  return (
+    normalizedName === 'data-derive-attr' &&
+    typeof value === 'string' &&
+    isBlockedDeclarativeShadowDomAttributeName(value)
+  );
+}
+
+function inertUnsafeIframeBindingSource(element: QueryBindingElement): boolean {
+  const tagName = readBindingTagName(element);
+  if (tagName === undefined || securityStringToLowerCase(tagName) !== 'iframe') return false;
+  if (readBindingAttribute(element, 'src') === null) return false;
+  const sandbox = readBindingAttribute(element, 'sandbox');
+  if (
+    sandbox !== null &&
+    elementContextSecurityStaticValueIssue('iframe', 'sandbox', sandbox) === undefined
+  ) {
+    return false;
+  }
+  removeBindingAttribute(element, 'src');
+  if (sandbox !== null) removeBindingAttribute(element, 'sandbox');
   return true;
 }

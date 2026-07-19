@@ -189,6 +189,90 @@ describe('server static export', () => {
     }
   });
 
+  it.each([
+    ['empty placeholder', 'integrity=""'],
+    ['mismatched hash', 'integrity="sha384-attacker"'],
+    ['duplicate exact hashes', 'duplicate'],
+  ] as const)(
+    'rejects an authored %s instead of silently replacing its static-export SRI assertion',
+    async (_label, authoredIntegrity) => {
+      const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-sri-mismatch-'));
+      try {
+        const css = 'body { color: navy; }\n';
+        const cssSource = path.join(sourceDir, 'app.css');
+        await writeFile(cssSource, css, 'utf8');
+        const exactIntegrity = sriSha384(css);
+        const integrityAttributes =
+          authoredIntegrity === 'duplicate'
+            ? `integrity="${exactIntegrity}" integrity="${exactIntegrity}"`
+            : authoredIntegrity;
+        const app = createApp({
+          routes: [
+            route('/', {
+              page: () =>
+                trustedHtml(
+                  `<link rel="stylesheet" href="/assets/app.css" ${integrityAttributes}><main>Home</main>`,
+                ),
+            }),
+          ],
+        });
+
+        await expect(
+          exportStaticApp(app, {
+            assets: [
+              {
+                contentType: 'text/css; charset=utf-8',
+                path: '/assets/app.css',
+                source: cssSource,
+              },
+            ],
+          }),
+        ).rejects.toThrow(
+          'exactly one authored integrity value must exactly match the computed first-party asset hash',
+        );
+      } finally {
+        await rm(sourceDir, { force: true, recursive: true });
+      }
+    },
+  );
+
+  it('accepts exactly one authored static-export SRI value only when it equals computed bytes', async () => {
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-sri-exact-'));
+    try {
+      const css = 'body { color: maroon; }\n';
+      const cssSource = path.join(sourceDir, 'app.css');
+      const integrity = sriSha384(css);
+      await writeFile(cssSource, css, 'utf8');
+      const app = createApp({
+        routes: [
+          route('/', {
+            page: () =>
+              trustedHtml(
+                `<link rel="stylesheet" href="/assets/app.css" integrity="${integrity}"><main>Home</main>`,
+              ),
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, {
+        assets: [
+          {
+            contentType: 'text/css; charset=utf-8',
+            path: '/assets/app.css',
+            source: cssSource,
+          },
+        ],
+      });
+
+      expect(result.artifacts[0]?.body).toContain(
+        `<link rel="stylesheet" href="/assets/app.css" integrity="${integrity}">`,
+      );
+      expect(result.artifacts[0]?.body.match(/integrity=/g)).toHaveLength(1);
+    } finally {
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
   it('pins route artifacts before SRI finalization can replace rendered HTML', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-sri-map-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-sri-source-'));

@@ -76,6 +76,15 @@ describe('request body carrier intrinsic closure', () => {
       method: 'POST',
     });
     await expect(requestFormData(urlEncoded)).rejects.toThrow(/too many entries/u);
+    await expect(
+      readUntrustedRequestBody(
+        new Request('https://kovo.local/form-entry-budget', {
+          body: '&'.repeat(10_000),
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          method: 'POST',
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'shape-budget' });
 
     const boundary = 'KovoFormEntryBudget';
     const parts: string[] = [];
@@ -89,6 +98,15 @@ describe('request body carrier intrinsic closure', () => {
       method: 'POST',
     });
     await expect(requestFormData(multipart)).rejects.toThrow(/too many parts/u);
+    await expect(
+      readUntrustedRequestBody(
+        new Request('https://kovo.local/form-entry-budget', {
+          body: parts.join(''),
+          headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+          method: 'POST',
+        }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: 'shape-budget' });
 
     const ordinary = new Request('https://kovo.local/form-entry-budget', {
       body: 'first=one&second=two',

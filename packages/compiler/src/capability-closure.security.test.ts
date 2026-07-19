@@ -8,6 +8,8 @@ import {
   type PackageCapabilitySummary,
   type ResolvedCapabilityPackage,
 } from './security/capability-closure.js';
+import { frameworkExportPosturePackages } from './security/framework-public-runtime-export-posture.generated.js';
+import { canonicalFrameworkImplementationDigest } from './security/framework-implementation-digest.js';
 
 const FRAMEWORK_VERSION = '0.2.0';
 
@@ -16,15 +18,35 @@ function resolved(
   options: {
     conditions?: readonly string[];
     fingerprint?: string;
+    implementationDigest?: string | null;
     packageVersion?: string;
   } = {},
 ): ResolvedCapabilityPackage {
   const parts = specifier.split('/');
   const packageName = specifier.startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0]!;
+  const subpath = specifier === packageName ? '.' : `.${specifier.slice(packageName.length)}`;
+  const frameworkPackage = frameworkExportPosturePackages.find(
+    ([candidate]) => candidate === packageName,
+  );
+  const frameworkVariant = frameworkPackage?.[2].find(([, subpaths]) =>
+    subpaths.some(([candidate]) => candidate === subpath),
+  );
+  const frameworkConditions = frameworkVariant?.[1].find(
+    ([candidate]) => candidate === subpath,
+  )?.[1];
+  const reviewedImplementationDigest =
+    frameworkVariant?.[2][0] === undefined
+      ? undefined
+      : canonicalFrameworkImplementationDigest(packageName, frameworkVariant[2][0]);
+  const implementationDigest =
+    options.implementationDigest === null
+      ? undefined
+      : (options.implementationDigest ?? reviewedImplementationDigest);
   return {
-    conditions: options.conditions ?? ['default', 'import'],
+    conditions: options.conditions ?? frameworkConditions ?? ['default', 'import'],
     exportStatus: 'resolved',
-    manifestFingerprint: options.fingerprint ?? `manifest:${packageName}`,
+    ...(implementationDigest === undefined ? {} : { implementationDigest }),
+    manifestFingerprint: options.fingerprint ?? frameworkVariant?.[0] ?? `manifest:${packageName}`,
     packageName,
     packageVersion:
       options.packageVersion ?? (packageName.startsWith('@kovojs/') ? FRAMEWORK_VERSION : '1.0.0'),
@@ -38,6 +60,10 @@ function packagesFor(files: readonly CapabilityClosureSourceFile[]): ResolvedCap
     for (const match of file.source.matchAll(
       /(?:from\s+|import\(|require\()['"]([^'".][^'"]*)['"]/gu,
     )) {
+      const specifier = match[1]!;
+      if (!specifier.startsWith('node:')) specifiers.add(specifier);
+    }
+    for (const match of file.source.matchAll(/\bimport\s*['"]([^'"]+)['"]/gu)) {
       const specifier = match[1]!;
       if (!specifier.startsWith('node:')) specifiers.add(specifier);
     }
@@ -60,14 +86,15 @@ function analyze(
 }
 
 describe('SPEC §6.6 capability-closed module graph', () => {
-  it('censuses every supported untrusted-data root kind, including scheduled and browser callbacks', () => {
+  it('censuses every shipping untrusted-data root kind, including application and browser callbacks', () => {
     const files = [
       {
         fileName: 'roots.tsx',
         source: `
           import { component } from '@kovojs/core';
-          import { endpoint, layout, mutation, query, route, task, webhook } from '@kovojs/server';
+          import { createApp, endpoint, layout, mutation, query, route, task, webhook } from '@kovojs/server';
           import { handler } from '@kovojs/browser';
+          export const app = createApp({});
           export const page = route('/page', { access: {}, render() { return null; } });
           export const chrome = layout({ render() { return null; } });
           export const save = mutation('save', { handler() {} });
@@ -87,6 +114,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       .map((fact) => fact.rootKind)
       .sort();
     expect(kinds).toEqual([
+      'application',
       'durable-task',
       'endpoint',
       'layout',
@@ -107,36 +135,54 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     ).toEqual(['durable-task', 'scheduled-task', 'webhook']);
   });
 
-  it('keeps raw agent-tool networking closed while exposing only the contextual egress door', () => {
+  it('closes the deferred fabricated agent-tool export without instantiating a ghost root', () => {
     const result = analyze([
       {
         fileName: 'agent-tool.ts',
         source: `
-          import { agentTool } from '@kovojs/server';
-          export const lookup = agentTool('lookup', {
-            run(input, ctx) { return [fetch(input.url), ctx.fetch(input.url)]; }
-          });
+          import { agentTool, route } from '@kovojs/server';
+          export const page = route('/agent-tool', { render() { return agentTool; } });
         `,
       },
     ]);
 
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]!.code).toBe('KV448');
-    expect(result.facts).toContainEqual(
-      expect.objectContaining({
-        capability: 'network',
-        kind: 'door',
-        name: 'lookup',
-        rootKind: 'agent-tool-callback',
-      }),
+    expect(result.diagnostics[0]!.message).toContain('does not classify runtime export agentTool');
+    expect(result.facts).not.toContainEqual(
+      expect.objectContaining({ kind: 'root', rootKind: 'agent-tool-callback' }),
     );
+  });
+
+  it('roots createApp lifecycle modules and closes their raw authority', () => {
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { createApp } from '@kovojs/server';
+          import { onError, sessionProvider } from './lifecycle.js';
+          export const app = createApp({ onError, sessionProvider });
+        `,
+      },
+      {
+        fileName: 'lifecycle.ts',
+        source: `
+          import { readFileSync } from 'node:fs';
+          export const sessionProvider = { load() { return readFileSync('/ambient-session'); } };
+          export function onError() { return readFileSync('/ambient-error'); }
+        `,
+      },
+    ];
+    const result = analyze(files);
+
     expect(result.facts).toContainEqual(
-      expect.objectContaining({
-        capability: 'network',
-        kind: 'closed',
-        rootKind: 'agent-tool-callback',
-      }),
+      expect.objectContaining({ kind: 'root', name: 'app', rootKind: 'application' }),
     );
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({ code: 'KV448', fileName: 'lifecycle.ts' });
+    expect(result.diagnostics[0]!.message).toContain('root=application:app');
+    expect(result.diagnostics[0]!.message).toContain('raw filesystem authority');
+    expect(result.diagnostics[0]!.message).toContain('import:./lifecycle.js@app.ts');
   });
 
   it('closes raw authority through wrappers, re-exports, literal dynamic import, and require', () => {
@@ -293,10 +339,10 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'app.ts',
         source: `
           import { endpoint } from '@kovojs/server';
-          function harmless(fetch, process, globalThis, require) {
+          function harmless(fetch, process, globalThis, require, RTCPeerConnection) {
             const localPlatform = globalThis;
             require('./not-a-module.js');
-            return fetch(process) ?? globalThis.fetch ?? localPlatform.fetch;
+            return fetch(process) ?? globalThis.fetch ?? localPlatform.fetch ?? RTCPeerConnection;
           }
           const platform = globalThis;
           const rawFetch = platform['fetch'];
@@ -341,6 +387,44 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         .map((fact) => fact.capability)
         .sort(),
     ).toEqual(['dynamic-loader', 'network', 'network', 'vm', 'vm', 'vm', 'worker']);
+  });
+
+  it('closes WebRTC peer networking as raw browser network authority', () => {
+    const result = analyze([
+      {
+        fileName: 'webrtc.ts',
+        source: `
+          import { handler } from '@kovojs/browser';
+          const platform = globalThis;
+          const GlobalPeer = globalThis['RTCPeerConnection'];
+          const AliasPeer = platform.RTCPeerConnection;
+          export const connect = handler(() => {
+            const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:peer.example' }] });
+            const globalPeer = new GlobalPeer();
+            const aliasPeer = new AliasPeer();
+            return [
+              peer.createDataChannel('direct'),
+              globalPeer.createDataChannel('global-member'),
+              aliasPeer.createDataChannel('namespace-alias'),
+            ];
+          });
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        capability: 'network',
+        kind: 'closed',
+        reason: expect.stringContaining('global RTCPeerConnection'),
+      }),
+    );
+    expect(
+      result.facts.filter(
+        (fact) => fact.kind === 'closed' && fact.reason.includes('RTCPeerConnection'),
+      ),
+    ).toHaveLength(3);
+    expect(result.diagnostics).toHaveLength(3);
   });
 
   it('closes builtin subpaths but ignores type-only authority imports', () => {
@@ -438,6 +522,41 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       packageSummaries: [summary, { ...summary, summaryVersion: 'safe-parser-review/2' }],
     });
     expect(contradictory.diagnostics[0]!.message).toContain('2 contradictory summaries');
+  });
+
+  it('binds first-party verdicts to exact installed source or packed implementation identity', () => {
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          export const page = route('/identity', { render() { return null; } });
+        `,
+      },
+    ];
+    const reviewed = resolved('@kovojs/server');
+    expect(analyze(files, { packages: [reviewed] }).diagnostics).toEqual([]);
+
+    const drifted = analyze(files, {
+      packages: [
+        {
+          ...reviewed,
+          implementationDigest: `kovo-source-tree-sha256:${'0'.repeat(64)}`,
+        },
+      ],
+    });
+    expect(drifted.diagnostics).toHaveLength(1);
+    expect(drifted.diagnostics[0]!.message).toContain(
+      'installed implementation digest does not match',
+    );
+
+    const missing = analyze(files, {
+      packages: [resolved('@kovojs/server', { implementationDigest: null })],
+    });
+    expect(missing.diagnostics).toHaveLength(1);
+    expect(missing.diagnostics[0]!.message).toContain(
+      'no compiler-derived installed implementation digest',
+    );
   });
 
   it('requires package summaries to classify side-effect module initialization explicitly', () => {
@@ -563,7 +682,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     );
   });
 
-  it('classifies public testing and Vite subpaths as reviewed capability doors', () => {
+  it('request-closes public testing and Vite tooling subpaths', () => {
     const files = [
       {
         fileName: 'app.ts',
@@ -578,13 +697,311 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       },
     ];
     const result = analyze(files);
+    expect(result.diagnostics).toHaveLength(6);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'testing is tooling/bootstrap authority',
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'vite is tooling/bootstrap authority',
+    );
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'closed')
+        .map((fact) => fact.capability)
+        .sort(),
+    ).toEqual([
+      'database-driver',
+      'dynamic-loader',
+      'filesystem',
+      'filesystem',
+      'process',
+      'process',
+    ]);
+  });
+
+  it('fails closed for absent first-party named/default exports while retaining exact module posture', () => {
+    const named = analyze([
+      {
+        fileName: 'named.ts',
+        source: `
+          import { route, unreviewedRuntimeExport } from '@kovojs/server';
+          export const page = route('/named', { render() { return unreviewedRuntimeExport; } });
+        `,
+      },
+    ]);
+    expect(named.diagnostics).toHaveLength(1);
+    expect(named.diagnostics[0]!.message).toContain(
+      'does not classify runtime export unreviewedRuntimeExport',
+    );
+
+    const defaultImport = analyze([
+      {
+        fileName: 'default.ts',
+        source: `
+          import serverDefault, { route } from '@kovojs/server';
+          export const page = route('/default', { render() { return serverDefault; } });
+        `,
+      },
+    ]);
+    expect(defaultImport.diagnostics).toHaveLength(1);
+    expect(defaultImport.diagnostics[0]!.message).toContain(
+      'does not classify runtime export default',
+    );
+
+    const moduleInit = analyze([
+      {
+        fileName: 'module.ts',
+        source: `
+          import '@kovojs/server';
+          import { route } from '@kovojs/server';
+          export const page = route('/module', { render() { return null; } });
+        `,
+      },
+    ]);
+    expect(moduleInit.diagnostics).toEqual([]);
+    expect(moduleInit.facts).toContainEqual(
+      expect.objectContaining({ capability: 'process', kind: 'door' }),
+    );
+  });
+
+  it('expands exact namespace and literal dynamic imports without wildcard authorization', () => {
+    const result = analyze([
+      {
+        fileName: 'namespace.ts',
+        source: `
+          import * as server from '@kovojs/server';
+          import('@kovojs/server');
+          export const page = server.route('/namespace', { render() { return null; } });
+        `,
+      },
+    ]);
     expect(result.diagnostics).toEqual([]);
     expect(
       result.facts
         .filter((fact) => fact.kind === 'door')
         .map((fact) => fact.capability)
         .sort(),
-    ).toEqual(['database-driver', 'dynamic-loader', 'filesystem', 'filesystem']);
+    ).toEqual([
+      'database-driver',
+      'database-driver',
+      'filesystem',
+      'filesystem',
+      'network',
+      'network',
+      'process',
+      'process',
+    ]);
+  });
+
+  it('request-closes arbitrary browser fetch from a serialized handler', () => {
+    const result = analyze([
+      {
+        fileName: 'browser.ts',
+        source: `
+          import { handler } from '@kovojs/browser';
+          import { defaultEnhancedFetch } from '@kovojs/browser/client';
+          export const submit = handler((url) => defaultEnhancedFetch(url, {
+            headers: {}, keepalive: false, method: 'POST'
+          }));
+        `,
+      },
+    ]);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        capability: 'network',
+        kind: 'closed',
+        rootKind: 'serialized-browser-handler',
+      }),
+    );
+    expect(result.diagnostics[0]!.message).toContain(
+      'browser bootstrap captures arbitrary-URL platform fetch authority',
+    );
+  });
+
+  it('treats toNodeHandler as an exact low-level request root', () => {
+    const result = analyze([
+      {
+        fileName: 'node-entry.ts',
+        source: `
+          import { readFileSync } from 'node:fs';
+          import { toNodeHandler } from '@kovojs/server';
+          const raw = async () => new Response(readFileSync('/tmp/secret'));
+          export const listener = toNodeHandler(raw);
+        `,
+      },
+    ]);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: 'listener', rootKind: 'endpoint' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ capability: 'filesystem', kind: 'closed' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ capability: 'network', kind: 'door' }),
+    );
+  });
+
+  it('accepts the documented bootstrap-first separated custom Node adapter', () => {
+    const result = analyze([
+      {
+        fileName: 'server.ts',
+        source: `
+          import '@kovojs/server/runtime-bootstrap';
+          import { createServer } from 'node:http';
+          import { toNodeHandler } from '@kovojs/server';
+          import { handler } from './handler.js';
+          createServer(toNodeHandler(handler)).listen(3000);
+        `,
+      },
+      {
+        fileName: 'handler.ts',
+        source: `
+          import { createRequestHandler } from '@kovojs/server';
+          import { app } from './app.js';
+          export const handler = createRequestHandler(app);
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { createApp } from '@kovojs/server';
+          export const app = createApp({});
+        `,
+      },
+    ]);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        capability: 'process',
+        kind: 'door',
+        module: 'server.ts',
+      }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', module: 'handler.ts', rootKind: 'endpoint' }),
+    );
+  });
+
+  it('rejects a custom adapter that loads its handler before runtime bootstrap', () => {
+    const result = analyze([
+      {
+        fileName: 'server.ts',
+        source: `
+          import { handler } from './handler.js';
+          import '@kovojs/server/runtime-bootstrap';
+          import { createServer } from 'node:http';
+          import { toNodeHandler } from '@kovojs/server';
+          createServer(toNodeHandler(handler)).listen(3000);
+        `,
+      },
+      {
+        fileName: 'handler.ts',
+        source: `export const handler = async () => new Response('ok');`,
+      },
+    ]);
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.message).toContain(
+      'must import @kovojs/server/runtime-bootstrap as its exact literal first side-effect import',
+    );
+  });
+
+  it('rejects runtime bootstrap in an inline toNodeHandler module', () => {
+    const result = analyze([
+      {
+        fileName: 'server.ts',
+        source: `
+          import '@kovojs/server/runtime-bootstrap';
+          import { toNodeHandler } from '@kovojs/server';
+          const handler = async () => new Response('ok');
+          export const listener = toNodeHandler(handler);
+        `,
+      },
+    ]);
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.message).toContain(
+      'only as the exact literal first side-effect import in a separated custom adapter entry',
+    );
+  });
+
+  it('rejects runtime bootstrap imported by the request handler instead of its adapter entry', () => {
+    const result = analyze([
+      {
+        fileName: 'server.ts',
+        source: `
+          import '@kovojs/server/runtime-bootstrap';
+          import { createServer } from 'node:http';
+          import { toNodeHandler } from '@kovojs/server';
+          import { handler } from './handler.js';
+          createServer(toNodeHandler(handler)).listen(3000);
+        `,
+      },
+      {
+        fileName: 'handler.ts',
+        source: `
+          import '@kovojs/server/runtime-bootstrap';
+          export const handler = async () => new Response('ok');
+        `,
+      },
+    ]);
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.message).toContain(
+      'only as the exact literal first side-effect import in a separated custom adapter entry',
+    );
+  });
+
+  it('keeps zero-public first-party packages compiler-owned instead of accepting project summaries', () => {
+    const compilerPackage = frameworkExportPosturePackages.find(
+      ([packageName]) => packageName === '@kovojs/compiler',
+    )!;
+    const packageFact = resolved('@kovojs/compiler/internal', {
+      conditions: ['default'],
+      fingerprint: compilerPackage[2][0]![0],
+      implementationDigest: canonicalFrameworkImplementationDigest(
+        '@kovojs/compiler',
+        compilerPackage[2][0]![2][0]!,
+      )!,
+    });
+    const summary: PackageCapabilitySummary = {
+      entries: [
+        {
+          conditions: packageFact.conditions,
+          exports: [{ capabilities: [], disposition: 'pure', name: 'compile' }],
+          subpath: './internal',
+        },
+      ],
+      manifestFingerprint: packageFact.manifestFingerprint,
+      packageName: packageFact.packageName,
+      packageVersion: packageFact.packageVersion,
+      schema: packageCapabilitySummarySchema,
+      source: 'kovo.capabilities.json',
+      summaryVersion: 'forged-first-party/1',
+    };
+    const result = analyze(
+      [
+        {
+          fileName: 'app.ts',
+          source: `
+            import { route } from '@kovojs/server';
+            import { compile } from '@kovojs/compiler/internal';
+            export const page = route('/compiler', { render() { return compile; } });
+          `,
+        },
+      ],
+      {
+        packages: [resolved('@kovojs/server'), packageFact],
+        packageSummaries: [summary],
+      },
+    );
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.message).toContain(
+      'compiler-owned @kovojs/compiler posture does not classify public subpath ./internal',
+    );
   });
 
   it('preserves raw driver closure while allowing reviewed Drizzle schema/query construction', () => {

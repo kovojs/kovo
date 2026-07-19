@@ -1,0 +1,319 @@
+{
+  "schema": "kovo.security-fuzz-campaign/v1",
+  "campaignVersion": 1,
+  "releaseCommand": "pnpm run test:security-fuzz-release",
+  "verdictPolicy": {
+    "normativePropertyOwnsSafetyVerdict": true,
+    "crossImplementationDisagreement": "triage-only"
+  },
+  "failureArtifacts": {
+    "directory": ".kovo/security-failures/security-fuzz-campaign",
+    "schema": "kovo.security-fuzz-counterexample/v1",
+    "minimizationUnit": "one independently replayable manifest case",
+    "retentionDays": 30
+  },
+  "mutationHarness": {
+    "command": ["node", "scripts/security-gate-mutations.mjs"],
+    "expectedMutants": 234,
+    "requiredScorePercent": 100
+  },
+  "profiles": {
+    "nightly": {
+      "maxWallMs": 1800000,
+      "replayTimeoutMs": 300000,
+      "families": {
+        "egress": {
+          "maxWallMs": 90000,
+          "caseExecutionBudget": 2,
+          "generatedInputBudget": 256
+        },
+        "authority": { "maxWallMs": 180000, "caseExecutionBudget": 5 },
+        "csrf": { "maxWallMs": 120000, "caseExecutionBudget": 3 },
+        "redos": {
+          "maxWallMs": 420000,
+          "caseExecutionBudget": 5,
+          "generatedInputBudget": 5000
+        },
+        "headers": { "maxWallMs": 180000, "caseExecutionBudget": 1 },
+        "mutations": { "maxWallMs": 720000, "caseExecutionBudget": 1 }
+      }
+    },
+    "release": {
+      "maxWallMs": 7200000,
+      "replayTimeoutMs": 600000,
+      "families": {
+        "egress": {
+          "maxWallMs": 180000,
+          "caseExecutionBudget": 2,
+          "generatedInputBudget": 256
+        },
+        "authority": { "maxWallMs": 360000, "caseExecutionBudget": 5 },
+        "csrf": { "maxWallMs": 240000, "caseExecutionBudget": 3 },
+        "redos": {
+          "maxWallMs": 1800000,
+          "caseExecutionBudget": 5,
+          "generatedInputBudget": 100000
+        },
+        "headers": { "maxWallMs": 360000, "caseExecutionBudget": 1 },
+        "mutations": { "maxWallMs": 1800000, "caseExecutionBudget": 1 }
+      }
+    }
+  },
+  "families": [
+    {
+      "id": "egress",
+      "seed": { "algorithm": "lcg32", "value": "0x6b6f766f", "version": 1 },
+      "coverage": {
+        "unit": "normative-obligation",
+        "denominator": 2,
+        "obligations": ["undeclared-before-dns", "framework-dispatcher-seal"]
+      },
+      "cases": [
+        {
+          "id": "undeclared-before-dns",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/egress-property-oracle.test.ts",
+          "testName": "rejects generated undeclared origin spellings before DNS",
+          "covers": ["undeclared-before-dns"],
+          "profileEnv": {
+            "nightly": { "KOVO_EGRESS_FUZZ_INPUTS": "256" },
+            "release": { "KOVO_EGRESS_FUZZ_INPUTS": "256" }
+          }
+        },
+        {
+          "id": "framework-dispatcher-seal",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/egress-property-oracle.test.ts",
+          "testName": "strips an application-supplied dispatcher from the sole supported fetch door",
+          "covers": ["framework-dispatcher-seal"]
+        }
+      ]
+    },
+    {
+      "id": "authority",
+      "seed": {
+        "algorithm": "closed-grammar-corpus",
+        "value": "request-authority-grammar/v1",
+        "version": 1
+      },
+      "coverage": {
+        "unit": "normative-obligation",
+        "denominator": 5,
+        "obligations": [
+          "single-valid-authority",
+          "trusted-proxy-scheme-precedence",
+          "duplicate-forwarded-scheme-precedence",
+          "malformed-or-duplicate-host-wire-rejection",
+          "http2-authority-host-exclusivity"
+        ]
+      },
+      "cases": [
+        {
+          "id": "single-valid-authority",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/node.test.ts",
+          "testName": "requires one syntactically valid request authority even with a pinned origin",
+          "covers": ["single-valid-authority"]
+        },
+        {
+          "id": "trusted-proxy-scheme-precedence",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/node.test.ts",
+          "testName": "trusts forwarded schemes only when the Node adapter opts into trustedProxy",
+          "covers": ["trusted-proxy-scheme-precedence"]
+        },
+        {
+          "id": "duplicate-forwarded-scheme-precedence",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/node.test.ts",
+          "testName": "uses the closest trusted proxy scheme from real duplicate HTTP/1 headers",
+          "covers": ["duplicate-forwarded-scheme-precedence"]
+        },
+        {
+          "id": "malformed-or-duplicate-host-wire-rejection",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/node.test.ts",
+          "testName": "rejects malformed or duplicate HTTP/1 authorities before app dispatch",
+          "covers": ["malformed-or-duplicate-host-wire-rejection"]
+        },
+        {
+          "id": "http2-authority-host-exclusivity",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/node.test.ts",
+          "testName": "rejects an ordinary Host field mixed into a real HTTP/2 source posture",
+          "covers": ["http2-authority-host-exclusivity"]
+        }
+      ]
+    },
+    {
+      "id": "csrf",
+      "seed": { "algorithm": "state-model", "value": "csrf-lifecycle/v1", "version": 1 },
+      "coverage": {
+        "unit": "normative-obligation",
+        "denominator": 3,
+        "obligations": [
+          "anonymous-mint-deliver-rotate-replay",
+          "session-rotation-before-replay",
+          "origin-before-replay"
+        ]
+      },
+      "cases": [
+        {
+          "id": "anonymous-mint-deliver-rotate-replay",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/csrf-lifecycle-property-oracle.test.tsx",
+          "testName": "models anonymous mint, cookie delivery, validation, rotation, and exact replay",
+          "covers": ["anonymous-mint-deliver-rotate-replay"]
+        },
+        {
+          "id": "session-rotation-before-replay",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/csrf-lifecycle-property-oracle.test.tsx",
+          "testName": "rejects a rotated authenticated session token before replay lookup and requires a new mint",
+          "covers": ["session-rotation-before-replay"]
+        },
+        {
+          "id": "origin-before-replay",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/csrf-lifecycle-property-oracle.test.tsx",
+          "testName": "models the independent Origin floor as a closed transition before replay",
+          "covers": ["origin-before-replay"]
+        }
+      ]
+    },
+    {
+      "id": "redos",
+      "seed": { "algorithm": "mulberry32", "value": "0x00000434", "version": 1 },
+      "coverage": {
+        "unit": "normative-obligation",
+        "denominator": 5,
+        "obligations": [
+          "minimized-catastrophic-cases",
+          "full-ceiling-hostile-corpus",
+          "bounded-work-slope",
+          "real-schema-ceiling",
+          "supported-grammar-differential"
+        ]
+      },
+      "cases": [
+        {
+          "id": "minimized-catastrophic-cases",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/redos-work-bound-oracle.test.ts",
+          "testName": "pins minimized formerly-catastrophic cases to the production matcher work model",
+          "covers": ["minimized-catastrophic-cases"]
+        },
+        {
+          "id": "full-ceiling-hostile-corpus",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "seed": { "algorithm": "xorshift32", "value": "0x4b563433", "version": 1 },
+          "file": "packages/server/src/redos-work-bound-oracle.test.ts",
+          "testName": "covers every hostile regression family at the full runtime input ceiling with a fixed seed",
+          "covers": ["full-ceiling-hostile-corpus"]
+        },
+        {
+          "id": "bounded-work-slope",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/redos-work-bound-oracle.test.ts",
+          "testName": "keeps the deterministic work slope bounded as hostile input grows",
+          "covers": ["bounded-work-slope"]
+        },
+        {
+          "id": "real-schema-ceiling",
+          "kind": "vitest",
+          "decisionRole": "normative",
+          "file": "packages/server/src/redos-work-bound-oracle.test.ts",
+          "testName": "enforces the same 4,096-code-unit ceiling through the real string-schema door",
+          "covers": ["real-schema-ceiling"]
+        },
+        {
+          "id": "supported-grammar-differential",
+          "kind": "vitest",
+          "decisionRole": "differential-triage",
+          "file": "packages/server/src/redos.test.ts",
+          "testName": "keeps a seeded differential fuzzer over the supported grammar",
+          "covers": ["supported-grammar-differential"],
+          "profileEnv": {
+            "nightly": {
+              "KOVO_LINEAR_REGEX_FUZZ_CASES": "5000",
+              "KOVO_LINEAR_REGEX_FUZZ_SEED": "0x00000434"
+            },
+            "release": {
+              "KOVO_LINEAR_REGEX_FUZZ_CASES": "100000",
+              "KOVO_LINEAR_REGEX_FUZZ_SEED": "0x00000434"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "headers",
+      "seed": {
+        "algorithm": "closed-hostile-wire-corpus",
+        "value": "real-http-header-roundtrip/v1",
+        "version": 1
+      },
+      "coverage": {
+        "unit": "normative-obligation",
+        "denominator": 7,
+        "obligations": [
+          "duplicate-request-fields",
+          "multi-set-cookie",
+          "private-cache-floor",
+          "vary-cookie-merge",
+          "transport-ambiguity-rejection",
+          "control-output-rejection",
+          "malformed-input-rejection"
+        ]
+      },
+      "cases": [
+        {
+          "id": "real-http-header-roundtrip",
+          "kind": "vitest",
+          "decisionRole": "normative-with-differential-triage",
+          "file": "packages/server/src/http-header-roundtrip-property-oracle.test.ts",
+          "testName": "keeps live and generated Node reconstruction identical for hostile header families",
+          "covers": [
+            "duplicate-request-fields",
+            "multi-set-cookie",
+            "private-cache-floor",
+            "vary-cookie-merge",
+            "transport-ambiguity-rejection",
+            "control-output-rejection",
+            "malformed-input-rejection"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mutations",
+      "seed": {
+        "algorithm": "enrolled-branch-deletion",
+        "value": "security-gate-mutants/v1",
+        "version": 1
+      },
+      "coverage": { "unit": "mutant", "denominator": 234 },
+      "cases": [
+        {
+          "id": "security-gate-mutations",
+          "kind": "mutation-harness",
+          "decisionRole": "normative",
+          "covers": ["all-enrolled-mutants"]
+        }
+      ]
+    }
+  ]
+}

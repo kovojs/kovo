@@ -4,6 +4,7 @@ import {
   canonicalFrameworkExportForExpression,
   frameworkExport,
   frameworkExportEquals,
+  resolveFrameworkIdentityProjectSourceFile,
   type FrameworkExportIdentity,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
@@ -12,7 +13,9 @@ import type {
   BrowserSecurityOperationKind,
   SecuritySemanticBudgets,
   SecuritySemanticClosedReason,
+  SecuritySemanticHelperInvocationFact,
   SecuritySemanticRoot,
+  SecuritySemanticRootBinding,
   SecuritySemanticSummary,
   SecuritySemanticTrace,
   ServerSecurityOperationKind,
@@ -24,17 +27,22 @@ import {
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerCreateWeakMap,
   compilerFailClosed,
+  compilerMapForEach,
   compilerMapGet,
   compilerMapSet,
   compilerOwnDataValue,
   compilerSetAdd,
   compilerSetDelete,
+  compilerSetForEach,
   compilerSetHas,
   compilerSnapshotDenseArray,
   compilerStringSlice,
   compilerStringStartsWith,
   compilerStringTrim,
+  compilerWeakMapGet,
+  compilerWeakMapSet,
 } from '../compiler-security-intrinsics.js';
 import type {
   BrowserSecurityOperationModel,
@@ -52,7 +60,11 @@ interface SecurityOperationScanResult<Operation> {
 /** Parser/scanner-shared exact same-file root or helper callable. */
 export interface ResolvedSecurityIrCallable {
   readonly body: ts.ConciseBody;
-  readonly declaration: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression;
+  readonly declaration:
+    | ts.ArrowFunction
+    | ts.FunctionDeclaration
+    | ts.FunctionExpression
+    | ts.MethodDeclaration;
   readonly name: string;
   readonly parameters: ts.NodeArray<ts.ParameterDeclaration>;
 }
@@ -70,11 +82,21 @@ type BrowserValueProvenance =
 type ServerValueProvenance =
   | 'context'
   | 'database'
+  | 'database-read-namespace'
+  | 'database-relational-query-namespace'
+  | 'database-relational-table-namespace'
+  | 'database-table-namespace'
+  | 'database-write-namespace'
   | 'headers'
+  | 'global-object'
+  | 'foreign-executable'
+  | 'intrinsic-identity-call'
+  | 'intrinsic-object'
   | 'local'
   | 'respond'
   | 'request'
   | 'response-constructor'
+  | 'response-outcome'
   | 'safe-call'
   | 'scope-call'
   | 'storage'
@@ -83,15 +105,74 @@ type ServerValueProvenance =
 
 const REDIRECT_IDENTITY = frameworkExport('@kovojs/server', 'redirect');
 const TRUSTED_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'trustedSql');
+const KOVO_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'sql');
+const DECLARE_SECRET_READ_CAPABILITY_IDENTITY = frameworkExport(
+  '@kovojs/server',
+  'declareSecretReadCapability',
+);
+const SECRET_IDENTITY = frameworkExport('@kovojs/core', 'secret');
+const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core', 'trustedReveal');
+const DRIZZLE_ALIAS_IDENTITY = frameworkExport('drizzle-orm', 'alias');
 const TRUSTED_HTML_IDENTITIES = [
   frameworkExport('@kovojs/browser', 'trustedHtml'),
   frameworkExport('@kovojs/server', 'trustedHtml'),
+] as const;
+const RUN_COMMAND_IDENTITY = frameworkExport('@kovojs/server', 'runCommand');
+const SERVER_STORAGE_FACTORY_IDENTITIES = [
+  frameworkExport('@kovojs/core', 'createFileSystemStorage'),
+  frameworkExport('@kovojs/core', 'createS3CompatibleStorage'),
 ] as const;
 const SERVER_OPERATION_LEGACY_IDENTITIES = [
   REDIRECT_IDENTITY,
   TRUSTED_SQL_IDENTITY,
   TRUSTED_HTML_IDENTITIES[0],
   TRUSTED_HTML_IDENTITIES[1],
+] as const;
+const SERVER_REVIEWED_DATA_HELPER_IDENTITIES = [
+  frameworkExport('@kovojs/server', 'serverValue'),
+  frameworkExport('@kovojs/server', 'trustedAssign'),
+  frameworkExport('drizzle-orm', 'and'),
+  frameworkExport('drizzle-orm', 'arrayContained'),
+  frameworkExport('drizzle-orm', 'arrayContains'),
+  frameworkExport('drizzle-orm', 'arrayOverlaps'),
+  frameworkExport('drizzle-orm', 'asc'),
+  frameworkExport('drizzle-orm', 'avg'),
+  frameworkExport('drizzle-orm', 'avgDistinct'),
+  frameworkExport('drizzle-orm', 'between'),
+  frameworkExport('drizzle-orm', 'count'),
+  frameworkExport('drizzle-orm', 'countDistinct'),
+  frameworkExport('drizzle-orm', 'desc'),
+  frameworkExport('drizzle-orm', 'eq'),
+  frameworkExport('drizzle-orm', 'exists'),
+  frameworkExport('drizzle-orm', 'gt'),
+  frameworkExport('drizzle-orm', 'gte'),
+  frameworkExport('drizzle-orm', 'ilike'),
+  frameworkExport('drizzle-orm', 'inArray'),
+  frameworkExport('drizzle-orm', 'isNotNull'),
+  frameworkExport('drizzle-orm', 'isNull'),
+  frameworkExport('drizzle-orm', 'like'),
+  frameworkExport('drizzle-orm', 'lt'),
+  frameworkExport('drizzle-orm', 'lte'),
+  frameworkExport('drizzle-orm', 'max'),
+  frameworkExport('drizzle-orm', 'min'),
+  frameworkExport('drizzle-orm', 'ne'),
+  frameworkExport('drizzle-orm', 'not'),
+  frameworkExport('drizzle-orm', 'notBetween'),
+  frameworkExport('drizzle-orm', 'notExists'),
+  frameworkExport('drizzle-orm', 'notIlike'),
+  frameworkExport('drizzle-orm', 'notInArray'),
+  frameworkExport('drizzle-orm', 'or'),
+  frameworkExport('drizzle-orm', 'sum'),
+  frameworkExport('drizzle-orm', 'sumDistinct'),
+] as const;
+const SERVER_REVIEWED_DATA_TAG_IDENTITIES = [
+  frameworkExport('@kovojs/drizzle', 'sql'),
+  frameworkExport('@kovojs/drizzle', 'staticSql'),
+  frameworkExport('drizzle-orm', 'sql'),
+] as const;
+const SERVER_REVIEWED_DATABASE_TABLE_FACTORY_IDENTITIES = [
+  frameworkExport('drizzle-orm', 'pgTable'),
+  frameworkExport('drizzle-orm', 'sqliteTable'),
 ] as const;
 
 function finiteStringSet(values: readonly string[]): ReadonlySet<string> {
@@ -126,6 +207,266 @@ const browserPureConstructors = finiteStringSet([
   'WeakMap',
   'WeakSet',
 ]);
+const serverPureConstructors = finiteStringSet(['Error']);
+const serverPureGlobalMemberCalls = finiteStringSet(['crypto.randomUUID']);
+const serverReviewedDatabaseBuilderMethods = finiteStringSet([
+  'from',
+  'innerJoin',
+  'limit',
+  'orderBy',
+  'set',
+  'union',
+  'values',
+  'where',
+]);
+const serverReviewedDatabaseSchemaValueCache = compilerCreateWeakMap<ts.Expression, boolean>();
+
+interface SecurityIrIndexedDeclarationFact {
+  callable?: ResolvedSecurityIrCallable;
+  callableStart?: number;
+  immutableInitializer?: ts.Expression;
+  immutableStart?: number;
+  matches: number;
+}
+
+interface SecurityIrSourceIndex {
+  readonly assignedNames: ReadonlySet<string>;
+  readonly declarationsByContainer: WeakMap<
+    ts.Block | ts.SourceFile,
+    ReadonlyMap<string, SecurityIrIndexedDeclarationFact>
+  >;
+  readonly foreignImportNames: ReadonlySet<string>;
+  readonly moduleConstDeclarations: readonly ts.VariableDeclaration[];
+}
+
+const securityIrSourceIndexCache = compilerCreateWeakMap<ts.SourceFile, SecurityIrSourceIndex>();
+
+/**
+ * SPEC §5.2/§6.6 source boundary index. The AST is immutable after parsing, so one conservative
+ * spelling-based pass can retain the exact old assignment and declaration answers without
+ * rescanning the entire source for every helper edge.
+ */
+function securityIrSourceIndex(sourceFile: ts.SourceFile): SecurityIrSourceIndex {
+  const cached = compilerWeakMapGet(securityIrSourceIndexCache, sourceFile);
+  if (cached) return cached;
+
+  const assignedNames = compilerCreateSet<string>();
+  const declarationsByContainer = compilerCreateWeakMap<
+    ts.Block | ts.SourceFile,
+    ReadonlyMap<string, SecurityIrIndexedDeclarationFact>
+  >();
+  const foreignImportNames = compilerCreateSet<string>();
+  const moduleConstDeclarations: ts.VariableDeclaration[] = [];
+
+  const indexContainer = (container: ts.Block | ts.SourceFile): void => {
+    const declarations = compilerCreateMap<string, SecurityIrIndexedDeclarationFact>();
+    const statements = compilerSnapshotDenseArray(
+      container.statements,
+      'Finite security-IR indexed statements',
+    );
+    for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+      const statement = statements[statementIndex]!;
+      if (ts.isFunctionDeclaration(statement) && statement.name) {
+        securityIrIndexDeclaration(declarations, statement.name.text, {
+          ...(statement.body
+            ? {
+                callable: {
+                  body: statement.body,
+                  declaration: statement,
+                  name: statement.name.text,
+                  parameters: statement.parameters,
+                },
+              }
+            : {}),
+        });
+        continue;
+      }
+      if ((ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) && statement.name) {
+        securityIrIndexDeclaration(declarations, statement.name.text);
+        continue;
+      }
+      if (ts.isImportDeclaration(statement)) {
+        const importNames = securityIrImportBindingNames(statement);
+        compilerSetForEach(importNames, (name) => {
+          securityIrIndexDeclaration(declarations, name);
+          if (ts.isSourceFile(container)) compilerSetAdd(foreignImportNames, name);
+        });
+        continue;
+      }
+      if (!ts.isVariableStatement(statement)) continue;
+      const isConst = (statement.declarationList.flags & ts.NodeFlags.Const) !== 0;
+      const variableDeclarations = compilerSnapshotDenseArray(
+        statement.declarationList.declarations,
+        'Finite security-IR indexed declarations',
+      );
+      for (
+        let declarationIndex = 0;
+        declarationIndex < variableDeclarations.length;
+        declarationIndex += 1
+      ) {
+        const declaration = variableDeclarations[declarationIndex]!;
+        if (ts.isSourceFile(container) && isConst) {
+          compilerArrayAppend(
+            moduleConstDeclarations,
+            declaration,
+            'Finite security-IR module const declarations',
+          );
+        }
+        const names = compilerCreateSet<string>();
+        collectBindingNames(declaration.name, names);
+        compilerSetForEach(names, (name) => {
+          const initializer = declaration.initializer && unwrapExpression(declaration.initializer);
+          const exactIdentifier =
+            ts.isIdentifier(declaration.name) && declaration.name.text === name;
+          const declarationStart = declaration.getStart(sourceFile);
+          securityIrIndexDeclaration(declarations, name, {
+            ...(exactIdentifier && isConst && declaration.initializer
+              ? {
+                  immutableInitializer: declaration.initializer,
+                  immutableStart: declarationStart,
+                }
+              : {}),
+            ...(exactIdentifier &&
+            isConst &&
+            initializer &&
+            (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+              ? {
+                  callable: {
+                    body: initializer.body,
+                    declaration: initializer,
+                    name,
+                    parameters: initializer.parameters,
+                  },
+                  callableStart: declarationStart,
+                }
+              : {}),
+          });
+        });
+      }
+    }
+    compilerWeakMapSet(declarationsByContainer, container, declarations);
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isSourceFile(node) || ts.isBlock(node)) indexContainer(node);
+    if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
+      collectSecurityIrAssignmentTargetNames(node.left, assignedNames);
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      ts.isIdentifier(node.operand)
+    ) {
+      compilerSetAdd(assignedNames, node.operand.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  const index: SecurityIrSourceIndex = {
+    assignedNames,
+    declarationsByContainer,
+    foreignImportNames,
+    moduleConstDeclarations,
+  };
+  compilerWeakMapSet(securityIrSourceIndexCache, sourceFile, index);
+  return index;
+}
+
+function securityIrIndexDeclaration(
+  declarations: Map<string, SecurityIrIndexedDeclarationFact>,
+  name: string,
+  candidate: Omit<SecurityIrIndexedDeclarationFact, 'matches'> = {},
+): void {
+  const fact = compilerMapGet(declarations, name) ?? { matches: 0 };
+  fact.matches += 1;
+  if (candidate.callable) fact.callable = candidate.callable;
+  if (candidate.callableStart !== undefined) fact.callableStart = candidate.callableStart;
+  if (candidate.immutableInitializer) {
+    fact.immutableInitializer = candidate.immutableInitializer;
+  }
+  if (candidate.immutableStart !== undefined) fact.immutableStart = candidate.immutableStart;
+  compilerMapSet(declarations, name, fact);
+}
+
+function securityIrImportBindingNames(statement: ts.ImportDeclaration): Set<string> {
+  const names = compilerCreateSet<string>();
+  const clause = statement.importClause;
+  if (!clause) return names;
+  if (clause.name) compilerSetAdd(names, clause.name.text);
+  const bindings = clause.namedBindings;
+  if (!bindings) return names;
+  if (ts.isNamespaceImport(bindings)) {
+    compilerSetAdd(names, bindings.name.text);
+    return names;
+  }
+  const elements = compilerSnapshotDenseArray(bindings.elements, 'Finite security-IR imports');
+  for (let index = 0; index < elements.length; index += 1) {
+    compilerSetAdd(names, elements[index]!.name.text);
+  }
+  return names;
+}
+
+function securityIrDeclarationFact(
+  sourceFile: ts.SourceFile,
+  container: ts.Block | ts.SourceFile,
+  name: string,
+): SecurityIrIndexedDeclarationFact | undefined {
+  const declarations = compilerWeakMapGet(
+    securityIrSourceIndex(sourceFile).declarationsByContainer,
+    container,
+  );
+  if (!declarations) {
+    compilerFailClosed('Security-IR declaration index omitted a lexical statement container.');
+  }
+  return compilerMapGet(declarations, name);
+}
+
+function collectSecurityIrAssignmentTargetNames(node: ts.Node, names: Set<string>): void {
+  const current =
+    ts.isExpression(node) &&
+    (ts.isParenthesizedExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isTypeAssertionExpression(node) ||
+      ts.isNonNullExpression(node) ||
+      ts.isSatisfiesExpression(node))
+      ? unwrapExpression(node)
+      : node;
+  if (ts.isIdentifier(current)) {
+    compilerSetAdd(names, current.text);
+    return;
+  }
+  if (ts.isArrayLiteralExpression(current)) {
+    const elements = compilerSnapshotDenseArray(
+      current.elements,
+      'Finite security-IR assignment targets',
+    );
+    for (let index = 0; index < elements.length; index += 1) {
+      collectSecurityIrAssignmentTargetNames(elements[index]!, names);
+    }
+    return;
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    const properties = compilerSnapshotDenseArray(
+      current.properties,
+      'Finite security-IR assignment targets',
+    );
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      if (ts.isShorthandPropertyAssignment(property)) {
+        compilerSetAdd(names, property.name.text);
+      } else if (ts.isPropertyAssignment(property)) {
+        collectSecurityIrAssignmentTargetNames(property.initializer, names);
+      } else if (ts.isSpreadAssignment(property)) {
+        collectSecurityIrAssignmentTargetNames(property.expression, names);
+      }
+    }
+  }
+  if (ts.isSpreadElement(current)) {
+    collectSecurityIrAssignmentTargetNames(current.expression, names);
+  }
+}
 const browserPureGlobalMemberCalls = finiteStringSet([
   'Array.from',
   'Array.isArray',
@@ -163,6 +504,40 @@ const browserEventControlMethods = finiteStringSet([
   'preventDefault',
   'stopImmediatePropagation',
   'stopPropagation',
+]);
+const serverCallbackInvokingMemberCalls = finiteStringSet([
+  'catch',
+  'every',
+  'filter',
+  'finally',
+  'find',
+  'findIndex',
+  'findLast',
+  'findLastIndex',
+  'flatMap',
+  'forEach',
+  'map',
+  'reduce',
+  'reduceRight',
+  'some',
+  'sort',
+  'then',
+  'toSorted',
+]);
+const serverImplicitObjectProtocolMembers = finiteStringSet([
+  'asyncIterator',
+  'hasInstance',
+  'iterator',
+  'match',
+  'matchAll',
+  'replace',
+  'search',
+  'split',
+  'then',
+  'toJSON',
+  'toPrimitive',
+  'toString',
+  'valueOf',
 ]);
 const browserEventScalarMembers = finiteStringSet([
   'altKey',
@@ -265,90 +640,480 @@ export function resolveSameFileSecurityIrCallable(
   expression: ts.Expression,
 ): ResolvedSecurityIrCallable | undefined {
   const current = unwrapExpression(expression);
-  if (
-    !ts.isIdentifier(current) ||
-    identifierIsShadowedBeforeBoundary(current, sourceFile) ||
-    moduleBindingIsAssigned(sourceFile, current.text)
-  ) {
+  if (!ts.isIdentifier(current)) {
+    return resolveSameFileSecurityIrMemberCallable(sourceFile, current);
+  }
+  if (!ts.isIdentifier(current) || moduleBindingIsAssigned(sourceFile, current.text)) {
     return undefined;
   }
 
-  let resolved: ResolvedSecurityIrCallable | undefined;
-  let matches = 0;
-  const statements = compilerSnapshotDenseArray(
-    sourceFile.statements,
-    'Finite security-IR module statements',
-  );
-  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
-    const statement = statements[statementIndex]!;
-    if (
-      ts.isFunctionDeclaration(statement) &&
-      statement.name?.text === current.text &&
-      statement.body
-    ) {
-      matches += 1;
-      resolved = {
-        body: statement.body,
-        declaration: statement,
-        name: current.text,
-        parameters: statement.parameters,
-      };
-      continue;
+  // Walk the exact lexical statement containers from the use site outward. The first container
+  // that declares the name owns identity; an ineligible declaration stops resolution instead of
+  // falling through to a same-named outer helper. This admits nested handler helpers without a
+  // checker or general module evaluation while preserving the single immutable declaration rule.
+  let cursor: ts.Node | undefined = current.parent;
+  while (cursor) {
+    if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
+      const resolved = securityIrCallableDeclaredInStatements(sourceFile, current, cursor);
+      if (resolved.matched) return resolved.callable;
+      if (ts.isSourceFile(cursor)) return undefined;
     }
-    if (!ts.isVariableStatement(statement)) continue;
-    const declarations = compilerSnapshotDenseArray(
-      statement.declarationList.declarations,
-      'Finite security-IR module declarations',
-    );
-    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
-      const declaration = declarations[declarationIndex]!;
-      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== current.text) continue;
-      matches += 1;
-      const initializer = declaration.initializer && unwrapExpression(declaration.initializer);
+    if (isSecurityIrFunctionScope(cursor)) {
+      const parameters = compilerSnapshotDenseArray(
+        cursor.parameters,
+        'Finite security-IR lexical parameters',
+      );
+      for (let index = 0; index < parameters.length; index += 1) {
+        const names = compilerCreateSet<string>();
+        collectBindingNames(parameters[index]!.name, names);
+        if (compilerSetHas(names, current.text)) return undefined;
+      }
       if (
-        (statement.declarationList.flags & ts.NodeFlags.Const) !== 0 &&
-        initializer &&
-        (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+        (ts.isFunctionExpression(cursor) || ts.isFunctionDeclaration(cursor)) &&
+        cursor.name?.text === current.text
       ) {
-        resolved = {
-          body: initializer.body,
-          declaration: initializer,
-          name: current.text,
-          parameters: initializer.parameters,
-        };
+        return undefined;
       }
     }
+    if (securityIrControlScopeDeclaresName(cursor, current.text)) {
+      return undefined;
+    }
+    cursor = cursor.parent;
   }
-  return matches === 1 ? resolved : undefined;
+  return undefined;
+}
+
+function resolveSameFileSecurityIrMemberCallable(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): ResolvedSecurityIrCallable | undefined {
+  const properties: string[] = [];
+  let root = unwrapExpression(expression);
+  while (true) {
+    const member = staticMember(root);
+    if (!member) break;
+    properties.unshift(member.name);
+    root = unwrapExpression(member.receiver);
+  }
+  if (properties.length === 0) return undefined;
+  return resolveSecurityIrCallableValue(
+    sourceFile,
+    root,
+    properties,
+    compilerCreateSet<string>(),
+    0,
+  );
+}
+
+function resolveSecurityIrCallableValue(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  properties: readonly string[],
+  active: Set<string>,
+  depth: number,
+): ResolvedSecurityIrCallable | undefined {
+  if (depth > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) return undefined;
+  const current = unwrapExpression(expression);
+  if (properties.length === 0) {
+    if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) {
+      return {
+        body: current.body,
+        declaration: current,
+        name: '<anonymous-member>',
+        parameters: current.parameters,
+      };
+    }
+    if (ts.isIdentifier(current)) {
+      return resolveSameFileSecurityIrCallable(sourceFile, current);
+    }
+    return undefined;
+  }
+
+  if (ts.isIdentifier(current)) {
+    const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+    if (!initializer) return undefined;
+    const key = `${initializer.getStart(sourceFile)}:${initializer.getEnd()}`;
+    if (compilerSetHas(active, key)) return undefined;
+    compilerSetAdd(active, key);
+    try {
+      return resolveSecurityIrCallableValue(sourceFile, initializer, properties, active, depth + 1);
+    } finally {
+      compilerSetDelete(active, key);
+    }
+  }
+
+  if (ts.isCallExpression(current)) {
+    const callee = unwrapExpression(current.expression);
+    const member = staticMember(callee);
+    const globalRoot = member && unwrapExpression(member.receiver);
+    if (
+      member &&
+      (member.name === 'freeze' || member.name === 'seal' || member.name === 'preventExtensions') &&
+      globalRoot !== undefined &&
+      ts.isIdentifier(globalRoot) &&
+      globalRoot.text === 'Object' &&
+      !identifierIsShadowedWithinBoundary(globalRoot, sourceFile) &&
+      current.arguments.length === 1
+    ) {
+      return resolveSecurityIrCallableValue(
+        sourceFile,
+        current.arguments[0]!,
+        properties,
+        active,
+        depth + 1,
+      );
+    }
+    return undefined;
+  }
+
+  if (!ts.isObjectLiteralExpression(current)) return undefined;
+  const propertyName = properties[0]!;
+  const remaining = properties.slice(1);
+  let match: ts.ObjectLiteralElementLike | undefined;
+  const members = compilerSnapshotDenseArray(
+    current.properties,
+    'Finite security-IR callable containers',
+  );
+  for (let index = 0; index < members.length; index += 1) {
+    const candidate = members[index]!;
+    if (ts.isSpreadAssignment(candidate)) return undefined;
+    if (staticPropertyName(candidate.name) !== propertyName) continue;
+    if (match !== undefined) return undefined;
+    match = candidate;
+  }
+  if (!match) return undefined;
+  if (ts.isMethodDeclaration(match)) {
+    if (remaining.length > 0 || !match.body) return undefined;
+    return {
+      body: match.body,
+      declaration: match,
+      name: propertyName,
+      parameters: match.parameters,
+    };
+  }
+  if (ts.isPropertyAssignment(match)) {
+    return resolveSecurityIrCallableValue(
+      sourceFile,
+      match.initializer,
+      remaining,
+      active,
+      depth + 1,
+    );
+  }
+  if (ts.isShorthandPropertyAssignment(match)) {
+    return resolveSecurityIrCallableValue(sourceFile, match.name, remaining, active, depth + 1);
+  }
+  return undefined;
+}
+
+function securityIrImmutableBindingInitializer(
+  sourceFile: ts.SourceFile,
+  use: ts.Identifier,
+): ts.Expression | undefined {
+  if (moduleBindingIsAssigned(sourceFile, use.text)) return undefined;
+  let cursor: ts.Node | undefined = use.parent;
+  while (cursor) {
+    if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
+      const resolved = securityIrImmutableBindingDeclaredInStatements(sourceFile, use, cursor);
+      if (resolved.matched) return resolved.initializer;
+      if (ts.isSourceFile(cursor)) return undefined;
+    }
+    if (isSecurityIrFunctionScope(cursor)) {
+      const parameters = compilerSnapshotDenseArray(
+        cursor.parameters,
+        'Finite security-IR lexical parameters',
+      );
+      for (let index = 0; index < parameters.length; index += 1) {
+        const names = compilerCreateSet<string>();
+        collectBindingNames(parameters[index]!.name, names);
+        if (compilerSetHas(names, use.text)) return undefined;
+      }
+      if (
+        (ts.isFunctionExpression(cursor) || ts.isFunctionDeclaration(cursor)) &&
+        cursor.name?.text === use.text
+      ) {
+        return undefined;
+      }
+    }
+    if (securityIrControlScopeDeclaresName(cursor, use.text)) return undefined;
+    cursor = cursor.parent;
+  }
+  return undefined;
+}
+
+function securityIrImmutableBindingDeclaredInStatements(
+  sourceFile: ts.SourceFile,
+  use: ts.Identifier,
+  container: ts.Block | ts.SourceFile,
+): { initializer?: ts.Expression; matched: boolean } {
+  const fact = securityIrDeclarationFact(sourceFile, container, use.text);
+  if (!fact) return { matched: false };
+  const initializer =
+    fact.matches === 1 &&
+    fact.immutableInitializer &&
+    fact.immutableStart !== undefined &&
+    fact.immutableStart < use.getStart(sourceFile)
+      ? fact.immutableInitializer
+      : undefined;
+  return { ...(initializer ? { initializer } : {}), matched: true };
+}
+
+function securityIrCallableDeclaredInStatements(
+  sourceFile: ts.SourceFile,
+  use: ts.Identifier,
+  container: ts.Block | ts.SourceFile,
+): { callable?: ResolvedSecurityIrCallable; matched: boolean } {
+  const fact = securityIrDeclarationFact(sourceFile, container, use.text);
+  if (!fact) return { matched: false };
+  const callable =
+    fact.matches === 1 &&
+    fact.callable &&
+    (fact.callableStart === undefined || fact.callableStart < use.getStart(sourceFile))
+      ? fact.callable
+      : undefined;
+  return { ...(callable ? { callable } : {}), matched: true };
 }
 
 function moduleBindingIsAssigned(sourceFile: ts.SourceFile, name: string): boolean {
-  let assigned = false;
+  return compilerSetHas(securityIrSourceIndex(sourceFile).assignedNames, name);
+}
+
+function securityIrControlScopeDeclaresName(node: ts.Node, name: string): boolean {
+  let declaration: ts.VariableDeclarationList | ts.VariableDeclaration | undefined;
+  if (ts.isForInStatement(node) || ts.isForOfStatement(node) || ts.isForStatement(node)) {
+    const initializer = node.initializer;
+    if (initializer && ts.isVariableDeclarationList(initializer)) declaration = initializer;
+  } else if (ts.isCatchClause(node)) {
+    declaration = node.variableDeclaration;
+  }
+  if (!declaration) return false;
+  const names = compilerCreateSet<string>();
+  if (ts.isVariableDeclaration(declaration)) {
+    collectBindingNames(declaration.name, names);
+  } else {
+    const declarations = compilerSnapshotDenseArray(
+      declaration.declarations,
+      'Finite security-IR control bindings',
+    );
+    for (let index = 0; index < declarations.length; index += 1) {
+      collectBindingNames(declarations[index]!.name, names);
+    }
+  }
+  return compilerSetHas(names, name);
+}
+
+function securityIrImportDeclaresName(statement: ts.ImportDeclaration, name: string): boolean {
+  const clause = statement.importClause;
+  if (!clause) return false;
+  if (clause.name?.text === name) return true;
+  const bindings = clause.namedBindings;
+  if (!bindings) return false;
+  if (ts.isNamespaceImport(bindings)) return bindings.name.text === name;
+  const elements = compilerSnapshotDenseArray(bindings.elements, 'Finite security-IR imports');
+  for (let index = 0; index < elements.length; index += 1) {
+    if (elements[index]!.name.text === name) return true;
+  }
+  return false;
+}
+
+function securityIrExpressionUsesDirectImportBinding(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  const member = staticMember(current);
+  const directName = ts.isIdentifier(current) ? current.text : undefined;
+  const namespaceName =
+    member && ts.isIdentifier(unwrapExpression(member.receiver))
+      ? (unwrapExpression(member.receiver) as ts.Identifier).text
+      : undefined;
+  if (directName === undefined && namespaceName === undefined) return false;
+
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Finite security-IR direct import bindings',
+  );
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (!ts.isImportDeclaration(statement)) continue;
+    const clause = statement.importClause;
+    if (!clause) continue;
+    if (directName !== undefined) {
+      if (clause.name?.text === directName) return true;
+      const bindings = clause.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        const elements = compilerSnapshotDenseArray(
+          bindings.elements,
+          'Finite security-IR direct named imports',
+        );
+        for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+          if (elements[elementIndex]!.name.text === directName) return true;
+        }
+      }
+    }
+    if (
+      namespaceName !== undefined &&
+      clause.namedBindings &&
+      ts.isNamespaceImport(clause.namedBindings) &&
+      clause.namedBindings.name.text === namespaceName
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function securityIrLeftmostExecutableRoot(expression: ts.Expression): ts.Identifier | undefined {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) return current;
+  const member = staticMember(current);
+  if (member) return securityIrLeftmostExecutableRoot(member.receiver);
+  if (ts.isCallExpression(current) || ts.isNewExpression(current)) {
+    return securityIrLeftmostExecutableRoot(current.expression);
+  }
+  return undefined;
+}
+
+function securityIrIdentifierBindingScope(
+  sourceFile: ts.SourceFile,
+  use: ts.Identifier,
+): 'local' | 'module' | 'unresolved' {
+  let cursor: ts.Node | undefined = use.parent;
+  while (cursor) {
+    if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
+      if (securityIrDeclarationFact(sourceFile, cursor, use.text)) {
+        return ts.isSourceFile(cursor) ? 'module' : 'local';
+      }
+      if (ts.isSourceFile(cursor)) return 'unresolved';
+    }
+    if (isSecurityIrFunctionScope(cursor)) {
+      const parameters = compilerSnapshotDenseArray(
+        cursor.parameters,
+        'Finite security-IR lexical parameters',
+      );
+      for (let index = 0; index < parameters.length; index += 1) {
+        const names = compilerCreateSet<string>();
+        collectBindingNames(parameters[index]!.name, names);
+        if (compilerSetHas(names, use.text)) return 'local';
+      }
+      if (
+        (ts.isFunctionExpression(cursor) || ts.isFunctionDeclaration(cursor)) &&
+        cursor.name?.text === use.text
+      ) {
+        return 'local';
+      }
+    }
+    if (securityIrControlScopeDeclaresName(cursor, use.text)) return 'local';
+    cursor = cursor.parent;
+  }
+  return sourceFile === use.getSourceFile() ? 'unresolved' : 'module';
+}
+
+function securityIrMemberCallableIsStable(
+  sourceFile: ts.SourceFile,
+  callee: ts.Expression,
+  call: ts.CallExpression | ts.NewExpression,
+): boolean {
+  const root = securityIrLeftmostExecutableRoot(callee);
+  if (!root) return true;
+  const boundary =
+    securityIrIdentifierBindingScope(sourceFile, root) === 'local'
+      ? securityIrEnclosingFunctionBody(call)
+      : sourceFile;
+  let stable = true;
   const visit = (node: ts.Node): void => {
-    if (assigned) return;
+    if (!stable || node === call) return;
     if (
       ts.isBinaryExpression(node) &&
       isAssignmentOperator(node.operatorToken.kind) &&
-      ts.isIdentifier(unwrapExpression(node.left)) &&
-      (unwrapExpression(node.left) as ts.Identifier).text === name
+      securityIrNodeContainsValueIdentifier(node.left, root.text, call)
     ) {
-      assigned = true;
+      stable = false;
       return;
     }
     if (
-      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
-      (node.operator === ts.SyntaxKind.PlusPlusToken ||
-        node.operator === ts.SyntaxKind.MinusMinusToken) &&
-      ts.isIdentifier(node.operand) &&
-      node.operand.text === name
+      (ts.isDeleteExpression(node) ||
+        ts.isPrefixUnaryExpression(node) ||
+        ts.isPostfixUnaryExpression(node)) &&
+      securityIrNodeContainsValueIdentifier(node, root.text, call)
     ) {
-      assigned = true;
+      stable = false;
+      return;
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      node.initializer &&
+      securityIrNodeContainsValueIdentifier(node.initializer, root.text, call)
+    ) {
+      stable = false;
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      compilerSnapshotDenseArray(node.arguments, 'Finite security-IR call arguments').some(
+        (argument) => securityIrNodeContainsValueIdentifier(argument, root.text, call),
+      )
+    ) {
+      stable = false;
+      return;
+    }
+    if (
+      (ts.isReturnStatement(node) || ts.isThrowStatement(node)) &&
+      node.expression &&
+      securityIrNodeContainsValueIdentifier(node.expression, root.text, call)
+    ) {
+      stable = false;
       return;
     }
     ts.forEachChild(node, visit);
   };
-  visit(sourceFile);
-  return assigned;
+  visit(boundary);
+  return stable;
+}
+
+function securityIrEnclosingFunctionBody(node: ts.Node): ts.ConciseBody | ts.SourceFile {
+  let cursor: ts.Node | undefined = node.parent;
+  while (cursor) {
+    if (isSecurityIrFunctionScope(cursor) && cursor.body) return cursor.body;
+    cursor = cursor.parent;
+  }
+  return node.getSourceFile();
+}
+
+function securityIrNodeContainsValueIdentifier(
+  node: ts.Node,
+  name: string,
+  ignored: ts.Node,
+): boolean {
+  let found = false;
+  const visit = (current: ts.Node): void => {
+    if (found || current === ignored) return;
+    if (ts.isCallExpression(current) || ts.isNewExpression(current)) {
+      const argumentsList = compilerSnapshotDenseArray(
+        current.arguments ?? [],
+        'Finite security-IR executable arguments',
+      );
+      for (let index = 0; index < argumentsList.length; index += 1) {
+        visit(argumentsList[index]!);
+      }
+      return;
+    }
+    if (ts.isIdentifier(current) && current.text === name) {
+      const parent = current.parent;
+      if (
+        !(
+          (ts.isPropertyAccessExpression(parent) && parent.name === current) ||
+          (ts.isPropertyAssignment(parent) && parent.name === current)
+        )
+      ) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(current, visit);
+  };
+  visit(node);
+  return found;
 }
 
 /** Scanner/source-text boundary for SPEC §4.3/§5.2 finite browser effects. */
@@ -362,6 +1127,18 @@ export function scanBrowserSecurityOperations(
   const aliases = browserAliasProvenance(body);
 
   const appendOperation = (kind: BrowserSecurityOperationKind, node: ts.Node, target?: string) => {
+    if (
+      kind === 'browser.timer.schedule' &&
+      ts.isCallExpression(node) &&
+      browserTimerCallbackIsSourceText(node.arguments[0])
+    ) {
+      appendViolation(
+        node.arguments[0]!,
+        'raw-dom-operation',
+        'string timer callbacks execute source text and are outside the finite handler IR',
+      );
+      return;
+    }
     compilerArrayAppend(
       operations,
       {
@@ -432,6 +1209,12 @@ export function scanBrowserSecurityOperations(
             : 'raw-dom-operation',
           `raw browser assignment ${browserExpressionTarget(node.left) ?? 'computed'} is not a finite operation`,
         );
+      } else if (provenance === 'unknown' && staticMember(unwrapExpression(node.left))) {
+        appendViolation(
+          node.left,
+          'unknown-security-operation',
+          `browser assignment ${browserExpressionTarget(node.left) ?? 'computed'} has no reviewed finite operation`,
+        );
       }
       const rightProvenance = browserExpressionProvenance(node.right, aliases, body);
       if (
@@ -460,6 +1243,12 @@ export function scanBrowserSecurityOperations(
             'raw-dom-operation',
             `raw DOM update ${browserExpressionTarget(operand) ?? 'computed'} is not a finite operation`,
           );
+        } else if (provenance === 'unknown' && staticMember(unwrapExpression(operand))) {
+          appendViolation(
+            operand,
+            'unknown-security-operation',
+            `browser update ${browserExpressionTarget(operand) ?? 'computed'} has no reviewed finite operation`,
+          );
         }
       }
     } else if (ts.isDeleteExpression(node)) {
@@ -476,6 +1265,12 @@ export function scanBrowserSecurityOperations(
           'raw-dom-operation',
           'deleting a DOM member is outside the finite handler IR',
         );
+      } else if (provenance === 'unknown' && staticMember(unwrapExpression(node.expression))) {
+        appendViolation(
+          node.expression,
+          'unknown-security-operation',
+          `browser delete ${browserExpressionTarget(node.expression) ?? 'computed'} has no reviewed finite operation`,
+        );
       }
     }
 
@@ -487,6 +1282,16 @@ export function scanBrowserSecurityOperations(
     operations: dedupeBrowserOperations(operations),
     violations: dedupeViolations(violations),
   };
+}
+
+function browserTimerCallbackIsSourceText(expression: ts.Expression | undefined): boolean {
+  if (expression === undefined) return false;
+  const current = unwrapExpression(expression);
+  return (
+    ts.isStringLiteral(current) ||
+    ts.isNoSubstitutionTemplateLiteral(current) ||
+    ts.isTemplateExpression(current)
+  );
 }
 
 function classifyBrowserCall(
@@ -719,16 +1524,38 @@ interface SecuritySemanticState {
 
 interface SecuritySemanticInvocationResult {
   readonly closed: boolean;
+  readonly helperInvocations: readonly SecuritySemanticHelperInvocationFact[];
   readonly operations: readonly ServerSecurityOperationModel[];
   readonly summaries: readonly SecuritySemanticSummary[];
   readonly traces: readonly SecuritySemanticTrace[];
   readonly violations: readonly SecurityOperationViolationModel[];
 }
 
+interface ServerModuleAliasEnvironment {
+  readonly sourceFile: ts.SourceFile;
+  readonly values: ReadonlyMap<string, ServerValueProvenance>;
+}
+
+interface ServerAliasEnvironment {
+  readonly module: ServerModuleAliasEnvironment;
+  readonly sourceFile: ts.SourceFile;
+  readonly values: ReadonlyMap<string, ServerValueProvenance>;
+}
+
+const serverRootModuleAliasEnvironmentCache = compilerCreateWeakMap<
+  ts.SourceFile,
+  ServerModuleAliasEnvironment
+>();
+const serverInheritedModuleAliasEnvironmentCache = compilerCreateWeakMap<
+  ServerAliasEnvironment,
+  ServerModuleAliasEnvironment
+>();
+
 interface SecuritySemanticHelperInvocation {
   readonly authorityInputs: readonly string[];
   readonly call: ts.CallExpression;
   readonly callable: ResolvedSecurityIrCallable;
+  readonly inheritedEnvironment: ServerAliasEnvironment;
   readonly parameterProvenances: readonly ServerValueProvenance[];
   readonly transfer: string;
   readonly unsupportedDetail?: string;
@@ -745,8 +1572,9 @@ export function scanServerSecurityOperations(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
   surface: SecurityOperationSurface,
-  parameters: readonly ts.ParameterDeclaration[] = [],
-  root = `${surface}:<anonymous>`,
+  parameters: readonly ts.ParameterDeclaration[],
+  root: string,
+  binding: SecuritySemanticRootBinding,
 ): SecurityOperationScanResult<ServerSecurityOperationModel> {
   const state: SecuritySemanticState = {
     active: compilerCreateSet<string>(),
@@ -759,6 +1587,7 @@ export function scanServerSecurityOperations(
     body,
     callable: undefined,
     depth: 0,
+    inheritedEnvironment: undefined,
     parameterProvenances: undefined,
     parameters,
     root,
@@ -770,6 +1599,8 @@ export function scanServerSecurityOperations(
   return {
     operations: dedupeServerOperations(result.operations),
     semanticRoot: {
+      binding,
+      helperInvocations: dedupeSemanticHelperInvocations(result.helperInvocations),
       root,
       summaries: dedupeSemanticSummaries(result.summaries),
       traces: dedupeSemanticTraces(result.traces),
@@ -782,6 +1613,7 @@ function analyzeServerSecurityCallable(options: {
   body: ts.ConciseBody;
   callable: ResolvedSecurityIrCallable | undefined;
   depth: number;
+  inheritedEnvironment: ServerAliasEnvironment | undefined;
   parameterProvenances: readonly ServerValueProvenance[] | undefined;
   parameters: readonly ts.ParameterDeclaration[];
   root: string;
@@ -794,6 +1626,7 @@ function analyzeServerSecurityCallable(options: {
     body,
     callable,
     depth,
+    inheritedEnvironment,
     parameterProvenances,
     parameters,
     root,
@@ -802,6 +1635,7 @@ function analyzeServerSecurityCallable(options: {
     surface,
     transfers,
   } = options;
+  const helperInvocations: SecuritySemanticHelperInvocationFact[] = [];
   const operations: ServerSecurityOperationModel[] = [];
   const summaries: SecuritySemanticSummary[] = [];
   const traces: SecuritySemanticTrace[] = [];
@@ -829,12 +1663,16 @@ function analyzeServerSecurityCallable(options: {
       {
         authorityInputs,
         callable: `local:${callable?.name ?? '<unknown>'}`,
+        callableSpan: {
+          end: (callable?.declaration ?? body).getEnd(),
+          start: (callable?.declaration ?? body).getStart(sourceFile),
+        },
         operationKinds: [],
         verdict: 'closed',
       },
       'Closed semantic helper summaries',
     );
-    return { closed: true, operations, summaries, traces, violations };
+    return { closed: true, helperInvocations, operations, summaries, traces, violations };
   }
 
   if (callable !== undefined) {
@@ -863,12 +1701,16 @@ function analyzeServerSecurityCallable(options: {
           {
             authorityInputs,
             callable: `local:${callable.name}`,
+            callableSpan: {
+              end: callable.declaration.getEnd(),
+              start: callable.declaration.getStart(sourceFile),
+            },
             operationKinds: [],
             verdict: 'closed',
           },
           'Budget-closed semantic helper summaries',
         );
-        return { closed: true, operations, summaries, traces, violations };
+        return { closed: true, helperInvocations, operations, summaries, traces, violations };
       }
     }
     compilerSetAdd(state.active, signature);
@@ -876,7 +1718,11 @@ function analyzeServerSecurityCallable(options: {
 
   let closed = false;
   try {
-    state.nodes += semanticNodeCount(body);
+    const regions = securityIrCallableRegions(body, parameters);
+    const regionSnapshot = compilerSnapshotDenseArray(regions, 'Semantic callable regions');
+    for (let index = 0; index < regionSnapshot.length; index += 1) {
+      state.nodes += semanticNodeCount(regionSnapshot[index]!);
+    }
     if (state.nodes > SECURITY_SEMANTIC_NODE_BUDGET) {
       appendSemanticClosure(
         sourceFile,
@@ -891,13 +1737,36 @@ function analyzeServerSecurityCallable(options: {
       );
       closed = true;
     } else {
-      const direct = scanServerSecurityOperationsDirect(
-        sourceFile,
-        body,
-        surface,
-        parameters,
-        parameterProvenances,
-      );
+      const directOperations: ServerSecurityOperationModel[] = [];
+      const directViolations: SecurityOperationViolationModel[] = [];
+      const regionEnvironments: ServerAliasEnvironment[] = [];
+      for (let index = 0; index < regionSnapshot.length; index += 1) {
+        const environment = serverAliasProvenance(
+          sourceFile,
+          regionSnapshot[index]!,
+          parameters,
+          surface,
+          parameterProvenances,
+          inheritedEnvironment,
+        );
+        compilerArrayAppend(
+          regionEnvironments,
+          environment,
+          'Semantic callable-region environments',
+        );
+        const region = scanServerSecurityOperationsDirect(
+          sourceFile,
+          regionSnapshot[index]!,
+          surface,
+          parameters,
+          parameterProvenances,
+          inheritedEnvironment,
+          environment,
+        );
+        appendServerOperations(directOperations, region.operations);
+        appendSemanticViolations(directViolations, region.violations);
+      }
+      const direct = { operations: directOperations, violations: directViolations };
       appendServerOperations(operations, direct.operations);
       state.operations += direct.operations.length;
       if (state.operations > SECURITY_SEMANTIC_OPERATION_BUDGET) {
@@ -968,8 +1837,31 @@ function analyzeServerSecurityCallable(options: {
       }
 
       if (!closed || state.operations <= SECURITY_SEMANTIC_OPERATION_BUDGET) {
-        const aliases = serverAliasProvenance(body, parameters, surface, parameterProvenances);
-        const helpers = semanticHelperInvocations(sourceFile, body, direct.operations, aliases);
+        const helpers: SecuritySemanticHelperInvocation[] = [];
+        const regionEnvironmentSnapshot = compilerSnapshotDenseArray(
+          regionEnvironments,
+          'Semantic callable-region environments',
+        );
+        for (let index = 0; index < regionSnapshot.length; index += 1) {
+          const region = regionSnapshot[index]!;
+          const regionHelpers = semanticHelperInvocations(
+            sourceFile,
+            region,
+            direct.operations,
+            regionEnvironmentSnapshot[index]!,
+          );
+          const helperRegionSnapshot = compilerSnapshotDenseArray(
+            regionHelpers,
+            'Semantic callable-region helpers',
+          );
+          for (let helperIndex = 0; helperIndex < helperRegionSnapshot.length; helperIndex += 1) {
+            compilerArrayAppend(
+              helpers,
+              helperRegionSnapshot[helperIndex]!,
+              'Semantic callable helpers',
+            );
+          }
+        }
         const helperSnapshot = compilerSnapshotDenseArray(
           helpers,
           'Normalized semantic helper invocations',
@@ -994,10 +1886,19 @@ function analyzeServerSecurityCallable(options: {
               {
                 authorityInputs: helper.authorityInputs,
                 callable: `local:${helper.callable.name}`,
+                callableSpan: {
+                  end: helper.callable.declaration.getEnd(),
+                  start: helper.callable.declaration.getStart(sourceFile),
+                },
                 operationKinds: [],
                 verdict: 'closed',
               },
               'Unsupported semantic helper summaries',
+            );
+            compilerArrayAppend(
+              helperInvocations,
+              semanticHelperInvocationFact(sourceFile, helper, nextTransfers, [], 'closed'),
+              'Unsupported semantic helper invocations',
             );
             closed = true;
             continue;
@@ -1019,10 +1920,19 @@ function analyzeServerSecurityCallable(options: {
               {
                 authorityInputs: helper.authorityInputs,
                 callable: `local:${helper.callable.name}`,
+                callableSpan: {
+                  end: helper.callable.declaration.getEnd(),
+                  start: helper.callable.declaration.getStart(sourceFile),
+                },
                 operationKinds: [],
                 verdict: 'closed',
               },
               'Depth-closed semantic helper summaries',
+            );
+            compilerArrayAppend(
+              helperInvocations,
+              semanticHelperInvocationFact(sourceFile, helper, nextTransfers, [], 'closed'),
+              'Depth-closed semantic helper invocations',
             );
             closed = true;
             continue;
@@ -1032,6 +1942,7 @@ function analyzeServerSecurityCallable(options: {
             body: helper.callable.body,
             callable: helper.callable,
             depth: depth + 1,
+            inheritedEnvironment: helper.inheritedEnvironment,
             parameterProvenances: helper.parameterProvenances,
             parameters: helper.callable.parameters,
             root,
@@ -1040,6 +1951,18 @@ function analyzeServerSecurityCallable(options: {
             surface,
             transfers: nextTransfers,
           });
+          compilerArrayAppend(
+            helperInvocations,
+            semanticHelperInvocationFact(
+              sourceFile,
+              helper,
+              nextTransfers,
+              semanticOperationKinds(child.operations),
+              child.closed ? 'closed' : 'proved',
+            ),
+            'Normalized semantic helper invocations',
+          );
+          appendSemanticHelperInvocations(helperInvocations, child.helperInvocations);
           appendServerOperations(operations, child.operations);
           appendSemanticSummaries(summaries, child.summaries);
           appendSemanticTraces(traces, child.traces);
@@ -1056,23 +1979,58 @@ function analyzeServerSecurityCallable(options: {
         {
           authorityInputs,
           callable: `local:${callable.name}`,
+          callableSpan: {
+            end: callable.declaration.getEnd(),
+            start: callable.declaration.getStart(sourceFile),
+          },
           operationKinds,
           verdict: closed ? 'closed' : 'proved',
         },
         'Bottom-up semantic helper summaries',
       );
     }
-    return { closed, operations, summaries, traces, violations };
+    return { closed, helperInvocations, operations, summaries, traces, violations };
   } finally {
     if (signature !== undefined) compilerSetDelete(state.active, signature);
   }
+}
+
+function securityIrCallableRegions(
+  body: ts.ConciseBody,
+  parameters: readonly ts.ParameterDeclaration[],
+): ts.ConciseBody[] {
+  const regions: ts.ConciseBody[] = [body];
+  const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Semantic callable parameters');
+  const appendBindingInitializers = (name: ts.BindingName): void => {
+    if (ts.isIdentifier(name)) return;
+    const elements = compilerSnapshotDenseArray(
+      name.elements,
+      'Semantic parameter binding elements',
+    );
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]!;
+      if (ts.isOmittedExpression(element)) continue;
+      if (element.initializer) {
+        compilerArrayAppend(regions, element.initializer, 'Semantic parameter initializers');
+      }
+      appendBindingInitializers(element.name);
+    }
+  };
+  for (let index = 0; index < parameterSnapshot.length; index += 1) {
+    const parameter = parameterSnapshot[index]!;
+    if (parameter.initializer) {
+      compilerArrayAppend(regions, parameter.initializer, 'Semantic parameter initializers');
+    }
+    appendBindingInitializers(parameter.name);
+  }
+  return regions;
 }
 
 function semanticHelperInvocations(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
   operations: readonly ServerSecurityOperationModel[],
-  aliases: ReadonlyMap<string, ServerValueProvenance>,
+  environment: ServerAliasEnvironment,
 ): SecuritySemanticHelperInvocation[] {
   const helperEdges = compilerCreateSet<string>();
   const operationSnapshot = compilerSnapshotDenseArray(
@@ -1092,18 +2050,16 @@ function semanticHelperInvocations(
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const callee = unwrapExpression(node.expression);
-      if (ts.isIdentifier(callee)) {
-        const callable = resolveSameFileSecurityIrCallable(sourceFile, callee);
-        const edgeKey = callable
-          ? `${node.getStart(sourceFile)}\0${node.getEnd()}\0local:${callable.name}`
-          : undefined;
-        if (callable && edgeKey && compilerSetHas(helperEdges, edgeKey)) {
-          compilerArrayAppend(
-            helpers,
-            semanticHelperInvocation(sourceFile, node, callable, aliases),
-            'Normalized semantic helper invocations',
-          );
-        }
+      const callable = resolveSameFileSecurityIrCallable(sourceFile, callee);
+      const edgeKey = callable
+        ? `${node.getStart(sourceFile)}\0${node.getEnd()}\0local:${callable.name}`
+        : undefined;
+      if (callable && edgeKey && compilerSetHas(helperEdges, edgeKey)) {
+        compilerArrayAppend(
+          helpers,
+          semanticHelperInvocation(sourceFile, node, callable, environment),
+          'Normalized semantic helper invocations',
+        );
       }
     }
     ts.forEachChild(node, visit);
@@ -1116,8 +2072,9 @@ function semanticHelperInvocation(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
   callable: ResolvedSecurityIrCallable,
-  aliases: ReadonlyMap<string, ServerValueProvenance>,
+  environment: ServerAliasEnvironment,
 ): SecuritySemanticHelperInvocation {
+  const aliases = environment.values;
   const argumentSnapshot = compilerSnapshotDenseArray(call.arguments, 'Semantic helper arguments');
   const parameterSnapshot = compilerSnapshotDenseArray(
     callable.parameters,
@@ -1176,9 +2133,56 @@ function semanticHelperInvocation(
     authorityInputs,
     call,
     callable,
+    inheritedEnvironment: environment,
     parameterProvenances,
     transfer,
     ...(unsupportedDetail === undefined ? {} : { unsupportedDetail }),
+  };
+}
+
+function semanticHelperInvocationFact(
+  sourceFile: ts.SourceFile,
+  helper: SecuritySemanticHelperInvocation,
+  transfers: readonly string[],
+  operationKinds: readonly ServerSecurityOperationKind[],
+  verdict: SecuritySemanticHelperInvocationFact['verdict'],
+): SecuritySemanticHelperInvocationFact {
+  const argumentSpans: Array<{ readonly end: number; readonly start: number }> = [];
+  const argumentsSnapshot = compilerSnapshotDenseArray(
+    helper.call.arguments,
+    'Semantic helper invocation arguments',
+  );
+  for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+    compilerArrayAppend(
+      argumentSpans,
+      {
+        end: argumentsSnapshot[index]!.getEnd(),
+        start: argumentsSnapshot[index]!.getStart(sourceFile),
+      },
+      'Semantic helper invocation argument spans',
+    );
+  }
+  return {
+    argumentSpans,
+    authorityInputs: compilerSnapshotDenseArray(
+      helper.authorityInputs,
+      'Semantic helper invocation authority inputs',
+    ),
+    callable: `local:${helper.callable.name}`,
+    callableSpan: {
+      end: helper.callable.declaration.getEnd(),
+      start: helper.callable.declaration.getStart(sourceFile),
+    },
+    callSpan: {
+      end: helper.call.getEnd(),
+      start: helper.call.getStart(sourceFile),
+    },
+    operationKinds: compilerSnapshotDenseArray(
+      operationKinds,
+      'Semantic helper invocation operation kinds',
+    ),
+    transfers: compilerSnapshotDenseArray(transfers, 'Semantic helper invocation transfers'),
+    verdict,
   };
 }
 
@@ -1328,6 +2332,16 @@ function appendSemanticSummaries(
   }
 }
 
+function appendSemanticHelperInvocations(
+  target: SecuritySemanticHelperInvocationFact[],
+  values: readonly SecuritySemanticHelperInvocationFact[],
+): void {
+  const snapshot = compilerSnapshotDenseArray(values, 'Semantic helper invocation facts');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerArrayAppend(target, snapshot[index]!, 'Semantic helper invocation facts');
+  }
+}
+
 function appendSemanticTraces(
   target: SecuritySemanticTrace[],
   values: readonly SecuritySemanticTrace[],
@@ -1354,8 +2368,30 @@ function dedupeSemanticSummaries(
   return dedupeByKey(
     values,
     (value) =>
-      `${value.callable}\0${compilerArrayJoin(value.authorityInputs, ',')}\0${compilerArrayJoin(value.operationKinds, ',')}\0${value.verdict}`,
+      `${value.callable}\0${value.callableSpan.start}\0${value.callableSpan.end}\0${compilerArrayJoin(value.authorityInputs, ',')}\0${compilerArrayJoin(value.operationKinds, ',')}\0${value.verdict}`,
   );
+}
+
+function dedupeSemanticHelperInvocations(
+  values: readonly SecuritySemanticHelperInvocationFact[],
+): SecuritySemanticHelperInvocationFact[] {
+  return dedupeByKey(
+    values,
+    (value) =>
+      `${value.callable}\0${value.callableSpan.start}\0${value.callableSpan.end}\0${value.callSpan.start}\0${value.callSpan.end}\0${semanticArgumentSpansKey(value.argumentSpans)}\0${compilerArrayJoin(value.authorityInputs, ',')}\0${compilerArrayJoin(value.operationKinds, ',')}\0${compilerArrayJoin(value.transfers, '\0')}\0${value.verdict}`,
+  );
+}
+
+function semanticArgumentSpansKey(
+  spans: readonly { readonly end: number; readonly start: number }[],
+): string {
+  const parts: string[] = [];
+  const snapshot = compilerSnapshotDenseArray(spans, 'Semantic helper argument spans');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const span = snapshot[index]!;
+    compilerArrayAppend(parts, `${span.start}:${span.end}`, 'Semantic helper argument span key');
+  }
+  return compilerArrayJoin(parts, ',');
 }
 
 function dedupeSemanticTraces(values: readonly SecuritySemanticTrace[]): SecuritySemanticTrace[] {
@@ -1383,10 +2419,25 @@ function scanServerSecurityOperationsDirect(
   surface: SecurityOperationSurface,
   parameters: readonly ts.ParameterDeclaration[] = [],
   parameterProvenances?: readonly ServerValueProvenance[],
+  inheritedEnvironment?: ServerAliasEnvironment,
+  precomputedEnvironment?: ServerAliasEnvironment,
 ): SecurityOperationScanResult<ServerSecurityOperationModel> {
   const operations: ServerSecurityOperationModel[] = [];
   const violations: SecurityOperationViolationModel[] = [];
-  const aliases = serverAliasProvenance(body, parameters, surface, parameterProvenances);
+  const environment =
+    precomputedEnvironment ??
+    serverAliasProvenance(
+      sourceFile,
+      body,
+      parameters,
+      surface,
+      parameterProvenances,
+      inheritedEnvironment,
+    );
+  if (environment.sourceFile !== sourceFile) {
+    compilerFailClosed('Security-IR callable environment crossed an immutable source boundary.');
+  }
+  const aliases = environment.values;
   const appendOperation = (
     kind: ServerSecurityOperationKind,
     node: ts.Node,
@@ -1422,6 +2473,21 @@ function scanServerSecurityOperationsDirect(
     );
   };
 
+  const parameterSnapshot = compilerSnapshotDenseArray(
+    parameters,
+    'Finite server callable parameters',
+  );
+  for (let index = 0; index < parameterSnapshot.length; index += 1) {
+    const parameter = parameterSnapshot[index]!;
+    if (parameter.dotDotDotToken) {
+      appendViolation(
+        parameter,
+        'computed-security-operation',
+        'rest parameters are outside the finite server handler language',
+      );
+    }
+  }
+
   const visit = (node: ts.Node): void => {
     if (isSecurityIrFunctionScope(node)) {
       if (nestedServerFunctionCapturesAuthority(node, aliases)) {
@@ -1431,6 +2497,60 @@ function scanServerSecurityOperationsDirect(
           'server authority cannot be captured by an unsummarized nested callable',
         );
       }
+      if (securityIrFunctionIsImmediateCallback(node)) {
+        const callbackRegions = securityIrCallableRegions(node.body, node.parameters);
+        const callbackRegionSnapshot = compilerSnapshotDenseArray(
+          callbackRegions,
+          'Immediate server callback regions',
+        );
+        for (let index = 0; index < callbackRegionSnapshot.length; index += 1) {
+          const callback = scanServerSecurityOperationsDirect(
+            sourceFile,
+            callbackRegionSnapshot[index]!,
+            surface,
+            node.parameters,
+            undefined,
+            environment,
+          );
+          appendServerOperations(operations, callback.operations);
+          appendSemanticViolations(violations, callback.violations);
+        }
+      }
+      return;
+    }
+    if (
+      ts.isIdentifier(node) &&
+      node.text === 'arguments' &&
+      !(
+        (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) ||
+        (ts.isPropertyAssignment(node.parent) && node.parent.name === node) ||
+        (ts.isMethodDeclaration(node.parent) && node.parent.name === node)
+      )
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'the implicit arguments object is outside the finite server handler language',
+      );
+    }
+    if (node.kind === ts.SyntaxKind.ThisKeyword) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'this-bound handler authority is outside the finite server handler language',
+      );
+    }
+    if (
+      ts.isClassDeclaration(node) ||
+      ts.isClassExpression(node) ||
+      ts.isEnumDeclaration(node) ||
+      ts.isModuleDeclaration(node)
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'handler-local runtime declarations are outside the finite server handler language',
+      );
       return;
     }
     if (ts.isVariableDeclaration(node) && node.initializer) {
@@ -1441,11 +2561,61 @@ function scanServerSecurityOperationsDirect(
           'computed-security-operation',
           'server authority cannot move through an opaque container or control-flow join',
         );
+      } else if (!ts.isIdentifier(node.name) && initializerProvenance === 'foreign-executable') {
+        appendViolation(
+          node.initializer,
+          'computed-security-operation',
+          'destructuring an imported or foreign value can execute an unreviewed protocol',
+        );
       }
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isVariableDeclarationList(node.parent) &&
+      (node.parent.flags & ts.NodeFlags.Using) !== 0
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'using declarations execute an unsupported disposal protocol outside the finite server IR',
+      );
+    }
+    if (
+      ts.isBindingElement(node) &&
+      node.initializer &&
+      serverExpressionProvenance(node.initializer, aliases) === 'foreign-executable'
+    ) {
+      appendViolation(
+        node.initializer,
+        'computed-security-operation',
+        'a binding default cannot receive an imported or foreign executable value',
+      );
     }
     if (ts.isCallExpression(node)) {
       classifyServerCall(sourceFile, node, surface, aliases, appendOperation, appendViolation);
+    } else if (ts.isTaggedTemplateExpression(node)) {
+      const tag = unwrapExpression(node.tag);
+      const identity = canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        tag,
+      );
+      if (!frameworkIdentityIn(identity, SERVER_REVIEWED_DATA_TAG_IDENTITIES)) {
+        appendViolation(
+          node,
+          'computed-security-operation',
+          'unresolved, imported, aliased, or local server template tag is outside the finite server IR',
+        );
+      }
     } else if (ts.isNewExpression(node)) {
+      const unsupportedCallback = serverUnreviewedCallbackArgument(sourceFile, node);
+      if (unsupportedCallback) {
+        appendViolation(
+          unsupportedCallback,
+          'computed-security-operation',
+          'a callback-invoking server constructor requires an inline finite callback',
+        );
+      }
       const callee = unwrapExpression(node.expression);
       const provenance = serverExpressionProvenance(callee, aliases);
       if (provenance === 'response-constructor') {
@@ -1463,6 +2633,12 @@ function scanServerSecurityOperationsDirect(
             `raw Response is not a supported ${surface} outcome`,
           );
         }
+      } else if (provenance === 'foreign-executable') {
+        appendViolation(
+          node,
+          'computed-security-operation',
+          'imported, aliased, or foreign server constructor is outside the finite server IR',
+        );
       } else if (provenance === 'unknown-authority') {
         appendViolation(
           node,
@@ -1475,7 +2651,64 @@ function scanServerSecurityOperationsDirect(
           'computed-security-operation',
           'server authority cannot pass through an unreviewed constructor',
         );
+      } else if (
+        !(
+          ts.isIdentifier(callee) &&
+          (compilerSetHas(browserPureConstructors, callee.text) ||
+            compilerSetHas(browserPureGlobalCalls, callee.text) ||
+            (compilerSetHas(serverPureConstructors, callee.text) &&
+              securityIrMemberCallableIsStable(sourceFile, callee, node))) &&
+          !identifierIsShadowedWithinBoundary(callee, sourceFile) &&
+          !serverArgumentsContainForeignExecutable(node.arguments ?? [], aliases)
+        )
+      ) {
+        appendViolation(
+          node,
+          'computed-security-operation',
+          'unresolved, local, or aliased server constructor is outside the finite server IR',
+        );
       }
+    } else if (
+      ts.isElementAccessExpression(node) &&
+      node.argumentExpression &&
+      serverExpressionProvenance(node.argumentExpression, aliases) === 'foreign-executable'
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'an imported or foreign computed property key can execute an unreviewed coercion protocol',
+      );
+    } else if (
+      ts.isComputedPropertyName(node) &&
+      serverExpressionProvenance(node.expression, aliases) === 'foreign-executable'
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'an imported or foreign computed property key can execute an unreviewed coercion protocol',
+      );
+    } else if (
+      ts.isBinaryExpression(node) &&
+      (node.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword ||
+        node.operatorToken.kind === ts.SyntaxKind.InKeyword) &&
+      serverExpressionProvenance(node.right, aliases) === 'foreign-executable'
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        `${node.operatorToken.getText(sourceFile)} against an imported or foreign value can execute an unreviewed protocol`,
+      );
+    } else if (
+      ts.isBinaryExpression(node) &&
+      serverBinaryOperatorExecutesCoercion(node.operatorToken.kind) &&
+      (serverExpressionProvenance(node.left, aliases) === 'foreign-executable' ||
+        serverExpressionProvenance(node.right, aliases) === 'foreign-executable')
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        `${node.operatorToken.getText(sourceFile)} with an imported or foreign operand can execute an unreviewed coercion protocol`,
+      );
     } else if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
       const left = unwrapExpression(node.left);
       if (
@@ -1495,7 +2728,20 @@ function scanServerSecurityOperationsDirect(
           'server capability members and containers cannot be mutated',
         );
       }
-      if (serverExpressionCarriesAuthority(node.right, aliases)) {
+      if (
+        !ts.isIdentifier(left) &&
+        serverExpressionProvenance(left, aliases) === 'foreign-executable'
+      ) {
+        appendViolation(
+          left,
+          'computed-security-operation',
+          'an imported or foreign assignment target is outside the finite server IR',
+        );
+      }
+      if (
+        serverExpressionCarriesAuthority(node.right, aliases) ||
+        serverExpressionProvenance(node.right, aliases) === 'foreign-executable'
+      ) {
         appendViolation(
           node.right,
           'computed-security-operation',
@@ -1504,7 +2750,8 @@ function scanServerSecurityOperationsDirect(
       }
     } else if (
       ts.isDeleteExpression(node) &&
-      serverExpressionCarriesAuthority(node.expression, aliases)
+      (serverExpressionCarriesAuthority(node.expression, aliases) ||
+        serverExpressionProvenance(node.expression, aliases) === 'foreign-executable')
     ) {
       appendViolation(
         node,
@@ -1512,10 +2759,23 @@ function scanServerSecurityOperationsDirect(
         'server capability members and containers cannot be deleted',
       );
     } else if (
+      ts.isPrefixUnaryExpression(node) &&
+      (node.operator === ts.SyntaxKind.PlusToken ||
+        node.operator === ts.SyntaxKind.MinusToken ||
+        node.operator === ts.SyntaxKind.TildeToken) &&
+      serverExpressionProvenance(node.operand, aliases) === 'foreign-executable'
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'unary coercion of an imported or foreign value is outside the finite server IR',
+      );
+    } else if (
       (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
       (node.operator === ts.SyntaxKind.PlusPlusToken ||
         node.operator === ts.SyntaxKind.MinusMinusToken) &&
-      serverExpressionCarriesAuthority(node.operand, aliases)
+      (serverExpressionCarriesAuthority(node.operand, aliases) ||
+        serverExpressionProvenance(node.operand, aliases) === 'foreign-executable')
     ) {
       appendViolation(
         node,
@@ -1523,19 +2783,81 @@ function scanServerSecurityOperationsDirect(
         'server capability members and containers cannot be incremented or decremented',
       );
     } else if (
-      (ts.isReturnStatement(node) || ts.isThrowStatement(node)) &&
-      node.expression &&
-      serverExpressionCarriesAuthority(node.expression, aliases)
+      ts.isForInStatement(node) &&
+      serverExpressionProvenance(node.expression, aliases) === 'foreign-executable'
     ) {
       appendViolation(
         node.expression,
-        'raw-capability-operation',
-        'server capability cannot escape a structured handler outcome',
+        'computed-security-operation',
+        'enumerating an imported or foreign value can execute an unreviewed property protocol',
       );
+    } else if (
+      ts.isForOfStatement(node) &&
+      serverExpressionProvenance(node.expression, aliases) === 'foreign-executable'
+    ) {
+      appendViolation(
+        node.expression,
+        'computed-security-operation',
+        'iterating an imported or foreign value can execute an unreviewed iterator protocol',
+      );
+    } else if (
+      (ts.isSpreadElement(node) || ts.isSpreadAssignment(node)) &&
+      serverExpressionProvenance(node.expression, aliases) === 'foreign-executable'
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'spreading an imported or foreign value can execute an unreviewed iterator or property protocol',
+      );
+    } else if (
+      ts.isAwaitExpression(node) &&
+      serverExpressionProvenance(node.expression, aliases) === 'foreign-executable'
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'awaiting an imported or foreign value can execute an unreviewed thenable protocol',
+      );
+    } else if (
+      ts.isYieldExpression(node) &&
+      node.expression &&
+      serverExpressionProvenance(node.expression, aliases) === 'foreign-executable'
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        node.asteriskToken
+          ? 'delegating to an imported or foreign iterator is outside the finite server IR'
+          : 'yielding an imported or foreign value is outside the finite server IR',
+      );
+    } else if ((ts.isReturnStatement(node) || ts.isThrowStatement(node)) && node.expression) {
+      const outcome = serverExpressionProvenance(node.expression, aliases);
+      const isReviewedRawResponseOutcome =
+        ts.isReturnStatement(node) &&
+        (surface === 'endpoint' || surface === 'webhook') &&
+        outcome === 'response-outcome';
+      if (outcome === 'foreign-executable') {
+        appendViolation(
+          node.expression,
+          'computed-security-operation',
+          'an imported, aliased, or foreign value cannot escape as a structured handler outcome',
+        );
+      } else if (serverProvenanceCarriesAuthority(outcome) && !isReviewedRawResponseOutcome) {
+        appendViolation(
+          node.expression,
+          'raw-capability-operation',
+          'server capability cannot escape a structured handler outcome',
+        );
+      }
     }
     ts.forEachChild(node, visit);
   };
-  if (!ts.isBlock(body) && serverExpressionCarriesAuthority(body, aliases)) {
+  const conciseOutcome = !ts.isBlock(body) ? serverExpressionProvenance(body, aliases) : undefined;
+  if (
+    conciseOutcome !== undefined &&
+    (conciseOutcome === 'foreign-executable' || serverProvenanceCarriesAuthority(conciseOutcome)) &&
+    !((surface === 'endpoint' || surface === 'webhook') && conciseOutcome === 'response-outcome')
+  ) {
     appendViolation(
       body,
       'raw-capability-operation',
@@ -1548,6 +2870,34 @@ function scanServerSecurityOperationsDirect(
     operations: dedupeServerOperations(operations),
     violations: dedupeViolations(violations),
   };
+}
+
+function securityIrFunctionIsImmediateCallback(
+  node: ts.FunctionLikeDeclaration,
+): node is ts.ArrowFunction | ts.FunctionExpression {
+  if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) return false;
+  let expression: ts.Expression = node;
+  let parent = expression.parent;
+  while (
+    parent &&
+    (ts.isParenthesizedExpression(parent) ||
+      ts.isAsExpression(parent) ||
+      ts.isTypeAssertionExpression(parent) ||
+      ts.isSatisfiesExpression(parent) ||
+      ts.isNonNullExpression(parent))
+  ) {
+    expression = parent;
+    parent = parent.parent;
+  }
+  if (!parent || (!ts.isCallExpression(parent) && !ts.isNewExpression(parent))) return false;
+  const argumentsList = compilerSnapshotDenseArray(
+    parent.arguments ?? [],
+    'Immediate server callback arguments',
+  );
+  for (let index = 0; index < argumentsList.length; index += 1) {
+    if (argumentsList[index] === expression) return true;
+  }
+  return false;
 }
 
 function nestedServerFunctionCapturesAuthority(
@@ -1624,6 +2974,98 @@ function classifyServerCall(
     );
     return;
   }
+  if (serverCallIsExactTrustedSqlRaw(sourceFile, call)) {
+    // SPEC §6.6: the raw constructor is plain reviewed SQL data only as argument zero of the
+    // exact trustedSql(static sql.raw literal, { justification }) door. A free-standing,
+    // dynamic, computed, aliased, or mutable raw constructor falls through to KV449.
+    return;
+  }
+  if (serverCallIsExactDeclaredSecretReadCapability(sourceFile, call, aliases)) {
+    // The Drizzle request analyzer independently proves declaration-before-one-execution and the
+    // runtime validates the private statement witness. Finite IR admits only the same exact
+    // public constructor and immutable trustedSql statement shape.
+    return;
+  }
+  if (serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {
+    // trustedReveal is an audited value projection, not capability authority. Its strict options
+    // and direct import shape mirror the confidentiality analyzer's reviewed escape.
+    return;
+  }
+  if (serverCallIsExactSecretBox(sourceFile, call, aliases)) {
+    // secret() boxes one plain value. It may not receive a server capability or travel through a
+    // renamed, aliased, mutable, computed, or foreign callable.
+    return;
+  }
+  if (serverCallIsExactDrizzleTableAlias(sourceFile, call, aliases)) {
+    // A schema alias is reviewed data only for an exact Drizzle alias(table, staticName) call over
+    // an independently proven project table declaration.
+    return;
+  }
+  if (serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {
+    // SPEC §6.6: one declaration-before-one-execution sequence is the finite read form for a
+    // runtime-validated secret SQL witness. The declaration, statement binding, and managed DB
+    // receiver must all remain direct and linear; aliases, extra references, and late declarations
+    // stay on the generic execute-as-write path below.
+    appendOperation('server.database.read', call, nodeName(callee));
+    return;
+  }
+  if (frameworkIdentityIn(frameworkIdentity, SERVER_REVIEWED_DATA_HELPER_IDENTITIES)) {
+    // These exact framework exports construct plain validation/query-expression data. They do not
+    // receive a capability or own a runtime sink; aliases and same-spelled app/import exports do
+    // not inherit this reviewed identity.
+    if (serverArgumentsContainAuthority(call.arguments, aliases)) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `reviewed server data helper ${nodeName(callee)} cannot receive server authority`,
+      );
+    } else if (
+      frameworkIdentity?.module === 'drizzle-orm'
+        ? serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)
+        : serverArgumentsContainForeignExecutable(call.arguments, aliases)
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `reviewed server data helper ${nodeName(callee)} cannot receive an unreviewed imported executable value`,
+      );
+    } else if (!securityIrMemberCallableIsStable(sourceFile, callee, call)) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `mutable, escaped, or aliased reviewed server data helper ${nodeName(callee)} is outside the finite server IR`,
+      );
+    }
+    return;
+  }
+  if (frameworkExportEquals(frameworkIdentity, RUN_COMMAND_IDENTITY)) {
+    // SPEC §6.6: command execution terminates at the exact framework capability door. KV424 owns
+    // the Command/allowlist provenance proof and runCommand revalidates its private runtime
+    // sentinel; finite IR admits only the direct immutable framework import, never an alias or a
+    // same-spelled foreign callable.
+    if (
+      !securityIrExpressionUsesDirectImportBinding(sourceFile, callee) ||
+      !securityIrMemberCallableIsStable(sourceFile, callee, call) ||
+      serverArgumentsContainAuthority(call.arguments, aliases) ||
+      serverArgumentsContainForeignExecutable(call.arguments, aliases)
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `mutable, escaped, aliased, or authority-bearing command door ${nodeName(callee)} is outside the finite server IR`,
+      );
+    }
+    return;
+  }
+  const unsupportedCallback = serverUnreviewedCallbackArgument(sourceFile, call);
+  if (unsupportedCallback) {
+    appendViolation(
+      unsupportedCallback,
+      'computed-security-operation',
+      'a callback-invoking server operation requires an inline or reviewed finite callback',
+    );
+    return;
+  }
   if (ts.isIdentifier(callee)) {
     const authorityTransfer = serverArgumentsContainAuthority(call.arguments, aliases);
     const classified = classifyServerProvenanceCall(
@@ -1634,15 +3076,28 @@ function classifyServerCall(
       appendOperation,
       appendViolation,
     );
-    if (!classified && authorityTransfer) {
+    if (!classified) {
       const local = resolveSameFileSecurityIrCallable(sourceFile, callee);
       if (local) {
+        // SPEC §5.2/§6.6: exact same-file call edges are part of the finite graph even when the
+        // invocation carries no authority. A helper can itself construct or return a privileged
+        // outcome, so authority-at-the-call-site is not a sound enrollment condition.
         appendOperation('server.helper.call', call, `local:${local.name}`);
+      } else if (
+        compilerSetHas(browserPureGlobalCalls, callee.text) &&
+        !identifierIsShadowedWithinBoundary(callee, sourceFile) &&
+        !authorityTransfer &&
+        !serverArgumentsContainForeignExecutable(call.arguments, aliases)
+      ) {
+        // Reviewed scalar/data intrinsics are the only foreign identifier calls in the finite
+        // server language. A same-spelled local/import or authority-bearing invocation is not the
+        // intrinsic and remains closed.
+        return;
       } else {
         appendViolation(
           call,
           'computed-security-operation',
-          `server authority cannot pass through unresolved or foreign helper ${callee.text}`,
+          `unresolved, imported, aliased, or foreign server helper ${callee.text} is outside the finite server IR`,
         );
       }
     }
@@ -1659,18 +3114,36 @@ function classifyServerCall(
         'computed-security-operation',
         `computed ${root} operation is outside the finite server IR`,
       );
-    } else if (serverArgumentsContainAuthority(call.arguments, aliases)) {
+    } else {
       appendViolation(
         call,
         'computed-security-operation',
-        'server authority cannot pass through a computed helper',
+        'computed server helper is outside the finite server IR',
       );
     }
     return;
   }
-  const provenance = serverExpressionProvenance(callee, aliases);
   const path = expressionPath(member.receiver);
   const target = path ? `${path}.${member.name}` : member.name;
+  const globalRoot = unwrapExpression(member.receiver);
+  const globalMember = ts.isIdentifier(globalRoot)
+    ? `${globalRoot.text}.${member.name}`
+    : undefined;
+  if (
+    globalMember !== undefined &&
+    compilerSetHas(serverPureGlobalMemberCalls, globalMember) &&
+    ts.isIdentifier(globalRoot) &&
+    !identifierIsShadowedWithinBoundary(globalRoot, sourceFile) &&
+    securityIrMemberCallableIsStable(sourceFile, callee, call) &&
+    !serverArgumentsContainAuthority(call.arguments, aliases) &&
+    !serverArgumentsContainForeignExecutable(call.arguments, aliases)
+  ) {
+    // SPEC §5.2/§6.6: this is one exact ambient data operation. The ambient root is seeded as
+    // foreign executable below so aliases, containers, getters, and replacement fall back to the
+    // closed provenance path instead of inheriting this direct-call verdict.
+    return;
+  }
+  const provenance = serverExpressionProvenance(callee, aliases);
   if (
     classifyServerProvenanceCall(
       provenance,
@@ -1683,13 +3156,729 @@ function classifyServerCall(
   ) {
     return;
   }
-  if (serverArgumentsContainAuthority(call.arguments, aliases)) {
+  if (
+    globalMember !== undefined &&
+    compilerSetHas(browserPureGlobalMemberCalls, globalMember) &&
+    ts.isIdentifier(globalRoot) &&
+    !identifierIsShadowedWithinBoundary(globalRoot, sourceFile) &&
+    !serverArgumentsContainAuthority(call.arguments, aliases) &&
+    !serverArgumentsContainForeignExecutable(call.arguments, aliases)
+  ) {
+    return;
+  }
+  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {
+    if (
+      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&
+      !serverArgumentsContainAuthority(call.arguments, aliases) &&
+      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)
+    ) {
+      // SPEC §5.2/§6.6: a Drizzle continuation is reviewed only while it remains an inline static
+      // chain rooted in an exact managed database operation. A detached, replaced, imported, or
+      // same-spelled method never reaches this branch.
+      return;
+    }
     appendViolation(
       call,
       'computed-security-operation',
-      `server authority cannot pass through unreviewed helper ${target}`,
+      `unknown or authority-bearing managed database builder continuation ${member.name} is outside the finite server IR`,
     );
+    return;
   }
+  if (!securityIrMemberCallableIsStable(sourceFile, callee, call)) {
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `mutable, escaped, or aliased server helper ${target} is outside the finite server IR`,
+    );
+    return;
+  }
+  if (member.name === 'call' || member.name === 'apply' || member.name === 'bind') {
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `server helper invocation through ${member.name} is outside the finite server IR`,
+    );
+    return;
+  }
+  const local = resolveSameFileSecurityIrCallable(sourceFile, callee);
+  if (local) {
+    appendOperation('server.helper.call', call, `local:${local.name}`);
+    return;
+  }
+  if (provenance === 'safe-call') return;
+  const localRoot = securityIrLeftmostExecutableRoot(callee);
+  if (
+    provenance === 'local' &&
+    (localRoot === undefined || securityIrIdentifierBindingScope(sourceFile, localRoot) === 'local')
+  ) {
+    if (
+      serverArgumentsContainForeignExecutable(call.arguments, aliases) &&
+      !serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `generic local server helper ${target} cannot receive an imported or foreign executable value`,
+      );
+      return;
+    }
+    // Plain values produced inside the enrolled callable may use ordinary data methods. Exact
+    // callable-valued object members were enrolled above; module/import/unresolved roots remain
+    // closed so a foreign helper cannot masquerade as a plain method.
+    return;
+  }
+  appendViolation(
+    call,
+    'computed-security-operation',
+    `unresolved, imported, aliased, or foreign server helper ${target} is outside the finite server IR`,
+  );
+}
+
+function serverCallIsExactTrustedSqlRaw(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  const member = staticMember(callee);
+  if (
+    !ts.isPropertyAccessExpression(callee) ||
+    !member ||
+    member.name !== 'raw' ||
+    call.arguments.length !== 1 ||
+    !serverExpressionIsNonEmptyStaticString(call.arguments[0]!) ||
+    !frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        unwrapExpression(member.receiver),
+      ),
+      KOVO_SQL_IDENTITY,
+    ) ||
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, member.receiver) ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, call)
+  ) {
+    return false;
+  }
+
+  const parent = call.parent;
+  if (
+    !ts.isCallExpression(parent) ||
+    parent.arguments[0] !== call ||
+    parent.arguments.length !== 2
+  ) {
+    return false;
+  }
+  const trustedSqlCallee = unwrapExpression(parent.expression);
+  return !!(
+    frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        trustedSqlCallee,
+      ),
+      TRUSTED_SQL_IDENTITY,
+    ) &&
+    securityIrExpressionUsesDirectImportBinding(sourceFile, trustedSqlCallee) &&
+    securityIrMemberCallableIsStable(sourceFile, trustedSqlCallee, parent) &&
+    serverExpressionIsExactJustificationOptions(parent.arguments[1]!)
+  );
+}
+
+function serverCallIsExactDeclaredSecretReadCapability(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  if (
+    !serverCallUsesExactNamedFrameworkImport(
+      sourceFile,
+      call,
+      callee,
+      'declareSecretReadCapability',
+      DECLARE_SECRET_READ_CAPABILITY_IDENTITY,
+    ) ||
+    call.arguments.length !== 2 ||
+    serverArgumentsContainAuthority(call.arguments, aliases) ||
+    serverArgumentsContainForeignExecutable(call.arguments, aliases) ||
+    !serverExpressionIsExactSecretReadDeclaration(call.arguments[1]!)
+  ) {
+    return false;
+  }
+
+  const statement = unwrapExpression(call.arguments[0]!);
+  if (!ts.isIdentifier(statement)) return false;
+  const initializer = securityIrImmutableBindingInitializer(sourceFile, statement);
+  if (!initializer) return false;
+  const trustedSqlCall = unwrapExpression(initializer);
+  if (!ts.isCallExpression(trustedSqlCall) || trustedSqlCall.arguments.length !== 2) return false;
+  const trustedSqlCallee = unwrapExpression(trustedSqlCall.expression);
+  if (
+    !frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        trustedSqlCallee,
+      ),
+      TRUSTED_SQL_IDENTITY,
+    ) ||
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, trustedSqlCallee) ||
+    !securityIrMemberCallableIsStable(sourceFile, trustedSqlCallee, trustedSqlCall) ||
+    !serverExpressionIsExactJustificationOptions(trustedSqlCall.arguments[1]!)
+  ) {
+    return false;
+  }
+  const raw = unwrapExpression(trustedSqlCall.arguments[0]!);
+  return ts.isCallExpression(raw) && serverCallIsExactTrustedSqlRaw(sourceFile, raw);
+}
+
+function serverCallIsExactTrustedReveal(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  return !!(
+    serverCallUsesExactNamedFrameworkImport(
+      sourceFile,
+      call,
+      callee,
+      'trustedReveal',
+      TRUSTED_REVEAL_IDENTITY,
+    ) &&
+    call.arguments.length === 2 &&
+    !serverArgumentsContainAuthority(call.arguments, aliases) &&
+    !serverArgumentsContainForeignExecutable(call.arguments, aliases) &&
+    serverExpressionIsExactTrustedRevealOptions(call.arguments[1]!)
+  );
+}
+
+function serverCallIsExactSecretBox(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  return !!(
+    serverCallUsesExactNamedFrameworkImport(sourceFile, call, callee, 'secret', SECRET_IDENTITY) &&
+    call.arguments.length === 1 &&
+    !serverArgumentsContainAuthority(call.arguments, aliases) &&
+    !serverArgumentsContainForeignExecutable(call.arguments, aliases)
+  );
+}
+
+function serverCallIsExactDrizzleTableAlias(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  return !!(
+    serverCallUsesExactNamedFrameworkImport(
+      sourceFile,
+      call,
+      callee,
+      'alias',
+      DRIZZLE_ALIAS_IDENTITY,
+    ) &&
+    call.arguments.length === 2 &&
+    !serverArgumentsContainAuthority(call.arguments, aliases) &&
+    serverExpressionIsReviewedDatabaseTable(sourceFile, call.arguments[0]!) &&
+    serverExpressionIsNonEmptyStaticString(call.arguments[1]!)
+  );
+}
+
+function serverCallIsExactDeclaredSecretReadExecution(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  if (
+    !ts.isPropertyAccessExpression(callee) ||
+    callee.name.text !== 'execute' ||
+    call.arguments.length !== 1 ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, call)
+  ) {
+    return false;
+  }
+  const receiverProvenance = serverExpressionProvenance(callee.expression, aliases);
+  if (receiverProvenance !== 'database' && receiverProvenance !== 'database-read-namespace') {
+    return false;
+  }
+
+  const statementUse = unwrapExpression(call.arguments[0]!);
+  if (!ts.isIdentifier(statementUse)) return false;
+  const initializer = securityIrImmutableBindingInitializer(sourceFile, statementUse);
+  if (!initializer) return false;
+  const trustedSqlCall = unwrapExpression(initializer);
+  if (!ts.isCallExpression(trustedSqlCall) || trustedSqlCall.arguments.length !== 2) return false;
+  const raw = unwrapExpression(trustedSqlCall.arguments[0]!);
+  if (!ts.isCallExpression(raw) || !serverCallIsExactTrustedSqlRaw(sourceFile, raw)) return false;
+
+  const declaration = serverExactVariableDeclarationForInitializer(initializer, statementUse.text);
+  const declarationLocation = declaration ? serverDirectStatementLocation(declaration) : undefined;
+  const executionLocation = serverDirectStatementLocation(call);
+  if (
+    !declaration ||
+    !declarationLocation ||
+    !executionLocation ||
+    declarationLocation.block !== executionLocation.block ||
+    declarationLocation.index >= executionLocation.index
+  ) {
+    return false;
+  }
+
+  let capabilityDeclaration: ts.CallExpression | undefined;
+  let capabilityDeclarationCount = 0;
+  const visit = (node: ts.Node): void => {
+    if (node !== executionLocation.block && isSecurityIrFunctionScope(node)) return;
+    if (ts.isCallExpression(node)) {
+      const argument = node.arguments.length > 0 ? unwrapExpression(node.arguments[0]!) : undefined;
+      if (
+        argument &&
+        ts.isIdentifier(argument) &&
+        argument.text === statementUse.text &&
+        serverCallIsExactDeclaredSecretReadCapability(sourceFile, node, aliases)
+      ) {
+        capabilityDeclarationCount += 1;
+        if (capabilityDeclarationCount === 1) capabilityDeclaration = node;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(executionLocation.block);
+  if (capabilityDeclarationCount !== 1 || !capabilityDeclaration) return false;
+
+  const capabilityLocation = serverDirectStatementLocation(capabilityDeclaration);
+  if (
+    !capabilityLocation ||
+    capabilityLocation.block !== executionLocation.block ||
+    capabilityLocation.index <= declarationLocation.index ||
+    capabilityLocation.index >= executionLocation.index
+  ) {
+    return false;
+  }
+
+  const declarationArgument = unwrapExpression(capabilityDeclaration.arguments[0]!);
+  if (!ts.isIdentifier(declarationArgument)) return false;
+  const allowedReferences = compilerCreateSet<ts.Identifier>();
+  compilerSetAdd(allowedReferences, declaration.name as ts.Identifier);
+  compilerSetAdd(allowedReferences, declarationArgument);
+  compilerSetAdd(allowedReferences, statementUse);
+  let escaped = false;
+  const findEscape = (node: ts.Node): void => {
+    if (escaped) return;
+    if (
+      ts.isIdentifier(node) &&
+      node.text === statementUse.text &&
+      !compilerSetHas(allowedReferences, node)
+    ) {
+      escaped = true;
+      return;
+    }
+    ts.forEachChild(node, findEscape);
+  };
+  findEscape(executionLocation.block);
+  return !escaped;
+}
+
+function serverExactVariableDeclarationForInitializer(
+  initializer: ts.Expression,
+  name: string,
+): ts.VariableDeclaration | undefined {
+  let cursor: ts.Node = initializer;
+  while (cursor.parent && !ts.isVariableDeclaration(cursor.parent)) {
+    if (ts.isStatement(cursor.parent) || isSecurityIrFunctionScope(cursor.parent)) return undefined;
+    cursor = cursor.parent;
+  }
+  const declaration = cursor.parent;
+  return declaration &&
+    ts.isVariableDeclaration(declaration) &&
+    ts.isIdentifier(declaration.name) &&
+    declaration.name.text === name &&
+    isConstVariableDeclaration(declaration)
+    ? declaration
+    : undefined;
+}
+
+interface ServerDirectStatementLocation {
+  readonly block: ts.Block;
+  readonly index: number;
+}
+
+function serverDirectStatementLocation(node: ts.Node): ServerDirectStatementLocation | undefined {
+  let cursor: ts.Node = node;
+  while (cursor.parent) {
+    const parent = cursor.parent;
+    if (ts.isBlock(parent) && ts.isStatement(cursor)) {
+      const statements = compilerSnapshotDenseArray(
+        parent.statements,
+        'Finite declared secret-read statements',
+      );
+      const index = statements.indexOf(cursor);
+      return index >= 0 ? { block: parent, index } : undefined;
+    }
+    if (isSecurityIrFunctionScope(parent)) return undefined;
+    cursor = parent;
+  }
+  return undefined;
+}
+
+function serverCallUsesExactNamedFrameworkImport(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  callee: ts.Expression,
+  exportName: string,
+  identity: FrameworkExportIdentity,
+): boolean {
+  return !!(
+    ts.isIdentifier(callee) &&
+    callee.text === exportName &&
+    frameworkExportEquals(
+      canonicalFrameworkExportForExpression(ts as FrameworkIdentityTypeScript, sourceFile, callee),
+      identity,
+    ) &&
+    securityIrExpressionUsesDirectImportBinding(sourceFile, callee) &&
+    securityIrMemberCallableIsStable(sourceFile, callee, call)
+  );
+}
+
+function serverExpressionIsExactJustificationOptions(expression: ts.Expression): boolean {
+  const options = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 1) return false;
+  const property = options.properties[0]!;
+  return !!(
+    ts.isPropertyAssignment(property) &&
+    !ts.isComputedPropertyName(property.name) &&
+    staticPropertyName(property.name) === 'justification' &&
+    serverExpressionIsNonEmptyStaticString(property.initializer)
+  );
+}
+
+function serverExpressionIsExactSecretReadDeclaration(expression: ts.Expression): boolean {
+  const options = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 4) return false;
+  const expected = finiteStringSet(['columns', 'justification', 'source', 'table']);
+  const seen = compilerCreateSet<string>();
+  const properties = compilerSnapshotDenseArray(
+    options.properties,
+    'Finite declared secret-read options',
+  );
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name))
+      return false;
+    const name = staticPropertyName(property.name);
+    if (!name || !compilerSetHas(expected, name) || compilerSetHas(seen, name)) return false;
+    compilerSetAdd(seen, name);
+    if (name === 'columns') {
+      const columns = unwrapExpression(property.initializer);
+      if (!ts.isArrayLiteralExpression(columns) || columns.elements.length === 0) return false;
+      const elements = compilerSnapshotDenseArray(columns.elements, 'Finite secret-read columns');
+      for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+        const element = elements[elementIndex]!;
+        if (
+          ts.isSpreadElement(element) ||
+          !serverExpressionIsNonEmptyStaticString(element as ts.Expression)
+        ) {
+          return false;
+        }
+      }
+    } else if (!serverExpressionIsNonEmptyStaticString(property.initializer)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function serverExpressionIsExactTrustedRevealOptions(expression: ts.Expression): boolean {
+  const options = unwrapExpression(expression);
+  if (
+    !ts.isObjectLiteralExpression(options) ||
+    options.properties.length < 1 ||
+    options.properties.length > 3
+  ) {
+    return false;
+  }
+  const expectedOrder = ['justification', 'method', 'source'] as const;
+  let lastIndex = -1;
+  let sawJustification = false;
+  const properties = compilerSnapshotDenseArray(options.properties, 'Finite trustedReveal options');
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name))
+      return false;
+    const name = staticPropertyName(property.name);
+    const optionIndex = name ? expectedOrder.indexOf(name as (typeof expectedOrder)[number]) : -1;
+    if (optionIndex <= lastIndex || optionIndex < 0) return false;
+    lastIndex = optionIndex;
+    const value = unwrapExpression(property.initializer);
+    if (!serverExpressionIsNonEmptyStaticString(value)) return false;
+    if (name === 'justification') {
+      sawJustification = true;
+    } else if (
+      name === 'method' &&
+      ts.isStringLiteralLike(value) &&
+      value.text !== 'arbitrary-fn' &&
+      value.text !== 'server-projection'
+    ) {
+      return false;
+    }
+  }
+  return sawJustification;
+}
+
+function serverExpressionIsNonEmptyStaticString(expression: ts.Expression): boolean {
+  const value = unwrapExpression(expression);
+  return ts.isStringLiteralLike(value) && compilerStringTrim(value.text).length > 0;
+}
+
+function serverCallDescendsFromReviewedDatabaseOperation(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (ts.isCallExpression(current)) {
+    const calleeProvenance = serverExpressionProvenance(current.expression, aliases);
+    if (
+      calleeProvenance === 'operation:server.database.read' ||
+      calleeProvenance === 'operation:server.database.write'
+    ) {
+      return true;
+    }
+    return serverCallDescendsFromReviewedDatabaseOperation(current.expression, aliases);
+  }
+  const member = staticMember(current);
+  return member ? serverCallDescendsFromReviewedDatabaseOperation(member.receiver, aliases) : false;
+}
+
+interface ServerImportedProjectValue {
+  readonly exportName: string;
+  readonly specifier: string;
+}
+
+function serverArgumentsContainUnreviewedForeignExecutable(
+  sourceFile: ts.SourceFile,
+  argumentsList: readonly ts.Expression[],
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const snapshot = compilerSnapshotDenseArray(
+    argumentsList,
+    'Finite managed database builder arguments',
+  );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const argument = snapshot[index]!;
+    if (ts.isSpreadElement(argument)) {
+      if (serverExpressionProvenance(argument.expression, aliases) === 'foreign-executable') {
+        return true;
+      }
+      continue;
+    }
+    if (
+      serverExpressionProvenance(argument, aliases) === 'foreign-executable' &&
+      !serverExpressionIsReviewedDatabaseSchemaValue(sourceFile, argument)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function serverExpressionIsReviewedDatabaseSchemaValue(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  const cached = compilerWeakMapGet(serverReviewedDatabaseSchemaValueCache, current);
+  if (cached !== undefined) return cached;
+  const member = staticMember(current);
+  const reviewed =
+    serverExpressionIsReviewedDatabaseTable(sourceFile, current) ||
+    (member !== undefined && serverExpressionIsReviewedDatabaseTable(sourceFile, member.receiver));
+  compilerWeakMapSet(serverReviewedDatabaseSchemaValueCache, current, reviewed);
+  return reviewed;
+}
+
+function serverExpressionIsReviewedDatabaseTable(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const imported = serverImportedProjectValue(sourceFile, expression);
+  if (!imported) return false;
+  const target = resolveFrameworkIdentityProjectSourceFile(sourceFile, imported.specifier);
+  if (!target) return false;
+
+  let declaration: ts.VariableDeclaration | undefined;
+  const statements = compilerSnapshotDenseArray(
+    target.statements,
+    'Finite database schema source statements',
+  );
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (
+      !ts.isVariableStatement(statement) ||
+      !securityIrNodeHasExportModifier(statement) ||
+      (statement.declarationList.flags & ts.NodeFlags.Const) === 0
+    ) {
+      continue;
+    }
+    const declarations = compilerSnapshotDenseArray(
+      statement.declarationList.declarations,
+      'Finite database schema export declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
+      const candidate = declarations[declarationIndex]!;
+      if (!ts.isIdentifier(candidate.name) || candidate.name.text !== imported.exportName) continue;
+      if (declaration) return false;
+      declaration = candidate;
+    }
+  }
+  if (!declaration?.initializer || serverBindingOrMemberIsAssigned(target, imported.exportName)) {
+    return false;
+  }
+  const initializer = unwrapExpression(declaration.initializer);
+  if (!ts.isCallExpression(initializer)) return false;
+  const factoryIdentity = canonicalFrameworkExportForExpression(
+    ts as FrameworkIdentityTypeScript,
+    target,
+    initializer.expression,
+  );
+  return frameworkIdentityIn(factoryIdentity, SERVER_REVIEWED_DATABASE_TABLE_FACTORY_IDENTITIES);
+}
+
+function serverImportedProjectValue(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): ServerImportedProjectValue | undefined {
+  const current = unwrapExpression(expression);
+  const member = staticMember(current);
+  const identifier = ts.isIdentifier(current)
+    ? current
+    : member && ts.isIdentifier(unwrapExpression(member.receiver))
+      ? (unwrapExpression(member.receiver) as ts.Identifier)
+      : undefined;
+  if (!identifier) return undefined;
+
+  let resolved: ServerImportedProjectValue | undefined;
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Finite server import statements',
+  );
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings) continue;
+    let exportName: string | undefined;
+    if (ts.isNamedImports(bindings) && ts.isIdentifier(current)) {
+      const elements = compilerSnapshotDenseArray(bindings.elements, 'Finite server named imports');
+      for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+        const element = elements[elementIndex]!;
+        if (element.name.text === identifier.text) {
+          exportName = element.propertyName?.text ?? element.name.text;
+          break;
+        }
+      }
+    } else if (
+      ts.isNamespaceImport(bindings) &&
+      member !== undefined &&
+      bindings.name.text === identifier.text
+    ) {
+      exportName = member.name;
+    }
+    if (!exportName) continue;
+    if (resolved) return undefined;
+    resolved = { exportName, specifier: statement.moduleSpecifier.text };
+  }
+  return resolved;
+}
+
+function securityIrNodeHasExportModifier(
+  node: ts.Node & { readonly modifiers?: ts.NodeArray<ts.ModifierLike> },
+): boolean {
+  const modifiers = node.modifiers;
+  if (!modifiers) return false;
+  const snapshot = compilerSnapshotDenseArray(modifiers, 'Finite source modifiers');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    if (snapshot[index]!.kind === ts.SyntaxKind.ExportKeyword) return true;
+  }
+  return false;
+}
+
+function serverBindingOrMemberIsAssigned(sourceFile: ts.SourceFile, name: string): boolean {
+  let assigned = false;
+  const visit = (node: ts.Node): void => {
+    if (assigned) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      isAssignmentOperator(node.operatorToken.kind) &&
+      rootIdentifier(node.left) === name
+    ) {
+      assigned = true;
+      return;
+    }
+    const mutationOperand = ts.isDeleteExpression(node)
+      ? node.expression
+      : (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+          (node.operator === ts.SyntaxKind.PlusPlusToken ||
+            node.operator === ts.SyntaxKind.MinusMinusToken)
+        ? node.operand
+        : undefined;
+    if (mutationOperand && rootIdentifier(mutationOperand) === name) {
+      assigned = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return assigned;
+}
+
+function serverUnreviewedCallbackArgument(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression | ts.NewExpression,
+): ts.Expression | undefined {
+  const callee = unwrapExpression(call.expression);
+  let callbackIndex: number | undefined;
+  if (ts.isNewExpression(call)) {
+    if (
+      ts.isIdentifier(callee) &&
+      callee.text === 'Promise' &&
+      !identifierIsShadowedWithinBoundary(callee, sourceFile)
+    ) {
+      callbackIndex = 0;
+    }
+  } else {
+    const member = staticMember(callee);
+    if (!member) return undefined;
+    const receiver = unwrapExpression(member.receiver);
+    const globalMember = ts.isIdentifier(receiver) ? `${receiver.text}.${member.name}` : undefined;
+    callbackIndex =
+      globalMember === 'Array.from'
+        ? 1
+        : compilerSetHas(serverCallbackInvokingMemberCalls, member.name)
+          ? 0
+          : undefined;
+  }
+  const argumentsList = call.arguments ?? [];
+  if (callbackIndex === undefined || callbackIndex >= argumentsList.length) return undefined;
+  const argument = argumentsList[callbackIndex]!;
+  if (ts.isSpreadElement(argument)) return argument;
+  const current = unwrapExpression(argument);
+  if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) return undefined;
+  if (
+    ts.isIdentifier(current) &&
+    ((current.text === 'undefined' && !identifierIsShadowedWithinBoundary(current, sourceFile)) ||
+      (compilerSetHas(browserPureGlobalCalls, current.text) &&
+        !identifierIsShadowedWithinBoundary(current, sourceFile)))
+  ) {
+    return undefined;
+  }
+  if (current.kind === ts.SyntaxKind.NullKeyword) return undefined;
+  return argument;
 }
 
 function classifyServerProvenanceCall(
@@ -1709,6 +3898,14 @@ function classifyServerProvenanceCall(
     detail: string,
   ) => void,
 ): boolean {
+  if (provenance === 'foreign-executable') {
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `imported, aliased, or foreign server helper ${target} is outside the finite server IR`,
+    );
+    return true;
+  }
   if (provenance === 'unknown-authority') {
     appendViolation(
       call,
@@ -1719,6 +3916,21 @@ function classifyServerProvenanceCall(
   }
   if (provenance === 'scope-call') {
     appendOperation('server.authority.scope', call, target);
+    return true;
+  }
+  if (provenance === 'database-read-namespace') {
+    appendOperation('server.database.read', call, target);
+    return true;
+  }
+  if (provenance === 'database-write-namespace') {
+    appendOperation('server.database.write', call, target);
+    if (surface === 'query') {
+      appendViolation(
+        call,
+        'raw-capability-operation',
+        'query loaders cannot perform a managed database write',
+      );
+    }
     return true;
   }
   if (!compilerStringStartsWith(provenance, 'operation:')) {
@@ -1734,6 +3946,7 @@ function classifyServerProvenanceCall(
   }
   const kind = compilerStringSlice(provenance, 'operation:'.length) as ServerSecurityOperationKind;
   if (surface === 'query' && kind === 'server.database.write') {
+    appendOperation(kind, call, target);
     appendViolation(
       call,
       'raw-capability-operation',
@@ -1758,13 +3971,16 @@ function classifyServerProvenanceCall(
 }
 
 function serverAliasProvenance(
+  sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
   parameters: readonly ts.ParameterDeclaration[],
   surface: SecurityOperationSurface,
   parameterProvenances?: readonly ServerValueProvenance[],
-): ReadonlyMap<string, ServerValueProvenance> {
+  inheritedEnvironment?: ServerAliasEnvironment,
+): ServerAliasEnvironment {
+  const module = serverModuleAliasEnvironment(sourceFile, inheritedEnvironment);
   const aliases = compilerCreateMap<string, ServerValueProvenance>();
-  compilerMapSet(aliases, 'Response', 'response-constructor');
+  compilerMapForEach(module.values, (value, name) => compilerMapSet(aliases, name, value));
 
   const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Security-IR parameters');
   for (let index = 0; index < parameterSnapshot.length; index += 1) {
@@ -1792,11 +4008,12 @@ function serverAliasProvenance(
         if (initializer) {
           const derived = serverExpressionProvenance(initializer, aliases);
           const authority = derived;
-          provenance = isConstVariableDeclaration(node)
-            ? authority
-            : serverProvenanceCarriesAuthority(authority)
-              ? 'unknown-authority'
-              : 'local';
+          provenance =
+            isConstVariableDeclaration(node) || authority === 'foreign-executable'
+              ? authority
+              : serverProvenanceCarriesAuthority(authority)
+                ? 'unknown-authority'
+                : 'local';
         }
         if (bindServerAliasPattern(node.name, provenance, aliases)) changed = true;
       }
@@ -1804,7 +4021,222 @@ function serverAliasProvenance(
     };
     visit(body);
   }
-  return aliases;
+  return { module, sourceFile, values: aliases };
+}
+
+function serverModuleAliasEnvironment(
+  sourceFile: ts.SourceFile,
+  inheritedEnvironment?: ServerAliasEnvironment,
+): ServerModuleAliasEnvironment {
+  if (inheritedEnvironment) {
+    if (
+      inheritedEnvironment.sourceFile !== sourceFile ||
+      inheritedEnvironment.module.sourceFile !== sourceFile
+    ) {
+      compilerFailClosed('Security-IR inherited aliases crossed an immutable source boundary.');
+    }
+    const inherited = compilerWeakMapGet(
+      serverInheritedModuleAliasEnvironmentCache,
+      inheritedEnvironment,
+    );
+    if (inherited) return inherited;
+  } else {
+    const root = compilerWeakMapGet(serverRootModuleAliasEnvironmentCache, sourceFile);
+    if (root) return root;
+  }
+
+  const aliases = compilerCreateMap<string, ServerValueProvenance>();
+  if (inheritedEnvironment) {
+    compilerMapForEach(inheritedEnvironment.values, (value, name) =>
+      compilerMapSet(aliases, name, value),
+    );
+  } else {
+    compilerMapSet(aliases, 'Response', 'response-constructor');
+    compilerMapSet(aliases, 'globalThis', 'global-object');
+    compilerMapSet(aliases, 'Object', 'intrinsic-object');
+    // Direct crypto.randomUUID() has one exact reviewed branch. Treat every other movement of the
+    // ambient executable object like foreign code so aliases and opaque containers stay KV449.
+    compilerMapSet(aliases, 'crypto', 'foreign-executable');
+    compilerSetForEach(securityIrSourceIndex(sourceFile).foreignImportNames, (name) =>
+      compilerMapSet(aliases, name, 'foreign-executable'),
+    );
+  }
+
+  // SPEC §5.2/§6.6: solve the exact old module-alias fixed point once for this immutable lexical
+  // parent. Caching by parent-environment identity preserves conservative name collisions while
+  // avoiding an O(helper-count * module-size) rewalk of emitted semantic graphs.
+  let moduleChanged = true;
+  while (moduleChanged) {
+    moduleChanged = false;
+    const declarations = compilerSnapshotDenseArray(
+      securityIrSourceIndex(sourceFile).moduleConstDeclarations,
+      'Security-IR module aliases',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
+      const declaration = declarations[declarationIndex]!;
+      const initializer = declaration.initializer;
+      if (!initializer) continue;
+      let provenance =
+        serverModuleFrameworkCapabilityFactoryProvenance(sourceFile, initializer, aliases) ??
+        serverExpressionProvenance(initializer, aliases);
+      if (
+        !serverProvenanceCarriesAuthority(provenance) &&
+        serverModuleInitializerReturnsAuthority(
+          sourceFile,
+          initializer,
+          aliases,
+          compilerCreateSet<string>(),
+          0,
+        )
+      ) {
+        provenance = 'unknown-authority';
+      }
+      if (
+        ts.isIdentifier(declaration.name) &&
+        moduleBindingIsAssigned(sourceFile, declaration.name.text) &&
+        serverProvenanceCarriesAuthority(provenance)
+      ) {
+        provenance = 'unknown-authority';
+      }
+      if (bindServerAliasPattern(declaration.name, provenance, aliases)) moduleChanged = true;
+    }
+  }
+
+  const environment: ServerModuleAliasEnvironment = { sourceFile, values: aliases };
+  if (inheritedEnvironment) {
+    compilerWeakMapSet(
+      serverInheritedModuleAliasEnvironmentCache,
+      inheritedEnvironment,
+      environment,
+    );
+  } else {
+    compilerWeakMapSet(serverRootModuleAliasEnvironmentCache, sourceFile, environment);
+  }
+  return environment;
+}
+
+function serverModuleFrameworkCapabilityFactoryProvenance(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerValueProvenance | undefined {
+  const current = unwrapExpression(expression);
+  if (!ts.isCallExpression(current)) return undefined;
+  const callee = unwrapExpression(current.expression);
+  const identity = canonicalFrameworkExportForExpression(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    callee,
+  );
+  if (!frameworkIdentityIn(identity, SERVER_STORAGE_FACTORY_IDENTITIES)) return undefined;
+  if (
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, callee) ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, current) ||
+    serverArgumentsContainAuthority(current.arguments, aliases) ||
+    serverArgumentsContainForeignExecutable(current.arguments, aliases)
+  ) {
+    return 'unknown-authority';
+  }
+  // SPEC §6.6: a module-scope immutable result of the exact reviewed storage factory is a finite
+  // storage capability. Request-time factories and mutable/aliased/lookalike callables never reach
+  // this module-constant fixed point.
+  return 'storage';
+}
+
+function serverModuleInitializerReturnsAuthority(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+  active: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) return true;
+  const current = unwrapExpression(expression);
+  if (!ts.isCallExpression(current)) return false;
+  const callee = unwrapExpression(current.expression);
+  if (!ts.isIdentifier(callee)) return false;
+  const callable = resolveSameFileSecurityIrCallable(sourceFile, callee);
+  if (!callable) return false;
+  const key = `${callable.declaration.getStart(sourceFile)}:${callable.declaration.getEnd()}`;
+  if (compilerSetHas(active, key)) return true;
+  compilerSetAdd(active, key);
+  try {
+    const callableAliases = compilerCreateMap<string, ServerValueProvenance>();
+    compilerMapForEach(aliases, (value, name) => compilerMapSet(callableAliases, name, value));
+    const argumentsList = compilerSnapshotDenseArray(
+      current.arguments,
+      'Security-IR module helper arguments',
+    );
+    const parameters = compilerSnapshotDenseArray(
+      callable.parameters,
+      'Security-IR module helper parameters',
+    );
+    for (let index = 0; index < parameters.length; index += 1) {
+      const argument = argumentsList[index];
+      setServerAliasPattern(
+        parameters[index]!.name,
+        argument === undefined ? 'local' : serverExpressionProvenance(argument, aliases),
+        callableAliases,
+      );
+    }
+
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const visitBindings = (node: ts.Node): void => {
+        if (node !== callable.body && isSecurityIrFunctionScope(node)) return;
+        if (ts.isVariableDeclaration(node)) {
+          const provenance = node.initializer
+            ? serverExpressionProvenance(node.initializer, callableAliases)
+            : 'local';
+          if (bindServerAliasPattern(node.name, provenance, callableAliases)) changed = true;
+        }
+        ts.forEachChild(node, visitBindings);
+      };
+      visitBindings(callable.body);
+    }
+
+    const returnExpressions: ts.Expression[] = [];
+    if (!ts.isBlock(callable.body)) {
+      compilerArrayAppend(returnExpressions, callable.body, 'Security-IR module helper returns');
+    } else {
+      const visitReturns = (node: ts.Node): void => {
+        if (node !== callable.body && isSecurityIrFunctionScope(node)) return;
+        if (ts.isReturnStatement(node) && node.expression) {
+          compilerArrayAppend(
+            returnExpressions,
+            node.expression,
+            'Security-IR module helper returns',
+          );
+          return;
+        }
+        ts.forEachChild(node, visitReturns);
+      };
+      visitReturns(callable.body);
+    }
+    const returns = compilerSnapshotDenseArray(
+      returnExpressions,
+      'Security-IR module helper returns',
+    );
+    for (let index = 0; index < returns.length; index += 1) {
+      const returned = returns[index]!;
+      if (serverExpressionCarriesAuthority(returned, callableAliases)) return true;
+      if (
+        serverModuleInitializerReturnsAuthority(
+          sourceFile,
+          returned,
+          callableAliases,
+          active,
+          depth + 1,
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  } finally {
+    compilerSetDelete(active, key);
+  }
 }
 
 function bindServerAliasPattern(
@@ -1824,11 +4256,16 @@ function bindServerAliasPattern(
       staticPropertyName(
         element.propertyName ?? (ts.isIdentifier(element.name) ? element.name : undefined),
       ) ?? 'computed';
-    const elementProvenance = element.dotDotDotToken
+    const projectedProvenance = element.dotDotDotToken
       ? serverProvenanceCarriesAuthority(provenance)
         ? 'unknown-authority'
         : 'local'
       : serverMemberProvenance(provenance, property);
+    const elementProvenance = serverProvenanceWithBindingDefault(
+      projectedProvenance,
+      element.initializer,
+      aliases,
+    );
     if (bindServerAliasPattern(element.name, elementProvenance, aliases)) changed = true;
   }
   return changed;
@@ -1851,13 +4288,33 @@ function setServerAliasPattern(
       staticPropertyName(
         element.propertyName ?? (ts.isIdentifier(element.name) ? element.name : undefined),
       ) ?? 'computed';
-    const elementProvenance = element.dotDotDotToken
+    const projectedProvenance = element.dotDotDotToken
       ? serverProvenanceCarriesAuthority(provenance)
         ? 'unknown-authority'
         : 'local'
       : serverMemberProvenance(provenance, property);
+    const elementProvenance = serverProvenanceWithBindingDefault(
+      projectedProvenance,
+      element.initializer,
+      aliases,
+    );
     setServerAliasPattern(element.name, elementProvenance, aliases);
   }
+}
+
+function serverProvenanceWithBindingDefault(
+  projected: ServerValueProvenance,
+  initializer: ts.Expression | undefined,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerValueProvenance {
+  if (!initializer) return projected;
+  const fallback = serverExpressionProvenance(initializer, aliases);
+  if (serverProvenanceCarriesAuthority(projected) || serverProvenanceCarriesAuthority(fallback)) {
+    return projected === fallback ? projected : 'unknown-authority';
+  }
+  return projected === 'foreign-executable' || fallback === 'foreign-executable'
+    ? 'foreign-executable'
+    : projected;
 }
 
 function joinServerAlias(
@@ -1877,9 +4334,55 @@ function serverExpressionProvenance(
 ): ServerValueProvenance {
   const current = unwrapExpression(expression);
   if (ts.isIdentifier(current)) return compilerMapGet(aliases, current.text) ?? 'local';
+  if (ts.isObjectLiteralExpression(current) && serverObjectLiteralHasImplicitCallable(current)) {
+    return 'unknown-authority';
+  }
+  if (ts.isNewExpression(current)) {
+    const constructor = serverExpressionProvenance(current.expression, aliases);
+    if (constructor === 'response-constructor') return 'response-outcome';
+    if (constructor === 'foreign-executable') return 'foreign-executable';
+    if (
+      serverProvenanceCarriesAuthority(constructor) ||
+      serverArgumentsContainAuthority(current.arguments ?? [], aliases)
+    ) {
+      return 'unknown-authority';
+    }
+    return 'local';
+  }
   if (ts.isCallExpression(current)) {
     const callee = serverExpressionProvenance(current.expression, aliases);
-    return callee === 'scope-call' ? 'context' : 'local';
+    if (callee === 'scope-call') return 'context';
+    if (callee === 'intrinsic-identity-call') {
+      return current.arguments.length === 1
+        ? serverExpressionProvenance(current.arguments[0]!, aliases)
+        : 'unknown-authority';
+    }
+    if (callee === 'response-constructor' || callee === 'operation:server.response.raw') {
+      return 'response-outcome';
+    }
+    if (callee === 'unknown-authority') return 'unknown-authority';
+    return 'local';
+  }
+  if (ts.isBinaryExpression(current)) {
+    const left = serverExpressionProvenance(current.left, aliases);
+    const right = serverExpressionProvenance(current.right, aliases);
+    if (serverProvenanceCarriesAuthority(left) || serverProvenanceCarriesAuthority(right)) {
+      return 'unknown-authority';
+    }
+    return left === 'foreign-executable' || right === 'foreign-executable'
+      ? 'foreign-executable'
+      : 'local';
+  }
+  if (ts.isConditionalExpression(current)) {
+    const whenTrue = serverExpressionProvenance(current.whenTrue, aliases);
+    const whenFalse = serverExpressionProvenance(current.whenFalse, aliases);
+    if (whenTrue === whenFalse) return whenTrue;
+    if (serverProvenanceCarriesAuthority(whenTrue) || serverProvenanceCarriesAuthority(whenFalse)) {
+      return 'unknown-authority';
+    }
+    return whenTrue === 'foreign-executable' || whenFalse === 'foreign-executable'
+      ? 'foreign-executable'
+      : 'local';
   }
   const member = staticMember(current);
   if (member) {
@@ -1888,7 +4391,66 @@ function serverExpressionProvenance(
       member.name,
     );
   }
+  if (expressionContainsServerForeignExecutable(current, aliases)) return 'foreign-executable';
   return expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local';
+}
+
+function serverObjectLiteralHasImplicitCallable(object: ts.ObjectLiteralExpression): boolean {
+  const properties = compilerSnapshotDenseArray(
+    object.properties,
+    'Finite server object properties',
+  );
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (ts.isGetAccessor(property) || ts.isSetAccessor(property)) return true;
+    if (
+      (ts.isMethodDeclaration(property) ||
+        ts.isPropertyAssignment(property) ||
+        ts.isShorthandPropertyAssignment(property)) &&
+      serverObjectPropertyIsImplicitProtocol(property.name)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function serverObjectPropertyIsImplicitProtocol(name: ts.PropertyName): boolean {
+  const direct = staticPropertyName(name);
+  if (direct && compilerSetHas(serverImplicitObjectProtocolMembers, direct)) return true;
+  if (!ts.isComputedPropertyName(name)) return false;
+  const member = staticMember(name.expression);
+  if (!member || !compilerSetHas(serverImplicitObjectProtocolMembers, member.name)) return false;
+  const receiver = unwrapExpression(member.receiver);
+  return ts.isIdentifier(receiver) && receiver.text === 'Symbol';
+}
+
+function expressionContainsServerForeignExecutable(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== expression && isSecurityIrFunctionScope(node)) return;
+    if (node !== expression && (ts.isCallExpression(node) || ts.isNewExpression(node))) return;
+    if (ts.isIdentifier(node)) {
+      const parent = node.parent;
+      if (
+        !(
+          (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+          (ts.isPropertyAssignment(parent) && parent.name === node)
+        ) &&
+        compilerMapGet(aliases, node.text) === 'foreign-executable'
+      ) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
 }
 
 function serverMemberProvenance(
@@ -1896,17 +4458,7 @@ function serverMemberProvenance(
   member: string,
 ): ServerValueProvenance {
   if (receiver === 'unknown-authority') return receiver;
-  if (
-    receiver === serverOperationProvenance('server.database.read') ||
-    receiver === serverOperationProvenance('server.database.write')
-  ) {
-    // Managed principal scopes expose exact `db.read.select` / `db.write.insert` namespaces. Keep
-    // only a terminal whose reviewed DB kind agrees with the namespace; Function-prototype
-    // laundering (`bind`/`call`/`apply`) and arbitrary members remain opaque.
-    return databaseOperationKind(member) === compilerStringSlice(receiver, 'operation:'.length)
-      ? receiver
-      : 'unknown-authority';
-  }
+  if (receiver === 'foreign-executable') return receiver;
   // Every other finite operation is an exact callable sink, not a first-class capability object.
   if (compilerStringStartsWith(receiver, 'operation:')) return 'unknown-authority';
   if (receiver === 'context') {
@@ -1948,15 +4500,47 @@ function serverMemberProvenance(
     return 'local';
   }
   if (receiver === 'database') {
+    if (member === 'read') return 'database-read-namespace';
+    if (member === 'write') return 'database-write-namespace';
+    if (member === 'query') return 'database-relational-query-namespace';
     const kind = databaseOperationKind(member);
     if (kind) return serverOperationProvenance(kind);
     if (isRawDatabaseCapabilityMember(member)) {
       return 'unknown-authority';
     }
-    // Managed handles can expose schema/table namespaces before the terminal reviewed method.
-    // A call while provenance is still `database` closes below; mere static member traversal does
-    // not erase the managed capability.
-    return 'database';
+    // Managed request handles support one exact static table namespace before a reviewed terminal
+    // (`request.db.products.get`). Further unknown namespace traversal closes below.
+    return 'database-table-namespace';
+  }
+  if (receiver === 'database-read-namespace') {
+    if (member === 'query') return 'database-relational-query-namespace';
+    return databaseOperationKind(member) === 'server.database.read'
+      ? serverOperationProvenance('server.database.read')
+      : 'unknown-authority';
+  }
+  if (receiver === 'database-write-namespace') {
+    return databaseOperationKind(member) === 'server.database.write'
+      ? serverOperationProvenance('server.database.write')
+      : 'unknown-authority';
+  }
+  if (receiver === 'database-table-namespace') {
+    // The generic one-member namespace exists for plain application table collections such as
+    // `request.db.products.get(...)`. It is not a second raw-driver door: SQL/execution and write
+    // terminals stay on the exact managed DB receiver/`read`/`write` namespaces, while an
+    // arbitrary `db.driver.execute(...)`-shaped chain remains absorbing unknown authority.
+    return member === 'all' || member === 'count' || member === 'get' || member === 'values'
+      ? serverOperationProvenance('server.database.read')
+      : 'unknown-authority';
+  }
+  if (receiver === 'database-relational-query-namespace') {
+    // Drizzle relational queries admit one exact static table member. Computed members never reach
+    // this transition because `staticMember` rejects them into absorbing unknown authority.
+    return 'database-relational-table-namespace';
+  }
+  if (receiver === 'database-relational-table-namespace') {
+    return member === 'findFirst' || member === 'findMany'
+      ? serverOperationProvenance('server.database.read')
+      : 'unknown-authority';
   }
   if (receiver === 'headers') {
     if (member === 'append' || member === 'delete' || member === 'set') {
@@ -1968,7 +4552,7 @@ function serverMemberProvenance(
     return 'unknown-authority';
   }
   if (receiver === 'storage') {
-    if (member === 'get' || member === 'list' || member === 'signUrl') {
+    if (member === 'get' || member === 'list' || member === 'signUrl' || member === 'stat') {
       return serverOperationProvenance('server.storage.read');
     }
     if (member === 'delete' || member === 'put') {
@@ -1982,12 +4566,21 @@ function serverMemberProvenance(
     }
     return 'unknown-authority';
   }
+  if (receiver === 'global-object') {
+    return member === 'Response' ? 'response-constructor' : 'unknown-authority';
+  }
+  if (receiver === 'intrinsic-object') {
+    return member === 'freeze' || member === 'seal' || member === 'preventExtensions'
+      ? 'intrinsic-identity-call'
+      : 'local';
+  }
   if (receiver === 'response-constructor') {
     if (member === 'error' || member === 'json' || member === 'redirect') {
       return serverOperationProvenance('server.response.raw');
     }
     return 'unknown-authority';
   }
+  if (receiver === 'response-outcome') return 'unknown-authority';
   return 'local';
 }
 
@@ -2008,7 +4601,14 @@ function serverOperationProvenance(
 }
 
 function serverProvenanceCarriesAuthority(provenance: ServerValueProvenance | undefined): boolean {
-  return provenance !== undefined && provenance !== 'local' && provenance !== 'safe-call';
+  return (
+    provenance !== undefined &&
+    provenance !== 'foreign-executable' &&
+    provenance !== 'intrinsic-identity-call' &&
+    provenance !== 'intrinsic-object' &&
+    provenance !== 'local' &&
+    provenance !== 'safe-call'
+  );
 }
 
 function expressionContainsServerAuthority(
@@ -2061,6 +4661,22 @@ function serverArgumentsContainAuthority(
   );
   for (let index = 0; index < snapshot.length; index += 1) {
     if (serverExpressionCarriesAuthority(snapshot[index]!, aliases)) return true;
+  }
+  return false;
+}
+
+function serverArgumentsContainForeignExecutable(
+  argumentsList: readonly ts.Expression[],
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const snapshot = compilerSnapshotDenseArray(
+    argumentsList,
+    'Server security-operation foreign arguments',
+  );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const argument = snapshot[index]!;
+    const expression = ts.isSpreadElement(argument) ? argument.expression : argument;
+    if (serverExpressionProvenance(expression, aliases) === 'foreign-executable') return true;
   }
   return false;
 }
@@ -2505,20 +5121,6 @@ function identifierIsShadowedWithinBoundary(identifier: ts.Identifier, boundary:
   return securityIrScopeDeclaresName(boundary, identifier.text);
 }
 
-function identifierIsShadowedBeforeBoundary(identifier: ts.Identifier, boundary: ts.Node): boolean {
-  let current: ts.Node | undefined = identifier.parent;
-  while (current && current !== boundary) {
-    if (
-      isSecurityIrLexicalScope(current) &&
-      securityIrScopeDeclaresName(current, identifier.text)
-    ) {
-      return true;
-    }
-    current = current.parent;
-  }
-  return current !== boundary;
-}
-
 function securityIrScopeDeclaresName(scope: ts.Node, name: string): boolean {
   let found = false;
 
@@ -2547,6 +5149,14 @@ function securityIrScopeDeclaresName(scope: ts.Node, name: string): boolean {
     }
     if (node !== scope && ts.isClassDeclaration(node)) {
       if (node.name && !insideNestedLexicalBlock) visitBindingName(node.name);
+      return;
+    }
+    if (
+      ts.isImportDeclaration(node) &&
+      !insideNestedLexicalBlock &&
+      securityIrImportDeclaresName(node, name)
+    ) {
+      found = true;
       return;
     }
     if (ts.isParameter(node)) visitBindingName(node.name);
@@ -2580,7 +5190,7 @@ function isSecurityIrLexicalScope(node: ts.Node): boolean {
   );
 }
 
-function isSecurityIrFunctionScope(node: ts.Node): boolean {
+function isSecurityIrFunctionScope(node: ts.Node): node is ts.FunctionLikeDeclaration {
   return (
     ts.isFunctionDeclaration(node) ||
     ts.isFunctionExpression(node) ||
@@ -2681,6 +5291,32 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
 
 function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
+}
+
+function serverBinaryOperatorExecutesCoercion(kind: ts.SyntaxKind): boolean {
+  switch (kind) {
+    case ts.SyntaxKind.AsteriskToken:
+    case ts.SyntaxKind.AsteriskAsteriskToken:
+    case ts.SyntaxKind.BarToken:
+    case ts.SyntaxKind.CaretToken:
+    case ts.SyntaxKind.EqualsEqualsToken:
+    case ts.SyntaxKind.ExclamationEqualsToken:
+    case ts.SyntaxKind.GreaterThanEqualsToken:
+    case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken:
+    case ts.SyntaxKind.GreaterThanGreaterThanToken:
+    case ts.SyntaxKind.GreaterThanToken:
+    case ts.SyntaxKind.LessThanEqualsToken:
+    case ts.SyntaxKind.LessThanLessThanToken:
+    case ts.SyntaxKind.LessThanToken:
+    case ts.SyntaxKind.MinusToken:
+    case ts.SyntaxKind.PercentToken:
+    case ts.SyntaxKind.PlusToken:
+    case ts.SyntaxKind.SlashToken:
+    case ts.SyntaxKind.AmpersandToken:
+      return true;
+    default:
+      return false;
+  }
 }
 
 function dedupeBrowserOperations(

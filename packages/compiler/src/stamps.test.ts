@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
+import { assertFixpoint, assertRenderEquivalence } from './index.js';
 import { serverRenderLowering } from './emit/server.js';
 import { parseComponentModule } from './scan/parse.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 const cartAddMutationInputs = [
   {
@@ -1729,7 +1730,7 @@ export const Recommendations = component({
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('reports KV222 and KV223 for hand-written stamps around typed expressions in sugar', () => {
+  it('preserves KV222 and KV223 drift checks for compiler-emitted residual stamps', () => {
     const redundant = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `

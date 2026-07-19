@@ -27,6 +27,7 @@ describe('source/sink inventory', () => {
     const sinks = new Set(frameworkSourceSinkInventory().map((entry) => entry.sink));
 
     expect([...sinks].sort()).toEqual([
+      'auth.credential.non-egress',
       'auth.data-access',
       'css.style.output',
       'document.shell.output',
@@ -436,7 +437,7 @@ describe('source/sink inventory', () => {
   it('exposes the same inventory through kovo check', () => {
     expect(kovoCheck({}, { family: 'sources-sinks' })).toMatchObject({
       exitCode: 0,
-      output: expect.stringContaining('CHECK families=12 entries=12 drift-tokens=17'),
+      output: expect.stringContaining('CHECK families=12 entries=13 drift-tokens=17'),
     });
   });
 

@@ -2,92 +2,18 @@
  * @internal Generated and semantic HTML attribute policy shared by compiler gates
  * and integration snapshot serialization (SPEC.md §4.8, §5.2 rule 3).
  */
-export const SEMANTIC_ATTRIBUTE_MANIFEST = {
-  /**
-   * Framework-emitted stamps that do not represent authored visible HTML for
-   * render-equivalence. Prefix entries cover generated attribute families.
-   */
-  generatedOnly: {
-    attributes: [
-      'command',
-      'commandfor',
-      'data-bind',
-      'data-bind-list',
-      'data-derive',
-      'data-derive-attr',
-      'data-kovo-module-allowlist',
-      'kovo-c',
-      'kovo-deps',
-      'kovo-fragment-target',
-      'kovo-key',
-      'kovo-live-component',
-      'kovo-param-types',
-      'kovo-props',
-      'kovo-state',
-      'popovertarget',
-      'popovertargetaction',
-    ],
-    prefixes: ['data-bind:', 'data-bind-prop:', 'data-p-', 'on:'],
-  },
-
-  /**
-   * Kovo attributes preserved by semantic snapshots because they describe
-   * app-visible binding, identity, routing, query, state, or error-channel
-   * semantics.
-   */
-  semanticSnapshot: [
-    'data-bind',
-    'data-bind-list',
-    'data-derive',
-    'data-derive-attr',
-    'data-error-code',
-    'data-error-path',
-    'data-route',
-    'data-row',
-    'data-state',
-    'kovo-c',
-    'kovo-deps',
-    'kovo-fragment-target',
-    'kovo-key',
-    'kovo-query',
-    'kovo-state',
-  ],
-
-  /**
-   * Accessibility and user-facing form attributes kept by semantic snapshots.
-   */
-  accessible: [
-    'alt',
-    'aria-checked',
-    'aria-current',
-    'aria-disabled',
-    'aria-expanded',
-    'aria-hidden',
-    'aria-invalid',
-    'aria-label',
-    'aria-level',
-    'aria-pressed',
-    'aria-selected',
-    'checked',
-    'disabled',
-    'name',
-    'placeholder',
-    'role',
-    'selected',
-    'type',
-    'value',
-  ],
-
-  /**
-   * Behavioral and navigation attributes kept by semantic snapshots because
-   * they define what the element does.
-   */
-  behavioral: ['action', 'formaction', 'href', 'method', 'src'],
-} as const;
+export { SEMANTIC_ATTRIBUTE_MANIFEST } from './semantic-attribute-manifest.js';
+import { SEMANTIC_ATTRIBUTE_MANIFEST } from './semantic-attribute-manifest.js';
 
 freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly.attributes);
 freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly.prefixes);
 freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.compilerOwnedResidual.attributes);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.compilerOwnedResidual.prefixes);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.compilerOwnedResidual);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.controlPlane.attributes);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.controlPlane.prefixes);
+freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.controlPlane);
 freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.semanticSnapshot);
 freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.accessible);
 freezeSecurityValue(SEMANTIC_ATTRIBUTE_MANIFEST.behavioral);
@@ -100,6 +26,21 @@ export const GENERATED_ONLY_SEMANTIC_ATTRIBUTES =
 /** @internal */
 export const GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES =
   SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly.prefixes;
+
+/** @internal */
+export const COMPILER_OWNED_RESIDUAL_ATTRIBUTES =
+  SEMANTIC_ATTRIBUTE_MANIFEST.compilerOwnedResidual.attributes;
+
+/** @internal */
+export const COMPILER_OWNED_RESIDUAL_ATTRIBUTE_PREFIXES =
+  SEMANTIC_ATTRIBUTE_MANIFEST.compilerOwnedResidual.prefixes;
+
+/** @internal */
+export const KOVO_CONTROL_PLANE_ATTRIBUTES = SEMANTIC_ATTRIBUTE_MANIFEST.controlPlane.attributes;
+
+/** @internal */
+export const KOVO_CONTROL_PLANE_ATTRIBUTE_PREFIXES =
+  SEMANTIC_ATTRIBUTE_MANIFEST.controlPlane.prefixes;
 
 /** @internal */
 export const KOVO_SEMANTIC_SNAPSHOT_ATTRIBUTES = SEMANTIC_ATTRIBUTE_MANIFEST.semanticSnapshot;
@@ -115,11 +56,50 @@ for (let index = 0; index < GENERATED_ONLY_SEMANTIC_ATTRIBUTES.length; index += 
   securitySetAdd(generatedOnlyAttributeNames, GENERATED_ONLY_SEMANTIC_ATTRIBUTES[index]!);
 }
 
+const controlPlaneAttributeNames = securitySet<string>();
+for (let index = 0; index < KOVO_CONTROL_PLANE_ATTRIBUTES.length; index += 1) {
+  securitySetAdd(controlPlaneAttributeNames, KOVO_CONTROL_PLANE_ATTRIBUTES[index]!);
+}
+
+const compilerOwnedResidualAttributeNames = securitySet<string>();
+for (let index = 0; index < COMPILER_OWNED_RESIDUAL_ATTRIBUTES.length; index += 1) {
+  securitySetAdd(compilerOwnedResidualAttributeNames, COMPILER_OWNED_RESIDUAL_ATTRIBUTES[index]!);
+}
+
 /** @internal True when a framework-emitted attribute is ignored by render-equivalence. */
 export function isGeneratedOnlySemanticAttribute(name: string): boolean {
-  if (securitySetHas(generatedOnlyAttributeNames, name)) return true;
+  const normalizedName = securityStringToLowerCase(name);
+  if (securitySetHas(generatedOnlyAttributeNames, normalizedName)) return true;
   for (let index = 0; index < GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES.length; index += 1) {
-    if (securityStringStartsWith(name, GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES[index]!)) {
+    if (
+      securityStringStartsWith(normalizedName, GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES[index]!)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** @internal True when an opaque carrier name belongs to Kovo's control plane. */
+export function isKovoControlPlaneAttribute(name: string): boolean {
+  const normalizedName = securityStringToLowerCase(name);
+  if (securitySetHas(controlPlaneAttributeNames, normalizedName)) return true;
+  for (let index = 0; index < KOVO_CONTROL_PLANE_ATTRIBUTE_PREFIXES.length; index += 1) {
+    if (securityStringStartsWith(normalizedName, KOVO_CONTROL_PLANE_ATTRIBUTE_PREFIXES[index]!)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** @internal True when app TSX is attempting to author compiler-owned residual wire IR. */
+export function isCompilerOwnedResidualAttribute(name: string): boolean {
+  const normalizedName = securityStringToLowerCase(name);
+  if (securitySetHas(compilerOwnedResidualAttributeNames, normalizedName)) return true;
+  for (let index = 0; index < COMPILER_OWNED_RESIDUAL_ATTRIBUTE_PREFIXES.length; index += 1) {
+    if (
+      securityStringStartsWith(normalizedName, COMPILER_OWNED_RESIDUAL_ATTRIBUTE_PREFIXES[index]!)
+    ) {
       return true;
     }
   }

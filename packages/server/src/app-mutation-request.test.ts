@@ -1667,6 +1667,41 @@ describe('server app mutation request boundary', () => {
     expect(body.payload.reason).toBe('invalid-json');
   });
 
+  it('rejects over-budget JSON before mutation provenance boxing and schema traversal', async () => {
+    const onError = vi.fn();
+    let handlerCalls = 0;
+    const importItems = mutation('items/import', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      input: s.array(s.number()),
+      handler(input) {
+        handlerCalls += 1;
+        return input;
+      },
+    });
+    const app = createApp({ mutations: [importItems], onError });
+    const request = new Request('https://shop.example.test/_m/items/import', {
+      body: JSON.stringify(Array.from({ length: 10_001 }, () => 0)),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(
+      app,
+      request,
+      new URL(request.url),
+      'items/import',
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual({
+      code: 'VALIDATION',
+      payload: { reason: 'shape-budget' },
+    });
+    expect(handlerCalls).toBe(0);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('validates CSRF before surfacing malformed body diagnostics for protected mutations', async () => {
     const onError = vi.fn();
     let handlerCalls = 0;
@@ -1702,6 +1737,53 @@ describe('server app mutation request boundary', () => {
     expect(response.status, body).toBe(422);
     expect(body).toContain('data-error-code="CSRF"');
     expect(body).not.toContain('invalid-json');
+    expect(handlerCalls).toBe(0);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not let a valid nested CSRF token bypass the request-body shape ceiling', async () => {
+    const onError = vi.fn();
+    let handlerCalls = 0;
+    const csrf = {
+      field: 'csrf',
+      secret: 'test-csrf-secret-0123456789abcdef012345',
+      sessionId() {
+        return 's1';
+      },
+    };
+    const importItems = mutation('items/import', {
+      csrf,
+      input: s.object({ items: s.array(s.number()) }),
+      handler(input) {
+        handlerCalls += 1;
+        return input;
+      },
+    });
+    const app = createApp({ mutations: [importItems], onError });
+    const request = new Request('https://shop.example.test/_m/items/import', {
+      body: JSON.stringify({
+        csrf: csrfToken({} as Request, csrf),
+        items: Array.from({ length: 10_001 }, () => 0),
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'import-form',
+      },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(
+      app,
+      request,
+      new URL(request.url),
+      'items/import',
+    );
+    const body = await response.text();
+
+    expect(response.status, body).toBe(422);
+    expect(body).toContain('data-error-code="CSRF"');
+    expect(body).not.toContain('shape-budget');
     expect(handlerCalls).toBe(0);
     expect(onError).not.toHaveBeenCalled();
   });

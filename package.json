@@ -12,12 +12,14 @@
   "type": "module",
   "scripts": {
     "acceptance": "pnpm run check && pnpm run check:api-surface && pnpm run test && pnpm run test:browser && pnpm run test:gallery-browser && pnpm run test:integration && pnpm run check:build && pnpm run check:publish && pnpm run test:p10-perf && pnpm run test:compiler-perf && pnpm run test:conformance && pnpm run check:kovo && pnpm run test:authz-paranoid",
-    "check": "pnpm run check:inline-loader && pnpm run check:inline-loader:trusted-types && pnpm run check:imports && pnpm run check:no-committed-generated && pnpm run check:spec-index && pnpm run check:security-ledger-index && pnpm run check:authorization-matrix && pnpm run check:sink-policy && pnpm run check:c9-sink-inventory && pnpm run check:csrf-mint-delivery && pnpm run check:single-choke && pnpm run check:filesystem-boundary && pnpm run check:egress-boundary && pnpm run check:wire-output-boundary && pnpm run check:tcb-boundary && pnpm run check:security-guarantee && pnpm run check:security-brands && pnpm run check:fail-closed-classifiers && pnpm run check:classifier-verdict-routing && pnpm run check:green-corpus && pnpm run check:security-classifier-corpus && pnpm run check:security-test-builds && pnpm run check:security-gate-mutations && pnpm run check:fundamental-fixes-census && pnpm run check:capability-surface-census && pnpm run check:vp && vp run typecheck-examples",
+    "check": "pnpm run check:inline-loader && pnpm run check:inline-loader:trusted-types && pnpm run check:imports && pnpm run check:no-committed-generated && pnpm run check:spec-index && pnpm run check:security-ledger-index && pnpm run check:authorization-matrix && pnpm run check:sink-policy && pnpm run check:c9-sink-inventory && pnpm run check:framework-export-posture && pnpm run check:threat-matrix && pnpm run check:csrf-mint-delivery && pnpm run check:single-choke && pnpm run check:filesystem-boundary && pnpm run check:egress-boundary && pnpm run check:wire-output-boundary && pnpm run check:tcb-boundary && pnpm run check:security-guarantee && pnpm run check:security-brands && pnpm run check:fail-closed-classifiers && pnpm run check:classifier-verdict-routing && pnpm run check:green-corpus && pnpm run check:security-classifier-corpus && pnpm run check:security-test-builds && pnpm run check:security-gate-mutations && pnpm run check:security-fuzz-campaign && pnpm run check:fundamental-fixes-census && pnpm run check:capability-surface-census && pnpm run check:vp && vp run typecheck-examples",
     "check:api-surface": "node scripts/api-surface-gate.mjs",
     "check:authorization-matrix": "node scripts/check-authorization-matrix.mjs",
     "check:build": "pnpm run check:inline-loader && node scripts/egress-floor.mjs --policy build -- vp run build",
     "check:build:ci": "node scripts/egress-floor.mjs --policy build -- vp run build",
     "check:c9-sink-inventory": "vitest --run packages/core/src/internal/source-sink-registry.test.ts packages/create-kovo/src/index.build.prod-artifact.sink-census.test.ts --reporter=dot",
+    "check:framework-export-posture": "node scripts/framework-export-posture-gate.mjs && vitest --run scripts/framework-export-posture-gate.test.mjs --reporter=dot",
+    "check:threat-matrix": "vitest --run scripts/threat-matrix-gate.test.ts --reporter=dot",
     "check:csrf-mint-delivery": "node scripts/check-csrf-mint-delivery.mjs",
     "check:capability-surface-census": "node scripts/capability-surface-census-gate.mjs",
     "check:exports": "node scripts/exported-symbols.mjs --duplicates --check",
@@ -26,6 +28,7 @@
     "check:security-guarantee": "node scripts/check-security-guarantee.mjs",
     "check:security-ledger-index": "node scripts/check-security-ledger-index.mjs",
     "check:security-gate-mutations": "node scripts/security-gate-mutations.mjs",
+    "check:security-fuzz-campaign": "node scripts/security-fuzz-campaign.mjs --check",
     "check:security-brands": "node scripts/check-security-brands.mjs",
     "check:security-classifier-corpus": "node scripts/check-security-classifier-corpus.mjs",
     "check:security-convergence-baseline": "node scripts/security-convergence-baseline.mjs",
@@ -65,6 +68,8 @@
     "test:conformance": "vp run conformance",
     "test:integration": "vp run integration",
     "test:p10-perf": "vp run p10-perf",
+    "test:security-fuzz-nightly": "node scripts/security-fuzz-campaign.mjs --profile nightly",
+    "test:security-fuzz-release": "node scripts/security-fuzz-campaign.mjs --profile release",
     "symbols": "node scripts/exported-symbols.mjs"
   },
   "devDependencies": {

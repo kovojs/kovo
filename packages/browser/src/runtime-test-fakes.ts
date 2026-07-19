@@ -276,14 +276,16 @@ export class FakeMorphRoot {
 
 export class FakeQueryPlanElement {
   attributes: { name: string; value: string }[];
+  tagName?: string;
   textContent: string | null;
   value?: string;
 
   constructor(
     attributes: Record<string, string>,
-    options: { textContent?: string | null; value?: string } = {},
+    options: { tagName?: string; textContent?: string | null; value?: string } = {},
   ) {
     this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
+    if (options.tagName !== undefined) this.tagName = options.tagName;
     this.textContent = options.textContent ?? null;
     if (options.value !== undefined) {
       this.value = options.value;

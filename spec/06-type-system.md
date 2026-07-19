@@ -295,20 +295,35 @@ fails closed and is never replaced by an anonymous fallback within that request.
 
 **Capability-closed untrusted roots (normative, supported-subset static gate).** Before evaluating
 authored app modules, `kovo build` MUST scan the immutable app-source snapshot and census every
-route, layout, query, mutation, endpoint, webhook, durable or scheduled task, serialized browser
-handler, and supported agent/tool callback as an untrusted-data root. For each root, Kovo computes a
-transitive module/callback graph across eager imports, re-exports, local aliases and wrappers,
-literal `import()`/`require()` edges, conditional local targets, and callbacks or callback-bearing
-containers transferred through a local wrapper. A non-literal loader, unresolved local target, or
-reachable raw filesystem, network, process, worker, VM/dynamic-loader, or database-driver capability
-fails the pre-evaluation build gate with **KV448** and a root-to-terminal provenance path. Reviewed
+application aggregate created by `createApp()` (including its lifecycle callbacks), route, layout,
+query, mutation, endpoint or low-level request adapter, webhook, durable or scheduled task,
+serialized browser handler, and supported agent/tool callback as an untrusted-data root. For each
+root, Kovo computes a transitive module/callback graph across eager imports, re-exports, local aliases
+and wrappers, literal `import()`/`require()` edges, conditional local targets, and callbacks or
+callback-bearing containers transferred through a local wrapper. A non-literal loader, unresolved
+local target, or reachable raw filesystem, network, process, worker, VM/dynamic-loader, or
+database-driver capability fails the pre-evaluation build gate with **KV448** and a root-to-terminal
+provenance path. Reviewed
 framework APIs are the only nodes that may terminate such a path as a capability door; app or
 package metadata cannot mint a framework door.
 
+A custom Node adapter is privileged host wiring, not request-handler code. Its entry module MUST
+import `@kovojs/server/runtime-bootstrap` as its exact literal first side-effect import and MUST pass
+one directly imported handler from a separate local module to `toNodeHandler()`. Capability closure
+starts at that handler module, while the adapter entry retains only the host listener boundary.
+Inlining `createRequestHandler(app)`, importing the handler before the bootstrap, or importing the
+bootstrap from the handler graph is unsupported and fails closed with KV448. Generated runners own
+the equivalent compiler-created separation and bootstrap order.
+
 Reachable package code requires a least-authority verdict for the exact installed package name,
 version, security-relevant manifest fingerprint, requested subpath, imported export, and complete
-conditional-export arm set. Kovo packages and explicitly reviewed framework companions use a
-compiler-owned, version-pinned verdict. Other packages use the committed
+conditional-export arm set. Every manifest-public Kovo runtime export and every public subpath's
+`<module>` initializer MUST appear exactly once in the compiler-owned, versioned framework export
+posture ledger with an explicit raw-authority disposition, root kind or `none`, security role,
+implementation digest, manifest-target/condition fingerprint, and threat-matrix posture. A new,
+missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
+door list is never an authority-free verdict. Explicitly reviewed framework companions use the same
+compiler-owned, version-pinned verdict model. Other packages use the committed
 `kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
 independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
 `<module>` entry and MUST classify package initialization explicitly rather than relying on an empty
@@ -319,6 +334,14 @@ package-summary versions/fingerprints, and every closed fact with the same prove
 diagnostic. This is a conservative proof about accidental authority in Kovo's supported static
 authoring subset; consistent with the trusted application-code boundary above, it is not a
 same-realm JavaScript sandbox or a claim about deliberately hostile dependencies.
+
+Supported browser event handlers MUST be authored as TSX/JSX event attributes and lowered through
+the compiler-owned finite browser operation vocabulary. App-authored imperative registration — an
+`on*` property write, `addEventListener`, or an equivalent opaque protocol/call transfer — is outside
+the supported subset and MUST fail closed with KV424 before authored modules are evaluated. That
+verdict is rooted in the registration's reachable authority, not in a deny-list of names found in
+the callback body; adding or renaming a dangerous browser API therefore cannot reopen the raw
+registration path. Compiler-owned JSX handlers remain governed by KV449 and the finite operation IR.
 
 **Finite operation closure (normative, supported-subset static gate).** Capability closure answers
 which code and reviewed doors are reachable; the finite security-operation IR answers which
@@ -365,7 +388,7 @@ interpreter defined next; the edge preserves that obligation rather than guessin
 verdict.
 
 **Normalized helper provenance (normative, narrow abstract interpreter).** The compiler MUST
-discharge every `server.helper.call` over `kovo-security-semantic-graph/v1`, a normalized graph whose
+discharge every `server.helper.call` over `kovo-security-semantic-graph/v2`, a normalized graph whose
 nodes are enrolled handler roots, exact same-file callables, finite operations, and explicit closed
 verdicts. This is not a JavaScript evaluator, SSA optimizer, or type-inference engine. Its complete
 value lattice is: plain local data; request/context authority; managed database, structured-header,
@@ -373,6 +396,25 @@ storage, response-constructor, response-outcome, and principal-scope authority; 
 `operation:<securityOperationKind>` terminal; and absorbing unknown authority. The scanner is the
 only raw-syntax boundary; validation, emission, graph, and explain consumers decide from these
 typed facts (SPEC §5.2 rule 10).
+
+Version 2 is unconditional; consumers MUST reject version 1 rather than enter a compatibility
+posture. Every semantic root carries an exact binding to its full root identity, factory family,
+callback name, factory-call `[start,end)` span, and callback-callable `[start,end)` span in the same
+byte-exact source snapshot. Every helper transfer carries its exact invocation and ordered argument
+spans, callable name and declaration span, complete ordered root-to-helper transfer prefix, authority-input vector,
+terminal-operation inventory, and verdict. A consumer may admit a helper summary only when an exact
+invocation fact has the same callable identity and span, authority-input vector, terminal inventory,
+and verdict; the invocation span and root binding must also match the authored call and root being
+classified. The terminal inventory MUST equal the unique finite sink kinds reached by proved traces
+under that complete transfer prefix. A downstream consumer MUST independently reconstruct the exact
+root, argument authority, and every terminal-operation family on which its own admission decision
+depends; self-consistent carrier fields are not authentication. A consumer-specific gate MAY project
+the complete graph onto only the terminal families it owns, but unverified families confer no
+authority in that gate. A missing or contradictory relevant fact, a root/trace identity mismatch, an
+omitted or extra relevant terminal kind, a closed trace, or a closed sibling summary/invocation for
+the same callable span closes that consumer proof. Source bytes, callable identity, and all-path
+closure remain mandatory; these carrier checks do not turn semantic facts into app-authored
+authority.
 
 Transfer semantics are finite. An exact immutable alias preserves its lattice value. Static object
 destructuring applies the reviewed member transition one property at a time. Results of finite
@@ -407,6 +449,34 @@ predicates, multi-principal policy composition, database policy correctness, and
 helper actually enforces the intended business rule are not proved by this interpreter. They remain
 an explicit database-engine/runtime-policy and audit responsibility; unknown correspondence stays
 `scope: unknown` and MUST NOT be promoted by naming, types, or a permissive helper summary.
+
+**Analyzer-summary proof boundary (normative).** `kovoAnalyzerSummary` is a candidate marker, not
+an app-authored provenance assertion. A private-scope marker contributes to any invalidation,
+owner-scope, accepted-guard, write, or diagnostic verdict only when the analyzer independently
+resolves a bare helper identifier to exactly one declaration in the same source file. The only
+accepted declaration forms are a direct function declaration or a `const` binding initialized
+directly by an arrow or function expression. Object-literal properties and methods, class members,
+property-access targets, imports, alias bindings presented as the marker target, destructured
+bindings, `let`/`var` bindings, reassigned bindings, and otherwise opaque or multiply declared
+callables remain unknown. No alias or container may stand between the marker and the proven
+declaration.
+
+The direct helper MUST have one non-default, non-rest identifier parameter and no generator body.
+Its body MUST be either an expression-bodied arrow or a block containing exactly one return, and
+that expression MUST be a literal property chain rooted in the parameter. The first private-scope
+segment MUST be `guard`, `session`, or `tenant` (for example, `parameter.guard.userId` or
+`parameter.request.session.id`), and the declared kind and path MUST exactly equal that segment and
+the literal suffix after it. A provenance-bearing invocation MUST call that exact helper identifier
+or one direct same-file immutable `const alias = provenHelper` identifier and pass the exact
+framework request/context parameter (`req`, `request`, `ctx`, or `context`), proven by its
+callback/receiver position rather than its spelling, as the sole argument. That one-hop alias may
+preserve an already-proven identity but cannot be the marker target or widen the proof. Property or
+element access, destructured/container aliases, alias chains, and imported, opaque, or mutable
+aliases remain unknown. Multi-statement/general bodies, computed returns, mismatched principals,
+unresolved symbols, and calls with client input or opaque/container arguments also remain unknown.
+No `server` summary kind exists: general server provenance and KV438 cannot be discharged by an app
+declaration. These restrictions apply uniformly to every consumer of session provenance; a looser
+invalidation or explain path MUST NOT become a security side door.
 
 **Build-preset capability boundary (normative).** `KovoPreset` is an opaque, framework-owned
 selection token, not a public structural deployment descriptor. `node()`, `vercel()`, and

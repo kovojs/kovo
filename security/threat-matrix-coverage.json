@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "surfaces": [
+    { "id": "db-data-plane", "label": "DB / data plane" },
+    { "id": "auth", "label": "Auth" },
+    { "id": "wire-http", "label": "Wire / HTTP" },
+    { "id": "render-browser", "label": "Render / browser" },
+    { "id": "build-compiler", "label": "Build / compiler" },
+    { "id": "dependencies-supply-chain", "label": "Dependencies / supply chain" },
+    { "id": "runtime-infra", "label": "Runtime / infra" }
+  ],
+  "proofs": {
+    "c9-control": {
+      "disposition": "control",
+      "control": "The C9 registry binds the sink family to a named guard, runtime floor, hostile-value proof, and live proof gate.",
+      "evidence": ["pnpm run check:c9-sink-inventory"]
+    },
+    "c9-escape-audit": {
+      "disposition": "audited-escape",
+      "control": "The C9 registry names the escape beside its owning sink and retains the sink's hostile-value and runtime evidence.",
+      "evidence": ["pnpm run check:c9-sink-inventory"]
+    },
+    "trust-escape-audit": {
+      "disposition": "audited-escape",
+      "control": "The static trust collector emits every registered kind to kovo explain --trust with its source site and justification posture.",
+      "evidence": ["packages/drizzle/src/trust-escapes-static.test.ts"]
+    },
+    "capability-escape-audit": {
+      "disposition": "audited-escape",
+      "control": "The static capability collector emits every app-authored registered kind to kovo explain --capabilities with its source site and justification posture.",
+      "evidence": ["packages/drizzle/src/capability-escapes-static.test.ts"]
+    },
+    "fixed-capability-control": {
+      "disposition": "control",
+      "control": "Framework-fixed capability identities are closed by the capability census rather than an app-authored escape call site.",
+      "evidence": ["pnpm run check:capability-surface-census"]
+    },
+    "public-security-surface-control": {
+      "disposition": "control",
+      "control": "The capability-surface census records the authority, mint, public posture, exact consumers, diagnostic, and test evidence.",
+      "evidence": ["pnpm run check:capability-surface-census"]
+    },
+    "public-runtime-export-posture-control": {
+      "disposition": "control",
+      "control": "Every manifest-public first-party runtime export and module initializer has exact authority, root, security-role, implementation-digest, and matrix posture before compiler use.",
+      "evidence": ["pnpm run check:framework-export-posture"]
+    }
+  },
+  "sinkMappings": [
+    {
+      "sink": "html.dom.output",
+      "escapeHatches": ["trustedHtml", "trustedUrl"],
+      "surface": "render-browser",
+      "cells": { "C": "c9-control", "I": "c9-control" },
+      "escapeCells": { "C": "c9-escape-audit", "I": "c9-escape-audit" }
+    },
+    {
+      "sink": "document.shell.output",
+      "escapeHatches": ["InlineScript", "InlineStyle", "trustedHtml", "trustedUrl"],
+      "surface": "render-browser",
+      "cells": { "I": "c9-control", "Au": "c9-control" },
+      "escapeCells": { "I": "c9-escape-audit", "Au": "c9-escape-audit" }
+    },
+    {
+      "sink": "url.navigation.selector",
+      "escapeHatches": ["trustedUrl", "external-route-opt-out", "compiler-owned-handler-ref"],
+      "surface": "wire-http",
+      "cells": { "I": "c9-control", "Au": "c9-control" },
+      "escapeCells": { "I": "c9-escape-audit", "Au": "c9-escape-audit" }
+    },
+    {
+      "sink": "css.style.output",
+      "escapeHatches": ["trustedCss-not-public", "compiler-owned-stylex-output"],
+      "surface": "render-browser",
+      "cells": { "I": "c9-control" },
+      "escapeCells": { "I": "c9-escape-audit" }
+    },
+    {
+      "sink": "http.header.cookie",
+      "escapeHatches": ["endpoint-raw-response-body-only(no-transport-header-authority)"],
+      "surface": "wire-http",
+      "cells": { "C": "c9-control", "I": "c9-control", "Au": "c9-control" },
+      "escapeCells": {
+        "C": "c9-escape-audit",
+        "I": "c9-escape-audit",
+        "Au": "c9-escape-audit"
+      }
+    },
+    {
+      "sink": "ingress.endpoint.webhook",
+      "escapeHatches": ["endpoint({csrf:false,reason})", "webhook({verify:none,reason})"],
+      "surface": "wire-http",
+      "cells": { "I": "c9-control", "Au": "c9-control" },
+      "escapeCells": { "I": "c9-escape-audit", "Au": "c9-escape-audit" }
+    },
+    {
+      "sink": "transport.query.live.broadcast",
+      "escapeHatches": ["renderOnce", "await-fragment", "disableServerRefresh"],
+      "surface": "wire-http",
+      "cells": { "C": "c9-control", "I": "c9-control", "Au": "c9-control" },
+      "escapeCells": {
+        "C": "c9-escape-audit",
+        "I": "c9-escape-audit",
+        "Au": "c9-escape-audit"
+      }
+    },
+    {
+      "sink": "file.storage.static-export",
+      "escapeHatches": ["respond.file", "respond.stream", "storage-adapter"],
+      "surface": "runtime-infra",
+      "cells": { "C": "c9-control", "I": "c9-control" },
+      "escapeCells": { "C": "c9-escape-audit", "I": "c9-escape-audit" }
+    },
+    {
+      "sink": "auth.data-access",
+      "escapeHatches": ["public-read-justification"],
+      "surface": "auth",
+      "cells": { "C": "c9-control", "I": "c9-control", "Au": "c9-control" },
+      "escapeCells": {
+        "C": "c9-escape-audit",
+        "I": "c9-escape-audit",
+        "Au": "c9-escape-audit"
+      }
+    },
+    {
+      "sink": "auth.credential.non-egress",
+      "escapeHatches": [],
+      "surface": "auth",
+      "cells": { "C": "c9-control", "Au": "c9-control" }
+    },
+    {
+      "sink": "sql.executable",
+      "escapeHatches": ["sql<T>+reads", "raw-sql-tables+touches"],
+      "surface": "db-data-plane",
+      "cells": { "I": "c9-control" },
+      "escapeCells": { "I": "c9-escape-audit" }
+    },
+    {
+      "sink": "dynamic.import.process",
+      "escapeHatches": ["compiler-owned-versioned-handler-import"],
+      "surface": "build-compiler",
+      "cells": { "I": "c9-control", "Au": "c9-control" },
+      "escapeCells": { "I": "c9-escape-audit", "Au": "c9-escape-audit" }
+    },
+    {
+      "sink": "network.egress",
+      "escapeHatches": ["declared-egress-origin-with-reviewed-private-network-posture"],
+      "surface": "wire-http",
+      "cells": { "C": "c9-control", "I": "c9-control" },
+      "escapeCells": { "C": "c9-escape-audit", "I": "c9-escape-audit" }
+    }
+  ],
+  "auditedEscapeMappings": [
+    {
+      "channel": "trust",
+      "kinds": ["customVerifier", "rawEndpoint", "webhookVerifyNone"],
+      "surface": "wire-http",
+      "cells": { "C": "trust-escape-audit", "I": "trust-escape-audit", "Au": "trust-escape-audit" }
+    },
+    {
+      "channel": "trust",
+      "kinds": ["staticExportPathOverride"],
+      "surface": "build-compiler",
+      "cells": { "I": "trust-escape-audit" }
+    },
+    {
+      "channel": "trust",
+      "kinds": ["trustedHtml", "trustedUrl"],
+      "surface": "render-browser",
+      "cells": { "I": "trust-escape-audit" }
+    },
+    {
+      "channel": "trust",
+      "kinds": ["trustedSql"],
+      "surface": "db-data-plane",
+      "cells": { "I": "trust-escape-audit" }
+    },
+    {
+      "channel": "capability",
+      "kinds": [
+        "acceptUnverified",
+        "egressAllowInternal",
+        "publishToClient",
+        "trustedReveal",
+        "unsafeInline"
+      ],
+      "surface": "wire-http",
+      "cells": { "C": "capability-escape-audit", "I": "capability-escape-audit" }
+    },
+    {
+      "channel": "capability",
+      "kinds": ["actAs", "unsafeCookie"],
+      "surface": "auth",
+      "cells": {
+        "C": "capability-escape-audit",
+        "I": "capability-escape-audit",
+        "Au": "capability-escape-audit"
+      }
+    },
+    {
+      "channel": "capability",
+      "kinds": [
+        "crossOwnerRead",
+        "declareSystemRead",
+        "declareSystemWrite",
+        "publicRelation",
+        "rawRead",
+        "serverValue",
+        "systemDb"
+      ],
+      "surface": "db-data-plane",
+      "cells": {
+        "C": "capability-escape-audit",
+        "I": "capability-escape-audit",
+        "Au": "capability-escape-audit"
+      }
+    },
+    {
+      "channel": "capability",
+      "kinds": ["unsafeRegex"],
+      "surface": "runtime-infra",
+      "cells": { "A": "capability-escape-audit" }
+    },
+    {
+      "channel": "capability",
+      "kinds": ["authAdapterDb"],
+      "surface": "auth",
+      "cells": {
+        "C": "fixed-capability-control",
+        "I": "fixed-capability-control",
+        "Au": "fixed-capability-control"
+      }
+    },
+    {
+      "channel": "capability",
+      "kinds": ["managedSqlStatement", "postgresRoleTopology"],
+      "surface": "db-data-plane",
+      "cells": {
+        "C": "fixed-capability-control",
+        "I": "fixed-capability-control",
+        "Au": "fixed-capability-control"
+      }
+    }
+  ],
+  "publicSurfaceMappings": [
+    {
+      "ids": [
+        "better-auth-mount-adapter",
+        "generated-postgres-auth-adapter",
+        "generated-sqlite-auth-adapter"
+      ],
+      "surface": "auth",
+      "cells": {
+        "C": "public-security-surface-control",
+        "I": "public-security-surface-control",
+        "Au": "public-security-surface-control"
+      }
+    },
+    {
+      "ids": [
+        "generated-postgres-readonly-db",
+        "generated-postgres-request-db-provider",
+        "server-system-db-capability",
+        "managed-sql-statement-identity",
+        "postgres-role-topology"
+      ],
+      "surface": "db-data-plane",
+      "cells": {
+        "C": "public-security-surface-control",
+        "I": "public-security-surface-control",
+        "Au": "public-security-surface-control"
+      }
+    },
+    {
+      "ids": ["storage-download-signer"],
+      "surface": "runtime-infra",
+      "cells": { "Au": "public-security-surface-control" }
+    },
+    {
+      "ids": ["webhook-transaction-db"],
+      "surface": "wire-http",
+      "cells": { "I": "public-security-surface-control", "Au": "public-security-surface-control" }
+    },
+    {
+      "ids": ["principal-posture"],
+      "surface": "auth",
+      "cells": {
+        "C": "public-security-surface-control",
+        "I": "public-security-surface-control",
+        "Au": "public-security-surface-control"
+      }
+    }
+  ]
+}

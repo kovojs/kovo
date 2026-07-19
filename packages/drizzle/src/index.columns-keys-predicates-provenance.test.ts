@@ -13,9 +13,10 @@ const extractQueryFactsFromProject = (
 ) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
 describe('@kovojs/drizzle touch graph helpers', () => {
-  it('uses declared analyzer summaries for same-package session helper provenance', () => {
+  it('uses exact structurally verified same-file session helper provenance', () => {
     const files = [
       pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
         'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
       ]),
       {
@@ -24,20 +25,25 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           'import { and, eq } from "drizzle-orm";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          'import { mutation } from "@kovojs/server";',
           '',
+          'interface AppRequest { db: PgAsyncDatabase<any, any>; session: { id: string } }',
           'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
           '',
-          'function requireSessionId(request: { session?: { id?: string } | null }) {',
-          '  if (!request.session?.id) throw new Error("auth required");',
+          'function requireSessionId(request: { session: { id: string } }) {',
           '  return request.session.id;',
+          '',
           '}',
           '',
           'kovoAnalyzerSummary(requireSessionId, { returns: { kind: "session", path: "id" } });',
           '',
-          'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
-          '  const sessionId = requireSessionId(request);',
-          '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
-          '}',
+          'export const voteUp = mutation("voteUp", {',
+          '  async handler({ targetId }: { targetId: string }, request: AppRequest) {',
+          '    const sessionId = requireSessionId(request);',
+          '    const existing = await request.db.select({ id: questions.id }).from(questions).where(eq(questions.sessionId, sessionId));',
+          '    await request.db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+          '  },',
+          '});',
         ].join('\n'),
       },
     ];
@@ -48,7 +54,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         domain: 'question',
         keys: 'arg:targetId',
-        site: 'question.domain.ts:16',
+        site: 'question.domain.ts:20',
         via: 'questions',
       },
     ]);
@@ -240,20 +246,24 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           'import { and, eq } from "drizzle-orm";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          'import { mutation } from "@kovojs/server";',
           '',
+          'interface AppRequest { db: PgAsyncDatabase<any, any>; tenant: { id: string } }',
           'export const tickets = pgTable("tickets", {}, kovo({ domain: "ticket", key: "tenantId,id" }));',
           '',
-          'function tenantId(request: { tenant?: { id?: string } | null }) {',
-          '  if (!request.tenant?.id) throw new Error("tenant required");',
+          'function tenantId(request: { tenant: { id: string } }) {',
           '  return request.tenant.id;',
+          '',
           '}',
           '',
           'kovoAnalyzerSummary(tenantId, { returns: { kind: "tenant", path: "id" } });',
           '',
-          'export async function closeTicket(db: PgAsyncDatabase<any, any>, request: { tenant?: { id?: string } | null }, targetId: string) {',
-          '  const currentTenantId = tenantId(request);',
-          '  await db.update(tickets).set({ status: "closed" }).where(and(eq(tickets.tenantId, currentTenantId), eq(tickets.id, targetId)));',
-          '}',
+          'export const closeTicket = mutation("closeTicket", {',
+          '  async handler({ targetId }: { targetId: string }, request: AppRequest) {',
+          '    const currentTenantId = tenantId(request);',
+          '    await request.db.update(tickets).set({ status: "closed" }).where(and(eq(tickets.tenantId, currentTenantId), eq(tickets.id, targetId)));',
+          '  },',
+          '});',
         ].join('\n'),
       },
     ];
@@ -264,7 +274,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         domain: 'ticket',
         keys: 'arg:targetId',
-        site: 'ticket.domain.ts:16',
+        site: 'ticket.domain.ts:19',
         via: 'tickets',
       },
     ]);

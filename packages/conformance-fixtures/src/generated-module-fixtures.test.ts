@@ -230,9 +230,13 @@ describe('@kovojs/test generated module fixtures', () => {
   it('executes generated client modules through explicit runtime bindings', () => {
     const exports = executeGeneratedClientModule(
       `
-import { derive, handler } from '@kovojs/browser/generated';
+import { derive, handler, securityHandler } from '@kovojs/browser/generated';
 export const Cart$isEmpty = derive(['cart'], (cart) => cart.count === 0);
 export const Cart$click = handler((event, ctx) => ctx.value + event.delta);
+export const Cart$secureClick = securityHandler(
+  [{ door: 'delegated-event', kind: 'browser.event.read', target: 'event.delta' }],
+  (event, ctx) => ctx.value + event.delta,
+);
 `,
       {
         runtime: {
@@ -241,6 +245,19 @@ export const Cart$click = handler((event, ctx) => ctx.value + event.delta);
           },
           handler(callback: (event: { delta: number }, ctx: { value: number }) => number) {
             return (event: { delta: number }, ctx: { value: number }) => callback(event, ctx);
+          },
+          securityHandler(
+            operations: unknown[],
+            callback: (event: { delta: number }, ctx: { value: number }) => number,
+          ) {
+            expect(operations).toEqual([
+              {
+                door: 'delegated-event',
+                kind: 'browser.event.read',
+                target: 'event.delta',
+              },
+            ]);
+            return callback;
           },
         },
       },
@@ -253,6 +270,12 @@ export const Cart$click = handler((event, ctx) => ctx.value + event.delta);
         { value: 3 },
       ),
     ).toBe(5);
+    expect(
+      (exports.Cart$secureClick as (event: { delta: number }, ctx: { value: number }) => number)(
+        { delta: 4 },
+        { value: 5 },
+      ),
+    ).toBe(9);
   });
 
   it('executes generated client modules after bundling rewrites generated helper imports', () => {

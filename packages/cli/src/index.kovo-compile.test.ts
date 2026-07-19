@@ -363,7 +363,8 @@ export const PaymentButton = component({
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('ERROR KV437');
       expect(output).toContain('ERROR KV201');
-      expect(output).toContain('SUMMARY artifacts=0 diagnostics=2');
+      expect(output).toContain('ERROR KV449');
+      expect(output).toContain('SUMMARY artifacts=0 diagnostics=3');
       expect(existsSync(outPath)).toBe(false);
       expect(existsSync(clientPath)).toBe(false);
     } finally {
@@ -389,9 +390,9 @@ import { tabsKeyDown } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   queries: { cart: {} },
-  render: () => (
+  render: ({ cart }) => (
     <button onClick={() => tabsKeyDown(state, item.id)}>
-      <span data-bind="cart.count">2</span>
+      <span>{cart.count}</span>
     </button>
   ),
 });
@@ -453,7 +454,8 @@ export const CartBadge = component({
 import { component } from '@kovojs/core';
 
 export const ProductCard = component({
-  render: () => <span data-bind="product.details.name">Coffee</span>,
+  queries: { product: {} },
+  render: ({ product }) => <span>{product.details.name}</span>,
 });
 `,
         'utf8',
@@ -708,6 +710,143 @@ export const addToCart = mutation('cart/add', {
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `CHECK drizzle-static path=${JSON.stringify(outPath)} status=current`,
       );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // @kovo-security-certifies KV449 standalone-drizzle-static-semantic-verdict
+  it('routes standalone Drizzle handler security through the exact compiler snapshot', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-semantic-'));
+    const inputPath = join(root, 'static.json');
+    const outPath = join(root, 'static-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const source = `
+import { mutation, serverValue } from '@kovojs/server';
+import { eq } from 'drizzle-orm';
+import { account } from './schema.js';
+export const update = mutation({
+  async handler(input, request) {
+    async function nestedWrite(db, carrier) {
+      await db.update(account)
+        .set({ userId: serverValue(carrier.userId, 'claimed owner') })
+        .where(eq(account.id, input.id));
+    }
+    await nestedWrite(request.db, input);
+    return { ok: true };
+  },
+});
+`;
+    const schemaSource = `
+import { pgTable, text } from 'drizzle-orm/pg-core';
+export const account = pgTable('account', {
+  id: text('id').notNull(),
+  userId: text('user_id').notNull(),
+});
+`;
+
+    try {
+      writeFileSync(
+        inputPath,
+        JSON.stringify({
+          extract: ['unregisteredSinks'],
+          files: [
+            { fileName: 'src/app.ts', source },
+            { fileName: 'src/schema.ts', source: schemaSource },
+          ],
+        }),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(0);
+      const facts = JSON.parse(readFileSync(outPath, 'utf8')) as {
+        diagnostics?: readonly { code: string }[];
+        unregisteredSinks?: readonly unknown[];
+      };
+      expect(facts.diagnostics ?? []).toEqual([]);
+      expect(facts.unregisteredSinks).toEqual([]);
+
+      writeFileSync(
+        inputPath,
+        JSON.stringify({
+          extract: ['unregisteredSinks'],
+          files: [
+            {
+              fileName: 'src/raw-response.ts',
+              source: `
+import { mutation } from '@kovojs/server';
+const RawResponse = Response;
+export const update = mutation({ handler() { return RawResponse.json({ ok: true }); } });
+`,
+            },
+          ],
+        }),
+        'utf8',
+      );
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(0);
+      const closed = JSON.parse(readFileSync(outPath, 'utf8')) as {
+        diagnostics?: readonly { code: string; message: string }[];
+      };
+      expect(closed.diagnostics).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'KV449' })]),
+      );
+      expect(closed.diagnostics?.[0]?.message).toContain('semantic root=mutation:');
+      expect(closed.diagnostics?.[0]?.message).toContain('verdict=closed:');
+
+      // @kovo-security-certifies C13 cross-file-zero-authority-helper-closes
+      writeFileSync(
+        inputPath,
+        JSON.stringify({
+          extract: ['unregisteredSinks'],
+          files: [
+            {
+              fileName: 'src/raw-helper.ts',
+              source:
+                'export const RawResponse = Response; export function raw() { return new Response("raw"); }',
+            },
+            {
+              fileName: 'src/imported-response.ts',
+              source: `
+import { mutation } from '@kovojs/server';
+import { RawResponse, raw } from './raw-helper.js';
+import * as rawHelpers from './raw-helper.js';
+const alias = raw;
+const helpers = { raw };
+export const direct = mutation({ handler() { return raw(); } });
+export const aliased = mutation({ handler() { return alias(); } });
+export const contained = mutation({ handler() { return helpers.raw(); } });
+export const namespaced = mutation({ handler() { return rawHelpers.raw(); } });
+export const constructed = mutation({ handler() { return new RawResponse('raw'); } });
+`,
+            },
+          ],
+        }),
+        'utf8',
+      );
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(0);
+      const crossFileClosed = JSON.parse(readFileSync(outPath, 'utf8')) as {
+        diagnostics?: readonly { code: string; message: string }[];
+      };
+      expect(crossFileClosed.diagnostics).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'KV449' })]),
+      );
+      const crossFileMessages = crossFileClosed.diagnostics
+        ?.map((diagnostic) => diagnostic.message)
+        .join('\n');
+      expect(crossFileMessages).toContain('foreign server helper raw');
+      expect(crossFileMessages).toContain('foreign server helper alias');
+      expect(crossFileMessages).toContain('foreign server helper helpers.raw');
+      expect(crossFileMessages).toContain('foreign server helper rawHelpers.raw');
+      expect(crossFileMessages).toContain('foreign server constructor');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

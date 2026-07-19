@@ -1403,6 +1403,102 @@ export const CartBadge = component({
     ]);
   });
 
+  it.each([
+    ['jsx', '@kovojs/server/jsx-runtime'],
+    ['jsxs', '@kovojs/server/jsx-runtime'],
+    ['jsxDEV', '@kovojs/server/jsx-dev-runtime'],
+    ['createElement', '@kovojs/server/jsx-dev-runtime'],
+  ] as const)(
+    'reports KV235 for app-authored %s imports from the compiler JSX runtime',
+    (factory, specifier) => {
+      const result = compileComponentModule({
+        fileName: 'runtime-helper.ts',
+        source: `
+import { ${factory} as buildNode } from '${specifier}';
+export const unsafe = buildNode('script', { src: request.url });
+`,
+      });
+
+      expect(result.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'KV235',
+            help: expect.stringContaining(`compiler-owned JSX construction ABI ["${factory}"]`),
+            message:
+              'App source imports the compiler-owned JSX runtime; author TSX/JSX instead.',
+          }),
+        ]),
+      );
+    },
+  );
+
+  it('reports KV235 for namespace, dynamic, CommonJS, and value re-export access to JSX runtime ABI', () => {
+    const result = compileComponentModule({
+      fileName: 'runtime-access.ts',
+      source: `
+import * as runtime from '@kovojs/server/jsx-runtime';
+export * from '@kovojs/server/jsx-dev-runtime';
+const lazy = () => import('@kovojs/server/jsx-runtime');
+const common = require('@kovojs/server/jsx-dev-runtime');
+export const values = [runtime, lazy, common];
+`,
+    });
+
+    expect(
+      result.diagnostics.filter(
+        (diagnostic) =>
+          diagnostic.code === 'KV235' &&
+          diagnostic.message.includes('compiler-owned JSX runtime'),
+      ),
+    ).toHaveLength(4);
+  });
+
+  it('rejects an exact JSX-runtime call through a reviewed local re-export while allowing lookalikes', () => {
+    const result = compileComponentModule({
+      extraFiles: [
+        {
+          fileName: 'runtime-barrel.ts',
+          source: `export { jsx as buildNode } from '@kovojs/server/jsx-runtime';`,
+        },
+      ],
+      fileName: 'runtime-consumer.ts',
+      source: `
+import { buildNode } from './runtime-barrel.js';
+const jsx = (tag, props) => ({ tag, props });
+export const local = jsx('div', {});
+export const unsafe = buildNode('script', { src: request.url });
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV235',
+          message: 'App source calls compiler-owned JSX constructor jsx; author TSX/JSX instead.',
+        }),
+      ]),
+    );
+    expect(
+      result.diagnostics.filter(
+        (diagnostic) => diagnostic.message.includes('compiler-owned JSX constructor'),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('keeps type-only JSX-runtime imports and shadowed/local lookalikes authorable', () => {
+    const result = compileComponentModule({
+      fileName: 'runtime-types.ts',
+      source: `
+import type { JSX } from '@kovojs/server/jsx-runtime';
+const jsx = (tag, props) => ({ tag, props });
+function render(jsx) { return jsx('script', {}); }
+export const values = [jsx('div', {}), render((tag, props) => ({ tag, props }))];
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toEqual([]);
+  });
+
   it('does not let late collection traversal suppress the KV235 internal-import gate', () => {
     const nativeFilter = Array.prototype.filter;
     let poisonHits = 0;

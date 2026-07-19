@@ -59,7 +59,10 @@ import {
   viteFrameworkIdentityFiles,
 } from '@kovojs/compiler/internal';
 import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
-import { collectStaticBuildTrustFactsFromProject } from '@kovojs/drizzle/internal/static';
+import {
+  collectStaticBuildTrustFactsFromProject,
+  type CompilerSecuritySemanticSource,
+} from '@kovojs/drizzle/internal/static';
 import type {
   AccessDecision,
   Guard,
@@ -811,7 +814,7 @@ async function loadAndCheckBuildApp(
   const { deriveClosedKovoApp, writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
   const appModule = loadedBuildApp.appModule;
   const app = appFromModule(appModule, options.appModulePath);
-  const buildCheck = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
+  const buildCheck = await runKovoBuildCheckPreflight(app, {
     cache: options.cache,
     execution,
     paranoidStaticAdvisory: security.paranoidStaticAdvisory,
@@ -838,6 +841,7 @@ interface PreEvaluationStaticTrust {
   readonly capabilityClosure: AnalyzeCapabilityClosureResult;
   readonly facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>;
   readonly files: readonly BuildCheckSourceFile[];
+  readonly sourceGraphFacts: SourceGraphFacts;
 }
 
 interface PreEvaluationBuildConfigTrust {
@@ -889,48 +893,59 @@ function runPreEvaluationStaticTrustPreflight(
     packageSummaries: readCapabilityPackageSummaries(root),
     packages: resolveCapabilityPackages(packageRequests, appModulePath),
   });
+  // SPEC §5.2/§6.6: parse the exact immutable snapshot through the compiler-owned finite IR before
+  // any authored SSR module executes. These same typed component/semantic facts are retained for
+  // graph assembly below; neither the verdict nor framework identity is re-derived from disk.
+  const sourceGraphFacts = sourceGraphFactsFromFiles(files);
+  const compilerSecurityDiagnostics = buildMapDense(
+    buildFilterDense(
+      buildPreflightComponentDiagnostics(sourceGraphFacts.components),
+      'Pre-evaluation compiler security diagnostics',
+      (diagnostic) => diagnostic.code === 'KV449',
+    ),
+    'Pre-evaluation compiler security diagnostic facts',
+    staticDiagnosticFact,
+  );
   // SPEC §6.6: authored modules are untrusted inputs to the compiler. Reject statically visible
-  // authority and credential-wire escapes before SSR evaluation can execute top-level app code or
-  // reject a framework factory shape that the runtime-derived registry does not understand. The
-  // full graph preflight still runs after app loading so this only advances the existing KV424 gate.
+  // authority and credential-wire escapes before SSR evaluation can execute top-level app code.
+  // TASK B may consume only semantic summaries bound to these exact source bytes.
   const facts =
     files.length === 0
       ? { capabilities: [], cookieDowngrades: [], unregisteredSinks: [] }
-      : collectStaticBuildTrustFactsFromProject({ files });
+      : collectStaticBuildTrustFactsFromProject({
+          compilerSecuritySemanticSources: sourceGraphFacts.compilerSecuritySemanticSources,
+          files,
+        });
   const accessGuardDiagnostics = preEvaluationAccessGuardDiagnostics(files);
   const capabilityClosureDiagnostics = buildMapDense(
     capabilityClosure.diagnostics,
     'Capability-closure diagnostics',
     staticDiagnosticFact,
   );
+  const preEvaluationDiagnostics = buildConcatDense(
+    buildConcatDense(
+      accessGuardDiagnostics,
+      capabilityClosureDiagnostics,
+      'Pre-evaluation access/capability diagnostics',
+    ),
+    compilerSecurityDiagnostics,
+    'Pre-evaluation compiler-routed security diagnostics',
+  );
   const { unregisteredSinks } = facts;
-  if (
-    unregisteredSinks.length === 0 &&
-    accessGuardDiagnostics.length === 0 &&
-    capabilityClosureDiagnostics.length === 0
-  ) {
-    return { capabilityClosure, facts, files };
+  if (unregisteredSinks.length === 0 && preEvaluationDiagnostics.length === 0) {
+    return { capabilityClosure, facts, files, sourceGraphFacts };
   }
 
   const result = kovoCheck(
     {
-      ...(accessGuardDiagnostics.length === 0 ? {} : { diagnostics: accessGuardDiagnostics }),
-      ...(capabilityClosureDiagnostics.length === 0
-        ? {}
-        : {
-            diagnostics: buildConcatDense(
-              accessGuardDiagnostics,
-              capabilityClosureDiagnostics,
-              'Pre-evaluation static diagnostics',
-            ),
-          }),
+      ...(preEvaluationDiagnostics.length === 0 ? {} : { diagnostics: preEvaluationDiagnostics }),
       ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
     },
     { paranoidStaticAdvisory },
   );
-  if (result.exitCode === 0) return { capabilityClosure, facts, files };
+  if (result.exitCode === 0) return { capabilityClosure, facts, files, sourceGraphFacts };
   if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
-    return { capabilityClosure, facts, files };
+    return { capabilityClosure, facts, files, sourceGraphFacts };
   }
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
@@ -1064,7 +1079,6 @@ async function runTypeScriptBuildPreflight(
 
 async function runKovoBuildCheckPreflight(
   app: KovoApp,
-  appModulePath: string,
   options: {
     cache: boolean;
     execution: BuildExecutionModule;
@@ -1074,7 +1088,7 @@ async function runKovoBuildCheckPreflight(
     root: string;
   },
 ): Promise<KovoBuildCheckArtifacts> {
-  const artifacts = await buildCheckGraph(app, appModulePath, options);
+  const artifacts = await buildCheckGraph(app, options);
   const result = kovoCheck(artifacts.graph, {
     paranoidStaticAdvisory: options.paranoidStaticAdvisory,
   });
@@ -1150,7 +1164,6 @@ function buildFatalWarningSummaryLine(line: string): string[] {
 
 async function buildCheckGraph(
   app: KovoApp,
-  appModulePath: string,
   options: {
     cache: boolean;
     execution: BuildExecutionModule;
@@ -1159,7 +1172,7 @@ async function buildCheckGraph(
     root: string;
   },
 ): Promise<KovoBuildCheckArtifacts> {
-  const staticArtifacts = await staticBuildCheckGraph(app, appModulePath, options);
+  const staticArtifacts = await staticBuildCheckGraph(app, options);
   const graph = staticArtifacts.graph;
   const result = deriveAppGraph({
     ...(staticArtifacts.components === undefined ? {} : { components: staticArtifacts.components }),
@@ -1247,7 +1260,6 @@ function staticDiagnosticFact(
 
 async function staticBuildCheckGraph(
   app: KovoApp,
-  appModulePath: string,
   options: {
     cache: boolean;
     execution: BuildExecutionModule;
@@ -1257,20 +1269,14 @@ async function staticBuildCheckGraph(
   },
 ): Promise<KovoBuildCheckArtifacts> {
   const files = options.preEvaluationStaticTrust.files;
-  const [drizzleFacts, sourceGraphFacts] =
+  const drizzleFacts =
     files.length === 0
-      ? [
-          emptyStaticDataPlaneBuildFacts(),
-          {
-            components: [] as SourceComponentGraphFacts[],
-            routeOutcomes: buildCreateMap<string, 'file' | 'stream'>(),
-            routePages: [] as SourceRoutePageFacts[],
-          },
-        ]
-      : await buildPromiseAll([
-          staticDataPlaneBuildFacts(files, { cache: options.cache }),
-          sourceGraphFactsFromFiles(files, dirname(appModulePath)),
-        ]);
+      ? emptyStaticDataPlaneBuildFacts()
+      : await staticDataPlaneBuildFacts(files, { cache: options.cache });
+  // SPEC §5.2 rule 9 / §6.6: graph assembly consumes the compiler facts that already authorized
+  // evaluation. Recompiling or re-reading identity files here would create a second carrier whose
+  // verdict could disagree with the exact bytes admitted by the pre-evaluation gate.
+  const sourceGraphFacts = options.preEvaluationStaticTrust.sourceGraphFacts;
   // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): surface every app-authored escape-hatch call site
   // (`kovo explain --capabilities`) and credential-cookie downgrade (`--cookies`) in the REAL build
   // graph.json — the static producers detect them at their call site, so a merely-built (not run) app
@@ -1367,6 +1373,7 @@ async function staticBuildCheckGraph(
 }
 
 interface SourceGraphFacts {
+  compilerSecuritySemanticSources: CompilerSecuritySemanticSource[];
   components: SourceComponentGraphFacts[];
   routeOutcomes: Map<string, 'file' | 'stream'>;
   routePages: SourceRoutePageFacts[];
@@ -1586,10 +1593,8 @@ function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined
   }
 }
 
-async function sourceGraphFactsFromFiles(
-  files: readonly BuildCheckSourceFile[],
-  root: string,
-): Promise<SourceGraphFacts> {
+function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): SourceGraphFacts {
+  const compilerSecuritySemanticSources: CompilerSecuritySemanticSource[] = [];
   const components: SourceComponentGraphFacts[] = [];
   const routeOutcomes = buildCreateMap<string, 'file' | 'stream'>();
   const routePages: SourceRoutePageFacts[] = [];
@@ -1601,8 +1606,15 @@ async function sourceGraphFactsFromFiles(
   const projectMutationFacts = projectMutationRegistryFactsFromFiles(sourceFiles);
   for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
     const file = sourceFiles[fileIndex]!;
+    // Every identity input comes from the same descriptor-bound source census. Supplying the
+    // other snapshotted files lets the compiler resolve exact local imports without reopening the
+    // filesystem after authority approval.
     const extraFiles = buildSnapshotDenseArray(
-      viteFrameworkIdentityFiles(root, file.fileName, file.source),
+      buildFilterDense(
+        sourceFiles,
+        `Same-snapshot framework-identity files for ${file.fileName}`,
+        (candidate) => candidate.fileName !== file.fileName,
+      ),
       `Framework-identity files for ${file.fileName}`,
     );
     const componentOptions = {
@@ -1615,6 +1627,20 @@ async function sourceGraphFactsFromFiles(
       sourceProvenance: 'app',
     } as const;
     const component = compileComponentModule(componentOptions);
+    const semanticGraphs = buildFlatMapDense(
+      component.componentGraphFacts,
+      `Compiler semantic graph facts for ${file.fileName}`,
+      (fact) => (fact.securitySemanticGraph === undefined ? [] : [fact.securitySemanticGraph]),
+    );
+    buildSecurityArrayAppend(
+      compilerSecuritySemanticSources,
+      {
+        fileName: file.fileName,
+        graphs: semanticGraphs,
+        source: file.source,
+      },
+      'CLI compiler semantic source carriers',
+    );
     if (
       component.componentGraphFacts.length > 0 ||
       component.diagnostics.length > 0 ||
@@ -1650,7 +1676,7 @@ async function sourceGraphFactsFromFiles(
     }
   }
 
-  return { components, routeOutcomes, routePages };
+  return { compilerSecuritySemanticSources, components, routeOutcomes, routePages };
 }
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {

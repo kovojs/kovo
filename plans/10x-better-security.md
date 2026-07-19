@@ -68,6 +68,29 @@ path; abstract interpretation is the last static resort; runtime floors own unav
 facts. A “covers 90%” result is not a proof. Every prior closed verdict must remain closed under
 C13, and every residual must have a named door or explicit out-of-scope disposition.
 
+### Decision record and routing rule
+
+The three static options are complementary, not interchangeable. Kovo therefore adopts the
+layered design above rather than asking one mechanism to carry the entire proof:
+
+| Mechanism | What it proves best | Cost accepted | Boundary it must not cross |
+| --- | --- | --- | --- |
+| Capability-closed module graph | A reachable module cannot acquire an undeclared authority | Versioned package summaries, conditional-export closure, and graph maintenance | Possessing a reviewed capability does not prove that every use of it is safe |
+| Finite compiler-owned IR | The ordinary security-critical effect is one exact reviewed operation | A deliberately smaller authoring language and explicit exceptional doors | It does not model arbitrary JavaScript or admit hand-authored lowered IR |
+| Narrow abstract interpretation | Residual cross-helper data/provenance facts over normalized semantics | Budgets, conservative closed verdicts, and some false positives | It must not become a general JavaScript verifier or a new raw-AST pattern treadmill |
+
+Routing is mechanical: first remove unavailable authority with the module graph; then require each
+ordinary security-critical effect to lower to finite IR; then interpret only the residual normalized
+facts needed to connect reviewed roots and operations. Unsupported syntax, opaque calls, missing or
+stale summaries, contradictory facts, recursion, and budget exhaustion close. Facts that inherently
+depend on runtime resolution or carrier behavior go to the real sink floor rather than being guessed
+statically.
+
+Any new abstract-interpreter rule must name its normalized fact, transfer, resource budget, exact
+closed reason, C13 reject/green anchors, behavioral mutant, and the production predicate it replaces.
+A rule that merely accepts one more source spelling is not architectural progress and does not earn a
+Phase 2C/3C checkbox. Technical-preview compatibility is not a reason to retain a weaker door.
+
 ## Convergence measurements
 
 Measurements are versioned and reproducible:
@@ -154,21 +177,26 @@ Measurements are versioned and reproducible:
 
 ### 2A. Capability-closed module graph
 
-- [x] Define the complete untrusted-data-reachable root census: routes, layouts, mutations,
-      queries, endpoints, webhooks, durable/scheduled tasks, serialized browser handlers, and
-      supported agent/tool callbacks.
-  - Evidence: `159f1a141`; `capability-closure.security.test.ts` proves all ten root kinds, and the
-    integrated six-file suite passes 134 tests with one intentional skip.
+- [x] Define the complete untrusted-data-reachable root census: `createApp()` application lifecycle,
+      routes, layouts, mutations, queries, endpoints and low-level request adapters, webhooks,
+      durable/scheduled tasks, and serialized browser handlers. Keep future agent/tool callbacks as
+      reserved vocabulary without inventing a shipping factory.
+  - Evidence: `capability-closure.security.test.ts` proves all 10 shipping kinds, including lifecycle
+    callback closure and separated custom adapters; the reviewed ledger contains 13 exact shipping
+    factories and zero fabricated agent/tool factories.
 - [x] Build transitive capability closure across imports, re-exports, local wrappers, dynamic
       `import()`/`require()`, conditional package exports, globals, and callback/container
       transfers. Raw network, filesystem, process, VM, worker, and database-driver capabilities
       are unavailable unless a reviewed framework door explicitly supplies one.
   - Evidence: the same suite closes wrappers, re-exports, dynamic loading, globals, callback and
-    container transfers across all seven raw capability kinds; C13 passes with 18 corpora.
+    container transfers across all seven raw capability kinds; C13 passes with 21 corpora.
 - [x] Define versioned, least-authority package summaries. An absent, stale, contradictory, or
       unresolved summary fails closed; package upgrades cannot silently retain an old verdict.
-  - Evidence: `capability-closure-packages.test.ts` pins schema/version, package version, canonical
-    manifest fingerprint, conditional export arms, and fail-closed stale/absent verdicts.
+  - Evidence: `pnpm run check:framework-export-posture` exact-matches 2,315 runtime exports plus
+    1,838 module initializers against package versions, source-tree digests, manifest targets,
+    conditional arms, authority/root/security roles, and matrix posture; omission, duplication,
+    same-version implementation drift, root deletion, and security-role omission mutants fail.
+    `capability-closure-packages.test.ts` retains the corresponding third-party summary proofs.
 - [x] Prove closure with adversarial wrapper/re-export/conditional/dynamic-loading fixtures and
       with positive fixtures for each supported framework capability. Emit a provenance path in
       diagnostics and `kovo explain`.
@@ -236,8 +264,12 @@ Measurements are versioned and reproducible:
       the runtime security mechanism.
   - Evidence: `pnpm run check:c9-sink-inventory` passes; C9 rejects `brand`, `sentinel`, `proxy`,
     and `static-diagnostic`, leaving only reconstruct/box/own mechanisms.
-- [ ] Obtain an independent architecture review of the 2A–2D design before deleting a production
+- [x] Obtain an independent architecture review of the 2A–2D design before deleting a production
       classifier family.
+  - Evidence: `plans/security-architecture-review-phase-2-2026-07-18.md` records an exact-tip
+    independent **REJECT** verdict after 102 focused tests, C13=20, M=68/68, G=18, and C9=23/23.
+    Its three provenance/summary blockers keep Phase 2C migration and every production-classifier
+    deletion open until repaired and independently re-reviewed.
 
 ## Phase 3 — Migrate the three enumerative treadmills
 
@@ -287,8 +319,51 @@ Measurements are versioned and reproducible:
 
 - [ ] Route TASK B roots through capability closure, finite IR, and normalized provenance; unknown
       roots, package summaries, transfers, or sinks fail closed with actionable traces.
+  - [x] Route exact authored request-handler snapshots through the compiler-owned semantic graph
+        before evaluation, bind helper summaries to exact source bytes, callable span/name, root
+        family, authority categories, terminal-operation inventory, and all-path proved verdict,
+        then use that proof in Drizzle request/process analysis only for the reviewed plain-data and
+        static-column reads it covers. Any byte/span/name/root/category/operation mismatch, closed
+        sibling summary, or closed root trace falls back to the legacy closed verdict.
+    - Evidence: `pnpm exec vitest run packages/compiler/src/security-operation-ir.security.test.ts packages/compiler/src/security-operation-ir.response-provenance.test.ts`
+      passes 169/169; the isolated `finite-security-operation-ir` C13 corpus passes with no
+      findings; focused CLI/Drizzle regressions prove cross-file Response/protocol closure and every
+      byte/span/callable/root/authority/operation semantic-proof mismatch.
+  - [x] Preserve the specialized exact Drizzle private-scope proof while the compiler carrier is
+        introduced; do not describe that legacy KV406 discharge as compiler-owned or delete its
+        survivor until the full TASK B migration proves replacement. Keep actual Drizzle writes,
+        referenced/shared mutation handlers, distinct write keys, and target-id derivation visible.
+    - Evidence: `index.mutation-private-scope-transfers.test.ts` proves adjacent alias/container/
+      rebinding rejects plus `account/exact`, `account/shared-one`, and `account/shared-two` effects.
+  - [x] Close the adversarial gaps found during exact-tip review: zero-authority raw `Response`
+        laundering through aliases/containers/wrappers/rebinding/shadowing/cross-file imports, and
+        owner-table reads hidden in a nested query helper invoked with validated input.
+    - Evidence: the focused compiler/CLI suites pass; `index.phase2c-exact-tip-adversarial.test.ts`
+      emits KV406 for the nested owner read, and both families are enrolled in C13.
 - [ ] Delete each superseded syntax/name predicate only after its C13 and mutation evidence passes.
       Record the remaining P obligations and explain every survivor.
+- [ ] Maintain a Phase 3C survivor register until every residual has an owner, reachable-root set,
+      terminal family, C13 anchor, behavioral mutant, and explicit replacement/deletion condition.
+      Moving a predicate into another module does not remove it from P.
+  - Current survivor: raw imperative handlers outside compiler-owned JSX, owned by
+    `nonCompilerRawHandlerBodies` / `unregisteredSinksForSourceFile` / `dangerousCallSink`; roots are
+    direct `on*` property assignments and `addEventListener` callbacks; terminals are `Function`,
+    `eval`, `innerHTML`, `outerHTML`, string `setInterval`/`setTimeout`, `document.write`, and
+    `document.writeln`. Its `kv424-request-process` C13 anchor stays closed until those registration
+    forms lower through finite IR or this narrow floor receives an executable deletion mutant and
+    an explicit long-term disposition.
+  - Current survivor: request/process KV424 authority and reachability analysis, owned by
+    `requestProcessSinksForProject` and its root/callable scans. It retains raw filesystem, process,
+    network, worker, VM, dynamic-loader, database-driver, build-initializer, request-authority, and
+    opaque-call terminals not discharged by the exact compiler semantic carrier. Delete a family
+    only when capability closure or finite IR owns the same roots and its behavioral mutant proves
+    the replacement; otherwise retain it as P rather than calling all TASK B logic retired.
+  - Current survivor: specialized Drizzle KV406/OPP correspondence in
+    `static/session-provenance.ts`, `static/summaries.ts`, and the write analyzer. Exact carrier,
+    principal projection, predicate, operation, and target mapping stay specialized until the
+    normalized graph proves the same correspondence and behavioral mutants kill declaration,
+    carrier, alias, and predicate laundering. Actual Drizzle writes remain an engine/audit
+    responsibility whenever JavaScript predicate correctness is not structurally provable.
 - [ ] Run full classifier, compiler, integration, browser, build, package, performance, and memory
       gates before declaring the treadmill retired.
 

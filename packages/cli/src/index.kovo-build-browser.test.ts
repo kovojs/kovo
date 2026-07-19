@@ -483,7 +483,7 @@ describe('kovo build — browser drive (S1)', () => {
       const islandModule = clientModules.find((module) =>
         module.url.includes('counter-island.client.js'),
       );
-      expect(islandModule?.source).toContain('const handler = (fn) => fn;');
+      expect(islandModule?.source).toContain('const securityHandler = (operations, fn) => {');
       expect(islandModule?.source).not.toContain('@kovojs/browser/generated');
       expect(pageErrors).toEqual([]);
       expect(consoleErrors).toEqual([]);

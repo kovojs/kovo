@@ -18,7 +18,11 @@ import {
   htmlTextWireValuePosture,
 } from '@kovojs/core/internal/semantic-attributes';
 import {
+  decideRuntimeAttributeWrite,
   drainRuntimeSinkSecurityEvent,
+  elementContextSecurityStaticValueIssue,
+  isBlockedActiveEmbedElementName,
+  isBlockedDeclarativeShadowDomAttributeName,
   isBlockedSvgSmilElementName,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
@@ -37,7 +41,6 @@ import {
   escapeWireAttribute,
   renderedHtml,
   type RenderedHtml,
-  safeRuntimeAttribute,
   safeRuntimeAttributeName,
 } from './html.js';
 import {
@@ -68,6 +71,7 @@ import {
   formHelperString,
   formHelperStringEndsWith,
   formHelperStringIndexOf,
+  formHelperStringSlice,
   formHelperStringStartsWith,
   formHelperStringToLowerCase,
 } from './jsx-form-helper-intrinsics.js';
@@ -205,6 +209,46 @@ export function jsx(
         'raw-html',
         intrinsicType,
         'SVG SMIL animation elements are disabled because they can transfer values into executable attributes',
+      ),
+    );
+    return renderedHtml('');
+  }
+  // SPEC.md §4.8 / §5.2 rule 10: object/embed and obsolete frame/frameset output can execute or
+  // contain same-origin HTML with parent-document authority but provide no reviewable modern
+  // iframe sandbox boundary. The compiler rejects authored uses; this floor closes uncompiled JSX.
+  if (isBlockedActiveEmbedElementName(intrinsicType)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        `<${intrinsicType}>`,
+        'raw-html',
+        intrinsicType,
+        'active embed/frame elements are disabled because their documents cannot be sandboxed',
+      ),
+    );
+    return renderedHtml('');
+  }
+  // SPEC §4.8 / §5.2 rule 10: `<base>` is a document-wide navigation capability. Even a
+  // same-origin, safe-scheme href retargets every later relative URL, so per-attribute URL
+  // sanitation cannot make the element an ordinary output sink. The compiler rejects authored
+  // `<base>` and this runtime floor removes direct/uncompiled JSX and opaque-spread construction.
+  if (intrinsicType === 'base') {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        'base',
+        'url',
+        intrinsicType,
+        'HTML base elements are disabled because they change document-wide URL resolution',
+      ),
+    );
+    return renderedHtml('');
+  }
+  if (isDisabledMetaReferrerElement(intrinsicType, intrinsicProps)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        'meta[name=referrer]',
+        'header',
+        'referrer',
+        'meta referrer policy is disabled because it can weaken the document response header',
       ),
     );
     return renderedHtml('');
@@ -483,9 +527,9 @@ function firstRenderedAttributeValue(props: JsxProps, expectedName: string): str
     if (isKovoTrustedUrl(value)) continue;
     if (!safeRuntimeAttributeName(name)) continue;
     if (value === true) return '';
-    // Only a primitive string can serialize to either reserved keyword exactly. Numbers and
-    // object JSON encodings remain first-attribute blockers but cannot spell `hidden`/`_charset_`.
-    return typeof value === 'string' ? value : '';
+    // Preserve exact rendered bytes for relational policies such as iframe sandbox tokens.
+    // Numbers and object JSON encodings remain blockers for the hidden/_charset_ keywords too.
+    return attributeText(name, value);
   }
   return undefined;
 }
@@ -875,6 +919,17 @@ function renderContextualAttributeValue(
   name: string,
   value: unknown,
 ): string | null {
+  if (isDeclarativeShadowDomRuntimeControl(type, name, value)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        `<template> ${name}`,
+        'framework-control',
+        attributeText(name, value),
+        'declarative Shadow DOM is disabled because Kovo component output is light DOM',
+      ),
+    );
+    return null;
+  }
   if (isMetaRefreshContentAttribute(type, props, name)) {
     drainRuntimeSinkSecurityEvent(
       runtimeElementSinkEvent(
@@ -889,9 +944,39 @@ function renderContextualAttributeValue(
   const text = attributeText(name, value);
   const posture = htmlAttributeWireValuePosture(type, name);
   if (posture !== undefined) assertHtmlWireValueStable(text, posture, `<${type}>[${name}]`);
-  return isKovoTrustedUrl(value) && isUrlAttributeName(name)
-    ? escapeAttribute(text)
-    : safeRuntimeAttribute(name, text);
+  const trustedUrl = isKovoTrustedUrl(value) && isUrlAttributeName(name);
+  const decision = decideRuntimeAttributeWrite(name, text, {
+    effectiveIframeSandbox: formHelperAsciiCaseInsensitiveEqual(type, 'iframe')
+      ? (firstRenderedAttributeValue(props, 'sandbox') ?? null)
+      : undefined,
+    elementName: type,
+    trustedUrl,
+  });
+  drainRuntimeSinkSecurityEvent(decision.event);
+  return decision.action === 'remove' ? null : escapeAttribute(decision.value ?? text);
+}
+
+function isDisabledMetaReferrerElement(type: string, props: JsxProps): boolean {
+  if (!formHelperAsciiCaseInsensitiveEqual(type, 'meta')) return false;
+  const name = firstRenderedAttributeValue(props, 'name');
+  return (
+    name !== undefined && elementContextSecurityStaticValueIssue('meta', 'name', name) !== undefined
+  );
+}
+
+function isDeclarativeShadowDomRuntimeControl(type: string, name: string, value: unknown): boolean {
+  if (!formHelperAsciiCaseInsensitiveEqual(type, 'template')) return false;
+  const normalizedName = formHelperStringToLowerCase(name);
+  if (isBlockedDeclarativeShadowDomAttributeName(normalizedName)) return true;
+  if (formHelperStringStartsWith(normalizedName, 'data-bind:')) {
+    return isBlockedDeclarativeShadowDomAttributeName(
+      formHelperStringSlice(normalizedName, 'data-bind:'.length),
+    );
+  }
+  return (
+    normalizedName === 'data-derive-attr' &&
+    isBlockedDeclarativeShadowDomAttributeName(attributeText(name, value))
+  );
 }
 
 function isMetaRefreshContentAttribute(type: string, props: JsxProps, name: string): boolean {

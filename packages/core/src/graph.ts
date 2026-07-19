@@ -7,6 +7,7 @@ import type {
 import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
 import { snapshotAuditText } from './internal/audit-text.js';
 import {
+  freezeSecurityValue,
   securityArrayAppend,
   securityDefineProperty,
   securityGetOwnPropertyDescriptor,
@@ -586,17 +587,25 @@ export interface ToctouFact {
   table: string;
 }
 
+/**
+ * @internal Closed runtime registry for every trust-escape kind rendered by
+ * `kovo explain --trust` (SPEC.md §2). The threat-matrix liveness gate consumes
+ * this value so widening the audit surface cannot silently outgrow its matrix cell.
+ */
+export const AUDITED_TRUST_ESCAPE_KINDS = freezeSecurityValue([
+  'customVerifier',
+  'rawEndpoint',
+  'staticExportPathOverride',
+  'trustedHtml',
+  'trustedSql',
+  'trustedUrl',
+  'webhookVerifyNone',
+] as const);
+
 /** @internal */
 export interface TrustEscapeExplain {
   justification?: string;
-  kind:
-    | 'customVerifier'
-    | 'rawEndpoint'
-    | 'staticExportPathOverride'
-    | 'trustedHtml'
-    | 'trustedSql'
-    | 'trustedUrl'
-    | 'webhookVerifyNone';
+  kind: (typeof AUDITED_TRUST_ESCAPE_KINDS)[number];
   owner?: string;
   safePath?: string;
   site: string;
@@ -624,6 +633,32 @@ export interface UnregisteredSinkFact {
 }
 
 /**
+ * @internal Closed runtime registry for every dangerous capability kind rendered
+ * by `kovo explain --capabilities` (SPEC.md §2/§6.6). The threat-matrix
+ * liveness gate consumes this value as the audited escape/capability denominator.
+ */
+export const AUDITED_CAPABILITY_KINDS = freezeSecurityValue([
+  'acceptUnverified',
+  'actAs',
+  'authAdapterDb',
+  'crossOwnerRead',
+  'declareSystemRead',
+  'declareSystemWrite',
+  'egressAllowInternal',
+  'managedSqlStatement',
+  'postgresRoleTopology',
+  'publishToClient',
+  'publicRelation',
+  'rawRead',
+  'serverValue',
+  'systemDb',
+  'trustedReveal',
+  'unsafeCookie',
+  'unsafeInline',
+  'unsafeRegex',
+] as const);
+
+/**
  * @internal A held dangerous *capability* surfaced by `kovo explain --capabilities` (SPEC §6.6,
  * audit-only, threat-matrix M3). One row per declared escape: a `publishToClient` secret-emit escape
  * (KV437), an egress `allowInternal` private-network entry, a confidentiality `trustedReveal`, an
@@ -643,25 +678,7 @@ export interface UnregisteredSinkFact {
  */
 export interface CapabilityExplain {
   /** The capability family the escape belongs to. */
-  kind:
-    | 'acceptUnverified'
-    | 'actAs'
-    | 'authAdapterDb'
-    | 'crossOwnerRead'
-    | 'declareSystemRead'
-    | 'declareSystemWrite'
-    | 'egressAllowInternal'
-    | 'managedSqlStatement'
-    | 'postgresRoleTopology'
-    | 'publishToClient'
-    | 'publicRelation'
-    | 'rawRead'
-    | 'serverValue'
-    | 'systemDb'
-    | 'trustedReveal'
-    | 'unsafeCookie'
-    | 'unsafeInline'
-    | 'unsafeRegex';
+  kind: (typeof AUDITED_CAPABILITY_KINDS)[number];
   /** A human justification recorded at the escape site (the audit's load-bearing field). */
   justification?: string;
   /** Source module for module-scoped escapes such as `publishToClient`. */
@@ -702,6 +719,7 @@ export interface CapabilityClosureExplainFact {
   reason?: string;
   rootKind?:
     | 'agent-tool-callback'
+    | 'application'
     | 'durable-task'
     | 'endpoint'
     | 'layout'

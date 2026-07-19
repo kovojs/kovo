@@ -143,6 +143,16 @@ function serverInternalRendering(exportName: string): FrameworkIdentityCatalogEn
   };
 }
 
+function serverJsxRuntime(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/server',
+    packageSourceFiles: ['jsx-runtime'],
+    scopes: ['authoring', 'rendering'],
+    specifiers: ['@kovojs/server/jsx-runtime', '@kovojs/server/jsx-dev-runtime'],
+  };
+}
+
 function serverWriteGovernance(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
@@ -223,13 +233,35 @@ function drizzleOrmSql(exportName: string): FrameworkIdentityCatalogEntry {
   };
 }
 
+function drizzleOrmSchema(
+  exportName: string,
+  specifier: 'drizzle-orm/pg-core' | 'drizzle-orm/sqlite-core',
+): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: 'drizzle-orm',
+    scopes: ['data-plane'],
+    specifiers: [specifier],
+  };
+}
+
 const catalogEntries: FrameworkIdentityCatalogEntry[] = [];
 
 appendCatalogEntry(catalogEntries, serverApp('createApp'));
 
 appendCatalogFactories(
   catalogEntries,
-  ['domain', 'mutation', 'query', 'Reader', 's', 'tag', 'task', 'write'],
+  [
+    'declareSecretReadCapability',
+    'domain',
+    'mutation',
+    'query',
+    'Reader',
+    's',
+    'tag',
+    'task',
+    'write',
+  ],
   serverData,
 );
 appendCatalogFactories(
@@ -262,6 +294,11 @@ appendCatalogFactories(
   serverCsrfAuthoring,
 );
 appendCatalogEntry(catalogEntries, serverInternalRendering('renderedHtml'));
+appendCatalogFactories(
+  catalogEntries,
+  ['createElement', 'jsx', 'jsxDEV', 'jsxs'],
+  serverJsxRuntime,
+);
 appendCatalogEntry(catalogEntries, serverWriteGovernance('trustedAssign'));
 appendCatalogEntry(catalogEntries, serverData('encryptAtRest'));
 appendCatalogEntry(catalogEntries, serverData('hashPassword'));
@@ -275,7 +312,7 @@ appendCatalogFactories(
 );
 appendCatalogFactories(
   catalogEntries,
-  ['component', 'declareOffWire', 'publishToClient', 'trustedReveal'],
+  ['component', 'declareOffWire', 'publishToClient', 'secret', 'trustedReveal'],
   coreAuthoring,
 );
 for (let index = 0; index < generatedHeadlessClientExecutableIdentities.length; index += 1) {
@@ -299,9 +336,48 @@ appendCatalogFactories(
 );
 appendCatalogFactories(
   catalogEntries,
-  ['avg', 'avgDistinct', 'count', 'countDistinct', 'max', 'min', 'sql', 'sum', 'sumDistinct'],
+  [
+    'and',
+    'arrayContained',
+    'arrayContains',
+    'arrayOverlaps',
+    'asc',
+    'avg',
+    'avgDistinct',
+    'between',
+    'count',
+    'countDistinct',
+    'desc',
+    'eq',
+    'exists',
+    'gt',
+    'gte',
+    'ilike',
+    'inArray',
+    'isNotNull',
+    'isNull',
+    'like',
+    'lt',
+    'lte',
+    'max',
+    'min',
+    'ne',
+    'not',
+    'notBetween',
+    'notExists',
+    'notIlike',
+    'notInArray',
+    'or',
+    'sql',
+    'sum',
+    'sumDistinct',
+  ],
   drizzleOrmSql,
 );
+appendCatalogEntry(catalogEntries, drizzleOrmSchema('pgTable', 'drizzle-orm/pg-core'));
+appendCatalogEntry(catalogEntries, drizzleOrmSchema('sqliteTable', 'drizzle-orm/sqlite-core'));
+appendCatalogEntry(catalogEntries, drizzleOrmSchema('alias', 'drizzle-orm/pg-core'));
+appendCatalogEntry(catalogEntries, drizzleOrmSchema('alias', 'drizzle-orm/sqlite-core'));
 
 /** @internal Shared manifest-backed export catalog for TS and ts-morph identity adapters. */
 export const frameworkIdentityCatalog: readonly FrameworkIdentityCatalogEntry[] =

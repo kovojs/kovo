@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { collectStateDeriveReferenceFacts } from './compile.js';
-import { assertFixpoint, compileComponentModule } from './index.js';
+import { assertFixpoint } from './index.js';
 import { lowerStructuralJsx } from './lower/structural-jsx.js';
 import { parseComponentModule } from './scan/parse.js';
 import { applySourceReplacements } from './shared.js';
+import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 describe('compiler state bindings', () => {
   it('lowers sole text-child state paths to data-bind without a query plan', () => {

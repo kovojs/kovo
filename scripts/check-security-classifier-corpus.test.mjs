@@ -77,9 +77,9 @@ describe('check-security-classifier-corpus gate', () => {
       'examples/stackoverflow/src/interactive-app.tsx': `export default app`,
       'site/src/app.tsx': `export default app`,
       'site/content/guides/deployment.md':
-        "```ts\nimport '@kovojs/server/runtime-bootstrap';\ncreateRequestHandler\n```",
+        "```ts\nimport { createRequestHandler } from '@kovojs/server';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
       'site/content/guides/request-shell.md':
-        "```ts\nimport '@kovojs/server/runtime-bootstrap';\ncreateRequestHandler\n```",
+        "```ts\nimport { createRequestHandler } from '@kovojs/server';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
     };
 
     expect(evaluateCustomRunnerBootstrapOrdering((file) => files[file])).toEqual([
@@ -205,9 +205,9 @@ describe('check-security-classifier-corpus gate', () => {
       'examples/stackoverflow/src/interactive-app.tsx': `export default app;`,
       'site/src/app.tsx': `export default siteStaticExportApp;`,
       'site/content/guides/deployment.md':
-        "```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { createRequestHandler } from '@kovojs/server';\n```",
+        "```ts\nimport { createRequestHandler } from '@kovojs/server';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
       'site/content/guides/request-shell.md':
-        "```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { createRequestHandler } from '@kovojs/server';\n```",
+        "```ts\nimport { createRequestHandler } from '@kovojs/server';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
     };
     const findings = evaluateRequestSafeRuntimeInventoryAlignment((file) => files[file]);
 
