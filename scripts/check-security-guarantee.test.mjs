@@ -123,9 +123,7 @@ describe('security guarantee gate', () => {
       array: ['first', 'second'],
       nested: { a: 1, z: 2 },
     });
-    expect(first).toBe(
-      'sha256:16fd239f376248d0b8774c1ab3e617ae566b31a154d8f96b0371b914dc78d913',
-    );
+    expect(first).toBe('sha256:16fd239f376248d0b8774c1ab3e617ae566b31a154d8f96b0371b914dc78d913');
     expect(
       securityGuaranteeRegisterCanonicalHash({
         nested: { z: 2, a: 1 },

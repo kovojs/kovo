@@ -114,11 +114,15 @@ or served artifact.
   - Evidence: `plans/security-architecture-decisions-phase-0-2026-07-19.md` freezes all seven
     enforcement shapes and non-claims at baseline `635fbea78`; each shipping phase still owes its
     normative SPEC delta and forcing/real-behavior proof.
-- [ ] Materialize frozen, stable-ID D and W denominator inventories. Each row names its owner,
+- [x] Materialize frozen, stable-ID D and W denominator inventories. Each row names its owner,
       authoritative source, applicability, proof/re-witness, and reviewed exemption; deletion or an
       `inapplicable` change requires an explicit reviewed-raise marker and a killing mutant.
-- [ ] Add D and W uncovered-obligation counts—not only percentages—to the baseline collector so
+  - Evidence: `check:derivation-rewitness-inventory` and its 5/5 mutation-oriented tests freeze 8 D
+    and 9 W stable IDs, rejecting deletion, unreviewed exemption, and unsupported covered claims.
+- [x] Add D and W uncovered-obligation counts—not only percentages—to the baseline collector so
       progress remains comparable when the implementation grows.
+  - Evidence: the focused convergence-collector test reports D `uncovered=6/8` and W
+    `uncovered=6/9` from the validated inventories.
 
 ---
 

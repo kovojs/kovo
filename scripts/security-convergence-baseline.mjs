@@ -8,6 +8,7 @@ import ts from 'typescript';
 
 import { dec10GreenCorpusRows } from '../packages/conformance-fixtures/src/adversarial-corpus.ts';
 import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.mjs';
+import { loadSecurityDenominatorInventories } from './derivation-rewitness-inventory.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 import {
@@ -65,6 +66,18 @@ export function collectSecurityConvergenceSnapshot(options = {}) {
   if (charter.schema !== CHARTER_SCHEMA) {
     throw new TypeError(`Security audit charter must use ${CHARTER_SCHEMA}.`);
   }
+  const inventories =
+    options.inventories ??
+    loadSecurityDenominatorInventories({
+      inventoryFile: options.inventoryFile,
+      readText,
+      repoRoot: root,
+    });
+  if (!inventories.ok) {
+    throw new TypeError(
+      `Security D/W denominator inventories are invalid:\n${inventories.findings.join('\n')}`,
+    );
+  }
 
   const staticPredicates = measureProductionPredicateObligations(predicateSources);
   const imperativeDom = measureImperativeDomSinkLexicon(trustSource);
@@ -110,6 +123,8 @@ export function collectSecurityConvergenceSnapshot(options = {}) {
       corpusCount: corpora.length,
       testFileCount: classifierTestFiles.size,
     },
+    d: inventories.summary.derivation,
+    w: inventories.summary.rewitness,
     informational: {
       egressLoc: lineCount(egressSource),
       trustStaticLoc: lineCount(trustSource),

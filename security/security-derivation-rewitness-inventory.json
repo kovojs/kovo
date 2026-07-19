@@ -1,0 +1,263 @@
+{
+  "schema": "kovo-security-denominator-inventories/v1",
+  "version": 1,
+  "denominatorPolicy": {
+    "stableIdsNeverRemoved": true,
+    "inapplicableRequiresReviewedMarkerAndMutation": true
+  },
+  "derivation": {
+    "schema": "kovo-security-derivation-inventory/v1",
+    "rows": [
+      {
+        "id": "D.browser-posture",
+        "owner": "compiler browser-posture derivation",
+        "authoritativeSource": [
+          "packages/compiler/src/security/operation-kinds.ts",
+          "packages/server/src/document-core.ts"
+        ],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "proof": [],
+        "gap": "CSP origins, Permissions-Policy, and optional cross-origin isolation remain authored or duplicated rather than derived from one browser posture manifest.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "D.capability-mint-census",
+        "owner": "capability-surface census gate",
+        "authoritativeSource": [
+          "packages/core/src/internal/framework-identity-catalog.ts",
+          "scripts/capability-surface-census-gate.mjs"
+        ],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "proof": [],
+        "gap": "Witness and capability mint sites are not yet derived through one symbol-identity inventory.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "D.config-secret-classification",
+        "owner": "server env-schema door",
+        "authoritativeSource": ["packages/server/src/schema.ts", "packages/server/src/env.ts"],
+        "applicability": "applicable",
+        "status": "derived",
+        "proof": [
+          "packages/server/src/schema.test.ts",
+          "packages/server/src/env.test.ts",
+          "packages/compiler/src/client-secret-capture.test.ts"
+        ],
+        "gap": null,
+        "reviewedExemption": null
+      },
+      {
+        "id": "D.decision-surface-coverage",
+        "owner": "compiler security-operation inventories",
+        "authoritativeSource": [
+          "packages/core/src/internal/security-operation-ir.ts",
+          "scripts/check-security-classifier-corpus.mjs"
+        ],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "proof": [],
+        "gap": "C13 witnesses are not yet required for every generated root, operation, and closed-verdict cell.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "D.public-cache-posture",
+        "owner": "compiler cache-influence derivation",
+        "authoritativeSource": [
+          "packages/compiler/src/scan/security-operation-ir.ts",
+          "packages/server/src/response-posture.ts"
+        ],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "proof": [],
+        "gap": "No finite influence manifest proves public responses principal-independent or derives request-header Vary axes.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "D.stateful-key-scoping",
+        "owner": "core ScopedKey and stateful sink doors",
+        "authoritativeSource": [
+          "packages/core/src/scoped-key.ts",
+          "packages/core/src/internal/source-sink-registry.ts"
+        ],
+        "applicability": "applicable",
+        "status": "derived",
+        "proof": [
+          "packages/core/src/scoped-key.test.ts",
+          "packages/core/src/storage.test.ts",
+          "packages/server/src/task-queue.test.ts"
+        ],
+        "gap": null,
+        "reviewedExemption": null
+      },
+      {
+        "id": "D.tcb-membership",
+        "owner": "analysis-time TCB closure gate",
+        "authoritativeSource": ["security/TCB.md", "scripts/check-tcb-boundary.mjs"],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "proof": [],
+        "gap": "Gate entrypoint import closures are not yet mechanically diffed against the TCB manifest.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "D.wire-grammar",
+        "owner": "core wire-ingress grammar registry",
+        "authoritativeSource": [
+          "packages/server/src/mutation-wire.ts",
+          "packages/browser/src/mutation-fetch.ts"
+        ],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "proof": [],
+        "gap": "Browser encoders and server decoders do not yet derive from one closed typed grammar registry.",
+        "reviewedExemption": null
+      }
+    ]
+  },
+  "rewitness": {
+    "schema": "kovo-security-rewitness-inventory/v1",
+    "rows": [
+      {
+        "id": "W.async-context-lifecycle",
+        "owner": "server async-context confinement contract",
+        "authoritativeSource": ["packages/server/src/jsx-form-helper-intrinsics.ts"],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "renewalTrigger": "not implemented",
+        "ttl": "undefined",
+        "failurePosture": "individual carriers differ",
+        "costBudget": "unbudgeted",
+        "evidence": [],
+        "gap": "AsyncLocalStorage carriers do not yet share one lifecycle identity and fail-closed contract.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "W.config-secret-runtime-box",
+        "owner": "server app env boot door",
+        "authoritativeSource": ["packages/server/src/env.ts", "packages/server/src/schema.ts"],
+        "applicability": "applicable",
+        "status": "rewitnessed",
+        "renewalTrigger": "every application boot and env-schema parse",
+        "ttl": "one process boot snapshot",
+        "failurePosture": "refuse boot or reject unavailable build sentinel egress",
+        "costBudget": "one bounded declared-schema parse per boot; no request hot-path lookup",
+        "evidence": ["packages/server/src/env.test.ts", "packages/server/src/schema.test.ts"],
+        "gap": null,
+        "reviewedExemption": null
+      },
+      {
+        "id": "W.database-posture-lease",
+        "owner": "server Postgres runtime posture door",
+        "authoritativeSource": ["packages/server/src/postgres-runtime.ts"],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "renewalTrigger": "boot only",
+        "ttl": "unbounded after boot",
+        "failurePosture": "no periodic drift response",
+        "costBudget": "renewal budget undefined",
+        "evidence": [],
+        "gap": "Role, grant, policy, pooler, and restore freshness facts are not renewed after boot.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "W.deployed-posture-attestation",
+        "owner": "CLI and server posture-attestation doors",
+        "authoritativeSource": [
+          "packages/cli/src/artifact-provenance.ts",
+          "plans/security-architecture-decisions-phase-0-2026-07-19.md"
+        ],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "renewalTrigger": "not implemented",
+        "ttl": "undefined",
+        "failurePosture": "UNBOUND",
+        "costBudget": "unbudgeted",
+        "evidence": [],
+        "gap": "No externally pinned nonce-bound single-instance posture challenge exists.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "W.dev-host-tier",
+        "owner": "server dev-host boot door",
+        "authoritativeSource": ["packages/server/src/vite-dev.ts"],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "renewalTrigger": "dev boot only",
+        "ttl": "one dev process",
+        "failurePosture": "tier obligations are not centrally compared",
+        "costBudget": "unbudgeted",
+        "evidence": [],
+        "gap": "HTTP/HMR host authority and dev/prod door parity lack one versioned re-witness manifest.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "W.egress-destination-resolution",
+        "owner": "server egress dial door",
+        "authoritativeSource": ["packages/server/src/egress.ts"],
+        "applicability": "applicable",
+        "status": "rewitnessed",
+        "renewalTrigger": "every dial and redirect hop",
+        "ttl": "one selected connection attempt",
+        "failurePosture": "reject before DNS/dial or reject selected address",
+        "costBudget": "one bounded all-answer classification and selected-address pin per hop",
+        "evidence": [
+          "packages/server/src/egress.test.ts",
+          "packages/server/src/egress-undici.test.ts"
+        ],
+        "gap": null,
+        "reviewedExemption": null
+      },
+      {
+        "id": "W.principal-revocation-epoch",
+        "owner": "identity-provider epoch adapter and credential verifier doors",
+        "authoritativeSource": ["plans/security-architecture-decisions-phase-0-2026-07-19.md"],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "renewalTrigger": "not implemented",
+        "ttl": "undefined",
+        "failurePosture": "credentials rely on expiry without epoch freshness",
+        "costBudget": "unbudgeted",
+        "evidence": [],
+        "gap": "Credential mint and verify doors do not yet bind a persistent monotone principal epoch.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "W.request-deadline-occupancy",
+        "owner": "server pre-dispatch admission and effect doors",
+        "authoritativeSource": ["packages/server/src/app-load-shed.ts"],
+        "applicability": "applicable",
+        "status": "uncovered",
+        "renewalTrigger": "not implemented",
+        "ttl": "unbounded request execution",
+        "failurePosture": "no mandatory deadline or global in-flight ceiling",
+        "costBudget": "unbudgeted",
+        "evidence": [],
+        "gap": "Owned effects do not consume one mandatory request deadline and occupancy witness.",
+        "reviewedExemption": null
+      },
+      {
+        "id": "W.scoped-key-sink-witness",
+        "owner": "stateful storage/task/replay sink doors",
+        "authoritativeSource": [
+          "packages/core/src/scoped-key.ts",
+          "packages/core/src/internal/source-sink-registry.ts"
+        ],
+        "applicability": "applicable",
+        "status": "rewitnessed",
+        "renewalTrigger": "every stateful sink operation",
+        "ttl": "one sink invocation",
+        "failurePosture": "KV450 rejection before namespace use",
+        "costBudget": "bounded 4,096-code-unit frame validation plus digest/framing per operation",
+        "evidence": [
+          "packages/core/src/scoped-key.test.ts",
+          "packages/core/src/storage.test.ts",
+          "packages/server/src/task-queue.test.ts"
+        ],
+        "gap": null,
+        "reviewedExemption": null
+      }
+    ]
+  }
+}

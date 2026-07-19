@@ -40,6 +40,24 @@ describe('security convergence baseline', () => {
     });
   });
 
+  it('reports absolute D and W denominator counts from the validated inventories', () => {
+    expect(collectSecurityConvergenceSnapshot()).toMatchObject({
+      d: {
+        checkedIntent: 0,
+        derived: 2,
+        reviewedExempt: 0,
+        total: 8,
+        uncovered: 6,
+      },
+      w: {
+        reviewedExempt: 0,
+        rewitnessed: 3,
+        total: 9,
+        uncovered: 6,
+      },
+    });
+  });
+
   it('counts generic Node/TypeScript syntax and name obligations rather than LOC', () => {
     const measured = measureStaticPredicateObligations(`
       const REVIEWED_ARRAY = (['alpha', 'beta'] as const)!;
