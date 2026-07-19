@@ -65,6 +65,7 @@ import {
   type PostgresOwnerColumnPolicyTerm,
   type PostgresOwnerPolicyTerm,
   type PostgresOwnerViaPolicyTerm,
+  type PostgresRlsSqlEmissionSite,
 } from './postgres-authorization-correspondence.js';
 import {
   createPostgresCapabilityReplayStoreFromExecutor,
@@ -1140,8 +1141,9 @@ interface PostgresPolicyRow {
 
 interface ExpectedPostgresPolicy {
   cmd: 'ALL' | 'SELECT';
+  emissionSite: PostgresRlsSqlEmissionSite;
   issueCode: string;
-  name: string;
+  name: KovoPostgresPostureReport['authorizationPolicies'][number]['policyName'];
   permissive: 'PERMISSIVE';
   qual: string;
   roles: readonly string[];
@@ -1569,6 +1571,23 @@ export interface KovoPostgresPostureIssue {
 
 /** Result of checking an existing Postgres database against the app schema posture. */
 export interface KovoPostgresPostureReport {
+  /**
+   * Live policy activations derived from the same exact FORCE-RLS/policy-set posture check.
+   * `verified` describes engine policy activation only; it does not claim guard/RLS equivalence.
+   * SPEC §10.3.
+   */
+  authorizationPolicies: readonly {
+    /** The closed framework SQL-emission site that generated this expected policy. */
+    emissionSite: 'admin' | 'authzPolicy' | 'owner' | 'ownerVia' | 'system';
+    /** The exact generated Postgres policy name. */
+    policyName: 'kovo_admin_scope' | 'kovo_authz_policy' | 'kovo_owner_scope' | 'kovo_system_scope';
+    /** The live relation schema checked through the engine catalog. */
+    schemaName: string;
+    /** Whether FORCE RLS and the table's complete expected policy set and shapes matched exactly. */
+    status: 'unverified' | 'verified';
+    /** The live relation name checked through the engine catalog. */
+    tableName: string;
+  }[];
   driver: KovoPostgresResolvedRuntimeDriver;
   ok: boolean;
   issues: readonly KovoPostgresPostureIssue[];
@@ -1777,7 +1796,12 @@ export async function provisionPostgresAppDb(
       safeOptions.runtimeDatabaseUrl,
     );
     if (runtimeConnectionPosture?.issue !== undefined) {
-      return postgresRuntimeWitnessFailureReport(config, runtimeConnectionPosture);
+      return postgresRuntimeWitnessFailureReport(
+        config,
+        runtimeConnectionPosture,
+        schemaTables,
+        metadata,
+      );
     }
     const runtimeLoginRole =
       runtimeConnectionPosture?.runtimeLoginRole ??
@@ -1834,7 +1858,12 @@ export async function migratePostgresAppDb(
     if (runtimeConnectionPosture?.issue !== undefined) {
       return {
         ...migrations,
-        posture: postgresRuntimeWitnessFailureReport(config, runtimeConnectionPosture),
+        posture: postgresRuntimeWitnessFailureReport(
+          config,
+          runtimeConnectionPosture,
+          schemaTables,
+          metadata,
+        ),
       };
     }
     const runtimeLoginRole =
@@ -1875,12 +1904,19 @@ async function witnessConfiguredPostgresRuntimeDatabase(
 function postgresRuntimeWitnessFailureReport(
   config: ResolvedPostgresRuntimeConfig,
   witness: PostgresRuntimeConnectionPostureWitness,
+  schemaTables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
 ): KovoPostgresPostureReport {
   const issue = witness.issue ?? {
     code: 'KV433_RUNTIME_ROLE',
     detail: RUNTIME_LEAST_PRIVILEGE_ERROR,
   };
   return {
+    authorizationPolicies: unverifiedPostgresAuthorizationPolicyActivations(
+      schemaTables,
+      metadata,
+      config,
+    ),
     driver: config.driver,
     issues: [issue],
     ok: false,
@@ -1952,6 +1988,11 @@ export async function checkPostgresAppDbPosture(
         : undefined;
     if (runtimeConnectionPosture?.issue !== undefined) {
       return {
+        authorizationPolicies: unverifiedPostgresAuthorizationPolicyActivations(
+          schemaTables,
+          metadata,
+          config,
+        ),
         driver: config.driver,
         issues: [runtimeConnectionPosture.issue],
         ok: false,
@@ -2175,6 +2216,10 @@ async function checkRuntimeDbPostureTransaction(
   },
 ): Promise<KovoPostgresPostureReport> {
   const issues: KovoPostgresPostureIssue[] = [];
+  const authorizationPolicies: KovoPostgresPostureReport['authorizationPolicies'][number][] = [];
+  const protectedTables = postgresMapValues(
+    resolveProtectedPostgresTables(input.schemaTables, input.metadata),
+  );
   const runtimeLoginRole =
     input.config.driver === 'node-postgres'
       ? (input.runtimeLoginRole ?? (await currentPostgresLogin(client)))
@@ -2186,6 +2231,11 @@ async function checkRuntimeDbPostureTransaction(
     );
     if (identityIssue !== undefined) {
       return {
+        authorizationPolicies: postgresAuthorizationPolicyActivations(
+          protectedTables,
+          input.config,
+          'unverified',
+        ),
         driver: input.config.driver,
         issues: [identityIssue],
         ok: false,
@@ -2251,9 +2301,6 @@ async function checkRuntimeDbPostureTransaction(
   // SPEC §10.3 (C10): policy posture is an exact catalog allowlist, not the
   // presence of a familiar name. A same-named allow-all/PUBLIC policy or an
   // additional permissive policy changes the effective OR-composed RLS boundary.
-  const protectedTables = postgresMapValues(
-    resolveProtectedPostgresTables(input.schemaTables, input.metadata),
-  );
   const protectedTableCount = postgresDenseArrayLength(
     protectedTables,
     'Protected Postgres tables',
@@ -2282,16 +2329,28 @@ async function checkRuntimeDbPostureTransaction(
       rls === undefined || postgresDenseArrayLength(rls.rows, 'Postgres RLS rows') === 0
         ? undefined
         : postgresDenseArrayValue(rls.rows, 0, 'Postgres RLS rows');
-    if (row?.relrowsecurity !== true || row.relforcerowsecurity !== true) {
+    const forceRlsVerified = row?.relrowsecurity === true && row.relforcerowsecurity === true;
+    if (!forceRlsVerified) {
       appendPostgresDenseValue(issues, {
         code: 'KV433_FORCE_RLS',
         detail: `${protectedTable.schemaName}.${protectedTable.tableName} must have row-level security enabled and forced`,
       });
     }
+    const expectedPolicies = expectedPostgresPolicies(protectedTable, input.config);
+    const policyIssues = await postgresProtectedPolicyPostureIssues(
+      client,
+      protectedTable,
+      expectedPolicies,
+    );
+    appendPostgresDenseValues(issues, policyIssues, 'Protected Postgres policy posture issues');
     appendPostgresDenseValues(
-      issues,
-      await postgresProtectedPolicyPostureIssues(client, protectedTable, input.config),
-      'Protected Postgres policy posture issues',
+      authorizationPolicies,
+      postgresAuthorizationPolicyActivationsForTable(
+        protectedTable,
+        expectedPolicies,
+        forceRlsVerified && policyIssues.length === 0 ? 'verified' : 'unverified',
+      ),
+      'Postgres authorization policy activations',
     );
   }
 
@@ -2363,7 +2422,9 @@ async function checkRuntimeDbPostureTransaction(
     'Postgres unexpected privilege issues',
   );
 
+  sortPostgresAuthorizationPolicyActivations(authorizationPolicies);
   return {
+    authorizationPolicies,
     driver: input.config.driver,
     issues,
     ok: issues.length === 0,
@@ -2374,10 +2435,147 @@ async function checkRuntimeDbPostureTransaction(
   };
 }
 
+function expectedPostgresPolicies(
+  table: ProtectedPostgresTable,
+  config: ResolvedPostgresRuntimeConfig,
+): ExpectedPostgresPolicy[] {
+  const primaryPolicyName = table.kind === 'authzPolicy' ? 'kovo_authz_policy' : 'kovo_owner_scope';
+  const primaryIssueCode =
+    table.kind === 'authzPolicy'
+      ? 'KV433_AUTHZ_POLICY'
+      : table.kind === 'ownerVia'
+        ? 'KV433_OWNER_VIA_POLICY'
+        : 'KV433_OWNER_POLICY';
+  const expected: ExpectedPostgresPolicy[] = [
+    {
+      cmd: 'ALL',
+      emissionSite: table.kind,
+      issueCode: primaryIssueCode,
+      name: primaryPolicyName,
+      permissive: 'PERMISSIVE',
+      qual: table.predicate,
+      roles: [config.readerRole, config.writerRole],
+      withCheck: table.predicate,
+    },
+    {
+      cmd: 'ALL',
+      emissionSite: 'system',
+      issueCode: 'KV433_SYSTEM_POLICY',
+      name: 'kovo_system_scope',
+      permissive: 'PERMISSIVE',
+      qual: 'true',
+      roles: [config.systemRole],
+      withCheck: 'true',
+    },
+  ];
+  if (witnessSetHas(config.crossOwnerReadTables, table.tableName)) {
+    appendPostgresDenseValue(expected, {
+      cmd: 'SELECT',
+      emissionSite: 'admin',
+      issueCode: 'KV433_ADMIN_POLICY',
+      name: 'kovo_admin_scope',
+      permissive: 'PERMISSIVE',
+      qual: 'true',
+      roles: [config.adminRole],
+      withCheck: null,
+    });
+  }
+  return expected;
+}
+
+function unverifiedPostgresAuthorizationPolicyActivations(
+  tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
+  config: ResolvedPostgresRuntimeConfig,
+): KovoPostgresPostureReport['authorizationPolicies'][number][] {
+  return postgresAuthorizationPolicyActivations(
+    postgresMapValues(resolveProtectedPostgresTables(tables, metadata)),
+    config,
+    'unverified',
+  );
+}
+
+function postgresAuthorizationPolicyActivations(
+  tables: readonly ProtectedPostgresTable[],
+  config: ResolvedPostgresRuntimeConfig,
+  status: KovoPostgresPostureReport['authorizationPolicies'][number]['status'],
+): KovoPostgresPostureReport['authorizationPolicies'][number][] {
+  const activations: KovoPostgresPostureReport['authorizationPolicies'][number][] = [];
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres authorization policy tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    const table = postgresDenseArrayValue(tables, index, 'Postgres authorization policy tables');
+    appendPostgresDenseValues(
+      activations,
+      postgresAuthorizationPolicyActivationsForTable(
+        table,
+        expectedPostgresPolicies(table, config),
+        status,
+      ),
+      'Postgres authorization policy activations',
+    );
+  }
+  sortPostgresAuthorizationPolicyActivations(activations);
+  return activations;
+}
+
+function postgresAuthorizationPolicyActivationsForTable(
+  table: ProtectedPostgresTable,
+  policies: readonly ExpectedPostgresPolicy[],
+  status: KovoPostgresPostureReport['authorizationPolicies'][number]['status'],
+): KovoPostgresPostureReport['authorizationPolicies'][number][] {
+  const activations: KovoPostgresPostureReport['authorizationPolicies'][number][] = [];
+  const policyCount = postgresDenseArrayLength(
+    policies,
+    'Expected Postgres authorization policies',
+  );
+  for (let index = 0; index < policyCount; index += 1) {
+    const policy = postgresDenseArrayValue(
+      policies,
+      index,
+      'Expected Postgres authorization policies',
+    );
+    appendPostgresDenseValue(activations, {
+      emissionSite: policy.emissionSite,
+      policyName: policy.name,
+      schemaName: table.schemaName,
+      status,
+      tableName: table.tableName,
+    });
+  }
+  return activations;
+}
+
+function sortPostgresAuthorizationPolicyActivations(
+  activations: KovoPostgresPostureReport['authorizationPolicies'][number][],
+): void {
+  securityArraySort(activations, (left, right) => {
+    const schemaOrder = postgresCompareStrings(left.schemaName, right.schemaName);
+    if (schemaOrder !== 0) return schemaOrder;
+    const tableOrder = postgresCompareStrings(left.tableName, right.tableName);
+    if (tableOrder !== 0) return tableOrder;
+    const siteOrder =
+      postgresAuthorizationPolicyEmissionRank(left.emissionSite) -
+      postgresAuthorizationPolicyEmissionRank(right.emissionSite);
+    return siteOrder === 0
+      ? postgresCompareStrings(left.emissionSite, right.emissionSite)
+      : siteOrder;
+  });
+}
+
+function postgresAuthorizationPolicyEmissionRank(site: PostgresRlsSqlEmissionSite): number {
+  if (site === 'system') return 1;
+  if (site === 'admin') return 2;
+  return 0;
+}
+
+function postgresCompareStrings(left: string, right: string): number {
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+
 async function postgresProtectedPolicyPostureIssues(
   client: RuntimeTransactionClient,
   table: ProtectedPostgresTable,
-  config: ResolvedPostgresRuntimeConfig,
+  expected: readonly ExpectedPostgresPolicy[],
 ): Promise<KovoPostgresPostureIssue[]> {
   const policies = await safeQuery<PostgresPolicyRow>(
     client,
@@ -2399,45 +2597,6 @@ async function postgresProtectedPolicyPostureIssues(
         detail: `could not enumerate the exact RLS policy set for ${table.schemaName}.${table.tableName}`,
       },
     ];
-  }
-
-  const primaryPolicyName = table.kind === 'authzPolicy' ? 'kovo_authz_policy' : 'kovo_owner_scope';
-  const primaryIssueCode =
-    table.kind === 'authzPolicy'
-      ? 'KV433_AUTHZ_POLICY'
-      : table.kind === 'ownerVia'
-        ? 'KV433_OWNER_VIA_POLICY'
-        : 'KV433_OWNER_POLICY';
-  const expected: ExpectedPostgresPolicy[] = [
-    {
-      cmd: 'ALL',
-      issueCode: primaryIssueCode,
-      name: primaryPolicyName,
-      permissive: 'PERMISSIVE',
-      qual: table.predicate,
-      roles: [config.readerRole, config.writerRole],
-      withCheck: table.predicate,
-    },
-    {
-      cmd: 'ALL',
-      issueCode: 'KV433_SYSTEM_POLICY',
-      name: 'kovo_system_scope',
-      permissive: 'PERMISSIVE',
-      qual: 'true',
-      roles: [config.systemRole],
-      withCheck: 'true',
-    },
-  ];
-  if (witnessSetHas(config.crossOwnerReadTables, table.tableName)) {
-    appendPostgresDenseValue(expected, {
-      cmd: 'SELECT',
-      issueCode: 'KV433_ADMIN_POLICY',
-      name: 'kovo_admin_scope',
-      permissive: 'PERMISSIVE',
-      qual: 'true',
-      roles: [config.adminRole],
-      withCheck: null,
-    });
   }
 
   const issues: KovoPostgresPostureIssue[] = [];
@@ -5206,10 +5365,7 @@ function resolvePostgresRuntimeConfigSnapshot(
   });
   const crossOwnerReadTables = normalizeStringSet(options.crossOwnerReadTables);
   const publicRelations = normalizePublicRelationDeclarations(options.publicRelations);
-  const postureCheck = resolvePostgresPostureCheck(
-    options,
-    driver === 'node-postgres',
-  );
+  const postureCheck = resolvePostgresPostureCheck(options, driver === 'node-postgres');
   const config: ResolvedPostgresRuntimeConfig = {
     adminRole,
     ...(adminDatabaseUrl === undefined ? {} : { adminDatabaseUrl }),

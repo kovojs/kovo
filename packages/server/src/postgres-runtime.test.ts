@@ -277,6 +277,32 @@ const orphanedContainerItems = pgTable(
 
 const unresolvableOwnerViaSchema = { orphanedContainerItems, sharedContainers };
 
+const ownedContainers = pgTable(
+  'kovo_runtime_owned_containers',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+  },
+  kovo({ domain: 'runtime-owned-containers', key: 'id', owner: 'ownerId' }),
+);
+
+const ownedContainerItems = pgTable(
+  'kovo_runtime_owned_container_items',
+  {
+    containerId: text('container_id')
+      .notNull()
+      .references(() => ownedContainers.id),
+    id: text('id').primaryKey(),
+  },
+  kovo({
+    domain: 'runtime-owned-container-items',
+    key: 'id',
+    ownerVia: { fk: 'containerId', parent: ownedContainers, parentKey: 'id' },
+  }),
+);
+
+const ownerViaSchema = { ownedContainerItems, ownedContainers };
+
 describe('createPostgresAppRuntimeDb', () => {
   const roots: string[] = [];
 
@@ -4605,6 +4631,35 @@ describe('createPostgresAppRuntimeDb', () => {
     ]);
   });
 
+  it('reports ownerVia as its exact live primary-policy emission site', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-owner-via-activation-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: ownerViaSchema,
+    });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    const report = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema: ownerViaSchema,
+    });
+    expect(report.ok).toBe(true);
+    expect(report.authorizationPolicies).toContainEqual({
+      emissionSite: 'ownerVia',
+      policyName: 'kovo_owner_scope',
+      schemaName: 'public',
+      status: 'verified',
+      tableName: 'kovo_runtime_owned_container_items',
+    });
+  });
+
   it('keeps audited crossOwnerRead parameters bound under a one-shot array iterator poison', async () => {
     drainCrossOwnerReadAuditFacts();
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-cross-owner-params-'));
@@ -5300,6 +5355,36 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+    expect(report.authorizationPolicies).toEqual([
+      {
+        emissionSite: 'authzPolicy',
+        policyName: 'kovo_authz_policy',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_team_documents',
+      },
+      {
+        emissionSite: 'system',
+        policyName: 'kovo_system_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_team_documents',
+      },
+      {
+        emissionSite: 'owner',
+        policyName: 'kovo_owner_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_team_memberships',
+      },
+      {
+        emissionSite: 'system',
+        policyName: 'kovo_system_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_team_memberships',
+      },
+    ]);
   });
 
   it('reports missing FORCE RLS and policy posture for custom authzPolicy tables', async () => {

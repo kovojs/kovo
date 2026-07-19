@@ -673,6 +673,19 @@ function dbCommandResult(action: KovoDbAction, report: DbRunReport): CliCommandR
   const migrations = report.migrations;
   const posture = report.posture;
   const topology = posture.roleTopology;
+  let authorizationPoliciesVerified = 0;
+  let authorizationPoliciesUnverified = 0;
+  for (let index = 0; index < posture.authorizationPolicies.length; index += 1) {
+    if (posture.authorizationPolicies[index]?.status === 'verified') {
+      authorizationPoliciesVerified += 1;
+    } else {
+      authorizationPoliciesUnverified += 1;
+    }
+  }
+  const authorizationPolicyLines = posture.authorizationPolicies.map(
+    (policy) =>
+      `AUTHORIZATION_POLICY schema=${stableValue(policy.schemaName)} table=${stableValue(policy.tableName)} site=${policy.emissionSite} policy=${stableValue(policy.policyName)} status=${policy.status}`,
+  );
   const migrationLines =
     migrations === undefined
       ? []
@@ -682,8 +695,8 @@ function dbCommandResult(action: KovoDbAction, report: DbRunReport): CliCommandR
         ];
   const summary =
     migrations === undefined
-      ? `SUMMARY issues=${posture.issues.length}`
-      : `SUMMARY migrationsApplied=${migrations.applied.length} migrationsSkipped=${migrations.skipped.length} issues=${posture.issues.length}`;
+      ? `SUMMARY authorizationPoliciesVerified=${authorizationPoliciesVerified} authorizationPoliciesUnverified=${authorizationPoliciesUnverified} issues=${posture.issues.length}`
+      : `SUMMARY migrationsApplied=${migrations.applied.length} migrationsSkipped=${migrations.skipped.length} authorizationPoliciesVerified=${authorizationPoliciesVerified} authorizationPoliciesUnverified=${authorizationPoliciesUnverified} issues=${posture.issues.length}`;
   return {
     exitCode: posture.ok ? 0 : 1,
     output:
@@ -704,6 +717,7 @@ function dbCommandResult(action: KovoDbAction, report: DbRunReport): CliCommandR
           (edge) =>
             `MEMBERSHIP member=${stableValue(edge.memberRole)} role=${stableValue(edge.role)} owner=${edge.owner} status=${edge.status}`,
         ),
+        ...authorizationPolicyLines,
         ...migrationLines,
         ...posture.issues.map(
           (issue) => `ISSUE code=${issue.code} detail=${stableValue(issue.detail)}`,
