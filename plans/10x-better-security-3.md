@@ -721,10 +721,13 @@ TLA+ is a real learning cost nobody on the team has paid.
       naive-watermark variant vs the GREATEST advance at `postgres-replay.ts:299`, each yielding a
       committed counterexample under `formal/replay/counterexamples/`. **If those variants do not
       produce counterexamples, the model is not faithful and the item stops there.**
-- [ ] `scripts/check-protocol-alphabet.mjs` (the cheap, high-certainty anti-rot half — ship it even if
+- [x] `scripts/check-protocol-alphabet.mjs` (the cheap, high-certainty anti-rot half — ship it even if
       the model never does): every SQL string touching `_kovo_replay`, `_kovo_replay_reclaimed`,
-      `_kovo_jobs` maps to a named model action, and the status literals equal the model's constants.
-      Fails the build on a sixth CTE or a new job status. (~0.35 pm)
+      `_kovo_jobs` maps to a named model action, and the status literals equal the registered model
+      constants in `formal/replay/protocol-alphabet.json`. Fails the build on a sixth transition CTE
+      or a new job status. (~0.35 pm)
+  - Evidence: `pnpm run check:protocol-alphabet` maps 70 source-derived statements to 29 actions and
+    closes five transition CTEs, six durable-job states, and two replay states; five C13 tests pass.
 - [ ] Honesty-boundary gate: SPEC text + `kovo explain` listing the Postgres-atomicity axiom (each CTE
       modeled as one atomic action, justified by the `FOR UPDATE` on the watermark row — a **human
       assumption**, not a verified one), the bounded scope, and the explicit not-modeled list, with a

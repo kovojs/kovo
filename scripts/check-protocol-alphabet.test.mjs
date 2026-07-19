@@ -94,15 +94,14 @@ describe('protocol alphabet gate (C13 anchor)', () => {
     const added = collect({
       ...fixtureSources,
       'packages/server/src/task-observability.ts': `${fixtureSources['packages/server/src/task-observability.ts']}
-export const extra = { text: "delete from _kovo_jobs where status = 'ready'" };
+export const extraSql = "delete from _kovo_jobs where status = 'ready'";
 `,
     });
     const changed = collect({
       ...fixtureSources,
-      'packages/server/src/task-queue.ts': fixtureSources['packages/server/src/task-queue.ts'].replace(
-        'attempts > 2',
-        'attempts > 3',
-      ),
+      'packages/server/src/task-queue.ts': fixtureSources[
+        'packages/server/src/task-queue.ts'
+      ].replace('attempts > 2', 'attempts > 3'),
     });
 
     expect(validateProtocolAlphabet({ artifact, observed: added }).findings).toEqual(
@@ -118,14 +117,15 @@ export const extra = { text: "delete from _kovo_jobs where status = 'ready'" };
     const artifact = renderProtocolAlphabet(observed, fixtureActions);
     const sixthCte = collect({
       ...fixtureSources,
-      'packages/server/src/task-queue.ts': fixtureSources['packages/server/src/task-queue.ts'].replace(
-        'with claimed as (',
-        'with surprise as (select 1), claimed as (',
-      ),
+      'packages/server/src/task-queue.ts': fixtureSources[
+        'packages/server/src/task-queue.ts'
+      ].replace('with claimed as (', 'with surprise as (select 1), claimed as ('),
     });
     const newStatus = collect({
       ...fixtureSources,
-      'packages/server/src/task-queue.ts': fixtureSources['packages/server/src/task-queue.ts'].replace(
+      'packages/server/src/task-queue.ts': fixtureSources[
+        'packages/server/src/task-queue.ts'
+      ].replace(
         "| 'ready' | 'running' | 'succeeded' | 'failed' | 'dead' | 'cancelled'",
         "| 'ready' | 'running' | 'succeeded' | 'failed' | 'dead' | 'cancelled' | 'paused'",
       ),
