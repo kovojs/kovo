@@ -1,10 +1,10 @@
-import { inspect } from 'node:util';
+import { inspect, types as utilTypes } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
 import { query, renderQueryEndpointResponse } from './query.js';
 import { parseRouteRequest, route } from './route.js';
-import { configureShapeBudget, s } from './schema.js';
+import { assertShapeWithinBudget, configureShapeBudget, s } from './schema.js';
 import {
   parseUntrustedJsonBodyBytes,
   readUntrustedCookieValue,
@@ -125,6 +125,26 @@ describe('untrusted request body parser', () => {
         }),
       ),
     ).resolves.toEqual({ ok: false, reason: 'shape-budget' });
+  });
+
+  it('uses lazy provenance containers for a near-node-limit scalar tree', () => {
+    const input = Array.from({ length: 20 }, () =>
+      Array.from({ length: 9_998 }, (_, index) => index),
+    );
+    expect(() => assertShapeWithinBudget(input)).not.toThrow();
+
+    const tagged = tagUntrustedRequestValue(input) as unknown[][];
+    expect(utilTypes.isProxy(tagged)).toBe(true);
+    const firstContainer = tagged[0]!;
+    expect(utilTypes.isProxy(firstContainer)).toBe(true);
+
+    const firstRead = firstContainer[0];
+    const secondRead = firstContainer[0];
+    expect(isUntrusted(firstRead)).toBe(true);
+    expect(isUntrusted(secondRead)).toBe(true);
+    expect(firstRead).not.toBe(secondRead);
+    expect(revealUntrusted(firstRead, 'test validates lazy request leaf')).toBe(0);
+    expect(revealUntrusted(secondRead, 'test validates lazy request leaf')).toBe(0);
   });
 
   it('enforces configured JSON string and key ceilings before provenance tagging', async () => {
