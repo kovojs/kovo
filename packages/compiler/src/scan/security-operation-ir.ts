@@ -3439,6 +3439,13 @@ function classifyServerCall(
     // an independently proven project table declaration.
     return;
   }
+  if (serverCallIsExactGeneratedReadonlyAppDbRead(sourceFile, call)) {
+    // SPEC §6.6 / §9.4 / §10.3: the generated app DB re-export is a read-only managed door only
+    // through its exact direct import and reviewed generated source graph. Local aliases,
+    // computed members, forged exports, and mutable re-exports never reach this branch.
+    appendOperation('server.database.read', call, nodeName(callee));
+    return;
+  }
   if (serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {
     // SPEC §6.6: one declaration-before-one-execution sequence is the finite read form for a
     // runtime-validated secret SQL witness. The declaration, statement binding, and managed DB
@@ -3619,6 +3626,23 @@ function classifyServerCall(
       call,
       'computed-security-operation',
       `unknown or authority-bearing managed database builder continuation ${member.name} is outside the finite server IR`,
+    );
+    return;
+  }
+  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&
+      !serverArgumentsContainAuthority(call.arguments, aliases) &&
+      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)
+    ) {
+      return;
+    }
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `unknown or authority-bearing generated readonly database builder continuation ${member.name} ` +
+        'is outside the finite server IR',
     );
     return;
   }
@@ -4091,6 +4115,60 @@ function serverCallDescendsFromReviewedDatabaseOperation(
   return member ? serverCallDescendsFromReviewedDatabaseOperation(member.receiver, aliases) : false;
 }
 
+function serverCallIsExactGeneratedReadonlyAppDbRead(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.questionDotToken) return false;
+  const receiver = unwrapExpression(callee.expression);
+  if (
+    !ts.isIdentifier(receiver) ||
+    !serverExpressionIsExactGeneratedReadonlyAppDb(sourceFile, receiver) ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, call)
+  ) {
+    return false;
+  }
+  return (
+    serverMemberProvenanceFromRelation('database-read-namespace', callee.name.text) ===
+    'operation:server.database.read'
+  );
+}
+
+function serverCallDescendsFromExactGeneratedReadonlyAppDbRead(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (ts.isCallExpression(current)) {
+    if (serverCallIsExactGeneratedReadonlyAppDbRead(sourceFile, current)) return true;
+    const callee = unwrapExpression(current.expression);
+    if (
+      !ts.isPropertyAccessExpression(callee) ||
+      callee.questionDotToken ||
+      !compilerSetHas(serverReviewedDatabaseBuilderMethods, callee.name.text) ||
+      serverArgumentsContainAuthority(current.arguments, aliases) ||
+      serverArgumentsContainUnreviewedForeignExecutable(sourceFile, current.arguments, aliases)
+    ) {
+      return false;
+    }
+    return serverCallDescendsFromExactGeneratedReadonlyAppDbRead(
+      sourceFile,
+      callee.expression,
+      aliases,
+    );
+  }
+  if (ts.isPropertyAccessExpression(current) && !current.questionDotToken) {
+    return serverCallDescendsFromExactGeneratedReadonlyAppDbRead(
+      sourceFile,
+      current.expression,
+      aliases,
+    );
+  }
+  return false;
+}
+
 interface ServerImportedProjectValue {
   readonly exportName: string;
   readonly specifier: string;
@@ -4183,6 +4261,236 @@ function serverExpressionIsReviewedDatabaseTable(
     initializer.expression,
   );
   return frameworkIdentityIn(factoryIdentity, SERVER_REVIEWED_DATABASE_TABLE_FACTORY_IDENTITIES);
+}
+
+function serverExpressionIsExactGeneratedReadonlyAppDb(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (
+    !ts.isIdentifier(current) ||
+    current.text !== 'readonlyAppDb' ||
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, current)
+  ) {
+    return false;
+  }
+  const imported = serverImportedProjectValue(sourceFile, current);
+  if (!imported || imported.exportName !== 'readonlyAppDb') return false;
+  const dbSource = resolveFrameworkIdentityProjectSourceFile(sourceFile, imported.specifier);
+  if (!dbSource) return false;
+
+  const dbExport = serverExactModuleConstDeclaration(dbSource, 'readonlyAppDb', true);
+  const dbInitializer = dbExport?.initializer ? unwrapExpression(dbExport.initializer) : undefined;
+  if (
+    !dbExport ||
+    !dbInitializer ||
+    !ts.isIdentifier(dbInitializer) ||
+    dbInitializer.text !== 'appRuntimeReadonlyDb' ||
+    !securityIrExpressionUsesDirectImportBinding(dbSource, dbInitializer) ||
+    !serverBindingHasOnlyExactValueUses(dbSource, 'readonlyAppDb', []) ||
+    !serverBindingHasOnlyExactValueUses(dbSource, 'appRuntimeReadonlyDb', [dbInitializer])
+  ) {
+    return false;
+  }
+
+  const runtimeImport = serverImportedProjectValue(dbSource, dbInitializer);
+  if (!runtimeImport || runtimeImport.exportName !== 'appRuntimeReadonlyDb') return false;
+  const runtimeSource = resolveFrameworkIdentityProjectSourceFile(
+    dbSource,
+    runtimeImport.specifier,
+  );
+  if (!runtimeSource) return false;
+  const runtimeExport = serverExactModuleConstDeclaration(
+    runtimeSource,
+    'appRuntimeReadonlyDb',
+    true,
+  );
+  const runtimeInitializer = runtimeExport?.initializer
+    ? unwrapExpression(runtimeExport.initializer)
+    : undefined;
+  const runtimeMember = runtimeInitializer ? staticMember(runtimeInitializer) : undefined;
+  const databaseIdentifier = runtimeMember ? unwrapExpression(runtimeMember.receiver) : undefined;
+  if (
+    !runtimeExport ||
+    !runtimeInitializer ||
+    !ts.isPropertyAccessExpression(runtimeInitializer) ||
+    runtimeMember?.name !== 'readonlyDb' ||
+    !databaseIdentifier ||
+    !ts.isIdentifier(databaseIdentifier) ||
+    databaseIdentifier.text !== 'appDatabase' ||
+    !serverBindingHasOnlyExactValueUses(runtimeSource, 'appRuntimeReadonlyDb', []) ||
+    !serverGeneratedAppDatabaseUsesAreExact(runtimeSource, databaseIdentifier.text)
+  ) {
+    return false;
+  }
+
+  const databaseDeclaration = serverExactModuleConstDeclaration(
+    runtimeSource,
+    databaseIdentifier.text,
+    false,
+  );
+  const databaseInitializer = databaseDeclaration?.initializer
+    ? unwrapExpression(databaseDeclaration.initializer)
+    : undefined;
+  if (!databaseInitializer || !ts.isCallExpression(databaseInitializer)) return false;
+  const factory = unwrapExpression(databaseInitializer.expression);
+  return !!(
+    serverExpressionIsExactGeneratedAppDatabaseFactory(runtimeSource, factory) &&
+    securityIrMemberCallableIsStable(runtimeSource, factory, databaseInitializer)
+  );
+}
+
+function serverExpressionIsExactGeneratedAppDatabaseFactory(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (!ts.isIdentifier(current)) return false;
+  const expectedSpecifier =
+    current.text === 'createPostgresAppRuntimeDb'
+      ? '@kovojs/server'
+      : current.text === 'createSqliteAppRuntime'
+        ? '@kovojs/server/sqlite'
+        : undefined;
+  if (!expectedSpecifier) return false;
+
+  let matches = 0;
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Finite generated app database imports',
+  );
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== expectedSpecifier
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    const elements = compilerSnapshotDenseArray(
+      bindings.elements,
+      'Finite generated app database named imports',
+    );
+    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+      const element = elements[elementIndex]!;
+      if (element.name.text === current.text && element.propertyName === undefined) matches += 1;
+    }
+  }
+  return matches === 1;
+}
+
+function serverExactModuleConstDeclaration(
+  sourceFile: ts.SourceFile,
+  name: string,
+  exported: boolean,
+): ts.VariableDeclaration | undefined {
+  let found: ts.VariableDeclaration | undefined;
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Finite generated app database statements',
+  );
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (
+      !ts.isVariableStatement(statement) ||
+      (statement.declarationList.flags & ts.NodeFlags.Const) === 0 ||
+      securityIrNodeHasExportModifier(statement) !== exported
+    ) {
+      continue;
+    }
+    const declarations = compilerSnapshotDenseArray(
+      statement.declarationList.declarations,
+      'Finite generated app database declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
+      const declaration = declarations[declarationIndex]!;
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== name) continue;
+      if (found) return undefined;
+      found = declaration;
+    }
+  }
+  const indexed = securityIrDeclarationFact(sourceFile, sourceFile, name);
+  return found && indexed?.matches === 1 && !serverBindingOrMemberIsAssigned(sourceFile, name)
+    ? found
+    : undefined;
+}
+
+function serverBindingHasOnlyExactValueUses(
+  sourceFile: ts.SourceFile,
+  name: string,
+  allowedUses: readonly ts.Identifier[],
+): boolean {
+  const allowed = compilerCreateSet<ts.Identifier>();
+  const uses = compilerSnapshotDenseArray(allowedUses, 'Finite generated DB allowed uses');
+  for (let index = 0; index < uses.length; index += 1) compilerSetAdd(allowed, uses[index]!);
+  let exact = true;
+  const visit = (node: ts.Node): void => {
+    if (!exact) return;
+    if (ts.isImportDeclaration(node)) return;
+    if (ts.isIdentifier(node) && node.text === name) {
+      const parent = node.parent;
+      if (
+        compilerSetHas(allowed, node) ||
+        (ts.isVariableDeclaration(parent) && parent.name === node) ||
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        (ts.isPropertyAssignment(parent) && parent.name === node)
+      ) {
+        return;
+      }
+      exact = false;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return exact;
+}
+
+function serverGeneratedAppDatabaseUsesAreExact(sourceFile: ts.SourceFile, name: string): boolean {
+  let exact = true;
+  const visit = (node: ts.Node): void => {
+    if (!exact) return;
+    if (ts.isIdentifier(node) && node.text === name) {
+      const parent = node.parent;
+      if (ts.isVariableDeclaration(parent) && parent.name === node) return;
+      if (!ts.isPropertyAccessExpression(parent) || parent.expression !== node) {
+        exact = false;
+        return;
+      }
+      const member = parent.name.text;
+      if (member === 'systemDb') {
+        const call = parent.parent;
+        if (!ts.isCallExpression(call) || unwrapExpression(call.expression) !== parent) {
+          exact = false;
+        }
+        return;
+      }
+      const expected =
+        member === 'db'
+          ? 'appRuntimeDbProvider'
+          : member === 'mutationReplayStore'
+            ? 'appRuntimeMutationReplayStore'
+            : member === 'readonlyDb'
+              ? 'appRuntimeReadonlyDb'
+              : member === 'ready'
+                ? 'appRuntimeDbReady'
+                : undefined;
+      if (
+        !expected ||
+        serverExactVariableDeclarationForInitializer(parent, expected) === undefined
+      ) {
+        exact = false;
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return exact;
 }
 
 function serverImportedProjectValue(

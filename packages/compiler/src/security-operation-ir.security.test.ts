@@ -2149,7 +2149,16 @@ import { contacts } from '../schema.js';
 const APP_TABLES = [contacts];
 const APP_SEED = [{ table: contacts, rows: [{ id: 'task-proof' }] }];
 const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
+const authSystemDb = appDatabase.systemDb({
+  operation: 'write',
+  reason: 'generated auth binding',
+  surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
+});
+export const appRuntimeMutationReplayStore = appDatabase.mutationReplayStore;
 export const appRuntimeReadonlyDb = appDatabase.readonlyDb;
+export const appRuntimeDbReady = appDatabase.ready;
+export const appRuntimeDbProvider = appDatabase.db;
+void authSystemDb;
 `;
     const dbSource = `
 import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
@@ -2163,6 +2172,20 @@ export const readonlyAppDb = appRuntimeReadonlyDb;
       ]);
 
     expect(project(endpointSource)).toEqual([]);
+    expect(
+      project(
+        endpointSource,
+        runtimeSource
+          .replace(
+            "import { createSqliteAppRuntime } from '@kovojs/server/sqlite';",
+            "import { createPostgresAppRuntimeDb } from '@kovojs/server';",
+          )
+          .replace(
+            'createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES })',
+            'createPostgresAppRuntimeDb({ seed: APP_SEED, tables: APP_TABLES })',
+          ),
+      ),
+    ).toEqual([]);
 
     for (const [label, source] of [
       [
@@ -2194,6 +2217,24 @@ export const readonlyAppDb = appRuntimeReadonlyDb;
       ).length,
       'forged generated runtime export',
     ).toBeGreaterThan(0);
+    for (const [label, runtime] of [
+      [
+        'aliased generated runtime factory',
+        runtimeSource
+          .replace('createSqliteAppRuntime }', 'createSqliteAppRuntime as makeRuntime }')
+          .replace('createSqliteAppRuntime({', 'makeRuntime({'),
+      ],
+      [
+        'foreign same-named runtime factory',
+        runtimeSource.replace("from '@kovojs/server/sqlite'", "from './lookalike.js'"),
+      ],
+      [
+        'computed generated readonly projection',
+        runtimeSource.replace('appDatabase.readonlyDb', "appDatabase['readonlyDb']"),
+      ],
+    ] as const) {
+      expect(project(endpointSource, runtime).length, label).toBeGreaterThan(0);
+    }
     expect(
       project(
         endpointSource,
