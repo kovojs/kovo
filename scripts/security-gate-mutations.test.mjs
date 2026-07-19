@@ -255,6 +255,19 @@ describe('security-gate-mutations', () => {
     ).toBe(true);
   });
 
+  it('executes normalized semantic-graph mutants instead of source-text assertions', () => {
+    const semanticGraphMutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
+      mutant.name.startsWith('compiler-semantic-graph/'),
+    );
+
+    expect(semanticGraphMutants).toHaveLength(13);
+    expect(
+      semanticGraphMutants.every(
+        (mutant) => mutant.behavioralTypeScript === true && mutant.sourceOnly !== true,
+      ),
+    ).toBe(true);
+  });
+
   it('executes OPP and TASK B boundary mutants instead of source-text assertions', () => {
     const behavioralNames = [
       'drizzle-analyzer-summary/allow-extra-carrier-argument',
