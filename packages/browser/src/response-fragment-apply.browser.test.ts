@@ -282,6 +282,25 @@ describe('browser response fragment apply', () => {
     expect(link?.getAttribute('srcdoc')).toBeNull();
   });
 
+  it('strips hostile submitter form targets from newly adopted fragment nodes', () => {
+    const target = document.createElement('section');
+    target.setAttribute('kovo-fragment-target', 'submitter-controls');
+    target.setAttribute('kovo-key', 'submitter-controls');
+    document.body.append(target);
+
+    new DomMorphTarget(target).replaceWithHtml(
+      [
+        '<section kovo-fragment-target="submitter-controls" kovo-key="submitter-controls">',
+        '<button kovo-key="button" formtarget="attacker-window">Pay</button>',
+        '<input kovo-key="input" formtarget="attacker-window">',
+        '</section>',
+      ].join(''),
+    );
+
+    expect(target.querySelector('[kovo-key="button"]')?.getAttribute('formtarget')).toBeNull();
+    expect(target.querySelector('[kovo-key="input"]')?.getAttribute('formtarget')).toBeNull();
+  });
+
   it('preserves reviewed element-context controls during keyed morphs', () => {
     const target = document.createElement('section');
     target.setAttribute('kovo-fragment-target', 'context-controls');

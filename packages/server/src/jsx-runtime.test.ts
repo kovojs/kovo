@@ -901,6 +901,8 @@ describe('server jsx runtime', () => {
       formMethod: 'get',
       formNoValidate: true,
       formTarget: '_blank',
+      FORMTARGET: 'attacker-window',
+      formtarget: '_parent',
       method: 'get',
     };
 
@@ -912,6 +914,8 @@ describe('server jsx runtime', () => {
       formMethod: 'get',
       formNoValidate: true,
       formTarget: '_blank',
+      FORMTARGET: 'attacker-window',
+      formtarget: '_parent',
     });
     expect(kovoSafeJsxSpread(record, 'mutation-submitter')).toEqual({
       ACTION: 'https://outside.example/save',
