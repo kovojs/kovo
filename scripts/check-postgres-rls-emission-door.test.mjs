@@ -56,6 +56,99 @@ describe('Postgres RLS emission-door census', () => {
     );
   });
 
+  it('kills PostgreSQL comment-separated CREATE POLICY spellings', () => {
+    const files = cleanFixture();
+    files.set(
+      'packages/core/src/rogue-policy.ts',
+      `export const policy = \`CREATE/**/POLICY rogue ON secrets USING (true)\`;`,
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it('kills statically joined CREATE POLICY spellings', () => {
+    const files = cleanFixture();
+    files.set(
+      'packages/core/src/rogue-policy.ts',
+      `export const policy = ['CREATE', 'POLICY rogue ON secrets USING (true)'].join(' ');`,
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it('kills const-bound CREATE POLICY template spellings', () => {
+    const files = cleanFixture();
+    files.set(
+      'packages/core/src/rogue-policy.ts',
+      `const keyword = 'POLICY'; export const policy = \`CREATE \${keyword} rogue ON secrets USING (true)\`;`,
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it('kills computed namespace access to the reviewed emitter', () => {
+    const files = cleanFixture();
+    files.set(
+      'packages/server/src/rogue-policy.ts',
+      `
+import * as rls from './postgres-authorization-correspondence.js';
+export function rogue(input) { return rls['emitPostgresRlsPolicySql']({ ...input, site: 'owner' }); }
+`,
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it('kills barrel re-exports and aliases of the reviewed emitter', () => {
+    const files = cleanFixture();
+    files.set(
+      'packages/server/src/rls-barrel.ts',
+      `export * from './postgres-authorization-correspondence.js';`,
+    );
+    files.set(
+      'packages/server/src/rogue-policy.ts',
+      `import { emitPostgresRlsPolicySql as emit } from './rls-barrel.js'; export const rogue = emit;`,
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it('kills a live sixth policy installed through an alias of the private renderer', () => {
+    const files = cleanFixture();
+    files.set(
+      emitterFile,
+      `${files.get(emitterFile)}
+const emitSixthPolicySql = primaryPolicySql;
+export { emitSixthPolicySql };
+`,
+    );
+    files.set(
+      runtimeFile,
+      files
+        .get(runtimeFile)
+        .replace(
+          "import { emitPostgresRlsPolicySql }",
+          "import { emitPostgresRlsPolicySql, emitSixthPolicySql }",
+        )
+        .replace(
+          "  emitPostgresRlsPolicySql({ site: 'admin' });",
+          "  emitPostgresRlsPolicySql({ site: 'admin' });\n  client.exec(emitSixthPolicySql('secrets', 'kovo_rogue_scope', 'true', 'reader', 'writer'));",
+        ),
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
+  it('treats shipped root config and script templates as part of the census', () => {
+    const files = cleanFixture();
+    files.set(
+      'packages/create-kovo/templates/kovo.config.ts',
+      `export const policy = \`CREATE POLICY starter_rogue ON secrets USING (true)\`;`,
+    );
+
+    expect(checkPostgresRlsEmissionDoor({ files })).toMatchObject({ ok: false });
+  });
+
   it('kills a sixth reviewed-emitter call even when it reuses a known site', () => {
     const files = cleanFixture();
     files.set(
@@ -161,6 +254,8 @@ export function rogue(input) { return emit({ ...input, site: 'owner' }); }
     expect(files.has(emitterFile)).toBe(true);
     expect(files.has(runtimeFile)).toBe(true);
     expect(files.has('packages/create-kovo/templates/src/app.tsx')).toBe(true);
+    expect(files.has('packages/create-kovo/templates/kovo.config.ts')).toBe(true);
+    expect(files.has('packages/create-kovo/templates/scripts/check-parallel.mjs')).toBe(true);
     expect([...files].some(([file]) => file.endsWith('.test.ts'))).toBe(false);
   });
 });
