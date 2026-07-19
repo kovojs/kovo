@@ -58,6 +58,7 @@ import {
   witnessCreateNullRecord,
   createWitnessSet,
   createWitnessWeakMap,
+  createWitnessWeakSet,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
@@ -73,6 +74,8 @@ import {
   witnessSetHas,
   witnessWeakMapGet,
   witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import {
   securityStringSlice,
@@ -1347,7 +1350,12 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   >;
 }
 
+const pinnedPrivateScopeRequestCarriers = createWitnessWeakSet<object>();
+
 function pinnedPrivateScopeRequestCarrier<Request>(request: Request): Request & object {
+  if (isObjectLike(request) && witnessWeakSetHas(pinnedPrivateScopeRequestCarriers, request)) {
+    return request;
+  }
   let carrier = pinnedRequestCarrier(request, []);
   if (isObjectLike(request)) {
     inheritAnonymousCsrfLiveTargetBinding(request, carrier);
@@ -1360,6 +1368,7 @@ function pinnedPrivateScopeRequestCarrier<Request>(request: Request): Request & 
   carrier = pinPrivateScopeRequestRoot(carrier, 'guard');
   carrier = pinPrivateScopeRequestRoot(carrier, 'session');
   carrier = pinPrivateScopeRequestRoot(carrier, 'tenant');
+  witnessWeakSetAdd(pinnedPrivateScopeRequestCarriers, carrier);
   return carrier;
 }
 

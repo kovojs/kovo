@@ -1,9 +1,14 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
 import dns from 'node:dns';
 import http from 'node:http';
 import net from 'node:net';
 import type { LookupAddress } from 'node:dns';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
+import {
+  createFrameworkAsyncContextCell,
+  currentFrameworkAsyncContextValue,
+  runWithFrameworkAsyncContext,
+  runWithIsolatedFrameworkAsyncContext,
+} from './async-context.js';
 import { activeUndiciFloorDispatcher } from './egress-undici.js';
 
 import {
@@ -222,7 +227,8 @@ export type PrivateAddressClass =
  */
 export type CloudMetadataProvider = 'aws' | 'azure' | 'gcp';
 
-const metadataAccessProvider = new AsyncLocalStorage<CloudMetadataProvider>();
+const metadataAccessProvider =
+  createFrameworkAsyncContextCell<CloudMetadataProvider>('server.metadata-access');
 
 // A configured database URL is authority for the framework's Postgres transport, not ambient
 // authority for every HTTP/TCP caller in the process. Keep that provenance on the exact Socket
@@ -238,12 +244,12 @@ const databaseEgressSocketEndpoints = createWitnessWeakMap<net.Socket, string>()
  * @internal
  */
 export function runWithMetadataAccess<T>(provider: CloudMetadataProvider, fn: () => T): T {
-  return metadataAccessProvider.run(provider, fn);
+  return runWithIsolatedFrameworkAsyncContext(metadataAccessProvider, provider, fn);
 }
 
 /** Whether the current async context is inside a credential-factory metadata frame. */
 function isMetadataAllowed(provider?: CloudMetadataProvider): boolean {
-  const activeProvider = metadataAccessProvider.getStore();
+  const activeProvider = currentFrameworkAsyncContextValue(metadataAccessProvider);
   return provider === undefined ? activeProvider !== undefined : activeProvider === provider;
 }
 
@@ -296,11 +302,13 @@ export interface EgressPolicy {
 // Framework-owned fetches carry their stricter positive-destination policy through native
 // fetch's redirect machinery. AsyncLocalStorage is the non-forgeable per-call signal that lets
 // the global dispatcher distinguish a privileged ctx.fetch hop from ordinary public egress.
-const frameworkEgressPolicyContext = new AsyncLocalStorage<EgressPolicy>();
+const frameworkEgressPolicyContext = createFrameworkAsyncContextCell<EgressPolicy>(
+  'server.framework-egress-policy',
+);
 
 /** @internal The exact policy pinned for the current framework-owned fetch redirect chain. */
 export function activeFrameworkEgressPolicy(): EgressPolicy | undefined {
-  return frameworkEgressPolicyContext.getStore();
+  return currentFrameworkAsyncContextValue(frameworkEgressPolicyContext);
 }
 
 /** Operator-facing config (the `egress` field of `createApp`). */
@@ -1843,7 +1851,9 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
   // Keep redirect handling inside native fetch. Its HTTP(S)-scheme rejection, 20-hop bound,
   // 301/302/303 rewrites, 307/308 replay rules, cross-origin credential stripping, and manual/error
   // modes remain authoritative; the dispatcher below re-runs the pinned policy on every hop.
-  return frameworkEgressPolicyContext.run(policy, () => frameworkEgressNativeFetch(request));
+  return runWithFrameworkAsyncContext(frameworkEgressPolicyContext, policy, () =>
+    frameworkEgressNativeFetch(request),
+  );
 }) as typeof globalThis.fetch;
 
 function lookupAllAddresses(host: string): Promise<LookupAddress[]> {

@@ -492,25 +492,35 @@ census. **Produces:** a persistent monotone revocation version and bounded-stale
 ### 3.4 Async-context authority confinement + non-interference oracle
 
 **Class:** cross-request principal/credential/lifecycle bleed and TOCTOU over pinned facts — the
-classic framework catastrophe. The runtime rides ≥8 independent `AsyncLocalStorage` carriers
-(`response-lifecycle-context.ts`, `request-input-provenance.ts`, `egress-credentials.ts`,
-`jsx-context.ts`, `live-target-registry.ts`, …), each hand-rolling its own missing-store behavior;
-`race-repeat.yml` only re-runs flaky tests, it is not a bleed oracle. **Leverage:** high ·
+classic framework catastrophe. The runtime has eight logical lifecycle/cell doors spanning response,
+request-input provenance, JSX, egress, build, credential, and module-load state; the test verifier has
+one separately classified non-deployable observer. `race-repeat.yml` only re-runs flaky tests, it is
+not a bleed oracle. **Leverage:** high ·
 **Effort:** L-M.
 
 **Depends on:** the Phase 0 choice between one request-authority envelope and a shared carrier
 contract, plus the runtime door census. **Produces:** context lifecycle identity and a real concurrency
 oracle. **Blocks:** §4.2 deadline propagation and async-context W coverage.
 
-- [ ] ALS-door census gate: mechanically enumerate every framework `AsyncLocalStorage` and enforce one
+- [x] ALS-door census gate: mechanically enumerate every framework `AsyncLocalStorage` and enforce one
       shared confinement contract (fail-closed on missing store, reject foreign/stale stores by
       identity witness, no ambient fallback); a carrier bypassing the contract is a build error.
-- [ ] Cross-request non-interference oracle: a seeded generator drives N concurrent requests under
+  - Evidence: `pnpm run check:async-context-confinement` derives eight runtime lifecycle/cell doors,
+    rejects raw/uncensused factories, lifecycle mutants, and any extra/non-isolated owned re-entry;
+    the only post-settlement bridge is Kovo-owned deferred JSX with one-shot registration,
+    winner-before-re-entry selection, and explicit timeout revocation, while the test-only verifier
+    observer retains its separate exact-scope revocation contract.
+- [x] Cross-request non-interference oracle: a seeded generator drives N concurrent requests under
       distinct principals with forced await-point interleavings (microtask shuffling, stream
       backpressure, thenable traps) and asserts zero cross-principal fact movement across every door.
-- [ ] Keep runtime scheduling/interleaving evidence separate from static analysis. Feed only normalized
+  - Evidence: the same gate runs 24 principals through eight cells and three shuffled interleaving
+    families; its detached-descendant canary plus
+    `anonymous-csrf-cache-security.test.tsx` prove unrelated post-settlement work is revoked while
+    deferred success/error rendering receives only a fresh JSX-only lifecycle.
+- [x] Keep runtime scheduling/interleaving evidence separate from static analysis. Feed only normalized
       check→await→use programs into §1.1 when the finite generated language defines their semantics;
       do not claim the abstract interpreter models arbitrary event-loop scheduling.
+  - Evidence: SPEC §§6.6/11.2 explicitly separate the runtime oracle from the finite analyzer language.
 
 ---
 

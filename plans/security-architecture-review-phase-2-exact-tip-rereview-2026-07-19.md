@@ -215,23 +215,23 @@ after all authoritative gates pass. This review did not edit the active plan.
 
 ## Requested adversarial matrix
 
-| Case | Exact-tip result |
-| --- | --- |
-| No accepted guard | `scope: unknown`, KV414, check exit 1 |
-| Pure mismatched accepted principal (no matching sibling) | `scope: unknown`, KV414, check exit 1 |
-| Opaque sibling before summarized leaf | `scope: unknown`, KV414, check exit 1 |
-| Opaque sibling after summarized leaf | `scope: unknown`, KV414, check exit 1 |
-| Two distinct independently body-proved same-key helpers | `scope: session`, check exit 0 |
-| Two-hop alias as direct guard | `scope: unknown`, KV414, check exit 1 |
-| Two-hop alias inside `guards.all` | `scope: unknown`, KV414, check exit 1 |
-| `serverValue(context)` whole-carrier returned alias | `scope: unknown`, check exit 1 |
-| Final read consumer with absent / mismatched accepted key | both `scope: unknown` |
-| Final write consumer with absent / mismatched accepted key | both `scope: unknown` |
-| Prime→current boolean runtime sequence | runner accepts attacker-selected `true`; static closes |
-| Current→poison boolean runtime sequence | runner accepts, loader observes poisoned `false`; static closes |
-| Exact-`true` boolean positive | static admits and real runner reaches loader |
-| Ordinary string principal extractor | static admits; runtime denies and loader is not called |
-| One-leaf accessor value drift | **static admits; runtime accepts then loader observes different value** |
+| Case                                                       | Exact-tip result                                                        |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------- |
+| No accepted guard                                          | `scope: unknown`, KV414, check exit 1                                   |
+| Pure mismatched accepted principal (no matching sibling)   | `scope: unknown`, KV414, check exit 1                                   |
+| Opaque sibling before summarized leaf                      | `scope: unknown`, KV414, check exit 1                                   |
+| Opaque sibling after summarized leaf                       | `scope: unknown`, KV414, check exit 1                                   |
+| Two distinct independently body-proved same-key helpers    | `scope: session`, check exit 0                                          |
+| Two-hop alias as direct guard                              | `scope: unknown`, KV414, check exit 1                                   |
+| Two-hop alias inside `guards.all`                          | `scope: unknown`, KV414, check exit 1                                   |
+| `serverValue(context)` whole-carrier returned alias        | `scope: unknown`, check exit 1                                          |
+| Final read consumer with absent / mismatched accepted key  | both `scope: unknown`                                                   |
+| Final write consumer with absent / mismatched accepted key | both `scope: unknown`                                                   |
+| Prime→current boolean runtime sequence                     | runner accepts attacker-selected `true`; static closes                  |
+| Current→poison boolean runtime sequence                    | runner accepts, loader observes poisoned `false`; static closes         |
+| Exact-`true` boolean positive                              | static admits and real runner reaches loader                            |
+| Ordinary string principal extractor                        | static admits; runtime denies and loader is not called                  |
+| One-leaf accessor value drift                              | **static admits; runtime accepts then loader observes different value** |
 
 The primary throwaway matrix passed 14/14. Separate one-leaf accessor, string-narrowness, and strict-
 TypeScript authorability probes were then run and deleted.

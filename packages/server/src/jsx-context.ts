@@ -2,9 +2,13 @@ import type { CsrfOptions } from './csrf.js';
 import type { DeferredStreamChunk } from './deferred-stream.js';
 import type { LiveTargetAttestationAuthority } from './live-target-app-identity.js';
 import {
-  formHelperAsyncLocalGetStore,
-  formHelperAsyncLocalRun,
-  formHelperCreateAsyncLocalStorage,
+  createFrameworkAsyncContextCell,
+  currentFrameworkAsyncContextValue,
+  runWithFrameworkAsyncContext,
+  runWithRevocableIsolatedFrameworkAsyncContext,
+  type RevocableFrameworkAsyncContextTask,
+} from './async-context.js';
+import {
   formHelperCreateMap,
   formHelperOwnDataValue,
   formHelperSnapshotRecord,
@@ -56,18 +60,19 @@ export interface JsxMutationFormHelperRegistry {
   token: string;
 }
 
-const jsxRequestContext = formHelperCreateAsyncLocalStorage<JsxFrameworkContext>();
+const jsxRequestContext =
+  createFrameworkAsyncContextCell<JsxFrameworkContext>('server.jsx-request');
 
 export function currentJsxRequestContext(): unknown {
-  return formHelperAsyncLocalGetStore(jsxRequestContext)?.request;
+  return currentFrameworkAsyncContextValue(jsxRequestContext)?.request;
 }
 
 export function currentJsxFrameworkContext(): JsxFrameworkContext | undefined {
-  return formHelperAsyncLocalGetStore(jsxRequestContext);
+  return currentFrameworkAsyncContextValue(jsxRequestContext);
 }
 
 export function currentJsxMutationFormHelperRegistry(): JsxMutationFormHelperRegistry | undefined {
-  return formHelperAsyncLocalGetStore(jsxRequestContext)?.mutationFormHelpers;
+  return currentFrameworkAsyncContextValue(jsxRequestContext)?.mutationFormHelpers;
 }
 
 export function runWithJsxRequestContext<Value>(
@@ -89,11 +94,37 @@ export function runWithJsxRequestContext<Value>(
   const options = typeof optionsOrRender === 'function' ? {} : optionsOrRender;
   const render = typeof optionsOrRender === 'function' ? optionsOrRender : maybeRender;
   if (!render) throw new Error('runWithJsxRequestContext requires a render callback');
-  return formHelperAsyncLocalRun(
+  return runWithFrameworkAsyncContext(
     jsxRequestContext,
     createJsxFrameworkContext(request, options),
     render,
   );
+}
+
+/**
+ * Bind one framework-owned deferred render to the exact JSX context that registered it.
+ *
+ * The callback re-enters through an isolated lifecycle, so response-body deferral preserves only
+ * the JSX cell and cannot revive sibling request, egress, provenance, credential, or build cells
+ * after the request owner has settled (SPEC §6.6).
+ *
+ * @internal Deferred-region lowering only; not exported from a package entrypoint.
+ */
+export function bindCurrentJsxRequestContext<Result>(
+  callback: () => Result,
+): () => RevocableFrameworkAsyncContextTask<Result> {
+  const context = currentFrameworkAsyncContextValue(jsxRequestContext);
+  if (context === undefined) {
+    throw new TypeError('Owned deferred JSX re-entry requires an active registration context.');
+  }
+  let started = false;
+  return () => {
+    if (started) {
+      throw new TypeError('Owned deferred JSX re-entry capabilities are one-shot.');
+    }
+    started = true;
+    return runWithRevocableIsolatedFrameworkAsyncContext(jsxRequestContext, context, callback);
+  };
 }
 
 function createJsxFrameworkContext(

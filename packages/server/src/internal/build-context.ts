@@ -1,4 +1,8 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
+import {
+  createFrameworkAsyncContextCell,
+  currentFrameworkAsyncContextValue,
+  runWithIsolatedFrameworkAsyncContext,
+} from '../async-context.js';
 
 /** @internal Scoped build/export state shared by CLI-controlled Vite loads. */
 export interface KovoBuildContext {
@@ -16,14 +20,15 @@ export interface KovoBuildContext {
   readonly appEnvironment?: 'unavailable';
 }
 
-const kovoBuildContextStorage = new AsyncLocalStorage<KovoBuildContext>();
+const kovoBuildContextStorage =
+  createFrameworkAsyncContextCell<KovoBuildContext>('server.build-context');
 
 /** @internal Return the current scoped Kovo build context, if any. */
 export function currentKovoBuildContext(): KovoBuildContext | undefined {
-  return kovoBuildContextStorage.getStore();
+  return currentFrameworkAsyncContextValue(kovoBuildContextStorage);
 }
 
 /** @internal Run work under a scoped Kovo build context. Async results retain the context. */
 export function withKovoBuildContext<T>(context: KovoBuildContext, fn: () => T): T {
-  return kovoBuildContextStorage.run(context, fn);
+  return runWithIsolatedFrameworkAsyncContext(kovoBuildContextStorage, context, fn);
 }

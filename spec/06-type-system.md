@@ -269,9 +269,41 @@ a non-identical plain/`__Host-`/`__Secure-` alias under the same logical name fa
 `runEndpoint()` and direct internal `renderRoutePageResponse()` have no managed cookie sink and
 reject a first-anonymous mint, while a truly late
 post-seal mint cannot enter the snapshot. Detached session-bound generation and generation from an
-already-present anonymous cookie do not mint a cookie and remain valid. CSRF validation and replay
-resolution always use the exact supplied ingress request and never inherit response-generation
-authority.
+already-present anonymous cookie can remain valid only from the exact supplied credential carrier;
+they do not inherit canonical response authority from a settled ambient frame. An authored raw
+stream therefore must retain and use its exact handler `Request` when it needs the response receipt;
+a reconstructed or otherwise derived request after owner settlement cannot recover that receipt.
+CSRF validation and replay resolution always use the exact supplied ingress request and never
+inherit response-generation authority.
+
+Every deployable `AsyncLocalStorage` authority cell is governed by the versioned
+`kovo.async-context-confinement/v1` census and one framework-owned confinement contract. Cells stay
+separate and least-authority; the contract does not merge request, response, provenance, egress,
+build, credential, or module-load values into one ambient bag. A cell is an opaque exact identity
+whose storage remains module-private. Each store is bound to an exact framework lifecycle witness
+and generation. A read exposes a value only when the cell, current lifecycle, and open-generation
+identities all match; missing, inherited-foreign, forged, or stale state yields no authority and
+never falls back to another ambient store. Entering a cell from a detached descendant of a closed
+lifecycle fails. `createRequestHandler()` establishes a fresh authority-empty lifecycle before any
+pre-dispatch callback; nested request cells share that exact lifecycle, while build evaluation,
+generated-module loading, and cloud-credential access deliberately open isolated roots. The owner
+closes its lifecycle on synchronous return, throw, asynchronous fulfillment, or rejection, so work
+not awaited by the owner cannot retain or reacquire its cells. Exact retained response-lifecycle
+receipts remain the separately specified identity bridge above and never turn an unrelated ambient
+cell into authority. The sole framework-owned post-settlement re-entry is deferred-region JSX
+rendering: `Defer` captures the same exact JSX context object that registered the region and runs its
+success, rejection, and timeout rendering in a fresh isolated lifecycle containing only that cell.
+Each captured re-entry capability is one-shot, and success, rejection, and timeout select one winner
+before opening a fallback lifecycle. Timeout explicitly revokes an unfinished success lifecycle
+before rendering the error fallback, so a never-settling or late-rejecting authored promise cannot
+retain or re-mint even JSX authority. The exact retained request inside that context may resolve its
+already-sealed response receipt;
+sibling request, provenance, egress, credential, build, and module-load cells remain absent. Critical
+and non-collected regions stay in their current owner lifecycle, authored raw streams receive no
+ambient re-entry, and the census gate rejects any additional consumer of this finite bridge. The
+`@kovojs/test` SQL observation carrier is a censused, non-deployable observer rather than app
+authority; it retains its independent exact-scope revocation so observation can span the request
+boundary without weakening runtime isolation.
 
 The public `mintCsrfToken` and `mintCsrfField` helpers serve only a verified raw endpoint protocol
 with an explicit custom audience. They reject mutation targeting. The lower-level

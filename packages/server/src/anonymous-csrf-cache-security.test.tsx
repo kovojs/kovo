@@ -17,6 +17,7 @@ import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { guard } from './guards.js';
 import { resolveLifecycleRequest } from './guards.js';
+import { currentJsxRequestContext } from './jsx-context.js';
 import { toNodeHandler } from './node.js';
 import { respond } from './response.js';
 import { notFound, route } from './route.js';
@@ -289,6 +290,91 @@ describe('anonymous mutation-form document cache posture', () => {
     await expect(response.text()).resolves.toContain('name="kovo-csrf"');
   });
 
+  it('re-enters only Kovo-owned deferred JSX while revoking an unrelated promise descendant', async () => {
+    let releaseDetached!: () => void;
+    const detachedGate = new Promise<void>((resolve) => {
+      releaseDetached = resolve;
+    });
+    let releaseRegion!: () => void;
+    const regionGate = new Promise<void>((resolve) => {
+      releaseRegion = resolve;
+    });
+    let detachedJsxRequest: unknown = 'not-run';
+    let detachedMintError: unknown;
+    let isolatedDerivedMintError: unknown;
+    let detachedDone: Promise<void> | undefined;
+    const submit = mutation('account/isolated-deferred-request-link', {
+      csrf,
+      input: s.object({ email: s.string() }),
+      handler: (input) => input,
+    });
+    const deferred = route('/isolated-deferred-login', {
+      page(_context, request) {
+        const reconstructed = new Request(request.url);
+        detachedDone = detachedGate.then(() => {
+          detachedJsxRequest = currentJsxRequestContext();
+          try {
+            mintCsrfToken(reconstructed, csrf, {
+              audience: 'endpoint:/isolated-deferred-submit',
+            });
+          } catch (error) {
+            detachedMintError = error;
+          }
+        });
+        return (
+          <main>
+            <Defer
+              fallback={<p>Loading isolated form</p>}
+              priority="after-paint"
+              render={async () => {
+                await regionGate;
+                try {
+                  mintCsrfToken(reconstructed, csrf, {
+                    audience: 'endpoint:/isolated-deferred-submit',
+                  });
+                } catch (error) {
+                  isolatedDerivedMintError = error;
+                }
+                return (
+                  <section>
+                    <p>
+                      {currentJsxRequestContext() === undefined ? 'missing-jsx' : 'isolated-jsx'}
+                    </p>
+                    <form mutation={submit}>
+                      <input name="email" />
+                    </form>
+                  </section>
+                );
+              }}
+              target="isolated-login-form"
+            />
+          </main>
+        );
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        egress: { enabled: false, justification: 'cache control fixture performs no outbound I/O' },
+        mutations: [submit],
+        routes: [deferred],
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://shop.example.test/isolated-deferred-login', {
+        headers: { Cookie: cookieHeader('A'.repeat(43)) },
+      }),
+    );
+    releaseDetached();
+    await detachedDone;
+    expect(detachedJsxRequest).toBeUndefined();
+    expect(String(detachedMintError)).toMatch(/without a framework response lifecycle/u);
+
+    releaseRegion();
+    await expect(response.text()).resolves.toContain('isolated-jsx');
+    expect(String(isolatedDerivedMintError)).toMatch(/without a framework response lifecycle/u);
+  });
+
   it('pre-delivers the binding cookie when a first-time deferred form owns local CSRF', async () => {
     let releaseRegion!: () => void;
     const regionGate = new Promise<void>((resolve) => {
@@ -500,25 +586,22 @@ describe('anonymous mutation-form document cache posture', () => {
     expect(response.headers.get('set-cookie')).toBeNull();
   });
 
-  it('selects the private posture before a live route stream can mint from pull()', async () => {
+  it('keeps an exact retained route request usable in a live stream pull()', async () => {
     let releaseStream!: () => void;
     const streamGate = new Promise<void>((resolve) => {
       releaseStream = resolve;
     });
     const download = route('/late-route-token', {
       page(_context, request) {
-        const lazyRequest = new Request(request.url);
         return respond.stream(
           new ReadableStream<Uint8Array>({
             async pull(controller) {
               await streamGate;
-              const minted = mintCsrfToken(lazyRequest, csrf, {
+              const minted = mintCsrfToken(request, csrf, {
                 audience: 'endpoint:/late-route-token-submit',
               });
               if (minted.setCookie !== undefined) {
-                throw new Error(
-                  'derived late request did not reuse the canonical anonymous cookie',
-                );
+                throw new Error('exact retained request minted a duplicate anonymous cookie');
               }
               controller.enqueue(new TextEncoder().encode(minted.token));
               controller.close();
@@ -549,7 +632,7 @@ describe('anonymous mutation-form document cache posture', () => {
     await expect(response.text()).resolves.not.toBe('');
   });
 
-  it('fails closed when a route stream first mints anonymous authority after headers commit', async () => {
+  it('rejects a reconstructed route-stream request after its owner settles', async () => {
     let releaseStream!: () => void;
     const streamGate = new Promise<void>((resolve) => {
       releaseStream = resolve;
@@ -585,7 +668,7 @@ describe('anonymous mutation-form document cache posture', () => {
     );
     releaseStream();
 
-    await expect(response.text()).rejects.toThrow(/after response headers were committed/u);
+    await expect(response.text()).rejects.toThrow(/without a framework response lifecycle/u);
   });
 
   it('retains a parameterized handler request across an external event after header commit', async () => {
@@ -2417,7 +2500,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     await expect(response.text()).resolves.not.toBe('');
   });
 
-  it('fails closed when a raw stream reconstructed request first mints after headers commit', async () => {
+  it('rejects a reconstructed raw-stream request after its owner settles', async () => {
     let releaseStream!: () => void;
     const streamGate = new Promise<void>((resolve) => {
       releaseStream = resolve;
@@ -2468,7 +2551,7 @@ describe('raw endpoint anonymous CSRF bootstrap cache posture', () => {
     );
     releaseStream();
 
-    await expect(response.text()).rejects.toThrow(/after response headers were committed/u);
+    await expect(response.text()).rejects.toThrow(/without a framework response lifecycle/u);
   });
 
   it('keeps an unrelated delegated raw response private because it can still vary by Cookie', async () => {

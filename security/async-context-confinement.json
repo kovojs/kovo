@@ -1,0 +1,83 @@
+{
+  "schema": "kovo.async-context-confinement/v1",
+  "contract": {
+    "path": "packages/server/src/async-context.ts",
+    "lifecycleId": "framework.lifecycle",
+    "rootBoundary": "packages/server/src/response-lifecycle-context.ts#runWithoutResponseLifecycleContext"
+  },
+  "cells": [
+    {
+      "id": "server.build-context",
+      "path": "packages/server/src/internal/build-context.ts",
+      "binding": "kovoBuildContextStorage",
+      "mode": "isolated",
+      "role": "build-authority"
+    },
+    {
+      "id": "server.framework-egress-policy",
+      "path": "packages/server/src/egress.ts",
+      "binding": "frameworkEgressPolicyContext",
+      "mode": "shared",
+      "role": "request-authority"
+    },
+    {
+      "id": "server.jsx-request",
+      "path": "packages/server/src/jsx-context.ts",
+      "binding": "jsxRequestContext",
+      "mode": "shared",
+      "role": "request-authority"
+    },
+    {
+      "id": "server.live-target-registry",
+      "path": "packages/server/src/live-target-registry.ts",
+      "binding": "generatedLiveTargetRegistryContext",
+      "mode": "isolated",
+      "role": "module-load-authority"
+    },
+    {
+      "id": "server.metadata-access",
+      "path": "packages/server/src/egress.ts",
+      "binding": "metadataAccessProvider",
+      "mode": "isolated",
+      "role": "credential-authority"
+    },
+    {
+      "id": "server.request-input-provenance",
+      "path": "packages/server/src/request-input-provenance.ts",
+      "binding": "requestInputProvenance",
+      "mode": "shared",
+      "role": "request-authority"
+    },
+    {
+      "id": "server.response-lifecycle",
+      "path": "packages/server/src/response-lifecycle-context.ts",
+      "binding": "responseLifecycleStorage",
+      "mode": "shared",
+      "role": "request-authority"
+    }
+  ],
+  "ownedReentries": [
+    {
+      "cellId": "server.jsx-request",
+      "binding": "bindCurrentJsxRequestContext",
+      "definitionPath": "packages/server/src/jsx-context.ts",
+      "consumerPath": "packages/server/src/deferred-region.ts",
+      "purpose": "Kovo-owned deferred-region rendering selects one success, error, or timeout winner and uses a one-shot capability to re-enter only the captured JSX cell through a fresh revocable isolated lifecycle; timeout closes unfinished authority, and exact retained request identity supplies any sealed response receipt."
+    }
+  ],
+  "reviewedNonRuntimeCarriers": [
+    {
+      "id": "test.verifier-observation",
+      "path": "packages/test/src/verifier-observation.ts",
+      "role": "verification-observer",
+      "reason": "Test-only SQL observation must span a dispatched request, carries no deployable app authority, and independently revokes its exact scope before capture resolves."
+    }
+  ],
+  "oracle": {
+    "path": "packages/server/src/async-context.test.ts",
+    "test": "keeps seeded concurrent principals disjoint through awaits, streams, and thenable traps",
+    "seed": "0x4b564f56",
+    "requests": 24,
+    "logicalCells": 8
+  }
+}

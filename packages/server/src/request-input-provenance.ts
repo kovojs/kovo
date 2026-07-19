@@ -1,5 +1,9 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
 import { isScopedKey } from '@kovojs/core/internal/storage';
+import {
+  createFrameworkAsyncContextCell,
+  currentFrameworkAsyncContextValue,
+  runWithFrameworkAsyncContext,
+} from './async-context.js';
 import {
   witnessArrayAppend,
   createWitnessWeakMap,
@@ -40,7 +44,9 @@ export interface RequestInputProvenance {
   path: string;
 }
 
-const requestInputProvenance = new AsyncLocalStorage<RequestInputProvenanceState>();
+const requestInputProvenance = createFrameworkAsyncContextCell<RequestInputProvenanceState>(
+  'server.request-input-provenance',
+);
 const requestInputObjectPrototype = witnessGetPrototypeOf({});
 
 /** @internal Run a mutation handler under a request-input provenance context (SPEC §11.1 KV438). */
@@ -56,12 +62,12 @@ export function runWithRequestInputProvenance<Input, Result>(
     proxyCache: createWitnessWeakMap(),
   };
   const trackedInput = trackRequestInputValue(input, '<input>', state) as Input;
-  return requestInputProvenance.run(state, () => callback(trackedInput));
+  return runWithFrameworkAsyncContext(requestInputProvenance, state, () => callback(trackedInput));
 }
 
 /** @internal Mark an audited `trustedAssign(...)` value as intentionally writable to governed columns. */
 export function markPrivilegedRequestInputAssignment(value: unknown): void {
-  const state = requestInputProvenance.getStore();
+  const state = currentFrameworkAsyncContextValue(requestInputProvenance);
   if (state === undefined) return;
   if (isTrackableObject(value)) {
     witnessWeakSetAdd(state.privilegedObjects, value);
@@ -83,7 +89,7 @@ export function markPrivilegedRequestInputAssignment(value: unknown): void {
 
 /** @internal Resolve whether `value` is an exact parsed request-input value in the active context. */
 export function requestInputProvenanceForValue(value: unknown): RequestInputProvenance | undefined {
-  const state = requestInputProvenance.getStore();
+  const state = currentFrameworkAsyncContextValue(requestInputProvenance);
   if (state === undefined) return undefined;
   if (isTrackableObject(value)) {
     if (witnessWeakSetHas(state.privilegedObjects, value)) return undefined;

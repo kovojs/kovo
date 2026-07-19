@@ -84,10 +84,7 @@ export const list = query({
   args: s.object({ userId: s.string() }),
   guard: guards.all(prime, current, poison),
   async load(_input, context) {
-    return context.db
-      .select()
-      .from(docs)
-      .where(eq(docs.userId, context.request.guard.userId));
+    return context.db.select().from(docs).where(eq(docs.userId, context.request.guard.userId));
   },
 });
 ```
@@ -137,10 +134,11 @@ contradicts the explicit one-alias and uniform-consumer boundary in
 `spec/06-type-system.md:453-479`.
 
 The alias chain alone preserves the same function identity and is not the remote exploit in Finding
+
 1. It is still a fail-open proof-language expansion. It also shows why the current mutation count is
-misleading: `drizzle-analyzer-summary/allow-opp-alias-chain` kills recursive expansion in the
-ordinary static callable consumer, but does not exercise this accepted-guard consumer, which already
-has the forbidden behavior.
+   misleading: `drizzle-analyzer-summary/allow-opp-alias-chain` kills recursive expansion in the
+   ordinary static callable consumer, but does not exercise this accepted-guard consumer, which already
+   has the forbidden behavior.
 
 Blocking repair: resolve accepted guard callables only through the shared exact helper map. Do not
 recursively expand `localConstInitializer` in that consumer. Add a consumer-level behavioral mutant

@@ -2,9 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { trustedHtml } from '@kovojs/browser';
 
+import {
+  createFrameworkAsyncContextCell,
+  currentFrameworkAsyncContextValue,
+  runWithFrameworkAsyncContext,
+} from './async-context.js';
 import { Defer, createDeferredRegionChunkCollector } from './deferred-region.js';
 import { renderHtmlValue } from './html.js';
-import { runWithJsxRequestContext } from './jsx-context.js';
+import { currentJsxRequestContext, runWithJsxRequestContext } from './jsx-context.js';
 import { jsx } from './jsx-runtime.js';
 
 const html = async (value: unknown): Promise<string> => renderHtmlValue(await value);
@@ -128,14 +133,25 @@ describe('Defer JSX primitive', () => {
 
   it('isolates a throwing deferred region as an error chunk', async () => {
     const collector = createDeferredRegionChunkCollector();
+    const request = {};
+    let releaseRegion!: () => void;
+    const regionGate = new Promise<void>((resolve) => {
+      releaseRegion = resolve;
+    });
+    const FallbackProbe = () =>
+      jsx('section', {
+        children:
+          currentJsxRequestContext() === request ? 'Loading reviews in JSX' : 'Missing JSX context',
+      });
 
     await expect(
       html(
-        runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+        runWithJsxRequestContext(request, { deferredRegions: collector }, () =>
           Defer({
-            fallback: jsx('section', { children: 'Loading reviews' }),
+            fallback: jsx(FallbackProbe, {}),
             priority: 'after-paint',
-            render: () => {
+            render: async () => {
+              await regionGate;
               throw new Error('review backend unavailable');
             },
             target: 'reviews',
@@ -144,11 +160,12 @@ describe('Defer JSX primitive', () => {
       ),
     ).resolves.toContain('state="pending"');
 
+    releaseRegion();
     await expect(collector.chunks()).resolves.toEqual([
       {
         fragments: [
           {
-            html: '<kovo-defer target="reviews" state="error" data-kovo-region-priority="after-paint"><section>Loading reviews</section></kovo-defer>',
+            html: '<kovo-defer target="reviews" state="error" data-kovo-region-priority="after-paint"><section>Loading reviews in JSX</section></kovo-defer>',
             priority: 'normal',
             target: 'reviews',
           },
@@ -220,13 +237,30 @@ describe('Defer JSX primitive', () => {
   it('bounds a hung deferred region with a per-region timeout', async () => {
     vi.useFakeTimers();
     const collector = createDeferredRegionChunkCollector();
+    const request = {};
+    const FallbackProbe = () =>
+      currentJsxRequestContext() === request ? 'Still loading in JSX' : 'Missing JSX context';
+    let releaseHungRender!: () => void;
+    const hungRenderGate = new Promise<void>((resolve) => {
+      releaseHungRender = resolve;
+    });
+    let finishHungRender!: () => void;
+    const hungRenderFinished = new Promise<void>((resolve) => {
+      finishHungRender = resolve;
+    });
+    let lateHungContext: unknown = 'not-run';
 
     await html(
-      runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+      runWithJsxRequestContext(request, { deferredRegions: collector }, () =>
         Defer({
-          fallback: 'Still loading',
+          fallback: jsx(FallbackProbe, {}),
           priority: 'visible',
-          render: () => new Promise<never>(() => {}),
+          render: async () => {
+            await hungRenderGate;
+            lateHungContext = currentJsxRequestContext();
+            finishHungRender();
+            return jsx('strong', { children: 'Too late' });
+          },
           target: 'slow-rail',
           timeoutMs: 5,
         }),
@@ -240,7 +274,7 @@ describe('Defer JSX primitive', () => {
       {
         fragments: [
           {
-            html: '<kovo-defer target="slow-rail" state="error" data-kovo-region-priority="visible">Still loading</kovo-defer>',
+            html: '<kovo-defer target="slow-rail" state="error" data-kovo-region-priority="visible">Still loading in JSX</kovo-defer>',
             priority: 'visible',
             target: 'slow-rail',
           },
@@ -248,18 +282,103 @@ describe('Defer JSX primitive', () => {
         priority: 'visible',
       },
     ]);
+    releaseHungRender();
+    await hungRenderFinished;
+    expect(lateHungContext).toBeUndefined();
+  });
+
+  it('does not re-enter JSX when a timed-out render rejects late', async () => {
+    vi.useFakeTimers();
+    const collector = createDeferredRegionChunkCollector();
+    const request = {};
+    const fallbackContexts: unknown[] = [];
+    const fallbackProbe = {
+      then(onFulfilled: (value: string) => unknown) {
+        fallbackContexts.push(currentJsxRequestContext());
+        return Promise.resolve(onFulfilled('Still loading'));
+      },
+    } as unknown as Promise<string>;
+    let rejectLateRender!: (error: Error) => void;
+    const lateRender = new Promise<never>((_resolve, reject) => {
+      rejectLateRender = reject;
+    });
+
+    await html(
+      runWithJsxRequestContext(request, { deferredRegions: collector }, () =>
+        Defer({
+          fallback: fallbackProbe,
+          priority: 'after-paint',
+          render: () => lateRender,
+          target: 'late-rejection',
+          timeoutMs: 5,
+        }),
+      ),
+    );
+
+    const chunks = collector.chunks();
+    await vi.advanceTimersByTimeAsync(5);
+    await expect(chunks).resolves.toHaveLength(1);
+    expect(fallbackContexts).toEqual([request, request]);
+
+    rejectLateRender(new Error('late private failure'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fallbackContexts).toEqual([request, request]);
+  });
+
+  it('keeps the live collector when a settled deferred render discovers a nested Defer', async () => {
+    const collector = createDeferredRegionChunkCollector();
+    let releaseOuter!: () => void;
+    const outerGate = new Promise<void>((resolve) => {
+      releaseOuter = resolve;
+    });
+
+    const shell = await html(
+      runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+        Defer({
+          fallback: 'Loading outer',
+          priority: 'after-paint',
+          render: async () => {
+            await outerGate;
+            return jsx('section', {
+              children: Defer({
+                fallback: 'Loading inner',
+                priority: 'after-paint',
+                render: () => jsx('strong', { children: 'Nested ready' }),
+                target: 'nested-inner',
+              }),
+            });
+          },
+          target: 'nested-outer',
+        }),
+      ),
+    );
+    expect(shell).toContain('target="nested-outer"');
+
+    releaseOuter();
+    const chunks = await collector.chunks();
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]?.fragments[0]?.html).toContain('target="nested-inner"');
+    expect(chunks[1]?.fragments[0]?.html).toBe('<strong>Nested ready</strong>');
   });
 
   it('renders critical and out-of-context regions immediately without chunks', async () => {
     const collector = createDeferredRegionChunkCollector();
+    const sibling = createFrameworkAsyncContextCell<string>('oracle.defer-immediate-sibling');
+    const observed: (string | undefined)[] = [];
 
     await expect(
       html(
-        runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
-          Defer({
-            render: () => jsx('main', { children: 'Critical' }),
-            target: 'critical',
-          }),
+        runWithFrameworkAsyncContext(sibling, 'request-owned', () =>
+          runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+            Defer({
+              render: () => {
+                observed.push(currentFrameworkAsyncContextValue(sibling));
+                return jsx('main', { children: 'Critical' });
+              },
+              target: 'critical',
+            }),
+          ),
         ),
       ),
     ).resolves.toBe('<main>Critical</main>');
@@ -267,13 +386,21 @@ describe('Defer JSX primitive', () => {
 
     await expect(
       html(
-        Defer({
-          priority: 'after-paint',
-          render: () => jsx('main', { children: 'No collector' }),
-          target: 'no-context',
-        }),
+        runWithFrameworkAsyncContext(sibling, 'request-owned', () =>
+          runWithJsxRequestContext({}, {}, () =>
+            Defer({
+              priority: 'after-paint',
+              render: () => {
+                observed.push(currentFrameworkAsyncContextValue(sibling));
+                return jsx('main', { children: 'No collector' });
+              },
+              target: 'no-context',
+            }),
+          ),
+        ),
       ),
     ).resolves.toBe('<main>No collector</main>');
+    expect(observed).toEqual(['request-owned', 'request-owned']);
   });
 
   it('does not dispatch late Promise combinator replacements for deferred output authority', async () => {

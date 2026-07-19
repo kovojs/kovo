@@ -1,6 +1,9 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 import type { LiveTargetRenderer } from './mutation-wire.js';
+import {
+  createFrameworkAsyncContextCell,
+  currentFrameworkAsyncContextValue,
+  runWithIsolatedFrameworkAsyncContext,
+} from './async-context.js';
 import { appendDenseOwnArrayValue, denseOwnArrayForEach } from './registry-lookup.js';
 import { securityJsonStringify, securityStringEndsWith } from './response-security-intrinsics.js';
 import {
@@ -12,7 +15,6 @@ import {
   witnessMapGet,
   witnessMapSet,
   witnessObjectKeys,
-  witnessReflectApply,
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
@@ -23,11 +25,9 @@ export type GeneratedLiveTargetModule<_Request = unknown> = Record<string, unkno
 type GeneratedLiveTargetRegistryScope = Map<string, LiveTargetRenderer<unknown>>;
 
 const generatedLiveTargetRegistryContext =
-  new AsyncLocalStorage<GeneratedLiveTargetRegistryScope>();
+  createFrameworkAsyncContextCell<GeneratedLiveTargetRegistryScope>('server.live-target-registry');
 const consumedGeneratedLiveTargetRegistryScopes =
   createWitnessWeakSet<GeneratedLiveTargetRegistryScope>();
-const nativeAsyncLocalGetStore = AsyncLocalStorage.prototype.getStore;
-const nativeAsyncLocalRun = AsyncLocalStorage.prototype.run;
 
 /**
  * @internal Evaluate one app module graph inside an owner-local generated-renderer registry.
@@ -38,10 +38,11 @@ const nativeAsyncLocalRun = AsyncLocalStorage.prototype.run;
  * (SPEC §6.6/§9.1/§9.5).
  */
 export function runWithGeneratedLiveTargetRegistry<Value>(load: () => Value): Value {
-  return witnessReflectApply<Value>(nativeAsyncLocalRun, generatedLiveTargetRegistryContext, [
+  return runWithIsolatedFrameworkAsyncContext(
+    generatedLiveTargetRegistryContext,
     createWitnessMap<string, LiveTargetRenderer<unknown>>(),
     load,
-  ]);
+  );
 }
 
 /**
@@ -128,11 +129,7 @@ function snapshotRegisteredGeneratedLiveTargetRenderers<Request>(
 }
 
 function currentGeneratedLiveTargetRegistryScope(): GeneratedLiveTargetRegistryScope | undefined {
-  return witnessReflectApply<GeneratedLiveTargetRegistryScope | undefined>(
-    nativeAsyncLocalGetStore,
-    generatedLiveTargetRegistryContext,
-    [],
-  );
+  return currentFrameworkAsyncContextValue(generatedLiveTargetRegistryContext);
 }
 
 /**

@@ -1,10 +1,10 @@
+import { formHelperIsPromise, formHelperPromiseThen } from './jsx-form-helper-intrinsics.js';
 import {
-  formHelperAsyncLocalGetStore,
-  formHelperAsyncLocalRun,
-  formHelperCreateAsyncLocalStorage,
-  formHelperIsPromise,
-  formHelperPromiseThen,
-} from './jsx-form-helper-intrinsics.js';
+  createFrameworkAsyncContextCell,
+  currentFrameworkAsyncContextValue,
+  runInFreshFrameworkAsyncContext,
+  runWithFrameworkAsyncContext,
+} from './async-context.js';
 import {
   createWitnessSet,
   createWitnessWeakMap,
@@ -26,9 +26,9 @@ interface ResponseLifecycleContext {
   readonly pendingSetCookies: Set<string>;
 }
 
-const responseLifecycleStorage = formHelperCreateAsyncLocalStorage<
-  ResponseLifecycleContext | undefined
->();
+const responseLifecycleStorage = createFrameworkAsyncContextCell<ResponseLifecycleContext>(
+  'server.response-lifecycle',
+);
 const responseLifecycleContexts = createWitnessWeakMap<object, ResponseLifecycleContext>();
 const sealedResponseLifecycleContexts = createWitnessWeakSet<object>();
 
@@ -39,7 +39,7 @@ function responseLifecycleContextForRequest(
     const exact = witnessWeakMapGet(responseLifecycleContexts, request as object);
     if (exact !== undefined) return exact;
   }
-  return formHelperAsyncLocalGetStore(responseLifecycleStorage);
+  return currentFrameworkAsyncContextValue(responseLifecycleStorage);
 }
 
 /** @internal Run authored response construction in one non-forgeable async lifecycle frame. */
@@ -59,7 +59,7 @@ export function runWithResponseLifecycleRequest<Value>(
   }
   const exactKey = key as object;
   const exactCanonicalRequest = canonicalRequest as object;
-  const current = formHelperAsyncLocalGetStore(responseLifecycleStorage);
+  const current = currentFrameworkAsyncContextValue(responseLifecycleStorage);
   if (current?.key === exactKey) {
     const canonicalContext = witnessWeakMapGet(responseLifecycleContexts, exactCanonicalRequest);
     if (canonicalContext !== undefined && canonicalContext !== current) {
@@ -86,7 +86,7 @@ export function runWithResponseLifecycleRequest<Value>(
   witnessWeakMapSet(responseLifecycleContexts, exactCanonicalRequest, context);
   let result: Value;
   try {
-    result = formHelperAsyncLocalRun(responseLifecycleStorage, context, callback);
+    result = runWithFrameworkAsyncContext(responseLifecycleStorage, context, callback);
   } catch (error) {
     witnessWeakSetAdd(sealedResponseLifecycleContexts, context);
     throw error;
@@ -115,7 +115,7 @@ export function runWithResponseLifecycleRequest<Value>(
  * @internal App request-handler response boundary; not exported from a package entrypoint.
  */
 export function runWithoutResponseLifecycleContext<Value>(callback: () => Value): Value {
-  return formHelperAsyncLocalRun(responseLifecycleStorage, undefined, callback);
+  return runInFreshFrameworkAsyncContext(callback);
 }
 
 /** @internal Resolve the response-owned state key for a helper call in the current async frame. */
@@ -151,7 +151,7 @@ export function responseLifecycleCanonicalRequest<Request>(fallback: Request): R
  * @internal Managed route authorization carrier bridge.
  */
 export function retainCurrentResponseLifecycleRequest(request: object): void {
-  const current = formHelperAsyncLocalGetStore(responseLifecycleStorage);
+  const current = currentFrameworkAsyncContextValue(responseLifecycleStorage);
   if (current === undefined) return;
   const retained = witnessWeakMapGet(responseLifecycleContexts, request);
   if (retained !== undefined && retained !== current) {

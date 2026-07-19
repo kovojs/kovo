@@ -122,15 +122,22 @@
       {
         "id": "W.async-context-lifecycle",
         "owner": "server async-context confinement contract",
-        "authoritativeSource": ["packages/server/src/jsx-form-helper-intrinsics.ts"],
+        "authoritativeSource": [
+          "packages/server/src/async-context.ts",
+          "security/async-context-confinement.json"
+        ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "renewalTrigger": "not implemented",
-        "ttl": "undefined",
-        "failurePosture": "individual carriers differ",
-        "costBudget": "unbudgeted",
-        "evidence": [],
-        "gap": "AsyncLocalStorage carriers do not yet share one lifecycle identity and fail-closed contract.",
+        "status": "rewitnessed",
+        "renewalTrigger": "every authority-root entry, cell read, and censused owned deferred re-entry",
+        "ttl": "one exact open synchronous or asynchronous owner lifecycle; each Kovo-owned deferred render receives a distinct revocable isolated JSX-only lifecycle bounded by settlement or timeout",
+        "failurePosture": "missing, foreign, revoked, or stale stores expose no authority; stale descendants cannot enter another cell; uncensused or non-isolated re-entry is rejected",
+        "costBudget": "one AsyncLocalStorage lookup plus exact identity and closed-witness checks per cell read",
+        "evidence": [
+          "pnpm run check:async-context-confinement",
+          "packages/server/src/async-context.test.ts",
+          "packages/server/src/anonymous-csrf-cache-security.test.tsx"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {

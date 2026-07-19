@@ -143,6 +143,16 @@ JavaScript, imported executable semantics, dynamic properties, browser provenanc
 scheduling, implicit protocols beyond the explicit object-literal close production, or behavior
 beyond the published resource bounds.
 
+**Async-context non-interference (normative evidence boundary).** Runtime scheduling evidence is
+separate from the finite abstract-interpreter claim above. `check:async-context-confinement` MUST
+derive every deployable authority cell from `kovo.async-context-confinement/v1`, reject a raw or
+uncensused `AsyncLocalStorage` door, and mutation-check the exact lifecycle, close, isolated-root,
+and verifier-observer revocation obligations. Its seeded runtime oracle MUST exercise distinct
+principals concurrently through microtasks, stream backpressure, and thenable callbacks and observe
+no cross-lifecycle cell value. This proves the shared runtime contract over those interleavings; it
+does not mean the abstract interpreter models arbitrary event-loop scheduling. Only a separately
+declared finite check→await→use production may enter the analyzer oracle's generated language.
+
 ### 11.4 The verification surface (the Keppo contract)
 
 For a Kovo app, the following are checkable **without executing a browser**:

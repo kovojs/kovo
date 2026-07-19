@@ -13,7 +13,11 @@ import {
   type DeferredStreamChunk,
 } from './deferred-stream.js';
 import type { StylesheetAsset } from './hints.js';
-import { currentJsxFrameworkContext, type DeferredRegionCollector } from './jsx-context.js';
+import {
+  bindCurrentJsxRequestContext,
+  currentJsxFrameworkContext,
+  type DeferredRegionCollector,
+} from './jsx-context.js';
 import { renderServerRenderable, type InternalServerRenderable } from './renderable.js';
 import {
   createSecurityPromise,
@@ -188,24 +192,41 @@ function lowerDeferredRegion<Input>(
   if (!collector) return renderNow();
 
   const streamPriority = deferredStreamPriority(priority);
-  const regionChunk = securityPromiseThen(
-    securityPromiseThen(securityPromiseResolve(undefined), renderRegion),
-    (html) => ({
-      fragments: [
-        {
-          html,
-          priority: streamPriority,
-          ...(options.stylesheets === undefined ? {} : { stylesheets: options.stylesheets }),
-          target: options.target,
-        },
-      ],
-      priority: streamPriority,
-    }),
-    () => renderDeferredErrorChunk(options, priority, streamPriority),
+  const startDeferredRegion = bindCurrentJsxRequestContext(renderRegion);
+  const startErrorChunk = bindCurrentJsxRequestContext(() =>
+    renderDeferredErrorChunk(options, priority, streamPriority),
+  );
+  let revokeDeferredRegion = (): void => undefined;
+  const renderDeferredRegion = () => {
+    const task = startDeferredRegion();
+    revokeDeferredRegion = () => task.revoke();
+    return task.result;
+  };
+  const renderErrorChunk = () => startErrorChunk().result;
+  const pendingRegion = securityPromiseThen(
+    securityPromiseResolve(undefined),
+    renderDeferredRegion,
   );
   collector.add(
-    withDeferredRegionTimeout(regionChunk, normalizeDeferredTimeoutMs(options.timeoutMs), () =>
-      renderDeferredErrorChunk(options, priority, streamPriority),
+    withDeferredRegionTimeout(
+      pendingRegion,
+      normalizeDeferredTimeoutMs(options.timeoutMs),
+      (html) => ({
+        fragments: [
+          {
+            html,
+            priority: streamPriority,
+            ...(options.stylesheets === undefined ? {} : { stylesheets: options.stylesheets }),
+            target: options.target,
+          },
+        ],
+        priority: streamPriority,
+      }),
+      renderErrorChunk,
+      () => {
+        revokeDeferredRegion();
+        return renderErrorChunk();
+      },
     ),
   );
 
@@ -240,25 +261,33 @@ async function renderDeferredErrorChunk<Input>(
   };
 }
 
-function withDeferredRegionTimeout(
-  chunk: Promise<DeferredStreamChunk>,
+function withDeferredRegionTimeout<Value>(
+  pending: Promise<Value>,
   timeoutMs: number,
-  onTimeout: () => Promise<DeferredStreamChunk>,
+  onValue: (value: Value) => MaybePromise<DeferredStreamChunk>,
+  onError: () => MaybePromise<DeferredStreamChunk>,
+  onTimeout: () => MaybePromise<DeferredStreamChunk>,
 ): Promise<DeferredStreamChunk> {
   return createSecurityPromise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      void securityPromiseThen(securityPromiseResolve(onTimeout()), resolve, reject);
-    }, timeoutMs);
-    void securityPromiseThen(
-      chunk,
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
+    let winnerSelected = false;
+    const select = (produce: () => MaybePromise<DeferredStreamChunk>): void => {
+      if (winnerSelected) return;
+      winnerSelected = true;
+      clearTimeout(timer);
+      let selected: MaybePromise<DeferredStreamChunk>;
+      try {
+        selected = produce();
+      } catch (error) {
         reject(error);
-      },
+        return;
+      }
+      void securityPromiseThen(securityPromiseResolve(selected), resolve, reject);
+    };
+    const timer = setTimeout(() => select(onTimeout), timeoutMs);
+    void securityPromiseThen(
+      pending,
+      (value) => select(() => onValue(value)),
+      () => select(onError),
     );
   });
 }

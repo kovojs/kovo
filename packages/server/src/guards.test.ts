@@ -181,6 +181,19 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
     expect(guards.role<typeof request>('admin')(request)).toBe(true);
   });
 
+  it('keeps an exact completed lifecycle carrier when no new authority is added', async () => {
+    const first = await resolveLifecycleRequest(new Request('https://app.example/admin'), {
+      sessionProvider: () => ({ user: { id: 'user_1', roles: ['admin'] } }),
+    });
+    const second = await resolveLifecycleRequest(first);
+
+    // SPEC §6.6: an authority-neutral framework layer must preserve the exact pinned carrier so
+    // response-owned side channels (warnings, cookie receipts, and principal witnesses) cannot be
+    // orphaned on a semantically identical replacement Proxy.
+    expect(second).toBe(first);
+    expect(guards.role<typeof second>('admin')(second)).toBe(true);
+  });
+
   it('ignores inherited session-provider envelope authority and forged refresh cookies', async () => {
     // SPEC §6.5/§6.6 C9: a provider envelope crosses a trust boundary. Only exact own data
     // fields may select its principal or response cookies; Object.prototype is never authority.
