@@ -983,12 +983,14 @@ describe('inline loader enhanced submit source', () => {
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const fetch = vi.fn(async () => mutationResponse('/_m/cart/add', { text: async () => '' }));
+      const setTypedFormAttribute = vi.fn();
       const typedForm = {
         action: '/_m/cart/add',
         getAttribute(name: string) {
           return mutationFormAttribute('cart/add', name, { enhance: '' });
         },
         method: 'post',
+        setAttribute: setTypedFormAttribute,
       };
       const candidates = [
         {
@@ -1061,7 +1063,8 @@ describe('inline loader enhanced submit source', () => {
           globalRecord,
         );
 
-        for (const candidate of candidates) {
+        for (let index = 0; index < candidates.length; index += 1) {
+          const candidate = candidates[index]!;
           const preventDefault = vi.fn();
           listeners.get('submit')?.({
             preventDefault,
@@ -1071,8 +1074,14 @@ describe('inline loader enhanced submit source', () => {
             },
             type: 'submit',
           });
-          expect(preventDefault).not.toHaveBeenCalled();
+          expect(preventDefault).toHaveBeenCalledTimes(index === 0 ? 0 : 1);
         }
+
+        expect(setTypedFormAttribute).toHaveBeenCalledWith(
+          'data-error-code',
+          'INVALID_MUTATION_TRANSPORT',
+        );
+        expect(setTypedFormAttribute).toHaveBeenCalledWith('kovo-error', '');
 
         const preventDefault = vi.fn();
         listeners.get('submit')?.({

@@ -562,7 +562,7 @@ describe('browser inline loader bootstrap', () => {
   });
 
   it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
-    'does not capture %s mutation actions from an opaque paint-first document',
+    'blocks typed %s mutation actions from an opaque paint-first document',
     async (action) => {
       const frame = document.createElement('iframe');
       const loaded = new Promise<void>((resolve) => {
@@ -597,7 +597,9 @@ describe('browser inline loader bootstrap', () => {
       const event = new frameWindow.SubmitEvent('submit', { bubbles: true, cancelable: true });
       form.dispatchEvent(event);
 
-      expect(event.defaultPrevented).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
+      expect(form.getAttribute('data-error-code')).toBe('INVALID_MUTATION_TRANSPORT');
+      expect(form.getAttribute('kovo-error')).toBe('');
       expect(runtimeImport).not.toHaveBeenCalled();
     },
   );
@@ -607,7 +609,7 @@ describe('browser inline loader bootstrap', () => {
 
     expect(result.locationOrigin).toBe(location.origin);
     expect(result.effectiveOrigin).toBe('null');
-    expect(result.submitPrevented).toBe(false);
+    expect(result.submitPrevented).toBe(true);
     expect(result.clickPrevented).toBe(false);
     expect(result.fetchCalls).toBe(0);
     expect(result.importCalls).toBe(0);
@@ -618,7 +620,7 @@ describe('browser inline loader bootstrap', () => {
     ['empty formmethod', 'formmethod=""'],
     ['empty formaction and formmethod', 'formaction="" formmethod=""'],
   ] as const)(
-    'does not capture a submitter with %s during paint-first takeover',
+    'blocks a typed mutation submitter with %s during paint-first takeover',
     async (_name, submitterAttributes) => {
       const frameWindow = await networkFrame(
         [
@@ -645,7 +647,9 @@ describe('browser inline loader bootstrap', () => {
       });
       form.dispatchEvent(event);
 
-      expect(event.defaultPrevented).toBe(false);
+      expect(event.defaultPrevented).toBe(true);
+      expect(form.getAttribute('data-error-code')).toBe('INVALID_MUTATION_TRANSPORT');
+      expect(form.getAttribute('kovo-error')).toBe('');
       expect(runtimeImport).not.toHaveBeenCalled();
     },
   );
@@ -697,7 +701,8 @@ describe('browser inline loader bootstrap', () => {
     const clickEvent = new frameWindow.MouseEvent('click', { bubbles: true, cancelable: true });
     anchor.dispatchEvent(clickEvent);
 
-    expect(submitEvent.defaultPrevented).toBe(false);
+    expect(submitEvent.defaultPrevented).toBe(true);
+    expect(form.getAttribute('data-error-code')).toBe('INVALID_MUTATION_TRANSPORT');
     expect(clickEvent.defaultPrevented).toBe(true);
     expect(runtimeImport).toHaveBeenCalledTimes(1);
     await safeNavigation;

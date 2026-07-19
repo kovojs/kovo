@@ -500,6 +500,37 @@ function mutationFormProvenanceDiagnostics(
     }
     const associatedMutationForm = mutationFormForSubmitter(element, mutationForms);
     const directTransport = mutationSubmitterDirectTransport(element.element);
+    if (associatedMutationForm !== null) {
+      const source = associatedMutationForm.element;
+      const lexicalDescendant =
+        element.element.start >= source.openingEnd && element.element.end <= source.closingStart;
+      const forbidden: JsxAttributeModel[] = [];
+      if (lexicalDescendant) {
+        appendCompilerFacts(
+          forbidden,
+          directTransport.formAssociations,
+          'Typed mutation submitter form associations',
+        );
+      }
+      appendCompilerFacts(
+        forbidden,
+        directTransport.overrides,
+        'Typed mutation submitter transport overrides',
+      );
+      for (let overrideIndex = 0; overrideIndex < forbidden.length; overrideIndex += 1) {
+        const attribute = forbidden[overrideIndex]!;
+        appendCompilerFact(
+          diagnostics,
+          mutationFormProvenanceDiagnostic(
+            options,
+            attribute,
+            `${attribute.name} cannot override compiler-owned typed mutation transport; remove the submitter transport attribute or use a separate native form`,
+          ),
+          'Typed mutation submitter diagnostics',
+        );
+        removeJsxIrSourceAttribute(element, attribute);
+      }
+    }
     if (
       associatedMutationForm === null &&
       mutationForms.length > 0 &&
@@ -669,9 +700,11 @@ function mutationFormForSubmitter(
 }
 
 function mutationSubmitterDirectTransport(element: JsxElementModel): {
+  formAssociations: JsxAttributeModel[];
   hasFormAssociation: boolean;
   overrides: JsxAttributeModel[];
 } {
+  const formAssociations: JsxAttributeModel[] = [];
   let hasFormAssociation = false;
   const overrides: JsxAttributeModel[] = [];
   const attributes = compilerSnapshotDenseArray(
@@ -684,11 +717,12 @@ function mutationSubmitterDirectTransport(element: JsxElementModel): {
     const transport = mutationSubmitterTransportAttributeName(attribute.name);
     if (transport === 'form') {
       hasFormAssociation = true;
+      appendCompilerFact(formAssociations, attribute, 'Direct mutation form associations');
     } else if (transport !== null) {
       appendCompilerFact(overrides, attribute, 'Direct mutation submitter overrides');
     }
   }
-  return { hasFormAssociation, overrides };
+  return { formAssociations, hasFormAssociation, overrides };
 }
 
 function componentMutationSubmitterOverrideDiagnostics(

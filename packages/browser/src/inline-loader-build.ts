@@ -1748,7 +1748,18 @@ function installInlineKovoLoader(im) {
           return;
         }
         const transport = emt(form, eventFacts.submitter);
-        if (!transport) return;
+        if (!transport) {
+          // A compiler-owned data-mutation form has one immutable POST transport. A mismatch is
+          // DOM tampering, so never fall through to native serialization of CSRF/idem fields.
+          if (
+            bns.readAttribute(form, 'data-mutation') &&
+            bns.preventDelegatedEventDefault(event)
+          ) {
+            bns.setElementAttribute(form, 'data-error-code', 'INVALID_MUTATION_TRANSPORT');
+            bns.setElementAttribute(form, 'kovo-error', '');
+          }
+          return;
+        }
         sef(event, form, eventFacts.submitter, transport);
         return;
       }
@@ -2451,8 +2462,10 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     );
     if (!form) return;
     const mutation = readAttribute(form, 'data-mutation');
+    if (!mutation) return;
+    const blocked = () => ({ blocked: true, target: form, type: 'submit' });
     const location = currentLocation();
-    if (!mutation || !location) return;
+    if (!location) return blocked();
     const submitter = facts.submitter;
     const submitterMethod = submitter
       ? readAttribute(submitter, 'formmethod') ?? readAttribute(submitter, 'formMethod')
@@ -2469,7 +2482,7 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       readAttribute(form, 'action') ??
       '';
     const documentBase = readCaptured(doc, nativeNodeBaseUri, 'baseURI');
-    if (typeof documentBase !== 'string' || !documentBase) return;
+    if (typeof documentBase !== 'string' || !documentBase) return blocked();
     const action = parseUrl(
       rawAction || location.href,
       rawAction ? documentBase : location.href,
@@ -2487,7 +2500,7 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       action.pathname !== '/_m/' + mutation ||
       action.search ||
       action.hash
-    ) return;
+    ) return blocked();
     return { submitter, target: form, type: 'submit' };
   };
   const authoredClick = (facts) => {
@@ -2600,6 +2613,11 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
           : undefined;
     if (!item) return;
     if (!preventEventDefault(event)) return;
+    if (item.blocked) {
+      setAttribute(item.target, 'data-error-code', 'INVALID_MUTATION_TRANSPORT');
+      setAttribute(item.target, 'kovo-error', '');
+      return;
+    }
     queued[queued.length] = item;
     void load();
   };
