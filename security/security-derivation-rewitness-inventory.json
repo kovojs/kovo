@@ -94,11 +94,18 @@
       {
         "id": "D.tcb-membership",
         "owner": "analysis-time TCB closure gate",
-        "authoritativeSource": ["security/TCB.md", "scripts/check-tcb-boundary.mjs"],
+        "authoritativeSource": [
+          "security/TCB.md",
+          "scripts/check-analysis-time-closure.mjs",
+          "scripts/check-tcb-boundary.mjs"
+        ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "proof": [],
-        "gap": "Gate entrypoint import closures are not yet mechanically diffed against the TCB manifest.",
+        "status": "derived",
+        "proof": [
+          "scripts/check-analysis-time-closure.test.mjs",
+          "scripts/lib/pnpm-lock-packages.test.mjs"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {

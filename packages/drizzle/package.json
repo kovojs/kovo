@@ -46,7 +46,7 @@
   },
   "dependencies": {
     "@kovojs/core": "workspace:*",
-    "ts-morph": "^28.0.0"
+    "ts-morph": "28.0.0"
   },
   "devDependencies": {
     "drizzle-orm": "1.0.0-rc.4",

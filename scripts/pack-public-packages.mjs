@@ -6,6 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import {
+  deterministicPackContract,
+  deterministicTarballFindings,
+} from './lib/deterministic-tarball.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 import {
   assertNoPackSecurityFindings,
@@ -54,6 +58,13 @@ export function packPublicPackages() {
         tarballPath,
       });
       assertNoPackSecurityFindings(findings);
+      const tarballBytes = readFileSync(tarballPath);
+      const deterministicFindings = deterministicTarballFindings(tarballBytes);
+      if (deterministicFindings.length > 0) {
+        throw new Error(
+          `${pkg.name} tarball violates the deterministic package contract:\n  ${deterministicFindings.join('\n  ')}`,
+        );
+      }
       assertNoWorkspaceProtocols(packedManifest, `${pkg.name} packed manifest`);
       assertPackedLifecyclePolicy(packedManifest, pkg.name);
       const files = tarEntries(tarballPath);
@@ -63,20 +74,50 @@ export function packPublicPackages() {
         files,
         manifest: packedManifest,
         name: pkg.name,
-        sha512: `sha512-${sha512(readFileSync(tarballPath))}`,
+        sha512: `sha512-${sha512(tarballBytes)}`,
         version: pkg.version,
         tarball: path.relative(repoRoot, tarballPath),
       });
     }
 
     assertSnapshotMatches(buildPackSecuritySnapshot(securityPackages), readPackSecuritySnapshot());
-    writeFileSync(manifestPath, `${JSON.stringify({ packages: packedPackages }, null, 2)}\n`);
+    writeFileSync(
+      manifestPath,
+      `${JSON.stringify(
+        {
+          buildEnvironment: packBuildEnvironment(),
+          deterministicInputs: deterministicPackContract,
+          packages: packedPackages,
+          schema: 'kovo.packed-public-packages/v2',
+        },
+        null,
+        2,
+      )}\n`,
+    );
     console.log(
       `Packed and security-verified ${packedPackages.length} public packages into ${tarballDir}`,
     );
   } finally {
     rmSync(inspectDir, { recursive: true, force: true });
   }
+}
+
+function packBuildEnvironment() {
+  const rootManifest = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  const toolchain = Object.fromEntries(
+    ['esbuild', 'ts-morph', 'typescript', 'vite-plus', 'vitest'].map((dependency) => [
+      dependency,
+      rootManifest.devDependencies?.[dependency],
+    ]),
+  );
+  return {
+    arch: process.arch,
+    id: process.env.KOVO_REPRODUCIBLE_BUILD_ID ?? 'primary',
+    node: process.version,
+    packageManager: rootManifest.packageManager,
+    platform: process.platform,
+    toolchain,
+  };
 }
 
 function sha512(bytes) {

@@ -23,6 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          # The analysis-time TCB ratchet compares this commit to its first parent.
+          fetch-depth: 2
+          persist-credentials: false
       - uses: ./.github/actions/kovo-setup
         with:
           rebuild-better-sqlite3: 'true'
@@ -157,6 +161,52 @@ jobs:
           name: kovo-package-dist
           path: ${{ runner.temp }}/kovo-package-dist.tgz
           retention-days: 1
+
+  reproducible-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          path: checkout-a
+          persist-credentials: false
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          path: checkout-b
+          persist-credentials: false
+      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+        with:
+          node-version: 24.18.0
+          version: 0.1.24
+      - name: Install first clean checkout
+        working-directory: checkout-a
+        run: vp install --frozen-lockfile
+      - name: Install second clean checkout
+        working-directory: checkout-b
+        run: vp install --frozen-lockfile
+      - name: Build public packages in first clean checkout
+        working-directory: checkout-a
+        env:
+          KOVO_REPRODUCIBLE_BUILD_ID: clean-checkout-a
+        run: vp exec pnpm run check:publish
+      - name: Build public packages in second clean checkout
+        working-directory: checkout-b
+        env:
+          KOVO_REPRODUCIBLE_BUILD_ID: clean-checkout-b
+        run: vp exec pnpm run check:publish
+      - name: Compare public tarball subjects
+        working-directory: checkout-a
+        run: >-
+          vp exec node scripts/reproducible-pack.mjs
+          --first .release/packed-packages.json
+          --second ../checkout-b/.release/packed-packages.json
+          --out .release/reproducible-pack-attestation.json
+          --source "$GITHUB_SHA"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-reproducible-pack-attestation
+          path: checkout-a/.release/reproducible-pack-attestation.json
+          retention-days: 7
 
   test:
     runs-on: ubuntu-latest
@@ -430,6 +480,7 @@ jobs:
       - metamorphic
       - compiler-perf
       - publish-readiness
+      - reproducible-pack
       - test
       - starter-packages
       - starter
