@@ -1369,7 +1369,12 @@ function pinPrivateScopeRequestRoot<
 >(request: Request, key: Key): Request & object {
   const captured = pinnedRequestCarrierOwnData(request, key);
   if (captured?.present === true) {
-    return requestWithProperty(request, key, snapshotPinnedLifecycleValue(captured.value));
+    return requestWithProperty(
+      request,
+      key,
+      snapshotPinnedLifecycleValue(captured.value),
+      captured.frameworkOwned,
+    );
   }
   if (key in request) {
     // Inherited private-looking values are not authority. Drop them so built-in guards observe
@@ -1596,8 +1601,10 @@ function requestWithProperty<Request, Key extends string, Value>(
   request: Request,
   key: Key,
   value: Value,
+  frameworkOwned = true,
 ): Request & Record<Key, Value> {
-  const carrier = pinnedRequestCarrier(request, [{ key, value }]) as Request & Record<Key, Value>;
+  const carrier = pinnedRequestCarrier(request, [{ frameworkOwned, key, value }]) as Request &
+    Record<Key, Value>;
   if (isObjectLike(request)) {
     inheritAnonymousCsrfLiveTargetBinding(request, carrier);
   }
@@ -1605,7 +1612,8 @@ function requestWithProperty<Request, Key extends string, Value>(
     carrier as unknown as globalThis.Request,
     requestForAuthorityNeutralMetadata(request as unknown as globalThis.Request),
   );
-  if (key === 'session') registerFrameworkSessionPrincipalSnapshot(carrier, value);
+  if (key === 'session' && frameworkOwned)
+    registerFrameworkSessionPrincipalSnapshot(carrier, value);
   else if (isObjectLike(request)) {
     const requestObject: object = request;
     inheritFrameworkPrincipalSnapshot(carrier, requestObject);

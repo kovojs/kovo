@@ -67,7 +67,7 @@ describe('request proxy intrinsics', () => {
       },
     });
     const accessorCarrier = pinnedRequestCarrier(accessorSource, []);
-    expect(accessorHits).toBe(1);
+    expect(accessorHits).toBe(0);
     expect(pinnedRequestCarrierOwnData(accessorCarrier, 'session')).toEqual({
       frameworkOwned: false,
       present: false,
@@ -78,6 +78,14 @@ describe('request proxy intrinsics', () => {
       frameworkOwned: false,
       present: true,
       value: { id: 'raw-session' },
+    });
+    const reclosedRawCarrier = pinnedRequestCarrier(rawCarrier, [
+      { frameworkOwned: false, key: 'session', value: { id: 'reclosed-raw-session' } },
+    ]);
+    expect(pinnedRequestCarrierOwnData(reclosedRawCarrier, 'session')).toEqual({
+      frameworkOwned: false,
+      present: true,
+      value: { id: 'reclosed-raw-session' },
     });
 
     let proxyDescriptorHits = 0;

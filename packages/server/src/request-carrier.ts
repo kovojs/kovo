@@ -100,6 +100,8 @@ for (let index = 0; index < intrinsicArrayPrototypeKeys.length; index += 1) {
 }
 
 export interface PinnedRequestProperty {
+  /** Preserve false when re-snapshotting caller-owned data; new framework overrides default true. */
+  readonly frameworkOwned?: boolean;
   readonly key: PropertyKey;
   readonly value: unknown;
 }
@@ -443,6 +445,7 @@ export function pinnedRequestCarrier<Request>(
     (typeof request === 'object' || typeof request === 'function') && request !== null;
   const target = objectLike ? (request as object) : {};
   const overrideValues = createWitnessMap<PropertyKey, unknown>();
+  const overrideOwnership = createWitnessMap<PropertyKey, boolean>();
   const omittedKeys = createWitnessSet<PropertyKey>();
   for (let index = 0; index < overrides.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(overrides, index);
@@ -452,6 +455,15 @@ export function pinnedRequestCarrier<Request>(
     const entry = descriptor.value;
     const key = pinnedRequestPropertyKey(ownPinnedRequestEntryValue(entry, 'key'));
     witnessMapSet(overrideValues, key, ownPinnedRequestEntryValue(entry, 'value'));
+    const ownershipDescriptor = witnessGetOwnPropertyDescriptor(entry, 'frameworkOwned');
+    if (ownershipDescriptor !== undefined && !('value' in ownershipDescriptor)) {
+      throw new TypeError('Pinned request override frameworkOwned must be an own data property.');
+    }
+    const frameworkOwned = ownershipDescriptor?.value ?? true;
+    if (typeof frameworkOwned !== 'boolean') {
+      throw new TypeError('Pinned request override frameworkOwned must be boolean when present.');
+    }
+    witnessMapSet(overrideOwnership, key, frameworkOwned);
   }
   for (let index = 0; index < omitted.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(omitted, index);
@@ -490,7 +502,7 @@ export function pinnedRequestCarrier<Request>(
     witnessMapSet(properties, key, {
       data: true,
       enumerable: true,
-      frameworkOwned: true,
+      frameworkOwned: witnessMapGet(overrideOwnership, key) ?? true,
       own: true,
       value: ownPinnedRequestEntryValue(descriptor.value, 'value'),
     });

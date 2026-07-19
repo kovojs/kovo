@@ -373,7 +373,7 @@ process.stdout.write(JSON.stringify({
       expect(result.status, result.stderr).toBe(0);
       expect(JSON.parse(result.stdout)).toEqual({
         accessorBinding: null,
-        accessorHits: 1,
+        accessorHits: 0,
         anonymousBinding: null,
         foreignRejected: true,
         foreignTrapHits: 0,
