@@ -701,9 +701,12 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/managed-db.test.ts',
       'packages/server/src/postgres-authorization-correspondence.pglite.test.ts',
       'packages/server/src/postgres-authorization-correspondence.test.ts',
+      'packages/server/src/postgres-authorization-explain.test.ts',
       'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
       'packages/server/src/postgres-external-probe.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
+      'packages/core/src/authorization-correspondence-graph.test.ts',
+      'packages/cli/src/authorization-explain.test.ts',
       'scripts/check-postgres-rls-emission-door.test.mjs',
     ],
     verdictAnchors: [
@@ -840,6 +843,36 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "semantics: 'arbitrary-app-callback'",
           'no generated RLS predicate reads it',
           "status: 'unproven'",
+        ],
+      },
+      {
+        id: 'authorization-production-explain-output',
+        file: 'packages/server/src/postgres-authorization-explain.test.ts',
+        snippets: [
+          'pairs each exact surface guard with its table policy without aggregating unrelated guards',
+          "surface.kind === 'query'",
+          "surface.kind === 'mutation'",
+          "surface.kind === 'framework-policy'",
+          "status: 'environment-unchecked'",
+          "status: 'unproven'",
+        ],
+      },
+      {
+        id: 'authorization-graph-forgery-rejection',
+        file: 'packages/core/src/authorization-correspondence-graph.test.ts',
+        snippets: [
+          'rejects a forged live role GUC claim',
+          "status: 'live'",
+          'roleGuc.status must be "dead"',
+        ],
+      },
+      {
+        id: 'authorization-cli-terminal-injection-closure',
+        file: 'packages/cli/src/authorization-explain.test.ts',
+        snippets: [
+          'prints deterministic quoted non-correspondence records and one dead-role warning',
+          'predicate="organization_id = 1\\\\nFORGED"',
+          "options: { authorization: true }",
         ],
       },
       {
