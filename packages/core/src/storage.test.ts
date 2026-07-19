@@ -111,6 +111,24 @@ function storageConformance(name: string, createHarness: () => Promise<StorageHa
       }
     });
 
+    // Train A / SPEC §6.6 C9: the storage key is currently the whole physical namespace.
+    // Two authenticated principals choosing the same app key therefore address one object. This
+    // red test stays at the adapter door so memory, filesystem, and S3 cannot hide behind a
+    // request-layer convention.
+    it('keeps one app key isolated across principal owners', async () => {
+      const harness = await createHarness();
+      try {
+        const appKey = 'avatars/current.png';
+
+        await harness.storage.put(appKey, 'victim bytes');
+        await harness.storage.put(appKey, 'attacker bytes');
+
+        expect(bytesToText((await harness.storage.get(appKey))?.body)).toBe('victim bytes');
+      } finally {
+        await harness.cleanup?.();
+      }
+    });
+
     it('deletes stored objects and metadata by key', async () => {
       const harness = await createHarness();
       try {

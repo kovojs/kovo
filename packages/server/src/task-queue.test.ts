@@ -1,3 +1,4 @@
+import { PGlite } from '@electric-sql/pglite';
 import { describe, expect, it } from 'vitest';
 import { secret } from '@kovojs/core';
 
@@ -13,6 +14,73 @@ import {
 import { managedDb } from './managed-db.js';
 
 describe('durable task queue store (SPEC §9.6)', () => {
+  it.each([
+    ['memory', async () => new MemoryDurableTaskQueue()],
+    [
+      'Postgres/PGlite',
+      async () => {
+        const client = new PGlite();
+        const store = new PostgresDurableTaskQueue({
+          async execute(statement) {
+            const result = await client.query(statement.text, [...statement.values]);
+            return { rowCount: result.affectedRows, rows: result.rows };
+          },
+        });
+        await ensureDurableTaskSchema({
+          async execute(statement) {
+            const result = await client.query(statement.text, [...statement.values]);
+            return { rowCount: result.affectedRows, rows: result.rows };
+          },
+        });
+        return store;
+      },
+    ],
+  ] as const)(
+    'does not debounce or throttle one principal with another through the %s queue',
+    async (_name, createStore) => {
+      const store = await createStore();
+      const runAt = new Date('2026-06-30T10:00:00.000Z');
+
+      await store.enqueue({
+        task: 'email.send',
+        args: { principal: 'victim', value: 'victim-first' },
+        key: 'account-email',
+        runAt,
+      });
+      await store.enqueue({
+        task: 'email.send',
+        args: { principal: 'attacker', value: 'attacker-debounce' },
+        key: 'account-email',
+        runAt,
+      });
+      await store.enqueue({
+        task: 'digest.send',
+        args: { principal: 'victim', value: 'victim-first' },
+        key: 'account-digest',
+        runAt,
+        coalesce: 'throttle',
+      });
+      await store.enqueue({
+        task: 'digest.send',
+        args: { principal: 'attacker', value: 'attacker-throttled' },
+        key: 'account-digest',
+        runAt,
+        coalesce: 'throttle',
+      });
+
+      const claimed = await store.claimDue({ limit: 10, leaseMs: 10_000, now: runAt });
+      expect(claimed).toHaveLength(4);
+      expect(claimed.map((job) => job.args)).toEqual(
+        expect.arrayContaining([
+          { principal: 'victim', value: 'victim-first' },
+          { principal: 'attacker', value: 'attacker-debounce' },
+          { principal: 'victim', value: 'victim-first' },
+          { principal: 'attacker', value: 'attacker-throttled' },
+        ]),
+      );
+    },
+  );
+
   it('uses 128-bit cryptographic job and lease identities despite late clock/RNG replacement', async () => {
     const originalDateNow = Date.now;
     const originalMathRandom = Math.random;
