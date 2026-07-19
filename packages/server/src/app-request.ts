@@ -108,6 +108,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       buildToken,
       maxBodyBytes,
       request,
+      requestDeadlineMsForMatch(app, match),
     );
     if (loadShed) return loadShed;
     const deadlineRequest = requestWithDeadlineCapability(request);
@@ -185,6 +186,15 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       errorShellRequest,
     );
   }
+}
+
+function requestDeadlineMsForMatch(
+  app: KovoApp,
+  match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>,
+): number {
+  return match.kind === 'endpoint'
+    ? (match.endpoint.response.longLived?.deadlineMs ?? app.requestLimits.deadlineMs)
+    : app.requestLimits.deadlineMs;
 }
 
 export async function handleAppStartupErrorResponse(

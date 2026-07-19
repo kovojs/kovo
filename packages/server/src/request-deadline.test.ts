@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp, createRequestHandler } from './app.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { mutation } from './mutation.js';
+import {
+  bindRequestDeadlineResponseTransport,
+  registerRequestDeadlineTransport,
+} from './request-deadline.js';
 import { s } from './schema.js';
 
 const rawTextResponse = {
@@ -268,6 +272,82 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
     await expect(next.text()).resolves.toBe('reacquired');
   });
 
+  it('binds an adapter-owned response transport to the same deadline capability', async () => {
+    const streaming = endpoint('/adapter-stream', {
+      auth: { justification: 'deadline transport test endpoint', kind: 'none' },
+      handler: () => noStoreResponse(new ReadableStream<Uint8Array>({ pull() {} })),
+      method: 'GET',
+      reason: 'adapter response transport binding regression',
+      response: rawStreamResponse,
+    });
+    const handle = createRequestHandler(
+      createApp({
+        endpoints: [streaming],
+        requestLimits: { deadlineMs: 30, maxInFlight: 1 },
+      }),
+    );
+    const request = new Request('https://app.test/adapter-stream');
+    registerRequestDeadlineTransport(request);
+    await handle(request);
+    const interrupted = vi.fn();
+    const complete = bindRequestDeadlineResponseTransport(request, interrupted);
+
+    await vi.waitFor(() => expect(interrupted).toHaveBeenCalledTimes(1));
+    complete();
+  });
+
+  it('releases occupancy on handler exception and consumer stream cancellation', async () => {
+    let failureCalls = 0;
+    const failsOnce = endpoint('/fails-once', {
+      auth: { justification: 'deadline test machine endpoint', kind: 'none' },
+      handler() {
+        failureCalls += 1;
+        if (failureCalls === 1) throw new Error('private fixture failure');
+        return noStoreResponse('reacquired-after-error');
+      },
+      method: 'GET',
+      reason: 'deadline exception release regression',
+      response: rawTextResponse,
+    });
+    let streamCalls = 0;
+    const cancellable = endpoint('/cancel-stream', {
+      auth: { justification: 'deadline test machine endpoint', kind: 'none' },
+      handler() {
+        streamCalls += 1;
+        return streamCalls === 1
+          ? noStoreResponse(new ReadableStream<Uint8Array>({ pull() {} }))
+          : noStoreResponse('reacquired-after-cancel');
+      },
+      method: 'GET',
+      reason: 'deadline consumer cancellation release regression',
+      response: rawStreamResponse,
+    });
+    const onError = vi.fn();
+    const handleFailure = createRequestHandler(
+      createApp({
+        endpoints: [failsOnce],
+        onError,
+        requestLimits: { deadlineMs: 2_000, maxInFlight: 1 },
+      }),
+    );
+    const failed = await handleFailure(new Request('https://app.test/fails-once'));
+    expect(failed.status).toBe(500);
+    const afterFailure = await handleFailure(new Request('https://app.test/fails-once'));
+    await expect(afterFailure.text()).resolves.toBe('reacquired-after-error');
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    const handleStream = createRequestHandler(
+      createApp({
+        endpoints: [cancellable],
+        requestLimits: { deadlineMs: 2_000, maxInFlight: 1 },
+      }),
+    );
+    const stream = await handleStream(new Request('https://app.test/cancel-stream'));
+    await stream.body!.cancel('fixture consumer closed');
+    const afterCancel = await handleStream(new Request('https://app.test/cancel-stream'));
+    await expect(afterCancel.text()).resolves.toBe('reacquired-after-cancel');
+  });
+
   // C13 red anchor: the sole audited extension remains finite and is scoped to one endpoint.
   it('allows only a bounded justified long-lived endpoint to extend its request deadline', async () => {
     const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 60));
@@ -325,6 +405,13 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
   // C13 red anchor: deadline expiry inside the transaction callback must take the rollback path.
   it('throws before transaction commit when the handler cooperatively observes expiry', async () => {
     const events: string[] = [];
+    const abortReservation = vi.fn();
+    const commitReservation = vi.fn();
+    const replayStore = {
+      get: vi.fn(() => undefined),
+      reserve: vi.fn(() => ({ abort: abortReservation, commit: commitReservation })),
+      set: vi.fn(),
+    };
     const slowMutation = mutation('deadline/transaction', {
       csrf: false,
       csrfJustification: 'test fixture uses a non-browser caller',
@@ -350,6 +437,7 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
     });
     const handle = createRequestHandler(
       createApp({
+        mutationReplayStore: replayStore,
         mutations: [slowMutation],
         requestLimits: { deadlineMs: 30, maxInFlight: 1 },
       }),
@@ -358,13 +446,80 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
     const response = await handle(
       new Request('https://app.test/_m/deadline/transaction', {
         body: '{}',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Kovo-Fragment': 'true',
+          'Kovo-Idem': `v1_${Date.now()}_${'a'.repeat(32)}`,
+        },
         method: 'POST',
       }),
     );
 
     expect(response.status).toBe(503);
     await vi.waitFor(() => expect(events).toEqual(['begin', 'handler', 'rollback']));
+    expect(replayStore.reserve).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(abortReservation).toHaveBeenCalledTimes(1));
+    expect(commitReservation).not.toHaveBeenCalled();
     expect(events).not.toContain('commit');
+  });
+
+  it('discards a post-commit response without aborting already-committed replay truth', async () => {
+    const events: string[] = [];
+    const abortReservation = vi.fn();
+    const commitStarted = vi.fn();
+    const commitFinished = vi.fn();
+    const replayStore = {
+      get: vi.fn(() => undefined),
+      reserve: vi.fn(() => ({
+        abort: abortReservation,
+        async commit() {
+          commitStarted();
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          commitFinished();
+        },
+      })),
+      set: vi.fn(),
+    };
+    const committedMutation = mutation('deadline/post-commit', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      handler: async () => {
+        events.push('handler');
+        return { committed: true };
+      },
+      input: s.object({}),
+      async transaction(request, run) {
+        events.push('begin');
+        const value = await run(request);
+        events.push('commit');
+        return value;
+      },
+    });
+    const handle = createRequestHandler(
+      createApp({
+        mutationReplayStore: replayStore,
+        mutations: [committedMutation],
+        requestLimits: { deadlineMs: 50, maxInFlight: 1 },
+      }),
+    );
+
+    const response = await handle(
+      new Request('https://app.test/_m/deadline/post-commit', {
+        body: '{}',
+        headers: {
+          'Content-Type': 'application/json',
+          'Kovo-Fragment': 'true',
+          'Kovo-Idem': `v1_${Date.now()}_${'b'.repeat(32)}`,
+        },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(events).toEqual(['begin', 'handler', 'commit']);
+    expect(commitStarted).toHaveBeenCalledTimes(1);
+    expect(abortReservation).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(commitFinished).toHaveBeenCalledTimes(1));
+    expect(abortReservation).not.toHaveBeenCalled();
   });
 });

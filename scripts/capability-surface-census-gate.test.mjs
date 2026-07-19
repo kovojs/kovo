@@ -110,6 +110,24 @@ it('requires every owned request effect door to consume the canonical deadline c
   ).toContain(
     'test.egress: frameworkEgressFetch does not consume composeCurrentRequestDeadlineSignal from request-deadline',
   );
+
+  effectSources.set(
+    'egress.ts',
+    `import { composeCurrentRequestDeadlineSignal as consumeDeadline } from './request-deadline.js';
+     export const frameworkEgressFetch = () => {
+       function deadLookalike() { return consumeDeadline(); }
+       return undefined;
+     };`,
+  );
+  expect(
+    evaluateRequestDeadlineEffectDoors({
+      requiredIds: ['test.egress'],
+      rows,
+      sources: effectSources,
+    }).findings,
+  ).toContain(
+    'test.egress: frameworkEgressFetch does not consume composeCurrentRequestDeadlineSignal from request-deadline',
+  );
 });
 
 it('fails closed when a discovered mint is absent, stale, or lacks a reviewed reason', () => {

@@ -1,9 +1,9 @@
 {
   "schema": "kovo-capability-surface-census/v2",
   "summary": {
-    "internalRegistries": 94,
+    "internalRegistries": 100,
     "mints": 4,
-    "sites": 98
+    "sites": 104
   },
   "rows": [
     {
@@ -122,6 +122,56 @@
       "evidence": "pnpm run check:fail-closed-classifiers"
     }
   ],
+  "requestDeadlineEffectDoors": [
+    {
+      "id": "server.egress-fetch",
+      "path": "packages/server/src/egress.ts",
+      "owner": "frameworkEgressFetch",
+      "consumes": ["composeCurrentRequestDeadlineSignal", "awaitWithCurrentRequestDeadline"],
+      "purpose": "The sole framework network door composes caller cancellation with the mandatory request deadline and bounds DNS resolution.",
+      "evidence": "packages/server/src/egress.test.ts plus request-deadline.test.ts exercise transport policy and deadline abort behavior."
+    },
+    {
+      "id": "server.db-provider",
+      "path": "packages/server/src/guards.ts",
+      "owner": "resolveDbProvider",
+      "consumes": ["awaitWithCurrentRequestDeadline"],
+      "purpose": "The framework-managed database provider wait is discarded when the request deadline expires and receives the deadline-bound Request signal.",
+      "evidence": "packages/server/src/request-deadline.test.ts proves a hanging DB provider observes abort before handler progress."
+    },
+    {
+      "id": "server.mutation-transaction",
+      "path": "packages/server/src/mutation.ts",
+      "owner": "runInDefaultTransaction",
+      "consumes": ["assertCurrentRequestDeadlineActive"],
+      "purpose": "The mutation transaction door rejects an expired request before opening work and rechecks inside the transaction callback before commit success.",
+      "evidence": "packages/server/src/request-deadline.test.ts proves cooperative expiry takes the pre-commit rollback path and never records commit."
+    },
+    {
+      "id": "server.deferred-region",
+      "path": "packages/server/src/deferred-region.ts",
+      "owner": "withDeferredRegionTimeout",
+      "consumes": ["onCurrentRequestDeadline"],
+      "purpose": "The owned deferred-render winner treats the mandatory request deadline as a timeout and revokes its retained render authority.",
+      "evidence": "packages/server/src/deferred-region.test.ts and async-context confinement tests prove one-shot timeout and revocation behavior."
+    },
+    {
+      "id": "server.response-stream-flush",
+      "path": "packages/server/src/request-deadline.ts",
+      "owner": "wrapRequestDeadlineResponse",
+      "consumes": ["RequestDeadlineAdmission.signal"],
+      "purpose": "The sole response deadline wrapper errors and cancels an unfinished body stream and releases occupancy at deadline or completion.",
+      "evidence": "packages/server/src/request-deadline.test.ts proves stream error, late discard, and occupancy reacquisition."
+    },
+    {
+      "id": "server.node-response-transport",
+      "path": "packages/server/src/node.ts",
+      "owner": "toNodeHandler",
+      "consumes": ["bindRequestDeadlineResponseTransport"],
+      "purpose": "The Node adapter holds occupancy through actual response finish or close and destroys a slow response transport when its mandatory deadline expires.",
+      "evidence": "packages/server/src/node.test.ts proves a stalled response transport is destroyed at deadline and the occupancy slot is reacquired."
+    }
+  ],
   "mintSites": [
     {
       "api": "systemDb",
@@ -166,10 +216,34 @@
     {
       "api": "createWitnessWeakMap",
       "file": "packages/server/src/app-load-shed.ts",
+      "id": "packages/server/src/app-load-shed.ts#frameworkLoadShedErrors",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Retains non-forgeable framework load-shed error facts for the stable response mapper; it does not mint authority for app code."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-load-shed.ts",
       "id": "packages/server/src/app-load-shed.ts#rateStates",
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-load-shed.ts",
+      "id": "packages/server/src/app-load-shed.ts#occupancyStates",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Retains per-app in-flight occupancy counters behind app identity; it does not mint or expose an application capability."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-load-shed.ts",
+      "id": "packages/server/src/app-load-shed.ts#requestDeadlineAdmissions",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Binds exact native Request identities to framework-minted deadline admissions for private dispatch transfer only."
     },
     {
       "api": "createWitnessWeakMap",
@@ -485,6 +559,14 @@
     },
     {
       "api": "createWitnessWeakMap",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "id": "packages/server/src/postgres-runtime.ts#postgresRuntimePostureLeases",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Retains private runtime posture lease state behind exact Postgres runtime identity and exposes no raw database authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
       "file": "packages/server/src/query.ts",
       "id": "packages/server/src/query.ts#queryRuntimeWarningsByRequest",
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
@@ -602,6 +684,22 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/request-deadline.ts",
+      "id": "packages/server/src/request-deadline.ts#requestDeadlineTransportAdmissions",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Binds one adapter-owned ingress Request to its private deadline admission so actual response finish or close can release occupancy; it exposes no app authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/request-deadline.ts",
+      "id": "packages/server/src/request-deadline.ts#admissionControls",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates non-forgeable deadline admissions with one-shot private release and interruption controls unavailable to app code."
     },
     {
       "api": "createWitnessWeakMap",

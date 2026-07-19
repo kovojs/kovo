@@ -24,7 +24,11 @@ import {
   markEndpointSelfVerifying,
   markEndpointVerifierExecuted,
 } from './endpoint-auth-proof.js';
-import { pinRequestIngressSurface, requestVerifierInput } from './app-load-shed.js';
+import {
+  MAX_APP_REQUEST_DEADLINE_MS,
+  pinRequestIngressSurface,
+  requestVerifierInput,
+} from './app-load-shed.js';
 import { requestClone } from './request-body-intrinsics.js';
 import { canonicalRequestMethod, isSafeEndpointMethod } from './request-method.js';
 import { securityNumberIsInteger } from './response-security-intrinsics.js';
@@ -87,6 +91,14 @@ export type EndpointResponseBodyPosture =
 /** Raw endpoint cache posture declared for endpoint audit output (SPEC §9.1). */
 export type EndpointCachePosture = 'custom' | 'no-store' | 'private' | 'public' | 'revalidated';
 
+/** A bounded audited extension for one endpoint that intentionally outlives the app default. */
+export interface EndpointLongLivedResponsePosture {
+  /** Finite end-to-end deadline for this endpoint (1..300,000 milliseconds; SPEC §9.5). */
+  deadlineMs: number;
+  /** Why this streaming or long-poll endpoint needs a wider request lifetime. */
+  justification: string;
+}
+
 /**
  * Audit metadata for the raw `Response` an endpoint returns. `appOwnedSafety`
  * means application code owns body encoding and response-header safety for this
@@ -96,6 +108,8 @@ export interface EndpointResponsePosture {
   appOwnedSafety: boolean;
   body: EndpointResponseBodyPosture;
   cache: EndpointCachePosture;
+  /** Bounded, explain-visible deadline extension for a legitimate stream or long poll. */
+  longLived?: EndpointLongLivedResponsePosture;
   /**
    * Exact cross-origin redirect origins this raw endpoint may emit in a `Location` header.
    * Same-origin paths need no entry; external origins require an audit-readable reason.
@@ -414,6 +428,7 @@ function snapshotEndpointResponsePosture(source: unknown): EndpointResponsePostu
   const appOwnedSafety = stableRequiredEndpointValue(source, 'appOwnedSafety');
   const bodySource = stableRequiredEndpointValue(source, 'body');
   const cache = stableRequiredEndpointValue(source, 'cache');
+  const longLivedSource = stableEndpointValue(source, 'longLived');
   const redirectAllowlistSource = stableEndpointValue(source, 'redirectAllowlist');
   const reservedHeadersSource = stableEndpointValue(source, 'reservedHeaders');
   if (typeof appOwnedSafety !== 'boolean') {
@@ -423,6 +438,10 @@ function snapshotEndpointResponsePosture(source: unknown): EndpointResponsePostu
     throw new TypeError('endpoint().response.cache has an invalid posture.');
   }
   const body = snapshotEndpointResponseBody(bodySource);
+  const longLived =
+    longLivedSource === undefined
+      ? undefined
+      : snapshotEndpointLongLivedResponsePosture(longLivedSource);
   const redirectAllowlist =
     redirectAllowlistSource === undefined
       ? undefined
@@ -435,9 +454,36 @@ function snapshotEndpointResponsePosture(source: unknown): EndpointResponsePostu
   snapshot.appOwnedSafety = appOwnedSafety;
   snapshot.body = body;
   snapshot.cache = cache;
+  snapshot.longLived = longLived;
   snapshot.redirectAllowlist = redirectAllowlist;
   snapshot.reservedHeaders = reservedHeaders;
   return witnessFreeze(snapshot) as unknown as EndpointResponsePosture;
+}
+
+function snapshotEndpointLongLivedResponsePosture(
+  source: unknown,
+): EndpointLongLivedResponsePosture {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('endpoint().response.longLived must be a stable own-data record.');
+  }
+  const deadlineMs = stableRequiredEndpointValue(source, 'deadlineMs');
+  const justification = stableRequiredEndpointValue(source, 'justification');
+  if (
+    !securityNumberIsInteger(deadlineMs) ||
+    (deadlineMs as number) < 1 ||
+    (deadlineMs as number) > MAX_APP_REQUEST_DEADLINE_MS
+  ) {
+    throw new TypeError(
+      `endpoint().response.longLived.deadlineMs must be an integer between 1 and ${MAX_APP_REQUEST_DEADLINE_MS}.`,
+    );
+  }
+  return witnessFreeze({
+    deadlineMs: deadlineMs as number,
+    justification: snapshotAuditJustification(
+      justification,
+      'endpoint().response.longLived.justification (SPEC §9.5)',
+    ),
+  });
 }
 
 function snapshotEndpointResponseBody(source: unknown): EndpointResponseBodyPosture {

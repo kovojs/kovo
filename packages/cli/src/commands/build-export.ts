@@ -2253,6 +2253,12 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
     cache: endpoint.response.cache,
     csrf,
     ...(csrf === 'exempt' ? { csrfJustification: endpoint.csrf?.justification ?? '' } : {}),
+    ...(endpoint.response.longLived === undefined
+      ? {}
+      : {
+          deadlineJustification: endpoint.response.longLived.justification,
+          deadlineMs: endpoint.response.longLived.deadlineMs,
+        }),
     ...(endpoint.response.reservedHeaders === undefined
       ? {}
       : { headers: endpoint.response.reservedHeaders }),

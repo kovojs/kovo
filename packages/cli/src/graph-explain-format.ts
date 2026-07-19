@@ -800,6 +800,11 @@ export function endpointExplainLine(
     `dynamic=${list(endpoint.dynamicExports)}`,
     `writes=${list(endpointWrites(endpoint, graph))}`,
   ];
+  if (endpoint.deadlineMs !== undefined) {
+    fields.push(
+      `deadline=long-lived:${endpoint.deadlineMs}:${stableValue(endpoint.deadlineJustification)}`,
+    );
+  }
   if (runMutations.length > 0) fields.push(`runMutations=${list(runMutations)}`);
   return fields.join(' ');
 }

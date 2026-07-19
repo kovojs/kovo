@@ -72,20 +72,39 @@ const frameworkSetTimeout = globalThis.setTimeout;
 const frameworkClearTimeout = globalThis.clearTimeout;
 const requestDeadlineContext =
   createFrameworkAsyncContextCell<RequestDeadlineContext>('server.request-deadline');
+const requestDeadlineTransportRequests = createWitnessWeakSet<Request>();
 const requestDeadlineAdmissions = createWitnessWeakSet<RequestDeadlineAdmission>();
+const requestDeadlineTransportAdmissions = createWitnessWeakMap<
+  Request,
+  RequestDeadlineAdmission
+>();
 const admissionControls = createWitnessWeakMap<
   RequestDeadlineAdmission,
   {
     complete(): void;
     interruption(): RequestDeadlineInterruption | undefined;
+    open(): boolean;
+    readonly transportManaged: boolean;
   }
 >();
+
+/** @internal Mark a Web request whose adapter owns the final response transport lifecycle. */
+export function registerRequestDeadlineTransport(request: Request): void {
+  witnessWeakSetAdd(requestDeadlineTransportRequests, request);
+}
+
+/** @internal Test whether the ingress adapter can prove actual response finish/close. */
+export function requestDeadlineTransportManaged(request: Request): boolean {
+  return witnessWeakSetHas(requestDeadlineTransportRequests, request);
+}
 
 /** @internal Create one finite deadline capability and bind it to ingress disconnect. */
 export function createRequestDeadlineAdmission(options: {
   readonly deadlineMs: number;
   readonly onRelease: () => void;
   readonly sourceSignal: AbortSignal;
+  readonly transportManaged?: boolean;
+  readonly transportRequest?: Request;
 }): RequestDeadlineAdmission {
   const controller = new NativeAbortController();
   const signal = witnessReflectApply<AbortSignal>(nativeAbortControllerSignal, controller, []);
@@ -141,7 +160,12 @@ export function createRequestDeadlineAdmission(options: {
       release();
     },
     interruption: () => interruption,
+    open: () => !released,
+    transportManaged: options.transportManaged === true,
   });
+  if (options.transportManaged === true && options.transportRequest !== undefined) {
+    witnessWeakMapSet(requestDeadlineTransportAdmissions, options.transportRequest, admission);
+  }
   if (witnessReflectApply<boolean>(nativeAbortSignalAborted, options.sourceSignal, [])) {
     disconnect();
   }
@@ -196,6 +220,41 @@ export function completeRequestDeadlineAdmission(admission: RequestDeadlineAdmis
   witnessWeakMapGet(admissionControls, admission)?.complete();
 }
 
+/**
+ * @internal Bind a Kovo response to an adapter-owned transport. The returned one-shot callback must
+ * run on actual transport finish or close; a deadline before then interrupts the transport.
+ */
+export function bindRequestDeadlineResponseTransport(
+  request: Request,
+  onInterrupt: () => void,
+): () => void {
+  const admission = witnessWeakMapGet(requestDeadlineTransportAdmissions, request);
+  const admissionControl =
+    admission === undefined ? undefined : witnessWeakMapGet(admissionControls, admission);
+  if (admission === undefined || admissionControl?.open() !== true) return () => undefined;
+  let completed = false;
+  const removeAbortListener = (): void => {
+    witnessReflectApply(nativeRemoveEventListener, admission.signal, ['abort', interrupt]);
+  };
+  const interrupt = (): void => {
+    if (completed) return;
+    onInterrupt();
+  };
+  const complete = (): void => {
+    if (completed) return;
+    completed = true;
+    removeAbortListener();
+    completeRequestDeadlineAdmission(admission);
+  };
+  witnessReflectApply(nativeAddEventListener, admission.signal, [
+    'abort',
+    interrupt,
+    { once: true },
+  ]);
+  if (witnessReflectApply<boolean>(nativeAbortSignalAborted, admission.signal, [])) interrupt();
+  return complete;
+}
+
 /** @internal Wrap a minted response so deadline, cancellation, and body completion release once. */
 export function wrapRequestDeadlineResponse(
   admission: RequestDeadlineAdmission,
@@ -203,9 +262,11 @@ export function wrapRequestDeadlineResponse(
   method: string,
 ): Response {
   assertRequestDeadlineAdmission(admission);
+  const transportManaged =
+    witnessWeakMapGet(admissionControls, admission)?.transportManaged === true;
   const body = securityResponseBody(response);
   if (method === 'HEAD' || body === null) {
-    completeRequestDeadlineAdmission(admission);
+    if (!transportManaged) completeRequestDeadlineAdmission(admission);
     if (body !== null) {
       const reader = witnessReflectApply<ReadableStreamDefaultReader<Uint8Array>>(
         nativeReadableStreamGetReader,
@@ -235,7 +296,7 @@ export function wrapRequestDeadlineResponse(
     if (settled) return;
     settled = true;
     removeAbortListener();
-    completeRequestDeadlineAdmission(admission);
+    if (!transportManaged) completeRequestDeadlineAdmission(admission);
   };
   const abortStream = (): void => {
     if (settled) return;
@@ -298,16 +359,17 @@ export function wrapRequestDeadlineResponse(
       try {
         await witnessReflectApply<Promise<void>>(nativeStreamReaderCancel, reader, [reason]);
       } finally {
-        completeRequestDeadlineAdmission(admission);
+        if (!transportManaged) completeRequestDeadlineAdmission(admission);
       }
     },
   });
 
-  return new NativeResponse(wrappedBody, {
+  const wrappedResponse = new NativeResponse(wrappedBody, {
     headers: securityResponseHeaders(response),
     status: securityResponseStatus(response),
     statusText: securityResponseStatusText(response),
   });
+  return wrappedResponse;
 }
 
 /** @internal Deadline signal inherited by every Kovo-owned effect door in this request lifecycle. */

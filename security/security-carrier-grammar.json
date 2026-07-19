@@ -952,6 +952,12 @@
       "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
     },
     {
+      "anchor": "request-deadline-effect-door-census",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness requires exact imports from the framework deadline module at every reviewed request effect door; a same-named local function cannot certify the boundary."
+    },
+    {
       "anchor": "complete-root-census",
       "corpus": "capability-closure",
       "production": "root-registration",

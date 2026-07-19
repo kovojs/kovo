@@ -566,6 +566,8 @@ export interface EndpointExplain {
   cache?: string;
   csrf?: 'checked' | 'exempt' | 'safe:read-only';
   csrfJustification?: string;
+  deadlineJustification?: string;
+  deadlineMs?: number;
   dynamicExports?: readonly string[];
   files?: readonly string[];
   guards?: readonly string[];
@@ -1216,6 +1218,31 @@ function snapshotEndpointDerivation(
     `${label}.csrfJustification`,
     budget,
   );
+  const deadlineJustification = snapshotOptionalGraphString(
+    ownGraphData(value, 'deadlineJustification', `${label}.deadlineJustification`),
+    `${label}.deadlineJustification`,
+    budget,
+  );
+  const deadlineMs = ownGraphData(value, 'deadlineMs', `${label}.deadlineMs`);
+  if (
+    deadlineMs !== undefined &&
+    (typeof deadlineMs !== 'number' ||
+      deadlineMs < 1 ||
+      deadlineMs > 300_000 ||
+      deadlineMs % 1 !== 0)
+  ) {
+    throw new TypeError(`Kovo graph ${label}.deadlineMs must be a finite integer from 1..300000.`);
+  }
+  if ((deadlineMs === undefined) !== (deadlineJustification === undefined)) {
+    throw new TypeError(
+      `Kovo graph ${label} must pair deadlineMs with deadlineJustification for one audited long-lived endpoint.`,
+    );
+  }
+  if (deadlineMs !== undefined && surface !== 'endpoint') {
+    throw new TypeError(
+      `Kovo graph ${label} may declare a long-lived deadline only on an endpoint surface.`,
+    );
+  }
   const guards = snapshotGraphStringList(
     ownGraphData(value, 'guards', `${label}.guards`),
     `${label}.guards`,
@@ -1237,6 +1264,8 @@ function snapshotEndpointDerivation(
     ...(authJustification === undefined ? {} : { authJustification }),
     ...(csrf === undefined ? {} : { csrf: csrf as NonNullable<EndpointExplain['csrf']> }),
     ...(csrfJustification === undefined ? {} : { csrfJustification }),
+    ...(deadlineJustification === undefined ? {} : { deadlineJustification }),
+    ...(deadlineMs === undefined ? {} : { deadlineMs }),
     ...(guards === undefined ? {} : { guards }),
     ...(method === undefined ? {} : { method }),
     ...(mount === undefined ? {} : { mount: mount as NonNullable<EndpointExplain['mount']> }),

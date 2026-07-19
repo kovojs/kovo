@@ -53,6 +53,7 @@ import {
   completeRequestDeadlineAdmission,
   createRequestDeadlineAdmission,
   readRequestBodyChunkWithCurrentDeadline,
+  requestDeadlineTransportManaged,
   runRequestDeadlineTask,
   wrapRequestDeadlineResponse,
   type RequestDeadlineAdmission,
@@ -399,6 +400,7 @@ export function preDispatchLoadShedResponse(
   buildToken?: string,
   maxBodyBytes: number = app.requestLimits.maxBodyBytes,
   admissionRequest?: Request,
+  deadlineMs: number = app.requestLimits.deadlineMs,
 ): Response | undefined {
   const bodyFailure = requestBodySizeFailure(maxBodyBytes, request, surface, buildToken);
   if (bodyFailure) return bodyFailure;
@@ -426,11 +428,13 @@ export function preDispatchLoadShedResponse(
   let admission: RequestDeadlineAdmission;
   try {
     admission = createRequestDeadlineAdmission({
-      deadlineMs: app.requestLimits.deadlineMs,
+      deadlineMs,
       onRelease() {
         occupancy.inFlight = occupancy.inFlight > 0 ? occupancy.inFlight - 1 : 0;
       },
       sourceSignal: readNativeRequestSignal(admissionRequest),
+      transportManaged: requestDeadlineTransportManaged(admissionRequest),
+      transportRequest: admissionRequest,
     });
   } catch (error) {
     occupancy.inFlight = occupancy.inFlight > 0 ? occupancy.inFlight - 1 : 0;
