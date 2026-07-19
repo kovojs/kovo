@@ -2099,6 +2099,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/cli/src/index.kovo-compile.test.ts',
       'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
       'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
+      'packages/server/src/guard-args-receipt-security.test.ts',
     ],
     verdictAnchors: [
       {
@@ -2435,6 +2436,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "candidate.writeKey === 'account/exact'",
           "toEqual(['account/shared-one', 'account/shared-two'])",
           "path: 'targetId'",
+        ],
+      },
+      {
+        id: 'guard-args-runtime-classify-and-pin-receipt',
+        file: 'packages/server/src/guard-args-receipt-security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 guard-args-receipt-proxy-drift',
+          'pins the validated ownership key before an async query loader consumes it',
+          'pins the validated ownership key before an async mutation handler consumes it',
+          "return reads === 1 ? 'owned' : 'victim'",
+          'expect(drift.reads()).toBe(0)',
         ],
       },
       {
