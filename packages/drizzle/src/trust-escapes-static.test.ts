@@ -362,6 +362,52 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     ).toEqual([...historicalSinks].sort());
   });
 
+  it.each([
+    {
+      label: 'an on* property assignment',
+      registration: 'element.onclick = () => element.focus();',
+      replacementSink: 'request-handler.opaque-protocol',
+    },
+    {
+      label: 'a static computed on* assignment',
+      registration: "element['onfocus'] = () => element.focus();",
+      replacementSink: 'request-handler.opaque-protocol',
+    },
+    {
+      label: 'an addEventListener member call',
+      registration: "element.addEventListener('click', () => element.focus());",
+      replacementSink: 'request-handler.opaque-call',
+    },
+    {
+      label: 'a static computed addEventListener call',
+      registration: "element['addEventListener']('click', () => element.focus());",
+      replacementSink: 'request-handler.opaque-call',
+    },
+    {
+      label: 'an unqualified global addEventListener call',
+      registration: "addEventListener('click', () => element.focus());",
+      replacementSink: 'request-handler.opaque-call',
+    },
+  ])(
+    'closes $label through the authoritative request graph before inspecting callback effects',
+    ({ registration, replacementSink }) => {
+      // C13 replacement proof: these verdicts come from requestProcessSinksForProject, so the
+      // historical callback-body name lexicon may be deleted without reopening the registration.
+      expect(sinksFor(registration)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ sink: replacementSink })]),
+      );
+    },
+  );
+
+  it('does not confuse a same-file addEventListener function with the browser global', () => {
+    expect(
+      sinksFor(`
+        function addEventListener(_name: string, _callback: () => void) {}
+        addEventListener('internal', () => {});
+      `),
+    ).toEqual([]);
+  });
+
   it('does NOT flag local Function or document shadows as global sinks', () => {
     const facts = sinksFor(`
       export function Widget(markup: string) {
@@ -7686,10 +7732,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
     for (const [label, replacement] of [
       ['raw runtime export', 'appDatabase'],
-      [
-        'forged runtime provider',
-        `{ get db() { return eval('forged-runtime-provider'); } }.db`,
-      ],
+      ['forged runtime provider', `{ get db() { return eval('forged-runtime-provider'); } }.db`],
     ] as const) {
       const hostile = postgresFiles.map((file) =>
         file.fileName === '_kovo/app-runtime-db.ts'
