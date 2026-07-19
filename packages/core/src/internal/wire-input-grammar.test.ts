@@ -6,6 +6,7 @@ import {
   encodeFrameworkLiveTargetHeader,
   encodeFrameworkTargetHeader,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
+  FRAMEWORK_WIRE_INPUT_REGISTRY,
 } from './wire-input-grammar.js';
 
 function seededIdentity(seed: number): string {
@@ -20,6 +21,32 @@ function seededIdentity(seed: number): string {
 }
 
 describe('framework wire-input grammar registry (SPEC §9.1)', () => {
+  // @kovo-security-certifies C13 cache-influence-wire-input-vocabulary
+  it('closes cache-influence credential and response-header observations', () => {
+    expect(FRAMEWORK_WIRE_INPUT_REGISTRY.inputs).toEqual(
+      expect.arrayContaining([
+        {
+          carrier: 'request-header',
+          grammar: 'http-field-value',
+          id: 'request-header.authorization',
+          name: 'authorization',
+        },
+        {
+          carrier: 'response-header',
+          grammar: 'http-field-value',
+          id: 'response-header.cache-control',
+          name: 'cache-control',
+        },
+        {
+          carrier: 'response-header',
+          grammar: 'http-field-value',
+          id: 'response-header.vary',
+          name: 'vary',
+        },
+      ]),
+    );
+  });
+
   // @kovo-security-certifies C13 wire-input-grammar-round-trip
   it('derives target encoders and decoders from one finite grammar with seeded round trips', () => {
     expect(FRAMEWORK_WIRE_INPUT_GRAMMAR).toMatchObject({
