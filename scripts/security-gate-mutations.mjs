@@ -3961,10 +3961,12 @@ function runIsolatedPackageVitestMutation({
     if (packageName === 'browser') {
       const coreInternalRoot = path.join(tempRoot, 'packages', 'core', 'src', 'internal');
       mkdirSync(coreInternalRoot, { recursive: true });
-      cpSync(
-        path.join(repoRoot, 'packages/core/src/internal/semantic-attribute-manifest.ts'),
-        path.join(coreInternalRoot, 'semantic-attribute-manifest.ts'),
-      );
+      for (const name of ['semantic-attribute-manifest.ts', 'sink-policy.ts']) {
+        cpSync(
+          path.join(repoRoot, 'packages/core/src/internal', name),
+          path.join(coreInternalRoot, name),
+        );
+      }
     }
     symlinkSync(path.join(repoRoot, 'node_modules'), path.join(tempRoot, 'node_modules'), 'dir');
     writeFileSync(path.join(packageRoot, 'src', relativeSourcePath), sourceText, 'utf8');
