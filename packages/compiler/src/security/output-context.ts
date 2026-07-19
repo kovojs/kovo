@@ -5,6 +5,7 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
 import {
+  ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
   elementContextSecurityControl,
   elementContextSecurityStaticValueIssue,
   elementHasContextSecurityControls,
@@ -39,6 +40,10 @@ import {
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import {
+  frameworkMutationFormAttributesReturnedKeys,
+  mutationSubmitterTransportAttributeName,
+} from '../mutation-form-provenance.js';
+import {
   isUrlAttribute,
   expressionResolvesToTrustedHtmlBrand,
   expressionResolvesToTrustedUrlPureBrand,
@@ -55,6 +60,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
   type JsxExpressionModel,
+  type JsxSpreadAttributeModel,
   type ObjectLiteralEntry,
   type SourceSpan,
   type StaticJsxWireAttributeEntry,
@@ -978,6 +984,48 @@ function validateDocumentNavigationElements(
 }
 
 /**
+ * SPEC §5.2 rule 10 / §6.3: two opaque-looking authored spellings have a narrower runtime shape
+ * than an arbitrary carrier. The exact mutationFormAttributes export has a finite returned-key
+ * summary, while unresolved button/input spreads are always reconstructed through the
+ * mutation-submitter boundary, which removes every submitter transport name. Both checks remain
+ * tied to the shared finite browser-control denominator so adding a new uncovered control closes
+ * the compiler verdict automatically.
+ */
+function opaqueSpreadHasClosedElementContextControls(
+  tag: string,
+  spread: JsxSpreadAttributeModel,
+): boolean {
+  if (tag === 'form') {
+    const keys = frameworkMutationFormAttributesReturnedKeys(spread);
+    if (keys === undefined) return false;
+    const keyLength = compilerArrayLength(keys, 'mutationFormAttributes returned keys');
+    for (let index = 0; index < keyLength; index += 1) {
+      const key = outputArrayValue(keys, index, 'mutationFormAttributes returned keys');
+      if (elementContextSecurityControl(tag, key) !== undefined) return false;
+    }
+    return true;
+  }
+
+  if (tag !== 'button' && tag !== 'input') return false;
+  let foundControl = false;
+  const tupleLength = compilerArrayLength(
+    ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+    'Element-context security controls',
+  );
+  for (let index = 0; index < tupleLength; index += 1) {
+    const tuple = outputArrayValue(
+      ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+      index,
+      'Element-context security controls',
+    );
+    if (tuple[0] !== tag) continue;
+    foundControl = true;
+    if (mutationSubmitterTransportAttributeName(tuple[1]) === null) return false;
+  }
+  return foundControl;
+}
+
+/**
  * SPEC §4.8 / §5.2 rule 10: a URL scheme is not the complete security context for elements that
  * execute fetched bytes or carry an isolation boundary. `script[src]`, stylesheet links, and an
  * iframe's `sandbox` attribute can all become unsafe while every individual string remains a
@@ -1056,6 +1104,7 @@ function validateElementContextSecuritySinks(
       }
       continue;
     }
+    if (opaqueSpreadHasClosedElementContextControls(tag, spread)) continue;
     return [
       elementContextSecurityDiagnostic(
         diagnostics,

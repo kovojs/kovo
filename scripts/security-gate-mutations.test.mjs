@@ -8,7 +8,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after finite browser-control enrollment', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(234);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(236);
   });
 
   it('enrolls behavioral request-body shape and lazy-provenance allocation mutants', () => {
@@ -87,6 +87,18 @@ describe('security-gate-mutations', () => {
         (mutant) => mutant.name === 'inline-runtime/drop-declarative-shadow-dom-classifier',
       ),
     ).toEqual(expect.objectContaining({ sourceOnly: true }));
+  });
+
+  it('executes opaque form and submitter spread decisions against behavioral oracles', () => {
+    const names = [
+      'compiler-output-context/drop-reconstructed-submitter-spread-boundary',
+      'compiler-output-context/widen-mutation-form-spread-provenance',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(names.sort());
+    expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
+    expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });
 
   it('enrolls finite browser-control deletion, inversion, compiler, and runtime mutants', () => {

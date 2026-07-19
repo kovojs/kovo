@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "e8aa991e10c94949bd0745a70620e8d74a961b69bd86cba0bafbe68c302be11e",
+      "sourceTreeSha256": "d6f0860bcadecceeb70f33fb0395300ed032386c07207290f0629b2b9d26ac1f",
       "manifestVariants": [
         {
           "exports": {
@@ -733,7 +733,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "62de5df9d4e9a0babd4bbc34d1b83d634809839784da58e09d36d0869def08e0"
+      "sourceTreeSha256": "6c79f2dc29a67ef2ca0f6b330dc345ad7e079d8260a14935aff0657f760a1b33"
     },
     {
       "manifestVariants": [
@@ -9627,7 +9627,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "e152811a8e56a39927ebe057319975c118d31170d29350074e741bbfffbdd0e1"
+      "sourceTreeSha256": "8699d1730fcdf7ef0ecde054faf3ff011334614a3494bafc220b157bc8ec88ae"
     },
     {
       "manifestVariants": [

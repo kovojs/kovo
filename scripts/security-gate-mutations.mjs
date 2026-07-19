@@ -320,6 +320,16 @@ const effectiveElementContextClosureBranch =
   '  const effectiveElementContexts = validateEffectiveElementContextSecurity(options, tree.roots);';
 const removedEffectiveElementContextClosureBranch =
   '  const effectiveElementContexts = { diagnostics: [], facts: [] } as const;';
+const exactMutationFormSpreadProvenanceBranch = [
+  '    const keys = frameworkMutationFormAttributesReturnedKeys(spread);',
+  '    if (keys === undefined) return false;',
+].join('\n');
+const widenedMutationFormSpreadProvenanceBranch = [
+  '    const keys = frameworkMutationFormAttributesReturnedKeys(spread);',
+  '    if (keys === undefined) return true;',
+].join('\n');
+const reconstructedSubmitterSpreadBoundaryBranch = '  return foundControl;';
+const removedReconstructedSubmitterSpreadBoundaryBranch = '  return false;';
 const reactiveSubmitterTransportClosureBranch = [
   '      appendCompilerFacts(',
   '        forbidden,',
@@ -1965,6 +1975,30 @@ export const SECURITY_GATE_MUTANTS = [
     search: effectiveElementContextClosureBranch,
     sourceFile: compilerStructuralJsxPath,
     test: assertEffectiveElementContextClosureBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description: 'Widens the mutationFormAttributes form-spread exception to arbitrary carriers.',
+    expectedKiller:
+      'only the exact @kovojs/server mutationFormAttributes export may use the finite returned-key summary',
+    name: 'compiler-output-context/widen-mutation-form-spread-provenance',
+    replacement: widenedMutationFormSpreadProvenanceBranch,
+    search: exactMutationFormSpreadProvenanceBranch,
+    sourceFile: compilerOutputContextValidatorPath,
+    test: assertOpaqueSpreadRuntimeBoundaryBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description: 'Deletes admission of submitter spreads reconstructed by the runtime boundary.',
+    expectedKiller:
+      'opaque button/input spreads must compile only through the mutation-submitter reconstruction boundary',
+    name: 'compiler-output-context/drop-reconstructed-submitter-spread-boundary',
+    replacement: removedReconstructedSubmitterSpreadBoundaryBranch,
+    search: reconstructedSubmitterSpreadBoundaryBranch,
+    sourceFile: compilerOutputContextValidatorPath,
+    test: assertOpaqueSpreadRuntimeBoundaryBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -3921,6 +3955,55 @@ export const ComposedExecutableContext = component({
     )
   ) {
     throw new Error('post-composition executable element context did not close through KV236');
+  }
+}
+
+function assertOpaqueSpreadRuntimeBoundaryBehavior(moduleUnderTest) {
+  const exact = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+import { mutationFormAttributes } from '@kovojs/server';
+export const ExactForm = component({
+  mutations: { save },
+  render: () => <form {...mutationFormAttributes(save)}>Save</form>,
+});
+`,
+  );
+  if (exact.diagnostics.some((diagnostic) => diagnostic.code === 'KV236')) {
+    throw new Error('exact mutationFormAttributes spread lost its finite returned-key verdict');
+  }
+
+  const forged = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+function mutationFormAttributes(value) { return value; }
+export const ForgedForm = component({
+  state: () => ({ attrs: {} }),
+  render: (_queries, state) => <form {...mutationFormAttributes(state.attrs)}>Save</form>,
+});
+`,
+  );
+  if (!forged.diagnostics.some((diagnostic) => diagnostic.code === 'KV236')) {
+    throw new Error('same-named local form helper crossed the exact framework-export boundary');
+  }
+
+  for (const tag of ['button', 'input']) {
+    const result = compileFiniteIrFixture(
+      moduleUnderTest,
+      `
+export const Submitter = component({
+  state: () => ({ attrs: {} }),
+  render: (_queries, state) => <${tag} {...state.attrs} />,
+});
+`,
+    );
+    if (result.diagnostics.some((diagnostic) => diagnostic.code === 'KV236')) {
+      throw new Error(`opaque <${tag}> spread lost its runtime reconstruction verdict`);
+    }
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    if (!serverSource.includes("kovoSafeJsxSpread(state.attrs, 'mutation-submitter')")) {
+      throw new Error(`opaque <${tag}> spread bypassed the mutation-submitter boundary`);
+    }
   }
 }
 

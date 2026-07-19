@@ -129,9 +129,13 @@ export const BrowserControlSpread = component({
     }
   });
 
-  it('fails closed on an opaque spread for every controlled element kind', () => {
-    const controlledTags = new Set(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.map(([tag]) => tag));
-    expect(controlledTags.size).toBe(15);
+  it('fails closed on opaque spreads without a proven runtime reconstruction boundary', () => {
+    const controlledTags = new Set(
+      ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.map(([tag]) => tag).filter(
+        (tag) => tag !== 'button' && tag !== 'input',
+      ),
+    );
+    expect(controlledTags.size).toBe(13);
     for (const tag of controlledTags) {
       expect(
         kv236Diagnostics(`
@@ -144,6 +148,26 @@ export const OpaqueBrowserControlSpread = component({
       ).toHaveLength(1);
     }
   });
+
+  it.each(['button', 'input'])(
+    'routes opaque <%s> spreads through the submitter transport boundary',
+    (tag) => {
+      const result = compileComponentModule({
+        fileName: 'opaque-submitter-spread.tsx',
+        source: `
+export const OpaqueSubmitterSpread = component({
+  state: () => ({ attributes: {} }),
+  render: (_queries, state) => (<${tag} {...state.attributes} />),
+});
+`,
+      });
+
+      expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+      expect(result.files.find((file) => file.kind === 'server')?.source).toContain(
+        "kovoSafeJsxSpread(state.attributes, 'mutation-submitter')",
+      );
+    },
+  );
 
   it('accepts the exact framework mutation form helper as a closed form spread', () => {
     expect(
@@ -184,6 +208,19 @@ function formAttributes(value) {
 export const OpaqueFormSpread = component({
   state: () => ({ attributes: {} }),
   render: (_queries, state) => <form {...formAttributes(state.attributes)}>Save</form>,
+});
+`,
+    ],
+    [
+      'shadowed framework import',
+      `
+import { mutationFormAttributes as frameworkMutationFormAttributes } from '@kovojs/server';
+
+export const ShadowedFormSpread = component({
+  state: () => ({ attributes: {} }),
+  render: (_queries, state, frameworkMutationFormAttributes) => (
+    <form {...frameworkMutationFormAttributes(state.attributes)}>Save</form>
+  ),
 });
 `,
     ],
