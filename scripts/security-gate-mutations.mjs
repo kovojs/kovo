@@ -115,6 +115,14 @@ const requestIngressPolicyPath = path.join(
   repoRoot,
   'packages/server/src/request-ingress-policy.ts',
 );
+const serverUntrustedRequestBodyPath = path.join(
+  repoRoot,
+  'packages/server/src/untrusted-request-body.ts',
+);
+const serverRequestBodyProvenancePath = path.join(
+  repoRoot,
+  'packages/server/src/request-body-provenance.ts',
+);
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 
@@ -378,6 +386,20 @@ const exactFrameworkImplementationDigestBranch =
 const deletedFrameworkImplementationDigestBranch = '  return true;';
 const invertedFrameworkImplementationDigestBranch =
   '  return installedDigest === undefined || !reviewedDigests.includes(installedDigest);';
+
+const requestBodyShapeBudgetAssertion = '    assertShapeWithinBudget(value);';
+const removedRequestBodyShapeBudgetAssertion =
+  '    // request-body pre-tag shape budget removed by mutant';
+const lazyRequestScalarSnapshotBranch = [
+  '      (isSnapshotContainer(sourceValue)',
+  '        ? snapshotContainer(sourceValue, sourceSnapshots, frames)',
+  '        : sourceValue);',
+].join('\n');
+const eagerRequestScalarSnapshotBranch = [
+  '      (isSnapshotContainer(sourceValue)',
+  '        ? snapshotContainer(sourceValue, sourceSnapshots, frames)',
+  '        : tagLeaf(sourceValue));',
+].join('\n');
 
 const canonicalPostMethodBranch =
   "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
@@ -3242,6 +3264,28 @@ export const SECURITY_GATE_MUTANTS = [
     search: betterAuthCredentialSourceIdentityBranch,
     sourceFile: betterAuthCredentialRuntimeGatePath,
     test: assertBetterAuthCredentialSourceIsPinned,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes the pre-provenance JSON shape-budget assertion.',
+    expectedKiller:
+      'both JSON body paths must accept the exact 200,000-node boundary and reject 200,001 nodes before tagging',
+    name: 'request-body/drop-json-pretag-shape-budget',
+    replacement: removedRequestBodyShapeBudgetAssertion,
+    search: requestBodyShapeBudgetAssertion,
+    sourceFile: serverUntrustedRequestBodyPath,
+    test: assertRequestBodyPretagShapeBudgetBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Restores one eager provenance box allocation per request-body scalar.',
+    expectedKiller:
+      'tagging the exact 199,979-leaf legal shape must allocate no scalar boxes until app reads',
+    name: 'request-body-provenance/restore-eager-scalar-boxing',
+    replacement: eagerRequestScalarSnapshotBranch,
+    search: lazyRequestScalarSnapshotBranch,
+    sourceFile: serverRequestBodyProvenancePath,
+    test: assertLazyRequestBodyProvenanceBehavior,
   },
   {
     baseModule: requestIngressPolicy,
@@ -6363,6 +6407,91 @@ function requestIngressHttp2(overrides = {}) {
     trustedProxy: false,
     ...overrides,
   };
+}
+
+function exactRequestBodyBoundaryJson(finalContainerLeaves) {
+  const fullContainer = `[${'0,'.repeat(9_999)}0]`;
+  const containers = [];
+  for (let index = 0; index < 19; index += 1) containers.push(fullContainer);
+  containers.push(`[${'0,'.repeat(finalContainerLeaves - 1)}0]`);
+  return `[${containers.join(',')}]`;
+}
+
+function exactRequestBodyBoundaryValue() {
+  const root = [];
+  for (let container = 0; container < 20; container += 1) {
+    const leafCount = container === 19 ? 9_979 : 10_000;
+    const values = [];
+    for (let index = 0; index < leafCount; index += 1) values.push(index);
+    root.push(values);
+  }
+  return root;
+}
+
+async function assertRequestBodyPretagShapeBudgetBehavior(moduleUnderTest) {
+  const encoder = new TextEncoder();
+  const legalJson = exactRequestBodyBoundaryJson(9_979);
+  const legal = moduleUnderTest.parseUntrustedJsonBodyBytes(encoder.encode(legalJson));
+  if (!legal.ok) {
+    throw new Error(
+      `request-body budget rejected the exact 200,000-node legal shape: ${legal.reason}`,
+    );
+  }
+
+  const oversizedJson = exactRequestBodyBoundaryJson(9_980);
+  const parsedOversized = moduleUnderTest.parseUntrustedJsonBodyBytes(
+    encoder.encode(oversizedJson),
+  );
+  if (parsedOversized.ok || parsedOversized.reason !== 'shape-budget') {
+    throw new Error('raw JSON bytes reached provenance tagging above the 200,000-node ceiling');
+  }
+
+  const requestOversized = await moduleUnderTest.readUntrustedRequestBody(
+    new Request('https://kovo.test/_m/shape-budget', {
+      body: oversizedJson,
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    }),
+  );
+  if (requestOversized.ok || requestOversized.reason !== 'shape-budget') {
+    throw new Error('Request.json reached provenance tagging above the 200,000-node ceiling');
+  }
+}
+
+function assertLazyRequestBodyProvenanceBehavior(moduleUnderTest) {
+  let scalarBoxAllocations = 0;
+  const tagLeaf = (value) => {
+    scalarBoxAllocations += 1;
+    return { allocation: scalarBoxAllocations, value };
+  };
+  const tagged = moduleUnderTest.tagRequestProvenanceValue(
+    exactRequestBodyBoundaryValue(),
+    tagLeaf,
+  );
+  if (scalarBoxAllocations !== 0) {
+    throw new Error(
+      `request provenance eagerly allocated ${scalarBoxAllocations} scalar boxes while tagging`,
+    );
+  }
+
+  const firstContainer = tagged[0];
+  if (scalarBoxAllocations !== 0 || firstContainer !== tagged[0]) {
+    throw new Error('request provenance did not lazily cache the first container proxy');
+  }
+  const firstRead = firstContainer[0];
+  const secondRead = firstContainer[0];
+  if (
+    scalarBoxAllocations !== 2 ||
+    firstRead === secondRead ||
+    firstRead.value !== 0 ||
+    secondRead.value !== 0
+  ) {
+    throw new Error('request provenance leaf reads did not allocate distinct app-visible boxes');
+  }
+  const finalRead = tagged[19][9_978];
+  if (scalarBoxAllocations !== 3 || finalRead.value !== 9_978) {
+    throw new Error('request provenance did not preserve the exact legal boundary leaf');
+  }
 }
 
 async function assertRequestIngressMethodIdentityIsClosed(moduleUnderTest) {
