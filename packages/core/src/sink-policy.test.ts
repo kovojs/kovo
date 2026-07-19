@@ -125,6 +125,9 @@ describe('shared runtime sink policy', () => {
   });
 
   it('fails closed on unsandboxable active embeds independent of authored casing', () => {
+    // SPEC §4.8 / §5.2 rule 10: this is the finite denominator, not a loop that can
+    // become vacuously green when one disabled primitive disappears from the registry.
+    expect(BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES).toEqual(['embed', 'object']);
     for (const name of BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES) {
       expect(isBlockedActiveEmbedElementName(name)).toBe(true);
       expect(isBlockedActiveEmbedElementName(name.toUpperCase())).toBe(true);

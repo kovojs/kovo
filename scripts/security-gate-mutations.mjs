@@ -63,12 +63,17 @@ const compilerOutputContextValidatorPath = path.join(
   repoRoot,
   'packages/compiler/src/security/output-context.ts',
 );
+const compilerStructuralJsxPath = path.join(
+  repoRoot,
+  'packages/compiler/src/lower/structural-jsx.ts',
+);
 const coreSinkPolicyPath = path.join(repoRoot, 'packages/core/src/internal/sink-policy.ts');
 const semanticAttributeManifestPath = path.join(
   repoRoot,
   'packages/core/src/internal/semantic-attribute-manifest.ts',
 );
 const inlineLoaderBuildPath = path.join(repoRoot, 'packages/browser/src/inline-loader-build.ts');
+const browserMutationSubmitPath = path.join(repoRoot, 'packages/browser/src/mutation-submit.ts');
 const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/capability-closure.ts',
@@ -107,6 +112,7 @@ const requestIngressPolicyPath = path.join(
   'packages/server/src/request-ingress-policy.ts',
 );
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
+const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 
 const serverEgressBehavioralInstrumentation = [
   '',
@@ -172,6 +178,66 @@ const generatedDeferredStyleControlManifestEntry =
   "  'data-kovo-deferred-style', // fixed high-impact denominator witness";
 const removedGeneratedDeferredStyleControlManifestEntry =
   '  // data-kovo-deferred-style generated-control entry removed by mutant';
+
+const blockedActiveEmbedEntry = "  'embed',";
+const removedBlockedActiveEmbedEntry = '  // embed denominator entry removed by mutant';
+const blockedActiveObjectEntry = "  'object',";
+const removedBlockedActiveObjectEntry = '  // object denominator entry removed by mutant';
+const compilerActiveEmbedClosureBranch = [
+  '  if (',
+  '    element.intrinsicTagName !== undefined &&',
+  '    isBlockedActiveEmbedElementName(element.intrinsicTagName)',
+  '  ) {',
+].join('\n');
+const removedCompilerActiveEmbedClosureBranch = '  if (false) {';
+const serverActiveEmbedClosureBranch =
+  '  if (isBlockedActiveEmbedElementName(intrinsicType)) {';
+const removedServerActiveEmbedClosureBranch =
+  '  if (false && isBlockedActiveEmbedElementName(intrinsicType)) {';
+const reactiveSubmitterTransportClosureBranch = [
+  '      appendCompilerFacts(',
+  '        forbidden,',
+  '        directTransport.overrides,',
+  "        'Typed mutation submitter transport overrides',",
+  '      );',
+].join('\n');
+const removedReactiveSubmitterTransportClosureBranch =
+  '      // reactive submitter transport closure removed by mutant';
+const modularTypedMutationMismatchClosureBranch = [
+  '  if (!transport) {',
+  '    if (!hasTypedMutationIdentity(form)) return false;',
+  '    // SPEC §§6.3/9.1: data-mutation owns a fixed POST /_m/<key> transport. A mismatched',
+  '    // submitter/action is DOM tampering, not an ordinary native-form fallback: allowing the',
+  '    // browser to continue could serialize CSRF/idempotency authority into a GET URL.',
+  '    if (!preventRuntimeDelegatedEventDefault(event)) return false;',
+  '    markInvalidTypedMutationTransport(form);',
+  '    return true;',
+  '  }',
+].join('\n');
+const removedModularTypedMutationMismatchClosureBranch = [
+  '  if (!transport) {',
+  '    return false;',
+  '  }',
+].join('\n');
+const inlineTypedMutationMismatchClosureBranch = [
+  '        if (!transport) {',
+  '          // A compiler-owned data-mutation form has one immutable POST transport. A mismatch is',
+  '          // DOM tampering, so never fall through to native serialization of CSRF/idem fields.',
+  '          if (',
+  "            bns.readAttribute(form, 'data-mutation') &&",
+  '            bns.preventDelegatedEventDefault(event)',
+  '          ) {',
+  "            bns.setElementAttribute(form, 'data-error-code', 'INVALID_MUTATION_TRANSPORT');",
+  "            bns.setElementAttribute(form, 'kovo-error', '');",
+  '          }',
+  '          return;',
+  '        }',
+].join('\n');
+const removedInlineTypedMutationMismatchClosureBranch = [
+  '        if (!transport) {',
+  '          return;',
+  '        }',
+].join('\n');
 
 const browserRtcNetworkCapabilityBranch = [
   'const globalCapabilities = new Map<string, RawCapabilityKind>([',
@@ -1539,6 +1605,81 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: semanticAttributeManifestPath,
     sourceOnly: true,
     test: assertGeneratedControlManifestEntryBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes embed from the finite unsandboxable active-element denominator.',
+    expectedKiller: 'the active-embed denominator must remain exactly embed and object',
+    name: 'runtime-sink/drop-active-embed-denominator-entry',
+    replacement: removedBlockedActiveEmbedEntry,
+    search: blockedActiveEmbedEntry,
+    sourceFile: coreSinkPolicyPath,
+    test: assertActiveEmbedDenominatorBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes object from the finite unsandboxable active-element denominator.',
+    expectedKiller: 'the active-embed denominator must remain exactly embed and object',
+    name: 'runtime-sink/drop-active-object-denominator-entry',
+    replacement: removedBlockedActiveObjectEntry,
+    search: blockedActiveObjectEntry,
+    sourceFile: coreSinkPolicyPath,
+    test: assertActiveEmbedDenominatorBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description: 'Deletes compiler refusal of unsandboxable active embed elements.',
+    expectedKiller: 'authored object/embed elements must diagnose KV236 before emission',
+    name: 'compiler-output-context/drop-active-embed-element-closure',
+    replacement: removedCompilerActiveEmbedClosureBranch,
+    search: compilerActiveEmbedClosureBranch,
+    sourceFile: compilerOutputContextValidatorPath,
+    test: assertCompilerActiveEmbedClosureBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes the direct JSX runtime floor for unsandboxable active embeds.',
+    expectedKiller: 'direct JSX runtime calls must omit object/embed documents',
+    name: 'server-jsx/drop-active-embed-runtime-floor',
+    replacement: removedServerActiveEmbedClosureBranch,
+    search: serverActiveEmbedClosureBranch,
+    sourceFile: serverJsxRuntimePath,
+    test: assertServerActiveEmbedClosureBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description: 'Deletes pre-lowering closure for reactive typed-form submitter overrides.',
+    expectedKiller:
+      'reactive formaction/formmethod/formenctype/formtarget controls must diagnose KV242 and emit no binding',
+    name: 'compiler-mutation/drop-reactive-submitter-transport-closure',
+    replacement: removedReactiveSubmitterTransportClosureBranch,
+    search: reactiveSubmitterTransportClosureBranch,
+    sourceFile: compilerStructuralJsxPath,
+    test: assertReactiveSubmitterTransportClosureBehavior,
+  },
+  {
+    description: 'Lets a tampered typed mutation form fall through to native submission.',
+    expectedKiller:
+      'modular typed mutation mismatch must prevent default and stamp INVALID_MUTATION_TRANSPORT',
+    name: 'browser-mutation/drop-modular-typed-transport-mismatch-closure',
+    replacement: removedModularTypedMutationMismatchClosureBranch,
+    search: modularTypedMutationMismatchClosureBranch,
+    sourceFile: browserMutationSubmitPath,
+    sourceOnly: true,
+    test: assertModularTypedMutationMismatchClosureBehavior,
+  },
+  {
+    description: 'Lets the always-loaded inline runtime natively submit a tampered typed form.',
+    expectedKiller:
+      'inline typed mutation mismatch must prevent default before any native token serialization',
+    name: 'inline-runtime/drop-typed-transport-mismatch-closure',
+    replacement: removedInlineTypedMutationMismatchClosureBranch,
+    search: inlineTypedMutationMismatchClosureBranch,
+    sourceFile: inlineLoaderBuildPath,
+    sourceOnly: true,
+    test: assertInlineTypedMutationMismatchClosureBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -3084,6 +3225,169 @@ export const DynamicRef = component({
     throw new Error(
       `runtime-selected executable reference did not close through KV449: ${finiteIrDiagnosticSummary(diagnostics)}`,
     );
+  }
+}
+
+function assertActiveEmbedDenominatorBehavior(moduleUnderTest) {
+  const denominator = [...moduleUnderTest.BLOCKED_ACTIVE_EMBED_ELEMENT_NAMES];
+  if (
+    denominator.length !== 2 ||
+    denominator[0] !== 'embed' ||
+    denominator[1] !== 'object' ||
+    !moduleUnderTest.isBlockedActiveEmbedElementName('EMBED') ||
+    !moduleUnderTest.isBlockedActiveEmbedElementName('Object')
+  ) {
+    throw new Error(`active-embed denominator drifted: ${JSON.stringify(denominator)}`);
+  }
+}
+
+function assertCompilerActiveEmbedClosureBehavior(moduleUnderTest) {
+  const result = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+export const ActiveEmbeds = component({
+  render: () => <><object data="/safe/account"><script>attack()</script></object><embed src="/safe/account" /></>,
+});
+`,
+  );
+  const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236');
+  if (
+    !diagnostics.some((diagnostic) => diagnostic.message.includes('<object> is disabled')) ||
+    !diagnostics.some((diagnostic) => diagnostic.message.includes('<embed> is disabled'))
+  ) {
+    throw new Error(
+      `active embed elements did not close through KV236: ${
+        diagnostics.map((diagnostic) => diagnostic.message).join(' | ') || '<open>'
+      }`,
+    );
+  }
+}
+
+function assertServerActiveEmbedClosureBehavior(moduleUnderTest) {
+  for (const tag of ['object', 'OBJECT', 'embed', 'EmBeD']) {
+    const rendered = moduleUnderTest.jsx(tag, {
+      children: moduleUnderTest.jsx('script', { children: 'globalThis.compromised = true' }),
+      data: '/safe/account',
+      src: '/safe/account',
+      type: 'text/html',
+    });
+    if (String(rendered) !== '') {
+      throw new Error(`direct JSX runtime emitted disabled <${tag}> content: ${String(rendered)}`);
+    }
+  }
+}
+
+function assertReactiveSubmitterTransportClosureBehavior(moduleUnderTest) {
+  const result = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+export const save = mutation({
+  input: s.object({ email: s.string() }),
+  handler() { return null; },
+});
+export const View = component({
+  queries: { q: {} },
+  render: ({ q }) => (
+    <form mutation={save}>
+      <input name="email" value="victim@example.test" />
+      <button formaction={q.action} formenctype={q.enctype} formmethod={q.method} formnovalidate={q.noValidate} formtarget={q.target}>Save</button>
+    </form>
+  ),
+});
+`,
+  );
+  const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV242');
+  const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+  const leakedBinding = ['formaction', 'formenctype', 'formmethod', 'formnovalidate', 'formtarget'].find(
+    (name) => serverSource.includes(`data-bind:${name}`),
+  );
+  if (diagnostics.length === 0 || leakedBinding !== undefined) {
+    throw new Error(
+      `reactive typed-form transport did not close before lowering: diagnostics=${diagnostics.length} leaked=${leakedBinding ?? '<none>'}`,
+    );
+  }
+}
+
+async function assertModularTypedMutationMismatchClosureBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'browser',
+    relativeSourcePath: 'mutation-submit.ts',
+    sourceText,
+    testFile: 'packages/browser/src/loader-enhanced-mutation-submit.test.ts',
+    testNamePattern: 'fails closed instead of natively submitting typed mutation authority',
+  });
+}
+
+async function assertInlineTypedMutationMismatchClosureBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'browser',
+    relativeSourcePath: 'inline-loader-build.ts',
+    sourceText,
+    testFile: 'packages/browser/src/inline-loader-enhanced-submit.test.ts',
+    testNamePattern: 'requires compiler-owned same-origin POST mutation transport',
+  });
+}
+
+function runIsolatedPackageVitestMutation({
+  packageName,
+  relativeSourcePath,
+  sourceText,
+  testFile,
+  testNamePattern,
+}) {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), `kovo-${packageName}-mutation-behavior-`));
+  try {
+    const packageRoot = path.join(tempRoot, 'packages', packageName);
+    mkdirSync(packageRoot, { recursive: true });
+    cpSync(path.join(repoRoot, `packages/${packageName}/src`), path.join(packageRoot, 'src'), {
+      recursive: true,
+    });
+    cpSync(
+      path.join(repoRoot, `packages/${packageName}/package.json`),
+      path.join(packageRoot, 'package.json'),
+    );
+    symlinkSync(
+      path.join(repoRoot, `packages/${packageName}/node_modules`),
+      path.join(packageRoot, 'node_modules'),
+      'dir',
+    );
+    if (packageName === 'browser') {
+      const coreInternalRoot = path.join(tempRoot, 'packages', 'core', 'src', 'internal');
+      mkdirSync(coreInternalRoot, { recursive: true });
+      cpSync(
+        path.join(repoRoot, 'packages/core/src/internal/semantic-attribute-manifest.ts'),
+        path.join(coreInternalRoot, 'semantic-attribute-manifest.ts'),
+      );
+    }
+    symlinkSync(path.join(repoRoot, 'node_modules'), path.join(tempRoot, 'node_modules'), 'dir');
+    writeFileSync(path.join(packageRoot, 'src', relativeSourcePath), sourceText, 'utf8');
+    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'node_modules/vitest/vitest.mjs'),
+        '--run',
+        testFile,
+        '--testNamePattern',
+        testNamePattern,
+        '--reporter=dot',
+      ],
+      {
+        cwd: tempRoot,
+        encoding: 'utf8',
+        env: { ...process.env, FORCE_COLOR: '0' },
+        timeout: 60_000,
+      },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(
+        `isolated ${packageName} mutation regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      );
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
   }
 }
 
