@@ -1,5 +1,12 @@
 /* oxlint-disable typescript/unbound-method -- Verifier controls are captured before app evaluation. */
 
+import {
+  deriveRegisteredDiagnostic,
+  isRegisteredDiagnostic,
+  type DiagnosticConstructionOptions,
+  type RegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
+
 /**
  * Boot-pinned boundary for the public in-process graph verifier.
  *
@@ -162,6 +169,9 @@ function snapshotVerifierData(value: unknown, budget: SnapshotBudget, depth: num
   ) {
     return value;
   }
+  if (isRegisteredDiagnostic(value)) {
+    return snapshotRegisteredDiagnostic(value, budget, depth);
+  }
   if (nativeApply(nativeArrayIsArray, NativeArray, [value])) {
     return snapshotVerifierArray(value as readonly unknown[], budget, depth);
   }
@@ -190,6 +200,48 @@ function snapshotVerifierData(value: unknown, budget: SnapshotBudget, depth: num
     defineSnapshotData(snapshot, key, snapshotVerifierData(entry.value, budget, depth + 1));
   }
   return snapshot;
+}
+
+function snapshotRegisteredDiagnostic(
+  value: RegisteredDiagnostic,
+  budget: SnapshotBudget,
+  depth: number,
+): RegisteredDiagnostic {
+  const fields = nativeApply<Record<string, unknown>>(nativeObjectCreate, NativeObject, [null]);
+  const options = nativeApply<DiagnosticConstructionOptions>(nativeObjectCreate, NativeObject, [
+    null,
+  ]);
+  const keys = nativeApply<readonly PropertyKey[]>(nativeReflectOwnKeys, NativeReflect, [value]);
+  let hasMessage = false;
+
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const entry = stableOwnDataDescriptor(value, key);
+    if (typeof key !== 'string') continue;
+    if (key === 'code' || key === 'severity') continue;
+    if (key === 'message') {
+      if (typeof entry.value !== 'string' || entry.value.length === 0) {
+        throw new TypeError('Registered diagnostic message must remain non-empty text.');
+      }
+      defineSnapshotData(options, 'message', entry.value);
+      hasMessage = true;
+      continue;
+    }
+    if (key === 'help') {
+      if (typeof entry.value !== 'string' || entry.value.length === 0) {
+        throw new TypeError('Registered diagnostic help must remain non-empty text.');
+      }
+      defineSnapshotData(options, 'help', entry.value);
+      continue;
+    }
+    if (entry.value === undefined) continue;
+    defineSnapshotData(fields, key, snapshotVerifierData(entry.value, budget, depth + 1));
+  }
+
+  if (!hasMessage) {
+    throw new TypeError('Registered diagnostic snapshot requires its constructor-owned message.');
+  }
+  return deriveRegisteredDiagnostic(value, fields, options);
 }
 
 function snapshotVerifierArray(
