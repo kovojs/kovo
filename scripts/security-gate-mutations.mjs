@@ -1081,9 +1081,15 @@ const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
-const taskEgressCapabilitySeal =
-  "    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);";
-const removedTaskEgressCapabilitySeal = '    return context;';
+const taskEgressCapabilitySeal = [
+  '    return taskDefineDataProperty(',
+  "      taskDefineDataProperty(context, 'signal', signal),",
+  "      'fetch',",
+  '      frameworkEgressFetch,',
+  '    );',
+].join('\n');
+const removedTaskEgressCapabilitySeal =
+  "    return taskDefineDataProperty(context, 'signal', signal);";
 const webhookEgressCapabilitySeal = [
   "  witnessDefineProperty(context, 'fetch', {",
   '    configurable: false,',

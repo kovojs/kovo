@@ -29,7 +29,7 @@ describe('security-gate-mutations', () => {
       mutant.name.startsWith('compiler-finite-ir/'),
     );
 
-    expect(finiteIrMutants).toHaveLength(20);
+    expect(finiteIrMutants).toHaveLength(21);
     expect(finiteIrMutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
     expect(finiteIrMutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });

@@ -57,7 +57,7 @@ parties we assume are friendly.**
 The decisive discovery of this audit is that Kovo's security-critical cores are **much smaller than
 the code implementing them, and several are finite**:
 
-- The server provenance relation is **37 states** (+20 browser), a member-name alphabet, four fixed
+- The server provenance relation is **38 states** (+20 browser), a member-name alphabet, four fixed
   budgets, and exactly **8 closed reasons** — and `serverExpressionProvenance` is _compositional_
   (a term's provenance depends only on its subterms' provenance **values**, never their syntax). So
   "can authority reach a sink with no operation record and no closed reason?" is not a program-analysis
@@ -238,7 +238,7 @@ a **counterexample path**, not a flaky seed.
 
 ### 1.0 Week-one kill-or-continue gate (do this before anything else in Phase 1)
 
-- [ ] Enumerate the arms of `serverExpressionProvenance`
+- [x] Enumerate the arms of `serverExpressionProvenance`
       (`packages/compiler/src/scan/security-operation-ir.ts:4331-4394`) and classify each as
       _compositional_ (depends only on subterm provenance values) or _syntax-dependent_. Expected:
       five compositional arms, one object-literal shape test, and two whole-subtree containment walks
@@ -246,6 +246,8 @@ a **counterexample path**, not a flaky seed.
       compositional core and model the fallthrough as one named nondeterministic oracle edge yielding
       `{local, foreign-executable, unknown-authority}`. If materially more arms inspect syntax, narrow
       the finite-state frame and record the narrowing in §4.5.
+  - Evidence: `check:provenance-closure` extracts the exact nine-arm order and its 12/12 tests pin
+    five compositional arms, one leaf, one syntax predicate, and the two-walk nondeterministic edge.
 
 ### 1.1 Reify and decide the provenance relation
 
@@ -255,23 +257,30 @@ file.** Today there is no declared partial order, no join, and no ⊑: joins are
 negative denylist**, so a newly-added exempt constant silently widens the TCB with no test that would
 notice. (~1.5 pm after §1.0)
 
-- [ ] Emit `security-provenance-relation/v1.json`: the 37 server + 20 browser states
+- [x] Emit `security-provenance-relation/v1.json`: the 38 server + 20 browser states
       (`scan/security-operation-ir.ts:72-104`), the **quotient** member alphabet (literal names +
       `databaseOperationKind` domain + `isRawDatabaseCapabilityMember` domain + `other`), the authority
       set, and the `State × MemberClass → State` table currently written as nested ifs (`:4456-4520`).
       Gate: the emitted state set equals the `ServerValueProvenance`/`BrowserValueProvenance` unions and
       `securityOperationKinds`; a new tag without a table row fails CI.
-- [ ] Replace the authority denylist with a table-derived `p ⊑ authorityTop` test; verify with an
+  - Evidence: the committed v1 artifact and `check:provenance-closure` cover 38 server states, 20
+    browser states, 56 quotient member classes, and all 2,128 server relation pairs.
+- [x] Replace the authority denylist with a table-derived `p ⊑ authorityTop` test; verify with an
       exhaustive per-state test that old and new predicates agree element-by-element, then confirm a
       planted new element defaults to authority-bearing.
-- [ ] **Exhaustive equivalence gate**: for every `(state, member-class)` pair assert
+  - Evidence: `security-provenance-relation.test.ts` exhausts every state and proves an unknown
+    future state defaults to authority-bearing.
+- [x] **Exhaustive equivalence gate**: for every `(state, member-class)` pair assert
       `table[s][m] === serverMemberProvenance(s,m)`, asserting the executed pair count equals
       `|states| × |classes|` exactly, plus a mutated-cell negative test. Because the domain is finite
       this is a **proof** of table/implementation agreement, not a test of it.
-- [ ] `check:provenance-closure`: least-fixpoint reachability from every authority state, asserting no
+  - Evidence: the focused compiler relation suite exhausts all 2,128 pairs and kills a mutated cell.
+- [x] `check:provenance-closure`: least-fixpoint reachability from every authority state, asserting no
       path reaches a sink position except via an enrolled `operation:*` state with a C9 door owner, or
       via `unknown-authority` (which must always yield one of the 8 `SecuritySemanticClosedReason`
       values). Emit the reachability relation as a diffable artifact; fail with a counterexample path.
+  - Evidence: `check:provenance-closure` passes 12/12, validating the least fixpoint, eight closed
+    reasons, exact C9 operation-door ownership, and counterexample-path negative controls.
 
 ### 1.2 Decide the authorization correspondence for the shipped fragment
 
