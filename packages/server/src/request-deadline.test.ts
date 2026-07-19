@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
+import { mutation } from './mutation.js';
+import { s } from './schema.js';
 
 const rawTextResponse = {
   appOwnedSafety: true,
@@ -13,6 +15,16 @@ const rawStreamResponse = {
   appOwnedSafety: true,
   body: 'stream',
   cache: 'no-store',
+} satisfies EndpointResponsePosture;
+
+const auditedLongLivedResponse = {
+  appOwnedSafety: true,
+  body: 'text',
+  cache: 'no-store',
+  longLived: {
+    deadlineMs: 120,
+    justification: 'bounded machine long-poll used by the deadline regression fixture',
+  },
 } satisfies EndpointResponsePosture;
 
 function noStoreResponse(body: BodyInit | null, init: ResponseInit = {}): Response {
@@ -254,5 +266,105 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
 
     const next = await handle(new Request('https://app.test/stream'));
     await expect(next.text()).resolves.toBe('reacquired');
+  });
+
+  // C13 red anchor: the sole audited extension remains finite and is scoped to one endpoint.
+  it('allows only a bounded justified long-lived endpoint to extend its request deadline', async () => {
+    const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 60));
+    const regular = endpoint('/regular-wait', {
+      auth: { justification: 'deadline test machine endpoint', kind: 'none' },
+      async handler() {
+        await wait();
+        return noStoreResponse('regular-late');
+      },
+      method: 'GET',
+      reason: 'default deadline control',
+      response: rawTextResponse,
+    });
+    const longLived = endpoint('/long-poll', {
+      auth: { justification: 'deadline test machine endpoint', kind: 'none' },
+      async handler() {
+        await wait();
+        return noStoreResponse('long-poll-ok');
+      },
+      method: 'GET',
+      reason: 'bounded long poll regression',
+      response: auditedLongLivedResponse,
+    });
+    const handle = createRequestHandler(
+      createApp({
+        endpoints: [regular, longLived],
+        requestLimits: { deadlineMs: 30, maxInFlight: 2 },
+      }),
+    );
+
+    const regularResponse = await handle(new Request('https://app.test/regular-wait'));
+    expect(regularResponse.status).toBe(503);
+
+    const longLivedResponse = await handle(new Request('https://app.test/long-poll'));
+    expect(longLivedResponse.status).toBe(200);
+    await expect(longLivedResponse.text()).resolves.toBe('long-poll-ok');
+
+    for (const longLivedPosture of [
+      false,
+      { deadlineMs: 300_001, justification: 'bounded fixture justification' },
+      { deadlineMs: 120, justification: '' },
+    ]) {
+      expect(() =>
+        endpoint('/invalid-long-poll', {
+          auth: { justification: 'deadline test machine endpoint', kind: 'none' },
+          handler: () => noStoreResponse('invalid'),
+          method: 'GET',
+          reason: 'invalid long poll fixture',
+          response: { ...rawTextResponse, longLived: longLivedPosture } as never,
+        }),
+      ).toThrow(/longLived/u);
+    }
+  });
+
+  // C13 red anchor: deadline expiry inside the transaction callback must take the rollback path.
+  it('throws before transaction commit when the handler cooperatively observes expiry', async () => {
+    const events: string[] = [];
+    const slowMutation = mutation('deadline/transaction', {
+      csrf: false,
+      csrfJustification: 'test fixture uses a non-browser caller',
+      handler: async (_input, request) => {
+        events.push('handler');
+        await new Promise<void>((resolve) =>
+          request.signal.addEventListener('abort', () => resolve(), { once: true }),
+        );
+        return { late: true };
+      },
+      input: s.object({}),
+      async transaction(request, run) {
+        events.push('begin');
+        try {
+          const value = await run(request);
+          events.push('commit');
+          return value;
+        } catch (error) {
+          events.push('rollback');
+          throw error;
+        }
+      },
+    });
+    const handle = createRequestHandler(
+      createApp({
+        mutations: [slowMutation],
+        requestLimits: { deadlineMs: 30, maxInFlight: 1 },
+      }),
+    );
+
+    const response = await handle(
+      new Request('https://app.test/_m/deadline/transaction', {
+        body: '{}',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    await vi.waitFor(() => expect(events).toEqual(['begin', 'handler', 'rollback']));
+    expect(events).not.toContain('commit');
   });
 });
