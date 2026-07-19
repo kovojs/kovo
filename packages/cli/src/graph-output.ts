@@ -13,10 +13,13 @@ import {
   accessKv436Line,
   accessLine,
   accessSummary,
+  authorizationCorrespondenceLine,
+  authorizationRoleGucWarningLine,
   capabilityClosureLine,
   capabilityLine,
   collectCapabilityFacts,
   compareCapabilityClosureFact,
+  compareAuthorizationCorrespondenceFact,
   compareCookieDowngrade,
   compareEndpointExplain,
   compareRevealExplain,
@@ -102,6 +105,7 @@ import {
 export type {
   ExplainKind,
   KovoAccessExplainOptions,
+  KovoAuthorizationExplainOptions,
   KovoDocumentExplainOptions,
   KovoEndpointExplainOptions,
   KovoExplainOptions,
@@ -173,6 +177,24 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
 
   const graph = input as CoreGraph.KovoExplainInput;
   const lines = [explainOutputVersion];
+
+  if ('authorization' in options) {
+    const facts = [...(graph.authorizationCorrespondence ?? [])].sort(
+      compareAuthorizationCorrespondenceFact,
+    );
+    lines.push('AUTHORIZATION');
+    if (facts[0] !== undefined) lines.push(authorizationRoleGucWarningLine(facts[0]));
+    for (const fact of facts) lines.push(authorizationCorrespondenceLine(fact));
+    lines.push(
+      [
+        `SUMMARY total=${facts.length}`,
+        `unproven=${facts.filter((fact) => fact.correspondence.status === 'unproven').length}`,
+        `divergent=${facts.filter((fact) => fact.correspondence.status === 'divergent').length}`,
+        `environmentUnchecked=${facts.filter((fact) => fact.activation.status === 'environment-unchecked').length}`,
+      ].join(' '),
+    );
+    return ok(lines);
+  }
 
   if ('access' in options) {
     const access = accessDecisions(graph);

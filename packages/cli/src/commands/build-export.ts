@@ -440,7 +440,11 @@ interface LoadedBuildAppModule {
 
 type BuildExecutionModule = Pick<
   typeof import('@kovojs/server/internal/execution'),
-  'accessDecisionFor' | 'accessFactsFromApp' | 'explainGuard' | 'guardAuditName'
+  | 'accessDecisionFor'
+  | 'accessFactsFromApp'
+  | 'authorizationCorrespondenceFactsFromApp'
+  | 'explainGuard'
+  | 'guardAuditName'
 >;
 
 interface LoadedExportAppModule {
@@ -1373,6 +1377,16 @@ async function staticBuildCheckGraph(
     mutationOptimisticCheckFacts,
   );
   const pages = buildMapDense(app.routes, 'Build app routes', routeCheckFact);
+  const authorizationCorrespondence =
+    drizzleFacts.runtimeTableSecurityManifest === undefined
+      ? []
+      : options.execution.authorizationCorrespondenceFactsFromApp({
+          app,
+          mutations,
+          pages,
+          queries: queryReadSets,
+          tableSecurity: drizzleFacts.runtimeTableSecurityManifest,
+        });
 
   return {
     components: sourceGraphFacts.components,
@@ -1397,6 +1411,7 @@ async function staticBuildCheckGraph(
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
       ...(revealed.length === 0 ? {} : { revealed }),
       ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
+      ...(authorizationCorrespondence.length === 0 ? {} : { authorizationCorrespondence }),
       endpoints,
       mutations,
       optimistic,

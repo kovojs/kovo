@@ -23,6 +23,7 @@ export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query
  */
 export type KovoExplainOptions =
   | KovoAccessExplainOptions
+  | KovoAuthorizationExplainOptions
   | { capabilities: true }
   | { cookies: true }
   | KovoDocumentExplainOptions
@@ -42,6 +43,11 @@ export type KovoExplainOptions =
 export interface KovoAccessExplainOptions {
   access: true;
   failOnFindings?: boolean;
+}
+
+/** `kovo explain --authorization`: print honest guard/RLS non-correspondence records. */
+export interface KovoAuthorizationExplainOptions {
+  authorization: true;
 }
 
 /**
@@ -214,6 +220,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   const positional = parsed.value.positionals;
   const modeFlags = [
     '--access',
+    '--authorization',
     '--capabilities',
     '--cookies',
     '--endpoints',
@@ -225,6 +232,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--unscoped',
   ].filter((flag) => flags.has(flag));
   if (modeFlags.length > 1) return explainUsage();
+
+  if (flags.has('--authorization')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { authorization: true } };
+  }
 
   if (flags.has('--access')) {
     if (flags.has('--layouts') || flags.has('--optimistic') || positional.length > 1) {

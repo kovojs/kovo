@@ -97,9 +97,111 @@ export interface KovoArtifactProvenance {
   };
 }
 
+/** @internal Serialized guard evidence paired with one concrete Postgres policy surface. */
+export type AuthorizationGuardAuditFact =
+  | {
+      auth: 'session-user';
+      kind: 'authed';
+      name: 'authed';
+    }
+  | {
+      kind: 'named';
+      name: string;
+    }
+  | {
+      kind: 'opaque';
+      name: string;
+    }
+  | {
+      auth: 'session-user';
+      kind: 'owns';
+      name: string;
+      principal: AuthorizationGuardPrincipalKeyAudit;
+      resourceKey?: AuthorizationGuardResourceKeyAudit;
+      staticProof: 'not-claimed';
+    }
+  | {
+      kind: 'rateLimit';
+      name: 'rateLimit';
+      per: 'custom' | 'global' | 'ip' | 'session';
+    }
+  | {
+      auth: 'session-role';
+      kind: 'role';
+      name: string;
+      principal: AuthorizationGuardPrincipalKeyAudit;
+      role: string;
+    };
+
+/** @internal */
+export interface AuthorizationGuardPrincipalKeyAudit {
+  expression: string;
+  path: string;
+  source: 'request' | 'session';
+}
+
+/** @internal */
+export interface AuthorizationGuardResourceKeyAudit {
+  expression: string;
+  path: string;
+  source: 'args' | 'params' | 'request';
+}
+
+/** @internal One honest build-time pairing of an executable surface and emitted Postgres policy. */
+export interface AuthorizationCorrespondenceExplainFact {
+  activation: {
+    source: 'build';
+    status: 'environment-unchecked';
+  };
+  correspondence: {
+    decision?: {
+      checkedModels: number;
+      counterexample?: {
+        expected: boolean;
+        model: {
+          edges: readonly ('absent' | 'null' | 'present')[];
+          equality: 'false' | 'null' | 'true';
+        };
+        observed: boolean;
+      };
+      expectedModels: number;
+      status: 'divergent' | 'proved';
+    };
+    guard: {
+      facts: readonly AuthorizationGuardAuditFact[];
+      semantics: 'arbitrary-app-callback' | 'none';
+    };
+    reason: string;
+    rls: {
+      emissionSite: 'admin' | 'authzPolicy' | 'owner' | 'ownerVia' | 'system';
+      predicate: string;
+      tableName: string;
+    };
+    roleGuc: {
+      readers: 0;
+      status: 'dead';
+      warning: string;
+      writers: 1;
+    };
+    schema: 'kovo.postgres.authorization-correspondence/v1';
+    status: 'divergent' | 'unproven';
+  };
+  schema: 'kovo.postgres.authorization-surface/v1';
+  surface: {
+    kind: 'framework-policy' | 'mutation' | 'page' | 'query' | 'unreferenced';
+    name: string;
+    viaQuery?: string;
+  };
+  table: {
+    domain?: string;
+    name: string;
+  };
+}
+
 /** @internal */
 export interface KovoCheckInput {
   access?: readonly AccessExplainFact[];
+  authorizationCorrespondence?: readonly AuthorizationCorrespondenceExplainFact[];
   authPosture?: readonly AuthPostureFact[];
   capabilities?: readonly CapabilityExplain[];
   capabilityClosure?: readonly CapabilityClosureExplainFact[];
@@ -1861,6 +1963,7 @@ function compareOwnershipPostureFact(
 
 const arrayFields = [
   'access',
+  'authorizationCorrespondence',
   'authPosture',
   'capabilities',
   'capabilityClosure',
@@ -1943,8 +2046,499 @@ export function validateKovoExplainInput(input: unknown): GraphInputValidationEr
   validateDiagnosticFactCodes(fields.lints, 'lints', errors, budget);
   validateAttributeMergeDiagnosticCodes(fields.components, errors, budget);
   validateTouchGraphDiagnosticCodes(touchGraph, errors, budget);
+  validateAuthorizationCorrespondenceFacts(
+    fields.authorizationCorrespondence,
+    errors,
+    budget,
+  );
 
   return errors;
+}
+
+function validateAuthorizationCorrespondenceFacts(
+  values: unknown,
+  errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
+): void {
+  if (!securityIsArray(values)) return;
+  const path = 'authorizationCorrespondence';
+  const length = snapshotGraphArrayLength(values, path, budget);
+  for (let index = 0; index < length; index += 1) {
+    const entryPath = `${path}[${index}]`;
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok || !isRecord(entry.value)) {
+      appendGraphValidationError(errors, entryPath, 'entry must be an object');
+      continue;
+    }
+    const fact = entry.value;
+    validateExactGraphString(
+      ownGraphData(fact, 'schema', `${entryPath}.schema`),
+      `${entryPath}.schema`,
+      'schema',
+      ['kovo.postgres.authorization-surface/v1'],
+      errors,
+    );
+    const activation = requiredGraphRecord(fact, 'activation', entryPath, errors);
+    if (activation !== undefined) {
+      validateExactGraphString(
+        ownGraphData(activation, 'source', `${entryPath}.activation.source`),
+        `${entryPath}.activation.source`,
+        'activation.source',
+        ['build'],
+        errors,
+      );
+      validateExactGraphString(
+        ownGraphData(activation, 'status', `${entryPath}.activation.status`),
+        `${entryPath}.activation.status`,
+        'activation.status',
+        ['environment-unchecked'],
+        errors,
+      );
+    }
+    validateAuthorizationSurface(
+      requiredGraphRecord(fact, 'surface', entryPath, errors),
+      `${entryPath}.surface`,
+      errors,
+    );
+    validateAuthorizationTable(
+      requiredGraphRecord(fact, 'table', entryPath, errors),
+      `${entryPath}.table`,
+      errors,
+    );
+    validateAuthorizationCorrespondence(
+      requiredGraphRecord(fact, 'correspondence', entryPath, errors),
+      `${entryPath}.correspondence`,
+      errors,
+      budget,
+    );
+  }
+}
+
+function validateAuthorizationSurface(
+  surface: Record<string, unknown> | undefined,
+  path: string,
+  errors: GraphInputValidationError[],
+): void {
+  if (surface === undefined) return;
+  validateExactGraphString(
+    ownGraphData(surface, 'kind', `${path}.kind`),
+    `${path}.kind`,
+    'surface.kind',
+    ['framework-policy', 'mutation', 'page', 'query', 'unreferenced'],
+    errors,
+  );
+  validateRequiredGraphString(ownGraphData(surface, 'name', `${path}.name`), `${path}.name`, errors);
+  validateOptionalGraphString(
+    ownGraphData(surface, 'viaQuery', `${path}.viaQuery`),
+    `${path}.viaQuery`,
+    errors,
+  );
+}
+
+function validateAuthorizationTable(
+  table: Record<string, unknown> | undefined,
+  path: string,
+  errors: GraphInputValidationError[],
+): void {
+  if (table === undefined) return;
+  validateRequiredGraphString(ownGraphData(table, 'name', `${path}.name`), `${path}.name`, errors);
+  validateOptionalGraphString(
+    ownGraphData(table, 'domain', `${path}.domain`),
+    `${path}.domain`,
+    errors,
+  );
+}
+
+function validateAuthorizationCorrespondence(
+  correspondence: Record<string, unknown> | undefined,
+  path: string,
+  errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
+): void {
+  if (correspondence === undefined) return;
+  validateExactGraphString(
+    ownGraphData(correspondence, 'schema', `${path}.schema`),
+    `${path}.schema`,
+    'correspondence.schema',
+    ['kovo.postgres.authorization-correspondence/v1'],
+    errors,
+  );
+  validateExactGraphString(
+    ownGraphData(correspondence, 'status', `${path}.status`),
+    `${path}.status`,
+    'correspondence.status',
+    ['divergent', 'unproven'],
+    errors,
+  );
+  validateRequiredGraphString(
+    ownGraphData(correspondence, 'reason', `${path}.reason`),
+    `${path}.reason`,
+    errors,
+  );
+
+  const guard = requiredGraphRecord(correspondence, 'guard', path, errors);
+  if (guard !== undefined) {
+    validateExactGraphString(
+      ownGraphData(guard, 'semantics', `${path}.guard.semantics`),
+      `${path}.guard.semantics`,
+      'guard.semantics',
+      ['arbitrary-app-callback', 'none'],
+      errors,
+    );
+    validateAuthorizationGuardFacts(
+      ownGraphData(guard, 'facts', `${path}.guard.facts`),
+      `${path}.guard.facts`,
+      errors,
+      budget,
+    );
+  }
+
+  const rls = requiredGraphRecord(correspondence, 'rls', path, errors);
+  if (rls !== undefined) {
+    validateExactGraphString(
+      ownGraphData(rls, 'emissionSite', `${path}.rls.emissionSite`),
+      `${path}.rls.emissionSite`,
+      'rls.emissionSite',
+      ['admin', 'authzPolicy', 'owner', 'ownerVia', 'system'],
+      errors,
+    );
+    validateRequiredGraphString(
+      ownGraphData(rls, 'predicate', `${path}.rls.predicate`),
+      `${path}.rls.predicate`,
+      errors,
+    );
+    validateRequiredGraphString(
+      ownGraphData(rls, 'tableName', `${path}.rls.tableName`),
+      `${path}.rls.tableName`,
+      errors,
+    );
+  }
+
+  const roleGuc = requiredGraphRecord(correspondence, 'roleGuc', path, errors);
+  if (roleGuc !== undefined) {
+    validateExactGraphNumber(
+      ownGraphData(roleGuc, 'readers', `${path}.roleGuc.readers`),
+      `${path}.roleGuc.readers`,
+      'roleGuc.readers',
+      0,
+      errors,
+    );
+    validateExactGraphString(
+      ownGraphData(roleGuc, 'status', `${path}.roleGuc.status`),
+      `${path}.roleGuc.status`,
+      'roleGuc.status',
+      ['dead'],
+      errors,
+    );
+    validateRequiredGraphString(
+      ownGraphData(roleGuc, 'warning', `${path}.roleGuc.warning`),
+      `${path}.roleGuc.warning`,
+      errors,
+    );
+    validateExactGraphNumber(
+      ownGraphData(roleGuc, 'writers', `${path}.roleGuc.writers`),
+      `${path}.roleGuc.writers`,
+      'roleGuc.writers',
+      1,
+      errors,
+    );
+  }
+
+  const decision = ownGraphData(correspondence, 'decision', `${path}.decision`);
+  if (decision !== undefined) {
+    if (!isRecord(decision)) {
+      appendGraphValidationError(errors, `${path}.decision`, 'decision must be an object');
+    } else {
+      validateAuthorizationDecision(decision, `${path}.decision`, errors, budget);
+    }
+  }
+}
+
+function validateAuthorizationGuardFacts(
+  facts: unknown,
+  path: string,
+  errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
+): void {
+  if (!securityIsArray(facts)) {
+    appendGraphValidationError(errors, path, 'guard.facts must be an array');
+    return;
+  }
+  const length = snapshotGraphArrayLength(facts, path, budget);
+  for (let index = 0; index < length; index += 1) {
+    const factPath = `${path}[${index}]`;
+    const entry = securityOwnArrayEntry(facts, index);
+    if (!entry.ok || !isRecord(entry.value)) {
+      appendGraphValidationError(errors, factPath, 'guard fact must be an object');
+      continue;
+    }
+    const fact = entry.value;
+    const kind = ownGraphData(fact, 'kind', `${factPath}.kind`);
+    validateExactGraphString(
+      kind,
+      `${factPath}.kind`,
+      'guard fact kind',
+      ['authed', 'named', 'opaque', 'owns', 'rateLimit', 'role'],
+      errors,
+    );
+    validateRequiredGraphString(
+      ownGraphData(fact, 'name', `${factPath}.name`),
+      `${factPath}.name`,
+      errors,
+    );
+    if (kind === 'authed') {
+      validateExactGraphString(
+        ownGraphData(fact, 'auth', `${factPath}.auth`),
+        `${factPath}.auth`,
+        'guard fact auth',
+        ['session-user'],
+        errors,
+      );
+    } else if (kind === 'owns') {
+      validateExactGraphString(
+        ownGraphData(fact, 'auth', `${factPath}.auth`),
+        `${factPath}.auth`,
+        'guard fact auth',
+        ['session-user'],
+        errors,
+      );
+      validateExactGraphString(
+        ownGraphData(fact, 'staticProof', `${factPath}.staticProof`),
+        `${factPath}.staticProof`,
+        'guard fact staticProof',
+        ['not-claimed'],
+        errors,
+      );
+      validateAuthorizationGuardKey(
+        requiredGraphRecord(fact, 'principal', factPath, errors),
+        `${factPath}.principal`,
+        ['request', 'session'],
+        errors,
+      );
+      const resourceKey = ownGraphData(fact, 'resourceKey', `${factPath}.resourceKey`);
+      if (resourceKey !== undefined) {
+        if (!isRecord(resourceKey)) {
+          appendGraphValidationError(
+            errors,
+            `${factPath}.resourceKey`,
+            'resourceKey must be an object',
+          );
+        } else {
+          validateAuthorizationGuardKey(
+            resourceKey,
+            `${factPath}.resourceKey`,
+            ['args', 'params', 'request'],
+            errors,
+          );
+        }
+      }
+    } else if (kind === 'rateLimit') {
+      validateExactGraphString(
+        ownGraphData(fact, 'per', `${factPath}.per`),
+        `${factPath}.per`,
+        'guard fact per',
+        ['custom', 'global', 'ip', 'session'],
+        errors,
+      );
+    } else if (kind === 'role') {
+      validateExactGraphString(
+        ownGraphData(fact, 'auth', `${factPath}.auth`),
+        `${factPath}.auth`,
+        'guard fact auth',
+        ['session-role'],
+        errors,
+      );
+      validateRequiredGraphString(
+        ownGraphData(fact, 'role', `${factPath}.role`),
+        `${factPath}.role`,
+        errors,
+      );
+      validateAuthorizationGuardKey(
+        requiredGraphRecord(fact, 'principal', factPath, errors),
+        `${factPath}.principal`,
+        ['request', 'session'],
+        errors,
+      );
+    }
+  }
+}
+
+function validateAuthorizationGuardKey(
+  key: Record<string, unknown> | undefined,
+  path: string,
+  sources: readonly string[],
+  errors: GraphInputValidationError[],
+): void {
+  if (key === undefined) return;
+  validateRequiredGraphString(
+    ownGraphData(key, 'expression', `${path}.expression`),
+    `${path}.expression`,
+    errors,
+  );
+  validateRequiredGraphString(ownGraphData(key, 'path', `${path}.path`), `${path}.path`, errors);
+  validateExactGraphString(
+    ownGraphData(key, 'source', `${path}.source`),
+    `${path}.source`,
+    'guard key source',
+    sources,
+    errors,
+  );
+}
+
+function validateAuthorizationDecision(
+  decision: Record<string, unknown>,
+  path: string,
+  errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
+): void {
+  validateRequiredNonNegativeInteger(
+    ownGraphData(decision, 'checkedModels', `${path}.checkedModels`),
+    `${path}.checkedModels`,
+    errors,
+  );
+  validateRequiredNonNegativeInteger(
+    ownGraphData(decision, 'expectedModels', `${path}.expectedModels`),
+    `${path}.expectedModels`,
+    errors,
+  );
+  validateExactGraphString(
+    ownGraphData(decision, 'status', `${path}.status`),
+    `${path}.status`,
+    'decision.status',
+    ['divergent', 'proved'],
+    errors,
+  );
+  const counterexample = ownGraphData(decision, 'counterexample', `${path}.counterexample`);
+  if (counterexample === undefined) return;
+  if (!isRecord(counterexample)) {
+    appendGraphValidationError(errors, `${path}.counterexample`, 'counterexample must be an object');
+    return;
+  }
+  validateRequiredGraphBoolean(
+    ownGraphData(counterexample, 'expected', `${path}.counterexample.expected`),
+    `${path}.counterexample.expected`,
+    errors,
+  );
+  validateRequiredGraphBoolean(
+    ownGraphData(counterexample, 'observed', `${path}.counterexample.observed`),
+    `${path}.counterexample.observed`,
+    errors,
+  );
+  const model = requiredGraphRecord(counterexample, 'model', `${path}.counterexample`, errors);
+  if (model === undefined) return;
+  validateExactGraphString(
+    ownGraphData(model, 'equality', `${path}.counterexample.model.equality`),
+    `${path}.counterexample.model.equality`,
+    'model.equality',
+    ['false', 'null', 'true'],
+    errors,
+  );
+  const edges = ownGraphData(model, 'edges', `${path}.counterexample.model.edges`);
+  if (!securityIsArray(edges)) {
+    appendGraphValidationError(
+      errors,
+      `${path}.counterexample.model.edges`,
+      'model.edges must be an array',
+    );
+    return;
+  }
+  const edgeLength = snapshotGraphArrayLength(edges, `${path}.counterexample.model.edges`, budget);
+  for (let index = 0; index < edgeLength; index += 1) {
+    const edge = securityOwnArrayEntry(edges, index);
+    validateExactGraphString(
+      edge.ok ? edge.value : undefined,
+      `${path}.counterexample.model.edges[${index}]`,
+      'model edge',
+      ['absent', 'null', 'present'],
+      errors,
+    );
+  }
+}
+
+function requiredGraphRecord(
+  parent: Record<string, unknown>,
+  property: string,
+  parentPath: string,
+  errors: GraphInputValidationError[],
+): Record<string, unknown> | undefined {
+  const path = `${parentPath}.${property}`;
+  const value = ownGraphData(parent, property, path);
+  if (isRecord(value)) return value;
+  appendGraphValidationError(errors, path, `${property} must be an object`);
+  return undefined;
+}
+
+function validateRequiredGraphString(
+  value: unknown,
+  path: string,
+  errors: GraphInputValidationError[],
+): void {
+  if (typeof value === 'string') return;
+  appendGraphValidationError(errors, path, 'value must be a string');
+}
+
+function validateOptionalGraphString(
+  value: unknown,
+  path: string,
+  errors: GraphInputValidationError[],
+): void {
+  if (value === undefined || typeof value === 'string') return;
+  appendGraphValidationError(errors, path, 'value must be a string');
+}
+
+function validateExactGraphString(
+  value: unknown,
+  path: string,
+  label: string,
+  allowed: readonly string[],
+  errors: GraphInputValidationError[],
+): void {
+  for (let index = 0; index < allowed.length; index += 1) {
+    const entry = securityOwnArrayEntry(allowed, index);
+    if (entry.ok && value === entry.value) return;
+  }
+  appendGraphValidationError(
+    errors,
+    path,
+    `${label} must be ${allowed.length === 1 ? securityJsonStringify(allowed[0]) : `one of ${securityJsonStringify(allowed)}`}`,
+  );
+}
+
+function validateExactGraphNumber(
+  value: unknown,
+  path: string,
+  label: string,
+  expected: number,
+  errors: GraphInputValidationError[],
+): void {
+  if (value === expected) return;
+  appendGraphValidationError(errors, path, `${label} must be ${expected}`);
+}
+
+function validateRequiredNonNegativeInteger(
+  value: unknown,
+  path: string,
+  errors: GraphInputValidationError[],
+): void {
+  if (typeof value === 'number' && value >= 0 && value % 1 === 0) return;
+  appendGraphValidationError(errors, path, 'value must be a non-negative integer');
+}
+
+function validateRequiredGraphBoolean(
+  value: unknown,
+  path: string,
+  errors: GraphInputValidationError[],
+): void {
+  if (typeof value === 'boolean') return;
+  appendGraphValidationError(errors, path, 'value must be a boolean');
+}
+
+function appendGraphValidationError(
+  errors: GraphInputValidationError[],
+  path: string,
+  message: string,
+): void {
+  securityArrayAppend(errors, { message, path });
 }
 
 function validateDiagnosticFactCodes(

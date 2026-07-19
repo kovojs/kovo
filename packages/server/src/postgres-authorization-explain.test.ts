@@ -80,7 +80,16 @@ describe('Postgres authorization production explain facts', () => {
       activation: { source: 'build', status: 'environment-unchecked' },
       correspondence: {
         guard: {
-          facts: [{ kind: 'owns', resourceKey: expect.objectContaining({ path: 'args.id' }) }],
+          facts: [
+            {
+              kind: 'owns',
+              resourceKey: {
+                expression: 'args.id',
+                path: 'id',
+                source: 'args',
+              },
+            },
+          ],
           semantics: 'arbitrary-app-callback',
         },
         rls: { emissionSite: 'owner', tableName: 'documents' },

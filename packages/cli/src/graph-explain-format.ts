@@ -38,6 +38,59 @@ export interface UnguardedAccessFact {
   name: string;
 }
 
+export function compareAuthorizationCorrespondenceFact(
+  left: CoreGraph.AuthorizationCorrespondenceExplainFact,
+  right: CoreGraph.AuthorizationCorrespondenceExplainFact,
+): number {
+  return (
+    compareAuthorizationText(left.table.name, right.table.name) ||
+    compareAuthorizationText(left.surface.kind, right.surface.kind) ||
+    compareAuthorizationText(left.surface.name, right.surface.name) ||
+    compareAuthorizationText(left.surface.viaQuery ?? '', right.surface.viaQuery ?? '') ||
+    compareAuthorizationText(
+      left.correspondence.rls.emissionSite,
+      right.correspondence.rls.emissionSite,
+    )
+  );
+}
+
+export function authorizationCorrespondenceLine(
+  fact: CoreGraph.AuthorizationCorrespondenceExplainFact,
+): string {
+  return [
+    'CORRESPONDENCE',
+    `surface=${fact.surface.kind}`,
+    `name=${stableValue(fact.surface.name)}`,
+    `viaQuery=${stableValue(fact.surface.viaQuery)}`,
+    `table=${stableValue(fact.table.name)}`,
+    `domain=${stableValue(fact.table.domain)}`,
+    `policy=${fact.correspondence.rls.emissionSite}`,
+    `activation=${fact.activation.status}`,
+    `status=${fact.correspondence.status}`,
+    `guardSemantics=${fact.correspondence.guard.semantics}`,
+    `guardFacts=${JSON.stringify(fact.correspondence.guard.facts)}`,
+    `predicate=${stableValue(fact.correspondence.rls.predicate)}`,
+    `reason=${stableValue(fact.correspondence.reason)}`,
+  ].join(' ');
+}
+
+export function authorizationRoleGucWarningLine(
+  fact: CoreGraph.AuthorizationCorrespondenceExplainFact,
+): string {
+  const roleGuc = fact.correspondence.roleGuc;
+  return [
+    'WARNING role-guc',
+    `status=${roleGuc.status}`,
+    `readers=${roleGuc.readers}`,
+    `writers=${roleGuc.writers}`,
+    `message=${stableValue(roleGuc.warning)}`,
+  ].join(' ');
+}
+
+function compareAuthorizationText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function diagnosticSeverity(
   diagnostic: Pick<CoreGraph.StaticDiagnosticFact, 'code' | 'severity'>,
 ): DiagnosticSeverity {
