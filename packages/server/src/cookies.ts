@@ -767,7 +767,7 @@ export function forwardSetCookie(raw: string, posture: ForwardSetCookiePosture):
   assertNoHeaderControlCharacters(raw, 'Set-Cookie');
   const parsed = parseSetCookieHeader(raw);
   if (parsed === undefined) throw new Error('forwardSetCookie requires a name=value Set-Cookie');
-  assertCookieName(parsed.name);
+  assertForwardedSetCookieShape(parsed);
 
   const cookieClass = closedPosture.class ?? 'session';
   const { byName } = parsed;
@@ -862,6 +862,49 @@ function appendUnknownForwardedAttributes(
       parts,
       attribute.value === undefined ? attribute.name : `${attribute.name}=${attribute.value}`,
     );
+  }
+}
+
+/**
+ * Close the raw adapter boundary over the same unambiguous component grammar that the serializer
+ * model proves disjoint from header controls and quote/escape confusion (SPEC §9.1.1). Forwarding is
+ * intentionally stricter than accepting an arbitrary HTTP field-value: cookie values use RFC 6265
+ * cookie-octet, while attribute values are printable ASCII excluding the structural semicolon and
+ * the quote and escape characters that could produce parser disagreement.
+ */
+function assertForwardedSetCookieShape(parsed: ParsedSetCookie): void {
+  assertCookieName(parsed.name);
+  assertForwardedCookieValue(parsed.value);
+  for (let index = 0; index < parsed.attributes.length; index += 1) {
+    const attribute = parsed.attributes[index]!;
+    assertCookieName(attribute.name);
+    if (attribute.value !== undefined) assertForwardedCookieAttributeValue(attribute.value);
+  }
+}
+
+function assertForwardedCookieValue(value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    const isCookieOctet =
+      code === 0x21 ||
+      (code >= 0x23 && code <= 0x2b) ||
+      (code >= 0x2d && code <= 0x3a) ||
+      (code >= 0x3c && code <= 0x5b) ||
+      (code >= 0x5d && code <= 0x7e);
+    if (!isCookieOctet) {
+      throw new Error('Forwarded Set-Cookie value must use the unquoted cookie-octet grammar');
+    }
+  }
+}
+
+function assertForwardedCookieAttributeValue(value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code < 0x20 || code > 0x7e || code === 0x22 || code === 0x3b || code === 0x5c) {
+      throw new Error(
+        'Forwarded Set-Cookie attribute values must use the unquoted printable ASCII grammar',
+      );
+    }
   }
 }
 

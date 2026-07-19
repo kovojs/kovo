@@ -570,6 +570,28 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     );
   });
 
+  it('rejects ambiguous quoted or escaped components at the forwarding boundary', () => {
+    const posture = { class: 'session', source: 'session-provider' } as const;
+    expect(() => forwardSetCookie('sid="quoted"; Path=/', posture)).toThrow(
+      'unquoted cookie-octet grammar',
+    );
+    expect(() => forwardSetCookie('sid=slash\\value; Path=/', posture)).toThrow(
+      'unquoted cookie-octet grammar',
+    );
+    expect(() => forwardSetCookie('sid=tok; Path="/admin"', posture)).toThrow(
+      'unquoted printable ASCII grammar',
+    );
+    expect(() => forwardSetCookie('sid=tok; Extension=slash\\value', posture)).toThrow(
+      'unquoted printable ASCII grammar',
+    );
+    expect(() => forwardSetCookie('sid=tok; bad name=value', posture)).toThrow(
+      'Cookie name must be an HTTP token',
+    );
+    expect(() => forwardSetCookie('sid=tøk; Path=/', posture)).toThrow(
+      'unquoted cookie-octet grammar',
+    );
+  });
+
   it('forces Secure on a forwarded credential cookie for a trusted HTTPS request', () => {
     process.env.NODE_ENV = 'development';
     const forwarded = forwardSetCookie('sid=tok; Path=/', {

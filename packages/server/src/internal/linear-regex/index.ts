@@ -50,7 +50,8 @@ export class LinearRegexWorkLimitError extends LinearRegexError {
   }
 }
 
-type Ast =
+/** @internal Parsed regular-language syntax shared with the finite-automata analysis layer. */
+export type Ast =
   | { kind: 'alt'; branches: readonly Ast[] }
   | { kind: 'anchor'; anchor: AnchorKind }
   | { kind: 'char'; matcher: CharMatcher }
@@ -58,14 +59,17 @@ type Ast =
   | { kind: 'empty' }
   | { kind: 'repeat'; node: Ast; min: number; max: number | null };
 
-type AnchorKind = 'begin' | 'end' | 'word-boundary' | 'not-word-boundary';
+/** @internal Zero-width assertion kinds understood by the runtime matcher. */
+export type AnchorKind = 'begin' | 'end' | 'word-boundary' | 'not-word-boundary';
 
-type CharMatcher =
+/** @internal UTF-16 code-unit matcher shared with the finite-automata analysis layer. */
+export type CharMatcher =
   | { kind: 'any' }
   | { kind: 'class'; negated: boolean; ranges: readonly CharRange[] }
   | { kind: 'dot' };
 
-interface CharRange {
+/** @internal Inclusive UTF-16 code-unit range. */
+export interface CharRange {
   readonly from: number;
   readonly to: number;
 }
@@ -85,15 +89,28 @@ export function compileLinearRegex(
   flagsText = '',
   options: { readonly programSizeLimit?: number } = {},
 ): LinearRegexProgram {
+  const { ast, flags } = parseLinearRegexAst(source, flagsText);
+  const compiler = new Compiler(options.programSizeLimit ?? DEFAULT_PROGRAM_SIZE_LIMIT);
+  return { flags, instructions: compiler.compile(ast), source };
+}
+
+/**
+ * Parse the same regular-language AST consumed by the production Pike VM.
+ *
+ * @internal Analysis-only bridge for bounded DFA construction. It deliberately does not expose the
+ * parser through a package export; callers must remain inside the server package.
+ */
+export function parseLinearRegexAst(
+  source: string,
+  flagsText = '',
+): { readonly ast: Ast; readonly flags: LinearRegexFlags } {
   const flags = parseFlags(flagsText);
   if (flags.ignoreCase && containsNonAscii(source)) {
     throw new LinearRegexError(
       'pattern(): non-ASCII pattern source with the i flag is not supported; use unsafeRegex(...)',
     );
   }
-  const ast = new Parser(source).parse();
-  const compiler = new Compiler(options.programSizeLimit ?? DEFAULT_PROGRAM_SIZE_LIMIT);
-  return { flags, instructions: compiler.compile(ast), source };
+  return { ast: new Parser(source).parse(), flags };
 }
 
 export function linearRegexMatch(program: LinearRegexProgram, input: string): boolean {

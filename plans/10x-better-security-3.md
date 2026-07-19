@@ -344,10 +344,12 @@ Build subset construction, complement, product, BFS emptiness, and shortest-coun
 on the existing `Ast`/`CharMatcher`/`CharRange` types in `internal/linear-regex`, with a hard state
 budget that throws. (~0.5 pm for substrate + first obligation)
 
-- [ ] **First obligation is disjointness, not SSRF**: prove
+- [x] **First obligation is disjointness, not SSRF**: prove
       `L(serializer output) ∩ L({CR, LF, NUL, quote-escape confusion}) = ∅` for `content-disposition.ts`
       and the `cookies.ts` `Set-Cookie` forwarding path — a 5-state dangerous DFA, no numeric grammar,
       no availability risk, retiring a review argument that today lives only in comments.
+  - Evidence: `pnpm run check:grammar-containment` proves both envelopes disjoint and passes 15/15
+    substrate, exhaustive UTF-16/ASCII binding, shortest-witness, and planted-mutant tests.
 - [ ] **Then IPv4 only**: declare `rfc3986-IPv4address`, a hand-derived POSIX `inet_aton` grammar, and
       a declared model of what `parseLooseIpv4` accepts (`egress.ts:1101` knowingly accepts non-RFC
       spellings because the OS resolver does — currently a prose comment). Decide **both** directions,
