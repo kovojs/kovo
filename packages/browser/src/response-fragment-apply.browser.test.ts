@@ -6,8 +6,10 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { applyMutationResponseBodyToRuntime } from './apply-mutation-response.js';
+import { createQueryStore } from './client.js';
 import { installInlineKovoLoader } from './inline-loader.js';
-import { DomMorphTarget } from './morph.js';
+import { DomMorphRoot, DomMorphTarget, keyedDomMorph } from './morph.js';
 import { applyStateBindings } from './query-bindings.js';
 import {
   __responseFragmentApplySanitizerParityForTests,
@@ -57,6 +59,37 @@ function readSanitizedAttribute(element: Element | null, name: string): string |
 const fragmentHtml = (html: string): RenderedFragmentHtml => createRenderedFragmentHtml(html);
 
 describe('browser response fragment apply', () => {
+  for (const kind of ['object', 'embed'] as const) {
+    it(`does not activate remotely selected same-origin HTML through <${kind}> during fragment morph`, async () => {
+      const root = document.createElement('main');
+      root.innerHTML = '<section kovo-c="active-embed-audit">old</section>';
+      document.body.append(root);
+
+      let executed = false;
+      const onMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'kovo:safe-account') executed = true;
+      };
+      addEventListener('message', onMessage);
+      try {
+        const element =
+          kind === 'object'
+            ? '<object data="/safe/account" type="text/html"></object>'
+            : '<embed src="/safe/account" type="text/html">';
+        applyMutationResponseBodyToRuntime({
+          body: `<kovo-fragment target="active-embed-audit"><section kovo-c="active-embed-audit">${element}</section></kovo-fragment>`,
+          morph: keyedDomMorph,
+          root: new DomMorphRoot(root),
+          store: createQueryStore(),
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        expect(executed).toBe(false);
+      } finally {
+        removeEventListener('message', onMessage);
+      }
+    });
+  }
+
   // @kovo-security-certifies C13 compiler-wire-control-plane-preserved
   it('preserves and executes compiler-emitted fragment interactivity', async () => {
     const target = document.createElement('button');
