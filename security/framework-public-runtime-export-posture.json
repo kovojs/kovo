@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "5ee972aadfc8dd2a4f51febdadeb059b67cdb6328e5886ca030d1d4d715c5277",
+      "sourceTreeSha256": "426b0b70a8f9fe8976004bef286d81188d19461ae439a7339f9b943753658779",
       "manifestVariants": [
         {
           "exports": {

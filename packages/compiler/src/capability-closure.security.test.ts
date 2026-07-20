@@ -559,6 +559,37 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     );
   });
 
+  it('rejects wholly request-closed framework tools without depending on their bytes', () => {
+    const result = analyze(
+      [
+        {
+          fileName: 'app.ts',
+          source: `
+            import { kovoCheck } from '@kovojs/cli';
+            import { route } from '@kovojs/server';
+            export const page = route('/tool-import', { render() { return kovoCheck; } });
+          `,
+        },
+      ],
+      {
+        packages: [
+          resolved('@kovojs/server'),
+          resolved('@kovojs/cli', {
+            fingerprint: 'sha256:unreviewed-cli-manifest',
+            implementationDigest: null,
+            packageVersion: '999.0.0',
+          }),
+        ],
+      },
+    );
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.message).toContain(
+      'compiler-owned @kovojs/cli is unconditionally request-closed',
+    );
+    expect(result.diagnostics[0]!.message).not.toContain('implementation digest');
+  });
+
   it('requires package summaries to classify side-effect module initialization explicitly', () => {
     const files = [
       {

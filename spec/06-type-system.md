@@ -410,10 +410,17 @@ version, security-relevant manifest fingerprint, requested subpath, imported exp
 conditional-export arm set. Every manifest-public Kovo runtime export and every public subpath's
 `<module>` initializer MUST appear exactly once in the compiler-owned, versioned framework export
 posture ledger with an explicit raw-authority disposition, root kind or `none`, security role,
-implementation digest, manifest-target/condition fingerprint, and threat-matrix posture. A new,
+implementation binding, manifest-target/condition fingerprint, and threat-matrix posture. A
+posture that can produce an authority-free or framework-door verdict MUST bind the exact installed
+implementation digest. A package whose complete public runtime surface is explicitly
+`request-closed` MAY instead use the `unconditional-request-closure` binding: the compiler rejects
+that package by exact package name before version, manifest, or implementation identity can
+influence a request-root verdict. Such a binding is invalid if any public initializer or export is
+missing or has a disposition other than `request-closed`; widening the package therefore restores
+the exact-implementation requirement rather than inheriting an identity-free allow path. A new,
 missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
 door list is never an authority-free verdict. Explicitly reviewed framework companions use the same
-compiler-owned, version-pinned verdict model. Other packages use the committed
+compiler-owned verdict model. Other packages use the committed
 `kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
 independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
 `<module>` entry and MUST classify package initialization explicitly rather than relying on an empty

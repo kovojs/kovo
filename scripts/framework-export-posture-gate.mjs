@@ -299,6 +299,7 @@ export function renderFrameworkExportPostureGenerated(ledger, actual) {
     ...arrayOrEmpty(ledger.emptyPublicPackages).map((pkg) => ({ ...pkg, empty: true })),
   ]
     .map((pkg) => {
+      const implementationBinding = frameworkPackageImplementationBinding(pkg);
       const subpaths = [
         ...new Set(
           arrayOrEmpty(pkg.postureGroups).flatMap((group) =>
@@ -320,8 +321,11 @@ export function renderFrameworkExportPostureGenerated(ledger, actual) {
             subpath,
             exportArmEvidence(variant.exports, subpath).conditions,
           ]),
-          implementationByFingerprint.get(variant.fingerprint) ?? [],
+          implementationBinding === 'exact-implementation'
+            ? (implementationByFingerprint.get(variant.fingerprint) ?? [])
+            : [],
         ]),
+        implementationBinding,
       ];
     })
     .sort(([left], [right]) => compareStrings(left, right));
@@ -337,6 +341,9 @@ export function renderFrameworkExportPostureGenerated(ledger, actual) {
     "  | 'framework-door'",
     "  | 'request-closed';",
     "export type FrameworkExportPostureRootKind = CapabilityRootKind | 'none';",
+    'export type FrameworkImplementationBinding =',
+    "  | 'exact-implementation'",
+    "  | 'unconditional-request-closure';",
     'export type FrameworkExportPosturePackage = readonly [',
     '  packageName: string,',
     '  packageVersion: string,',
@@ -345,6 +352,7 @@ export function renderFrameworkExportPostureGenerated(ledger, actual) {
     '    subpaths: readonly (readonly [subpath: string, conditions: readonly string[]])[],',
     '    implementationDigests: readonly string[],',
     '  ])[],',
+    '  implementationBinding: FrameworkImplementationBinding,',
     '];',
     'export type FrameworkExportPostureGroup = readonly [',
     '  packageName: string,',
@@ -375,16 +383,29 @@ function quoteTypeScriptString(value) {
 }
 
 function renderGeneratedPackages(packages) {
-  const rendered = packages.map(([name, version, variants]) => {
+  const rendered = packages.map(([name, version, variants, implementationBinding]) => {
     const renderedVariants = variants.map(
       ([fingerprint, subpaths, implementationDigests]) =>
         `    [${JSON.stringify(fingerprint)}, [\n${subpaths
           .map((row) => `      ${JSON.stringify(row)},`)
           .join('\n')}\n    ], ${JSON.stringify(implementationDigests)}],`,
     );
-    return `  [${JSON.stringify(name)}, ${JSON.stringify(version)}, [\n${renderedVariants.join('\n')}\n  ]],`;
+    return `  [${JSON.stringify(name)}, ${JSON.stringify(version)}, [\n${renderedVariants.join('\n')}\n  ], ${JSON.stringify(implementationBinding)}],`;
   });
   return `[\n${rendered.join('\n')}\n]`;
+}
+
+/**
+ * A package whose complete public runtime surface is request-closed cannot contribute authority
+ * to a request root regardless of its installed bytes. Encoding that package as an unconditional
+ * closed verdict removes proof-output bytes from the compiler's implementation-identity graph;
+ * every package that can produce an allow/door verdict retains exact whole-tree identity.
+ */
+function frameworkPackageImplementationBinding(pkg) {
+  const groups = arrayOrEmpty(pkg.postureGroups);
+  return groups.length > 0 && groups.every((group) => group.disposition === 'request-closed')
+    ? 'unconditional-request-closure'
+    : 'exact-implementation';
 }
 
 function renderGeneratedGroups(groups) {

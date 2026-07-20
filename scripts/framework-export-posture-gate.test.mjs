@@ -443,5 +443,16 @@ describe('framework public runtime export posture gate', () => {
     const server = packageBlock('@kovojs/server');
     expect(server).toContain('"exact-implementation"');
     expect(server).toContain('kovo-source-tree-sha256:');
+
+    const widened = clone(ledger);
+    const cliGroup = packageRow(widened, '@kovojs/cli').postureGroups[0];
+    cliGroup.disposition = 'authority-free';
+    cliGroup.capabilities = [];
+    const widenedGenerated = renderFrameworkExportPostureGenerated(widened, actual);
+    const widenedStart = widenedGenerated.indexOf('  ["@kovojs/cli",');
+    const widenedEnd = widenedGenerated.indexOf('\n  ["@kovojs/', widenedStart + 1);
+    const widenedCli = widenedGenerated.slice(widenedStart, widenedEnd);
+    expect(widenedCli).toContain('"exact-implementation"');
+    expect(widenedCli).toContain('kovo-source-tree-sha256:');
   });
 });

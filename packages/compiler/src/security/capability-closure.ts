@@ -108,9 +108,14 @@ interface FrameworkPackageVariantPosture {
 }
 
 interface FrameworkPackagePosture {
+  readonly implementationBinding: FrameworkImplementationBinding;
   readonly variantsByFingerprint: ReadonlyMap<string, FrameworkPackageVariantPosture>;
   readonly packageVersion: string;
 }
+
+type FrameworkImplementationBinding =
+  | 'exact-implementation'
+  | 'unconditional-request-closure';
 
 interface FrameworkPermission {
   readonly capabilities: readonly RawCapabilityKind[];
@@ -129,6 +134,10 @@ const frameworkDispositions = new Set<FrameworkExportPostureDisposition>([
   'authority-free',
   'framework-door',
   'request-closed',
+]);
+const frameworkImplementationBindings = new Set<FrameworkImplementationBinding>([
+  'exact-implementation',
+  'unconditional-request-closure',
 ]);
 const frameworkRawCapabilities = new Set<RawCapabilityKind>([
   'crypto-acquisition',
@@ -168,10 +177,20 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
   const permissions = new Map<string, FrameworkPermission>();
   const rootFactories = new Map<string, CapabilityRootKind>();
 
-  for (const [packageName, packageVersion, variants] of frameworkExportPosturePackages) {
+  for (const [
+    packageName,
+    packageVersion,
+    variants,
+    implementationBinding,
+  ] of frameworkExportPosturePackages) {
     if (packages.has(packageName)) {
       invalidReasons.push(`duplicate package ${packageName}`);
       continue;
+    }
+    if (!frameworkImplementationBindings.has(implementationBinding)) {
+      invalidReasons.push(
+        `${packageName} has unknown implementation binding ${String(implementationBinding)}`,
+      );
     }
     const variantsByFingerprint = new Map<string, FrameworkPackageVariantPosture>();
     for (const [fingerprint, subpaths, implementationDigests] of variants) {
@@ -200,12 +219,23 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
         }
         return [canonical];
       });
+      if (new Set(canonicalImplementationDigests).size !== canonicalImplementationDigests.length) {
+        invalidReasons.push(
+          `${packageName}/${fingerprint} has duplicate implementation digests`,
+        );
+      }
       if (
-        canonicalImplementationDigests.length === 0 ||
-        new Set(canonicalImplementationDigests).size !== canonicalImplementationDigests.length
+        implementationBinding === 'exact-implementation' &&
+        canonicalImplementationDigests.length === 0
+      ) {
+        invalidReasons.push(`${packageName}/${fingerprint} has no exact implementation digest`);
+      }
+      if (
+        implementationBinding === 'unconditional-request-closure' &&
+        canonicalImplementationDigests.length !== 0
       ) {
         invalidReasons.push(
-          `${packageName}/${fingerprint} has empty or duplicate implementation digests`,
+          `${packageName}/${fingerprint} unconditional request closure carries implementation digests`,
         );
       }
       variantsByFingerprint.set(fingerprint, {
@@ -216,6 +246,7 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
     if (variantsByFingerprint.size === 0)
       invalidReasons.push(`${packageName} has no manifest variant`);
     packages.set(packageName, {
+      implementationBinding,
       packageVersion,
       variantsByFingerprint,
     });
@@ -270,6 +301,9 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
         if (disposition === 'request-closed' && (reason === null || reason.trim() === '')) {
           invalidReasons.push(`request-closed permission has no reason ${id}`);
         }
+        if (disposition === 'request-closed' && rootKind !== 'none') {
+          invalidReasons.push(`request-closed permission is a root factory ${id}`);
+        }
         permissions.set(id, {
           capabilities,
           disposition,
@@ -286,6 +320,18 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
   }
 
   for (const [packageName, pkg] of packages) {
+    const packagePermissions = [...permissions.entries()].filter(([id]) =>
+      id.startsWith(`${packageName}\0`),
+    );
+    if (
+      pkg.implementationBinding === 'unconditional-request-closure' &&
+      (packagePermissions.length === 0 ||
+        packagePermissions.some(([, permission]) => permission.disposition !== 'request-closed'))
+    ) {
+      invalidReasons.push(
+        `${packageName} unconditional request closure does not cover an entirely request-closed public runtime surface`,
+      );
+    }
     const subpaths = new Set(
       [...pkg.variantsByFingerprint.values()].flatMap((variant) => [
         ...variant.conditionsBySubpath.keys(),
@@ -722,6 +768,15 @@ function packageVerdict(
         use,
         'contradictory',
         `compiler-owned framework posture registry is invalid: ${frameworkPostureRegistry.invalidReasons.join('; ')}`,
+        metadata,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
+    if (frameworkPosture.implementationBinding === 'unconditional-request-closure') {
+      return closedPackageVerdict(
+        use,
+        'contradictory',
+        `compiler-owned ${packageName} is unconditionally request-closed; its reviewed public runtime surface cannot contribute request-handler authority`,
         metadata,
         frameworkExportPostureSummaryVersion,
       );
