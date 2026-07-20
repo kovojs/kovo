@@ -6,6 +6,8 @@ import { mintFrameworkLoadShedError } from './app-load-shed.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { endpoint } from './endpoint.js';
 import { createFrameworkManagedDbProvider } from './guards.js';
+import { trustedHtml } from './html.js';
+import { route } from './route.js';
 import { s } from './schema.js';
 import { task } from './task.js';
 
@@ -61,9 +63,40 @@ describe('Postgres posture app load shedding', () => {
     );
 
     await Promise.resolve();
-    expect(response.status).toBe(413);
     expect(admit).not.toHaveBeenCalled();
     expect(resolve).not.toHaveBeenCalled();
+    expect(response.status).toBe(413);
+  });
+
+  it('rejects oversized method-mismatch route bodies before managed database admission', async () => {
+    const admit = vi.fn(async () => undefined);
+    const resolve = vi.fn(async () => ({}));
+    const provider = createFrameworkManagedDbProvider(resolve, { admit });
+    const handler = createRequestHandler(
+      createApp({
+        db: provider,
+        requestLimits: { maxBodyBytes: 4 },
+        routes: [route('/document', { page: () => trustedHtml('<main>document</main>') })],
+      }),
+    );
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('12345'));
+        controller.close();
+      },
+    });
+
+    const response = await handler(
+      new Request('https://app.example/document', {
+        body,
+        duplex: 'half',
+        method: 'POST',
+      } as RequestInit & { duplex: 'half' }),
+    );
+
+    expect(admit).not.toHaveBeenCalled();
+    expect(resolve).not.toHaveBeenCalled();
+    expect(response.status).toBe(413);
   });
 
   it('keeps the reserved bounded CSP report reader outside app database admission', async () => {
