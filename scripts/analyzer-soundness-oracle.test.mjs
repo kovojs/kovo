@@ -22,7 +22,7 @@ describe('finite analyzer transfer/lattice census gate', () => {
       ok: true,
       summary: {
         effectDoors: 9,
-        latticeElements: 40,
+        latticeElements: 44,
         productions: 33,
         transfers: 33,
       },
