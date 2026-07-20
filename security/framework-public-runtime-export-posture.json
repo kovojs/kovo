@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "73ade2b9e4339960be90509d8121d971deaef77910482244232af35fd79ac2b7",
+      "sourceTreeSha256": "4772b198d3375f04033530c5c13816299391aefb33faa7046b62bea5677592ec",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "07f99be78a44fd3714d3921a9dc5b852040e29ec67a7cca90bc91dec0f2cd163",
+      "sourceTreeSha256": "cfe079ebb221b53a7c081c6e1c2f3047333e9d7146b03c18a4d689e60ab37579",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -824,7 +824,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "73ca7559c6994f5afc029b3b0f03c3eb480b6713caa3011f6e7d87aef459d1b7"
+      "sourceTreeSha256": "bc9b415a3c9df38a434689765d036b81b7ca9db60239805b764eea11f78d89c2"
     },
     {
       "manifestVariants": [
@@ -1660,7 +1660,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "a5d8c77fc8f49c788c38ee1da81e5db803dd46732db4f35717cad37110e43bf1"
+      "sourceTreeSha256": "475164f60ce959064b012021505a5f3a775d06d196de13685e1c1bdf251c7498"
     },
     {
       "manifestVariants": [
@@ -9813,7 +9813,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "2c01370befc0bcab24c763818e925b3631a1e0749162af41ea128baf0559f27d"
+      "sourceTreeSha256": "0351d6f28466670ab915ead232d28843a1cf751df7fd67e2d32acde614fd71a5"
     },
     {
       "manifestVariants": [
