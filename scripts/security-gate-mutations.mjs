@@ -1524,6 +1524,18 @@ const weakenedEmittedNodeBodylessPayloadAdmissionBranch = [
   '  if (!apply(nativeSetHas, bodylessMethods, [request.method])) return false;',
   '  return false;',
 ].join('\n');
+const vercelPreFilesystemBodylessAdmissionBranch = [
+  '  const headers = apply(nativeRequestHeadersGetter, request, []);',
+  '  if (bodylessRequestHasPayload(method, headers)) {',
+  "    return ingressFailure(method, 413, 'Payload Too Large');",
+  '  }',
+].join('\n');
+const weakenedVercelPreFilesystemBodylessAdmissionBranch = [
+  '  const headers = apply(nativeRequestHeadersGetter, request, []);',
+  '  if (false && bodylessRequestHasPayload(method, headers)) {',
+  "    return ingressFailure(method, 413, 'Payload Too Large');",
+  '  }',
+].join('\n');
 const transportManagedNodeBodyDeferredCancelBranch = [
   '    cancel() {',
   '      cancelled = true;',
@@ -5277,6 +5289,19 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: {},
     description:
+      'Drops GET/HEAD payload-framing admission from Vercel Edge Middleware before filesystem routing.',
+    expectedKiller:
+      'the emitted Vercel pre-filesystem door must reject body-framed static requests with 413',
+    name: 'server-build/drop-vercel-pre-filesystem-bodyless-admission',
+    replacement: weakenedVercelPreFilesystemBodylessAdmissionBranch,
+    search: vercelPreFilesystemBodylessAdmissionBranch,
+    sourceFile: serverBuildPath,
+    sourceOnly: true,
+    test: assertEmittedVercelPreFilesystemBodylessAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
       'Restores immediate source cancellation for a live Node transport-managed request body before its 413 can flush.',
     expectedKiller:
       'live Node streamed POST and PUT body-limit failures must flush complete 413 responses',
@@ -6506,6 +6531,19 @@ function assertEmittedNodeBodylessPayloadAdmissionBehavior(_moduleUnderTest, { s
     testFile: 'packages/server/src/build.test.ts',
     testNamePattern:
       'emits a standalone node server that serves immutable client files before route fallback|emits Vercel Build Output API v3 with static files and a Node function',
+  });
+}
+
+function assertEmittedVercelPreFilesystemBodylessAdmissionBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'build.ts',
+    sourceText,
+    testFile: 'packages/server/src/build.test.ts',
+    testNamePattern: 'emits Vercel Build Output API v3 with static files and a Node function',
   });
 }
 

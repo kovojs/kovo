@@ -3916,12 +3916,44 @@ export default async function handler(request) {
             method: 'HEAD',
             url: 'https://deployment.example/c/__v/cart-v1/cart.client.js',
           },
+          {
+            headers: [['content-length', '7']],
+            method: 'GET',
+            url: 'https://deployment.example/index.html',
+          },
         ],
       );
-      expect(bodyFramedMiddlewareResponses).toHaveLength(2);
+      expect(bodyFramedMiddlewareResponses).toHaveLength(3);
       for (const response of bodyFramedMiddlewareResponses) {
         expect(response.status).toBe(413);
         expect(response.headers.get('x-middleware-next')).toBeNull();
+      }
+      await expect(bodyFramedMiddlewareResponses[0]!.text()).resolves.toBe('Payload Too Large');
+      await expect(bodyFramedMiddlewareResponses[1]!.text()).resolves.toBe('');
+
+      const validBodylessMiddlewareResponses = runGeneratedVercelIngressMiddleware(
+        join(vercelOutDir, 'functions/kovo-ingress.func/index.js'),
+        [
+          {
+            headers: [['content-length', '0']],
+            method: 'GET',
+            url: 'https://deployment.example/assets/cart.css',
+          },
+          {
+            headers: [['content-length', '00']],
+            method: 'HEAD',
+            url: 'https://deployment.example/c/__v/cart-v1/cart.client.js',
+          },
+          {
+            method: 'GET',
+            url: 'https://deployment.example/index.html',
+          },
+        ],
+      );
+      expect(validBodylessMiddlewareResponses).toHaveLength(3);
+      for (const response of validBodylessMiddlewareResponses) {
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-middleware-next')).toBe('1');
       }
 
       const emittedVercelAdapter = (await import(

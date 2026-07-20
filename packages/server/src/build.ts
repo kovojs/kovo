@@ -2299,16 +2299,20 @@ function vercelIngressMiddlewareSource(): string {
 lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
 
 const NativeArray = globalThis.Array;
+const NativeHeaders = globalThis.Headers;
 const NativeObject = globalThis.Object;
 const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
 const NativeURL = globalThis.URL;
 const nativeReflectApply = Reflect.apply;
 const nativeArrayIsArray = NativeArray.isArray;
+const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeRequestHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'headers').get;
 const nativeRequestMethodGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'method').get;
 const nativeRequestUrlGetter = nativeObjectGetOwnPropertyDescriptor(NativeRequest.prototype, 'url').get;
 const nativeStringCharCodeAt = String.prototype.charCodeAt;
+const nativeStringTrim = String.prototype.trim;
 const nativeUrlHashGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hash').get;
 const nativeUrlHostGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'host').get;
 const nativeUrlHrefGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'href').get;
@@ -2344,6 +2348,10 @@ export default function kovoRequestIngressMiddleware(request) {
   if (requestUrlLimitFailure(requestUrl) !== undefined) {
     return ingressFailure(method, 414, 'URI Too Long');
   }
+  const headers = apply(nativeRequestHeadersGetter, request, []);
+  if (bodylessRequestHasPayload(method, headers)) {
+    return ingressFailure(method, 413, 'Payload Too Large');
+  }
   const url = new NativeURL(requestUrl);
   const protocol = apply(nativeUrlProtocolGetter, url, []);
   const ingress = requestIngressClassifier.classify({
@@ -2373,6 +2381,25 @@ function ingressFailure(method, status, statusText) {
     status,
     statusText,
   });
+}
+
+// SPEC §9.5: Vercel's Edge Routing Middleware is the last Kovo-owned door before
+// handle:filesystem. Reject framing that the later Fetch boundary would erase even when the
+// request would never enter the generated Node function.
+function bodylessRequestHasPayload(method, headers) {
+  if (method !== 'GET' && method !== 'HEAD') return false;
+  const contentLength = apply(nativeHeadersGet, headers, ['content-length']);
+  if (contentLength !== null && !bodylessContentLengthIsZero(contentLength)) return true;
+  return apply(nativeHeadersGet, headers, ['transfer-encoding']) !== null;
+}
+
+function bodylessContentLengthIsZero(value) {
+  const trimmed = apply(nativeStringTrim, value, []);
+  if (trimmed.length === 0) return false;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (apply(nativeStringCharCodeAt, trimmed, [index]) !== 0x30) return false;
+  }
+  return true;
 }
 
 function parseRequestIngressAuthority(authority, scheme) {
